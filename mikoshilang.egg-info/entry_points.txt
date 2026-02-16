@@ -1,2 +1,3 @@
 [console_scripts]
 mikoshilang = mikoshilang.repl:main
+mikoshilang-install-kernel = mikoshilang.jupyter.install:main
