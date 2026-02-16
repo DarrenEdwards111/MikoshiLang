@@ -1,8 +1,37 @@
 # MikoshiLang
 
-A symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence.
+[![Tests](https://img.shields.io/badge/tests-424%20passed-brightgreen)]()
+[![PyPI](https://img.shields.io/pypi/v/mikoshilang)](https://pypi.org/project/mikoshilang/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
+
+**A symbolic computation language for Python** — Wolfram-style syntax, pattern matching, algebraic simplification, and domain-specific packages for physics, chemistry, and signal processing.
 
 Built by **Mikoshi Ltd**.
+
+## Why MikoshiLang?
+
+| Feature | MikoshiLang | SymPy | Wolfram |
+|---------|------------|-------|---------|
+| Wolfram-style syntax (`Sin[x]`, `{1,2,3}`) | ✅ | ❌ | ✅ |
+| Pattern matching (`x_`, `__`, conditions) | ✅ | Limited | ✅ |
+| Rule-based rewriting engine | ✅ | Limited | ✅ |
+| Interactive REPL with In/Out history | ✅ | ❌ | ✅ |
+| Jupyter kernel with LaTeX rendering | ✅ | ✅ | ✅ |
+| Chemistry — 118 elements, equation balancing | ✅ | ❌ | ✅ |
+| Physics units with arithmetic & conversion | ✅ | ✅ | ✅ |
+| Signal processing (FFT, filters, spectrograms) | ✅ | Limited | ✅ |
+| Free & open source | ✅ | ✅ | ❌ ($395/yr) |
+| Python-native, pip installable | ✅ | ✅ | ❌ |
+
+### Key Selling Points
+
+- **🧪 Chemistry built-in** — All 118 elements with atomic mass, electron configuration, electronegativity. Balance equations: `BalanceEquation["H2 + O2 -> H2O"]` → `"2H2 + O2 -> 2H2O"`. Calculate molecular mass: `MolecularMass["C6H12O6"]` → `180.156`
+- **⚡ Wolfram syntax, Python ecosystem** — Write `Solve[x^2 - 4 == 0, x]` not `sympy.solve(sympy.Symbol('x')**2 - 4, sympy.Symbol('x'))`. Same power, 70% less typing
+- **🎯 Pattern matching** — Real Wolfram-style patterns: `f[x_] := x^2`, blanks, sequences, conditions. Not regex — structural matching on expression trees
+- **📡 Signal processing** — DFT, filters (low/high/band-pass), convolution, window functions, spectrograms — all from one import
+- **🔬 Physics units** — 50+ units, quantity arithmetic that checks dimensions, automatic conversion: `UnitConvert[Quantity[100, "cm"], "m"]`
+- **📓 Jupyter kernel** — LaTeX-rendered expressions, inline plots, proper notebook experience
 
 ## Installation
 
