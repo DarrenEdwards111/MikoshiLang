@@ -1,5 +1,9 @@
 # MikoshiLang
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/DarrenEdwards111/MikoshiLang/main/mikoshilang-logo.jpg" alt="MikoshiLang" width="400">
+</p>
+
 [![Tests](https://img.shields.io/badge/tests-424%20passed-brightgreen)]()
 [![PyPI](https://img.shields.io/pypi/v/mikoshilang)](https://pypi.org/project/mikoshilang/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
