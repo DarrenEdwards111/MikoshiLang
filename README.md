@@ -1,7 +1,7 @@
 # MikoshiLang
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/DarrenEdwards111/MikoshiLang/main/mikoshilang-logo.jpg" alt="MikoshiLang" width="400">
+  <img src="https://raw.githubusercontent.com/DarrenEdwards111/MikoshiLang/main/mikoshilang-logo-v2.jpg" alt="MikoshiLang" width="400">
 </p>
 
 [![Tests](https://img.shields.io/badge/tests-424%20passed-brightgreen)]()
