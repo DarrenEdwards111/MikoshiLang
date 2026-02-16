@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mikoshilang"
-version = "0.1.0"
+version = "0.2.0"
 description = "Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence"
 authors = [{name = "Mikoshi Ltd", email = "mikoshiuk@gmail.com"}]
 license = {text = "Apache-2.0"}
@@ -20,5 +20,14 @@ classifiers = [
 ]
 dependencies = ["sympy>=1.12", "numpy>=1.21"]
 
+[project.optional-dependencies]
+jupyter = ["ipykernel>=6.0", "matplotlib>=3.4"]
+signal = ["scipy>=1.7"]
+plotting = ["matplotlib>=3.4"]
+chemistry = []
+units = []
+all = ["ipykernel>=6.0", "matplotlib>=3.4", "scipy>=1.7"]
+
 [project.scripts]
 mikoshilang = "mikoshilang.repl:main"
+mikoshilang-install-kernel = "mikoshilang.jupyter.install:main"

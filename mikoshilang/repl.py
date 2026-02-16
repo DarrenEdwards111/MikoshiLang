@@ -1,15 +1,12 @@
-"""Interactive REPL for MikoshiLang."""
+"""Interactive REPL for MikoshiLang — now with Wolfram-style syntax parser."""
 
 from __future__ import annotations
 import readline
 import sys
-from .expr import Expr, Symbol, symbols
+from .parser import parse, ParseError
 from .evaluate import evaluate
-from .builtins import BUILTIN_FUNCTIONS
-from .math_ops import simplify, expand, factor, diff, integrate, solve, limit, series
-from .numerical import N, Pi, E, I, Infinity, GoldenRatio
-from .data import List, Table, Map, Select, Sort, Reverse, Take, Drop, Part, Range, Total, Mean, Median, StandardDeviation
-from .linalg import Matrix, Dot, Det, Inverse, Eigenvalues, Eigenvectors, Transpose
+from .expr import Expr, Symbol
+
 
 _HELP = {
     "Sin": "Sin[x] — sine of x",
@@ -17,26 +14,33 @@ _HELP = {
     "Tan": "Tan[x] — tangent of x",
     "Exp": "Exp[x] — exponential e^x",
     "Log": "Log[x] — natural logarithm",
-    "diff": "diff(expr, var) — differentiate",
-    "integrate": "integrate(expr, var) — integrate",
-    "solve": "solve(expr, var) — solve equation",
-    "simplify": "simplify(expr) — algebraic simplification",
-    "expand": "expand(expr) — expand products",
-    "factor": "factor(expr) — factorize",
-    "N": "N(expr) or N(expr, precision) — numerical evaluation",
-    "Matrix": "Matrix([a,b],[c,d]) — create matrix",
-    "List": "List(a, b, c) — ordered collection",
-    "Range": "Range(n) or Range(a,b) — generate range",
-    "Table": "Table(fn, (min, max)) — generate list from function",
+    "Diff": "Diff[expr, x] — differentiate",
+    "Integrate": "Integrate[expr, x] — integrate",
+    "Solve": "Solve[expr == 0, x] — solve equation",
+    "Simplify": "Simplify[expr] — algebraic simplification",
+    "Expand": "Expand[expr] — expand products",
+    "Factor": "Factor[expr] — factorize",
+    "N": "N[expr] or N[expr, precision] — numerical evaluation",
+    "Plot": "Plot[expr, {x, min, max}] — 2D function plot",
+    "Matrix": "{{a, b}, {c, d}} — create matrix",
+    "List": "{a, b, c} — ordered collection",
+    "Range": "Range[n] or Range[a, b] — generate range",
+    "Table": "Table[expr, {i, min, max}] — generate list",
+    "Quantity": "Quantity[value, \"unit\"] — physical quantity",
+    "Element": "Element[\"H\"] — element data",
+    "DFT": "DFT[{1, 2, 3, 4}] — discrete Fourier transform",
 }
 
-_ALL_NAMES = list(BUILTIN_FUNCTIONS.keys()) + [
-    "simplify", "expand", "factor", "diff", "integrate", "solve", "limit", "series",
-    "N", "Pi", "E", "I", "Infinity", "GoldenRatio",
-    "List", "Table", "Map", "Select", "Sort", "Reverse", "Take", "Drop", "Part", "Range",
+_ALL_NAMES = list(_HELP.keys()) + [
+    "Pi", "E", "I", "Infinity", "True", "False",
+    "ArcSin", "ArcCos", "ArcTan", "Log2", "Log10",
+    "Det", "Inverse", "Transpose", "Eigenvalues", "Dot",
+    "Map", "Select", "Sort", "Reverse", "Take", "Drop", "Part",
     "Total", "Mean", "Median", "StandardDeviation",
-    "Matrix", "Dot", "Det", "Inverse", "Eigenvalues", "Eigenvectors", "Transpose",
-    "symbols", "evaluate",
+    "Prime", "PrimeQ", "GCD", "LCM", "Mod",
+    "Factorial", "Binomial", "Fibonacci",
+    "UnitConvert", "MolecularMass", "BalanceEquation",
+    "FourierTransform", "Convolve", "HammingWindow",
 ]
 
 
@@ -47,36 +51,15 @@ def _completer(text, state):
 
 def main():
     """Run the MikoshiLang interactive REPL."""
-    print("MikoshiLang v0.1.0 — Symbolic Computation Language")
+    print("MikoshiLang v0.2.0 — Symbolic Computation Language")
     print("Built by Mikoshi Ltd")
-    print('Type "quit" to exit, "?Name" for help.\n')
+    print("Type Wolfram-style expressions. \"quit\" to exit, \"?Name\" for help.\n")
 
     readline.set_completer(_completer)
     readline.parse_and_bind("tab: complete")
 
-    history_in = {}
     history_out = {}
     counter = 1
-
-    # Build evaluation namespace
-    ns = {}
-    ns.update(BUILTIN_FUNCTIONS)
-    ns.update({
-        "simplify": simplify, "expand": expand, "factor": factor,
-        "diff": diff, "integrate": integrate, "solve": solve,
-        "limit": limit, "series": series,
-        "N": N, "Pi": Pi, "E": E, "I": I,
-        "Infinity": Infinity, "GoldenRatio": GoldenRatio,
-        "List": List, "Table": Table, "Map": Map, "Select": Select,
-        "Sort": Sort, "Reverse": Reverse, "Take": Take, "Drop": Drop,
-        "Part": Part, "Range": Range, "Total": Total, "Mean": Mean,
-        "Median": Median, "StandardDeviation": StandardDeviation,
-        "Matrix": Matrix, "Dot": Dot, "Det": Det, "Inverse": Inverse,
-        "Eigenvalues": Eigenvalues, "Eigenvectors": Eigenvectors,
-        "Transpose": Transpose,
-        "symbols": symbols, "Symbol": Symbol, "Expr": Expr,
-        "evaluate": evaluate,
-    })
 
     while True:
         try:
@@ -100,15 +83,13 @@ def main():
                 print(f"  No help available for {name}")
             continue
 
-        history_in[counter] = line
-
         try:
-            result = eval(line, {"__builtins__": {}}, ns)
+            expr = parse(line)
+            result = evaluate(expr)
             history_out[counter] = result
-            ns["In"] = history_in
-            ns["Out"] = history_out
-            ns[f"Out{counter}"] = result
             print(f"Out[{counter}]= {result}")
+        except ParseError as ex:
+            print(f"  Parse error: {ex}")
         except Exception as ex:
             print(f"  Error: {ex}")
 

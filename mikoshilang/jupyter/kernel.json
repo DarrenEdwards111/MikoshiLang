@@ -1,0 +1,5 @@
+{
+  "argv": ["python", "-m", "mikoshilang.jupyter.kernel", "-f", "{connection_file}"],
+  "display_name": "MikoshiLang",
+  "language": "mikoshilang"
+}

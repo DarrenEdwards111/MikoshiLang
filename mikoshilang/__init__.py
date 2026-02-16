@@ -3,7 +3,7 @@
 Built by Mikoshi Ltd.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .expr import Expr, Symbol, symbols
 from .pattern import Blank, BlankSequence, BlankNullSequence, Pattern
@@ -20,6 +20,17 @@ from .builtins import (
     Factorial, Binomial, Fibonacci,
     And, Or, Not, Xor, Implies,
     Equal, Less, Greater, LessEqual, GreaterEqual,
+)
+from .parser import parse, parse_file, parse_and_eval, ParseError
+from .latex import to_latex
+from .units import Quantity, UnitConvert
+from .chemistry import Element, AtomicMass, ElectronConfiguration, MolecularMass, BalanceEquation
+from .signal import (
+    FourierTransform, InverseFourierTransform,
+    DFT, IDFT,
+    LowPassFilter, HighPassFilter, BandPassFilter,
+    Convolve, HammingWindow, HanningWindow, BlackmanWindow,
+    Spectrogram,
 )
 
 __all__ = [
@@ -38,4 +49,13 @@ __all__ = [
     "Factorial", "Binomial", "Fibonacci",
     "And", "Or", "Not", "Xor", "Implies",
     "Equal", "Less", "Greater", "LessEqual", "GreaterEqual",
+    "parse", "parse_file", "parse_and_eval", "ParseError",
+    "to_latex",
+    "Quantity", "UnitConvert",
+    "Element", "AtomicMass", "ElectronConfiguration", "MolecularMass", "BalanceEquation",
+    "FourierTransform", "InverseFourierTransform",
+    "DFT", "IDFT",
+    "LowPassFilter", "HighPassFilter", "BandPassFilter",
+    "Convolve", "HammingWindow", "HanningWindow", "BlackmanWindow",
+    "Spectrogram",
 ]
