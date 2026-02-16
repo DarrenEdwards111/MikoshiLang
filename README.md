@@ -1,0 +1,242 @@
+# MikoshiLang
+
+**A symbolic computation language for Python** — pattern matching, algebraic simplification, and computational intelligence.
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python](https://img.shields.io/badge/python-3.9+-green.svg)](https://python.org)
+
+---
+
+## Overview
+
+MikoshiLang brings Wolfram Language-style symbolic computation to Python. Write mathematical expressions naturally, apply pattern-based transformations, and leverage a full computer algebra system — all from Python.
+
+## Installation
+
+```bash
+pip install mikoshilang
+```
+
+## Quick Start
+
+```python
+from mikoshilang import *
+
+# Create symbols
+x, y = symbols("x y")
+
+# Build expressions naturally
+expr = x**2 + 3*x + 1
+
+# Differentiate
+diff(x**2, x)  # → 2*x
+
+# Integrate
+integrate(x**2, x)  # → x³/3
+
+# Solve equations
+solve(x**2 - 4, x)  # → {-2, 2}
+
+# Simplify
+simplify(Sin(x)**2 + Cos(x)**2)  # → 1
+
+# Expand
+expand((x + 1)**3)  # → x³ + 3x² + 3x + 1
+
+# Factor
+factor(x**2 - 1)  # → (x - 1)(x + 1)
+```
+
+## Pattern Matching
+
+Wolfram-style pattern matching with blanks, sequences, and conditions:
+
+```python
+from mikoshilang import *
+
+# Match anything
+pat = Blank()  # _
+
+# Named patterns
+pat = Blank("x")  # x_ — binds to "x"
+
+# Type-constrained patterns
+pat = Blank("n", "Integer")  # n_Integer — matches only integers
+
+# Sequence patterns
+pat = BlankSequence("xs")    # xs__ — one or more
+pat = BlankNullSequence("xs")  # xs___ — zero or more
+
+# Match expressions
+pat = Expr("Plus", Blank("a"), Blank("b"))
+match(pat, Expr("Plus", 1, 2))  # → {"a": 1, "b": 2}
+
+# Conditional matching
+pat = Condition(Blank("x"), lambda b: b["x"] > 0)
+match(pat, 5)   # → {"x": 5}
+match(pat, -1)  # → None
+```
+
+## Rule-Based Transformation
+
+```python
+from mikoshilang import *
+
+x = Symbol("x")
+
+# Simple rule
+rule = Rule(Expr("Plus", Blank("a"), 0), Blank("a"))
+replace(x + 0, rule)  # → x
+
+# Delayed rule (lazy evaluation)
+rule = RuleDelayed(
+    Expr("Square", Blank("n", "Integer")),
+    lambda b: b["n"] ** 2
+)
+
+# Apply rules recursively
+replace_all(expr, rules)
+```
+
+## Data Operations
+
+```python
+from mikoshilang import *
+
+# Lists
+lst = List(3, 1, 4, 1, 5, 9)
+
+# Generate
+Range(5)                    # → {1, 2, 3, 4, 5}
+Table(lambda i: i**2, (1, 5))  # → {1, 4, 9, 16, 25}
+
+# Transform
+Map(lambda x: x * 2, lst)      # → {6, 2, 8, 2, 10, 18}
+Select(lst, lambda x: x > 3)   # → {4, 5, 9}
+Sort(lst)                       # → {1, 1, 3, 4, 5, 9}
+
+# Statistics
+Total(lst)              # → 23
+Mean(List(1, 2, 3, 4))  # → 2.5
+Median(List(1, 2, 3))   # → 2
+```
+
+## Linear Algebra
+
+```python
+from mikoshilang import *
+
+m = Matrix([1, 2], [3, 4])
+
+Det(m)          # → -2
+Inverse(m)      # → Matrix[...]
+Transpose(m)    # → Matrix[{1, 3}, {2, 4}]
+Eigenvalues(m)  # → {λ₁, λ₂}
+
+# Matrix multiplication
+a = Matrix([1, 0], [0, 1])
+Dot(a, m)  # → m
+```
+
+## Numerical Evaluation
+
+```python
+from mikoshilang import *
+
+N(Pi)              # → 3.14159265358979
+N(Pi, 50)          # → 50-digit precision
+N(Exp(1))          # → 2.71828182845905
+N(Sin(Pi/4))       # → 0.707106781186548
+```
+
+## Built-in Functions
+
+| Category | Functions |
+|----------|-----------|
+| **Trig** | `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan` |
+| **Exponential** | `Exp`, `Log`, `Log2`, `Log10` |
+| **Number Theory** | `Prime`, `PrimeQ`, `FactorInteger`, `GCD`, `LCM`, `Mod` |
+| **Combinatorics** | `Factorial`, `Binomial`, `Fibonacci` |
+| **Logic** | `And`, `Or`, `Not`, `Xor`, `Implies` |
+| **Comparison** | `Equal`, `Less`, `Greater`, `LessEqual`, `GreaterEqual` |
+
+## Interactive REPL
+
+```bash
+$ mikoshilang
+MikoshiLang v0.1.0 — Symbolic Computation Language
+Built by Mikoshi Ltd
+
+In[1]:= diff(x**2 + 3*x, x)
+Out[1]= 2*x + 3
+
+In[2]:= solve(x**2 - 1, x)
+Out[2]= {-1, 1}
+
+In[3]:= N(Pi, 30)
+Out[3]= 3.14159265358979323846264338328
+```
+
+## Comparison with Wolfram Language
+
+| Wolfram Language | MikoshiLang |
+|-----------------|-------------|
+| `D[x^2, x]` | `diff(x**2, x)` |
+| `Integrate[x^2, x]` | `integrate(x**2, x)` |
+| `Solve[x^2 - 4 == 0, x]` | `solve(x**2 - 4, x)` |
+| `Simplify[Sin[x]^2 + Cos[x]^2]` | `simplify(Sin(x)**2 + Cos(x)**2)` |
+| `Table[i^2, {i, 1, 5}]` | `Table(lambda i: i**2, (1, 5))` |
+| `Det[{{1,2},{3,4}}]` | `Det(Matrix([1,2],[3,4]))` |
+| `N[Pi, 50]` | `N(Pi, 50)` |
+
+## API Reference
+
+### Core
+- `Expr(head, *args)` — Create an expression
+- `Symbol(name)` — Create a symbolic variable
+- `symbols("x y z")` — Create multiple symbols
+- `evaluate(expr)` — Evaluate with simplification
+
+### Pattern Matching
+- `Blank(name, head)` — Match single expression
+- `BlankSequence(name)` — Match one or more
+- `BlankNullSequence(name)` — Match zero or more
+- `match(pattern, expr)` — Attempt pattern match
+
+### Rules
+- `Rule(pattern, replacement)` — Substitution rule
+- `RuleDelayed(pattern, fn)` — Lazy substitution
+- `replace(expr, rules)` — Apply rules (top level)
+- `replace_all(expr, rules)` — Apply rules recursively
+
+### Symbolic Math
+- `simplify(expr)` — Simplify
+- `expand(expr)` — Expand
+- `factor(expr)` — Factor
+- `diff(expr, var)` — Differentiate
+- `integrate(expr, var)` — Integrate
+- `solve(expr, var)` — Solve
+- `limit(expr, var, point)` — Limit
+- `series(expr, var, point, order)` — Taylor series
+
+### Numerical
+- `N(expr)` — Numerical evaluation
+- `N(expr, precision)` — Arbitrary precision
+- Constants: `Pi`, `E`, `I`, `Infinity`, `GoldenRatio`
+
+### Data
+- `List`, `Range`, `Table`, `Map`, `Select`
+- `Sort`, `Reverse`, `Take`, `Drop`, `Part`
+- `Total`, `Mean`, `Median`, `StandardDeviation`
+
+### Linear Algebra
+- `Matrix`, `Dot`, `Det`, `Inverse`
+- `Eigenvalues`, `Eigenvectors`, `Transpose`
+
+## License
+
+Apache License 2.0
+
+---
+
+**Built by [Mikoshi Ltd](https://mikoshi.co.uk)**
