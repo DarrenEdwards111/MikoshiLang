@@ -6,6 +6,7 @@ mikoshilang/chemistry.py
 mikoshilang/data.py
 mikoshilang/evaluate.py
 mikoshilang/expr.py
+mikoshilang/extended.py
 mikoshilang/latex.py
 mikoshilang/linalg.py
 mikoshilang/math_ops.py
@@ -31,6 +32,7 @@ tests/test_chemistry.py
 tests/test_data.py
 tests/test_evaluate.py
 tests/test_expr.py
+tests/test_extended.py
 tests/test_latex.py
 tests/test_linalg.py
 tests/test_math.py
