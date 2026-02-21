@@ -57,14 +57,28 @@ def to_latex(expr, parent_prec: int = 0) -> str:
     if head == "Plus":
         parts = []
         for i, a in enumerate(args):
-            s = to_latex(a, 1)
-            if i > 0:
-                if isinstance(a, Expr) and a.head == "Times" and len(a.args) >= 1 and isinstance(a.args[0], (int, float)) and a.args[0] < 0:
-                    parts.append(f" {s}")
-                else:
-                    parts.append(f" + {s}")
+            is_neg_times = (isinstance(a, Expr) and a.head == "Times" and len(a.args) >= 1
+                           and isinstance(a.args[0], (int, float)) and a.args[0] < 0)
+            is_neg_atom = isinstance(a, (int, float)) and a < 0
+            if i == 0:
+                parts.append(to_latex(a, 1))
             else:
-                parts.append(s)
+                if is_neg_atom:
+                    parts.append(f" - {abs(a)}")
+                elif is_neg_times:
+                    coeff = a.args[0]
+                    rest_args = a.args[1:]
+                    if coeff == -1 and len(rest_args) == 1:
+                        parts.append(f" - {to_latex(rest_args[0], 1)}")
+                    else:
+                        abs_coeff = abs(coeff)
+                        if abs_coeff == 1 and len(rest_args) == 1:
+                            pos_expr = rest_args[0]
+                        else:
+                            pos_expr = Expr("Times", abs_coeff, *rest_args)
+                        parts.append(f" - {to_latex(pos_expr, 1)}")
+                else:
+                    parts.append(f" + {to_latex(a, 1)}")
         result = "".join(parts)
         if parent_prec > 1:
             result = r"\left(" + result + r"\right)"

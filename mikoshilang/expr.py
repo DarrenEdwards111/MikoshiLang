@@ -146,16 +146,33 @@ def _format_expr(e: Expr, parent_prec: int = 0) -> str:
     if e.head == "Plus":
         parts = []
         for i, a in enumerate(e.args):
-            s = _fmt(a, prec)
-            if i > 0:
-                # Check for negative coefficient
-                if isinstance(a, Expr) and a.head == "Times" and len(a.args) >= 1 and isinstance(a.args[0], (int, float)) and a.args[0] < 0:
-                    s = _fmt(a, prec)
-                    parts.append(f" {s}" if s.startswith("-") else f" + {s}")
+            # Detect subtraction: Times[-1, expr], Times[negative, expr], or plain negative number
+            is_neg_times = (isinstance(a, Expr) and a.head == "Times" and len(a.args) >= 1
+                           and isinstance(a.args[0], (int, float)) and a.args[0] < 0)
+            is_neg_atom = isinstance(a, (int, float)) and a < 0
+            if i == 0:
+                if is_neg_times and a.args[0] == -1 and len(a.args) == 2:
+                    parts.append(f"-{_fmt(a.args[1], prec)}")
                 else:
-                    parts.append(f" + {s}")
+                    parts.append(_fmt(a, prec))
             else:
-                parts.append(s)
+                if is_neg_atom:
+                    # Plain negative number: render as " - abs(n)"
+                    parts.append(f" - {_format_atom(abs(a))}")
+                elif is_neg_times:
+                    coeff = a.args[0]
+                    rest_args = a.args[1:]
+                    if coeff == -1 and len(rest_args) == 1:
+                        parts.append(f" - {_fmt(rest_args[0], prec)}")
+                    else:
+                        abs_coeff = abs(coeff)
+                        if abs_coeff == 1 and len(rest_args) == 1:
+                            pos_expr = rest_args[0]
+                        else:
+                            pos_expr = Expr("Times", abs_coeff, *rest_args)
+                        parts.append(f" - {_fmt(pos_expr, prec)}")
+                else:
+                    parts.append(f" + {_fmt(a, prec)}")
         result = "".join(parts)
         if parent_prec > prec:
             result = f"({result})"

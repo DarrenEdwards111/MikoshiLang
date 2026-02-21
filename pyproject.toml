@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mikoshilang"
-version = "0.2.4"
+version = "0.2.5"
 description = "Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence"
 authors = [{name = "Mikoshi Ltd", email = "mikoshiuk@gmail.com"}]
 license = {text = "Apache-2.0"}
