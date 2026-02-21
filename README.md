@@ -140,13 +140,78 @@ Then open Jupyter Notebook and select the "MikoshiLang" kernel. Features:
 - Inline matplotlib plots with `Plot[Sin[x], {x, -Pi, Pi}]`
 - Rich display of matrices and lists
 
-### Plotting
+### Advanced Visualization
 
+MikoshiLang includes comprehensive visualization capabilities rivaling Wolfram's plotting system:
+
+#### 2D Plotting
+```python
+# Single function
+Plot2D[Sin[x], {x, -Pi, Pi}]
+
+# Multiple functions
+Plot2D[{Sin[x], Cos[x], Tan[x]}, {x, -Pi, Pi}]
+
+# Parametric 2D
+ParametricPlot[{Cos[t], Sin[t]}, {t, 0, 2*Pi}]  # Circle
+
+# Polar plots
+PolarPlot[1 + Cos[theta], {theta, 0, 2*Pi}]  # Cardioid
 ```
-Plot[Sin[x], {x, -Pi, Pi}]
-Plot[{Sin[x], Cos[x]}, {x, -Pi, Pi}]
-ListPlot[{1, 4, 9, 16, 25}]
-ListLinePlot[{1, 4, 9, 16, 25}]
+
+#### 3D Plotting
+```python
+# 3D surface plot
+Plot3D[Sin[x]*Cos[y], {x, -Pi, Pi}, {y, -Pi, Pi}]
+
+# Interactive 3D (uses Plotly)
+Interactive3D[x^2 + y^2, {x, -3, 3}, {y, -3, 3}]
+
+# 3D parametric (helix)
+ParametricPlot[{Cos[t], Sin[t], t}, {t, 0, 4*Pi}]
+```
+
+#### Contour & Vector Fields
+```python
+# Contour plot
+ContourPlot[x^2 - y^2, {x, -2, 2}, {y, -2, 2}]
+
+# Vector field
+VectorFieldPlot[{-y, x}, {x, -3, 3}, {y, -3, 3}]
+
+# With streamlines
+VectorFieldPlot[{-y, x}, {x, -3, 3}, {y, -3, 3}, streamlines=True]
+```
+
+#### Animations
+```python
+# Animate a wave with changing frequency
+AnimatePlot[Sin[k*x], x, {k, 1, 10, 50}, 
+           x_range={x, 0, 2*Pi}, 
+           interval=100,
+           save_as="wave.gif")
+```
+
+#### Heatmaps & Matrix Visualization
+```python
+# Heatmap with annotations
+data = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}
+Heatmap[data, annot=True, cmap="viridis"]
+```
+
+**Visualization Options:**
+- `show=True/False` — Display immediately or return figure
+- `interactive=True` — Use Plotly for 3D rotation/zoom
+- `color`, `linewidth`, `linestyle` — Styling
+- `title`, `xlabel`, `ylabel` — Labels
+- `grid=True/False` — Grid lines
+- `figsize=(width, height)` — Figure dimensions
+- `cmap` — Colormap for heatmaps/contours
+- `save_as="filename.png"` — Save to file
+
+Install visualization dependencies:
+```bash
+pip install mikoshilang[visualization]  # matplotlib + plotly
 ```
 
 ## Physics Units
@@ -271,6 +336,9 @@ print(BalanceEquation("H2 + O2 -> H2O"))
 | Physics units | ✅ | ✅ |
 | Chemistry | ✅ | ✅ (118 elements) |
 | Signal processing | ✅ | ✅ (via SciPy) |
+| 3D visualization | ✅ | ✅ (matplotlib + plotly) |
+| Interactive plots | ✅ | ✅ (plotly) |
+| Animations | ✅ | ✅ (GIF export) |
 | Free & open source | ❌ | ✅ |
 
 ## Function Library (1,333 Functions)
@@ -434,9 +502,29 @@ Power1-10, Root1-10, Reciprocal1-10, Double1-10, Half1-10, Negate1-10, Increment
 
 **Examples:** `Power3[x]`, `Root5[x]`, `Fibonacci7Plus[n]`, `Sin2Pi[x]`
 
+### Advanced Visualization (9 functions + options)
+**2D:** Plot2D (single/multiple functions), ParametricPlot (2D/3D curves), PolarPlot  
+**3D:** Plot3D (surface plots), Interactive3D (Plotly rotation/zoom), ContourPlot (filled/line contours)  
+**Vector Fields:** VectorFieldPlot (quiver/streamline modes)  
+**Animations:** AnimatePlot (parameter sweeps, save as GIF)  
+**Heatmaps:** Heatmap (matrix visualization, annotations)
+
+**Features:**
+- Static plots (matplotlib) and interactive plots (plotly)
+- 3D surface plots with rotation, zoom, pan
+- Vector field visualization with streamlines
+- Contour plots (filled or line-based)
+- Parametric curves in 2D and 3D
+- Polar coordinate plots
+- Animated parameter sweeps with GIF export
+- Matrix heatmaps with value annotations
+- Full styling control (colors, linewidth, grid, labels, legends)
+
+**Examples:** `Plot2D[Sin[x], {x, 0, 2*Pi}]`, `Plot3D[x^2 + y^2, {x, -3, 3}, {y, -3, 3}]`, `Interactive3D[Sin[x]*Cos[y], {x, -Pi, Pi}, {y, -Pi, Pi}]`, `AnimatePlot[Sin[k*x], x, {k, 1, 10, 50}]`
+
 ---
 
-**Total:** 1,333 functions across 20+ domains — comprehensive coverage rivaling commercial computer algebra systems.
+**Total:** 1,342 functions across 21 domains — comprehensive coverage rivaling commercial computer algebra systems.
 
 ## License
 

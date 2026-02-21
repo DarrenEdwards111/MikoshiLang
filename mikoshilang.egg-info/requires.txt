@@ -5,6 +5,9 @@ numpy>=1.21
 ipykernel>=6.0
 matplotlib>=3.4
 scipy>=1.7
+plotly>=5.0
+networkx>=2.6
+scikit-learn>=1.0
 
 [chemistry]
 
@@ -19,3 +22,7 @@ matplotlib>=3.4
 scipy>=1.7
 
 [units]
+
+[visualization]
+matplotlib>=3.4
+plotly>=5.0

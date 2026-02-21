@@ -18,7 +18,8 @@ def _ensure_extended():
             from .extended3 import EXTENDED3_RULES
             from .extended4 import EXTENDED4_RULES
             from .extended5 import EXTENDED5_RULES
-            _extended_rules = EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + EXTENDED4_RULES + EXTENDED5_RULES
+            from .visualization import VISUALIZATION_RULES
+            _extended_rules = EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + EXTENDED4_RULES + EXTENDED5_RULES + VISUALIZATION_RULES
         except Exception as e:
             # Fallback: try loading what we can
             try:

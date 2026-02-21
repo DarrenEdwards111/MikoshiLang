@@ -22,6 +22,7 @@ mikoshilang/repl.py
 mikoshilang/rules.py
 mikoshilang/signal.py
 mikoshilang/units.py
+mikoshilang/visualization.py
 mikoshilang.egg-info/PKG-INFO
 mikoshilang.egg-info/SOURCES.txt
 mikoshilang.egg-info/dependency_links.txt
@@ -47,3 +48,4 @@ tests/test_plotting.py
 tests/test_rules.py
 tests/test_signal.py
 tests/test_units.py
+tests/test_visualization.py
