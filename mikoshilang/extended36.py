@@ -107,8 +107,11 @@ def get_rules():
         ('DefectWaste[rework_cost_]', lambda cost: cost),
         
         # ===== MAINTENANCE (20 functions) =====
+        ('MTBF[operating_time_, failures_]', lambda t, f: t/f),  # Alias
         ('MeanTimeBetweenFailures[operating_time_, failures_]', lambda t, f: t/f),
+        ('MTTR[repair_time_, repairs_]', lambda t, r: t/r),  # Alias
         ('MeanTimeToRepair[repair_time_, repairs_]', lambda t, r: t/r),
+        ('MTTF[total_time_, items_]', lambda t, n: t/n),  # Alias
         ('MeanTimeToFailure[total_time_, items_]', lambda t, n: t/n),
         ('Availability[MTBF_, MTTR_]', lambda mtbf, mttr: mtbf/(mtbf + mttr)*100),
         ('ReliabilityFunction[failure_rate_, t_]', lambda lam, t: exp(-lam*t)),

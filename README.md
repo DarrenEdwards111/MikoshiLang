@@ -17,13 +17,13 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C094-blue)]()
 
-**A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
+**A symbolic computation language for Python** — Wolfram-style syntax, **6,327** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
 Built by **Mikoshi Ltd**.
 
 > **[🚀 Try It Online — No Install Required](https://mikoshi.co.uk/mikoshilang)**
 > 
-> **[📖 Download the Manual (PDF)](https://mikoshi.co.uk/docs/mikoshilang-manual.pdf)** — Complete reference guide with all 6,324 functions
+> **[📖 Download the Manual (PDF)](https://mikoshi.co.uk/docs/mikoshilang-manual.pdf)** — Complete reference guide with all 6,327 functions
 
 ## Why MikoshiLang?
 
@@ -352,9 +352,9 @@ print(BalanceEquation("H2 + O2 -> H2O"))
 | Animations | ✅ | ✅ (GIF export) |
 | Free & open source | ❌ | ✅ |
 
-## Function Library (6,324 Functions)
+## Function Library (6,327 Functions)
 
-MikoshiLang includes **6,324 built-in functions** across 40+ scientific and engineering domains:
+MikoshiLang includes **6,327 built-in functions** across 40+ scientific and engineering domains:
 
 ### Boolean Logic & SAT (50 functions)
 Truth tables, CNF/DNF conversion, SAT solving, boolean minimization, logic gates (NAND, NOR, XOR, XNOR, Iff), all satisfying assignments.
@@ -548,7 +548,7 @@ MikoshiLang v3.0+ includes 28 extended modules covering specialized scientific d
 
 ---
 
-**Total:** 6,324 functions across 40+ domains — comprehensive computational breadth matching Wolfram Mathematica.
+**Total:** 6,327 functions across 40+ domains — comprehensive computational breadth matching Wolfram Mathematica.
 
 ## License
 
