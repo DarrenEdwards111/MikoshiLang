@@ -49,6 +49,8 @@ mikoshilang/extended8.py
 mikoshilang/extended9.py
 mikoshilang/extended_helper.py
 mikoshilang/knowledge.py
+mikoshilang/knowledge_full.py
+mikoshilang/knowledge_full_rules.py
 mikoshilang/knowledge_rules.py
 mikoshilang/latex.py
 mikoshilang/linalg.py
@@ -78,6 +80,7 @@ tests/test_evaluate.py
 tests/test_expr.py
 tests/test_extended.py
 tests/test_knowledge.py
+tests/test_knowledge_full.py
 tests/test_latex.py
 tests/test_linalg.py
 tests/test_math.py

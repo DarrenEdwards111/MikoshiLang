@@ -50,32 +50,54 @@ Built by **Mikoshi Ltd**.
 - **📓 Jupyter kernel** — LaTeX-rendered expressions, inline plots, proper notebook experience
 - **🌐 Knowledge layer** — Wikidata entity graph + Wikipedia summaries. Structured facts, provenance tracking, license compliance. `EntitySearch`, `EntityValue`, `WikipediaSummary`
 
-## Knowledge Layer
+## Knowledge Layer (Full Version)
 
-MikoshiLang implements a Wolfram-style entity framework with **deterministic fact retrieval**:
+MikoshiLang implements a **complete** Wolfram-style entity framework with all 8 components:
 
 ```python
-# Search entities
-EntitySearch["Douglas Adams"]
-# → [{"id": "Q42", "label": "Douglas Adams", "description": "British science fiction writer...", ...}]
+# 1. Entity Search (cached)
+entities = EntitySearch["Douglas Adams"]
+# → [{"id": "Q42", "label": "Douglas Adams", ...}]
 
-# Get properties
+# 2. Entity Facts (with time-travel)
 EntityValue["Q42", "BirthDate"]
-# → {"value": "1952-03-11", "source": "https://www.wikidata.org/wiki/Q42", "license": "CC0"}
+# → {"value": "1952-03-11", "license": "CC0", "source": "..."}
 
-# Wikipedia summaries
-WikipediaSummary["Python (programming language)"]
-# → {"summary": "Python is a high-level...", "license": "CC BY-SA 3.0", ...}
+EntityValue["Q42", "Occupation", as_of="2015-01-01"]  # Historical snapshot
+
+# 3. Relationship Queries (graph traversal)
+EntityRelationships["Q42", "Influenced", depth=2]
+# → Multi-hop graph via SPARQL
+
+# 4. Wikipedia Text (with sections)
+WikipediaText["Python (programming language)", sentences=3]
+# → {"text": "...", "license": "CC BY-SA 3.0", "attribution": "..."}
+
+# 5. Domain Packs (extensible knowledge)
+PackSearch["pubchem", "caffeine"]
+PackValue["pubchem", "2519", "MolecularFormula"]
+# → {"value": "C8H10N4O2", "license": "Public Domain"}
+
+# 6. LLM Interpreter (natural language)
+InterpretQuery["When was Douglas Adams born?"]
+# → Plan + execute + answer
+
+# 7. Cache Management
+CacheStats[]  # {"total_entries": 1523, "size_mb": 8.4}
+CacheClear[30]  # Clear entries older than 30 days
 ```
 
-**Features:**
-- Entity graph (Wikidata QIDs + properties)
-- Canonical property mappings (`BirthDate`, `Occupation`, `AtomicNumber`, etc.)
-- Provenance tracking (source URLs + timestamps)
-- License compliance (CC0 for Wikidata, CC BY-SA for Wikipedia)
-- Cached results for performance
+**Architecture:**
+1. ✅ Entity Graph (Wikidata) — QIDs, PIDs, 50+ canonical properties
+2. ✅ Text Layer (Wikipedia) — summaries, sections, attribution
+3. ✅ 5 Core Tools — search, facts, **relationships**, text, **time/versioning**
+4. ✅ LLM Interpreter — natural language → structured queries
+5. ✅ Persistent Cache — SQLite with TTL (7d Wikidata, 24h Wikipedia)
+6. ✅ Canonical Properties — stable schema across domains
+7. ✅ Domain Packs — PubChem (chemistry), extensible for more
+8. ✅ License Compliance — CC0/CC BY-SA tracking + attribution
 
-See [Knowledge Layer docs](docs/KNOWLEDGE_LAYER.md) for full details.
+See [Full Knowledge Layer docs](docs/KNOWLEDGE_LAYER_FULL.md) for complete reference.
 
 ## Installation
 

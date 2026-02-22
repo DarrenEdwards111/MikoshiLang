@@ -50,7 +50,7 @@ def _ensure_extended():
             from .extended35 import register as ext35
             from .extended36 import register as ext36
             from .extended37 import register as ext37
-            from .knowledge_rules import register as knowledge
+            from .knowledge_full_rules import register_full as knowledge
             from .visualization import VISUALIZATION_RULES
             _extended_rules = (EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + 
                              EXTENDED4_RULES + EXTENDED5_RULES + ext6() + ext7() + 
