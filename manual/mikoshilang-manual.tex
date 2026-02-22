@@ -56,7 +56,7 @@
 
 \title{\Huge\textbf{MikoshiLang}\\\Large Reference Manual \& User Guide}
 \author{Mikoshi Ltd}
-\date{Version 2.0.0 --- \today}
+\date{Version 3.1.1 --- \today}
 
 \begin{document}
 
@@ -66,7 +66,7 @@
 \vspace{2cm}
 
 \begin{abstract}
-MikoshiLang is a symbolic computation language for Python, inspired by Wolfram Language. It provides 1,794 functions across 25+ domains including calculus, linear algebra, number theory, statistics, chemistry, visualization, machine learning, physics, cryptography, biology, and more. Unlike traditional computational tools, MikoshiLang combines natural language processing with deterministic code execution — AI proposes, the engine proves. No hallucinated math.
+MikoshiLang is a symbolic computation language for Python, inspired by Wolfram Language. It provides \textbf{6,327 functions} across \textbf{40+ domains} including calculus, linear algebra, number theory, statistics, chemistry, visualization, machine learning, physics, cryptography, biology, engineering (mechanical, electrical, civil, aerospace, chemical), hydrology, mining, manufacturing, renewable energy, and more. Unlike traditional computational tools, MikoshiLang combines natural language processing with deterministic code execution — AI proposes, the engine proves. No hallucinated math.
 \end{abstract}
 
 \vfill
@@ -90,7 +90,7 @@ MikoshiLang is a symbolic computation language designed for Python, providing Wo
 \subsection{Key Features}
 
 \begin{itemize}
-    \item \textbf{1,794 functions} across calculus, algebra, number theory, statistics, chemistry, physics, biology, ML, cryptography, and more
+    \item \textbf{6,327 functions} across 40+ domains: calculus, algebra, number theory, statistics, chemistry, physics, biology, ML, cryptography, engineering, hydrology, mining, manufacturing, renewable energy, and more
     \item \textbf{Natural language mode} — type plain English, get verified results
     \item \textbf{Pattern matching \& rules} — symbolic manipulation with custom transformations
     \item \textbf{Jupyter kernel} — interactive notebooks with rich output
@@ -456,37 +456,57 @@ jupyter notebook
 
 \section{Function Reference}
 
-MikoshiLang provides 1,794 functions across 25+ domains. Below is a categorized listing.
+MikoshiLang provides \textbf{6,327 functions} across \textbf{40+ domains}. Below is a categorized listing.
 
-\subsection{New in v2.0 (452 functions)}
-
-Version 2.0 adds major expansions in scientific computing, machine learning, and computational mathematics:
+\subsection{Version History}
 
 \begin{itemize}
-    \item \textbf{Vector Calculus} (40) — Gradient, divergence, curl, Laplacian, directional derivatives, Hessian, Jacobian
-    \item \textbf{Differential Geometry} (35) — Christoffel symbols, Riemann tensor, Ricci tensor, curvature, fundamental forms
-    \item \textbf{Tensor Operations} (40) — Outer/inner products, wedge product, Hodge dual, symmetrization
-    \item \textbf{Geometry} (45) — Distance, area, volume, centroid, convex hull, Voronoi diagrams
-    \item \textbf{Topology} (30) — Euler characteristic, Betti numbers, homology groups, simplicial complexes
-    \item \textbf{Fractals \& Chaos} (25) — Mandelbrot set, Julia sets, Lyapunov exponents, bifurcation diagrams
-    \item \textbf{Coordinate Systems} (35) — Polar, cylindrical, spherical, toroidal, elliptic, bipolar
-    \item \textbf{Computational Geometry} (40) — Point-in-polygon, line intersection, bounding boxes, closest pair
-    \item \textbf{Machine Learning} (60) — Regression, activation functions, loss functions, optimizers, metrics
-    \item \textbf{Time Series} (50) — ARIMA, autocorrelation, exponential smoothing, seasonal decomposition
-    \item \textbf{Economics \& Finance} (60) — NPV, IRR, Black-Scholes, option pricing, Greeks, portfolio theory
-    \item \textbf{Cryptography} (40) — SHA-256/512, MD5, modular exponentiation, discrete log, number theory
-    \item \textbf{String Processing} (40) — Edit distance, alignment algorithms, tokenization, TF-IDF
-    \item \textbf{Classical Mechanics} (50) — Energy, momentum, forces, orbits, oscillations, drag
-    \item \textbf{Thermodynamics} (45) — Ideal gas law, entropy, heat engines, blackbody radiation
-    \item \textbf{Electromagnetism} (50) — Coulomb, Ohm, Faraday, Maxwell, Lorentz force, Hall effect
-    \item \textbf{Quantum Mechanics} (45) — Schrödinger equation, uncertainty, Pauli matrices, Fermi-Dirac
-    \item \textbf{Relativity} (30) — Lorentz transformations, time dilation, mass-energy, Schwarzschild metric
-    \item \textbf{Astronomy} (30) — Kepler's laws, stellar evolution, cosmology, Hubble law
-    \item \textbf{Biology \& Genetics} (60) — DNA analysis, protein analysis, population dynamics, epidemiology
-    \item \textbf{Numerical Methods} (70) — Root finding, integration, ODEs, interpolation, finite differences
-    \item \textbf{Formal Logic} (60) — Propositional logic, predicate logic, proof theory, modal logic
-    \item \textbf{Advanced Algebra} (60) — Gröbner bases, Galois theory, modules, quaternions
+    \item \textbf{v3.1.1} (Current) — 6,327 total functions
+    \item \textbf{v3.1.0} — Added 600 functions: hydrology, mining, manufacturing, renewable energy
+    \item \textbf{v3.0.4} — Fixed all placeholders, 100\% working functions
+    \item \textbf{v3.0.0} — Added 600 functions: info theory, acoustics, GIS, chemical engineering
+    \item \textbf{v2.5.0} — Added 600 functions: materials, optics, aerospace, nuclear physics
+    \item \textbf{v2.4.0} — Added 600 functions: climate, medical, robotics, environmental
+    \item \textbf{v2.3.0} — Added 900 functions: engineering, biology, finance, fluids
+    \item \textbf{v2.2.0} — Added 900 functions: CS algorithms, astronomy, statistics, NLP
+    \item \textbf{v2.0.0} — Added 452 functions: vector calculus, ML, physics, biology
+    \item \textbf{v1.0.0} — Initial release: 1,342 core functions
 \end{itemize}
+
+\subsection{Extended Function Sets (v2.0+)}
+
+MikoshiLang v2.0+ includes 32 extended modules covering specialized scientific domains:
+
+\begin{itemize}
+    \item \textbf{Extended 6-9} (552) — Vector calculus, ML/time series, physics, biology/numerical methods
+    \item \textbf{Extended 10-12} (600) — Special functions, audio/signal processing, graph theory/quantum computing
+    \item \textbf{Extended 13-16} (900) — Computer science algorithms, astronomy/astrophysics, advanced statistics, NLP
+    \item \textbf{Extended 17-20} (900) — Mechanical/electrical/civil engineering, biology/genetics, finance/economics, fluid dynamics
+    \item \textbf{Extended 21-24} (600) — Climate science, medical sciences, robotics, environmental science
+    \item \textbf{Extended 25-28} (600) — Materials science, optics/photonics, aerospace engineering, nuclear/particle physics
+    \item \textbf{Extended 29-32} (600) — Information theory/cryptography, acoustics/audio, geospatial/GIS, chemical engineering
+    \item \textbf{Extended 33} (100) — Agriculture, food science, sports science, textile/petroleum engineering
+    \item \textbf{Extended 34} (150) — Hydrology, groundwater, watershed analysis, oceanography, coastal engineering
+    \item \textbf{Extended 35} (150) — Rock mechanics, mine design, drilling/blasting, mineral processing, flotation
+    \item \textbf{Extended 36} (153) — Production planning, quality control, lean manufacturing, maintenance, ergonomics, facility layout
+    \item \textbf{Extended 37} (150) — Solar/wind energy, energy storage, power systems, grid integration
+\end{itemize}
+
+\subsection{Domain Coverage}
+
+\textbf{Mathematics:} Calculus, linear algebra, number theory, statistics, differential equations, discrete math, abstract algebra, topology, geometry, tensor analysis
+
+\textbf{Physics:} Classical mechanics, thermodynamics, electromagnetism, quantum mechanics, relativity, astronomy, astrophysics, nuclear physics, particle physics, optics, acoustics, fluid dynamics
+
+\textbf{Engineering:} Mechanical, electrical, civil, chemical, aerospace, materials, mining, manufacturing, petroleum, textile, robotics
+
+\textbf{Computer Science:} Algorithms, data structures, ML, NLP, cryptography, information theory, signal processing, image processing
+
+\textbf{Natural Sciences:} Chemistry, biology, genetics, environmental science, climate science, oceanography, geology, hydrology
+
+\textbf{Applied Sciences:} Medicine, pharmacology, agriculture, food science, sports science, renewable energy
+
+\textbf{Industrial:} Production, quality control, lean manufacturing, facility layout, maintenance, ergonomics
 
 \subsection{Calculus (67 functions)}
 
