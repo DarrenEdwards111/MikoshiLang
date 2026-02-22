@@ -171,6 +171,8 @@ def get_rules():
         ('PredictionHorizon[P_]', lambda P: P),
     ]
 
+
 def register():
     """Register all extended32 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

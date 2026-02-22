@@ -171,6 +171,8 @@ def get_rules():
         ('IsostasyPratt[h1_, h2_, rho1_, rho2_]', lambda h1, h2, rho1, rho2: h1*rho1 == h2*rho2),
     ]
 
+
 def register():
     """Register all extended24 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

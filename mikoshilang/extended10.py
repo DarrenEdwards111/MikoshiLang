@@ -60,7 +60,7 @@ def get_rules():
         ('PoissonDistribution[lambda_]', lambda lam: f'Poisson({lam})'),
         ('ExponentialDistribution[lambda_]', lambda lam: f'Exponential({lam})'),
         ('GammaDistribution[alpha_, beta_]', lambda a, b: f'Gamma({a}, {b})'),
-        ('BetaDistribution[alpha_, beta_]', lambda a, b: f'Beta({a}, b})'),
+        ('BetaDistribution[alpha_, beta_]', lambda a, b: f'Beta({a}, {b})'),
         ('ChiSquareDistribution[k_]', lambda k: f'ChiSquare({k})'),
         ('StudentTDistribution[nu_]', lambda nu: f'StudentT({nu})'),
         ('FDistribution[d1_, d2_]', lambda d1, d2: f'F({d1}, {d2})'),
@@ -172,6 +172,8 @@ def get_rules():
         ('SURF[img_]', lambda img: []),
     ]
 
+
 def register():
     """Register all extended10 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

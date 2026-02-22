@@ -39,6 +39,7 @@ mikoshilang/extended6.py
 mikoshilang/extended7.py
 mikoshilang/extended8.py
 mikoshilang/extended9.py
+mikoshilang/extended_helper.py
 mikoshilang/latex.py
 mikoshilang/linalg.py
 mikoshilang/math_ops.py

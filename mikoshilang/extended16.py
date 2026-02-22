@@ -251,6 +251,8 @@ def get_rules():
         ('HPSGParsing[text_]', lambda t: "HPSG structure"),
     ]
 
+
 def register():
     """Register all extended16 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

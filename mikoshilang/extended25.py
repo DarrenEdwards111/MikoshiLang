@@ -171,6 +171,8 @@ def get_rules():
         ('ZetaPotential[mu_, epsilon_, eta_]', lambda mu, eps, eta: mu*eta/eps),
     ]
 
+
 def register():
     """Register all extended25 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

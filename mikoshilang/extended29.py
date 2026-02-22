@@ -169,6 +169,8 @@ def get_rules():
         ('GolombCode[n_, m_]', lambda n, m: (int(n)//int(m), int(n)%int(m))),
     ]
 
+
 def register():
     """Register all extended29 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

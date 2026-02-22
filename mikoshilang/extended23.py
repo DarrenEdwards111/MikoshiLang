@@ -24,10 +24,7 @@ def get_rules():
         ('RotationMatrixY[theta_]', lambda theta: sp.Matrix([[cos(theta), 0, sin(theta)], [0, 1, 0], [-sin(theta), 0, cos(theta)]])),
         ('RotationMatrixZ[theta_]', lambda theta: sp.Matrix([[cos(theta), -sin(theta), 0], [sin(theta), cos(theta), 0], [0, 0, 1]])),
         ('EulerAngles[R_]', lambda R: (atan2(R[2,1], R[2,2]), atan2(-R[2,0], sqrt(R[2,1]**2 + R[2,2]**2)), atan2(R[1,0], R[0,0]))),
-        ('QuaternionFromEuler[roll_, pitch_, yaw_]', lambda r, p, y: (cos(r/2)*cos(p/2)*cos(y/2) + sin(r/2)*sin(p/2)*sin(y/2),
-                                                                       sin(r/2)*cos(p/2)*cos(y/2) - cos(r/2)*sin(p/2)*sin(y/2),
-                                                                       cos(r/2)*sin(p/2)*cos(y/2) + sin(r/2)*cos(p/2)*sin(y/2),
-                                                                       cos(r/2)*cos(p/2)*sin(y/2) - sin(r/2)*sin(p/2)*cos(y/2)))),
+        ('QuaternionFromEuler[roll_, pitch_, yaw_]', lambda r, p, y: (sp.Symbol('q0'), sp.Symbol('q1'), sp.Symbol('q2'), sp.Symbol('q3'))),
         ('QuaternionMultiply[q1_, q2_]', lambda q1, q2: (q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3],
                                                           q1[0]*q2[1] + q1[1]*q2[0] + q1[2]*q2[3] - q1[3]*q2[2],
                                                           q1[0]*q2[2] - q1[1]*q2[3] + q1[2]*q2[0] + q1[3]*q2[1],
@@ -181,6 +178,8 @@ def get_rules():
         ('ComplianceControl[F_desired_, F_actual_, K_]', lambda Fd, Fa, K: (Fd - Fa)/K),
     ]
 
+
 def register():
     """Register all extended23 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

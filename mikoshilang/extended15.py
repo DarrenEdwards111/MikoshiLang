@@ -294,6 +294,8 @@ def get_rules():
         ('LandmarkAnalysis[times_, events_, landmark_]', lambda t, e, lm: "landmark"),
     ]
 
+
 def register():
     """Register all extended15 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

@@ -168,6 +168,8 @@ def get_rules():
             (p[1]-sum(q[1] for q in pts)/len(pts))**2) for p in pts))),
     ]
 
+
 def register():
     """Register all extended6 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

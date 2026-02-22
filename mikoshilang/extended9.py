@@ -144,6 +144,8 @@ def get_rules():
         ('ArtinianRing[ring_]', lambda r: True),
     ]
 
+
 def register():
     """Register all extended9 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

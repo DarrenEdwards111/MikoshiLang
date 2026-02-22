@@ -266,6 +266,8 @@ def get_rules():
         ('PlasticZoneSize[K_, sigma_ys_]', lambda K, sigys: (K/sigys)**2/(2*pi)),
     ]
 
+
 def register():
     """Register all extended17 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

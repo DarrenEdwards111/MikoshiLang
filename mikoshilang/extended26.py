@@ -171,6 +171,8 @@ def get_rules():
         ('Soliton FissionLength[N_]', lambda N: sp.Symbol('LD')/N),
     ]
 
+
 def register():
     """Register all extended26 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

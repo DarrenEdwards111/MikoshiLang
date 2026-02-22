@@ -160,7 +160,7 @@ def get_rules():
         ('DroughtIndex[P_, PET_]', lambda P, PET: P - PET),
         ('StandardizedPrecipitationIndex[P_]', lambda P: (P - sp.Symbol('mean'))/sp.Symbol('std')),
         ('PalmerDroughtIndex[P_, PET_, soil_]', lambda P, PET, soil: P - PET + soil),
-        ('HeatWaveIndex[T_, threshold_, duration_]', lambda T, th, dur: T > th for dur),
+        ('HeatWaveIndex[T_, threshold_, duration_]', lambda T, th, dur: sp.Symbol('HeatWaveIndex')),
         ('FreezingDegreedays[T_]', lambda T: sum(max(0, 0 - Ti) for Ti in T)),
         ('GrowingDegreeDays[T_, T_base_]', lambda T, Tb: sum(max(0, Ti - Tb) for Ti in T)),
         ('VorticityIndex[vort_]', lambda vort: vort),
@@ -171,6 +171,8 @@ def get_rules():
         ('PolarVortexStrength[u_60N_]', lambda u: u),
     ]
 
+
 def register():
     """Register all extended21 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

@@ -166,6 +166,8 @@ def get_rules():
         ('PowerClean[work_, time_]', lambda W, t: W/t),
     ]
 
+
 def register():
     """Register all extended22 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

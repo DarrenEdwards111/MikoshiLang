@@ -193,6 +193,8 @@ def get_rules():
         ('ImageDifferencing[before_, after_]', lambda bef, aft: aft - bef),
     ]
 
+
 def register():
     """Register all extended31 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

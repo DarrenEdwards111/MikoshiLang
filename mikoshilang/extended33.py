@@ -121,6 +121,8 @@ def get_rules():
         ('WellProductivityIndex[Q_, P_res_, P_well_]', lambda Q, Pres, Pwell: Q/(Pres - Pwell)),
     ]
 
+
 def register():
     """Register all extended33 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

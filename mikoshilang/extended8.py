@@ -129,6 +129,8 @@ def get_rules():
         ('JeansLength[T_, rho_]', lambda T, rho: sqrt(15*sp.Symbol('k_B')*T / (4*pi*sp.Symbol('G')*sp.Symbol('mu')*sp.Symbol('m_H')*rho))),
     ]
 
+
 def register():
     """Register all extended8 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

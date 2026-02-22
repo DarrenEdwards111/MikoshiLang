@@ -322,6 +322,8 @@ def get_rules():
         ('SimHash[text_, k_]', lambda t, k: "hash"),
     ]
 
+
 def register():
     """Register all extended13 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

@@ -191,6 +191,8 @@ def get_rules():
         ('NearestNeighborLatLong[point_, {points__}]', lambda pt, *pts: pts[0]),
     ]
 
+
 def register():
     """Register all extended12 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

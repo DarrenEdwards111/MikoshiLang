@@ -162,6 +162,8 @@ def get_rules():
         ('JaccardSimilarity[set1_, set2_]', lambda s1, s2: len(set(s1) & set(s2)) / len(set(s1) | set(s2))),
     ]
 
+
 def register():
     """Register all extended7 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

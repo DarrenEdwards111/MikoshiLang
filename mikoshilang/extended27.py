@@ -168,6 +168,8 @@ def get_rules():
         ('ConstellationCoverage[n_sats_, n_planes_]', lambda ns, np: ns*np),
     ]
 
+
 def register():
     """Register all extended27 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

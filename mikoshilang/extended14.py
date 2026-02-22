@@ -211,6 +211,8 @@ def get_rules():
         ('PlasmaFrequency[n_e_]', lambda ne: sqrt(ne*sp.Symbol('e')**2/(sp.Symbol('epsilon0')*sp.Symbol('m_e')))),
     ]
 
+
 def register():
-    """Register all extended13 rules"""
-    return get_rules()
+    """Register all extended14 rules"""
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

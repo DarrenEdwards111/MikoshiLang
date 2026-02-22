@@ -226,6 +226,8 @@ def get_rules():
         ('RevenuEquivalenceTheorem[mechanism1_, mechanism2_]', lambda m1, m2: m1 == m2),
     ]
 
+
 def register():
     """Register all extended19 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

@@ -225,6 +225,8 @@ def get_rules():
         ('SonicConditions[M_]', lambda M: M == 1),
     ]
 
+
 def register():
     """Register all extended20 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())

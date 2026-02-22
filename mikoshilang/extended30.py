@@ -15,7 +15,7 @@ def get_rules():
         ('SoundIntensityLevel[I_, I_ref_]', lambda I, Iref: 10*log(I/Iref, 10)),
         ('SoundPowerLevel[W_, W_ref_]', lambda W, Wref: 10*log(W/Wref, 10)),
         ('AcousticIntensity[p_, rho_, c_]', lambda p, rho, c: p**2/(rho*c)),
-        ('AcousticImpedanceWave[rho_, c_]', lambda rho, c: rho*c)),
+        ('AcousticImpedanceWave[rho_, c_]', lambda rho, c: rho*c),
         ('SpeedOfSoundAir[T_]', lambda T: 331.3*sqrt(1 + T/273.15)),
         ('SpeedOfSoundWater[T_, S_, d_]', lambda T, S, d: 1449 + 4.6*T - 0.055*T**2 + 0.00029*T**3 + (1.34 - 0.01*T)*(S - 35) + 0.016*d),
         ('WavelengthAcoustic[c_, f_]', lambda c, f: c/f),
@@ -67,7 +67,7 @@ def get_rules():
         ('RapidSpeechTransmissionIndex[RASTI_]', lambda RASTI: RASTI),
         ('SoundStrengthG[I_, I_ref_]', lambda I, Iref: 10*log(I/Iref, 10)),
         ('LateralEnergyFraction[LF_]', lambda LF: LF),
-        ('InterauralCrossCorrelation[IACC_]', lambda IACC: IACC)),
+        ('InterauralCrossCorrelation[IACC_]', lambda IACC: IACC),
         ('CenterTime[ts_]', lambda ts: ts),
         ('RoomGain[direct_, reverb_]', lambda d, r: 10*log((d + r)/d, 10)),
         ('NoiseReductionCoefficient[alpha_250_, alpha_500_, alpha_1000_, alpha_2000_]', lambda a250, a500, a1000, a2000: (a250 + a500 + a1000 + a2000)/4),
@@ -171,6 +171,8 @@ def get_rules():
         ('ShockResponseSpectrum[acceleration_, time_]', lambda a, t: sp.Symbol('SRS')),
     ]
 
+
 def register():
     """Register all extended30 rules"""
-    return get_rules()
+    from .extended_helper import convert_rules
+    return convert_rules(get_rules())
