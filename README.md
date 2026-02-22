@@ -22,6 +22,8 @@
 Built by **Mikoshi Ltd**.
 
 > **[🚀 Try It Online — No Install Required](https://mikoshi.co.uk/mikoshilang)**
+> 
+> **[📖 Download the Manual (PDF)](https://mikoshi.co.uk/docs/mikoshilang-manual.pdf)** — Complete reference guide with all 1,342 functions
 
 ## Why MikoshiLang?
 
