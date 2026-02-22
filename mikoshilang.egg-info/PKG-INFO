@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: mikoshilang
-Version: 3.4.0
+Version: 3.5.1
 Summary: Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence
 Author-email: Mikoshi Ltd <mikoshiuk@gmail.com>
 License: Apache-2.0
@@ -52,13 +52,13 @@ Requires-Dist: scikit-learn>=1.0; extra == "all"
   <a href="https://github.com/DarrenEdwards111/MikoshiLang/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-orange" alt="License"></a>
 </p>
 
-[![Tests](https://img.shields.io/badge/tests-633%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-635%20passed-brightgreen)]()
 [![PyPI](https://img.shields.io/pypi/v/mikoshilang)](https://pypi.org/project/mikoshilang/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C324-blue)]()
-[![Knowledge](https://img.shields.io/badge/knowledge_packs-6-green)]()
-[![Version](https://img.shields.io/badge/version-3.4.0-orange)](https://pypi.org/project/mikoshilang/3.4.0/)
+[![Knowledge](https://img.shields.io/badge/knowledge_packs-7-green)]()
+[![Version](https://img.shields.io/badge/version-3.5.0-orange)](https://pypi.org/project/mikoshilang/3.5.0/)
 
 **A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
@@ -80,9 +80,9 @@ Built by **Mikoshi Ltd**.
 | Chemistry — 118 elements, equation balancing | ✅ | ❌ | ✅ |
 | Physics units with arithmetic & conversion | ✅ | ✅ | ✅ |
 | Signal processing (FFT, filters, spectrograms) | ✅ | Limited | ✅ |
-| **Knowledge layer (Wikidata/Wikipedia/Packs)** | ✅ 6 packs | ❌ | ✅ Curated |
+| **Knowledge layer (Wikidata/Wikipedia/Packs)** | ✅ 7 packs | ❌ | ✅ Curated |
 | **Entity graph with SPARQL queries** | ✅ | ❌ | ✅ |
-| **Domain-specific knowledge (PubChem, Crossref...)** | ✅ 6 sources | ❌ | Limited |
+| **Domain-specific knowledge (PubChem, Crossref...)** | ✅ 7 sources | ❌ | Limited |
 | Free & open source | ✅ | ✅ | ❌ ($395/yr) |
 | Python-native, pip installable | ✅ | ✅ | ❌ |
 
@@ -94,7 +94,7 @@ Built by **Mikoshi Ltd**.
 - **📡 Signal processing** — DFT, filters (low/high/band-pass), convolution, window functions, spectrograms — all from one import
 - **🔬 Physics units** — 50+ units, quantity arithmetic that checks dimensions, automatic conversion: `UnitConvert[Quantity[100, "cm"], "m"]`
 - **📓 Jupyter kernel** — LaTeX-rendered expressions, inline plots, proper notebook experience
-- **🌐 Knowledge layer (v3.4.0)** — 6 domain packs (PubChem, Crossref, OpenAlex, GeoNames, World Bank, AlphaFold) + Wikidata/Wikipedia. SPARQL graph queries, persistent cache, 50 canonical properties. `EntitySearch`, `EntityRelationships`, `PackSearch`. **NEW:** 200M+ protein structures from AlphaFold DB
+- **🌐 Knowledge layer (v3.5.0)** — 7 domain packs (PubChem, Crossref, OpenAlex, GeoNames, World Bank, AlphaFold, JHTDB) + Wikidata/Wikipedia. SPARQL graph queries, persistent cache, 50 canonical properties. `EntitySearch`, `EntityRelationships`, `PackSearch`. **NEW:** Johns Hopkins Turbulence Databases (6 DNS datasets)
 
 ## Knowledge Layer (Full Version)
 
@@ -119,13 +119,14 @@ EntityRelationships["Q42", "Influenced", depth=2]
 WikipediaText["Python (programming language)", sentences=3]
 # → {"text": "...", "license": "CC BY-SA 3.0", "attribution": "..."}
 
-# 5. Domain Packs (6 built-in sources)
+# 5. Domain Packs (7 built-in sources)
 PackSearch["pubchem", "caffeine"]  # Chemistry
 PackSearch["crossref", "machine learning"]  # Papers
 PackSearch["openalex", "deep learning"]  # Scholarly graph
 PackSearch["geonames", "London"]  # Geographic data
 PackSearch["worldbank", "GDP"]  # Economic indicators
 PackSearch["alphafold", "hemoglobin"]  # Protein structures
+PackSearch["jhtdb", "isotropic"]  # Turbulence simulations
 
 PackValue["pubchem", "2519", "MolecularFormula"]
 # → {"value": "C8H10N4O2", "license": "Public Domain"}
@@ -146,14 +147,14 @@ CacheClear[30]  # Clear entries older than 30 days
 4. ✅ LLM Interpreter — natural language → structured queries
 5. ✅ Persistent Cache — SQLite with TTL (7d Wikidata, 24h Wikipedia)
 6. ✅ Canonical Properties — stable schema across domains
-7. ✅ Domain Packs — 6 sources: PubChem, Crossref, OpenAlex, GeoNames, World Bank, AlphaFold
+7. ✅ Domain Packs — 7 sources: PubChem, Crossref, OpenAlex, GeoNames, World Bank, AlphaFold, JHTDB
 8. ✅ License Compliance — CC0/CC BY-SA tracking + attribution
 
 See [Full Knowledge Layer docs](docs/KNOWLEDGE_LAYER_FULL.md) for complete reference.
 
-### Domain Packs (6 Built-In Sources)
+### Domain Packs (7 Built-In Sources)
 
-MikoshiLang v3.4.0 includes production-ready knowledge packs:
+MikoshiLang v3.5.0 includes production-ready knowledge packs:
 
 | Pack | Domain | Coverage | License | Properties |
 |------|--------|----------|---------|------------|
@@ -163,6 +164,7 @@ MikoshiLang v3.4.0 includes production-ready knowledge packs:
 | **GeoNames** | Geography | 11M+ places | CC BY 4.0 | Country, Population, Latitude, Longitude, Elevation, Timezone |
 | **World Bank** | Economics | 1,400+ indicators | CC BY 4.0 | Value, Date, Country, Unit |
 | **AlphaFold** | Proteins | 200M+ structures | CC BY 4.0 | Structure, Confidence, Sequence, Organism, Gene, Function |
+| **JHTDB** | Turbulence | 6 DNS datasets | Free for research | Name, Resolution, ReynoldsNumber, TimeRange, Fields |
 
 **Usage:**
 
@@ -191,6 +193,11 @@ value = PackValue["worldbank", "NY.GDP.MKTP.CD", "Value", country="US"]
 proteins = PackSearch["alphafold", "hemoglobin"]
 structure = PackValue["alphafold", "P69905", "Structure"]
 confidence = PackValue["alphafold", "P69905", "Confidence"]
+
+# Turbulence (JHTDB)
+datasets = PackSearch["jhtdb", "channel"]
+reynolds = PackValue["jhtdb", "channel5200", "ReynoldsNumber"]  # → 5200
+resolution = PackValue["jhtdb", "isotropic1024coarse", "Resolution"]  # → "1024³"
 ```
 
 **All queries include:**
