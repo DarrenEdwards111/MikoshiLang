@@ -14,7 +14,7 @@ test_functions = {
     ],
     'Extended6-9': [
         ('Gradient', 'x^2, {x}'),
-        ('LinearRegression', '{{1},{2}}, {1,2}'),
+        ('LinearRegression', '{1,2,3}, {2,4,6}'),  # Simple 1D regression
         ('KineticEnergy', '2, 3'),
         ('DNAComplement', '"ATCG"'),
     ],

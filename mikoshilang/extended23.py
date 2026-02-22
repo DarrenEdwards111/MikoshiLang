@@ -15,6 +15,10 @@ def get_rules():
         ('InverseKinematics[x_, y_, L1_, L2_]', lambda x, y, L1, L2: (atan2(y, x), atan2(sqrt(x**2 + y**2 - L1**2), L1))),
         ('JacobianMatrix[f_, q_]', lambda f, q: sp.Matrix([[sp.diff(fi, qi) for qi in q] for fi in f])),
         ('VelocityKinematics[J_, q_dot_]', lambda J, qdot: J*qdot),
+        ('DHTransform[a_, alpha_, d_, theta_]', lambda a, alpha, d, theta: sp.Matrix([[cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha), a*cos(theta)],
+                                                                                        [sin(theta), cos(theta)*cos(alpha), -cos(theta)*sin(alpha), a*sin(theta)],
+                                                                                        [0, sin(alpha), cos(alpha), d],
+                                                                                        [0, 0, 0, 1]])),  # Alias
         ('DHParameters[a_, alpha_, d_, theta_]', lambda a, alpha, d, theta: sp.Matrix([[cos(theta), -sin(theta)*cos(alpha), sin(theta)*sin(alpha), a*cos(theta)],
                                                                                         [sin(theta), cos(theta)*cos(alpha), -cos(theta)*sin(alpha), a*sin(theta)],
                                                                                         [0, sin(alpha), cos(alpha), d],

@@ -11,7 +11,7 @@ def get_rules():
     
     return [
         # ===== INFORMATION THEORY (40 functions) =====
-        ('EntropyShannon[p_]', lambda p: -sum(pi*log(pi, 2) for pi in p if pi > 0)),
+        ('EntropyShannon[p_]', lambda p: -sum(pi*log(pi, 2) for pi in (p.args if hasattr(p, 'args') else p) if pi > 0)),
         ('JointEntropy[p_xy_]', lambda pxy: -sum(sum(pij*log(pij, 2) for pij in row if pij > 0) for row in pxy)),
         ('ConditionalEntropyInfo[p_xy_, p_x_]', lambda pxy, px: sp.Symbol('H(X,Y)') - sp.Symbol('H(X)')),
         ('MutualInformationInfo[H_X_, H_Y_, H_XY_]', lambda HX, HY, HXY: HX + HY - HXY),

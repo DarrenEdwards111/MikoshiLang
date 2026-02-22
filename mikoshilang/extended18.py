@@ -21,6 +21,7 @@ def get_rules():
         ('OligoConcentration[A260_, dilution_]', lambda A, dil: A * dil * 33),  # μg/mL for ssDNA
         ('PlasmidCopyNumber[oriType_]', lambda ori: 15 if str(ori) == "pSC101" else 100),
         ('TransformationEfficiency[colonies_, DNA_amount_]', lambda col, dna: col / dna),  # CFU/μg
+        ('GeneExpression[level_]', lambda level: level),  # Simple expression level
         ('GeneExpression[mRNA_, protein_]', lambda m, p: p / m),
         ('TranscriptionRate[mRNA_, time_]', lambda m, t: m / t),
         ('TranslationRate[protein_, mRNA_, time_]', lambda p, m, t: p / (m * t)),

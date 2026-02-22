@@ -12,7 +12,7 @@ def get_rules():
     
     return [
         # ===== MACHINE LEARNING (60 functions) =====
-        ('LinearRegression[X_, y_]', lambda X, y: (X.T * X).inv() * X.T * y if hasattr(X, 'T') else y/X),
+        # LinearRegression is already defined in extended.py
         ('LogisticRegression[X_, y_]', lambda X, y: 1 / (1 + exp(-X * y))),
         ('SigmoidFunction[x_]', lambda x: 1 / (1 + exp(-x))),
         ('ReLU[x_]', lambda x: sp.Max(0, x)),

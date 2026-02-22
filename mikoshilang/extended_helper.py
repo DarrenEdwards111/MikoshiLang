@@ -7,6 +7,36 @@ from .rules import RuleDelayed
 from .pattern import Blank
 import re
 
+# Helper functions for extracting Python types from MikoshiLang Expr objects
+
+def extract_list(expr):
+    """Extract a Python list from Expr("List", ...) or return as-is."""
+    if isinstance(expr, Expr) and expr.head == "List":
+        return list(expr.args)
+    elif isinstance(expr, (list, tuple)):
+        return list(expr)
+    return [expr]
+
+def extract_number(expr):
+    """Extract a Python number from an Expr."""
+    if isinstance(expr, (int, float)):
+        return expr
+    if isinstance(expr, Symbol):
+        # Try to evaluate constants
+        if expr.name == 'Pi':
+            import math
+            return math.pi
+        elif expr.name == 'E':
+            import math
+            return math.e
+    return float(expr) if hasattr(expr, '__float__') else expr
+
+def extract_matrix(expr):
+    """Extract a nested list (matrix) from Expr."""
+    if isinstance(expr, Expr) and expr.head == "List":
+        return [extract_list(row) for row in expr.args]
+    return expr
+
 def parse_pattern_vars(pattern_str):
     """
     Extract function name and variable names from pattern string.

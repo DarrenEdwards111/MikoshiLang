@@ -112,6 +112,7 @@ def get_rules():
         ('TargetOrganDose[internal_dose_, distribution_]', lambda ID, dist: ID*dist),
         
         # ===== CLINICAL MEASUREMENTS (30 functions) =====
+        ('BMI[weight_, height_]', lambda wt, ht: wt/ht**2),  # Alias for BodyMassIndex
         ('BodyMassIndex[weight_, height_]', lambda wt, ht: wt/ht**2),
         ('BodySurfaceArea[height_, weight_]', lambda ht, wt: sqrt(ht*wt/3600)),  # Mosteller
         ('DuBoisFormula[height_, weight_]', lambda ht, wt: 0.007184*wt**0.425*ht**0.725),
