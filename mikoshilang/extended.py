@@ -265,6 +265,7 @@ def build_extended_rules():
         sa, sb = _to_sympy(a), _to_sympy(b)
         return _from_sympy(sp.diff(sa, sb))
     rule2("Diff", _diff)
+    rule2("D", _diff)  # D[expr, var] — 2-arg derivative
 
     # PartialD[expr, var] — alias for Diff
     rule2("PartialD", _diff)
@@ -365,6 +366,14 @@ def build_extended_rules():
             return _from_sympy(sp.limit(sa, var, point))
         return Expr("Error", "Limit requires var -> point")
     rule2("Limit", _limit)
+
+    # Limit[expr, var, point] — 3-arg form
+    def _limit3(a, b, c):
+        sa = _to_sympy(a)
+        sb = _to_sympy(b)
+        sc = _to_sympy(c)
+        return _from_sympy(sp.limit(sa, sb, sc))
+    rule3("Limit", _limit3)
 
     # Residue[expr, {var, point}]
     def _residue(a, b):
@@ -1150,6 +1159,7 @@ def build_extended_rules():
     # ── NUMBER THEORY ────────────────────────────────────────
 
     rule1("PrimeQ", lambda a: bool(sp.isprime(int(a))))
+    rule1("IsPrime", lambda a: bool(sp.isprime(int(a))))
     rule1("NextPrime", lambda a: int(sp.nextprime(int(a))))
     rule1("PrimePi", lambda a: int(sp.primepi(int(a))))
     rule1("Prime", lambda a: int(sp.prime(int(a))))
