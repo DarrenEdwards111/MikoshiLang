@@ -56,7 +56,7 @@
 
 \title{\Huge\textbf{MikoshiLang}\\\Large Reference Manual \& User Guide}
 \author{Mikoshi Ltd}
-\date{Version 1.1.5 --- \today}
+\date{Version 2.0.0 --- \today}
 
 \begin{document}
 
@@ -66,7 +66,7 @@
 \vspace{2cm}
 
 \begin{abstract}
-MikoshiLang is a symbolic computation language for Python, inspired by Wolfram Language. It provides 1,342 functions across 20+ domains including calculus, linear algebra, number theory, statistics, chemistry, visualization, and more. Unlike traditional computational tools, MikoshiLang combines natural language processing with deterministic code execution — AI proposes, the engine proves. No hallucinated math.
+MikoshiLang is a symbolic computation language for Python, inspired by Wolfram Language. It provides 1,794 functions across 25+ domains including calculus, linear algebra, number theory, statistics, chemistry, visualization, machine learning, physics, cryptography, biology, and more. Unlike traditional computational tools, MikoshiLang combines natural language processing with deterministic code execution — AI proposes, the engine proves. No hallucinated math.
 \end{abstract}
 
 \vfill
@@ -90,12 +90,16 @@ MikoshiLang is a symbolic computation language designed for Python, providing Wo
 \subsection{Key Features}
 
 \begin{itemize}
-    \item \textbf{1,342 functions} across calculus, algebra, number theory, statistics, chemistry, units, visualization
+    \item \textbf{1,794 functions} across calculus, algebra, number theory, statistics, chemistry, physics, biology, ML, cryptography, and more
     \item \textbf{Natural language mode} — type plain English, get verified results
     \item \textbf{Pattern matching \& rules} — symbolic manipulation with custom transformations
     \item \textbf{Jupyter kernel} — interactive notebooks with rich output
     \item \textbf{Visualization} — 2D/3D plotting with matplotlib \& plotly
-    \item \textbf{Chemistry} — equation balancing, molecular mass, element data
+    \item \textbf{Chemistry} — equation balancing, molecular mass, 118 elements
+    \item \textbf{Physics} — mechanics, thermodynamics, E\&M, quantum, relativity
+    \item \textbf{Machine learning} — regression, neural nets, loss functions, optimizers
+    \item \textbf{Biology} — genetics, DNA analysis, population dynamics
+    \item \textbf{Cryptography} — hashing, modular arithmetic, number theory
     \item \textbf{Unit conversion} — 50+ physical units with dimensional analysis
     \item \textbf{No hallucinations} — AI translates natural language to code, engine verifies
 \end{itemize}
@@ -452,7 +456,37 @@ jupyter notebook
 
 \section{Function Reference}
 
-MikoshiLang provides 1,342 functions across 20+ domains. Below is a categorized listing.
+MikoshiLang provides 1,794 functions across 25+ domains. Below is a categorized listing.
+
+\subsection{New in v2.0 (452 functions)}
+
+Version 2.0 adds major expansions in scientific computing, machine learning, and computational mathematics:
+
+\begin{itemize}
+    \item \textbf{Vector Calculus} (40) — Gradient, divergence, curl, Laplacian, directional derivatives, Hessian, Jacobian
+    \item \textbf{Differential Geometry} (35) — Christoffel symbols, Riemann tensor, Ricci tensor, curvature, fundamental forms
+    \item \textbf{Tensor Operations} (40) — Outer/inner products, wedge product, Hodge dual, symmetrization
+    \item \textbf{Geometry} (45) — Distance, area, volume, centroid, convex hull, Voronoi diagrams
+    \item \textbf{Topology} (30) — Euler characteristic, Betti numbers, homology groups, simplicial complexes
+    \item \textbf{Fractals \& Chaos} (25) — Mandelbrot set, Julia sets, Lyapunov exponents, bifurcation diagrams
+    \item \textbf{Coordinate Systems} (35) — Polar, cylindrical, spherical, toroidal, elliptic, bipolar
+    \item \textbf{Computational Geometry} (40) — Point-in-polygon, line intersection, bounding boxes, closest pair
+    \item \textbf{Machine Learning} (60) — Regression, activation functions, loss functions, optimizers, metrics
+    \item \textbf{Time Series} (50) — ARIMA, autocorrelation, exponential smoothing, seasonal decomposition
+    \item \textbf{Economics \& Finance} (60) — NPV, IRR, Black-Scholes, option pricing, Greeks, portfolio theory
+    \item \textbf{Cryptography} (40) — SHA-256/512, MD5, modular exponentiation, discrete log, number theory
+    \item \textbf{String Processing} (40) — Edit distance, alignment algorithms, tokenization, TF-IDF
+    \item \textbf{Classical Mechanics} (50) — Energy, momentum, forces, orbits, oscillations, drag
+    \item \textbf{Thermodynamics} (45) — Ideal gas law, entropy, heat engines, blackbody radiation
+    \item \textbf{Electromagnetism} (50) — Coulomb, Ohm, Faraday, Maxwell, Lorentz force, Hall effect
+    \item \textbf{Quantum Mechanics} (45) — Schrödinger equation, uncertainty, Pauli matrices, Fermi-Dirac
+    \item \textbf{Relativity} (30) — Lorentz transformations, time dilation, mass-energy, Schwarzschild metric
+    \item \textbf{Astronomy} (30) — Kepler's laws, stellar evolution, cosmology, Hubble law
+    \item \textbf{Biology \& Genetics} (60) — DNA analysis, protein analysis, population dynamics, epidemiology
+    \item \textbf{Numerical Methods} (70) — Root finding, integration, ODEs, interpolation, finite differences
+    \item \textbf{Formal Logic} (60) — Propositional logic, predicate logic, proof theory, modal logic
+    \item \textbf{Advanced Algebra} (60) — Gröbner bases, Galois theory, modules, quaternions
+\end{itemize}
 
 \subsection{Calculus (67 functions)}
 
@@ -541,6 +575,140 @@ MikoshiLang provides 1,342 functions across 20+ domains. Below is a categorized 
 \subsection{Financial Math (21 functions)}
 
 \texttt{PresentValue, FutureValue, NPV, IRR, Annuity, TimeValue, CompoundInterest, ContinuouslyCompounded, BondPrice, YieldToMaturity, ...}
+
+\section{New Domain Examples (v2.0)}
+
+\subsection{Vector Calculus}
+
+\begin{lstlisting}
+# Gradient of a scalar field
+Grad[x^2 + y^2 + z^2, {x, y, z}]
+# => [2*x, 2*y, 2*z]
+
+# Divergence of a vector field
+Div[{x, y, z}, {x, y, z}]
+# => 3
+
+# Curl of a vector field
+Curl[{-y, x, 0}, {x, y, z}]
+# => [0, 0, 2]
+
+# Laplacian
+Laplacian[x^2 + y^2, {x, y}]
+# => 4
+\end{lstlisting}
+
+\subsection{Machine Learning}
+
+\begin{lstlisting}
+# Linear regression
+X = Matrix([[1, 2], [2, 3], [3, 4]])
+y = Matrix([3, 5, 7])
+LinearRegression[X, y]
+
+# Activation functions
+Sigmoid[x]        # => 1/(1 + exp(-x))
+ReLU[x]           # => Max(0, x)
+Softmax[{x, y, z}]
+
+# Loss functions
+MeanSquaredError[ytrue, ypred]
+CrossEntropy[p, q]
+
+# Metrics
+Accuracy[ytrue, ypred]
+F1Score[precision, recall]
+\end{lstlisting}
+
+\subsection{Physics}
+
+\begin{lstlisting}
+# Classical mechanics
+KineticEnergy[m, v]           # => m*v^2/2
+PotentialEnergy[m, g, h]      # => m*g*h
+EscapeVelocity[M, r]          # => sqrt(2*G*M/r)
+
+# Thermodynamics
+IdealGasLaw[P, V, n, T]       # => P*V - n*R*T
+CarnotEfficiency[Th, Tc]      # => 1 - Tc/Th
+
+# Electromagnetism
+CoulombForce[q1, q2, r]       # => k_e*q1*q2/r^2
+OhmLaw[V, R]                  # => V/R
+
+# Quantum mechanics
+PlankEnergy[freq]             # => h*freq
+DeBroglieWavelength[p]        # => h/p
+HeisenbergUncertainty[dx, dp] # => dx*dp >= hbar/2
+
+# Relativity
+LorentzFactor[v]              # => 1/sqrt(1 - v^2/c^2)
+MassEnergyEquivalence[m]      # => m*c^2
+\end{lstlisting}
+
+\subsection{Biology \& Genetics}
+
+\begin{lstlisting}
+# DNA analysis
+Complement["A"]               # => "T"
+ReverseComplement["ATCG"]     # => "CGAT"
+Transcribe["ATCG"]            # => "AUCG"
+GCContent["ATCGGC"]           # => 0.5
+
+# Molecular mass
+MolecularMass["H2O"]          # => 18.015 g/mol
+
+# Population dynamics
+LogisticGrowth[N, r, K]       # => r*N*(1 - N/K)
+SIRModel[S, I, R, beta, gamma]
+
+# Sequence alignment
+HammingDistanceDNA[seq1, seq2]
+LevenshteinDNA[seq1, seq2]
+\end{lstlisting}
+
+\subsection{Cryptography}
+
+\begin{lstlisting}
+# Hashing
+SHA256["hello"]
+SHA512["world"]
+MD5["message"]
+
+# Modular arithmetic
+ModularExponentiation[base, exp, mod]
+ModularInverse[a, m]
+ExtendedEuclidean[a, b]
+
+# Number theory
+DiscreteLog[base, result, modulus]
+PrimitiveRoot[p]
+QuadraticResidue[a, p]
+LegendreSymbol[a, p]
+\end{lstlisting}
+
+\subsection{Numerical Methods}
+
+\begin{lstlisting}
+# Root finding
+NewtonRaphson[f, x0, tol]
+BisectionMethod[f, a, b, tol]
+SecantMethod[f, x0, x1, tol]
+
+# Integration
+TrapezoidalRule[f, a, b, n]
+SimpsonsRule[f, a, b, n]
+GaussianQuadrature[f, a, b, n]
+
+# ODEs
+EulerMethod[f, y0, t0, h, n]
+RungeKutta4[f, y0, t0, h]
+AdamsBashforth[f, y, h]
+
+# Interpolation
+LagrangeInterpolation[{x1, x2, x3}, {y1, y2, y3}]
+CubicSpline[points]
+\end{lstlisting}
 
 \section{Advanced Topics}
 
