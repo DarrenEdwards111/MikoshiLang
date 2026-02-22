@@ -14,7 +14,11 @@ mikoshilang/extended13.py
 mikoshilang/extended14.py
 mikoshilang/extended15.py
 mikoshilang/extended16.py
+mikoshilang/extended17.py
+mikoshilang/extended18.py
+mikoshilang/extended19.py
 mikoshilang/extended2.py
+mikoshilang/extended20.py
 mikoshilang/extended3.py
 mikoshilang/extended4.py
 mikoshilang/extended5.py

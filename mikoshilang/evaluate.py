@@ -29,11 +29,16 @@ def _ensure_extended():
             from .extended14 import register as ext14
             from .extended15 import register as ext15
             from .extended16 import register as ext16
+            from .extended17 import register as ext17
+            from .extended18 import register as ext18
+            from .extended19 import register as ext19
+            from .extended20 import register as ext20
             from .visualization import VISUALIZATION_RULES
             _extended_rules = (EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + 
                              EXTENDED4_RULES + EXTENDED5_RULES + ext6() + ext7() + 
                              ext8() + ext9() + ext10() + ext11() + ext12() + ext13() + 
-                             ext14() + ext15() + ext16() + VISUALIZATION_RULES)
+                             ext14() + ext15() + ext16() + ext17() + ext18() + ext19() + 
+                             ext20() + VISUALIZATION_RULES)
         except Exception as e:
             # Fallback: try loading what we can
             try:
