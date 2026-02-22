@@ -48,6 +48,34 @@ Built by **Mikoshi Ltd**.
 - **📡 Signal processing** — DFT, filters (low/high/band-pass), convolution, window functions, spectrograms — all from one import
 - **🔬 Physics units** — 50+ units, quantity arithmetic that checks dimensions, automatic conversion: `UnitConvert[Quantity[100, "cm"], "m"]`
 - **📓 Jupyter kernel** — LaTeX-rendered expressions, inline plots, proper notebook experience
+- **🌐 Knowledge layer** — Wikidata entity graph + Wikipedia summaries. Structured facts, provenance tracking, license compliance. `EntitySearch`, `EntityValue`, `WikipediaSummary`
+
+## Knowledge Layer
+
+MikoshiLang implements a Wolfram-style entity framework with **deterministic fact retrieval**:
+
+```python
+# Search entities
+EntitySearch["Douglas Adams"]
+# → [{"id": "Q42", "label": "Douglas Adams", "description": "British science fiction writer...", ...}]
+
+# Get properties
+EntityValue["Q42", "BirthDate"]
+# → {"value": "1952-03-11", "source": "https://www.wikidata.org/wiki/Q42", "license": "CC0"}
+
+# Wikipedia summaries
+WikipediaSummary["Python (programming language)"]
+# → {"summary": "Python is a high-level...", "license": "CC BY-SA 3.0", ...}
+```
+
+**Features:**
+- Entity graph (Wikidata QIDs + properties)
+- Canonical property mappings (`BirthDate`, `Occupation`, `AtomicNumber`, etc.)
+- Provenance tracking (source URLs + timestamps)
+- License compliance (CC0 for Wikidata, CC BY-SA for Wikipedia)
+- Cached results for performance
+
+See [Knowledge Layer docs](docs/KNOWLEDGE_LAYER.md) for full details.
 
 ## Installation
 

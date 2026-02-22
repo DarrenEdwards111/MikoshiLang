@@ -1,5 +1,6 @@
 sympy>=1.12
 numpy>=1.21
+requests>=2.28
 
 [all]
 ipykernel>=6.0
