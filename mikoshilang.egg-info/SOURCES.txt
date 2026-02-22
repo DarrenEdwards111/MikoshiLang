@@ -23,6 +23,10 @@ mikoshilang/extended21.py
 mikoshilang/extended22.py
 mikoshilang/extended23.py
 mikoshilang/extended24.py
+mikoshilang/extended25.py
+mikoshilang/extended26.py
+mikoshilang/extended27.py
+mikoshilang/extended28.py
 mikoshilang/extended3.py
 mikoshilang/extended4.py
 mikoshilang/extended5.py

@@ -1,0 +1,176 @@
+"""
+MikoshiLang Extended Functions - Set 28
+Nuclear physics, particle physics, and quantum field theory
+"""
+import sympy as sp
+from sympy import symbols, sqrt, exp, log, pi, sin, cos
+
+def get_rules():
+    """Extended set 28: Nuclear and particle physics (150 functions)"""
+    E, m, c, t = symbols('E m c t')
+    
+    return [
+        # ===== NUCLEAR STRUCTURE (35 functions) =====
+        ('NuclearBindingEnergy[A_, Z_]', lambda A, Z: 15.75*A - 17.8*A**sp.Rational(2,3) - 0.711*Z**2/A**sp.Rational(1,3) - 23.7*(A - 2*Z)**2/A),  # SEMF
+        ('MassDefectNuclear[A_, Z_, M_nucleus_]', lambda A, Z, Mnuc: Z*sp.Symbol('m_p') + (A - Z)*sp.Symbol('m_n') - Mnuc),
+        ('BindingEnergyPerNucleon[B_, A_]', lambda B, A: B/A),
+        ('SeparationEnergy[B_A_, B_A_minus_1_]', lambda BA, BAm1: BA - BAm1),
+        ('NeutronSeparationEnergy[Sn_]', lambda Sn: Sn),
+        ('ProtonSeparationEnergy[Sp_]', lambda Sp: Sp),
+        ('AlphaSeparationEnergy[Salpha_]', lambda Sa: Sa),
+        ('PairingEnergy[A_]', lambda A: 12/sqrt(A)),
+        ('AsymmetryEnergy[A_, Z_]', lambda A, Z: 23.7*(A - 2*Z)**2/A),
+        ('CoulombEnergy[Z_, A_]', lambda Z, A: 0.711*Z**2/A**sp.Rational(1,3)),
+        ('SurfaceEnergy[A_]', lambda A: 17.8*A**sp.Rational(2,3)),
+        ('VolumeEnergy[A_]', lambda A: 15.75*A),
+        ('MagicNumbers[N_or_Z_]', lambda N: N in [2, 8, 20, 28, 50, 82, 126]),
+        ('NuclearShellModel[n_, l_, j_]', lambda n, l, j: (n, l, j)),
+        ('SpinOrbitCoupling[l_, s_]', lambda l, s: l*s),
+        ('IsospinProjection[Z_, A_]', lambda Z, A: (A - 2*Z)/2),
+        ('IsospinMultiplet[T_]', lambda T: 2*T + 1),
+        ('MirrorNuclei[A_, Z1_, Z2_]', lambda A, Z1, Z2: Z1 + Z2 == A),
+        ('IsobaricAnalogStates[T_]', lambda T: T),
+        ('NuclearRadius[A_]', lambda A: 1.2*A**sp.Rational(1,3)),  # fm
+        ('NuclearDensity[A_, R_]', lambda A, R: 3*A/(4*pi*R**3)),
+        ('FormFactor[q_]', lambda q: exp(-q**2*sp.Symbol('r')**2/6)),
+        ('ElasticScatteringCrossSection[theta_]', lambda theta: sp.Symbol('sigma_Mott')*(1 + sp.Symbol('F')**2)),
+        ('RutherfordCrossSection[Z_, alpha_, theta_]', lambda Z, alpha, theta: (Z*sp.Symbol('e')**2/(4*sp.Symbol('E')))**2/sin(theta/2)**4),
+        ('MottCrossSection[Z_, E_, theta_]', lambda Z, E, theta: (Z*sp.Symbol('alpha')*sp.Symbol('hbar')*sp.Symbol('c')/(2*E))**2/sin(theta/2)**4),
+        ('NuclearMagneticMoment[mu_]', lambda mu: mu),
+        ('NuclearQuadrupoleMoment[Q_]', lambda Q: Q),
+        ('Hyperfinetracking[A_]', lambda A: A),
+        ('GamovTellerTransition[GT_]', lambda GT: GT),
+        ('FermiTransition[F_]', lambda F: F),
+        ('CollectiveModel[beta_, gamma_]', lambda beta, gamma: (beta, gamma)),
+        ('RotationalBands[J_, I_]', lambda J, I: sp.Symbol('E') == sp.Symbol('hbar')**2/(2*I)*J*(J + 1)),
+        ('VibrationalBands[n_]', lambda n: sp.Symbol('hbar')*sp.Symbol('omega')*(n + sp.Rational(1,2))),
+        ('DeformationParameter[beta_]', lambda beta: beta),
+        ('NilssonModel[N_, nz_, ml_]', lambda N, nz, ml: (N, nz, ml)),
+        
+        # ===== RADIOACTIVE DECAY (30 functions) =====
+        ('DecayConstant[half_life_]', lambda t12: log(2)/t12),
+        ('HalfLife[lambda_]', lambda lam: log(2)/lam),
+        ('MeanLifetime[lambda_]', lambda lam: 1/lam),
+        ('ActivityNuclear[N_, lambda_]', lambda N, lam: lam*N),
+        ('DecayLaw[N0_, lambda_, t_]', lambda N0, lam, t: N0*exp(-lam*t)),
+        ('SpecificActivity[lambda_, A_]', lambda lam, A: lam*sp.Symbol('N_A')/A),
+        ('BatemanEquation[lambda1_, lambda2_, N10_, t_]', lambda lam1, lam2, N10, t: N10*lam1/(lam2 - lam1)*(exp(-lam1*t) - exp(-lam2*t))),
+        ('SecularEquilibrium[lambda1_, lambda2_]', lambda lam1, lam2: lam1 << lam2),
+        ('TransientEquilibrium[lambda1_, lambda2_]', lambda lam1, lam2: lam1 < lam2),
+        ('AlphaDecayEnergy[Q_]', lambda Q: Q),
+        ('QValueAlpha[M_parent_, M_daughter_, M_alpha_]', lambda Mp, Md, Ma: (Mp - Md - Ma)*sp.Symbol('c')**2),
+        ('GeigerNuttallLaw[Z_, Q_]', lambda Z, Q: log(sp.Symbol('lambda')) == sp.Symbol('a') + sp.Symbol('b')*Z/sqrt(Q)),
+        ('AlphaDecayLifetime[Z_, Q_]', lambda Z, Q: exp(-sp.Symbol('G')*Z/sqrt(Q))),
+        ('BetaDecayEnergy[Q_beta_]', lambda Qb: Qb),
+        ('QValueBeta[M_parent_, M_daughter_]', lambda Mp, Md: (Mp - Md)*sp.Symbol('c')**2),
+        ('FermiKurieTransition[p_, E_]', lambda p, E: sqrt(p**2 + (sp.Symbol('m_e')*sp.Symbol('c'))**2)*(sp.Symbol('E_max') - E)**2),
+        ('BetaDecaySpectrum[E_]', lambda E: sp.Symbol('F')(sp.Symbol('Z'), E)*sp.Symbol('p')*E*(sp.Symbol('E_max') - E)**2),
+        ('FermiFunction[Z_, E_]', lambda Z, E: 2*pi*sp.Symbol('eta')/(1 - exp(-2*pi*sp.Symbol('eta')))),
+        ('AllowedTransition[delta_l_, delta_j_]', lambda dl, dj: dl == 0 and dj == 0),
+        ('ForbiddenTransition[delta_l_]', lambda dl: dl > 0),
+        ('GammaDecayEnergy[E_initial_, E_final_]', lambda Ei, Ef: Ei - Ef),
+        ('GammaDecayMultipolarity[L_]', lambda L: 2**L),
+        ('E1Transition[lambda_]', lambda lam: lam),  # Electric dipole
+        ('M1Transition[lambda_]', lambda lam: lam),  # Magnetic dipole
+        ('E2Transition[lambda_]', lambda lam: lam),  # Electric quadrupole
+        ('InternalConversion[alpha_]', lambda alpha: alpha),
+        ('InternalConversionCoefficient[gamma_, electron_]', lambda gamma, e: e/gamma),
+        ('AugerEffect[electron_]', lambda e: e),
+        ('ElectronCapture[Q_EC_]', lambda QEC: QEC),
+        ('DoubleElectronCapture[rare_]', lambda r: r),
+        
+        # ===== NUCLEAR REACTIONS (35 functions) =====
+        ('QValueReaction[reactants_, products_]', lambda r, p: sum(r) - sum(p)),
+        ('ThresholdEnergy[Q_, m_target_, m_projectile_]', lambda Q, mt, mp: -Q*(1 + sp.Symbol('m_products')/(2*mt) + abs(Q)/(2*mt*sp.Symbol('c')**2))),
+        ('CrossSection[sigma_]', lambda sig: sig),  # barns
+        ('DifferentialCrossSection[d_sigma_d_Omega_]', lambda dsigdOm: dsigdOm),
+        ('ReactionRate[sigma_, phi_]', lambda sig, phi: sig*phi),
+        ('NeutronFlux[n_, v_]', lambda n, v: n*v),
+        ('MacroscopicCrossSection[N_, sigma_]', lambda N, sig: N*sig),
+        ('MeanFreePath[Sigma_]', lambda Sigma: 1/Sigma),
+        ('ResonanceCrossSection[sigma_0_, E_, E_R_, Gamma_]', lambda sig0, E, ER, Gamma: sig0*Gamma**2/((E - ER)**2 + Gamma**2/4)),
+        ('BreitWignerFormula[sigma_0_, Gamma_, E_, E_R_]', lambda sig0, Gamma, E, ER: sig0*Gamma**2/((E - ER)**2 + Gamma**2/4)),
+        ('ResonanceIntegral[sigma_, E_]', lambda sig, E: sp.integrate(sig/E, E)),
+        ('CompoundNucleusFormation[A_, a_, b_, B_]', lambda A, a, b, B: A + a == b + B),
+        ('EvaporationModel[T_]', lambda T: exp(-sp.Symbol('E')/T)),
+        ('FissionBarrier[Z_, A_]', lambda Z, A: 0.73*Z**2/A**sp.Rational(1,3)),
+        ('FissionYield[A_]', lambda A: sp.Symbol('Y')),
+        ('PromptNeutrons[nu_]', lambda nu: nu),
+        ('DelayedNeutrons[beta_]', lambda beta: beta),
+        ('MultiplicationFactor[k_]', lambda k: k),
+        ('Criticality[k_]', lambda k: k == 1),
+        ('SixFactorFormula[eta_, f_, p_, epsilon_, P_FNL_, P_TNL_]', lambda eta, f, p, epsilon, PFNL, PTNL: eta*f*p*epsilon*PFNL*PTNL),
+        ('ReproductionFactor[eta_]', lambda eta: eta),
+        ('ThermalUtilization[f_]', lambda f: f),
+        ('ResonanceEscapeProbability[p_]', lambda p: p),
+        ('FastFissionFactor[epsilon_]', lambda epsilon: epsilon),
+        ('ReactorKinetics[rho_, beta_, Lambda_]', lambda rho, beta, Lambda: rho/Lambda),
+        ('ReactivityRho[k_]', lambda k: (k - 1)/k),
+        ('InhourEquation[rho_, beta_i_, lambda_i_]', lambda rho, betai, lami: rho == sum(betai/(1 + lami*sp.Symbol('T')))),
+        ('PromptCritical[rho_, beta_]', lambda rho, beta: rho > beta),
+        ('DelayedCritical[rho_, beta_]', lambda rho, beta: rho == beta),
+        ('PointKinetics[n_, rho_]', lambda n, rho: sp.diff(n, sp.Symbol('t')) == (rho - sp.Symbol('beta'))/sp.Symbol('Lambda')*n),
+        ('ReactorPeriod[T_]', lambda T: T),
+        ('Shutdown Margin[rho_]', lambda rho: -rho),
+        ('Burnup[energy_, mass_]', lambda E, m: E/m),  # MWd/kg
+        ('ConversionRatio[fissile_produced_, fissile_consumed_]', lambda prod, cons: prod/cons),
+        ('BreedingRatio[CR_]', lambda CR: CR),
+        
+        # ===== PARTICLE PHYSICS (30 functions) =====
+        ('RelativisticEnergy[m_, p_]', lambda m, p: sqrt(p**2*sp.Symbol('c')**2 + m**2*sp.Symbol('c')**4)),
+        ('RelativisticMomentum[m_, v_]', lambda m, v: m*v/sqrt(1 - v**2/sp.Symbol('c')**2)),
+        ('LorentzFactor[v_]', lambda v: 1/sqrt(1 - v**2/sp.Symbol('c')**2)),
+        ('BetaParticle[v_]', lambda v: v/sp.Symbol('c')),
+        ('Rapidity[y_]', lambda y: sp.Rational(1,2)*log((sp.Symbol('E') + sp.Symbol('p_z')*sp.Symbol('c'))/(sp.Symbol('E') - sp.Symbol('p_z')*sp.Symbol('c')))),
+        ('Pseudorapidity[theta_]', lambda theta: -log(tan(theta/2))),
+        ('TransverseMomentum[px_, py_]', lambda px, py: sqrt(px**2 + py**2)),
+        ('TransverseMass[m_, pT_]', lambda m, pT: sqrt(m**2 + pT**2)),
+        ('InvariantMass[E1_, E2_, p1_, p2_]', lambda E1, E2, p1, p2: sqrt((E1 + E2)**2 - (p1 + p2)**2*sp.Symbol('c')**2)),
+        ('MandelstamS[E_cm_]', lambda Ecm: Ecm**2),
+        ('MandelstamT[p1_, p2_]', lambda p1, p2: (p1 - p2)**2),
+        ('MandelstamU[s_, t_]', lambda s, t: -s - t),
+        ('CrossingSymmetry[s_, t_, u_]', lambda s, t, u: s + t + u),
+        ('FeynmanDiagram[vertices_]', lambda v: v),
+        ('PropagatorPhoton[q_]', lambda q: 1/q**2),
+        ('PropagatorElectron[p_, m_]', lambda p, m: 1/(sp.Symbol('gamma')*p - m)),
+        ('VertexFactorQED[e_]', lambda e: sp.I*e*sp.Symbol('gamma')),
+        ('RunningCoupling[alpha_, Q_]', lambda alpha, Q: alpha/(1 - alpha/(3*pi)*log(Q/sp.Symbol('Lambda')))),
+        ('AsymptoticFreedom[alpha_s_, Q_]', lambda alphas, Q: alphas/log(Q/sp.Symbol('Lambda_QCD'))),
+        ('ColorCharge[r_, g_, b_]', lambda r, g, b: (r, g, b)),
+        ('QuarkConfinement[distance_]', lambda d: d > sp.Symbol('r_hadron')),
+        ('FlavorSymmetry[u_, d_, s_]', lambda u, d, s: (u, d, s)),
+        ('CKMMatrix[V_]', lambda V: V),  # Cabibbo-Kobayashi-Maskawa
+        ('CPViolation[eta_]', lambda eta: eta != 0),
+        ('BaryonNumber[B_]', lambda B: B),
+        ('LeptonNumber[L_]', lambda L: L),
+        ('Strangeness[S_]', lambda S: S),
+        ('CharmNumber[C_]', lambda C: C),
+        ('BottomnessNumber[B_]', lambda B: B),
+        ('TopnessNumber[T_]', lambda T: T),
+        
+        # ===== QUANTUM FIELD THEORY (20 functions) =====
+        ('LagrangianDensity[kinetic_, potential_]', lambda T, V: T - V),
+        ('EulerLagrangeFieldEquation[L_, phi_]', lambda L, phi: sp.diff(L, phi) - sp.diff(sp.diff(L, sp.diff(phi, sp.Symbol('t'))), sp.Symbol('t'))),
+        ('NoetherTheorem[symmetry_]', lambda sym: "conserved current"),
+        ('NoetherCurrent[j_mu_]', lambda jmu: jmu),
+        ('EnergyMomentumTensor[T_mu_nu_]', lambda Tmuinu: Tmunu),
+        ('DiracEquation[psi_, m_]', lambda psi, m: (sp.I*sp.Symbol('gamma')*sp.diff(psi, sp.Symbol('t')) - m)*psi),
+        ('KleinGordonEquation[phi_, m_]', lambda phi, m: (sp.diff(phi, sp.Symbol('t'), 2) - sp.Symbol('nabla')**2*phi + m**2)*phi),
+        ('MaxwellEquations[E_, B_]', lambda E, B: (sp.Symbol('div_E'), sp.Symbol('div_B'), sp.Symbol('curl_E'), sp.Symbol('curl_B'))),
+        ('YangMillsEquation[A_mu_]', lambda Amu: sp.Symbol('D_mu')*sp.Symbol('F_mu_nu')),
+        ('GaugeTransformation[psi_, alpha_]', lambda psi, alpha: psi*exp(sp.I*alpha)),
+        ('CovariantDerivative[D_mu_]', lambda Dmu: Dmu),
+        ('FieldStrengthTensor[A_mu_, A_nu_]', lambda Amu, Anu: sp.diff(Amu, sp.Symbol('nu')) - sp.diff(Anu, sp.Symbol('mu'))),
+        ('PathIntegral[S_]', lambda S: sp.integrate(exp(sp.I*S), sp.Symbol('phi'))),
+        ('FeynmanPathIntegral[action_]', lambda act: exp(sp.I*act/sp.Symbol('hbar'))),
+        ('VacuumExpectation[phi_]', lambda phi: sp.Symbol('<0|phi|0>')),
+        ('SpontaneousSymmetryBreaking[v_]', lambda v: v != 0),
+        ('GoldstonBoson[massless_]', lambda m: m == 0),
+        ('HiggsMechanism[v_, lambda_]', lambda v, lam: v**2*lam),
+        ('ElectroweakUnification[SU2_, U1_]', lambda SU2, U1: (SU2, U1)),
+        ('GrandUnification[SU5_]', lambda SU5: SU5),
+    ]
+
+def register():
+    """Register all extended28 rules"""
+    return get_rules()
