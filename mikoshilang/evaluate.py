@@ -45,6 +45,7 @@ def _ensure_extended():
             from .extended30 import register as ext30
             from .extended31 import register as ext31
             from .extended32 import register as ext32
+            from .extended33 import register as ext33
             from .visualization import VISUALIZATION_RULES
             _extended_rules = (EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + 
                              EXTENDED4_RULES + EXTENDED5_RULES + ext6() + ext7() + 
@@ -52,7 +53,7 @@ def _ensure_extended():
                              ext14() + ext15() + ext16() + ext17() + ext18() + ext19() + 
                              ext20() + ext21() + ext22() + ext23() + ext24() + ext25() + 
                              ext26() + ext27() + ext28() + ext29() + ext30() + ext31() + 
-                             ext32() + VISUALIZATION_RULES)
+                             ext32() + ext33() + VISUALIZATION_RULES)
         except Exception as e:
             # Fallback: try loading what we can
             try:
