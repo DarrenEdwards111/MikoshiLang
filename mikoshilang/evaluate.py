@@ -22,10 +22,14 @@ def _ensure_extended():
             from .extended7 import register as ext7
             from .extended8 import register as ext8
             from .extended9 import register as ext9
+            from .extended10 import register as ext10
+            from .extended11 import register as ext11
+            from .extended12 import register as ext12
             from .visualization import VISUALIZATION_RULES
             _extended_rules = (EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + 
                              EXTENDED4_RULES + EXTENDED5_RULES + ext6() + ext7() + 
-                             ext8() + ext9() + VISUALIZATION_RULES)
+                             ext8() + ext9() + ext10() + ext11() + ext12() + 
+                             VISUALIZATION_RULES)
         except Exception as e:
             # Fallback: try loading what we can
             try:

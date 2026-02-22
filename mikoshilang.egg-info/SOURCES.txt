@@ -7,6 +7,9 @@ mikoshilang/data.py
 mikoshilang/evaluate.py
 mikoshilang/expr.py
 mikoshilang/extended.py
+mikoshilang/extended10.py
+mikoshilang/extended11.py
+mikoshilang/extended12.py
 mikoshilang/extended2.py
 mikoshilang/extended3.py
 mikoshilang/extended4.py

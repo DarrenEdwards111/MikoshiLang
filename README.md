@@ -15,9 +15,9 @@
 [![PyPI](https://img.shields.io/pypi/v/mikoshilang)](https://pypi.org/project/mikoshilang/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
-[![Functions](https://img.shields.io/badge/functions-1%2C794-blue)]()
+[![Functions](https://img.shields.io/badge/functions-2%2C394-blue)]()
 
-**A symbolic computation language for Python** — Wolfram-style syntax, 1,794 built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and more.
+**A symbolic computation language for Python** — Wolfram-style syntax, 2,394 built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and more.
 
 Built by **Mikoshi Ltd**.
 
