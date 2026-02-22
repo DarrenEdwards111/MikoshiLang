@@ -11,6 +11,10 @@ mikoshilang/extended2.py
 mikoshilang/extended3.py
 mikoshilang/extended4.py
 mikoshilang/extended5.py
+mikoshilang/extended6.py
+mikoshilang/extended7.py
+mikoshilang/extended8.py
+mikoshilang/extended9.py
 mikoshilang/latex.py
 mikoshilang/linalg.py
 mikoshilang/math_ops.py
