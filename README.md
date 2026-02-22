@@ -17,7 +17,7 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-2%2C394-blue)]()
 
-**A symbolic computation language for Python** — Wolfram-style syntax, 5,394 built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and more.
+**A symbolic computation language for Python** — Wolfram-style syntax, 5,994 built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and more.
 
 Built by **Mikoshi Ltd**.
 
