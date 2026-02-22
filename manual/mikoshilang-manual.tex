@@ -56,7 +56,7 @@
 
 \title{\Huge\textbf{MikoshiLang}\\\Large Reference Manual \& User Guide}
 \author{Mikoshi Ltd}
-\date{Version 3.1.1 --- \today}
+\date{Version 3.3.0 --- \today}
 
 \begin{document}
 
@@ -138,6 +138,178 @@ parse_and_eval("Solve[x^2 - 4 == 0, x]")
 parse_and_eval("Plot[sin(x), {x, 0, 6.28}]")
 # => <base64 PNG image>
 \end{lstlisting}
+
+\section{Knowledge Layer (v3.3.0)}
+
+MikoshiLang v3.3.0 introduces a complete knowledge layer with deterministic fact retrieval from multiple sources. Unlike LLMs that answer from memory, MikoshiLang queries structured databases and returns provenance-tracked results.
+
+\subsection{Architecture}
+
+The knowledge layer implements 8 core components:
+
+\begin{enumerate}
+    \item \textbf{Entity Graph} — Wikidata (QIDs, 50 canonical properties)
+    \item \textbf{Text Layer} — Wikipedia (summaries, citations)
+    \item \textbf{5 Core Tools} — Search, facts, relationships, text, time-travel
+    \item \textbf{LLM Interpreter} — Natural language → structured queries
+    \item \textbf{Persistent Cache} — SQLite with TTL (7d Wikidata, 24h Wikipedia)
+    \item \textbf{Canonical Properties} — Stable schema (BirthDate, Occupation, etc.)
+    \item \textbf{Domain Packs} — PubChem, Crossref, OpenAlex, GeoNames, World Bank
+    \item \textbf{License Compliance} — Full attribution (CC0, CC BY-SA, Public Domain)
+\end{enumerate}
+
+\subsection{Core Knowledge Functions}
+
+\subsubsection{EntitySearch}
+
+Search Wikidata entities:
+
+\begin{lstlisting}
+EntitySearch["Douglas Adams"]
+# => [{"id": "Q42", "label": "Douglas Adams", 
+#      "description": "British science fiction writer...", 
+#      "license": "CC0"}]
+
+EntitySearch["Moon", "Film", 10]  # Type hint, limit 10
+\end{lstlisting}
+
+\subsubsection{EntityValue}
+
+Get entity properties:
+
+\begin{lstlisting}
+EntityValue["Q42", "BirthDate"]
+# => {"value": "1952-03-11", "license": "CC0", 
+#     "source": "https://www.wikidata.org/wiki/Q42"}
+
+# Time-travel queries
+EntityValue["Q42", "Occupation", as_of="2015-01-01"]
+\end{lstlisting}
+
+\textbf{Canonical Properties (50):} BirthDate, DeathDate, Occupation, Country, Population, ChemicalFormula, AtomicNumber, ISBN, DOI, and more.
+
+\subsubsection{EntityRelationships}
+
+SPARQL-powered graph traversal:
+
+\begin{lstlisting}
+EntityRelationships["Q42", "Occupation", depth=1, limit=10]
+# => {"related": [{"id": "Q36180", "label": "writer"}, ...], 
+#     "license": "CC0"}
+\end{lstlisting}
+
+\subsubsection{WikipediaText}
+
+Get Wikipedia summaries with attribution:
+
+\begin{lstlisting}
+WikipediaText["Douglas Adams", sentences=3]
+# => {"text": "Douglas Noel Adams was...", 
+#     "license": "CC BY-SA 3.0", 
+#     "attribution": "Source: Wikipedia contributors"}
+\end{lstlisting}
+
+\subsection{Domain Packs}
+
+MikoshiLang includes 5 domain-specific knowledge sources:
+
+\subsubsection{PubChem (Chemistry)}
+
+\begin{lstlisting}
+PackSearch["pubchem", "caffeine"]
+# => [{"id": "CID2519", "source": "PubChem", 
+#      "license": "Public Domain"}]
+
+PackValue["pubchem", "2519", "MolecularFormula"]
+# => {"value": "C8H10N4O2"}
+\end{lstlisting}
+
+\textbf{Coverage:} 100M+ compounds \\
+\textbf{Properties:} MolecularFormula, MolecularWeight, IUPACName, CanonicalSMILES
+
+\subsubsection{Crossref (Scholarly Papers)}
+
+\begin{lstlisting}
+PackSearch["crossref", "machine learning", limit=5]
+# => [{"id": "10.1145/...", "label": "Paper Title", 
+#      "license": "Metadata: CC0"}]
+
+PackValue["crossref", "10.1145/3422622", "Authors"]
+# => {"value": ["Author 1", "Author 2"]}
+\end{lstlisting}
+
+\textbf{Coverage:} 70M+ papers \\
+\textbf{Properties:} Title, Authors, PublicationDate, Abstract, CitationCount
+
+\subsubsection{OpenAlex (Scholarly Graph)}
+
+\begin{lstlisting}
+PackSearch["openalex", "deep learning"]
+# => [{"id": "W2741809807", "license": "CC0"}]
+
+PackValue["openalex", "W2741809807", "CitationCount"]
+# => {"value": 1523}
+\end{lstlisting}
+
+\textbf{Coverage:} 200M+ works \\
+\textbf{Properties:} Title, Authors, CitationCount, Concepts, OpenAccessURL
+
+\subsubsection{GeoNames (Geographic Data)}
+
+\begin{lstlisting}
+PackSearch["geonames", "London"]
+# => [{"id": "2643743", "license": "CC BY 4.0"}]
+
+PackValue["geonames", "2643743", "Population"]
+# => {"value": 8961989}
+\end{lstlisting}
+
+\textbf{Coverage:} 11M+ places \\
+\textbf{Properties:} Country, Population, Latitude, Longitude, Elevation, Timezone
+
+\subsubsection{World Bank (Economic Indicators)}
+
+\begin{lstlisting}
+PackSearch["worldbank", "GDP"]
+# => [{"id": "NY.GDP.MKTP.CD", "license": "CC BY 4.0"}]
+
+PackValue["worldbank", "NY.GDP.MKTP.CD", "Value", country="US"]
+# => {"value": 25462700000000, "date": "2022"}
+\end{lstlisting}
+
+\textbf{Coverage:} 1,400+ indicators \\
+\textbf{Properties:} Value, Date, Country, Unit
+
+\subsection{Caching \& Provenance}
+
+All knowledge queries are cached in \texttt{\textasciitilde/.mikoshilang/knowledge\_cache/knowledge.db} (SQLite) with:
+
+\begin{itemize}
+    \item \textbf{TTL:} 7 days (Wikidata), 24 hours (Wikipedia)
+    \item \textbf{Provenance:} Source URL, retrieved timestamp, license
+    \item \textbf{Performance:} 200x speedup on cached queries
+\end{itemize}
+
+\begin{lstlisting}
+CacheStats[]
+# => {"total_entries": 1523, "size_mb": 8.4}
+
+CacheClear[30]  # Clear entries older than 30 days
+\end{lstlisting}
+
+\subsection{License Compliance}
+
+Every result includes license metadata:
+
+\begin{itemize}
+    \item \textbf{Wikidata:} CC0 (public domain)
+    \item \textbf{Wikipedia:} CC BY-SA 3.0 (attribution required)
+    \item \textbf{PubChem:} Public Domain
+    \item \textbf{Crossref:} Metadata CC0
+    \item \textbf{OpenAlex:} CC0
+    \item \textbf{GeoNames:} CC BY 4.0
+    \item \textbf{World Bank:} CC BY 4.0
+\end{itemize}
 
 \section{Syntax}
 
@@ -461,7 +633,9 @@ MikoshiLang provides \textbf{6,324 functions} across \textbf{40+ domains}. Below
 \subsection{Version History}
 
 \begin{itemize}
-    \item \textbf{v3.1.1} (Current) — 6,324 total functions
+    \item \textbf{v3.3.0} (Current) — Full knowledge layer: 5 domain packs (Crossref, OpenAlex, GeoNames, World Bank, PubChem), SPARQL graph queries, persistent cache, 50 canonical properties
+    \item \textbf{v3.2.0} — MVP knowledge layer: EntitySearch, EntityValue, WikipediaSummary, Wikidata/Wikipedia integration
+    \item \textbf{v3.1.1} — 6,324 computational functions
     \item \textbf{v3.1.0} — Added 600 functions: hydrology, mining, manufacturing, renewable energy
     \item \textbf{v3.0.4} — Fixed all placeholders, 100\% working functions
     \item \textbf{v3.0.0} — Added 600 functions: info theory, acoustics, GIS, chemical engineering
