@@ -18,26 +18,41 @@ def _ensure_extended():
             from .extended3 import EXTENDED3_RULES
             from .extended4 import EXTENDED4_RULES
             from .extended5 import EXTENDED5_RULES
+            from .extended6 import register as ext6
+            from .extended7 import register as ext7
+            from .extended8 import register as ext8
+            from .extended9 import register as ext9
             from .visualization import VISUALIZATION_RULES
-            _extended_rules = EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + EXTENDED4_RULES + EXTENDED5_RULES + VISUALIZATION_RULES
+            _extended_rules = (EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + 
+                             EXTENDED4_RULES + EXTENDED5_RULES + ext6() + ext7() + 
+                             ext8() + ext9() + VISUALIZATION_RULES)
         except Exception as e:
             # Fallback: try loading what we can
             try:
                 from .extended import EXTENDED_RULES
                 from .extended2 import EXTENDED2_RULES
                 from .extended3 import EXTENDED3_RULES
-                _extended_rules = EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES
+                from .extended4 import EXTENDED4_RULES
+                from .extended5 import EXTENDED5_RULES
+                from .visualization import VISUALIZATION_RULES
+                _extended_rules = EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES + EXTENDED4_RULES + EXTENDED5_RULES + VISUALIZATION_RULES
             except Exception:
                 try:
                     from .extended import EXTENDED_RULES
                     from .extended2 import EXTENDED2_RULES
-                    _extended_rules = EXTENDED_RULES + EXTENDED2_RULES
+                    from .extended3 import EXTENDED3_RULES
+                    _extended_rules = EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES
                 except Exception:
                     try:
                         from .extended import EXTENDED_RULES
-                        _extended_rules = EXTENDED_RULES
+                        from .extended2 import EXTENDED2_RULES
+                        _extended_rules = EXTENDED_RULES + EXTENDED2_RULES
                     except Exception:
-                        _extended_rules = []
+                        try:
+                            from .extended import EXTENDED_RULES
+                            _extended_rules = EXTENDED_RULES
+                        except Exception:
+                            _extended_rules = []
         _extended_loaded = True
 
 # Hold attributes
