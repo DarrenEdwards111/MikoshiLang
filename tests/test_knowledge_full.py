@@ -369,8 +369,27 @@ def test_alphafold_value():
         assert result["license"] == "CC BY 4.0"
 
 
+def test_jhtdb_search():
+    """Test JHTDB pack search."""
+    results = PackSearch("jhtdb", "isotropic", limit=3)
+    assert isinstance(results, list)
+    assert len(results) > 0
+    if "error" not in results[0]:
+        assert results[0]["source"] == "JHTDB"
+        assert "license" in results[0]
+
+
+def test_jhtdb_value():
+    """Test JHTDB dataset metadata."""
+    # Isotropic turbulence dataset
+    result = PackValue("jhtdb", "isotropic1024coarse", "ReynoldsNumber")
+    assert "error" not in result
+    assert result["value"] == 433
+    assert "license" in result
+
+
 def test_all_packs_registered():
-    """Test that all 6 packs are registered."""
+    """Test that all 7 packs are registered."""
     from mikoshilang.knowledge_full import _KNOWLEDGE_PACKS
     
     assert "pubchem" in _KNOWLEDGE_PACKS
@@ -379,5 +398,6 @@ def test_all_packs_registered():
     assert "geonames" in _KNOWLEDGE_PACKS
     assert "worldbank" in _KNOWLEDGE_PACKS
     assert "alphafold" in _KNOWLEDGE_PACKS
+    assert "jhtdb" in _KNOWLEDGE_PACKS
     
-    assert len(_KNOWLEDGE_PACKS) == 6
+    assert len(_KNOWLEDGE_PACKS) == 7

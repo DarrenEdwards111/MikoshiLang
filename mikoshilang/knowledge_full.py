@@ -1101,6 +1101,139 @@ class AlphaFoldPack(KnowledgePack):
             return {"error": str(e)}
 
 
+class JHTDBPack(KnowledgePack):
+    """Turbulence simulation data from Johns Hopkins Turbulence Databases."""
+    
+    # Available datasets with metadata
+    DATASETS = {
+        "isotropic1024coarse": {
+            "name": "Forced Isotropic Turbulence (1024³)",
+            "description": "Incompressible forced isotropic turbulence",
+            "resolution": "1024³",
+            "grid_points": 1024**3,
+            "reynolds": 433,
+            "time_range": "0.0-2.048",
+            "fields": ["velocity", "pressure", "force"],
+            "url": "http://turbulence.pha.jhu.edu/Isotropic1024.aspx",
+        },
+        "channel": {
+            "name": "Channel Flow (Re=1000)",
+            "description": "Turbulent channel flow at Reτ=1000",
+            "resolution": "2048×1536×512",
+            "grid_points": 2048 * 1536 * 512,
+            "reynolds": 1000,
+            "time_range": "0.0-25.0",
+            "fields": ["velocity", "pressure"],
+            "url": "http://turbulence.pha.jhu.edu/Channel_Flow.aspx",
+        },
+        "channel5200": {
+            "name": "Channel Flow (Re=5200)",
+            "description": "High Reynolds number channel flow",
+            "resolution": "10240×7680×1536",
+            "grid_points": 10240 * 7680 * 1536,
+            "reynolds": 5200,
+            "time_range": "0.0-0.04",
+            "fields": ["velocity", "pressure"],
+            "url": "http://turbulence.pha.jhu.edu/Channel5200.aspx",
+        },
+        "mixing": {
+            "name": "Temporal Mixing Layer",
+            "description": "Temporally evolving turbulent mixing layer",
+            "resolution": "1024×1024×2048",
+            "grid_points": 1024 * 1024 * 2048,
+            "reynolds": 418,
+            "time_range": "0.0-90.0",
+            "fields": ["velocity", "pressure"],
+            "url": "http://turbulence.pha.jhu.edu/Mixing_Layer.aspx",
+        },
+        "mhd1024": {
+            "name": "MHD Isotropic Turbulence",
+            "description": "Magnetohydrodynamic isotropic turbulence",
+            "resolution": "1024³",
+            "grid_points": 1024**3,
+            "reynolds": 377,
+            "time_range": "0.0-2.56",
+            "fields": ["velocity", "magnetic", "pressure"],
+            "url": "http://turbulence.pha.jhu.edu/MHD_Isotropic.aspx",
+        },
+        "transition_bl": {
+            "name": "Transitional Boundary Layer",
+            "description": "Spatially developing boundary layer transition",
+            "resolution": "10240×3072×1920",
+            "grid_points": 10240 * 3072 * 1920,
+            "reynolds": 670,
+            "time_range": "0.0-4.0",
+            "fields": ["velocity", "pressure"],
+            "url": "http://turbulence.pha.jhu.edu/Transition.aspx",
+        },
+    }
+    
+    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search turbulence datasets."""
+        try:
+            results = []
+            query_lower = query.lower()
+            
+            for dataset_id, data in self.DATASETS.items():
+                # Match by name or description
+                if (query_lower in data["name"].lower() or 
+                    query_lower in data["description"].lower() or
+                    query_lower in dataset_id.lower()):
+                    results.append({
+                        "id": dataset_id,
+                        "label": data["name"],
+                        "description": data["description"],
+                        "url": data["url"],
+                        "source": "JHTDB",
+                        "license": "Free for research/education",
+                    })
+                    
+                    if len(results) >= limit:
+                        break
+            
+            return results if results else [{"error": "No matching datasets"}]
+        except Exception as e:
+            return [{"error": str(e)}]
+    
+    def get_value(self, dataset_id: str, property: str, **kwargs) -> Dict[str, Any]:
+        """Get dataset metadata."""
+        try:
+            if dataset_id not in self.DATASETS:
+                return {"error": f"Unknown dataset: {dataset_id}"}
+            
+            data = self.DATASETS[dataset_id]
+            
+            value = None
+            if property == "Name":
+                value = data["name"]
+            elif property == "Description":
+                value = data["description"]
+            elif property == "Resolution":
+                value = data["resolution"]
+            elif property == "GridPoints":
+                value = data["grid_points"]
+            elif property == "ReynoldsNumber":
+                value = data["reynolds"]
+            elif property == "TimeRange":
+                value = data["time_range"]
+            elif property == "Fields":
+                value = ", ".join(data["fields"])
+            elif property == "URL":
+                value = data["url"]
+            else:
+                value = data.get(property)
+            
+            return {
+                "value": value,
+                "property": property,
+                "entity": dataset_id,
+                "source": data["url"],
+                "license": "Free for research/education",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+
 # Pack registry
 _KNOWLEDGE_PACKS = {
     "pubchem": PubChemPack(),
@@ -1109,6 +1242,7 @@ _KNOWLEDGE_PACKS = {
     "geonames": GeoNamesPack(),
     "worldbank": WorldBankPack(),
     "alphafold": AlphaFoldPack(),
+    "jhtdb": JHTDBPack(),
 }
 
 
@@ -1200,6 +1334,7 @@ __all__ = [
     "GeoNamesPack",  # NEW
     "WorldBankPack",  # NEW
     "AlphaFoldPack",  # NEW
+    "JHTDBPack",  # NEW
     
     # Cache management
     "CacheClear",
