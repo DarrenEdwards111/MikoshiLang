@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: mikoshilang
-Version: 1.1.4
+Version: 1.1.5
 Summary: Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence
 Author-email: Mikoshi Ltd <mikoshiuk@gmail.com>
 License: Apache-2.0
@@ -60,6 +60,8 @@ Requires-Dist: scikit-learn>=1.0; extra == "all"
 **A symbolic computation language for Python** — Wolfram-style syntax, 1,333 built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and more.
 
 Built by **Mikoshi Ltd**.
+
+> **[🚀 Try It Online — No Install Required](https://mikoshi.co.uk/mikoshilang)**
 
 ## Why MikoshiLang?
 

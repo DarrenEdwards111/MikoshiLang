@@ -21,6 +21,8 @@
 
 Built by **Mikoshi Ltd**.
 
+> **[🚀 Try It Online — No Install Required](https://mikoshi.co.uk/mikoshilang)**
+
 ## Why MikoshiLang?
 
 | Feature | MikoshiLang | SymPy | Wolfram |
