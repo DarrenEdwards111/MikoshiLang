@@ -4,6 +4,13 @@
   <img src="https://raw.githubusercontent.com/DarrenEdwards111/MikoshiLang/main/mikoshilang-logo-v2.jpg" alt="MikoshiLang" width="400">
 </p>
 
+<p align="center">
+  <a href="https://pypi.org/project/mikoshilang/"><img src="https://img.shields.io/pypi/v/mikoshilang?color=blue&label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/mikoshilang/"><img src="https://img.shields.io/pypi/dm/mikoshilang?color=green&label=Downloads" alt="Downloads"></a>
+  <a href="https://mikoshi.co.uk/mikoshilang"><img src="https://img.shields.io/badge/🚀_Try_It_Online-mikoshi.co.uk-00d4ff?style=for-the-badge" alt="Try It Online"></a>
+  <a href="https://github.com/DarrenEdwards111/MikoshiLang/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-orange" alt="License"></a>
+</p>
+
 [![Tests](https://img.shields.io/badge/tests-570%20passed-brightgreen)]()
 [![PyPI](https://img.shields.io/pypi/v/mikoshilang)](https://pypi.org/project/mikoshilang/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
