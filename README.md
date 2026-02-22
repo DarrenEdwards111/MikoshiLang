@@ -11,11 +11,13 @@
   <a href="https://github.com/DarrenEdwards111/MikoshiLang/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-orange" alt="License"></a>
 </p>
 
-[![Tests](https://img.shields.io/badge/tests-570%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-601%20passed-brightgreen)]()
 [![PyPI](https://img.shields.io/pypi/v/mikoshilang)](https://pypi.org/project/mikoshilang/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C324-blue)]()
+[![Knowledge](https://img.shields.io/badge/knowledge_packs-5-green)]()
+[![Version](https://img.shields.io/badge/version-3.3.0-orange)](https://pypi.org/project/mikoshilang/3.3.0/)
 
 **A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
@@ -37,6 +39,9 @@ Built by **Mikoshi Ltd**.
 | Chemistry — 118 elements, equation balancing | ✅ | ❌ | ✅ |
 | Physics units with arithmetic & conversion | ✅ | ✅ | ✅ |
 | Signal processing (FFT, filters, spectrograms) | ✅ | Limited | ✅ |
+| **Knowledge layer (Wikidata/Wikipedia/Packs)** | ✅ 5 packs | ❌ | ✅ Curated |
+| **Entity graph with SPARQL queries** | ✅ | ❌ | ✅ |
+| **Domain-specific knowledge (PubChem, Crossref...)** | ✅ 5 sources | ❌ | Limited |
 | Free & open source | ✅ | ✅ | ❌ ($395/yr) |
 | Python-native, pip installable | ✅ | ✅ | ❌ |
 
@@ -48,7 +53,7 @@ Built by **Mikoshi Ltd**.
 - **📡 Signal processing** — DFT, filters (low/high/band-pass), convolution, window functions, spectrograms — all from one import
 - **🔬 Physics units** — 50+ units, quantity arithmetic that checks dimensions, automatic conversion: `UnitConvert[Quantity[100, "cm"], "m"]`
 - **📓 Jupyter kernel** — LaTeX-rendered expressions, inline plots, proper notebook experience
-- **🌐 Knowledge layer** — Wikidata entity graph + Wikipedia summaries. Structured facts, provenance tracking, license compliance. `EntitySearch`, `EntityValue`, `WikipediaSummary`
+- **🌐 Knowledge layer (v3.3.0)** — 5 domain packs (PubChem, Crossref, OpenAlex, GeoNames, World Bank) + Wikidata/Wikipedia. SPARQL graph queries, persistent cache, 50 canonical properties. `EntitySearch`, `EntityRelationships`, `PackSearch`
 
 ## Knowledge Layer (Full Version)
 
@@ -73,8 +78,13 @@ EntityRelationships["Q42", "Influenced", depth=2]
 WikipediaText["Python (programming language)", sentences=3]
 # → {"text": "...", "license": "CC BY-SA 3.0", "attribution": "..."}
 
-# 5. Domain Packs (extensible knowledge)
-PackSearch["pubchem", "caffeine"]
+# 5. Domain Packs (5 built-in sources)
+PackSearch["pubchem", "caffeine"]  # Chemistry
+PackSearch["crossref", "machine learning"]  # Papers
+PackSearch["openalex", "deep learning"]  # Scholarly graph
+PackSearch["geonames", "London"]  # Geographic data
+PackSearch["worldbank", "GDP"]  # Economic indicators
+
 PackValue["pubchem", "2519", "MolecularFormula"]
 # → {"value": "C8H10N4O2", "license": "Public Domain"}
 
@@ -94,10 +104,51 @@ CacheClear[30]  # Clear entries older than 30 days
 4. ✅ LLM Interpreter — natural language → structured queries
 5. ✅ Persistent Cache — SQLite with TTL (7d Wikidata, 24h Wikipedia)
 6. ✅ Canonical Properties — stable schema across domains
-7. ✅ Domain Packs — PubChem (chemistry), extensible for more
+7. ✅ Domain Packs — 5 sources: PubChem, Crossref, OpenAlex, GeoNames, World Bank
 8. ✅ License Compliance — CC0/CC BY-SA tracking + attribution
 
 See [Full Knowledge Layer docs](docs/KNOWLEDGE_LAYER_FULL.md) for complete reference.
+
+### Domain Packs (5 Built-In Sources)
+
+MikoshiLang v3.3.0 includes production-ready knowledge packs:
+
+| Pack | Domain | Coverage | License | Properties |
+|------|--------|----------|---------|------------|
+| **PubChem** | Chemistry | 100M+ compounds | Public Domain | MolecularFormula, MolecularWeight, IUPACName, CanonicalSMILES |
+| **Crossref** | Papers | 70M+ papers | Metadata: CC0 | Title, Authors, PublicationDate, Abstract, CitationCount |
+| **OpenAlex** | Scholarly | 200M+ works | CC0 | Title, Authors, CitationCount, Concepts, OpenAccessURL |
+| **GeoNames** | Geography | 11M+ places | CC BY 4.0 | Country, Population, Latitude, Longitude, Elevation, Timezone |
+| **World Bank** | Economics | 1,400+ indicators | CC BY 4.0 | Value, Date, Country, Unit |
+
+**Usage:**
+
+```python
+# Chemistry
+compounds = PackSearch["pubchem", "aspirin"]
+formula = PackValue["pubchem", "2244", "MolecularFormula"]
+
+# Papers
+papers = PackSearch["crossref", "machine learning", limit=5]
+authors = PackValue["crossref", "10.1145/3422622", "Authors"]
+
+# Scholarly graph
+works = PackSearch["openalex", "deep learning"]
+citations = PackValue["openalex", "W2741809807", "CitationCount"]
+
+# Geography
+places = PackSearch["geonames", "London"]
+population = PackValue["geonames", "2643743", "Population"]
+
+# Economics
+indicators = PackSearch["worldbank", "GDP"]
+value = PackValue["worldbank", "NY.GDP.MKTP.CD", "Value", country="US"]
+```
+
+**All queries include:**
+- ✅ Provenance (source URL + timestamp)
+- ✅ License metadata
+- ✅ Persistent caching (200x speedup)
 
 ## Installation
 
