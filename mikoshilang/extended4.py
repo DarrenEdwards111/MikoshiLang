@@ -577,12 +577,28 @@ def build_extended4_rules():
     
     def _weekday_name(date_str):
         from datetime import datetime
-        dt = datetime.fromisoformat(str(date_str))
+        val = str(date_str)
+        try:
+            n = int(float(val))
+            if 1 <= n <= 7:
+                import calendar
+                return calendar.day_name[n - 1]  # 1=Monday
+        except (ValueError, TypeError):
+            pass
+        dt = datetime.fromisoformat(val)
         return dt.strftime("%A")
     
     def _month_name(date_str):
         from datetime import datetime
-        dt = datetime.fromisoformat(str(date_str))
+        val = str(date_str)
+        try:
+            n = int(float(val))
+            if 1 <= n <= 12:
+                import calendar
+                return calendar.month_name[n]
+        except (ValueError, TypeError):
+            pass
+        dt = datetime.fromisoformat(val)
         return dt.strftime("%B")
     
     rule2('DatePlus', _date_plus)

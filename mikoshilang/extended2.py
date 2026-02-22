@@ -1105,7 +1105,10 @@ def build_extended2_rules():
     def _is_prime_power(n):
         """Check if n is a prime power."""
         import sympy as sp
-        return sp.ntheory.factor_.is_prime_power(int(n))
+        n = int(n)
+        if n < 2:
+            return False
+        return len(sp.factorint(n)) == 1
 
     def _radical(n):
         """Product of distinct prime factors."""

@@ -506,8 +506,11 @@ def build_extended_rules():
 
     # TrigReduce[expr] (reverse of expand)
     def _trig_reduce(a):
-        from sympy import TR8
-        return _from_sympy(TR8(_to_sympy(a)))
+        try:
+            from sympy.simplify.fu import TR8
+            return _from_sympy(TR8(_to_sympy(a)))
+        except ImportError:
+            return _from_sympy(sp.trigsimp(_to_sympy(a)))
     rule1("TrigReduce", _trig_reduce)
 
     # ExpToTrig[expr]
