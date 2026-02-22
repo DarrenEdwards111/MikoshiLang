@@ -998,6 +998,109 @@ class WorldBankPack(KnowledgePack):
             return {"error": str(e)}
 
 
+class AlphaFoldPack(KnowledgePack):
+    """Protein structures from AlphaFold Database."""
+    
+    UNIPROT_API = "https://rest.uniprot.org/uniprotkb"
+    ALPHAFOLD_API = "https://alphafold.ebi.ac.uk/api"
+    
+    def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search proteins via UniProt."""
+        try:
+            params = {
+                "query": query,
+                "format": "json",
+                "size": limit,
+            }
+            response = requests.get(f"{self.UNIPROT_API}/search", params=params, headers=HEADERS, timeout=10)
+            data = response.json()
+            
+            results = []
+            for item in data.get("results", []):
+                accession = item.get("primaryAccession", "")
+                protein_name = item.get("proteinDescription", {}).get("recommendedName", {}).get("fullName", {}).get("value", "")
+                organism = item.get("organism", {}).get("scientificName", "")
+                
+                results.append({
+                    "id": accession,
+                    "label": protein_name or accession,
+                    "description": f"{organism}",
+                    "url": f"https://alphafold.ebi.ac.uk/entry/{accession}",
+                    "source": "AlphaFold DB",
+                    "license": "CC BY 4.0",
+                })
+            
+            return results
+        except Exception as e:
+            return [{"error": str(e)}]
+    
+    def get_value(self, accession: str, property: str, **kwargs) -> Dict[str, Any]:
+        """Get protein data from AlphaFold/UniProt."""
+        try:
+            # Get AlphaFold prediction data
+            if property in ["Structure", "Confidence", "pLDDT"]:
+                response = requests.get(f"{self.ALPHAFOLD_API}/prediction/{accession}", headers=HEADERS, timeout=10)
+                data = response.json()
+                
+                if not data or len(data) == 0:
+                    return {"error": "No AlphaFold prediction available"}
+                
+                pred = data[0] if isinstance(data, list) else data
+                
+                value = None
+                if property == "Structure":
+                    # Return PDB file URL
+                    value = pred.get("pdbUrl")
+                elif property == "Confidence":
+                    # Return average pLDDT score
+                    value = pred.get("globalMetricValue")
+                elif property == "pLDDT":
+                    # Return pLDDT scores (truncated)
+                    value = str(pred.get("plddt", []))[:100] + "..."
+                
+                return {
+                    "value": value,
+                    "property": property,
+                    "entity": accession,
+                    "source": f"https://alphafold.ebi.ac.uk/entry/{accession}",
+                    "license": "CC BY 4.0",
+                }
+            
+            # Get UniProt data for other properties
+            response = requests.get(f"{self.UNIPROT_API}/{accession}.json", headers=HEADERS, timeout=10)
+            data = response.json()
+            
+            value = None
+            if property == "Sequence":
+                value = data.get("sequence", {}).get("value", "")
+            elif property == "Organism":
+                value = data.get("organism", {}).get("scientificName", "")
+            elif property == "Gene":
+                genes = data.get("genes", [])
+                if genes:
+                    value = genes[0].get("geneName", {}).get("value", "")
+            elif property == "Function":
+                comments = data.get("comments", [])
+                for comment in comments:
+                    if comment.get("commentType") == "FUNCTION":
+                        texts = comment.get("texts", [])
+                        if texts:
+                            value = texts[0].get("value", "")[:200]
+                            break
+            else:
+                value = data.get(property)
+            
+            return {
+                "value": value,
+                "property": property,
+                "entity": accession,
+                "source": f"https://www.uniprot.org/uniprotkb/{accession}",
+                "license": "CC BY 4.0",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+
 # Pack registry
 _KNOWLEDGE_PACKS = {
     "pubchem": PubChemPack(),
@@ -1005,6 +1108,7 @@ _KNOWLEDGE_PACKS = {
     "openalex": OpenAlexPack(),
     "geonames": GeoNamesPack(),
     "worldbank": WorldBankPack(),
+    "alphafold": AlphaFoldPack(),
 }
 
 
@@ -1095,6 +1199,7 @@ __all__ = [
     "OpenAlexPack",  # NEW
     "GeoNamesPack",  # NEW
     "WorldBankPack",  # NEW
+    "AlphaFoldPack",  # NEW
     
     # Cache management
     "CacheClear",

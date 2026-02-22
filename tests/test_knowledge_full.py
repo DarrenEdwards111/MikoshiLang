@@ -351,8 +351,26 @@ def test_worldbank_value():
         assert result["license"] == "CC BY 4.0"
 
 
+def test_alphafold_search():
+    """Test AlphaFold pack search."""
+    results = PackSearch("alphafold", "hemoglobin", limit=3)
+    assert isinstance(results, list)
+    if len(results) > 0 and "error" not in results[0]:
+        assert results[0]["source"] == "AlphaFold DB"
+        assert results[0]["license"] == "CC BY 4.0"
+
+
+def test_alphafold_value():
+    """Test AlphaFold protein structure data."""
+    # Human hemoglobin alpha chain
+    result = PackValue("alphafold", "P69905", "Confidence")
+    if "error" not in result:
+        assert "value" in result
+        assert result["license"] == "CC BY 4.0"
+
+
 def test_all_packs_registered():
-    """Test that all 5 packs are registered."""
+    """Test that all 6 packs are registered."""
     from mikoshilang.knowledge_full import _KNOWLEDGE_PACKS
     
     assert "pubchem" in _KNOWLEDGE_PACKS
@@ -360,5 +378,6 @@ def test_all_packs_registered():
     assert "openalex" in _KNOWLEDGE_PACKS
     assert "geonames" in _KNOWLEDGE_PACKS
     assert "worldbank" in _KNOWLEDGE_PACKS
+    assert "alphafold" in _KNOWLEDGE_PACKS
     
-    assert len(_KNOWLEDGE_PACKS) == 5
+    assert len(_KNOWLEDGE_PACKS) == 6
