@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mikoshilang"
-version = "1.1.5"
+version = "1.1.6"
 description = "Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence"
 authors = [{name = "Mikoshi Ltd", email = "mikoshiuk@gmail.com"}]
 license = {text = "Apache-2.0"}
@@ -38,3 +38,6 @@ Documentation = "https://github.com/DarrenEdwards111/MikoshiLang#readme"
 [project.scripts]
 mikoshilang = "mikoshilang.repl:main"
 mikoshilang-install-kernel = "mikoshilang.jupyter.install:main"
+
+[tool.setuptools]
+packages = ["mikoshilang", "mikoshilang.jupyter"]
