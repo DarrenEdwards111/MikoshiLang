@@ -1,9 +1,13 @@
 Metadata-Version: 2.1
 Name: mikoshilang
-Version: 1.1.2
+Version: 1.1.3
 Summary: Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence
 Author-email: Mikoshi Ltd <mikoshiuk@gmail.com>
 License: Apache-2.0
+Project-URL: Homepage, https://mikoshi.co.uk/mikoshilang
+Project-URL: Repository, https://github.com/DarrenEdwards111/MikoshiLang
+Project-URL: Try It Online, https://mikoshi.co.uk/mikoshilang
+Project-URL: Documentation, https://github.com/DarrenEdwards111/MikoshiLang#readme
 Keywords: symbolic-computation,computer-algebra,pattern-matching,mathematics,wolfram
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Science/Research
