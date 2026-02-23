@@ -71,6 +71,7 @@ mikoshilang.egg-info/entry_points.txt
 mikoshilang.egg-info/requires.txt
 mikoshilang.egg-info/top_level.txt
 mikoshilang/jupyter/__init__.py
+mikoshilang/jupyter/__main__.py
 mikoshilang/jupyter/install.py
 mikoshilang/jupyter/kernel.py
 tests/test_builtins.py
