@@ -17,7 +17,7 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C324-blue)]()
 [![Knowledge](https://img.shields.io/badge/knowledge_packs-7-green)]()
-[![Version](https://img.shields.io/badge/version-3.5.5-orange)](https://pypi.org/project/mikoshilang/3.5.5/)
+[![Version](https://img.shields.io/badge/version-3.5.6-orange)](https://pypi.org/project/mikoshilang/3.5.6/)
 
 **A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
@@ -178,6 +178,60 @@ pip install mikoshilang[signal]
 # Everything
 pip install mikoshilang[all]
 ```
+
+## Using with Jupyter/Anaconda
+
+### Quick Start (Recommended Method)
+
+The easiest way to use MikoshiLang in Jupyter is through a **regular Python 3 kernel**:
+
+**1. Install in your Anaconda environment:**
+```bash
+# Open Anaconda Prompt
+conda create -n mikoshilang python=3.9
+conda activate mikoshilang
+pip install mikoshilang[jupyter]
+```
+
+**2. Launch Jupyter:**
+```bash
+jupyter notebook
+```
+
+**3. Create a new Python 3 notebook** (not a MikoshiLang kernel)
+
+**4. Import and use MikoshiLang:**
+```python
+from mikoshilang import parse_and_eval
+
+# Evaluate expressions
+result = parse_and_eval("x^2 + 2*x + 1")
+print(result)  # Output: x^2 + 2*x + 1
+
+# Solve equations
+parse_and_eval("Solve[x^2 - 4 == 0, x]")
+
+# Integrate
+parse_and_eval("Integrate[x^2, x]")
+
+# Chemistry
+parse_and_eval("MolecularMass['C6H12O6']")
+
+# Knowledge layer
+parse_and_eval("EntitySearch['Douglas Adams']")
+```
+
+### Alternative: Custom MikoshiLang Kernel
+
+You can also install a dedicated MikoshiLang kernel for Wolfram-style `In[1]:=` prompts:
+
+```bash
+python -m mikoshilang.jupyter.install
+jupyter notebook
+# Then select "MikoshiLang" as the kernel
+```
+
+**Note:** The custom kernel may have compatibility issues on Windows/Anaconda due to async event loop conflicts. If you encounter kernel restart errors, use the Python 3 kernel method above—it provides the same functionality.
 
 ## Extensions
 
