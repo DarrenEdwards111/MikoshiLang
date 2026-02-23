@@ -17,7 +17,7 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C324-blue)]()
 [![Knowledge](https://img.shields.io/badge/knowledge_packs-7-green)]()
-[![Version](https://img.shields.io/badge/version-3.5.7-orange)](https://pypi.org/project/mikoshilang/3.5.7/)
+[![Version](https://img.shields.io/badge/version-3.5.8-orange)](https://pypi.org/project/mikoshilang/3.5.8/)
 
 **A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
@@ -222,29 +222,11 @@ In[3]:= Plot2D[Sin[x], {x, -Pi, Pi}]
 3. **Follow the Linux instructions above**
 4. **Access Jupyter** from your Windows browser - WSL automatically forwards ports
 
-### Alternative: Anaconda with Python Kernel Workaround
+### Windows Users: Anaconda Not Supported
 
-If you must use Anaconda on Windows, the custom MikoshiLang kernel has **async event loop conflicts**. Use this workaround:
+**The MikoshiLang Jupyter kernel does not work on Windows/Anaconda** due to async event loop conflicts. 
 
-**1. Install in Anaconda:**
-```bash
-conda create -n mikoshilang python=3.9
-conda activate mikoshilang
-pip install mikoshilang[jupyter]
-```
-
-**2. Launch Jupyter and create a Python 3 notebook** (not MikoshiLang kernel)
-
-**3. Import and use:**
-```python
-from mikoshilang import parse_and_eval
-
-parse_and_eval("x^2 + 2*x + 1")
-parse_and_eval("Solve[x^2 - 4 == 0, x]")
-parse_and_eval("Plot2D[Sin[x], {x, -Pi, Pi}]")
-```
-
-**Note:** This works but requires wrapping expressions in `parse_and_eval()`. For the proper Wolfram-style experience, use WSL.
+**Use WSL instead** (instructions above) - it works perfectly and gives you the proper Wolfram-style experience.
 
 ## Extensions
 
