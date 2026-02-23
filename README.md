@@ -17,7 +17,7 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C324-blue)]()
 [![Knowledge](https://img.shields.io/badge/knowledge_packs-7-green)]()
-[![Version](https://img.shields.io/badge/version-3.5.6-orange)](https://pypi.org/project/mikoshilang/3.5.6/)
+[![Version](https://img.shields.io/badge/version-3.5.7-orange)](https://pypi.org/project/mikoshilang/3.5.7/)
 
 **A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
@@ -179,59 +179,72 @@ pip install mikoshilang[signal]
 pip install mikoshilang[all]
 ```
 
-## Using with Jupyter/Anaconda
+## Using with Jupyter Notebooks
 
-### Quick Start (Recommended Method)
+### Recommended: WSL, Linux, or macOS
 
-The easiest way to use MikoshiLang in Jupyter is through a **regular Python 3 kernel**:
+For the full **Wolfram-style experience** with `In[1]:=` prompts, use the MikoshiLang kernel on **WSL, Linux, or macOS**:
 
-**1. Install in your Anaconda environment:**
+**1. Install MikoshiLang with Jupyter support:**
 ```bash
-# Open Anaconda Prompt
+pip install mikoshilang[jupyter]
+```
+
+**2. Install the MikoshiLang kernel:**
+```bash
+python -m mikoshilang.jupyter.install
+```
+
+**3. Launch Jupyter:**
+```bash
+jupyter notebook
+```
+
+**4. Create a new notebook and select "MikoshiLang" as the kernel**
+
+**5. Use Wolfram-style syntax directly:**
+```
+In[1]:= x^2 + 2*x + 1
+Out[1]= x^2 + 2*x + 1
+
+In[2]:= Solve[x^2 - 4 == 0, x]
+Out[2]= [-2, 2]
+
+In[3]:= Plot2D[Sin[x], {x, -Pi, Pi}]
+```
+
+### Windows Users: Use WSL (Windows Subsystem for Linux)
+
+**The MikoshiLang kernel works perfectly in WSL.** If you're on Windows:
+
+1. **Install WSL** (if not already): `wsl --install` in PowerShell
+2. **Open WSL terminal** (Ubuntu)
+3. **Follow the Linux instructions above**
+4. **Access Jupyter** from your Windows browser - WSL automatically forwards ports
+
+### Alternative: Anaconda with Python Kernel Workaround
+
+If you must use Anaconda on Windows, the custom MikoshiLang kernel has **async event loop conflicts**. Use this workaround:
+
+**1. Install in Anaconda:**
+```bash
 conda create -n mikoshilang python=3.9
 conda activate mikoshilang
 pip install mikoshilang[jupyter]
 ```
 
-**2. Launch Jupyter:**
-```bash
-jupyter notebook
-```
+**2. Launch Jupyter and create a Python 3 notebook** (not MikoshiLang kernel)
 
-**3. Create a new Python 3 notebook** (not a MikoshiLang kernel)
-
-**4. Import and use MikoshiLang:**
+**3. Import and use:**
 ```python
 from mikoshilang import parse_and_eval
 
-# Evaluate expressions
-result = parse_and_eval("x^2 + 2*x + 1")
-print(result)  # Output: x^2 + 2*x + 1
-
-# Solve equations
+parse_and_eval("x^2 + 2*x + 1")
 parse_and_eval("Solve[x^2 - 4 == 0, x]")
-
-# Integrate
-parse_and_eval("Integrate[x^2, x]")
-
-# Chemistry
-parse_and_eval("MolecularMass['C6H12O6']")
-
-# Knowledge layer
-parse_and_eval("EntitySearch['Douglas Adams']")
+parse_and_eval("Plot2D[Sin[x], {x, -Pi, Pi}]")
 ```
 
-### Alternative: Custom MikoshiLang Kernel
-
-You can also install a dedicated MikoshiLang kernel for Wolfram-style `In[1]:=` prompts:
-
-```bash
-python -m mikoshilang.jupyter.install
-jupyter notebook
-# Then select "MikoshiLang" as the kernel
-```
-
-**Note:** The custom kernel may have compatibility issues on Windows/Anaconda due to async event loop conflicts. If you encounter kernel restart errors, use the Python 3 kernel method above—it provides the same functionality.
+**Note:** This works but requires wrapping expressions in `parse_and_eval()`. For the proper Wolfram-style experience, use WSL.
 
 ## Extensions
 
