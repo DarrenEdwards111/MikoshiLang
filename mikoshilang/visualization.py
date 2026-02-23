@@ -75,8 +75,10 @@ def Plot2D(expr, var_range, **kwargs):
         f = sp.lambdify(sym_var, sym_expr, modules=['numpy'])
         functions.append((f, str(e)))
     
-    # Generate points
-    x_vals = np.linspace(float(x_min), float(x_max), kwargs.get('points', 500))
+    # Generate points (evaluate symbolic bounds)
+    x_min_val = float(_to_sympy(x_min).evalf())
+    x_max_val = float(_to_sympy(x_max).evalf())
+    x_vals = np.linspace(x_min_val, x_max_val, kwargs.get('points', 500))
     
     # Create plot
     fig, ax = plt.subplots(figsize=kwargs.get('figsize', (10, 6)))
@@ -142,8 +144,12 @@ def Plot3D(expr, x_range, y_range, **kwargs):
     
     # Generate mesh
     points = kwargs.get('points', 100)
-    x_vals = np.linspace(float(x_min), float(x_max), points)
-    y_vals = np.linspace(float(y_min), float(y_max), points)
+    x_min_val = float(_to_sympy(x_min).evalf())
+    x_max_val = float(_to_sympy(x_max).evalf())
+    y_min_val = float(_to_sympy(y_min).evalf())
+    y_max_val = float(_to_sympy(y_max).evalf())
+    x_vals = np.linspace(x_min_val, x_max_val, points)
+    y_vals = np.linspace(y_min_val, y_max_val, points)
     X, Y = np.meshgrid(x_vals, y_vals)
     
     try:
@@ -225,8 +231,12 @@ def ContourPlot(expr, x_range, y_range, **kwargs):
     
     # Generate mesh
     points = kwargs.get('points', 200)
-    x_vals = np.linspace(float(x_min), float(x_max), points)
-    y_vals = np.linspace(float(y_min), float(y_max), points)
+    x_min_val = float(_to_sympy(x_min).evalf())
+    x_max_val = float(_to_sympy(x_max).evalf())
+    y_min_val = float(_to_sympy(y_min).evalf())
+    y_max_val = float(_to_sympy(y_max).evalf())
+    x_vals = np.linspace(x_min_val, x_max_val, points)
+    y_vals = np.linspace(y_min_val, y_max_val, points)
     X, Y = np.meshgrid(x_vals, y_vals)
     Z = f(X, Y)
     
@@ -286,8 +296,12 @@ def VectorFieldPlot(funcs, x_range, y_range, **kwargs):
     
     # Generate grid
     density = kwargs.get('density', 20)
-    x_vals = np.linspace(float(x_min), float(x_max), density)
-    y_vals = np.linspace(float(y_min), float(y_max), density)
+    x_min_val = float(_to_sympy(x_min).evalf())
+    x_max_val = float(_to_sympy(x_max).evalf())
+    y_min_val = float(_to_sympy(y_min).evalf())
+    y_max_val = float(_to_sympy(y_max).evalf())
+    x_vals = np.linspace(x_min_val, x_max_val, density)
+    y_vals = np.linspace(y_min_val, y_max_val, density)
     X, Y = np.meshgrid(x_vals, y_vals)
     
     U = Fx(X, Y)
@@ -348,7 +362,9 @@ def ParametricPlot(funcs, t_range, **kwargs):
     lambdas = [sp.lambdify(sym_t, _to_sympy(f), modules=['numpy']) for f in func_list]
     
     # Generate parameter values
-    t_vals = np.linspace(float(t_min), float(t_max), kwargs.get('points', 500))
+    t_min_val = float(_to_sympy(t_min).evalf())
+    t_max_val = float(_to_sympy(t_max).evalf())
+    t_vals = np.linspace(t_min_val, t_max_val, kwargs.get('points', 500))
     coords = [f(t_vals) for f in lambdas]
     
     # 2D or 3D?
@@ -405,7 +421,9 @@ def PolarPlot(r_expr, theta_range, **kwargs):
     r_func = sp.lambdify(sym_theta, sym_r, modules=['numpy'])
     
     # Generate values
-    theta_vals = np.linspace(float(theta_min), float(theta_max), kwargs.get('points', 500))
+    theta_min_val = float(_to_sympy(theta_min).evalf())
+    theta_max_val = float(_to_sympy(theta_max).evalf())
+    theta_vals = np.linspace(theta_min_val, theta_max_val, kwargs.get('points', 500))
     r_vals = r_func(theta_vals)
     
     # Create polar plot
@@ -456,7 +474,8 @@ def AnimatePlot(expr, var, param_range, **kwargs):
     # Get x range
     x_range = kwargs.get('x_range', Expr("List", var, -10, 10))
     x_list = _extract_list(x_range)
-    x_min, x_max = float(x_list[1]), float(x_list[2])
+    x_min = float(_to_sympy(x_list[1]).evalf())
+    x_max = float(_to_sympy(x_list[2]).evalf())
     
     # Convert to sympy
     sym_var = _to_sympy(var)
@@ -471,7 +490,9 @@ def AnimatePlot(expr, var, param_range, **kwargs):
     x_vals = np.linspace(x_min, x_max, kwargs.get('points', 500))
     
     # Initial plot
-    p_vals = np.linspace(float(p_min), float(p_max), int(steps))
+    p_min_val = float(_to_sympy(p_min).evalf())
+    p_max_val = float(_to_sympy(p_max).evalf())
+    p_vals = np.linspace(p_min_val, p_max_val, int(steps))
     line, = ax.plot(x_vals, f(x_vals, p_vals[0]), 
                    color=kwargs.get('color', 'blue'),
                    linewidth=2)
@@ -483,7 +504,9 @@ def AnimatePlot(expr, var, param_range, **kwargs):
     # Set y limits if provided
     if 'y_range' in kwargs:
         y_list = _extract_list(kwargs['y_range'])
-        ax.set_ylim(float(y_list[0]), float(y_list[1]))
+        y_min_val = float(_to_sympy(y_list[0]).evalf())
+        y_max_val = float(_to_sympy(y_list[1]).evalf())
+        ax.set_ylim(y_min_val, y_max_val)
     
     title_template = kwargs.get('title', f'{param} = {{:.2f}}')
     title = ax.set_title(title_template.format(p_vals[0]), fontsize=14)
