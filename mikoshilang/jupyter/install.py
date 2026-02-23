@@ -11,7 +11,7 @@ def install_kernel(user=True, prefix=None):
     from jupyter_client.kernelspec import KernelSpecManager
 
     kernel_json = {
-        "argv": [sys.executable, "-m", "mikoshilang.jupyter.kernel", "-f", "{connection_file}"],
+        "argv": [sys.executable, "-m", "mikoshilang.jupyter", "-f", "{connection_file}"],
         "display_name": "MikoshiLang",
         "language": "mikoshilang",
     }
