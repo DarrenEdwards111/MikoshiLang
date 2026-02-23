@@ -17,7 +17,7 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C324-blue)]()
 [![Knowledge](https://img.shields.io/badge/knowledge_packs-7-green)]()
-[![Version](https://img.shields.io/badge/version-3.6.0-orange)](https://pypi.org/project/mikoshilang/3.6.0/)
+[![Version](https://img.shields.io/badge/version-3.6.1-orange)](https://pypi.org/project/mikoshilang/3.6.1/)
 
 **A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
@@ -181,28 +181,38 @@ pip install mikoshilang[all]
 
 ## Using with Jupyter Notebooks
 
-### Recommended: WSL, Linux, or macOS
+### Recommended Installation (All Platforms)
 
-For the full **Wolfram-style experience** with `In[1]:=` prompts, use the MikoshiLang kernel on **WSL, Linux, or macOS**:
+For the full **Wolfram-style experience** with `In[1]:=` prompts:
 
-**1. Install MikoshiLang with Jupyter support:**
+**1. Create a virtual environment:**
+```bash
+python3 -m venv ~/mikoshi-env
+```
+
+**2. Activate it:**
+```bash
+source ~/mikoshi-env/bin/activate
+```
+
+**3. Install MikoshiLang with Jupyter:**
 ```bash
 pip install mikoshilang[jupyter]
 ```
 
-**2. Install the MikoshiLang kernel:**
+**4. Install the MikoshiLang kernel:**
 ```bash
 python -m mikoshilang.jupyter.install
 ```
 
-**3. Launch Jupyter:**
+**5. Launch Jupyter:**
 ```bash
 jupyter notebook
 ```
 
-**4. Create a new notebook and select "MikoshiLang" as the kernel**
+**6. Create a new notebook and select "MikoshiLang" as the kernel**
 
-**5. Use Wolfram-style syntax directly:**
+**7. Use Wolfram-style syntax directly:**
 ```
 In[1]:= x^2 + 2*x + 1
 Out[1]= x^2 + 2*x + 1
@@ -213,20 +223,16 @@ Out[2]= [-2, 2]
 In[3]:= Plot2D[Sin[x], {x, -Pi, Pi}]
 ```
 
-### Windows Users: Use WSL (Windows Subsystem for Linux)
+**Note:** The virtual environment is required on Ubuntu 24.04+ due to PEP 668 (externally-managed-environment). It also ensures a clean, isolated installation on all platforms.
 
-**The MikoshiLang kernel works perfectly in WSL.** If you're on Windows:
+### Windows Users: Use WSL
+
+**For Windows users, install MikoshiLang in WSL (Windows Subsystem for Linux):**
 
 1. **Install WSL** (if not already): `wsl --install` in PowerShell
 2. **Open WSL terminal** (Ubuntu)
-3. **Follow the Linux instructions above**
-4. **Access Jupyter** from your Windows browser - WSL automatically forwards ports
-
-### Windows Users: Anaconda Not Supported
-
-**The MikoshiLang Jupyter kernel does not work on Windows/Anaconda** due to async event loop conflicts. 
-
-**Use WSL instead** (instructions above) - it works perfectly and gives you the proper Wolfram-style experience.
+3. **Follow the installation steps above**
+4. **Access Jupyter** from your Windows browser - WSL automatically forwards ports to `http://localhost:8888`
 
 ## Extensions
 
