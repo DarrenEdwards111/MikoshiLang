@@ -17,7 +17,7 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C324-blue)]()
 [![Knowledge](https://img.shields.io/badge/knowledge_packs-7-green)]()
-[![Version](https://img.shields.io/badge/version-3.5.3-orange)](https://pypi.org/project/mikoshilang/3.5.3/)
+[![Version](https://img.shields.io/badge/version-3.5.4-orange)](https://pypi.org/project/mikoshilang/3.5.4/)
 
 **A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
@@ -178,6 +178,55 @@ pip install mikoshilang[signal]
 # Everything
 pip install mikoshilang[all]
 ```
+
+## Extensions
+
+### 🧬 MikoshiBio — Molecular Modeling for Python & MikoshiLang
+
+Protein structure analysis, molecular dynamics, and docking tools. Use as a pure Python library or with MikoshiLang's symbolic/Wolfram-style syntax.
+
+**[📦 PyPI: mikoshi-bio](https://pypi.org/project/mikoshi-bio/)** | **[📖 GitHub](https://github.com/DarrenEdwards111/MikoshiBio)**
+
+```bash
+# Python API only (BioPython + NumPy)
+pip install mikoshi-bio
+
+# With MikoshiLang integration (symbolic syntax)
+pip install mikoshi-bio[symbolic]
+
+# With molecular dynamics (MDAnalysis)
+pip install mikoshi-bio[md]
+
+# Everything
+pip install mikoshi-bio[all]
+```
+
+**Features:**
+- 🧬 **PDB Knowledge Pack** — Query 200,000+ protein structures
+- 🔬 **BioPython Integration** — LoadPDB, GetSequence, FindContacts, CalculateRMSD
+- 📊 **MD Analysis** — Trajectory analysis, RMSD/RMSF, contacts over time
+- ⚗️ **Molecular Docking** — AutoDock Vina integration for binding predictions
+
+**Example (Python API):**
+```python
+from mikoshibio import LoadPDB, GetSequence, FindContacts
+
+structure = LoadPDB("pdb", "1CRN")
+sequence = GetSequence(structure)
+contacts = FindContacts(structure, distance=5.0)
+```
+
+**Example (MikoshiLang symbolic syntax):**
+```python
+from mikoshilang import parse_and_eval
+import mikoshibio
+
+parse_and_eval('GetSequence[LoadPDB["pdb", "1CRN"]]')
+```
+
+Perfect for **meta-analysis augmentation** — add structural biology context to statistical findings.
+
+---
 
 ## Language Syntax
 
