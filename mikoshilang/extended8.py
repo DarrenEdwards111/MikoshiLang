@@ -18,7 +18,7 @@ def get_rules():
         ('MomentumAngular[I_, omega_]', lambda I, w: I * w),
         ('Force[m_, a_]', lambda m, a: m * a),
         ('Work[F_, d_]', lambda F, d: F * d),
-        ('Power[W_, t_]', lambda W, t: W / t),
+        ('AveragePower[W_, t_]', lambda W, t: W / t),
         ('Impulse[F_, dt_]', lambda F, dt: F * dt),
         ('Torque[r_, F_]', lambda r, F: r * F),
         ('AngularVelocity[theta_, t_]', lambda th, t: sp.diff(th, t)),
