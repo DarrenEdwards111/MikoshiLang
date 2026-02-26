@@ -54,7 +54,7 @@ def get_rules():
         ('MachNumber[v_, c_]', lambda v, c: v/c),
         ('SonicVelocity[gamma_, R_, T_]', lambda gamma, R, T: sqrt(gamma*R*T)),
         ('Torque[F_, r_]', lambda F, r: F*r),
-        ('Power[T_, omega_]', lambda T, omega: T*omega),
+        ('MechanicalPower[T_, omega_]', lambda T, omega: T*omega),
         ('RotationalKineticEnergy[I_, omega_]', lambda I, omega: sp.Rational(1,2)*I*omega**2),
         ('MomentOfInertia[m_, r_]', lambda m, r: m*r**2),
         ('AngularMomentum[I_, omega_]', lambda I, omega: I*omega),
@@ -83,7 +83,7 @@ def get_rules():
         
         # ===== ELECTRICAL ENGINEERING (70 functions) =====
         ('OhmsLaw[V_, I_]', lambda V, I: V/I),
-        ('Power[V_, I_]', lambda V, I: V*I),
+        ('ElectricalPower[V_, I_]', lambda V, I: V*I),
         ('PowerResistive[I_, R_]', lambda I, R: I**2*R),
         ('PowerVoltage[V_, R_]', lambda V, R: V**2/R),
         ('SeriesResistance[{R__}]', lambda *R: sum(R)),
