@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: mikoshilang
-Version: 3.6.7
+Version: 3.7.0
 Summary: Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence
 Author-email: Mikoshi Ltd <mikoshiuk@gmail.com>
 License: Apache-2.0
@@ -22,6 +22,7 @@ Requires-Dist: requests>=2.28
 Provides-Extra: jupyter
 Requires-Dist: ipykernel>=6.0; extra == "jupyter"
 Requires-Dist: matplotlib>=3.4; extra == "jupyter"
+Requires-Dist: nest-asyncio>=1.5; extra == "jupyter"
 Provides-Extra: signal
 Requires-Dist: scipy>=1.7; extra == "signal"
 Provides-Extra: plotting
@@ -58,7 +59,7 @@ Requires-Dist: scikit-learn>=1.0; extra == "all"
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)]()
 [![Functions](https://img.shields.io/badge/functions-6%2C324-blue)]()
 [![Knowledge](https://img.shields.io/badge/knowledge_packs-7-green)]()
-[![Version](https://img.shields.io/badge/version-3.6.7-orange)](https://pypi.org/project/mikoshilang/3.6.7/)
+[![Version](https://img.shields.io/badge/version-3.7.0-orange)](https://pypi.org/project/mikoshilang/3.7.0/)
 
 **A symbolic computation language for Python** — Wolfram-style syntax, **6,324** built-in functions, pattern matching, and domain-specific packages spanning calculus, physics, chemistry, machine learning, graph theory, and 40+ scientific domains.
 
@@ -266,20 +267,40 @@ In[3]:= Plot2D[Sin[x], {x, -Pi, Pi}]
 
 **Note:** The virtual environment is required on Ubuntu 24.04+ due to PEP 668 (externally-managed-environment). It also ensures a clean, isolated installation on all platforms.
 
-### ⚠️ Anaconda/Conda: Kernel Crashes
+### Alternative: Anaconda/Conda
 
-**The MikoshiLang Jupyter kernel has known issues with Anaconda/Conda environments** and will crash with `AsyncIOLoopKernelRestarter` errors. 
+**MikoshiLang works perfectly with Anaconda!** If you prefer Anaconda environments:
 
-**Use the standard Python virtual environment method above instead.** It works reliably on all platforms.
+```bash
+# Create a new conda environment
+conda create -n mikoshilang python=3.9
+conda activate mikoshilang
 
-### Windows Users: Use WSL
+# Install MikoshiLang with Jupyter support
+pip install mikoshilang[jupyter]
 
-**For Windows users, install MikoshiLang in WSL (Windows Subsystem for Linux):**
+# Install the kernel
+python -m mikoshilang.jupyter.install
 
-1. **Install WSL** (if not already): `wsl --install` in PowerShell
-2. **Open WSL terminal** (Ubuntu)
-3. **Follow the installation steps above** (virtual environment method)
-4. **Access Jupyter** from your Windows browser - WSL automatically forwards ports to `http://localhost:8888`
+# Launch Jupyter
+jupyter notebook
+```
+
+**Supported on all platforms**: Windows, macOS, Linux, WSL
+
+### Windows Users
+
+**Two options for Windows:**
+
+**Option 1: Anaconda (Recommended for Windows)**
+- Follow the Anaconda instructions above
+- Works natively on Windows
+
+**Option 2: WSL (Linux Subsystem)**
+1. Install WSL: `wsl --install` in PowerShell
+2. Open WSL terminal (Ubuntu)
+3. Follow the virtual environment installation steps
+4. Access Jupyter from Windows browser at `http://localhost:8888`
 
 ## Extensions
 
