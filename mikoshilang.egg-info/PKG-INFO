@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: mikoshilang
-Version: 3.7.0
+Version: 3.7.1
 Summary: Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence
 Author-email: Mikoshi Ltd <mikoshiuk@gmail.com>
 License: Apache-2.0
