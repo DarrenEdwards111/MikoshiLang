@@ -56,7 +56,7 @@
 
 \title{\Huge\textbf{MikoshiLang}\\\Large Reference Manual \& User Guide}
 \author{Mikoshi Ltd}
-\date{Version 3.5.0 --- \today}
+\date{Version 3.7.0 --- \today}
 
 \begin{document}
 
@@ -106,14 +106,85 @@ MikoshiLang is a symbolic computation language designed for Python, providing Wo
 
 \subsection{Installation}
 
+\subsubsection{Linux / macOS}
+
 \begin{lstlisting}[language=bash]
-# Standard installation
+# Create virtual environment (recommended)
+python3 -m venv ~/mikoshi-env
+source ~/mikoshi-env/bin/activate
+
+# Install MikoshiLang
 pip install mikoshilang
 
-# With visualization support
+# With Jupyter support
+pip install mikoshilang[jupyter]
+
+# With all features (Jupyter + visualization + signal processing)
+pip install mikoshilang[all]
+\end{lstlisting}
+
+\textbf{Note:} On Ubuntu 24.04+ the virtual environment is required due to PEP 668 (externally-managed-environment).
+
+\subsubsection{Windows (Anaconda — Recommended)}
+
+\begin{lstlisting}[language=bash]
+# Create new conda environment
+conda create -n mikoshilang python=3.9
+conda activate mikoshilang
+
+# Install MikoshiLang with Jupyter support
+pip install mikoshilang[jupyter]
+
+# All features
+pip install mikoshilang[all]
+\end{lstlisting}
+
+\textbf{Supported on all platforms:} Windows, macOS, Linux, WSL. The Jupyter kernel is fully compatible with Anaconda (fixed in v3.6.9 with \texttt{nest\_asyncio} integration).
+
+\subsubsection{Windows (WSL — Alternative)}
+
+\begin{lstlisting}[language=bash]
+# Install WSL (if not already installed)
+# In PowerShell: wsl --install
+
+# Open WSL terminal (Ubuntu)
+# Then follow Linux installation steps:
+python3 -m venv ~/mikoshi-env
+source ~/mikoshi-env/bin/activate
+pip install mikoshilang[jupyter]
+
+# Start Jupyter
+jupyter notebook
+
+# Access from Windows browser at http://localhost:8888
+\end{lstlisting}
+
+\subsubsection{macOS (Apple Silicon / Intel)}
+
+\begin{lstlisting}[language=bash]
+# Create virtual environment
+python3 -m venv ~/mikoshi-env
+source ~/mikoshi-env/bin/activate
+
+# Install MikoshiLang
+pip install mikoshilang[jupyter]
+
+# For M1/M2/M3 Macs: all dependencies are ARM64-compatible
+\end{lstlisting}
+
+\subsubsection{Optional Dependencies}
+
+\begin{lstlisting}[language=bash]
+# Jupyter notebook support
+pip install mikoshilang[jupyter]
+
+# Visualization (matplotlib + plotly)
 pip install mikoshilang[visualization]
 
-# All optional dependencies
+# Signal processing (scipy)
+pip install mikoshilang[signal]
+
+# Everything
 pip install mikoshilang[all]
 \end{lstlisting}
 
@@ -651,14 +722,65 @@ curl -X POST https://mikoshi.co.uk/api/mikoshilang/chemistry \
 
 \subsection{Jupyter Kernel}
 
+MikoshiLang provides a custom Jupyter kernel for interactive Wolfram-style notebooks with LaTeX rendering and inline plots.
+
+\subsubsection{Installation}
+
 \begin{lstlisting}[language=bash]
-# Install kernel
-python -m mikoshilang.kernel install
+# Install with Jupyter support
+pip install mikoshilang[jupyter]
+
+# Install the kernel
+python -m mikoshilang.jupyter.install
 
 # Start Jupyter
 jupyter notebook
+\end{lstlisting}
 
-# Select "MikoshiLang" kernel
+\subsubsection{Platform Support}
+
+\begin{itemize}
+    \item \textbf{Linux:} ✓ Fully supported
+    \item \textbf{macOS:} ✓ Fully supported (Intel \& Apple Silicon)
+    \item \textbf{Windows (Anaconda):} ✓ Fully supported (fixed in v3.6.9)
+    \item \textbf{Windows (WSL):} ✓ Fully supported
+\end{itemize}
+
+\textbf{Anaconda Compatibility:} As of v3.6.9, the MikoshiLang kernel is fully compatible with Anaconda on all platforms. The kernel applies \texttt{nest\_asyncio.apply()} before launch to fix Windows ProactorEventLoop conflicts.
+
+\subsubsection{Usage}
+
+\begin{enumerate}
+    \item Create a new notebook in Jupyter
+    \item Select \textbf{MikoshiLang} from the kernel dropdown
+    \item Use Wolfram-style syntax directly:
+\end{enumerate}
+
+\begin{lstlisting}
+In[1]:= x^2 + 2*x + 1
+Out[1]= x^2 + 2*x + 1  (rendered as LaTeX)
+
+In[2]:= Solve[x^2 - 4 == 0, x]
+Out[2]= [-2, 2]
+
+In[3]:= Plot2D[Sin[x], {x, -Pi, Pi}]
+Out[3]= <inline plot>
+\end{lstlisting}
+
+\subsubsection{Troubleshooting}
+
+If the kernel doesn't appear in Jupyter:
+
+\begin{lstlisting}[language=bash]
+# Verify kernel is installed
+jupyter kernelspec list
+
+# Reinstall kernel
+python -m mikoshilang.jupyter.install --user
+
+# Check Python environment matches Jupyter
+which python
+which jupyter
 \end{lstlisting}
 
 \section{Function Reference}
