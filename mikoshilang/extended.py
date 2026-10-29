@@ -17,6 +17,8 @@ def _to_sympy(expr):
     """Convert MikoshiLang expr to SymPy expression."""
     import sympy as sp
 
+    if isinstance(expr, str):
+        raise TypeError("Strings are not symbolic expressions; parse source explicitly")
     if isinstance(expr, (int, float)):
         return sp.Float(expr) if isinstance(expr, float) else sp.Integer(expr)
     if isinstance(expr, Symbol):

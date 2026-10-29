@@ -10,6 +10,8 @@ from .expr import Expr, Symbol
 
 def to_sympy(expr) -> Any:
     """Convert a MikoshiLang expression to a SymPy expression."""
+    if isinstance(expr, str):
+        raise TypeError("Strings are not symbolic expressions; parse source explicitly")
     if isinstance(expr, (int, float)):
         return sp.sympify(expr)
     if isinstance(expr, bool):
@@ -51,7 +53,9 @@ def to_sympy(expr) -> Any:
         if hasattr(sp, head.lower()):
             return getattr(sp, head.lower())(*args)
         raise ValueError(f"Cannot convert {head} to SymPy")
-    return sp.sympify(expr)
+    if isinstance(expr, (sp.Basic, sp.MatrixBase, complex)):
+        return sp.sympify(expr)
+    raise TypeError(f"Unsupported symbolic value type: {type(expr).__name__}")
 
 
 def from_sympy(sexpr) -> Any:

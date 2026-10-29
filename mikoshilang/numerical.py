@@ -27,9 +27,9 @@ def numerical(expr, precision: int = 15) -> Any:
         sexpr = sp.GoldenRatio
     else:
         sexpr = to_sympy(expr)
-    if not getattr(sexpr, "is_number", False):
-        return expr
     result = sexpr.evalf(precision)
+    if not result.is_number:
+        return from_sympy(result)
     if precision > 15:
         return result
     if result.is_real or result in (sp.oo, -sp.oo):

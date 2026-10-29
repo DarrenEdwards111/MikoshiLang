@@ -178,3 +178,12 @@ def test_short_circuit_logic(session):
 
 def test_boolean_not_integer_pattern():
     assert match(parse('f[x_Integer]'),parse('f[True]')) is None
+
+@pytest.mark.parametrize('source',['Simplify["x+1"]','N["2+2"]','Solve["x^2-4",x]'])
+def test_no_implicit_sympy_string_evaluation(session,source):
+    with pytest.raises(TypeError): session.evaluate(source)
+
+def test_symbolic_numerical_coefficients(session):
+    result=to_sympy(session.evaluate('N[Pi+x,50]'))
+    constant=result.subs(sp.Symbol('x'),0)
+    assert abs(constant-sp.pi.evalf(70)) < sp.Float('1e-49')
