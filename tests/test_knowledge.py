@@ -141,3 +141,7 @@ def test_license_attribution():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+# External service integration tests; run explicitly with -m live_service.
+import pytest
+pytestmark = pytest.mark.live_service

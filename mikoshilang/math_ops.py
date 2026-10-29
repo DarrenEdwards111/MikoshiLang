@@ -28,8 +28,11 @@ def to_sympy(expr) -> Any:
         head = expr.head
         args = [to_sympy(a) for a in expr.args]
         _map = {
-            "Plus": lambda a: sum(a[1:], a[0]),
-            "Times": lambda a: a[0] if len(a) == 1 else a[0] * a[1] if len(a) == 2 else sp.Mul(*a),
+            "List": lambda a: a,
+            "Equal": lambda a: sp.Eq(*a, evaluate=False),
+            "Unequal": lambda a: sp.Ne(*a, evaluate=False),
+            "Plus": lambda a: sum(a),
+            "Times": lambda a: sp.Mul(*a),
             "Power": lambda a: a[0] ** a[1],
             "Sin": lambda a: sp.sin(a[0]),
             "Cos": lambda a: sp.cos(a[0]),
@@ -70,7 +73,7 @@ def from_sympy(sexpr) -> Any:
             return int(sexpr.p)
         return Expr("Times", int(sexpr.p), Expr("Power", int(sexpr.q), -1))
     if isinstance(sexpr, sp.Float):
-        return float(sexpr)
+        return sexpr
     if isinstance(sexpr, sp.Symbol):
         return Symbol(str(sexpr))
     if isinstance(sexpr, sp.Add):

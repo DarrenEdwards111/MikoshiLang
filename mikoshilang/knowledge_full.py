@@ -33,7 +33,6 @@ HEADERS = {
 
 # Cache directory
 CACHE_DIR = Path.home() / ".mikoshilang" / "knowledge_cache"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_DB = CACHE_DIR / "knowledge.db"
 
 # TTL settings (seconds)
@@ -118,7 +117,8 @@ PID_TO_NAME = {v: k for k, v in CANONICAL_PROPERTIES.items()}
 # ============================================================================
 
 def _init_cache_db():
-    """Initialize SQLite cache database."""
+    """Initialize SQLite cache database on first explicit knowledge operation."""
+    CACHE_DB.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(CACHE_DB)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cache (
@@ -145,7 +145,7 @@ def _cache_key(operation: str, *args) -> str:
 
 def _cache_get(key: str) -> Optional[Dict[str, Any]]:
     """Get value from cache if not expired."""
-    conn = sqlite3.connect(CACHE_DB)
+    conn = _cache_connect()
     cursor = conn.execute(
         "SELECT value, source, retrieved, license FROM cache WHERE key = ? AND expires > ?",
         (key, datetime.now(timezone.utc).timestamp())
@@ -169,7 +169,7 @@ def _cache_set(key: str, value: Any, source: str, ttl: int, license: str = None)
     now = datetime.now(timezone.utc).timestamp()
     expires = now + ttl
     
-    conn = sqlite3.connect(CACHE_DB)
+    conn = _cache_connect()
     conn.execute(
         "INSERT OR REPLACE INTO cache (key, value, source, retrieved, expires, license) VALUES (?, ?, ?, ?, ?, ?)",
         (key, json.dumps(value), source, now, expires, license)
@@ -180,7 +180,7 @@ def _cache_set(key: str, value: Any, source: str, ttl: int, license: str = None)
 
 def _cache_clear_expired():
     """Remove expired entries from cache."""
-    conn = sqlite3.connect(CACHE_DB)
+    conn = _cache_connect()
     conn.execute(
         "DELETE FROM cache WHERE expires <= ?",
         (datetime.now(timezone.utc).timestamp(),)
@@ -189,8 +189,10 @@ def _cache_clear_expired():
     conn.close()
 
 
-# Initialize cache on module load
-_init_cache_db()
+# No filesystem writes at import time.
+def _cache_connect():
+    _init_cache_db()
+    return sqlite3.connect(CACHE_DB)
 
 
 # ============================================================================
@@ -850,7 +852,7 @@ class OpenAlexPack(KnowledgePack):
 class GeoNamesPack(KnowledgePack):
     """Geographic data from GeoNames."""
     
-    API_BASE = "http://api.geonames.org"
+    API_BASE = "https://secure.geonames.org"
     # Note: Requires username - using demo account for testing
     USERNAME = "demo"
     
@@ -1270,7 +1272,7 @@ def CacheClear(older_than_days: Optional[int] = None):
     """Clear cache entries."""
     if older_than_days is None:
         # Clear all
-        conn = sqlite3.connect(CACHE_DB)
+        conn = _cache_connect()
         conn.execute("DELETE FROM cache")
         conn.commit()
         conn.close()
@@ -1278,7 +1280,7 @@ def CacheClear(older_than_days: Optional[int] = None):
     else:
         # Clear entries older than N days
         cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
-        conn = sqlite3.connect(CACHE_DB)
+        conn = _cache_connect()
         cursor = conn.execute(
             "DELETE FROM cache WHERE retrieved < ?",
             (cutoff.timestamp(),)
@@ -1291,7 +1293,7 @@ def CacheClear(older_than_days: Optional[int] = None):
 
 def CacheStats() -> Dict[str, Any]:
     """Get cache statistics."""
-    conn = sqlite3.connect(CACHE_DB)
+    conn = _cache_connect()
     
     total = conn.execute("SELECT COUNT(*) FROM cache").fetchone()[0]
     expired = conn.execute(

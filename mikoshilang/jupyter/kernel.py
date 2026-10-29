@@ -8,26 +8,27 @@ import traceback
 from ipykernel.kernelbase import Kernel
 
 from ..parser import parse, ParseError
-from ..evaluate import evaluate
+from ..runtime import Session
+from .. import __version__
 from ..latex import to_latex
 from ..expr import Expr, Symbol
 
 
 class MikoshiLangKernel(Kernel):
     implementation = "MikoshiLang"
-    implementation_version = "0.2.0"
+    implementation_version = __version__
     language = "mikoshilang"
-    language_version = "0.2.0"
+    language_version = __version__
     language_info = {
         "name": "mikoshilang",
         "mimetype": "text/x-mikoshilang",
         "file_extension": ".ml",
     }
-    banner = "MikoshiLang v0.2.0 — Symbolic Computation Language\nBuilt by Mikoshi Ltd"
+    banner = f"MikoshiLang {__version__} — Symbolic Computation Language"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._env = {}
+        self._session = Session()
         self._counter = 0
 
     def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
@@ -38,7 +39,7 @@ class MikoshiLangKernel(Kernel):
 
         try:
             expr = parse(code)
-            result = evaluate(expr)
+            result = self._session.evaluate(expr)
         except Exception as e:
             if not silent:
                 self.send_response(self.iopub_socket, "stream", {

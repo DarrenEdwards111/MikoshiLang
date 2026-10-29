@@ -38,89 +38,49 @@ def extract_matrix(expr):
     return expr
 
 def parse_pattern_vars(pattern_str):
-    """
-    Extract function name and variable names from pattern string.
-    
-    Example:
-        'Sin[x_]' -> ('Sin', ['x'])
-        'Plus[x_, y_]' -> ('Plus', ['x', 'y'])
-        'Func[a_, b_, c_]' -> ('Func', ['a', 'b', 'c'])
-    
-    Returns:
-        (func_name, [var1, var2, ...])
-    """
-    # Extract function name and arguments
-    match = re.match(r'([A-Za-z][A-Za-z0-9]*)\[(.*?)\]', pattern_str)
-    if not match:
-        return None, []
-    
-    func_name = match.group(1)
-    args_str = match.group(2).strip()
-    
-    if not args_str:
-        # No arguments
-        return func_name, []
-    
-    # Split arguments by comma and extract variable names
-    arg_parts = [a.strip() for a in args_str.split(',')]
-    
-    var_names = []
-    for arg in arg_parts:
-        if arg.endswith('__'):
-            # Sequence pattern
-            var_names.append(arg[:-2])
-        elif arg.endswith('_'):
-            # Single pattern variable
-            var_names.append(arg[:-1])
-        else:
-            # Literal or unrecognized - use as-is
-            var_names.append(arg)
-    
-    return func_name, var_names
+    """Validate syntax and collect distinct bindings in traversal order."""
+    from .parser import parse
+    from .pattern import compile_pattern, BlankSequence, BlankNullSequence
+    declaration = re.fullmatch(r"([A-Za-z][A-Za-z0-9]*)\[.*\]", pattern_str, re.DOTALL)
+    if declaration is None:
+        raise ValueError("Expected a single function-pattern declaration")
+    pattern = compile_pattern(parse(pattern_str))
+    if not isinstance(pattern, Expr) or pattern.head != declaration.group(1):
+        raise ValueError("Invalid function-pattern declaration")
+    if not isinstance(pattern, Expr) or not isinstance(pattern.head, str):
+        raise ValueError("Rule must have a function head")
+    names = []
+    def visit(node):
+        if isinstance(node, (Blank, BlankSequence, BlankNullSequence)):
+            if node.name is None:
+                raise ValueError("Generated rules require named arguments")
+            if node.name not in names: names.append(node.name)
+        elif isinstance(node, Expr):
+            for arg in node.args: visit(arg)
+    visit(pattern)
+    return pattern.head, names
+
 
 def make_rule(pattern_str, user_func):
-    """
-    Convert (pattern_string, lambda) tuple into RuleDelayed object.
-    
-    The user_func takes positional arguments matching the pattern variables.
-    We create a RuleDelayed that takes a binding dict and calls user_func with those values.
-    
-    Args:
-        pattern_str: Pattern like 'Sin[x_]' or 'Plus[x_, y_]'
-        user_func: Lambda function that takes matched variables as positional args
-    
-    Returns:
-        RuleDelayed object
-    """
-    func_name, var_names = parse_pattern_vars(pattern_str)
-    if func_name is None:
-        return None
-    
-    # Create Expr pattern with Blank for each variable
-    pattern_args = [Blank(vname) for vname in var_names]
-    pattern = Expr(func_name, *pattern_args)
-    
-    # Create RuleDelayed that extracts bindings and calls user_func
-    def rule_lambda(bindings):
-        # Extract values in the same order as var_names
-        args = [bindings[vname] for vname in var_names]
-        return user_func(*args)
-    
-    return RuleDelayed(pattern, rule_lambda)
+    from .parser import parse
+    from .pattern import compile_pattern
+    from .math_ops import to_sympy, from_sympy
+    import sympy as sp
+    _, names = parse_pattern_vars(pattern_str)
+    pattern = compile_pattern(parse(pattern_str))
+    def convert_in(value):
+        if isinstance(value, tuple): return [convert_in(x) for x in value]
+        if isinstance(value, (Expr, Symbol)): return to_sympy(value)
+        return value
+    def convert_out(value):
+        if isinstance(value, sp.Basic): return from_sympy(value)
+        if isinstance(value, (list, tuple)): return Expr('List', *(convert_out(x) for x in value))
+        return value
+    def apply(bindings):
+        return convert_out(user_func(*(convert_in(bindings[name]) for name in names)))
+    return RuleDelayed(pattern, apply)
+
 
 def convert_rules(rules_list):
-    """
-    Convert list of (pattern_string, lambda) tuples into RuleDelayed objects.
-    
-    Args:
-        rules_list: List of (str, callable) tuples
-    
-    Returns:
-        List of RuleDelayed objects
-    """
-    converted = []
-    for pattern_str, func in rules_list:
-        rule = make_rule(pattern_str, func)
-        if rule is not None:
-            converted.append(rule)
-    return converted
+    """Convert validated rules; invalid declarations raise instead of disappearing."""
+    return [make_rule(pattern, fn) for pattern, fn in rules_list]

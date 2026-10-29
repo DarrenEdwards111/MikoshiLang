@@ -24,6 +24,7 @@ from mikoshilang.knowledge_full import (
 
 def test_cache_initialization():
     """Test that cache directory and database are created."""
+    CacheStats()  # cache is deliberately lazy
     assert CACHE_DIR.exists()
     assert (CACHE_DIR / "knowledge.db").exists()
 
@@ -401,3 +402,7 @@ def test_all_packs_registered():
     assert "jhtdb" in _KNOWLEDGE_PACKS
     
     assert len(_KNOWLEDGE_PACKS) == 7
+
+# External service integration tests; run explicitly with -m live_service.
+import pytest
+pytestmark = pytest.mark.live_service

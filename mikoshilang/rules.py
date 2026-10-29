@@ -49,12 +49,20 @@ def _substitute(template, bindings: Dict[str, Any]):
             return bindings[template.name]
         return template
     if isinstance(template, Expr):
-        new_args = tuple(_substitute(a, bindings) for a in template.args)
+        new_args = _substitute_args(template.args, bindings)
         return Expr(template.head, *new_args)
     if isinstance(template, Pattern):
-        new_args = tuple(_substitute(a, bindings) for a in template.args)
+        new_args = _substitute_args(template.args, bindings)
         return Expr(template.head, *new_args)
     return template
+
+
+def _substitute_args(args, bindings):
+    result = []
+    for arg in args:
+        value = _substitute(arg, bindings)
+        result.extend(value if isinstance(value, tuple) else (value,))
+    return tuple(result)
 
 
 def replace(expr, rules) -> Any:
@@ -79,7 +87,7 @@ def replace_all(expr, rules, _depth=0) -> Any:
     for rule in rules:
         result = rule.apply(expr)
         if result is not None:
-            return replace_all(result, rules, _depth + 1)
+            return result if result == expr else replace_all(result, rules, _depth + 1)
 
     # Then recurse into subexpressions
     if isinstance(expr, Expr):

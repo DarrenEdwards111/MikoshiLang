@@ -4,7 +4,8 @@ from __future__ import annotations
 import readline
 import sys
 from .parser import parse, ParseError
-from .evaluate import evaluate
+from .runtime import Session
+from . import __version__
 from .expr import Expr, Symbol
 
 
@@ -51,7 +52,8 @@ def _completer(text, state):
 
 def main():
     """Run the MikoshiLang interactive REPL."""
-    print("MikoshiLang v0.2.0 — Symbolic Computation Language")
+    print(f"MikoshiLang {__version__} — Symbolic Computation Language")
+    session = Session()
     print("Built by Mikoshi Ltd")
     print("Type Wolfram-style expressions. \"quit\" to exit, \"?Name\" for help.\n")
 
@@ -85,7 +87,7 @@ def main():
 
         try:
             expr = parse(line)
-            result = evaluate(expr)
+            result = session.evaluate(expr)
             history_out[counter] = result
             print(f"Out[{counter}]= {result}")
         except ParseError as ex:

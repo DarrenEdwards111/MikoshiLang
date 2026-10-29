@@ -638,12 +638,12 @@ def build_extended3_rules():
         import sympy as sp
         # a_n x^n y^(n) + ... + a_0 y = 0
         # Transform with y = x^m
-        return Expr("Error", "Not yet implemented")
+        raise NotImplementedError("This ODE method has not been implemented")
 
     def _variation_of_parameters(homog_sol_expr, particular_expr, var):
         """Variation of parameters method."""
         import sympy as sp
-        return Expr("Error", "Not yet implemented")
+        raise NotImplementedError("This ODE method has not been implemented")
 
     def _laplace_ode_solve(eq_expr, y_expr, t_expr):
         """Solve ODE using Laplace transform."""
@@ -1175,9 +1175,7 @@ def build_extended3_rules():
         """Refine expression under assumptions."""
         import sympy as sp
         sym_expr = _to_sympy(expr)
-        # Simplified: just return simplified
-        result = sp.refine(sym_expr)
-        return _from_sympy(result)
+        raise NotImplementedError("Refine assumptions are not supported by this frontend")
 
     def _rational_reconstruct(expr):
         """Convert float to rational."""
