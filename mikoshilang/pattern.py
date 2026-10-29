@@ -56,10 +56,31 @@ class Condition:
         return f"{self.pattern!r} /; <condition>"
 
 
+def compile_pattern(pattern):
+    """Translate parsed pattern syntax into matcher objects."""
+    if not isinstance(pattern, Expr):
+        return pattern
+    if pattern.head == "Pattern":
+        name, blank = pattern.args
+        result = compile_pattern(blank)
+        if not isinstance(result, (Blank, BlankSequence, BlankNullSequence)):
+            raise ValueError("Unsupported named pattern")
+        result.name = name.name
+        return result
+    if pattern.head == "Blank":
+        return Blank(head=pattern.args[0].name if pattern.args else None)
+    if pattern.head == "BlankSequence":
+        return BlankSequence()
+    if pattern.head == "BlankNullSequence":
+        return BlankNullSequence()
+    return Expr(pattern.head, *(compile_pattern(a) for a in pattern.args))
+
+
 def match(pattern, expr, bindings: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Try to match expr against pattern. Returns bindings dict or None."""
     if bindings is None:
         bindings = {}
+        pattern = compile_pattern(pattern)
 
     if isinstance(pattern, Condition):
         result = match(pattern.pattern, expr, bindings.copy())
@@ -70,7 +91,7 @@ def match(pattern, expr, bindings: Optional[Dict[str, Any]] = None) -> Optional[
     if isinstance(pattern, Blank):
         # Check head constraint
         if pattern.head is not None:
-            if pattern.head == "Integer" and not isinstance(expr, int):
+            if pattern.head == "Integer" and (not isinstance(expr, int) or isinstance(expr, bool)):
                 return None
             elif pattern.head == "Real" and not isinstance(expr, float):
                 return None

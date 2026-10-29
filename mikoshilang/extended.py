@@ -17,8 +17,10 @@ def _to_sympy(expr):
     """Convert MikoshiLang expr to SymPy expression."""
     import sympy as sp
 
+    if isinstance(expr, str):
+        raise TypeError("Strings are not symbolic expressions; parse source explicitly")
     if isinstance(expr, (int, float)):
-        return sp.nsimplify(expr) if isinstance(expr, float) else sp.Integer(expr)
+        return sp.Float(expr) if isinstance(expr, float) else sp.Integer(expr)
     if isinstance(expr, Symbol):
         name = expr.name
         _constants = {
@@ -32,7 +34,8 @@ def _to_sympy(expr):
 
         _func_map = {
             'Plus': lambda a: a[0] + a[1] if len(a) == 2 else sum(a),
-            'Times': lambda a: a[0] * a[1] if len(a) == 2 else math.prod(a) if all(isinstance(x, (int, float)) for x in a) else a[0] * a[1],
+            'Times': lambda a: sp.Mul(*a),
+            'Equal': lambda a: sp.Eq(*a, evaluate=False),
             'Power': lambda a: a[0] ** a[1],
             'Sin': lambda a: sp.sin(a[0]),
             'Cos': lambda a: sp.cos(a[0]),
@@ -89,7 +92,7 @@ def _from_sympy(result):
     if isinstance(result, sp.Integer):
         return int(result)
     if isinstance(result, sp.Float):
-        return float(result)
+        return result
     if isinstance(result, sp.Rational):
         n, d = int(result.p), int(result.q)
         if d == 1:
@@ -538,7 +541,7 @@ def build_extended_rules():
     rule1("Sign", lambda a: _from_sympy(sp.sign(_to_sympy(a))))
     rule1("Floor", lambda a: _from_sympy(sp.floor(_to_sympy(a))))
     rule1("Ceiling", lambda a: _from_sympy(sp.ceiling(_to_sympy(a))))
-    rule1("Mod", lambda a: a)  # single-arg no-op
+    # Mod requires a modulus; no one-argument identity placeholder.
     rule2("Mod", lambda a, b: _from_sympy(sp.Mod(_to_sympy(a), _to_sympy(b))))
     rule2("Quotient", lambda a, b: _from_sympy(_to_sympy(a) // _to_sympy(b)))
 

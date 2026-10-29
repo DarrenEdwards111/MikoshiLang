@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mikoshilang"
-version = "3.7.1"
+version = "3.8.0.dev1"
 description = "Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence"
 authors = [{name = "Mikoshi Ltd", email = "mikoshiuk@gmail.com"}]
 license = {text = "Apache-2.0"}
@@ -44,3 +44,11 @@ packages = ["mikoshilang", "mikoshilang.jupyter"]
 
 [tool.setuptools.data-files]
 "share/mikoshilang/manual" = ["manual/*.pdf", "manual/*.tex", "manual/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not live_service'"
+markers = ["live_service: depends on external knowledge APIs and mutable remote data"]
+
+[tool.setuptools.package-data]
+mikoshilang = ["quarantined.json"]

@@ -7,6 +7,7 @@ implicit multiplication, pattern matching, assignments, and rules.
 from __future__ import annotations
 from typing import Any, List as ListType, Optional, Tuple
 import re
+import json
 from .expr import Expr, Symbol
 from .evaluate import evaluate
 
@@ -34,9 +35,12 @@ _TOKEN_SPEC = [
     ("COMMENT",   r'\(\*.*?\*\)'),
     ("FLOAT",     r'\d+\.\d*([eE][+-]?\d+)?|\.\d+([eE][+-]?\d+)?|\d+[eE][+-]?\d+'),
     ("INTEGER",   r'\d+'),
-    ("STRING",    r'"[^"]*"'),
+    ("STRING",    r'"(?:\\.|[^"\\])*"'),
     ("SETDELAYED",r':='),
     ("SET",       r'(?<![=!<>])=(?!=)'),
+    ("RULEDELAYED", r':>'),
+    ("MAP", r'/@'),
+    ("APPLY", r'@@'),
     ("RULE",      r'->'),
     ("REPLACEALL",r'/\.'),
     ("CONDITION", r'/;'),
@@ -52,7 +56,7 @@ _TOKEN_SPEC = [
     ("PLUS",      r'\+'),
     ("MINUS",     r'-'),
     ("TIMES",     r'\*'),
-    ("DIVIDE",    r'/(?![.;])'),
+    ("DIVIDE",    r'/(?![.;@])'),
     ("POWER",     r'\^'),
     ("LSQUARE",   r'\['),
     ("RSQUARE",   r'\]'),
@@ -66,29 +70,46 @@ _TOKEN_SPEC = [
     ("BLANKS",    r'__'),
     ("BLANK",     r'_'),
     ("SYMBOL",    r'[A-Za-z$][A-Za-z0-9$]*'),
-    ("WS",        r'[ \t]+'),
+    ("SLOT",      r'#[0-9]*'),
+    ("FUNCTION",  r'&(?!&)'),
+    ("WS",        r'[ \t\r]+'),
     ("NEWLINE",   r'\n'),
 ]
 
-_TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _TOKEN_SPEC))
+_TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _TOKEN_SPEC), re.DOTALL)
 
 
 def tokenize(text: str) -> ListType[Token]:
     """Tokenize Wolfram-style input text."""
     tokens = []
+    end = 0
     for m in _TOKEN_RE.finditer(text):
+        if m.start() != end:
+            raise ParseError(f"Unsupported character at position {end}: {text[end]!r}")
+        end = m.end()
         kind = m.lastgroup
         value = m.group()
         pos = m.start()
-        if kind in ("WS", "NEWLINE", "COMMENT"):
+        if kind == "NEWLINE":
+            # Newlines separate top-level statements, never implicit products.
+            level = sum(t.type in ("LPAREN", "LSQUARE", "LBRACE") for t in tokens) - sum(t.type in ("RPAREN", "RSQUARE", "RBRACE") for t in tokens)
+            if level == 0 and tokens and tokens[-1].type in ("INTEGER", "FLOAT", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "FUNCTION"):
+                tokens.append(Token("SEMICOLON", ";", pos))
+            continue
+        if kind in ("WS", "COMMENT"):
             continue
         if kind == "INTEGER":
             value = int(value)
         elif kind == "FLOAT":
             value = float(value)
         elif kind == "STRING":
-            value = value[1:-1]  # strip quotes
+            try:
+                value = json.loads(value)
+            except ValueError as exc:
+                raise ParseError(f"Invalid string at position {pos}") from exc
         tokens.append(Token(kind, value, pos))
+    if end != len(text):
+        raise ParseError(f"Unsupported character at position {end}: {text[end]!r}")
     return tokens
 
 
@@ -180,10 +201,13 @@ class Parser:
     def parse_rule(self) -> Any:
         """Handle -> (Rule)."""
         expr = self.parse_or()
-        if self.at("RULE"):
+        if self.at("RULE", "RULEDELAYED"):
+            op = self.advance().type
+            rhs = self.parse_rule()
+            expr = Expr("RuleDelayed" if op == "RULEDELAYED" else "Rule", expr, rhs)
+        if self.at("FUNCTION"):
             self.advance()
-            rhs = self.parse_or()
-            expr = Expr("Rule", expr, rhs)
+            expr = Expr("Function", expr)
         return expr
 
     def parse_or(self) -> Any:
@@ -276,7 +300,11 @@ class Parser:
         if self.at("PLUS"):
             self.advance()
             return self.parse_unary()
-        return self.parse_power()
+        expr = self.parse_power()
+        if self.at("MAP", "APPLY"):
+            op = self.advance().type
+            expr = Expr("Map" if op == "MAP" else "Apply", expr, self.parse_unary())
+        return expr
 
     def parse_power(self) -> Any:
         base = self.parse_postfix()
@@ -293,9 +321,7 @@ class Parser:
         while True:
             if self.at("LSQUARE"):
                 # Function call: head[args]
-                if not isinstance(expr, Symbol):
-                    break
-                head = expr.name
+                head = expr.name if isinstance(expr, Symbol) else expr
                 self.advance()  # consume [
                 args = self._parse_arglist("RSQUARE")
                 self.expect("RSQUARE")
@@ -313,6 +339,13 @@ class Parser:
         tok = self.peek()
         if tok is None:
             raise ParseError("Unexpected end of input")
+
+        if tok.type == "SLOT":
+            self.advance()
+            index = int(tok.value[1:] or "1")
+            if index < 1:
+                raise ParseError("Slots start at #1")
+            return Expr("Slot", index)
 
         if tok.type == "INTEGER":
             self.advance()
@@ -398,6 +431,8 @@ def parse(text: str) -> Any:
         return None
     parser = Parser(tokens)
     result = parser.parse_expression()
+    if parser.peek() is not None:
+        raise ParseError(f"Unexpected trailing token: {parser.peek()}")
     return result
 
 

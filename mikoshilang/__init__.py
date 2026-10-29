@@ -3,7 +3,7 @@
 Built by Mikoshi Ltd.
 """
 
-__version__ = "3.7.1"
+__version__ = "3.8.0.dev1"
 
 from .expr import Expr, Symbol, symbols
 from .pattern import Blank, BlankSequence, BlankNullSequence, Pattern
@@ -59,3 +59,6 @@ __all__ = [
     "Convolve", "HammingWindow", "HanningWindow", "BlackmanWindow",
     "Spectrogram",
 ]
+
+from .runtime import Session, clear_definitions
+__all__ += ["Session", "clear_definitions"]

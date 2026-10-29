@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Comprehensive test suite for all MikoshiLang functions
-Tests all 6,094+ functions with basic inputs
+Legacy sample runner, not a function-completeness or correctness certification.
 """
 import sys
 import traceback
 from mikoshilang import parse, evaluate
 
-def test_function(func_name, test_input, expected_type=None):
+def test_function(func_name, test_input, expected=None):
     """Test a single function with given input"""
     try:
         expr = parse(f"{func_name}[{test_input}]")
@@ -18,6 +17,10 @@ def test_function(func_name, test_input, expected_type=None):
         if result_str == f"{func_name}[{test_input}]":
             return ('placeholder', result_str)
         
+        if expected is None:
+            return ('placeholder', 'No expected answer: unverified sample')
+        if result != expected:
+            return ('error', f'Expected {expected!r}, got {result!r}')
         return ('ok', result_str)
     except Exception as e:
         return ('error', str(e))

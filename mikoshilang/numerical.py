@@ -21,26 +21,17 @@ def N(expr, precision: int = 15) -> Any:
 
 def numerical(expr, precision: int = 15) -> Any:
     """Evaluate expression to floating point with given precision."""
-    if isinstance(expr, (int, float)):
-        return float(expr)
-    if isinstance(expr, Symbol):
-        _constants = {
-            "Pi": lambda p: float(sp.pi.evalf(p)),
-            "E": lambda p: float(sp.E.evalf(p)),
-            "I": lambda p: complex(0, 1),
-            "Infinity": lambda p: float("inf"),
-            "GoldenRatio": lambda p: float(sp.GoldenRatio.evalf(p)),
-        }
-        if expr.name in _constants:
-            return _constants[expr.name](precision)
-        return expr
-    try:
+    if isinstance(precision, bool) or not isinstance(precision, int) or precision < 1:
+        raise ValueError("Precision must be a positive integer")
+    if isinstance(expr, Symbol) and expr.name == "GoldenRatio":
+        sexpr = sp.GoldenRatio
+    else:
         sexpr = to_sympy(expr)
-        result = sexpr.evalf(precision)
-        if result.is_real:
-            return float(result)
-        if result.is_number:
-            return complex(result)
+    result = sexpr.evalf(precision)
+    if not result.is_number:
         return from_sympy(result)
-    except Exception:
-        return expr
+    if precision > 15:
+        return result
+    if result.is_real or result in (sp.oo, -sp.oo):
+        return float(result)
+    return complex(result)
