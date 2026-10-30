@@ -466,8 +466,16 @@ def _constraints(cons, xs, fname):
     return bounds, general
 
 
+def _need_scipy(fname):
+    try:
+        import scipy  # noqa: F401
+    except ImportError:
+        raise NotImplementedError(f"{fname} requires SciPy (pip install mikoshilang[signal])")
+
+
 def _nminimize(f, vs, fname, sense):
     import numpy as np
+    _need_scipy(fname)
     from scipy.optimize import minimize, differential_evolution, NonlinearConstraint
     if is_list(f) and f.args:
         obj, cons = f.args[0], L(*f.args[1:])
@@ -598,6 +606,7 @@ def _fit(data, funs, vs):
           "with starting values (default 1); constraints FindFit[data, {expr, cons}, ...] are not supported")
 def _findfit(data, model, pars, vs, *rest):
     import numpy as np
+    _need_scipy("FindFit")
     from scipy.optimize import least_squares
     if is_list(model):
         raise NotImplementedError("FindFit: constrained fits are not supported")

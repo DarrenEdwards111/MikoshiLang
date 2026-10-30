@@ -209,7 +209,10 @@ def _to_sym(e, funcs, x, table):
 
 
 def _ndsolve(eqs, unknowns, rng, opts, fname):
-    import scipy.integrate as si
+    try:
+        import scipy.integrate as si
+    except ImportError:
+        raise NotImplementedError(f"{fname} requires SciPy (pip install mikoshilang[signal])")
     us = list(unknowns.args) if is_list(unknowns) else [unknowns]
     funcs = [_fname(u) for u in us]
     it = list_arg(rng, fname, "range")

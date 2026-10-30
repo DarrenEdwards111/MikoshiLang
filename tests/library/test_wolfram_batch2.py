@@ -433,7 +433,15 @@ INTERP = [
     ("NDSolveValue[{y'[x] == -y[x], y[0] == 1}, y, {x, 0, 1}, WorkingPrecision -> 30]", Raises()),
 ]
 
-CASES = NUMERICS + SPECIAL + NUMBER_THEORY + NUMCALC + INTERP
+try:
+    import scipy  # noqa: F401
+    HAVE_SCIPY = True
+except ImportError:
+    HAVE_SCIPY = False
+NEEDS_SCIPY = ("FindMaximum", "NMinimize", "NMaximize", "FindFit", "NDSolve")
+
+CASES = [c for c in NUMERICS + SPECIAL + NUMBER_THEORY + NUMCALC + INTERP
+         if HAVE_SCIPY or not any(n in c[0] for n in NEEDS_SCIPY)]
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
