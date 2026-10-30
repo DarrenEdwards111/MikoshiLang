@@ -152,28 +152,68 @@ def _cont(fname, e, a, b):
     return f, x, y
 
 
-@fn("FourierTransform", area=AREA, status="fixed",
-    notes="Wolfram convention (1/√(2π)) ∫ f e^(iωt) dt; legacy used SymPy's e^(-2πikx) convention (wrong "
-          "for Wolfram, e.g. FourierTransform[E^(-t^2/2), t, w] must be E^(-w^2/2)); unevaluated when SymPy "
-          "cannot do the integral")
-def _ft(e, t, w):
-    f, tv, wv = _cont("FourierTransform", e, t, w)
+def _ft_numeric(f, tv, sign, params):
+    """(1/sqrt(2 pi)) * Integral f(t) e^(sign*i*w*t) dt as an mpmath function of w (f, params numeric)."""
+    import mpmath as mp
+    g = sp.lambdify(tv, f.subs(params), "mpmath")
+
+    def val(w):
+        h = lambda tt: g(tt) * mp.exp(sign * 1j * w * tt)
+        tot = mp.quadosc(h, [0, mp.inf], omega=abs(w)) + mp.quadosc(lambda u: h(-u), [0, mp.inf], omega=abs(w))
+        return tot / mp.sqrt(2 * mp.pi)
+    return val
+
+
+def _fourier(fname, e, a, b, sign):
+    """Wolfram-convention transform with sign +1 (Fourier) or -1 (inverse).
+
+    SymPy's fourier_transform silently assumes k > 0 in many cases (e.g. it returns pi e^(-2 pi k) for
+    1/(1 + t^2), which is wrong for k < 0), so every candidate is checked numerically at several
+    frequencies of both signs; a result that cannot be verified raises instead of being returned.
+    """
+    import mpmath as mp
+    f, tv, wv = _cont(fname, e, a, b)
     k = sp.Dummy("k", real=True)
     r = sp.fourier_transform(f, tv, k)
     if r.has(sp.FourierTransform):
         raise Unevaluated()
-    return R(sp.simplify(r.subs(k, -wv / (2 * sp.pi)) / sp.sqrt(2 * sp.pi)))
+    if (r == 0 and f != 0) or r.has(sp.DiracDelta):
+        raise NotImplementedError(f"{fname}: distributional transforms (DiracDelta results, e.g. of Sin or 1) "
+                                  "are not supported")
+    wr = sp.Dummy("w", real=True)
+    base = r.subs(k, -sign * wr / (2 * sp.pi)) / sp.sqrt(2 * sp.pi)
+    cands = [base, base.subs(wr, sp.Abs(wr)), base.subs(wr, -sp.Abs(wr))]
+    params = {s_: sp.Rational(7, 5) + i * sp.Rational(3, 10) for i, s_ in enumerate(sorted(
+        f.free_symbols - {tv}, key=str))}
+    try:
+        num = _ft_numeric(f, tv, sign, params)
+        ref = [(w, complex(num(w))) for w in (-1.7, -0.6, 0.45, 1.3)]
+    except Exception:
+        raise NotImplementedError(f"{fname}: could not verify SymPy's transform numerically for this input")
+    for c in cands:
+        cf = sp.lambdify(wr, c.subs(params), "mpmath")
+        try:
+            ok = all(abs(complex(cf(w)) - v) <= 1e-7 * max(1.0, abs(v)) for w, v in ref)
+        except Exception:
+            ok = False
+        if ok:
+            return R(sp.simplify(c.subs(wr, wv)))
+    raise NotImplementedError(f"{fname}: SymPy's closed form failed numerical verification for this input")
+
+
+@fn("FourierTransform", area=AREA, status="fixed",
+    notes="Wolfram convention (1/√(2π)) ∫ f e^(iωt) dt; legacy used SymPy's e^(-2πikx) convention, and SymPy "
+          "silently assumes k > 0 (1/(1+t^2) gave √(π/2)E^w); every result is now checked numerically at "
+          "frequencies of both signs and raises if it cannot be verified; unevaluated when SymPy cannot integrate")
+def _ft(e, t, w):
+    return _fourier("FourierTransform", e, t, w, 1)
 
 
 @fn("InverseFourierTransform", area=AREA, status="fixed",
-    notes="Wolfram convention (1/√(2π)) ∫ F e^(-iωt) dω; legacy used SymPy's convention")
+    notes="Wolfram convention (1/√(2π)) ∫ F e^(-iωt) dω; legacy used SymPy's convention; numerically verified "
+          "like FourierTransform")
 def _ift(e, w, t):
-    F, wv, tv = _cont("InverseFourierTransform", e, w, t)
-    k = sp.Dummy("k", real=True)
-    r = sp.fourier_transform(F, wv, k)
-    if r.has(sp.FourierTransform):
-        raise Unevaluated()
-    return R(sp.simplify(r.subs(k, tv / (2 * sp.pi)) / sp.sqrt(2 * sp.pi)))
+    return _fourier("InverseFourierTransform", e, w, t, -1)
 
 
 @fn("LaplaceTransform", area=AREA, status="verified",
