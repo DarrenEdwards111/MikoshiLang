@@ -3,7 +3,7 @@ The legacy `extended*.py` modules defined about 5,508 further names. 148 of them
 * those with a real Wolfram meaning and a correct implementation were promoted or recorded under their area;
 * 6 that the kernel already evaluates correctly (`AtomQ`, `ListQ`, `StringQ`, `ToString`, `ReplaceAll`,
   `Distance2D`) were recorded as kernel heads;
-* `YoungTableaux`, which returned the size of a single tableau, was moved *into* quarantine.
+* `YoungTableaux` was briefly quarantined because the legacy version returned the size of a single tableau. It is now properly implemented and promoted (see above).
 
 **Decision for the remaining names: keep them quarantined.** These are the other names on the list in
 `mikoshilang/quarantined.json`. They raise

@@ -83,7 +83,7 @@ CASES = [
     ("ODEClassify[y'[x] == x, y[x], x]", Pred(lambda r: "nth_algebraic" in r.args or "separable" in r.args, "hints")),
     ("SeparableODE[y'[x] == x y[x], y[x], x]", "{{y[x] -> C[1] E^(x^2/2)}}"),
     ("SeparableODE[y'[x] == y[x], y[x], x]", "{{y[x] -> C[1] E^x}}"), ("SeparableODE[y'[x] == x + y[x], y[x], x]", Raises()),
-    ("LaplaceODESolve[y'[t] == y[t], y, t]", Raises(NotImplementedError, "DSolve")),
+    ("LaplaceODESolve[y'[t] == t y[t], y, t]", Raises(ValueError, "constant coefficients")),
     ("Table[i^2, {i, 3}]", "{1, 4, 9}"),
 ]
 

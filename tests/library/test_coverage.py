@@ -21,7 +21,7 @@ from mikoshilang import library
 HERE = pathlib.Path(__file__).parent
 MODULES = ["test_elementary", "test_special", "test_numbertheory", "test_combinatorics", "test_algebra",
            "test_calculus", "test_linalg", "test_lists_strings", "test_statistics", "test_applied",
-           "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads"]
+           "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes"]
 OPTIONAL = ["scipy", "matplotlib", "sklearn", "networkx", "plotly", "numpy"]
 NAME = re.compile(r"\s*([A-Za-z][A-Za-z0-9]*)")
 

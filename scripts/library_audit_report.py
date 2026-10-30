@@ -15,7 +15,7 @@ from mikoshilang.runtime import _quarantined  # noqa: E402
 
 MODULES = ["test_elementary", "test_special", "test_numbertheory", "test_combinatorics", "test_algebra",
            "test_calculus", "test_linalg", "test_lists_strings", "test_statistics", "test_applied",
-           "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads"]
+           "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes"]
 IDENT = re.compile(r"(?<![A-Za-z0-9\"])([A-Z][A-Za-z0-9]*)")
 
 used = collections.Counter()

@@ -40,7 +40,7 @@ CASES = [
     ("Log10[1000]", "3"), ("Log10[2.]", mp.log10(2)), ("Log10[1/100]", "-2"),
     ("CubeRoot[27]", "3"), ("CubeRoot[-8]", "-2"), ("CubeRoot[2.]", mp.cbrt(2)),
     ("Surd[-8, 3]", "-2"), ("Surd[16, 4]", "2"), ("Surd[-32., 5]", -2.0), ("Surd[-16, 4]", Raises()),
-    ("Root[8, 3]", Raises(NotImplementedError, "Surd")),
+    ("Root[8, 3]", Raises(ValueError, "pure function")),
     # absolute value & parts
     ("Abs[-3]", "3"), ("Abs[3 + 4 I]", "5"), ("Abs[-2.5]", 2.5),
     ("Sign[-2]", "-1"), ("Sign[0]", "0"), ("Sign[3.5]", "1"), ("Sign[3 + 4 I]", "3/5 + 4 I/5"),

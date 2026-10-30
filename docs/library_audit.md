@@ -47,9 +47,32 @@ unevaluated, for example symbolic arguments to a numeric routine.
 | applied | physical constants were rounded (`LightYear` = 9.461e15); 1-argument constant forms ignored their argument; legacy formulas used g = 9.81 and c = 3e8; `BohrRadius[n]` returned a0 | exact CODATA/SI values, `hbar`/`R`/`F`/`σ`/`Vm` derived exactly; extra arguments raise; `BohrRadius[n]` = n² a0 |
 | applied | `CircleArea[-1]` = `Pi`; Carnot efficiency could be negative; finance rates ≤ −100% accepted | domain checks raise |
 | plots | `Plot3D`, `ContourPlot`, `ParametricPlot`, `PolarPlot` were shadowed by inert descriptors; `Plot2D` drew an empty figure for bad input | real figures; errors raise |
-| names | `Catalan`, `Trace`, `Degree` and `Root` had non-Wolfram meanings (`Catalan[n]` = Catalan number, and so on) | raise and point to `CatalanNumber`, `Tr`, `Exponent`, `Surd` |
+| names | `Catalan`, `Trace`, `Degree` and `Root` had non-Wolfram meanings (`Catalan[n]` = Catalan number, `Trace[m]` = matrix trace, `Degree[p, x]` = polynomial degree, `Root[a, n]` = a^(1/n)) | Wolfram meanings: `Catalan` constant, evaluation `Trace`, `Degree` = Pi/180, `Root[f, k]` algebraic numbers in Wolfram root order (see below) |
 | strings | legacy `Simplify` accepted strings and evaluated them | `sym()` rejects Python strings |
 | knowledge | `EntitySearch` returned Wikidata's raw order (an engineer before Q42 for "Douglas Adams"); type hints were appended to the query, which found nothing; `EntityProperties`, `WikipediaSummary`, `Disambiguate` and `Entity` were never wired into the evaluator | relevance-ranked by sitelinks; P31/description filters; network-gated heads |
+
+## Formerly unsupported functions (second pass)
+
+The 8 heads that used to raise an error, and the one quarantined head, now have their Wolfram semantics.
+Each has at least 3 differential cases in `tests/library/test_wolfram_fixes.py`.
+
+| Head | Now | Limits |
+|---|---|---|
+| `Root[f, k]` | k-th root of the polynomial `f[x]`, where `f` is a pure function. Roots are in Wolfram order: real roots ascending, then complex roots by real part, then by \|Im\|, with conjugate pairs adjacent (negative imaginary part first). SymPy's CRootOf order differs and is remapped. The polynomial is reduced to the irreducible factor that carries the root. Linear, quadratic and binomial factors give radicals; otherwise the result is `Root[minpoly &, j]`, which `N` evaluates to any precision. Checked against `mpmath.polyroots`. | Rational coefficients for exact results; approximate coefficients give a number; symbolic coefficients stay unevaluated. `Root[{f, x0}]` and other newer forms are not supported. |
+| `Catalan` | Catalan's constant (SymPy `Catalan`); `N[Catalan, n]` gives any precision. | `Catalan[...]` raises and points to `CatalanNumber`. |
+| `Degree` | The constant Pi/180: `30 Degree` is `Pi/6` and `N[Degree]` is 0.0174533. | `30 Degree` evaluates to `Pi/6`, whereas Wolfram keeps `30°` until a function needs the value. `Degree[...]` raises and points to `Exponent`. |
+| `Trace` | Wolfram evaluation trace. Each form is wrapped in `HoldForm` and subevaluations are nested lists: `Trace[1 + 2 3]` is `{{2 3, 6}, 1 + 6, 7}`. `Trace[expr, form]` filters by pattern. The matrix trace is `Tr`. | Internal steps taken by library functions may show up. `Trace[expr, form, s]` raises. |
+| `Refine` | Assumptions-based refinement using SymPy `refine`/`ask`, assumption-carrying symbols, and interval reasoning for one-variable inequalities (`Refine[x > 0, x > 1]` is `True`). | Supported assumptions: inequalities, `Equal`/`Unequal`, `Element[x, Reals \| Integers \| Rationals \| Primes \| Complexes \| Algebraics]`, `&&`, `\|\|`, `!`. Anything else raises. |
+| `Assumptions` / `$Assumptions` / `Assuming` | `$Assumptions` defaults to `True`. `Assuming[a, expr]` scopes it. The `Assumptions -> a` option works for `Simplify`, `Refine` and `Integrate`. `Integrate` returns `ConditionalExpression[value, cond]` when SymPy reports a convergence condition; it returns the plain value when the assumptions imply that condition and raises when they contradict it. This also fixes `Integrate[Exp[-a x], {x, 0, Infinity}]`, which previously hit the recursion limit. | `Assumptions[...]` used as a function raises (it is an option name). `FullSimplify` is not implemented. |
+| `LaplaceODESolve` | Not a Wolfram built-in; kept as a correct helper. It solves linear constant-coefficient ODEs by Laplace transform and returns `{{y[t] -> sol}}` for t > 0. Initial values that are not given appear as `y[0]`, `y'[0]`, and so on. Every solution is substituted back into the ODE and initial conditions before it is returned. | Non-linear or variable-coefficient equations raise and point to `DSolve`. |
+| `InverseZTransform` | Rational `F(z)`: partial fractions in 1/z give `c Binomial[n + k - 1, k - 1] p^n` and `DiscreteDelta[n - m]` terms (causal, n ≥ 0). Each result is checked against 12 coefficients of the series at z = ∞. | Non-rational `F` stays unevaluated; non-causal `F` (one that grows as z → ∞) raises. |
+| `YoungTableaux` | `YoungTableaux[shape]`: all standard Young tableaux. `YoungTableaux[n]`: all tableaux with n cells. Counts match `HookLengthFormula` and the involution numbers. | Refuses more than 100,000 tableaux. |
+| `DiscreteDelta`, `UnitStep` (new) | Evaluate numerically as in Wolfram (previously inert). | Symbolic arguments stay unevaluated. |
+
+Related fixes made along the way:
+
+* `y'[0]` no longer turns into `Subs[...]` inside arithmetic.
+* The parser now reads `a - 1` as `Plus[a, -1]`, Wolfram's FullForm.
 
 ## Live-service tests (`-m live_service`)
 
@@ -68,44 +91,44 @@ After the fixes: **50/50 pass** (run twice). These tests are excluded from defau
 
 | Status | Heads | Meaning |
 |---|---|---|
-| verified | 135 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
-| fixed | 427 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
-| promoted | 26 | was quarantined; now properly implemented and tested |
+| verified | 133 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
+| fixed | 437 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
+| promoted | 30 | was quarantined; now properly implemented and tested |
 | kernel | 54 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
-| error | 8 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
-| quarantined | 1 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **651** | 620 pre-audit inventory heads, all with a status, plus 31 promoted/aliased heads |
+| error | 0 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
+| quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
+| **total reviewed** | **654** | 620 pre-audit inventory heads, all with a status, plus 34 promoted/aliased heads |
 
-Remaining unreviewed quarantined names: **5355** (all raise NotImplementedError; see below).
+Remaining unreviewed quarantined names: **5354** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **2094**.
+Differential test cases in tests/library: **2249**.
 
 
 ## By area
 
 | Area | verified | fixed | promoted | kernel | error | quarantined |
 |---|---|---|---|---|---|---|
-| algebra | 13 | 8 | 1 | 0 | 3 | 0 |
-| calculus | 10 | 22 | 3 | 1 | 1 | 0 |
-| combinatorics | 5 | 13 | 5 | 0 | 0 | 1 |
+| algebra | 12 | 12 | 2 | 0 | 0 | 0 |
+| calculus | 9 | 24 | 3 | 1 | 0 | 0 |
+| combinatorics | 5 | 13 | 6 | 0 | 0 | 0 |
 | constants | 0 | 33 | 0 | 0 | 0 | 0 |
-| elementary | 33 | 6 | 1 | 0 | 1 | 0 |
+| elementary | 33 | 7 | 1 | 0 | 0 | 0 |
 | finance | 0 | 20 | 0 | 0 | 0 | 0 |
 | geometry | 0 | 29 | 0 | 0 | 0 | 0 |
 | graphs | 3 | 14 | 0 | 0 | 0 | 0 |
 | kernel | 0 | 0 | 0 | 53 | 0 | 0 |
-| linear algebra | 8 | 39 | 1 | 0 | 1 | 0 |
+| linear algebra | 8 | 40 | 1 | 0 | 0 | 0 |
 | lists and sets | 4 | 14 | 2 | 0 | 0 | 0 |
 | logic | 6 | 7 | 0 | 0 | 0 | 0 |
 | ml | 4 | 0 | 0 | 0 | 0 | 0 |
-| number theory | 3 | 48 | 4 | 0 | 1 | 0 |
+| number theory | 3 | 49 | 4 | 0 | 0 | 0 |
 | numerics | 4 | 5 | 0 | 0 | 0 | 0 |
 | physics | 0 | 48 | 0 | 0 | 0 | 0 |
 | plots | 0 | 14 | 0 | 0 | 0 | 0 |
-| special functions | 12 | 30 | 5 | 0 | 0 | 0 |
+| special functions | 12 | 30 | 7 | 0 | 0 | 0 |
 | statistics | 9 | 38 | 4 | 0 | 0 | 0 |
 | strings and dates | 16 | 26 | 0 | 0 | 0 | 0 |
-| transforms | 5 | 13 | 0 | 0 | 1 | 0 |
+| transforms | 5 | 14 | 0 | 0 | 0 | 0 |
 
 ## Every function
 
@@ -116,13 +139,14 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Assumptions` | error | 1 | legacy always returned {} because converted symbols never carry assumptions; now raises |
+| `Assuming` | promoted | 4 | Assuming[assum, expr] evaluates expr with $Assumptions = $Assumptions && assum (held arguments), restoring $Assumptions afterwards, as in Wolfram |
+| `Assumptions` | fixed | 13 | Wolfram option name: Assumptions -> cond is accepted by Simplify, Refine and Integrate (default $Assumptions, which is True unless set or changed by Assuming). Assumptions[...] used as a function raises ValueError (legacy Assumptions[expr] always returned {}) |
 | `Coefficient` | fixed | 5 | legacy used Poly.nth, failing for non-polynomial expressions and negative powers; now Coefficient[e, x] and Coefficient[e, x, n] on the expanded expression (n may be 0 or negative) |
 | `CoefficientList` | fixed | 3 | returned coefficients from the highest power down; Wolfram lists them from x^0 upwards; nested lists for {x, y} |
 | `Collect` | verified | 3 | Collect[e, x] and Collect[e, {x, y}] |
 | `CompleteTheSquare` | fixed | 3 | a (x - h)^2 + k form (MikoshiLang); non-quadratics now raise instead of returning an Error expression |
 | `ComplexExpand` | fixed | 3 | legacy treated variables as complex (ComplexExpand[Re[x + I y]] stayed symbolic); Wolfram assumes all variables are real |
-| `Degree` | error | 1 | legacy Degree[p, x] returned the polynomial degree, conflicting with Wolfram's constant Degree; now raises and points to Exponent (promoted) |
+| `Degree` | fixed | 6 | Wolfram constant Degree = Pi/180 (30 Degree -> Pi/6, Sin[30 Degree] -> 1/2, N[Degree] -> 0.0174533); Degree[...] used as a function raises ValueError pointing to Exponent; legacy Degree[p, x] returned the polynomial degree |
 | `Discriminant` | verified | 3 | SymPy discriminant (same normalisation as Wolfram) |
 | `ExpToTrig` | verified | 3 | rewrite exponentials as trig/hyperbolic functions |
 | `Expand` | fixed | 4 | now expands products and integer powers only, like Wolfram (legacy also rewrote Exp[a + b] -> E^a E^b and expanded inside function arguments); Expand[e, patt] raises |
@@ -135,9 +159,9 @@ Cases = number of differential test cases in which the head occurs.
 | `PowerExpand` | fixed | 4 | legacy used powsimp (which combines powers, the opposite operation); now Wolfram PowerExpand: (a b)^c -> a^c b^c, (a^b)^c -> a^(b c), Log[a b] -> Log[a] + Log[b], Sqrt[x^2] -> x |
 | `QuadraticFormula` | fixed | 4 | roots {(-b + Sqrt[b^2 - 4ac])/(2a), (-b - Sqrt[...])/(2a)} (MikoshiLang); a = 0 now raises instead of dividing by zero |
 | `RationalizeDenominator` | fixed | 3 | legacy multiplied by conj(d)/conj(d) (a no-op) and only simplified; now SymPy radsimp, e.g. 1/(1 + Sqrt[2]) -> -1 + Sqrt[2] |
-| `Refine` | error | 1 | assumptions are not supported by MikoshiLang. |
+| `Refine` | fixed | 23 | Refine[expr, assum] / Refine[expr] (uses $Assumptions) / Refine[expr, Assumptions -> a]: SymPy refine with assumption-carrying symbols and Q-propositions (Refine[Sqrt[x^2], x > 0] -> x, Refine[Abs[x], x < 0] -> -x, Refine[Sin[n Pi], Element[n, Integers]] -> 0, Refine[x > 0, x > 1] -> True); relations that do not follow stay as they are. Legacy raised |
 | `Resultant` | verified | 3 | Sylvester resultant (SymPy) |
-| `Simplify` | verified | 4 | SymPy simplify; Simplify[e, assumptions] raises (assumptions are not supported) |
+| `Simplify` | fixed | 12 | SymPy simplify; Simplify[e, assum] and Simplify[e, Assumptions -> a] (default $Assumptions) refine with the assumptions before and after simplifying (Simplify[Sqrt[x^2], x > 0] -> x); legacy rejected assumptions |
 | `TrigExpand` | verified | 3 | SymPy expand_trig followed by Expand |
 | `TrigReduce` | verified | 3 | products and powers of trig functions to multiple angles (SymPy fu TR8) |
 | `TrigToExp` | verified | 3 | rewrite trig/hyperbolic functions as exponentials |
@@ -160,10 +184,10 @@ Cases = number of differential test cases in which the head occurs.
 | `Gradient` | verified | 3 | list of partial derivatives (MikoshiLang; Wolfram Grad) |
 | `HessianMatrix` | verified | 3 | matrix of second partial derivatives |
 | `InflectionPoints` | fixed | 3 | real points where f'' changes sign; legacy returned every root of f'' (so x^4 reported 0, which is not an inflection point) and complex roots |
-| `Integrate` | verified | 6 | indefinite (no constant) and definite integrals; several variables as Wolfram (the last specification is innermost, so its bounds may depend on earlier variables); indeterminate results raise; integrals SymPy cannot do stay as Integrate[...] |
+| `Integrate` | fixed | 13 | indefinite (no constant) and definite integrals; several variables as Wolfram (the last specification is innermost, so its bounds may depend on earlier variables); Assumptions -> a option (default $Assumptions). Results that hold only under a condition are returned as Wolfram ConditionalExpression[value, cond] (Integrate[Exp[-a x], {x, 0, Infinity}] -> ConditionalExpression[1/a, Abs[Arg[a]] < Pi/2]); under assumptions that imply the condition the plain value is returned, and assumptions that contradict it raise (divergent). Previously such integrals hit the recursion limit. Indeterminate results raise; integrals SymPy cannot do stay as Integrate[...] |
 | `IntegratingFactor` | fixed | 3 | mu(x) or mu(y) making M dx + N dy exact; the test is now applied to the simplified ratio and failure raises (legacy returned an Error expression) |
 | `JacobianMatrix` | verified | 3 | matrix dF_i/dx_j |
-| `LaplaceODESolve` | error | 1 | legacy applied laplace_transform to an equation containing y(t) and solved for an unrelated symbol Y(s), so it could not return correct solutions; now raises |
+| `LaplaceODESolve` | fixed | 12 | MikoshiLang helper (not a Wolfram built-in): LaplaceODESolve[eqn \| {eqn, y[0] == a, y'[0] == b, ...}, y, t] solves a linear constant-coefficient ODE by the Laplace transform and returns {{y[t] -> sol}} like DSolve, valid for t > 0. Initial values that are not given appear as y[0], y'[0], ... (Laplace form) rather than C[k]. Every solution is substituted back into the ODE and the initial conditions before it is returned. Non-linear or variable-coefficient equations raise (use DSolve). Legacy transformed the raw equation and solved for an unrelated symbol, so it never returned a solution |
 | `Laplacian` | promoted | 3 | Laplacian[f, {x1, ..., xn}] (Cartesian) |
 | `LaurentSeries` | fixed | 3 | LaurentSeries[f, x, a, n]: Laurent expansion up to (x - a)^n without the O-term (legacy kept an O-term and was exclusive in n) |
 | `LinearProgramming` | fixed | 4 | legacy solved A.x <= b with floats; Wolfram LinearProgramming[c, m, b] minimises c.x subject to m.x >= b and x >= 0; now exact (SymPy simplex); infeasible/unbounded problems raise |
@@ -178,7 +202,7 @@ Cases = number of differential test cases in which the head occurs.
 | `RSolve` | fixed | 3 | legacy called a SymPy Symbol (TypeError for every input); now RSolve[eq or {eq, a[0] == v, ...}, a[n], n] -> {{a[n] -> ...}} via SymPy rsolve |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Sum` | fixed | 8 | added {i, n}, {i, a, b, step} and {i, {values}} iterators and multiple iterators (first outermost); sums divergent to +-Infinity return that limit, other non-convergent sums stay unevaluated, indeterminate (nan) results raise |
+| `Sum` | fixed | 9 | added {i, n}, {i, a, b, step} and {i, {values}} iterators and multiple iterators (first outermost); sums divergent to +-Infinity return that limit, other non-convergent sums stay unevaluated, indeterminate (nan) results raise |
 | `Table` | kernel | 3 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
@@ -199,7 +223,7 @@ Cases = number of differential test cases in which the head occurs.
 | `FibonacciSequence` | verified | 3 | first n Fibonacci numbers F0, F1, ... (MikoshiLang) |
 | `GeometricSequence` | fixed | 3 | first n terms a, a r, ...; exact for exact input (legacy converted to floats and rounded) |
 | `HarmonicNumber` | fixed | 4 | HarmonicNumber[n] and HarmonicNumber[n, r]; exact; symbolic n stays symbolic; legacy truncated reals |
-| `HookLengthFormula` | fixed | 4 | legacy subtracted the row index from each hook (wrong counts / ZeroDivisionError); now the number of standard Young tableaux of the shape |
+| `HookLengthFormula` | fixed | 5 | legacy subtracted the row index from each hook (wrong counts / ZeroDivisionError); now the number of standard Young tableaux of the shape |
 | `IntegerPartitions` | fixed | 4 | legacy returned the number of partitions; Wolfram IntegerPartitions lists them in reverse lexicographic order; supports [n], [n, k], [n, {k}], [n, {kmin, kmax}], [n, kspec, {s1, ...}] |
 | `Multinomial` | fixed | 4 | legacy Multinomial[n, {k...}] was not Wolfram's form; now Multinomial[n1, n2, ...] = (n1 + n2 + ...)!/(n1! n2! ...), exact for any exact arguments |
 | `PartitionCount` | verified | 3 | MikoshiLang alias of PartitionsP |
@@ -211,7 +235,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Subfactorial` | promoted | 3 | !n |
 | `Subsets` | fixed | 3 | Subsets[list], [list, n], [list, {n}], [list, {min, max}] in Wolfram order (by size, then position) |
 | `Tuples` | promoted | 3 | Tuples[list, n] and Tuples[{l1, l2, ...}] |
-| `YoungTableaux` | quarantined | 1 | legacy built a single StandardTableau and returned its size (not the tableaux, not their count); quarantined: use HookLengthFormula[shape] for the number of standard tableaux |
+| `YoungTableaux` | promoted | 22 | YoungTableaux[shape]: all standard Young tableaux of the partition shape (rows strictly increase left to right and down columns), sorted by row word, as Combinatorica Tableaux[shape]; their number equals HookLengthFormula[shape]. YoungTableaux[n]: all standard tableaux with n cells (over all partitions in reverse-lexicographic order), whose number is the number of involutions of n. Refuses more than 100000 tableaux. Legacy built one tableau and returned its size |
 
 ### constants
 
@@ -255,7 +279,7 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Abs` | verified | 5 | verified against SymPy/mpmath |
+| `Abs` | verified | 10 | verified against SymPy/mpmath |
 | `ArcCos` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCosh` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCot` | verified | 3 | verified against SymPy/mpmath |
@@ -267,17 +291,17 @@ Cases = number of differential test cases in which the head occurs.
 | `ArcTanh` | verified | 3 | verified against SymPy/mpmath |
 | `Ceiling` | verified | 3 | verified against SymPy/mpmath |
 | `Conjugate` | verified | 3 | verified against SymPy/mpmath |
-| `Cos` | verified | 19 | verified against SymPy/mpmath |
+| `Cos` | verified | 21 | verified against SymPy/mpmath |
 | `Cosh` | verified | 4 | verified against SymPy/mpmath |
 | `Cot` | verified | 3 | verified against SymPy/mpmath |
 | `Coth` | verified | 3 | verified against SymPy/mpmath |
 | `Csc` | verified | 3 | verified against SymPy/mpmath |
 | `Csch` | verified | 3 | verified against SymPy/mpmath |
 | `CubeRoot` | fixed | 3 | returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2) |
-| `Exp` | verified | 24 | verified against SymPy/mpmath |
-| `Floor` | verified | 3 | verified against SymPy/mpmath |
+| `Exp` | verified | 31 | verified against SymPy/mpmath |
+| `Floor` | verified | 4 | verified against SymPy/mpmath |
 | `ImaginaryPart` | verified | 3 | verified against SymPy/mpmath |
-| `Log` | fixed | 10 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
+| `Log` | fixed | 11 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
 | `Log10` | verified | 3 | log base 10; Log10[0] = -Infinity |
 | `Log2` | verified | 3 | log base 2; Log2[0] = -Infinity |
 | `Max` | fixed | 4 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
@@ -285,14 +309,14 @@ Cases = number of differential test cases in which the head occurs.
 | `Mod` | verified | 5 | Mod[m, n] has the sign of n (Wolfram); Mod[m, 0] raises |
 | `Quotient` | verified | 4 | Quotient[m, n] = Floor[m/n] |
 | `RealPart` | verified | 3 | verified against SymPy/mpmath |
-| `Root` | error | 1 | Wolfram's Root[f, k] denotes an algebraic number (the k-th root of a polynomial); the legacy Root[a, n] = a^(1/n) had different semantics. Use Surd[a, n] or Power[a, 1/n]. |
+| `Root` | fixed | 36 | Wolfram Root[f, k]: the k-th root of the polynomial f[x] (f a pure function), ordered as Wolfram: real roots ascending, then complex roots by real part, then \|Im\|, conjugate pairs adjacent (negative imaginary part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. Legacy Root[a, n] meant a^(1/n) (now Surd/Power) |
 | `Round` | fixed | 7 | Round[x] was not implemented and Round[x, a] returned floats (Round[7, 5] = 5.0); now Wolfram half-to-even rounding, exact for exact input |
 | `Sec` | verified | 3 | verified against SymPy/mpmath |
 | `Sech` | verified | 3 | verified against SymPy/mpmath |
 | `Sign` | verified | 4 | verified against SymPy/mpmath |
-| `Sin` | verified | 28 | verified against SymPy/mpmath |
+| `Sin` | verified | 33 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
-| `Sqrt` | verified | 12 | verified against SymPy/mpmath |
+| `Sqrt` | verified | 25 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
 | `Tan` | verified | 3 | verified against SymPy/mpmath |
 | `Tanh` | verified | 3 | verified against SymPy/mpmath |
@@ -401,12 +425,12 @@ Cases = number of differential test cases in which the head occurs.
 | `Inverse` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Join` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Last` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Length` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Length` | kernel | 13 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Limit` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `ListQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `MemberQ` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Most` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `N` | kernel | 33 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `N` | kernel | 54 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Negative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NonNegative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NumberQ` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -430,7 +454,7 @@ Cases = number of differential test cases in which the head occurs.
 | `StringLength` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `StringQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Take` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Times` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Times` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `ToString` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Together` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Total` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -483,8 +507,8 @@ Cases = number of differential test cases in which the head occurs.
 | `SingularValueDecomposition` | fixed | 3 | Wolfram {u, s, v} with m = u.s.ConjugateTranspose[v] and singular values in decreasing order (legacy did not order them); machine matrices give the full SVD |
 | `SpectralNorm` | fixed | 3 | largest singular value, exact for exact matrices (legacy always returned a float via NumPy) |
 | `SymmetricMatrixQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
-| `Tr` | promoted | 3 | trace of a matrix (sum of the diagonal); Tr[list] sums a vector |
-| `Trace` | error | 1 | legacy Trace[m] returned the matrix trace, conflicting with Wolfram's evaluation Trace; now raises and points to Tr (added) |
+| `Tr` | promoted | 5 | trace of a matrix (sum of the diagonal); Tr[list] sums a vector |
+| `Trace` | fixed | 12 | Wolfram evaluation trace: Trace[expr] evaluates expr and returns the chain of forms as HoldForm[...] with subevaluations as nested lists (Trace[1 + 2 3] -> {{2 3, 6}, 1 + 6, 7}); Trace[expr, form] keeps only forms matching the pattern. Internal evaluations made by library functions can add extra steps that Wolfram would not show. For the matrix trace use Tr (legacy Trace[m] meant Tr[m]) |
 | `TransposeList` | fixed | 3 | transpose of a rectangular list of lists (MikoshiLang); ragged input now raises (legacy zip-truncated) |
 | `UpperTriangularMatrixQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
 | `VectorAngle` | fixed | 4 | ArcCos[u.Conjugate[v]/(\|u\| \|v\|)]; zero vectors and different lengths raise |
@@ -555,7 +579,7 @@ Cases = number of differential test cases in which the head occurs.
 | `BernoulliB` | promoted | 3 | BernoulliB[n] and BernoulliB[n, x] |
 | `BernoulliNumber` | fixed | 3 | Bernoulli[1] returned +1/2 (SymPy >= 1.12 convention); Wolfram BernoulliB[1] = -1/2 |
 | `CarmichaelLambda` | fixed | 4 | CarmichaelLambda[-n] = CarmichaelLambda[n]; 0 raises; legacy truncated non-integer arguments with int(); now exact integers only |
-| `Catalan` | error | 1 | legacy Catalan[n] gave Catalan numbers, conflicting with Wolfram's constant Catalan; now raises and points to CatalanNumber |
+| `Catalan` | fixed | 5 | Wolfram constant Catalan = 0.915965594177219... (SymPy Catalan; N[Catalan, n] to any precision, Sum[(-1)^k/(2k+1)^2, {k, 0, Infinity}] -> Catalan); Catalan[...] used as a function raises ValueError pointing to CatalanNumber; legacy Catalan[n] gave Catalan numbers |
 | `CatalanNumber` | fixed | 3 | exact for any exact argument, symbolic n stays unevaluated; legacy truncated non-integer arguments with int(); now exact integers only |
 | `ChineseRemainder` | fixed | 3 | smallest non-negative solution; non-coprime moduli handled; no solution leaves the call unevaluated (legacy returned an Error expression) |
 | `CollatzLength` | fixed | 4 | number of terms of CollatzSequence[n] (including n and 1); legacy looped forever for n <= 0 |
@@ -705,6 +729,7 @@ Cases = number of differential test cases in which the head occurs.
 | `CosIntegral` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `DiGamma` | verified | 3 | MikoshiLang alias of PolyGamma[z] |
 | `DirichletEta` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
+| `DiscreteDelta` | promoted | 4 | Wolfram DiscreteDelta[n1, n2, ...]: 1 if every argument is 0, 0 if any argument is a non-zero number; symbolic arguments stay unevaluated (previously always inert) |
 | `EllipticE` | fixed | 5 | complete, parameter m; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `EllipticEIncomplete` | fixed | 3 | alias of EllipticE[phi, m]; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `EllipticF` | fixed | 3 | EllipticF[phi, m]; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
@@ -739,6 +764,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SphericalHarmonicY` | fixed | 4 | Y_l^m(theta, phi) with the Condon-Shortley phase (Wolfram); legacy forced floats and returned Python complex |
 | `StruveH` | promoted | 3 | Struve H_n(z), numeric via mpmath |
 | `TriGamma` | fixed | 3 | TriGamma[z] = PolyGamma[1, z]; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
+| `UnitStep` | promoted | 5 | Wolfram UnitStep[x1, ...]: 1 if every argument is >= 0 (UnitStep[0] = 1), 0 if any is < 0; real arguments only; symbolic arguments stay unevaluated (previously always inert) |
 | `Zeta` | verified | 4 | Riemann zeta |
 
 ### statistics
@@ -863,10 +889,10 @@ Cases = number of differential test cases in which the head occurs.
 | `InverseFFT` | fixed | 4 | x_j = (1/n) Σ X_k e^(2πi jk/n) (NumPy ifft); legacy discarded imaginary parts and rounded |
 | `InverseFourierTransform` | fixed | 3 | Wolfram convention (1/√(2π)) ∫ F e^(-iωt) dω; legacy used SymPy's convention; numerically verified like FourierTransform |
 | `InverseLaplaceTransform` | fixed | 3 | inverse Laplace transform for t > 0 (Wolfram form); legacy kept SymPy's HeavisideTheta[t] factor |
-| `InverseZTransform` | error | 1 | the inverse Z-transform is not supported (legacy returned the input unevaluated) |
+| `InverseZTransform` | fixed | 17 | InverseZTransform[F, z, n] for rational F (causal, n >= 0, Wolfram convention F(z) = Σ f(n) z^-n): partial fractions in w = 1/z give c/(1 - p w)^k -> c Binomial[n + k - 1, k - 1] p^n and c w^m -> c DiscreteDelta[n - m]; F must stay finite as z -> Infinity (causal sequence). Every result is checked against the first 12 coefficients of the series of F at z = Infinity. Non-rational F stays unevaluated; legacy returned the input |
 | `LaplaceTransform` | verified | 4 | ∫_0^∞ f e^(-st) dt (same convention as Wolfram/SymPy), convergence conditions dropped; unevaluated when SymPy cannot transform |
 | `WaveletTransform` | fixed | 4 | WaveletTransform[list] or [list, "Haar"\|"db1"]: full Haar decomposition {cA_n, cD_n, ..., cD_1} (PyWavelets wavedec ordering, orthonormal 1/√2 scaling), exact; length must be a power of 2; other wavelets raise (legacy needed PyWavelets, which is not a dependency) |
-| `ZTransform` | fixed | 3 | Wolfram ZTransform[f, n, z] = Σ_{n=0}^∞ f(n) z^(-n) via symbolic summation (convergence conditions dropped); unevaluated when the sum has no closed form; legacy always returned itself |
+| `ZTransform` | fixed | 5 | Wolfram ZTransform[f, n, z] = Σ_{n=0}^∞ f(n) z^(-n) via symbolic summation (convergence conditions dropped); unevaluated when the sum has no closed form; legacy always returned itself |
 
 ## Quarantine decision for the remaining names
 
@@ -875,7 +901,7 @@ The legacy `extended*.py` modules defined about 5,508 further names. 148 of them
 * those with a real Wolfram meaning and a correct implementation were promoted or recorded under their area;
 * 6 that the kernel already evaluates correctly (`AtomQ`, `ListQ`, `StringQ`, `ToString`, `ReplaceAll`,
   `Distance2D`) were recorded as kernel heads;
-* `YoungTableaux`, which returned the size of a single tableau, was moved *into* quarantine.
+* `YoungTableaux` was briefly quarantined because the legacy version returned the size of a single tableau. It is now properly implemented and promoted (see above).
 
 **Decision for the remaining names: keep them quarantined.** These are the other names on the list in
 `mikoshilang/quarantined.json`. They raise

@@ -4,7 +4,7 @@ from _harness import Raises, Pred, check, ids
 
 CASES = [
     ("Simplify[(x^2 - 1)/(x - 1)]", "1 + x"), ("Simplify[Sin[x]^2 + Cos[x]^2]", "1"), ("Simplify[2 x + 3 x]", "5 x"),
-    ("Simplify[x > 0, x > 1]", Raises()),
+    ("Simplify[x > 0, x > 1]", True), ("Simplify[Sqrt[x^2], x < 0]", "-x"),
     ("Expand[(x + 1)^2]", "1 + 2 x + x^2"), ("Expand[(a + b) (a - b)]", "a^2 - b^2"), ("Expand[x (y + 1)]", "x + x y"),
     ("Expand[Sin[2 x]]", "Sin[2 x]"),
     ("Factor[x^2 - 1]", "(x - 1) (x + 1)"), ("Factor[x^3 - x^2 + x - 1]", "(x - 1) (1 + x^2)"), ("Factor[6]", "6"),
@@ -15,7 +15,7 @@ CASES = [
     ("Coefficient[a x + b x y, x]", "a + b y"), ("Coefficient[x + 2/x, x, -1]", "2"), ("Coefficient[x^2 + 1, x^2]", "1"),
     ("CoefficientList[1 + 2 x + 3 x^3, x]", "{1, 2, 0, 3}"), ("CoefficientList[0, x]", "{}"),
     ("CoefficientList[1 + x y + y^2, {x, y}]", "{{1, 0, 1}, {0, 1, 0}}"),
-    ("Degree[x^3 + 1, x]", Raises(NotImplementedError, "Exponent")),
+    ("Degree[x^3 + 1, x]", Raises(ValueError, "Exponent")),
     ("Exponent[x^3 + x, x]", "3"), ("Exponent[5, x]", "0"), ("Exponent[0, x]", "-Infinity"), ("Exponent[x^2 y^5, y]", "5"),
     ("Discriminant[a x^2 + b x + c, x]", "b^2 - 4 a c"), ("Discriminant[x^3 + p x + q, x]", "-4 p^3 - 27 q^2"),
     ("Discriminant[x^2 - 2 x + 1, x]", "0"),
@@ -44,7 +44,7 @@ CASES = [
     ("QuadraticFormula[1., 0, -2]", [2 ** 0.5, -(2 ** 0.5)]),
     ("RationalizeDenominator[1/(1 + Sqrt[2])]", "-1 + Sqrt[2]"), ("RationalizeDenominator[1/Sqrt[3]]", "Sqrt[3]/3"),
     ("RationalizeDenominator[2/(Sqrt[3] - 1)]", "1 + Sqrt[3]"),
-    ("Refine[Sqrt[x^2], x > 0]", Raises(NotImplementedError)), ("Assumptions[x]", Raises(NotImplementedError)),
+    ("Refine[Sqrt[x^2], x > 0]", "x"), ("Assumptions[x]", Raises(ValueError, "option name")),
 ]
 
 

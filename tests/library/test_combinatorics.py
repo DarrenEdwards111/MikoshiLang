@@ -48,7 +48,7 @@ CASES = [
     ("GeometricSequence[1, -1, 4]", "{1, -1, 1, -1}"),
     # first n Fibonacci numbers starting at F(0) (MikoshiLang convention)
     ("FibonacciSequence[7]", "{0, 1, 1, 2, 3, 5, 8}"), ("FibonacciSequence[1]", "{0}"), ("FibonacciSequence[0]", "{}"),
-    ("YoungTableaux[{2, 1}]", Raises(NotImplementedError, "quarantined")),
+    ("YoungTableaux[{2, 1}]", "{{{1, 2}, {3}}, {{1, 3}, {2}}}"),
 ]
 
 

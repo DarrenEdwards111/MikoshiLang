@@ -68,7 +68,7 @@ TRANSFORMS = [
     ("InverseLaplaceTransform[1/(s^2 + 1), s, t]", "Sin[t]"), ("InverseLaplaceTransform[1/s^2, s, t]", "t"),
     ("InverseLaplaceTransform[1/(s - 2), s, t]", "E^(2 t)"),
     ("ZTransform[1, n, z]", "z/(z - 1)"), ("ZTransform[a^n, n, z]", "z/(z - a)"), ("ZTransform[n, n, z]", "z/(z - 1)^2"),
-    ("InverseZTransform[z/(z - 1), z, n]", Raises(NotImplementedError)),
+    ("InverseZTransform[z/(z - 1), z, n]", "1"),
 ]
 
 CASES = NUMERICS + TRANSFORMS

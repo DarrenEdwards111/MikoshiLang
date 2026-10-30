@@ -45,9 +45,32 @@ unevaluated, for example symbolic arguments to a numeric routine.
 | applied | physical constants were rounded (`LightYear` = 9.461e15); 1-argument constant forms ignored their argument; legacy formulas used g = 9.81 and c = 3e8; `BohrRadius[n]` returned a0 | exact CODATA/SI values, `hbar`/`R`/`F`/`σ`/`Vm` derived exactly; extra arguments raise; `BohrRadius[n]` = n² a0 |
 | applied | `CircleArea[-1]` = `Pi`; Carnot efficiency could be negative; finance rates ≤ −100% accepted | domain checks raise |
 | plots | `Plot3D`, `ContourPlot`, `ParametricPlot`, `PolarPlot` were shadowed by inert descriptors; `Plot2D` drew an empty figure for bad input | real figures; errors raise |
-| names | `Catalan`, `Trace`, `Degree` and `Root` had non-Wolfram meanings (`Catalan[n]` = Catalan number, and so on) | raise and point to `CatalanNumber`, `Tr`, `Exponent`, `Surd` |
+| names | `Catalan`, `Trace`, `Degree` and `Root` had non-Wolfram meanings (`Catalan[n]` = Catalan number, `Trace[m]` = matrix trace, `Degree[p, x]` = polynomial degree, `Root[a, n]` = a^(1/n)) | Wolfram meanings: `Catalan` constant, evaluation `Trace`, `Degree` = Pi/180, `Root[f, k]` algebraic numbers in Wolfram root order (see below) |
 | strings | legacy `Simplify` accepted strings and evaluated them | `sym()` rejects Python strings |
 | knowledge | `EntitySearch` returned Wikidata's raw order (an engineer before Q42 for "Douglas Adams"); type hints were appended to the query, which found nothing; `EntityProperties`, `WikipediaSummary`, `Disambiguate` and `Entity` were never wired into the evaluator | relevance-ranked by sitelinks; P31/description filters; network-gated heads |
+
+## Formerly unsupported functions (second pass)
+
+The 8 heads that used to raise an error, and the one quarantined head, now have their Wolfram semantics.
+Each has at least 3 differential cases in `tests/library/test_wolfram_fixes.py`.
+
+| Head | Now | Limits |
+|---|---|---|
+| `Root[f, k]` | k-th root of the polynomial `f[x]`, where `f` is a pure function. Roots are in Wolfram order: real roots ascending, then complex roots by real part, then by \|Im\|, with conjugate pairs adjacent (negative imaginary part first). SymPy's CRootOf order differs and is remapped. The polynomial is reduced to the irreducible factor that carries the root. Linear, quadratic and binomial factors give radicals; otherwise the result is `Root[minpoly &, j]`, which `N` evaluates to any precision. Checked against `mpmath.polyroots`. | Rational coefficients for exact results; approximate coefficients give a number; symbolic coefficients stay unevaluated. `Root[{f, x0}]` and other newer forms are not supported. |
+| `Catalan` | Catalan's constant (SymPy `Catalan`); `N[Catalan, n]` gives any precision. | `Catalan[...]` raises and points to `CatalanNumber`. |
+| `Degree` | The constant Pi/180: `30 Degree` is `Pi/6` and `N[Degree]` is 0.0174533. | `30 Degree` evaluates to `Pi/6`, whereas Wolfram keeps `30°` until a function needs the value. `Degree[...]` raises and points to `Exponent`. |
+| `Trace` | Wolfram evaluation trace. Each form is wrapped in `HoldForm` and subevaluations are nested lists: `Trace[1 + 2 3]` is `{{2 3, 6}, 1 + 6, 7}`. `Trace[expr, form]` filters by pattern. The matrix trace is `Tr`. | Internal steps taken by library functions may show up. `Trace[expr, form, s]` raises. |
+| `Refine` | Assumptions-based refinement using SymPy `refine`/`ask`, assumption-carrying symbols, and interval reasoning for one-variable inequalities (`Refine[x > 0, x > 1]` is `True`). | Supported assumptions: inequalities, `Equal`/`Unequal`, `Element[x, Reals \| Integers \| Rationals \| Primes \| Complexes \| Algebraics]`, `&&`, `\|\|`, `!`. Anything else raises. |
+| `Assumptions` / `$Assumptions` / `Assuming` | `$Assumptions` defaults to `True`. `Assuming[a, expr]` scopes it. The `Assumptions -> a` option works for `Simplify`, `Refine` and `Integrate`. `Integrate` returns `ConditionalExpression[value, cond]` when SymPy reports a convergence condition; it returns the plain value when the assumptions imply that condition and raises when they contradict it. This also fixes `Integrate[Exp[-a x], {x, 0, Infinity}]`, which previously hit the recursion limit. | `Assumptions[...]` used as a function raises (it is an option name). `FullSimplify` is not implemented. |
+| `LaplaceODESolve` | Not a Wolfram built-in; kept as a correct helper. It solves linear constant-coefficient ODEs by Laplace transform and returns `{{y[t] -> sol}}` for t > 0. Initial values that are not given appear as `y[0]`, `y'[0]`, and so on. Every solution is substituted back into the ODE and initial conditions before it is returned. | Non-linear or variable-coefficient equations raise and point to `DSolve`. |
+| `InverseZTransform` | Rational `F(z)`: partial fractions in 1/z give `c Binomial[n + k - 1, k - 1] p^n` and `DiscreteDelta[n - m]` terms (causal, n ≥ 0). Each result is checked against 12 coefficients of the series at z = ∞. | Non-rational `F` stays unevaluated; non-causal `F` (one that grows as z → ∞) raises. |
+| `YoungTableaux` | `YoungTableaux[shape]`: all standard Young tableaux. `YoungTableaux[n]`: all tableaux with n cells. Counts match `HookLengthFormula` and the involution numbers. | Refuses more than 100,000 tableaux. |
+| `DiscreteDelta`, `UnitStep` (new) | Evaluate numerically as in Wolfram (previously inert). | Symbolic arguments stay unevaluated. |
+
+Related fixes made along the way:
+
+* `y'[0]` no longer turns into `Subs[...]` inside arithmetic.
+* The parser now reads `a - 1` as `Plus[a, -1]`, Wolfram's FullForm.
 
 ## Live-service tests (`-m live_service`)
 

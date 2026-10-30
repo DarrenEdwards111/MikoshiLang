@@ -35,7 +35,7 @@ CASES = [
     ("BernoulliB[1]", "-1/2"), ("BernoulliB[6]", "1/42"), ("BernoulliB[2, x]", "x^2 - x + 1/6"),
     ("EulerNumber[4]", "5"), ("EulerNumber[6]", "-61"), ("EulerNumber[3]", "0"),
     ("EulerE[4]", "5"), ("EulerE[10]", "-50521"), ("EulerE[2, x]", "x^2 - x"),
-    ("Catalan[5]", Raises(NotImplementedError, "CatalanNumber")),
+    ("Catalan[5]", Raises(ValueError, "CatalanNumber")),
     ("CatalanNumber[5]", "42"), ("CatalanNumber[0]", "1"), ("CatalanNumber[10]", "16796"),
     ("Bell[5]", "52"), ("Bell[0]", "1"), ("Bell[10]", "115975"),
     ("BellNumber[5]", "52"), ("BellNumber[1]", "1"), ("BellNumber[7]", "877"),
