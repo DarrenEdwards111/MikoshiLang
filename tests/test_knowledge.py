@@ -137,7 +137,10 @@ def test_provenance_tracking():
 def test_license_attribution():
     """Test license information is present"""
     wikidata_result = parse_and_eval('EntityValue["Q42", "BirthDate"]')
-    assert wikidata_result.get("license") == "CC0 (Wikidata)"
+    # the evaluator's knowledge heads use the knowledge_full provenance format (license "CC0",
+    # source = the Wikidata entity URL); "CC0 (Wikidata)" was the format of the unwired legacy module
+    assert wikidata_result.get("license") == "CC0"
+    assert wikidata_result["source"].startswith("https://www.wikidata.org")
     
     wikipedia_result = parse_and_eval('WikipediaSummary["Douglas Adams"]')
     assert wikipedia_result.get("license") == "CC BY-SA 3.0 (Wikipedia)"

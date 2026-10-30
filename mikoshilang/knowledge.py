@@ -58,22 +58,10 @@ PID_TO_NAME = {v: k for k, v in CANONICAL_PROPERTIES.items()}
 # Cache for entity lookups (keyed by query + type)
 @lru_cache(maxsize=1000)
 def _entity_search_cached(query: str, entity_type: Optional[str], limit: int) -> str:
-    """Cached Wikidata entity search"""
-    # If entity_type provided, append it to the search query as a hint
-    search_query = f"{query} {entity_type}" if entity_type else query
-    
-    params = {
-        "action": "wbsearchentities",
-        "format": "json",
-        "language": "en",
-        "search": search_query,
-        "limit": limit,
-    }
-    
+    """Cached, relevance-ranked Wikidata entity search (see knowledge_full.ranked_search)."""
+    from .knowledge_full import ranked_search
     try:
-        response = requests.get(WIKIDATA_API, params=params, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        return response.text
+        return json.dumps({"search": ranked_search(query, entity_type, limit)})
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -362,11 +350,8 @@ def Disambiguate(query: str, context: Optional[str] = None) -> List[Dict[str, An
         >>> Disambiguate["Moon", "film"]
         [{"id": "Q219562", "label": "Moon", "description": "2009 film by Duncan Jones"}, ...]
     """
-    # If context provided, use it in search
-    search_query = f"{query} {context}" if context else query
-    
-    # Search Wikidata
-    entities = EntitySearch(search_query, limit=10)
+    # The context is a filter on the candidates (appending it to the search string finds nothing)
+    entities = EntitySearch(query, entity_type=context, limit=10)
     
     # Also check for Wikipedia disambiguation page
     wiki_params = {

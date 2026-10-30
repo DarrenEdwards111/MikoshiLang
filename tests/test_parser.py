@@ -47,7 +47,8 @@ class TestArithmetic:
         assert parse("2 + 3") == Expr("Plus", 2, 3)
 
     def test_subtraction(self):
-        assert parse("5 - 3") == Expr("Plus", 5, Expr("Times", -1, 3))
+        assert parse("5 - 3") == Expr("Plus", 5, -3)   # Wolfram: Hold[5 - 3] is Hold[Plus[5, -3]]
+        assert parse("5 - x") == Expr("Plus", 5, Expr("Times", -1, Symbol("x")))
 
     def test_multiplication(self):
         assert parse("2 * 3") == Expr("Times", 2, 3)
@@ -76,7 +77,7 @@ class TestArithmetic:
 
     def test_complex_expression(self):
         result = parse("x^2 - 4")
-        assert result == Expr("Plus", Expr("Power", Symbol("x"), 2), Expr("Times", -1, 4))
+        assert result == Expr("Plus", Expr("Power", Symbol("x"), 2), -4)
 
 
 class TestImplicitMultiplication:
@@ -91,7 +92,7 @@ class TestImplicitMultiplication:
     def test_paren_paren(self):
         result = parse("(x + 1)(x - 1)")
         lhs = Expr("Plus", Symbol("x"), 1)
-        rhs = Expr("Plus", Symbol("x"), Expr("Times", -1, 1))
+        rhs = Expr("Plus", Symbol("x"), -1)
         assert result == Expr("Times", lhs, rhs)
 
     def test_number_paren(self):
@@ -115,7 +116,7 @@ class TestFunctionCalls:
 
     def test_solve(self):
         result = parse("Solve[x^2 - 4 == 0, x]")
-        inner = Expr("Equal", Expr("Plus", Expr("Power", Symbol("x"), 2), Expr("Times", -1, 4)), 0)
+        inner = Expr("Equal", Expr("Plus", Expr("Power", Symbol("x"), 2), -4), 0)
         assert result == Expr("Solve", inner, Symbol("x"))
 
     def test_simplify(self):

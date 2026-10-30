@@ -5,32 +5,32 @@ from typing import Any, Dict, Set
 from .expr import Expr, Symbol
 from .rules import SIMPLIFICATION_RULES, replace
 
-# Lazy load extended rules to avoid circular imports
-_extended_loaded = False
-_extended_rules = []
-_rules_by_head = {}
+# The reviewed function library (mikoshilang.library) replaces the legacy
+# extended/extended2/extended3/visualization rule tables, which are no longer
+# loaded: every exposed function is registered there with an audit status.
+_rules_by_head = {}   # kept for backward compatibility; always empty
+
 
 def _ensure_extended():
-    global _extended_loaded, _extended_rules
-    if not _extended_loaded:
-        from .extended import EXTENDED_RULES
-        from .extended2 import EXTENDED2_RULES
-        from .extended3 import EXTENDED3_RULES
-        from .visualization import VISUALIZATION_RULES
-        _extended_rules = (EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES
-                           + VISUALIZATION_RULES)
-        for rule in _extended_rules:
-            _rules_by_head.setdefault(rule.pattern.head, []).append(rule)
-        _extended_loaded = True
+    """Backward-compatible no-op: the legacy rule tables are no longer loaded."""
+    from . import library  # noqa: F401  (registers the reviewed library)
+
 
 # Hold attributes
-_HOLD_ALL: Set[str] = set()
+_HOLD_ALL: Set[str] = {"Trace", "Assuming"}   # library heads that receive unevaluated arguments
 _HOLD_FIRST: Set[str] = set()
 
 _MAX_DEPTH = 1024  # matches Wolfram's default $RecursionLimit
 _memo: Dict[int, Any] = {}
 
 import sys as _sys
+from contextvars import ContextVar as _ContextVar
+
+# Evaluation tracing for Trace[expr]: a stack of frames (None when not tracing). Each frame collects
+# ("nested", chain) for argument evaluations, ("form", expr) for the expression after its arguments
+# were evaluated, and ("splice", chain) for re-evaluations of a rewritten expression.
+_TRACE = _ContextVar("mikoshilang_trace", default=None)
+_TRACE_ARG = _ContextVar("mikoshilang_trace_arg", default=False)
 if _sys.getrecursionlimit() < 20000:
     _sys.setrecursionlimit(20000)
 
@@ -54,6 +54,8 @@ def evaluate(expr, depth: int = 0) -> Any:
     Sequence splicing, Flat/Orderless/Listable, user DownValues (most specific
     first), kernel built-ins, then the legacy rule library.
     """
+    if depth > 0 and _TRACE.get() is not None:
+        return _traced(expr, depth)
     if depth == 0:
         from .kernel import ReturnSignal, BreakSignal, ContinueSignal, ThrowSignal
         try:
@@ -67,6 +69,84 @@ def evaluate(expr, depth: int = 0) -> Any:
     return _evaluate(expr, depth)
 
 
+def _traced(expr, depth):
+    stack = _TRACE.get()
+    is_arg = _TRACE_ARG.get()
+    tok = _TRACE_ARG.set(False)
+    frame = []
+    stack.append(frame)
+    try:
+        r = _evaluate(expr, depth)
+    finally:
+        stack.pop()
+        _TRACE_ARG.reset(tok)
+    chain = _trace_chain(expr, frame, r, start=bool(stack) and not is_arg and len(stack) > 1)
+    if stack:
+        if not is_arg:
+            stack[-1].append(("splice", chain))
+        elif len(chain) > 1 or any(isinstance(c, list) for c in chain):
+            stack[-1].append(("nested", chain))
+    return r
+
+
+def _trace_chain(expr, items, r, start=False):
+    out = []
+
+    def add(x):
+        if not (out and not isinstance(out[-1], list) and _same(out[-1], x)):
+            out.append(x)
+
+    if start or not any(k == "nested" for k, _ in items):
+        add(expr)
+    for k, c in items:
+        if k == "nested":
+            out.append(c)
+        elif k == "form":
+            add(c)
+        else:
+            for el in c:
+                if isinstance(el, list):
+                    out.append(el)
+                else:
+                    add(el)
+    add(r)
+    return out
+
+
+def _same(a, b):
+    try:
+        return type(a) is type(b) and a == b
+    except Exception:
+        return False
+
+
+def trace_evaluation(expr):
+    """Evaluate expr while recording the Wolfram-style evaluation chain; returns (chain, value)."""
+    stack = [[]]
+    tok = _TRACE.set(stack)
+    atok = _TRACE_ARG.set(False)
+    try:
+        r = evaluate(expr, 1)
+    finally:
+        _TRACE.reset(tok)
+        _TRACE_ARG.reset(atok)
+    top = stack[0]
+    chain = top[0][1] if top else [expr, r]
+    if len(chain) == 1:       # nothing happened: Wolfram returns {}
+        chain = []
+    return chain, r
+
+
+def _ev_arg(x, depth):
+    if _TRACE.get() is None:
+        return evaluate(x, depth)
+    tok = _TRACE_ARG.set(True)
+    try:
+        return evaluate(x, depth)
+    finally:
+        _TRACE_ARG.reset(tok)
+
+
 def _evaluate(expr, depth: int) -> Any:
     if depth > _MAX_DEPTH:
         raise RecursionError(f"Evaluation depth exceeded {_MAX_DEPTH}")
@@ -77,7 +157,9 @@ def _evaluate(expr, depth: int) -> Any:
     from . import kernel
     if isinstance(expr, Symbol):
         own = kernel.state().own
-        return evaluate(own[expr.name], depth + 1) if expr.name in own else expr
+        if expr.name in own:
+            return evaluate(own[expr.name], depth + 1)
+        return True if expr.name == "$Assumptions" else expr     # Wolfram default $Assumptions = True
     if not isinstance(expr, Expr):
         return expr
 
@@ -117,14 +199,15 @@ def _evaluate(expr, depth: int) -> Any:
 
     # 4. Arguments, respecting Hold attributes
     attrs = kernel.attributes(head) if isinstance(head, str) else set()
+    eva = lambda x: _ev_arg(x, depth + 1)  # noqa: E731
     if head in _HOLD_ALL or "HoldAll" in attrs:
         new_args = list(expr.args)
     elif head in _HOLD_FIRST or "HoldFirst" in attrs:
-        new_args = list(expr.args[:1]) + [ev(a) for a in expr.args[1:]]
+        new_args = list(expr.args[:1]) + [eva(a) for a in expr.args[1:]]
     elif "HoldRest" in attrs:
-        new_args = [ev(a) for a in expr.args[:1]] + list(expr.args[1:])
+        new_args = [eva(a) for a in expr.args[:1]] + list(expr.args[1:])
     else:
-        new_args = [ev(a) for a in expr.args]
+        new_args = [eva(a) for a in expr.args]
 
     # 5. Sequence splicing, Flat, Orderless, Listable
     if "SequenceHold" not in attrs and any(isinstance(a, Expr) and a.head == "Sequence" for a in new_args):
@@ -157,6 +240,8 @@ def _evaluate(expr, depth: int) -> Any:
                                  for i in range(n))))
 
     new_expr = Expr(head, *new_args)
+    if _TRACE.get() is not None and _TRACE.get():
+        _TRACE.get()[-1].append(("form", new_expr))
 
     # 6. Pure functions and derivatives as heads
     if isinstance(head, Expr):
@@ -186,20 +271,18 @@ def _evaluate(expr, depth: int) -> Any:
     if not isinstance(head, str):
         return new_expr
 
-    # 9. Legacy rule library
+    # 9. Reviewed function library
     result = replace(new_expr, SIMPLIFICATION_RULES)
     if isinstance(result, Expr) and result == new_expr:
-        _ensure_extended()
-        if _extended_rules:
-            ext_result = replace(new_expr, _rules_by_head.get(head, []))
-            if ext_result != new_expr:
-                result = ext_result
+        from . import library
+        lib = library.dispatch(head, new_expr.args)
+        if lib is library.UNHANDLED:
+            if head not in library.REGISTRY:
+                from .runtime import reject_quarantined
+                reject_quarantined(head)
+            return new_expr
+        result = lib
 
     if isinstance(result, Expr) and result != new_expr:
         result = evaluate(result, depth + 1)
-
-    from .pattern import match
-    if result == new_expr and not any(match(r.pattern, new_expr) is not None for r in _rules_by_head.get(head, [])):
-        from .runtime import reject_quarantined
-        reject_quarantined(head)
     return result

@@ -199,44 +199,98 @@ def _cache_connect():
 # Tool 1: Entity Search (with caching)
 # ============================================================================
 
+# Type hints that name a Wikidata class; candidates must be an instance (P31) of it.
+TYPE_HINT_QIDS = {
+    "person": "Q5", "human": "Q5", "people": "Q5", "film": "Q11424", "movie": "Q11424", "city": "Q515",
+    "country": "Q6256", "planet": "Q634", "book": "Q7725634", "band": "Q215380", "company": "Q4830453",
+    "university": "Q3918", "river": "Q4022", "mountain": "Q8502", "chemical": "Q11173", "element": "Q11344",
+}
+
+
+def _wd_get(params):
+    response = requests.get(WIKIDATA_API, params={"format": "json", **params}, headers=HEADERS, timeout=10)
+    response.raise_for_status()
+    return response.json()
+
+
+def ranked_search(query: str, entity_type: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
+    """Wikidata candidates for ``query``, best match first (raw ``wbsearchentities`` items).
+
+    Wikidata's own search order is not a relevance order for ambiguous names (it currently lists an
+    environmental engineer before Q42 for "Douglas Adams"), and appending the type hint to the search
+    string (what earlier versions did) usually returns nothing. So: search the bare query, keep
+    candidates whose label or alias matches the query, filter by the hint (an instance-of class for
+    known type words such as "Person", otherwise the hint must occur in the description), and order by
+    number of Wikipedia sitelinks, the usual notability proxy. Raises on network errors.
+    """
+    items = _wd_get({"action": "wbsearchentities", "language": "en", "search": query, "limit": 50,
+                     "type": "item"}).get("search", [])
+    if not items:
+        return []
+    if entity_type:
+        hint = str(entity_type).strip().lower()
+        qid = TYPE_HINT_QIDS.get(hint)
+        if qid:
+            hits = []
+            for _attempt in range(2):  # CirrusSearch occasionally returns an empty page transiently
+                hits = _wd_get({"action": "query", "list": "search", "srlimit": 500,
+                                "srsearch": f"{query} haswbstatement:P31={qid}"}).get("query", {}).get("search", [])
+                if hits:
+                    break
+            keep = {h.get("title") for h in hits}
+            items = [i for i in items if i.get("id") in keep]
+        else:
+            stem = hint[:-1] if hint.endswith("s") else hint
+            hinted = [i for i in items if stem in i.get("description", "").lower()]
+            if not hinted:
+                # full-text search over labels, descriptions and statements
+                hits = _wd_get({"action": "query", "list": "search", "srlimit": 20,
+                                "srsearch": f"{query} {entity_type}"}).get("query", {}).get("search", [])
+                hid = [h["title"] for h in hits if str(h.get("title", "")).startswith("Q")]
+                if hid:
+                    ents = _wd_get({"action": "wbgetentities", "ids": "|".join(hid), "props": "labels|descriptions",
+                                    "languages": "en"}).get("entities", {})
+                    hinted = [{"id": q_, "label": ents.get(q_, {}).get("labels", {}).get("en", {}).get("value", q_),
+                               "description": ents.get(q_, {}).get("descriptions", {}).get("en", {}).get("value", "")}
+                              for q_ in hid]
+            items = hinted
+    ids = [i["id"] for i in items]
+    links = {}
+    for k in range(0, len(ids), 50):
+        ents = _wd_get({"action": "wbgetentities", "ids": "|".join(ids[k:k + 50]), "props": "sitelinks"})
+        for eid, ent in ents.get("entities", {}).items():
+            links[eid] = len(ent.get("sitelinks", {}))
+    q = query.strip().lower()
+    exact = lambda i: (i.get("match", {}).get("text", "").lower() == q) or (i.get("label", "").lower() == q)
+    order = {i["id"]: n for n, i in enumerate(items)}
+    items.sort(key=lambda i: (not exact(i), -links.get(i["id"], 0), order[i["id"]]))
+    return items[:limit]
+
+
 def EntitySearch(query: str, entity_type: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
     """
-    Search for entities in Wikidata with persistent caching.
-    
+    Search for entities in Wikidata with persistent caching, best match first (see ranked_search).
+
     Args:
         query: Search string
-        entity_type: Optional type hint
+        entity_type: Optional type hint ("Person", "Film", ... or a description word such as "writer")
         limit: Max results
-    
+
     Returns:
         List of entities with metadata + provenance
     """
-    # Check cache
-    cache_key = _cache_key("EntitySearch", query, entity_type or "", limit)
+    cache_key = _cache_key("EntitySearch/ranked-v2", query, entity_type or "", limit)
     cached = _cache_get(cache_key)
     if cached:
         return cached["data"]
-    
-    # Build search query
-    search_query = f"{query} {entity_type}" if entity_type else query
-    
-    params = {
-        "action": "wbsearchentities",
-        "format": "json",
-        "language": "en",
-        "search": search_query,
-        "limit": limit,
-    }
-    
+
     try:
-        response = requests.get(WIKIDATA_API, params=params, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        items = ranked_search(query, entity_type, limit)
     except Exception as e:
         return [{"error": str(e)}]
-    
+
     results = []
-    for item in data.get("search", []):
+    for item in items:
         results.append({
             "id": item.get("id"),
             "label": item.get("label"),
@@ -246,10 +300,8 @@ def EntitySearch(query: str, entity_type: Optional[str] = None, limit: int = 5) 
             "source": "Wikidata",
             "license": "CC0",
         })
-    
-    # Cache results
+
     _cache_set(cache_key, results, "Wikidata", TTL_ENTITY, "CC0")
-    
     return results
 
 
