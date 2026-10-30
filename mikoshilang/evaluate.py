@@ -160,7 +160,11 @@ def _evaluate(expr, depth: int) -> Any:
         if expr.name in own:
             return evaluate(own[expr.name], depth + 1)
         if expr.name == "Null":
-            return None                     # the symbol Null is the null value (what x; evaluates to)
+            return None
+        if expr.name.startswith("$"):
+            from .library.wl_numerics import SYSTEM_CONSTANTS
+            if expr.name in SYSTEM_CONSTANTS:
+                return SYSTEM_CONSTANTS[expr.name]                     # the symbol Null is the null value (what x; evaluates to)
         return True if expr.name == "$Assumptions" else expr     # Wolfram default $Assumptions = True
     if not isinstance(expr, Expr):
         return expr
@@ -252,6 +256,18 @@ def _evaluate(expr, depth: int) -> Any:
                 return kernel.apply_function(head, new_args, ev)
             except kernel.ReturnSignal as r:
                 return r.value
+        if head.head == "InterpolatingFunction":
+            from .library.wl_interp import apply_ifun
+            r = apply_ifun(head, new_args)
+            if r is not None:
+                return r
+        if (isinstance(head.head, Expr) and head.head.head == "Derivative" and len(head.args) == 1
+                and isinstance(head.args[0], Expr) and head.args[0].head == "InterpolatingFunction"
+                and len(head.head.args) == 1 and isinstance(head.head.args[0], int)):
+            from .library.wl_interp import apply_ifun
+            r = apply_ifun(head.args[0], new_args, head.head.args[0])
+            if r is not None:
+                return r
         if isinstance(head.head, Expr) and head.head.head == "Derivative":
             r = kernel.apply_derivative(head, new_args, ev)
             if r is not kernel.UNHANDLED:

@@ -22,7 +22,7 @@ HERE = pathlib.Path(__file__).parent
 MODULES = ["test_elementary", "test_special", "test_numbertheory", "test_combinatorics", "test_algebra",
            "test_calculus", "test_linalg", "test_lists_strings", "test_statistics", "test_applied",
            "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes",
-           "test_wolfram_batch1"]
+           "test_wolfram_batch1", "test_wolfram_batch2"]
 OPTIONAL = ["scipy", "matplotlib", "sklearn", "networkx", "plotly", "numpy"]
 NAME = re.compile(r"\s*([A-Za-z][A-Za-z0-9]*)")
 
@@ -35,7 +35,7 @@ def _head(src):
     return m.group(1) if m else None
 
 
-IDENT = re.compile(r"(?<![A-Za-z0-9\"])([A-Z][A-Za-z0-9]*)")
+IDENT = re.compile(r"(?<![A-Za-z0-9\"$])(\$?[A-Z][A-Za-z0-9]*)")
 
 
 def _cases():

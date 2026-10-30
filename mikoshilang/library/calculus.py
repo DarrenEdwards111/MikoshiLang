@@ -473,7 +473,7 @@ def _findmin(f, spec, x0=None):
     fx = sp.lambdify(xs, g, "numpy")
     grad = sp.lambdify(xs, [sp.diff(g, x) for x in xs], "numpy")
     res = minimize(lambda z: float(fx(*z)), np.array([float(s) for s in starts]),
-                   jac=lambda z: np.array(grad(*z), dtype=float), method="BFGS")
+                   jac=lambda z: np.array(grad(*z), dtype=float), method="BFGS", options={"gtol": 1e-11})
     if not res.success or not np.isfinite(res.fun):
         raise ValueError(f"FindMinimum: the search did not converge ({res.message})")
     return L(float(res.fun), L(*(rule(Symbol(str(x)), float(v)) for x, v in zip(xs, res.x))))

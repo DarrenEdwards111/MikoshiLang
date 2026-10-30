@@ -193,14 +193,19 @@ def has_float(x) -> bool:
 
 
 def numeric_out(value, *inputs):
-    """Evaluate ``value`` numerically when any input was inexact, else return it exactly."""
+    """Evaluate ``value`` numerically when any input was inexact, else return it exactly.  The result has the
+    lowest input precision: machine if any input is a machine number, else the smallest bignum precision."""
     if any(has_float(i) for i in inputs):
-        prec = 15
-        for i in inputs:
-            if isinstance(i, sp.Float) and i._prec > 53:
-                prec = max(prec, int(round(i._prec * 0.30103)))
-        v = sp.sympify(value).evalf(prec)
-        return R(v)
+        from ..precision import input_precision
+        p = input_precision(inputs)
+        if p == "m" or p is None:
+            v = sp.sympify(value).evalf(15)
+            return R(v)
+        import mpmath
+        dps = mpmath.libmp.prec_to_dps(p)
+        v = sp.sympify(value).evalf(dps)
+        from ..precision import round_to
+        return round_to(R(v), p)
     return R(value)
 
 

@@ -1760,9 +1760,12 @@ def _listarg(x, name):
 def _sympy_arith(expr):
     try:
         from .math_ops import to_sympy, from_sympy
-        return from_sympy(to_sympy(expr))
+        out = from_sympy(to_sympy(expr))
     except (ValueError, TypeError, AttributeError):
         return expr
+    from .precision import input_precision, round_to
+    p = input_precision(expr.args)
+    return round_to(out, p) if p is not None else out
 
 
 @builtin("Plus")

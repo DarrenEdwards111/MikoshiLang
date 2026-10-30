@@ -434,11 +434,33 @@ def _fromdigits(ds, b=10):
             raise ValueError(f"FromDigits: digit out of range for base {base}")
         vals = [sp.Integer(v) for v in vals]
     else:
-        vals = [sym(v, "FromDigits") for v in list_arg(ds, "FromDigits")]
+        items = list_arg(ds, "FromDigits")
+        if len(items) == 2 and is_list(items[0]) and not is_list(items[1]):
+            return _fromdigits_real(items[0], items[1], base)          # FromDigits[{digits, exponent}, b]
+        vals = [sym(v, "FromDigits") for v in items]
     acc = sp.Integer(0)
     for v in vals:
         acc = acc * base + v
     return R(sp.expand(acc))
+
+
+def _fromdigits_real(digs, e, base):
+    """Inverse of RealDigits: {{d1, d2, ..., {r1, ..., rk}}, e} (a trailing nested list repeats forever)."""
+    items = list(digs.args)
+    rep = []
+    if items and is_list(items[-1]):
+        rep = [sym(v, "FromDigits") for v in items[-1].args]
+        items = items[:-1]
+    head = [sym(v, "FromDigits") for v in items]
+    ex = sym(e, "FromDigits")
+    val = sp.Integer(0)
+    for i, d in enumerate(head, 1):
+        val += d * base ** (-i)
+    if rep:
+        k, n0 = len(rep), len(head)
+        block = sum(d * base ** (k - j) for j, d in enumerate(rep, 1))
+        val += block / (base ** k - 1) * base ** (-n0)
+    return R(sp.nsimplify(sp.expand(val * base ** ex)) if not has_float(digs) else sp.expand(val * base ** ex))
 
 
 @fn("BaseConvert", area=AREA, status="fixed",
@@ -674,3 +696,209 @@ def _collatz(n):
     notes="number of terms of CollatzSequence[n] (including n and 1); legacy looped forever for n <= 0")
 def _collatzlen(n):
     return len(_collatz_seq(n, "CollatzLength"))
+
+
+# ───────────────────────────── coverage batch 2 additions and fixes ─────────────────────────────
+
+B2 = "number theory (batch 2)"
+
+
+@fn("LucasL", area=AREA, status="fixed", listable=True,
+    notes="LucasL[n, x] Lucas polynomials L_0 = 2, L_1 = x, L_n = x L_(n-1) + L_(n-2) (LucasL[3, x] = x^3 + 3 x); "
+          "the 2-argument form was missing")
+def _lucas_poly(n, x):
+    k = nonneg_int(n, "LucasL", "index")
+    xv = sym(x, "LucasL")
+    a, b = sp.Integer(2), xv
+    if k == 0:
+        return 2
+    for _ in range(k - 1):
+        a, b = b, sp.expand(xv * b + a)
+    return numeric_out(sp.expand(b), x)
+
+
+@fn("HarmonicNumber", area=AREA, status="fixed", listable=True,
+    notes="HarmonicNumber[n] for rational n in closed form (HarmonicNumber[1/2] = 2 - 2 Log[2], legacy left it "
+          "unevaluated); HarmonicNumber[n, r]")
+def _harmonic_b2(n, r=1):
+    if not is_numeric_value(n):
+        raise Unevaluated()
+    sn, sr = S(n), sym(r, "HarmonicNumber")
+    if sn.is_Integer and sn < 0:
+        raise ValueError("HarmonicNumber: negative integers are poles")
+    v = sp.harmonic(sn, sr)
+    if isinstance(v, sp.harmonic) and sn.is_Rational and sr == 1:
+        v = sp.expand_func(v)
+    return numeric_out(v, n, r)
+
+
+
+
+def _replace_first(name, newf):
+    from .core import REGISTRY
+    e = REGISTRY[name]
+    e.impls = [i for i in e.impls if i[0] is newf] + [i for i in e.impls if i[0] is not newf]
+
+
+_replace_first("HarmonicNumber", _harmonic_b2)
+
+
+@fn("CatalanNumber", area=AREA, status="fixed", listable=True,
+    notes="CatalanNumber[n] for any exact n via 4^n Gamma[n + 1/2]/(Sqrt[Pi] Gamma[n + 2]) "
+          "(CatalanNumber[1/2] = 8/(3 Pi), legacy left it unevaluated); symbolic n stays unevaluated")
+def _catalan_b2(n):
+    if not is_numeric_value(n):
+        raise Unevaluated()
+    v = sp.catalan(S(n))
+    if isinstance(v, sp.catalan):
+        v = sp.simplify(v.rewrite(sp.gamma))
+    return numeric_out(v, n)
+
+
+_replace_first("CatalanNumber", _catalan_b2)
+
+
+@fn("PowerMod", area=AREA, status="fixed", listable=True,
+    notes="PowerMod[a, 1/r, m] is the smallest modular r-th root of a (PowerMod[3, 1/2, 11] = 5), unevaluated "
+          "when none exists; other rational exponents p/r use the root then the power")
+def _powermod_root(a, b, m):
+    bb = sym(b, "PowerMod")
+    if bb.is_Integer:
+        return _powermod(a, b, m)
+    if not bb.is_Rational:
+        raise ValueError("PowerMod: exponent must be an integer or a rational number")
+    aa, mm = int_arg(a, "PowerMod"), int_arg(m, "PowerMod", "modulus")
+    if mm == 0:
+        raise ValueError("PowerMod: modulus must be non-zero")
+    p, q = int(bb.p), int(bb.q)
+    from sympy.ntheory.residue_ntheory import nthroot_mod
+    roots = nthroot_mod(aa % abs(mm), q, abs(mm), all_roots=True) if abs(mm) > 1 else [0]
+    if not roots:
+        raise Unevaluated()
+    r = min(roots)
+    return _powermod(r, p, m)
+
+
+_replace_first("PowerMod", _powermod_root)
+
+
+def _unlist(name):
+    """Make a listable head thread only over its leading arguments (so a list-valued option argument works)."""
+    from .core import REGISTRY
+    e = REGISTRY[name]
+    e.listable = False
+    old = [i for i in e.impls]
+
+    def threaded(*args):
+        if any(is_list(a) for a in args):
+            n = {len(a.args) for a in args if is_list(a)}
+            if len(n) != 1:
+                raise ValueError(f"{name}: cannot thread over lists of unequal length")
+            k = n.pop()
+            return L(*(Expr(name, *(a.args[i] if is_list(a) else a for a in args)) for i in range(k)))
+        return old[0][0](*args)
+    e.impls = [(threaded, old[0][1], old[0][2])] + old[1:]
+
+
+_unlist("MultiplicativeOrder")
+
+
+@fn("MultiplicativeOrder", area=AREA, status="fixed",
+    notes="MultiplicativeOrder[k, n, {r1, r2, ...}] is the smallest positive m with k^m = ri (mod n) for some ri; "
+          "unevaluated when there is none (the 3-argument form was missing)")
+def _order3(k, n, rs):
+    kk, m = int_arg(k, "MultiplicativeOrder"), pos_int(n, "MultiplicativeOrder", "modulus")
+    targets = {int_arg(r, "MultiplicativeOrder", "residue") % m for r in list_arg(rs, "MultiplicativeOrder")}
+    if math.gcd(kk, m) != 1:
+        raise ValueError(f"MultiplicativeOrder: {kk} is not a unit modulo {m}")
+    order = int(sp.n_order(kk % m, m)) if m > 1 else 1
+    x = 1
+    for e in range(1, order + 1):
+        x = (x * kk) % m
+        if x in targets:
+            return e
+    raise Unevaluated()
+
+
+@fn("PrimitiveRoot", area=AREA, status="fixed",
+    notes="PrimitiveRoot[n, k] is the smallest primitive root of n that is >= k (the 2-argument form was missing)")
+def _primroot2(n, k):
+    m = pos_int(n, "PrimitiveRoot", "modulus")
+    start = int_arg(k, "PrimitiveRoot", "lower bound")
+    if sp.primitive_root(m) is None:
+        raise Unevaluated()
+    for a in range(max(start, 1), start + 10 * m + 2):
+        if math.gcd(a, m) == 1 and sp.is_primitive_root(a % m, m):
+            return a
+    raise Unevaluated()
+
+
+@fn("MangoldtLambda", area=B2, status="added", listable=True,
+    notes="von Mangoldt function: Log[p] if n is a power of the prime p, else 0; MangoldtLambda[1] = 0")
+def _mangoldt(n):
+    k = int_arg(n, "MangoldtLambda")
+    if k < 1:
+        raise ValueError("MangoldtLambda: argument must be a positive integer")
+    f = sp.factorint(k)
+    if len(f) == 1:
+        return R(sp.log(next(iter(f))))
+    return 0
+
+
+@fn("LiouvilleLambda", area=B2, status="added", listable=True,
+    notes="Liouville function (-1)^Omega(n), Omega counting prime factors with multiplicity; LiouvilleLambda[1] = 1")
+def _liouville(n):
+    k = int_arg(n, "LiouvilleLambda")
+    if k == 0:
+        raise ValueError("LiouvilleLambda: argument must be a non-zero integer")
+    return (-1) ** sum(sp.factorint(abs(k)).values())
+
+
+@fn("DivisorSum", area=B2, status="added",
+    notes="DivisorSum[n, form] = Sum of form[d] over the positive divisors d of n; DivisorSum[n, form, cond] keeps "
+          "the divisors for which cond[d] is True")
+def _divisorsum(n, form, cond=None):
+    from ..evaluate import evaluate
+    from .wl_common import apply
+    k = int_arg(n, "DivisorSum")
+    if k <= 0:
+        raise ValueError("DivisorSum: n must be a positive integer")
+    total = []
+    for d in sp.divisors(k):
+        if cond is not None and apply(cond, int(d)) is not True:
+            continue
+        total.append(apply(form, int(d)))
+    return evaluate(Expr("Plus", *total)) if total else 0
+
+
+@fn("RandomPrime", area=B2, status="added",
+    notes="RandomPrime[n] is a uniformly random prime in [2, n]; RandomPrime[{a, b}]; RandomPrime[range, k] a "
+          "list of k primes (independent draws); raises when the range contains no prime")
+def _randomprime(rng, count=None):
+    import random
+    if is_list(rng):
+        lo, hi = (int_arg(v, "RandomPrime", "range") for v in list_arg(rng, "RandomPrime"))
+    else:
+        lo, hi = 2, int_arg(rng, "RandomPrime", "bound")
+    lo = max(lo, 2)
+    if hi < lo or sp.nextprime(lo - 1) > hi:
+        raise ValueError(f"RandomPrime: there are no primes in [{lo}, {hi}]")
+
+    def one():
+        # uniform over the primes in [lo, hi]: draw uniform integers until one is prime
+        while True:
+            c = random.randint(lo, hi)
+            if sp.isprime(c):
+                return c
+    if count is None:
+        return one()
+    if is_list(count):
+        dims = [pos_int(v, "RandomPrime", "dimension") for v in count.args]
+    else:
+        dims = [pos_int(count, "RandomPrime", "count")]
+
+    def build(ds):
+        if len(ds) == 1:
+            return L(*(one() for _ in range(ds[0])))
+        return L(*(build(ds[1:]) for _ in range(ds[0])))
+    return build(dims)

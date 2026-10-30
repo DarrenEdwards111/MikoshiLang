@@ -7,7 +7,7 @@ import sympy as sp
 
 from ..expr import Expr, Symbol
 from .core import (Unevaluated, fn, error, record, S, R, L, numeric_out, sym, number, is_list,
-                   has_float)
+                   has_float, is_numeric_value)
 
 AREA = "elementary"
 
@@ -30,8 +30,7 @@ for _name, _f in [
     ("Sinh", sp.sinh), ("Cosh", sp.cosh), ("Tanh", sp.tanh), ("Coth", sp.coth), ("Sech", sp.sech),
     ("Csch", sp.csch), ("ArcSin", sp.asin), ("ArcCos", sp.acos), ("ArcCot", sp.acot), ("ArcSec", sp.asec),
     ("ArcCsc", sp.acsc), ("ArcSinh", sp.asinh), ("ArcCosh", sp.acosh), ("ArcTanh", sp.atanh),
-    ("Exp", sp.exp), ("Sqrt", sp.sqrt), ("Abs", sp.Abs), ("Sign", sp.sign), ("Floor", sp.floor),
-    ("Ceiling", sp.ceiling), ("Conjugate", sp.conjugate), ("RealPart", sp.re), ("ImaginaryPart", sp.im),
+    ("Exp", sp.exp), ("Sqrt", sp.sqrt), ("Abs", sp.Abs), ("Conjugate", sp.conjugate), ("RealPart", sp.re), ("ImaginaryPart", sp.im),
 ]:
     _unary(_name, _f)
 
@@ -179,10 +178,12 @@ def _as_fraction(v):
           "now Wolfram half-to-even rounding, exact for exact input")
 def _round1(x):
     v = number(x, "Round", real=False)
+    if v in (sp.oo, -sp.oo):
+        return R(v)
     if v.is_real is False:
         re, im = sp.re(v), sp.im(v)
         return R(_round_real(re) + sp.I * _round_real(im))
-    if v in (sp.oo, -sp.oo):
+    if v in (sp.oo, -sp.oo) or v is sp.zoo:
         return R(v)
     return R(_round_real(v))
 
@@ -203,26 +204,115 @@ def _round2(x, a):
     step = number(a, "Round", "rounding step")
     if step == 0:
         raise ValueError("Round: rounding step must be non-zero")
+    if v in (sp.oo, -sp.oo):
+        return R(v)
     k = _round_real(v / step)
-    out = k * step
-    return numeric_out(out, x, a)
+    return R(k * step)            # a Round[x/a]: exact when a is exact (Round[7.3, 2] = 8), else inexact like a
 
 
-@fn("Mod", area=AREA, status="verified", listable=True,
-    notes="Mod[m, n] has the sign of n (Wolfram); Mod[m, 0] raises")
-def _mod(m, n):
-    sm, sn = sym(m, "Mod"), sym(n, "Mod")
+def _cfloor(v, mode="floor"):
+    """Floor/Ceiling/Round of a SymPy number, applied separately to real and imaginary parts (Wolfram)."""
+    if v in (sp.oo, -sp.oo):
+        return v
+    if v.is_real is False:
+        re, im = sp.re(v), sp.im(v)
+        return _cfloor(re, mode) + sp.I * _cfloor(im, mode)
+    if v in (sp.oo, -sp.oo):
+        return v
+    if mode == "round":
+        return _round_real(v)
+    q = _as_fraction(v)
+    if q is None:
+        if v.is_Float:
+            q = Fraction(float(v)) if v._prec <= 53 else Fraction(sp.Rational(v).p, sp.Rational(v).q)
+        else:
+            f = sp.floor(v) if mode == "floor" else sp.ceiling(v)
+            if f.is_Integer:
+                return f
+            raise Unevaluated()
+    if mode == "floor":
+        return sp.Integer(q.numerator // q.denominator)
+    return sp.Integer(-((-q.numerator) // q.denominator))
+
+
+def _rounding(name, mode):
+    @fn(name, area=AREA, status="fixed", listable=True,
+        notes=f"{name}[x] and {name}[x, a] (a {name}[x/a], exact when a is exact); complex numbers are rounded "
+              "in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] "
+              "= 2. + 3. I, and had no step form)")
+    def one(x):
+        if isinstance(x, (Symbol, Expr)) and not is_numeric_value(x):
+            raise Unevaluated()
+        v = number(x, name, real=False)
+        if v is sp.zoo or v is sp.nan:
+            raise Unevaluated()
+        return R(_cfloor(v, mode))
+
+    @fn(name, area=AREA, status="fixed", listable=True)
+    def two(x, a):
+        v = number(x, name, real=False)
+        step = number(a, name, "rounding step", real=False)
+        if step == 0:
+            raise ValueError(f"{name}: rounding step must be non-zero")
+        if v in (sp.oo, -sp.oo):
+            return R(v)
+        return R(_cfloor(v / step, mode) * step)
+
+
+_rounding("Floor", "floor")
+_rounding("Ceiling", "ceiling")
+
+
+@fn("Sign", area=AREA, status="fixed", listable=True,
+    notes="Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals")
+def _sign(z):
+    v = sym(z, "Sign")
+    if v.is_number and v.is_real is False and v.is_finite:
+        return numeric_out(sp.nsimplify(v / sp.Abs(v)) if not has_float(z) else v / sp.Abs(v), z)
+    out = sp.sign(v)
+    if isinstance(out, sp.Integer):
+        return R(out)
+    return numeric_out(out, z)
+
+
+@fn("Mod", area=AREA, status="fixed", listable=True,
+    notes="Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); "
+          "complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset "
+          "form and complex arguments were missing")
+def _mod(m, n, d=0):
+    sm, sn, sd = sym(m, "Mod"), sym(n, "Mod"), sym(d, "Mod")
     if sn == 0:
         raise ValueError("Mod: modulus must be non-zero")
-    return numeric_out(sp.Mod(sm, sn), m, n)
+    if all(v.is_number for v in (sm, sn, sd)):
+        if sm.is_real is False or sn.is_real is False or sd.is_real is False:
+            q = _cfloor(sp.expand((sm - sd) / sn), "round")
+        else:
+            q = _cfloor((sm - sd) / sn if not has_float(m) and not has_float(n) else sp.sympify((sm - sd) / sn),
+                        "floor")
+        return numeric_out(sp.expand(sm - sn * q), m, n, d)
+    if d == 0:
+        return numeric_out(sp.Mod(sm, sn), m, n)
+    raise Unevaluated()
 
 
-@fn("Quotient", area=AREA, status="verified", listable=True, notes="Quotient[m, n] = Floor[m/n]")
-def _quotient(m, n):
-    sm, sn = sym(m, "Quotient"), sym(n, "Quotient")
+@fn("Quotient", area=AREA, status="fixed", listable=True,
+    notes="Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = "
+          "Floor[(m - d)/n]; complex arguments use Round")
+def _quotient(m, n, d=0):
+    sm, sn, sd = sym(m, "Quotient"), sym(n, "Quotient"), sym(d, "Quotient")
     if sn == 0:
         raise ValueError("Quotient: divisor must be non-zero")
-    return numeric_out(sp.floor(sm / sn), m, n)
+    if not all(v.is_number for v in (sm, sn, sd)):
+        raise Unevaluated()
+    if sm.is_real is False or sn.is_real is False:
+        return R(_cfloor(sp.expand((sm - sd) / sn), "round"))
+    return R(_cfloor((sm - sd) / sn, "floor"))
+
+
+@fn("QuotientRemainder", area=AREA, status="added", listable=True,
+    notes="{Quotient[m, n], Mod[m, n]}")
+def _quotrem(m, n):
+    return Expr("List", _quotient(m, n), _mod(m, n))
 
 
 def _flatten_args(args):

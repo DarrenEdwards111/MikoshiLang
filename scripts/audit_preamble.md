@@ -87,3 +87,16 @@ After the fixes: **50/50 pass** (run twice). These tests are excluded from defau
 ## Wolfram batch 1
 
 Batch 1 adds Wolfram built-ins for lists, strings, string patterns and associations, plus the language objects they need (operator forms, `Key`, `Missing`, `Span`, `UpTo`, `Repeated`, `Optional`, ...). These heads have status `added`. Kernel builtins whose semantics were extended to match Wolfram are recorded as `fixed`. Each has at least 3 differential cases in `tests/library/test_wolfram_batch1.py`, checked against the output examples on the Wolfram reference pages. Overall progress towards the documented Wolfram built-ins is tracked in `docs/wolfram_coverage_roadmap.md`.
+
+## Wolfram batch 2
+
+Batch 2 adds numerics and special functions. Areas `numerics (batch 2)`, `special functions (batch 2)` and `number theory (batch 2)` cover:
+
+- the precision model: number marks `x`p`, `x``a` and `*^`; `Precision`, `Accuracy`, `SetPrecision` and `SetAccuracy`; and precision propagation. A result has the lowest precision among its inputs, and a machine number among the inputs makes the result a machine number.
+- `Rationalize`, `Chop`, `RealDigits` and `FromDigits`.
+- rounding with steps.
+- mpmath-backed special functions, which are exact at special values and arbitrary precision under `N`.
+- numerical calculus: `NIntegrate`, `NSum`, `NProduct`, `NSolve`, `NRoots`, `FindRoot`, `NMinimize`, `NMaximize`, `Fit` and `FindFit`.
+- `Interpolation` and `NDSolve`, which return `InterpolatingFunction` objects.
+
+Existing heads whose semantics were corrected are recorded as `fixed`. Each head has at least 3 differential cases in `tests/library/test_wolfram_batch2.py`. The cases are checked against values from the Wolfram reference pages, or against mpmath/SciPy computed at higher precision.
