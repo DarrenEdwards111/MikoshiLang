@@ -1686,7 +1686,9 @@ def _h_and(a, ev, expr):
         v = ev(x)
         if v is False:
             return False
-        if v is not True:
+        if isinstance(v, Expr) and v.head == "And":     # Flat: a && (b && c) is And[a, b, c]
+            rest.extend(v.args)
+        elif v is not True:
             rest.append(v)
     if not rest:
         return True
@@ -1699,7 +1701,9 @@ def _h_or(a, ev, expr):
         v = ev(x)
         if v is True:
             return True
-        if v is not False:
+        if isinstance(v, Expr) and v.head == "Or":     # Flat: a || (b || c) is Or[a, b, c]
+            rest.extend(v.args)
+        elif v is not False:
             rest.append(v)
     if not rest:
         return False

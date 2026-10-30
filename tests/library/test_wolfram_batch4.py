@@ -111,7 +111,8 @@ DERIVATIVES = [
     ("D[f[x] x, x]", "f[x] + x f'[x]"),
     ("D[x^2, {x, n}]", Unevaluated("D")),
     ("D[x^2, 2]", Raises()),
-    ("D[x y, x, NonConstants -> {y}]", "y + x D[y, x, NonConstants -> {y}]"),
+    ("D[x y, x, NonConstants -> {y}] /. HoldPattern[D[y, x, NonConstants -> {y}]] -> q", "y + q x"),
+    ("D[x y, x, NonConstants -> {y}]", Pred(lambda g: "NonConstants" in str(g), "keeps D[y, x, NonConstants -> {y}]")),
     ("Dt[x^2 y]", "2 x y Dt[x] + x^2 Dt[y]"),
     ("Dt[x^2 + a x, x]", "2 x + a + x Dt[a, x]"),
     ("Dt[x^2 + a x, x, Constants -> {a}]", "2 x + a"),
@@ -191,7 +192,8 @@ SERIES = [
     ("Normal[Series[Exp[x y], {x, 0, 2}, {y, 0, 2}]]", "1 + x y + x^2 y^2/2"),
     ("Normal[Series[Sin[x], {x, 0, 5}]]", "x - x^3/6 + x^5/120"),
     ("Normal[Series[1/(1 - x), {x, Infinity, 3}]]", "-1/x - 1/x^2 - 1/x^3"),
-    ("Normal[Series[Exp[x], {x, 0, 2}] + x^3]", "1 + x + x^2/2 + x^3"),
+    ("Normal[Series[Exp[x], {x, 0, 2}] + x^3]", "1 + x + x^2/2"),   # x^3 is absorbed by O[x]^3 (Wolfram)
+    ("Normal[Series[Exp[x], {x, 0, 2}] + x^2]", "1 + x + 3 x^2/2"),
     ("Normal[x + O[x]^3]", "x"),
     ("Series[Sin[x], {x, 0, 3}] + O[x]^2", Pred(lambda g: g is not None, "combines")),
     ("Normal[x^2 + O[x]^5]", "x^2"),
@@ -212,6 +214,12 @@ SERIES = [
     ("Normal[ComposeSeries[Series[1/(1 - x), {x, 0, 4}], Series[x^2, {x, 0, 4}]]]", "1 + x^2 + x^4"),
     ("Normal[ComposeSeries[Series[Log[1 + x], {x, 0, 3}], Series[Exp[x] - 1, {x, 0, 3}]]]", "x"),
     ("Series[f[x], {x, 0, 2}]", Pred(lambda g: g is not None, "Taylor series of an undefined function")),
+    ("Normal[Series[f[x], {x, 0, 2}]]", "f[0] + x f'[0] + x^2 f''[0]/2"),
+    ("Normal[Series[f[x] g[x], {x, a, 1}]]", "f[a] g[a] + (x - a) (f[a] g'[a] + f'[a] g[a])"),
+    ("Series[f[x], {x, 0, 3}] /. f -> Sin", Pred(lambda g: str(g) == "x - x^3/6 + O[x]^4", "x - x^3/6 + O[x]^4")),
+    ("Normal[Series[Sin[f[x]], {x, 0, 1}]]", "Sin[f[0]] + x Cos[f[0]] f'[0]"),
+    ("Series[f[x]/x, {x, 0, 2}]", Raises()),
+    ("Series[f[x, y], {x, 0, 1}]", Raises()),
 ]
 
 SUMS = [
@@ -234,7 +242,9 @@ SUMS = [
 ]
 
 RECURRENCES = [
-    ("RSolve[{a[n + 1] == a[n] + n, a[0] == 0}, a, n]", "{{a -> Function[{n}, (n (n - 1))/2]}}"),
+    ("RSolve[{a[n + 1] == a[n] + n, a[0] == 0}, a, n]", Pred(lambda g: "Function" in str(g), "pure-function solution")),
+    ("a[n] /. First[RSolve[{a[n + 1] == a[n] + n, a[0] == 0}, a, n]]", "n (n - 1)/2"),
+    ("a[10] /. First[RSolve[{a[n + 1] == a[n] + n, a[0] == 0}, a, n]]", "45"),
     ("RSolve[{a[n + 1] == 3 a[n] + 1, a[0] == 0}, a[n], n]", "{{a[n] -> (3^n - 1)/2}}"),
     ("RSolve[{a[n] == n a[n - 1], a[0] == 1}, a[n], n]", "{{a[n] -> n!}}"),
     ("RSolve[{a[n + 2] == a[n + 1] + a[n], a[0] == 0, a[1] == 1}, a[n], n]",
@@ -250,7 +260,9 @@ RECURRENCES = [
 ODES = [
     ("DSolve[y''[x] + y[x] == 0, y[x], x]", "{{y[x] -> C[1] Sin[x] + C[2] Cos[x]}}"),
     ("DSolve[{y''[x] + y[x] == 0, y[0] == 0, y'[0] == 1}, y[x], x]", "{{y[x] -> Sin[x]}}"),
-    ("DSolve[y'[x] == x y[x], y, x]", "{{y -> Function[{x}, C[1] E^(x^2/2)]}}"),
+    ("DSolve[y'[x] == x y[x], y, x]", Pred(lambda g: "Function" in str(g), "pure-function solution")),
+    ("y[x] /. First[DSolve[y'[x] == x y[x], y, x]]", "C[1] E^(x^2/2)"),
+    ("y'[1] /. First[DSolve[y'[x] == x y[x], y, x]]", "C[1] E^(1/2)"),
     ("DSolve[y''[x] - 3 y'[x] + 2 y[x] == Exp[3 x], y[x], x]",
      ODESolution(f_(x).diff(x, 2) - 3 * f_(x).diff(x) + 2 * f_(x) - sp.exp(3 * x), f_(x))),
     ("DSolve[x^2 y''[x] + x y'[x] - y[x] == 0, y[x], x]",
@@ -285,6 +297,10 @@ TRANSFORMS = [
      Near(complex(_ft_num(lambda u: mp.exp(-u ** 2), 1, -1, 1)(0.3)), 1e-12)),
     ("InverseFourierTransform[Sqrt[Pi] E^(-w^2/4), w, t, FourierParameters -> {1, -1}]", "E^(-t^2)"),
     ("FourierTransform[f'[t] == Exp[-t^2], t, w]", Head("Equal")),
+    ("FourierTransform[f'[t] == Exp[-t^2], t, w]", Pred(lambda g: g.args[0].head == "FourierTransform", "unknown side stays")),
+    ("FourierTransform[{Exp[-t^2], Exp[-t^2/2]}, t, w]", "{E^(-w^2/4)/Sqrt[2], E^(-w^2/2)}"),
+    ("FourierTransform[Exp[-t^2], t, 0]", "1/Sqrt[2]"),
+    ("FourierTransform[Exp[-t^2], t, x + 1]", Raises()),
     ("FourierSinTransform[Exp[-t], t, w]", "Sqrt[2/Pi] w/(1 + w^2)"),
     ("FourierSinTransform[Exp[-t], t, w, FourierParameters -> {1, 1}]", "2 w/(1 + w^2)"),
     ("FourierSinTransform[t/(t^2 + 1), t, w]", "Sqrt[Pi/2] E^(-w)"),
@@ -305,6 +321,8 @@ TRANSFORMS = [
     ("MellinTransform[Exp[-x], x, s]", "Gamma[s]"),
     ("MellinTransform[1/(1 + x), x, s]", "Pi Csc[Pi s]"),
     ("MellinTransform[Exp[-x^2], x, s]", "Gamma[s/2]/2"),
+    ("MellinTransform[x Exp[-x], x, s]", "Gamma[1 + s]"),
+    ("MellinTransform[1/(1 + x)^2, x, s]", "Pi (1 - s) Csc[Pi s]"),
     ("InverseMellinTransform[Gamma[s], s, x]", "E^(-x)"),
     ("InverseMellinTransform[Gamma[s/2]/2, s, x]", "E^(-x^2)"),
     ("InverseMellinTransform[MellinTransform[Exp[-2 x], x, s], s, x]", "E^(-2 x)"),
@@ -548,7 +566,8 @@ SOLVING = [
     ("{ToRules[Roots[x^2 == 9, x]]}", "{{x -> -3}, {x -> 3}}"),
     ("Eliminate[{x == 2 + y, y == z}, y]", "-2 + x - z == 0"),
     ("Eliminate[{x == t^2, y == t^3}, t]", "x^3 - y^2 == 0"),
-    ("Eliminate[{x + y == 1, x - y == 3}, {x, y}]", False),
+    ("Eliminate[{x + y == 1, x - y == 3}, {x, y}]", True),      # consistent: nothing left (Wolfram True)
+    ("Eliminate[{x + y == 1, x - y == 3, x == 5}, {x, y}]", False),
     ("CountRoots[x^3 - x, x]", "3"),
     ("CountRoots[(x - 1)^2 (x + 3), {x, 0, 5}]", "2"),
     ("CountRoots[x^2 + 1, {x, -2 - 2 I, 2 + 2 I}]", "2"),
@@ -606,7 +625,22 @@ REDUCTION = [
     ("FunctionPeriod[x^2, x]", "0"),
 ]
 
-CASES = (DERIVATIVES + GENERALIZED + INTEGRALS + LIMITS + SERIES + SUMS + RECURRENCES + ODES + TRANSFORMS
+LOGIC = [   # And / Or are Flat (Wolfram): chains parse and evaluate to one head
+    ("FullForm[a || b || c]", Pred(lambda g: str(g) == "Or[a, b, c]", "Or[a, b, c]")),
+    ("FullForm[Hold[a && b && c]]", Pred(lambda g: str(g) == "Hold[And[a, b, c]]", "Hold[And[a, b, c]]")),
+    ("FullForm[a && (b && c)]", Pred(lambda g: str(g) == "And[a, b, c]", "And[a, b, c]")),
+    ("Length[x == 1 || (x == 2 || x == 3)]", "3"),
+    ("x == 1 || x == 2 || x == 3 /. x -> 3", True),
+]
+
+DSOLVE_VERIFIED = [   # solutions with integration constants are substituted back and verified
+    ("y[x] /. First[DSolve[x^2 y''[x] + x y'[x] - y[x] == 0, y[x], x]]", "C[1]/x + C[2] x"),
+    ("y[x] /. First[DSolve[y'[x] == y[x] + 1, y[x], x]]", "-1 + C[1] E^x"),
+    ("y[x] /. First[DSolve[y''[x] - y[x] == 0, y[x], x]]", Pred(lambda g: "C[1]" in str(g) and "C[2]" in str(g),
+                                                                "two constants")),
+]
+
+CASES = (LOGIC + DSOLVE_VERIFIED + DERIVATIVES + GENERALIZED + INTEGRALS + LIMITS + SERIES + SUMS + RECURRENCES + ODES + TRANSFORMS
          + FOURIER_SERIES + VECTOR + EXPANSION + POLY_STRUCTURE + POLY_ARITH + FACTORING + POLY_MISC + SIMPLIFY
          + SOLVING + REDUCTION)
 

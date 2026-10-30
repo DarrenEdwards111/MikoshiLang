@@ -911,10 +911,63 @@ def _series_expr(f, specs, fname="Series"):
     x, x0, n = _series_spec(specs[0], fname)
     if n is None:
         raise ValueError(f"{fname}: give the order, {{x, x0, n}}")
+    if len(specs) == 1 and any(isinstance(u, AppliedUndef) and u.has(x) for u in sp.preorder_traversal(f)):
+        return _series_undefined(f, x, x0, n, fname)
     sd = series_data(f, x, x0, n, fname)
     if len(specs) == 1:
         return sd.to_expr()
     return sd.to_expr(coeff_expr=lambda c: _series_expr(c, specs[1:], fname))
+
+
+def _mreplace(e, table):
+    if isinstance(e, Symbol) and e.name in table:
+        return table[e.name]
+    if isinstance(e, Expr):
+        h = _mreplace(e.head, table) if isinstance(e.head, Expr) else e.head
+        return Expr(h, *(_mreplace(a, table) for a in e.args))
+    return e
+
+
+def _series_undefined(f, x, x0, n, fname):
+    """Taylor series of an expression containing undefined functions g[x] (Wolfram: g[0] + g'[0] x + ...).
+
+    Only univariate undefined functions applied to exactly x are supported, at a finite point, with n >= 0."""
+    if x0 in (sp.oo, -sp.oo) or x0.is_finite is False or n < 0:
+        raise NotImplementedError(f"{fname}: series of undefined functions only about a finite point")
+    undef = {u for u in sp.preorder_traversal(f) if isinstance(u, AppliedUndef) and u.has(x)}
+    if any(u.args != (x,) for u in undef):
+        raise NotImplementedError(f"{fname}: undefined functions must be applied to the expansion variable alone")
+    table, k_fact = {}, sp.Integer(1)
+    terms, g = [], f
+    for k in range(n + 1):
+        if k:
+            g = sp.diff(g, x)
+            k_fact *= k
+        rep = {}
+        for d in sorted(g.atoms(sp.Derivative), key=lambda d: -d.derivative_count):
+            if isinstance(d.expr, AppliedUndef) and d.expr in undef:
+                name = f"SeriesD${d.expr.func.__name__}${d.derivative_count}"
+                rep[d] = sp.Symbol(name)
+                table[name] = Expr(Expr(Expr("Derivative", R(d.derivative_count)), Symbol(d.expr.func.__name__)), R(x0))
+        h = g.xreplace(rep)
+        rep0 = {}
+        for u in undef:
+            name = f"SeriesD${u.func.__name__}$0"
+            rep0[u] = sp.Symbol(name)
+            table[name] = Expr(u.func.__name__, R(x0))
+        h = h.xreplace(rep0)
+        if h.has(sp.Derivative) or any(isinstance(a, AppliedUndef) for a in sp.preorder_traversal(h)):
+            raise NotImplementedError(f"{fname}: cannot expand this function")
+        try:
+            c = sp.simplify(h.subs(x, x0) / k_fact)
+        except Exception:
+            raise NotImplementedError(f"{fname}: cannot expand this function") from None
+        if c.has(sp.zoo, sp.nan, sp.oo, -sp.oo):
+            raise NotImplementedError(f"{fname}: the expansion has non-Taylor terms")
+        if c != 0:
+            terms.append((sp.Integer(k), c))
+    sd = SeriesData(x, x0, terms, sp.Integer(n + 1))
+    return _mreplace(sd.to_expr(), table)
 
 
 @kernel_override("Series", AREA,
@@ -1438,6 +1491,9 @@ def _check_ode_solution(eqs, sol_rules, ev, fname):
             v = K.to_sp(res)
         except Exception:
             raise ArithmeticError(f"{fname}: could not verify the solution")
+        if not isinstance(v, list):    # integration constants C[k] are free parameters, not unknown functions
+            v = v.xreplace({c: sp.Symbol(f"_C{c.args[0]}") for c in v.atoms(AppliedUndef)
+                            if c.func.__name__ == "C" and len(c.args) == 1 and c.args[0].is_Integer})
         if isinstance(v, list) or v.has(sp.Derivative) or any(isinstance(t, AppliedUndef) for t in sp.preorder_traversal(v)):
             raise ArithmeticError(f"{fname}: could not verify the solution")
         try:
@@ -1604,9 +1660,24 @@ def _ft_general(fname, e, t, w, rest, inverse):
     _, opts = split_opts(rest, {"FourierParameters", "Assumptions", "GenerateConditions"}, fname)
     if _:
         raise ValueError(f"{fname}: unexpected arguments")
-    th = _equation_thread(e, lambda x: _ft_general(fname, x, t, w, rest, inverse))
+    def side(x):    # a side that has no closed form stays FourierTransform[side, t, w] (Wolfram)
+        try:
+            return _ft_general(fname, x, t, w, rest, inverse)
+        except Unevaluated:
+            return Expr(fname, x, t, w, *rest)
+    th = _equation_thread(e, side)
     if th is not None:
         return th
+    if not isinstance(w, Symbol):    # a numeric frequency: transform symbolically, then substitute
+        wn = sym(w, fname)
+        if not wn.is_number:
+            raise ValueError(f"{fname}: {w} is not a valid variable")
+        tmpw = Symbol("FTfreq$")
+        r = _ft_general(fname, e, t, tmpw, rest, inverse)
+        val = sym(r, fname).subs(sp.Symbol("FTfreq$"), wn)
+        if val.has(sp.Symbol("FTfreq$")) or val.has(sp.FourierTransform, sp.InverseFourierTransform):
+            raise Unevaluated()
+        return out(sp.simplify(val))
     a, b = _fparams(opts, fname, (sp.Integer(0), sp.Integer(1)))
     if (a, b) == (0, 1):
         return _fourier_default(fname, e, t, w, -1 if inverse else 1)
@@ -1959,7 +2030,8 @@ def _mellin(e, x, s, *rest):
         g = sp.lambdify(xv, f, "mpmath")
         for frac in (0.35, 0.7):
             s0 = lo_f + frac * (hi_f - lo_f)
-            num = mp.quad(lambda y: mp.exp(s0 * y) * g(mp.exp(y)), [-mp.inf, 0, mp.inf])
+            with mp.workdps(20):     # integrate in x (the log substitution makes exp(exp(y)) blow up)
+                num = mp.quad(lambda u: u ** (s0 - 1) * g(u), [0, 1, 10, mp.inf])
             got = complex(sp.N(val.subs(sv, s0)))
             if abs(got - complex(num)) > 1e-7 * max(1.0, abs(num)):
                 raise NotImplementedError("MellinTransform: SymPy's closed form failed numerical verification")
