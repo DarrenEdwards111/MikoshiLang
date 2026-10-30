@@ -557,9 +557,36 @@ def _schur(m):
     return L(R(z), R(t))
 
 
-error("Trace", AREA, "in the Wolfram Language Trace traces evaluation; use Tr[m] for the matrix trace.",
-      notes="legacy Trace[m] returned the matrix trace, conflicting with Wolfram's evaluation Trace; now raises "
-            "and points to Tr (added)")
+def _trace_out(chain):
+    return L(*(_trace_out(c) if isinstance(c, list) else Expr("HoldForm", c) for c in chain))
+
+
+def _trace_filter(chain, form):
+    from ..kernel import match
+    out = []
+    for c in chain:
+        if isinstance(c, list):
+            sub = _trace_filter(c, form)
+            if sub:
+                out.append(sub)
+        elif next(iter(match(form, c, {}, lambda x: x)), None) is not None:
+            out.append(c)
+    return out
+
+
+@fn("Trace", area=AREA, status="fixed",
+    notes="Wolfram evaluation trace: Trace[expr] evaluates expr and returns the chain of forms as HoldForm[...] "
+          "with subevaluations as nested lists (Trace[1 + 2 3] -> {{2 3, 6}, 1 + 6, 7}); Trace[expr, form] keeps "
+          "only forms matching the pattern. Internal evaluations made by library functions can add extra steps "
+          "that Wolfram would not show. For the matrix trace use Tr (legacy Trace[m] meant Tr[m])")
+def _trace(e, *form):
+    if len(form) > 1:
+        raise NotImplementedError("Trace[expr, form, s] (a third argument) is not supported")
+    from ..evaluate import trace_evaluation
+    chain, _ = trace_evaluation(e)
+    if form:
+        chain = _trace_filter(chain, form[0])
+    return _trace_out(chain)
 
 
 @fn("Tr", area=AREA, status="promoted", notes="trace of a matrix (sum of the diagonal); Tr[list] sums a vector")

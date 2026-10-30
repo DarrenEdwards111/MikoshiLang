@@ -226,10 +226,9 @@ class TestLinearAlgebra:
         assert r is not None
 
     def test_trace(self):
-        # Wolfram: Tr is the matrix trace; Trace traces evaluation and is rejected clearly.
+        # Wolfram: Tr is the matrix trace; Trace traces evaluation (a constant matrix has no steps).
         assert ev("Tr[{{1, 0}, {0, 2}}]") == 3
-        with pytest.raises(NotImplementedError, match="Tr"):
-            ev("Trace[{{1, 0}, {0, 2}}]")
+        assert ev("Trace[{{1, 0}, {0, 2}}]") == Expr("List")
 
     def test_eigenvalues(self):
         r = ev("Eigenvalues[{{2, 1}, {1, 2}}]")
@@ -409,7 +408,7 @@ class TestNumberTheory:
 
     def test_catalan(self):
         assert ev("CatalanNumber[5]") == 42
-        with pytest.raises(NotImplementedError, match="CatalanNumber"):
+        with pytest.raises(ValueError, match="CatalanNumber"):
             ev("Catalan[5]")
 
     def test_bell(self):
