@@ -252,5 +252,48 @@ def _zt(e, n, z):
     return R(sp.simplify(r))
 
 
-error("InverseZTransform", AREA,
-      "the inverse Z-transform is not supported (legacy returned the input unevaluated)")
+@fn("InverseZTransform", area=AREA, status="fixed",
+    notes="InverseZTransform[F, z, n] for rational F (causal, n >= 0, Wolfram convention F(z) = Σ f(n) z^-n): "
+          "partial fractions in w = 1/z give c/(1 - p w)^k -> c Binomial[n + k - 1, k - 1] p^n and c w^m -> "
+          "c DiscreteDelta[n - m]; F must stay finite as z -> Infinity (causal sequence). Every result is checked "
+          "against the first 12 coefficients of the series of F at z = Infinity. Non-rational F stays "
+          "unevaluated; legacy returned the input")
+def _izt(e, z, n):
+    F = sym(e, "InverseZTransform")
+    zv, nv = variable(z, "InverseZTransform"), variable(n, "InverseZTransform")
+    w = sp.Dummy("w")
+    G = sp.cancel(sp.together(F.subs(zv, 1 / w)))
+    if not G.is_rational_function(w) or G.has(nv):
+        raise Unevaluated()
+    num, den = sp.fraction(G)
+    if den.subs(w, 0) == 0:
+        raise ValueError("InverseZTransform: F(z) grows as z -> Infinity, so it is not the Z-transform of a "
+                         "causal sequence")
+    dd = sp.Function("DiscreteDelta")
+    parts = sp.Add.make_args(sp.apart(G, w, full=True).doit())
+    out = sp.Integer(0)
+    for t in parts:
+        tn, td = sp.fraction(sp.factor(t))
+        if not td.has(w):
+            for (m,), c in sp.Poly(sp.expand(tn / td), w).terms():
+                out += c * dd(nv - m)
+            continue
+        cst, facs = sp.factor_list(td, w)
+        lin = [(f_, mult) for f_, mult in facs if f_.has(w)]
+        if len(lin) != 1 or sp.degree(lin[0][0], w) != 1 or tn.has(w):
+            raise NotImplementedError("InverseZTransform: could not decompose the partial fraction " + str(t))
+        fac, k = lin[0]
+        a0 = fac.subs(w, 0)
+        a1 = sp.expand(fac - a0).coeff(w)
+        const = sp.radsimp(sp.simplify(tn / (cst * a0 ** k)))
+        p = sp.radsimp(sp.simplify(-a1 / a0))
+        out += sp.simplify(const) * sp.expand_func(sp.binomial(nv + k - 1, k - 1)) * p ** nv
+    if not out.has(dd):
+        cand = sp.simplify(out)
+        out = cand if sp.count_ops(cand) <= sp.count_ops(out) else out
+    ser = sp.series(G, w, 0, 12).removeO()
+    for k in range(12):
+        val = out.subs(nv, k).replace(dd, lambda a: sp.Integer(1) if a == 0 else sp.Integer(0))
+        if sp.simplify(sp.expand(val - ser.coeff(w, k))) != 0:
+            raise ArithmeticError("InverseZTransform: result failed series verification")
+    return R(out)

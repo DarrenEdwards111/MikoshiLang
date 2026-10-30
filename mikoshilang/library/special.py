@@ -92,6 +92,33 @@ def _kdelta(*args):
     return R(out)
 
 
+@fn("DiscreteDelta", area=AREA, status="promoted",
+    notes="Wolfram DiscreteDelta[n1, n2, ...]: 1 if every argument is 0, 0 if any argument is a non-zero number; "
+          "symbolic arguments stay unevaluated (previously always inert)")
+def _ddelta(*args):
+    vals = [sym(a, "DiscreteDelta") for a in args]
+    if any(v.is_number and v != 0 for v in vals):
+        return 0
+    if all(v == 0 for v in vals):
+        return 1
+    raise Unevaluated()
+
+
+@fn("UnitStep", area=AREA, status="promoted",
+    notes="Wolfram UnitStep[x1, ...]: 1 if every argument is >= 0 (UnitStep[0] = 1), 0 if any is < 0; real "
+          "arguments only; symbolic arguments stay unevaluated (previously always inert)")
+def _ustep(*args):
+    vals = [sym(a, "UnitStep") for a in args]
+    for v in vals:
+        if v.is_number and v.is_real is False:
+            raise ValueError("UnitStep is defined for real arguments only")
+    if any(v.is_number and v < 0 for v in vals):
+        return 0
+    if all(v.is_number and v >= 0 for v in vals):
+        return 1
+    raise Unevaluated()
+
+
 @fn("SphericalHarmonicY", area=AREA, status="fixed",
     notes="Y_l^m(theta, phi) with the Condon-Shortley phase (Wolfram); legacy forced floats and returned Python complex")
 def _ynm(l, m, theta, phi):
