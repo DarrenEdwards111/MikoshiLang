@@ -89,7 +89,7 @@ def Plot2D(expr, var_range, **kwargs):
     
     for i, (f, label) in enumerate(functions):
         try:
-            y_vals = f(x_vals)
+            y_vals = np.broadcast_to(np.asarray(f(x_vals), dtype=float), x_vals.shape)
             color = colors[i % len(colors)] if isinstance(colors, (list, tuple)) else kwargs.get('color')
             ax.plot(x_vals, y_vals, 
                    label=label if len(functions) > 1 else None,
@@ -97,7 +97,7 @@ def Plot2D(expr, var_range, **kwargs):
                    linewidth=kwargs.get('linewidth', 2),
                    linestyle=kwargs.get('linestyle', '-'))
         except Exception as e:
-            print(f"Warning: Could not plot {label}: {e}")
+            raise ValueError(f"Plot2D: could not evaluate {label} on the plot range: {e}") from e
     
     # Styling
     ax.set_xlabel(kwargs.get('xlabel', str(var)), fontsize=12)
@@ -153,7 +153,7 @@ def Plot3D(expr, x_range, y_range, **kwargs):
     X, Y = np.meshgrid(x_vals, y_vals)
     
     try:
-        Z = f(X, Y)
+        Z = np.broadcast_to(np.asarray(f(X, Y), dtype=float), X.shape)
     except Exception as e:
         raise ValueError(f"Could not evaluate function: {e}")
     
@@ -238,7 +238,7 @@ def ContourPlot(expr, x_range, y_range, **kwargs):
     x_vals = np.linspace(x_min_val, x_max_val, points)
     y_vals = np.linspace(y_min_val, y_max_val, points)
     X, Y = np.meshgrid(x_vals, y_vals)
-    Z = f(X, Y)
+    Z = np.broadcast_to(np.asarray(f(X, Y), dtype=float), X.shape)
     
     # Create plot
     fig, ax = plt.subplots(figsize=kwargs.get('figsize', (10, 8)))
@@ -304,8 +304,8 @@ def VectorFieldPlot(funcs, x_range, y_range, **kwargs):
     y_vals = np.linspace(y_min_val, y_max_val, density)
     X, Y = np.meshgrid(x_vals, y_vals)
     
-    U = Fx(X, Y)
-    V = Fy(X, Y)
+    U = np.broadcast_to(np.asarray(Fx(X, Y), dtype=float), X.shape)
+    V = np.broadcast_to(np.asarray(Fy(X, Y), dtype=float), X.shape)
     
     # Normalize if requested
     if kwargs.get('normalize', False):
@@ -365,7 +365,7 @@ def ParametricPlot(funcs, t_range, **kwargs):
     t_min_val = float(_to_sympy(t_min).evalf())
     t_max_val = float(_to_sympy(t_max).evalf())
     t_vals = np.linspace(t_min_val, t_max_val, kwargs.get('points', 500))
-    coords = [f(t_vals) for f in lambdas]
+    coords = [np.broadcast_to(np.asarray(f(t_vals), dtype=float), t_vals.shape) for f in lambdas]
     
     # 2D or 3D?
     if len(coords) == 2:
@@ -424,7 +424,7 @@ def PolarPlot(r_expr, theta_range, **kwargs):
     theta_min_val = float(_to_sympy(theta_min).evalf())
     theta_max_val = float(_to_sympy(theta_max).evalf())
     theta_vals = np.linspace(theta_min_val, theta_max_val, kwargs.get('points', 500))
-    r_vals = r_func(theta_vals)
+    r_vals = np.broadcast_to(np.asarray(r_func(theta_vals), dtype=float), theta_vals.shape)
     
     # Create polar plot
     fig = plt.figure(figsize=kwargs.get('figsize', (8, 8)))
@@ -513,7 +513,7 @@ def AnimatePlot(expr, var, param_range, **kwargs):
     
     def update(frame):
         p_val = p_vals[frame]
-        y_vals = f(x_vals, p_val)
+        y_vals = np.broadcast_to(np.asarray(f(x_vals, p_val), dtype=float), x_vals.shape)
         line.set_ydata(y_vals)
         title.set_text(title_template.format(p_val))
         return line, title
