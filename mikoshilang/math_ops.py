@@ -300,6 +300,10 @@ _INV_FUNCS.update({
 
 def _special_from_sympy(sexpr):
     """Structured conversions that are not a plain head rename (None if not applicable)."""
+    if isinstance(sexpr, sp.Heaviside):          # batch 4: Heaviside(x, H0) -> HeavisideTheta[x]
+        return Expr("HeavisideTheta", from_sympy(sexpr.args[0]))
+    if isinstance(sexpr, sp.DiracDelta) and len(sexpr.args) == 2 and sexpr.args[1] != 0:
+        return Expr(Expr(Expr("Derivative", int(sexpr.args[1])), Symbol("DiracDelta")), from_sympy(sexpr.args[0]))
     if isinstance(sexpr, sp.LambertW):
         a = [from_sympy(x) for x in sexpr.args]
         return Expr("ProductLog", a[0]) if len(a) == 1 else Expr("ProductLog", a[1], a[0])

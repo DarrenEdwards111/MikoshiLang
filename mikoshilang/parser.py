@@ -373,20 +373,18 @@ class Parser:
         return expr
 
     def parse_or(self) -> Any:
-        expr = self.parse_and()
+        terms = [self.parse_and()]
         while self.at("OR"):
             self.advance()
-            rhs = self.parse_and()
-            expr = Expr("Or", expr, rhs)
-        return expr
+            terms.append(self.parse_and())
+        return terms[0] if len(terms) == 1 else Expr("Or", *terms)     # a op b op c parses to Or[a, b, c]
 
     def parse_and(self) -> Any:
-        expr = self.parse_not()
+        terms = [self.parse_not()]
         while self.at("AND"):
             self.advance()
-            rhs = self.parse_not()
-            expr = Expr("And", expr, rhs)
-        return expr
+            terms.append(self.parse_not())
+        return terms[0] if len(terms) == 1 else Expr("And", *terms)     # a op b op c parses to And[a, b, c]
 
     def parse_not(self) -> Any:
         if self.at("NOT"):

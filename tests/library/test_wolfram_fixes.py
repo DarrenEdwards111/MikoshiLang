@@ -93,7 +93,7 @@ ASSUME = [  # Wolfram documentation examples for Refine / Simplify / Assuming / 
     ("Assuming[x < 0, Refine[Sqrt[x^2]]]", "-x"), ("Assuming[x < 0, Simplify[Abs[x]]]", "-x"),
     ("Assuming[x > 0, 1]; $Assumptions", True), ("Assuming[a > 0, Integrate[Exp[-a x^2], {x, -Infinity, Infinity}]]", "Sqrt[Pi]/Sqrt[a]"),
     ("Assumptions[x]", Raises(ValueError, "option name")), ("Assumptions[]", Raises(ValueError)),
-    ("Integrate[Exp[-a x], {x, 0, Infinity}]", "ConditionalExpression[1/a, Abs[Arg[a]] < Pi/2]"),
+    ("Integrate[Exp[-a x], {x, 0, Infinity}]", "ConditionalExpression[1/a, Re[a] > 0]"),
     ("Integrate[Exp[-a x], {x, 0, Infinity}, Assumptions -> a > 0]", "1/a"),
     ("Integrate[Exp[-a x], {x, 0, Infinity}, Assumptions -> a < 0]", "Infinity"),
     ("Integrate[x^n, {x, 0, 1}, Assumptions -> n > 0]", "1/(n + 1)"),
