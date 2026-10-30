@@ -13,7 +13,11 @@ from .kernel import UNHANDLED, SessionState, state, _state, ReturnSignal, BreakS
 
 _network = ContextVar("mikoshilang_network", default=False)
 _KNOWLEDGE = {"EntitySearch", "EntityValue", "EntityRelationships", "WikipediaText", "KnowledgeAsOf",
-              "InterpretQuery", "PackSearch", "PackValue", "CacheClear", "CacheStats"}
+              "InterpretQuery", "PackSearch", "PackValue", "CacheClear", "CacheStats",
+              # legacy knowledge-layer heads (mikoshilang.knowledge); previously never wired into the
+              # evaluator, so they silently stayed unevaluated
+              "EntityProperties", "WikipediaSummary", "Disambiguate", "Entity"}
+_LEGACY_KNOWLEDGE = {"EntityProperties", "WikipediaSummary", "Disambiguate", "Entity"}
 
 
 class _Values:
@@ -71,7 +75,12 @@ def special(expr, ev):
     if h in _KNOWLEDGE:
         if not _network.get():
             raise PermissionError("Knowledge access requires Session(allow_network=True)")
-        from .knowledge_full_rules import register_full
         from .rules import replace
-        return replace(Expr(h, *(ev(x) for x in a)), register_full())
+        if h in _LEGACY_KNOWLEDGE:
+            from .knowledge_rules import register
+            rules = [r for r in register() if r.pattern.head == h]
+        else:
+            from .knowledge_full_rules import register_full
+            rules = register_full()
+        return replace(Expr(h, *(ev(x) for x in a)), rules)
     return UNHANDLED
