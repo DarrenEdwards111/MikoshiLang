@@ -6,4 +6,4 @@ Every function exposed here was audited against an independent reference
 ``docs/library_audit.md`` for the generated table.
 """
 from .core import REGISTRY, STATUS, ERRORS, UNHANDLED, Unevaluated, dispatch  # noqa: F401
-from . import elementary, special, numbertheory, combinatorics, algebra, calculus, linalg, lists, strings, statistics, applied  # noqa: F401,E402
+from . import elementary, special, numbertheory, combinatorics, algebra, calculus, linalg, lists, strings, statistics, applied, logic, graphs  # noqa: F401,E402
