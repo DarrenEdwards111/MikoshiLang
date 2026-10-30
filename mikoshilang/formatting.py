@@ -281,6 +281,9 @@ def input_form(e, parent: int = 0) -> str:
             if isinstance(args[1], Expr) and args[1].head in ("Blank", "BlankSequence", "BlankNullSequence"):
                 return args[0].name + input_form(args[1], P_ATOM)
             return _paren(args[0].name + ":" + input_form(args[1], 151), 150, parent)
+        if h == "Optional" and len(args) == 1 and isinstance(args[0], Expr) and args[0].head in ("Pattern", "Blank") \
+                and input_form(args[0]).endswith("_"):
+            return input_form(args[0]) + "."
         if h == "Optional" and len(args) == 2:
             return _paren(input_form(args[0], 141) + ":" + input_form(args[1], 141), 140, parent)
         if h in ("Repeated", "RepeatedNull") and len(args) == 1:

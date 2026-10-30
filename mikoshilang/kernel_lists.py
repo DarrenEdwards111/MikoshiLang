@@ -987,12 +987,20 @@ def _b_thread(a, ev, expr):
 def _b_normal(a, ev, expr):
     need(a, 1, "Normal", 2)
     x = a[0]
-    if K.contains(x, lambda y: isinstance(y, Expr) and y.head == "O"):
+    heads = None
+    if len(a) == 2:
+        hs = a[1].args if is_list(a[1]) else (a[1],)
+        heads = {h.name for h in hs if isinstance(h, Symbol)}
+    if (heads is None or "Series" in heads or "SeriesData" in heads) and \
+            K.contains(x, lambda y: isinstance(y, Expr) and y.head == "O"):
         return K.from_sp(K.to_sp(x).removeO())
+    if heads is not None and "Association" not in heads:
+        return x
 
     def norm(e):
         if is_assoc(e):
-            return L(*(Expr(r.head, r.args[0], norm(r.args[1])) for r in e.args))
+            # Wolfram: an association becomes its list of rules; values (even associations) are left alone
+            return L(*e.args)
         if isinstance(e, Expr) and not atomq(e):
             h = norm(e.head) if isinstance(e.head, Expr) else e.head
             return Expr(h, *(norm(y) for y in e.args))
@@ -1051,12 +1059,11 @@ def operator_form(name, nops=1, operand="first"):
 for _n in ("Select", "SelectFirst", "Cases", "DeleteCases", "Count", "Position", "FirstCase", "FirstPosition",
            "MemberQ", "FreeQ", "MatchQ", "SortBy", "GroupBy", "Replace", "ReplaceAll", "ReplacePart", "Append",
            "Prepend", "Delete", "Extract", "StringReplace", "StringCases", "StringMatchQ", "StringContainsQ",
-           "StringStartsQ", "StringEndsQ", "StringDelete", "StringFreeQ", "StringPosition", "StringCount",
+           "StringStartsQ", "StringEndsQ", "StringDelete", "StringFreeQ", "StringPosition",
            "KeyTake", "KeyDrop", "KeySelect", "KeySortBy", "Merge", "CountsBy", "MaximalBy", "MinimalBy",
            "TakeLargest", "TakeSmallest", "DeleteDuplicatesBy", "AnyTrue", "AllTrue", "NoneTrue", "ContainsAll",
            "ContainsAny", "ContainsNone", "ContainsOnly", "ContainsExactly", "KeyExistsQ", "KeyMemberQ", "KeyFreeQ",
-           "Lookup", "SequenceCases", "SequencePosition", "SequenceCount", "SequenceReplace", "SequenceSplit",
-           "DeleteElements", "Between"):
+           "Lookup", "SequenceReplace", "Between"):
     operator_form(_n, 1, "first")          # f[op][x] -> f[x, op]
 for _n in ("Map", "Apply", "MapIndexed", "MapApply", "Scan", "KeyMap", "KeyValueMap", "AssociationMap"):
     operator_form(_n, 1, "last")           # f[op][x] -> f[op, x]
@@ -1064,7 +1071,6 @@ operator_form("MapAt", 2, "middle")         # MapAt[f, pos][expr] -> MapAt[f, ex
 operator_form("Insert", 2, "first")         # Insert[elem, n][list] -> Insert[list, elem, n]
 operator_form("TakeLargestBy", 2, "first")
 operator_form("TakeSmallestBy", 2, "first")
-operator_form("StringInsert", 2, "first")
 
 # operators that are not curried forms of a two-argument function
 _COMPARATORS = {"GreaterThan": "Greater", "LessThan": "Less", "GreaterEqualThan": "GreaterEqual",

@@ -90,6 +90,7 @@ _TOKEN_SPEC = [
     ("SEMICOLON", r';'),
     ("REPEATEDNULL", r'\.\.\.'),
     ("REPEATED",  r'\.\.'),
+    ("BLANKOPT",  r'_\.(?![.0-9])'),
     ("BLANKNS",   r'___'),
     ("BLANKS",    r'__'),
     ("BLANK",     r'_'),
@@ -108,7 +109,7 @@ _TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _T
 
 _STATEMENT_END = ("INTEGER", "FLOAT", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "RASSOC",
                   "FUNCTION", "SLOT", "SLOTSEQ", "SLOTNAME", "INCREMENT", "DECREMENT", "BLANK", "BLANKS",
-                  "BLANKNS", "REPEATED", "REPEATEDNULL")
+                  "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL")
 
 
 def tokenize(text: str) -> ListType[Token]:
@@ -351,7 +352,7 @@ class Parser:
     }
 
     _EXPR_START = ("INTEGER", "FLOAT", "STRING", "SYMBOL", "LPAREN", "LBRACE", "LASSOC", "MINUS", "PLUS",
-                   "SLOT", "SLOTSEQ", "SLOTNAME", "BLANK", "BLANKS", "BLANKNS", "NOT")
+                   "SLOT", "SLOTSEQ", "SLOTNAME", "BLANK", "BLANKS", "BLANKNS", "BLANKOPT", "NOT")
 
     def parse_span(self) -> Any:
         """Handle i;;j, i;;j;;k, ;;j, i;; and ;; (Span, precedence 305)."""
@@ -583,11 +584,18 @@ class Parser:
             if name == "False":
                 return False
             nxt = self.peek()
+            if nxt is not None and nxt.type == "BLANKOPT" and nxt.pos == tok.pos + len(name):
+                self.advance()
+                return Expr("Optional", Expr("Pattern", Symbol(name), Expr("Blank")))
             if nxt is not None and nxt.type in _blank_kinds and nxt.pos == tok.pos + len(name):
                 self.advance()
                 blank = self._blank_tail(_blank_kinds[nxt.type])
                 return self._pattern_test(Expr("Pattern", Symbol(name), blank))
             return Symbol(name)
+
+        if tok.type == "BLANKOPT":
+            self.advance()
+            return Expr("Optional", Expr("Blank"))
 
         if tok.type in _blank_kinds:
             self.advance()

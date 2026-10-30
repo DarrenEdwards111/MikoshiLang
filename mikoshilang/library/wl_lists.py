@@ -7,7 +7,6 @@ implementations -- itertools, collections, NumPy -- for the structural ones).
 from __future__ import annotations
 
 import contextvars
-import itertools
 import math
 
 import sympy as sp
@@ -16,7 +15,7 @@ from ..expr import Expr, Symbol
 from .. import kernel as K
 from .. import kernel_lists as KL
 from .core import fn, Unevaluated
-from .wl_common import (L, ev, apply, true, is_sym, is_list, is_int, is_assoc, is_rule, same, items_of, list_items,
+from .wl_common import (L, ev, apply, true, is_sym, is_list, is_int, is_assoc, is_rule, same, items_of,
                         canonical, tester, dedup, classes, real_number, int_value, upto, split_options)
 
 AREA = "lists (batch 1)"
@@ -1554,3 +1553,57 @@ def _modify_symbol(s, f, fname):
     st.own[s.name] = new
     st.note_write(s.name, new)
     return new
+
+
+# ---------------------------------------------------------------- rule application
+def _rule_list(r, fname):
+    rules = list(r.args) if is_list(r) else [r]
+    if not all(is_rule(x) for x in rules):
+        raise ValueError(f"{fname}: {r!r} is not a rule or list of rules")
+    return rules
+
+
+def _apply_rules(e, rules):
+    for rule in rules:
+        b = K.first_match(rule.args[0], e, ev)
+        if b is not None:
+            return True, ev(K.substitute(rule.args[1], b))
+    return False, e
+
+
+@fn("Replace", **ADDED,
+    notes="Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); "
+          "Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives "
+          "a list of results")
+def _replace(e, r, spec=None):
+    if is_list(r) and r.args and all(is_list(x) for x in r.args):
+        return L(*(_replace(e, x, spec) for x in r.args))
+    rules = _rule_list(r, "Replace")
+    if spec is None:
+        return _apply_rules(e, rules)[1]
+    ls = KL.level_spec(spec, (0, 0))
+    return ev(KL.map_levels(lambda x, _pos: _apply_rules(x, rules)[1], e, ls))
+
+
+@fn("ReplaceList", **ADDED,
+    notes="all results of applying the rules to the whole expression in every way they match (sequence patterns "
+          "give one result per split; Orderless heads give each distinct binding once, in matcher order rather "
+          "than Wolfram's); ReplaceList[expr, rules, n] keeps at most n")
+def _replacelist(e, r, n=None):
+    rules = _rule_list(r, "ReplaceList")
+    lim = None if n is None else int_value(n, "ReplaceList", "count", lo=0)
+    out = []
+    orderless = isinstance(e, Expr) and isinstance(e.head, str) and "Orderless" in K.attributes(e.head)
+    for rule in rules:
+        seen = set()
+        for b in K.match(rule.args[0], e, {}, ev):
+            if orderless:
+                # permutations of an Orderless expression can reach the same binding more than once
+                key = tuple(sorted((k, K.tag(ev(L(*v))) if isinstance(v, tuple) else K.tag(ev(v))) for k, v in b.items()))
+                if key in seen:
+                    continue
+                seen.add(key)
+            if lim is not None and len(out) >= lim:
+                return L(*out)
+            out.append(ev(K.substitute(rule.args[1], b)))
+    return L(*out)

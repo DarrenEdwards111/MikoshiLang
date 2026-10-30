@@ -670,8 +670,27 @@ def match(pat, expr, b: Dict[str, Any], ev) -> Iterator[Dict[str, Any]]:
         if h == "HoldPattern" and len(pat.args) == 1:
             yield from match(pat.args[0], expr, b, ev)
             return
-        if h == "Optional":
-            raise NotImplementedError("Optional patterns (x_.) are not supported")
+        if h == "Optional" and len(pat.args) in (1, 2):
+            # outside an argument sequence an optional pattern matches like its pattern
+            yield from match(pat.args[0], expr, b, ev)
+            return
+        if h == "Except" and len(pat.args) in (1, 2):
+            if any(True for _ in match(pat.args[0], expr, b, ev)):
+                return
+            if len(pat.args) == 1:
+                yield b
+            else:
+                yield from match(pat.args[1], expr, b, ev)
+            return
+        if h in ("Repeated", "RepeatedNull") and len(pat.args) in (1, 2):
+            # outside an argument sequence p.. matches a single expression matching p
+            lo, hi = _repeat_bounds(pat)
+            if lo <= 1 <= hi:
+                yield from match(pat.args[0], expr, b, ev)
+            return
+        if isinstance(h, str) and h in _OPTIONAL_DEFAULTS and (not isinstance(expr, Expr) or expr.head != h):
+            yield from _match_omitted_optionals(pat, expr, b, ev)
+            return
         if not isinstance(expr, Expr):
             return
         eh = expr.head
@@ -708,12 +727,108 @@ def match_sequence(pats, args, b, ev, head=None, attrs=()):
     yield from _match_seq(pats, 0, tuple(args), 0, b, ev, head, "Flat" in attrs)
 
 
+def _repeat_bounds(p):
+    """(min, max) repetitions of Repeated / RepeatedNull."""
+    lo = 1 if p.head == "Repeated" else 0
+    if len(p.args) == 1:
+        return lo, 10 ** 9
+    spec = p.args[1]
+    if isinstance(spec, Expr) and spec.head == "List" and len(spec.args) in (1, 2) and \
+            all(isinstance(v, int) and not isinstance(v, bool) for v in spec.args):
+        return (spec.args[0], spec.args[0]) if len(spec.args) == 1 else (spec.args[0], spec.args[1])
+    if isinstance(spec, int) and not isinstance(spec, bool):
+        return lo, spec
+    raise NotImplementedError("Repeated: unsupported repetition specification")
+
+
+def _match_omitted_optionals(pat, expr, b, ev):
+    """x_. + y_ matching a non-sum: the optional parts take their defaults and the one remaining pattern must
+    match expr (Wolfram's rule for Optional in Plus, Times and Power)."""
+    opts = [(k, a) for k, a in enumerate(pat.args) if isinstance(a, Expr) and a.head == "Optional"
+            and len(a.args) in (1, 2)]
+    rest = [a for a in pat.args if not (isinstance(a, Expr) and a.head == "Optional" and len(a.args) in (1, 2))]
+    if not opts or len(rest) != 1:
+        return
+    if pat.head == "Power" and [k for k, _ in opts] != [1]:
+        return
+    b2 = dict(b)
+    for _k, o in opts:
+        d = o.args[1] if len(o.args) == 2 else _OPTIONAL_DEFAULTS[pat.head]
+        q = o.args[0]
+        while isinstance(q, Expr) and q.head in ("Condition", "PatternTest") and len(q.args) == 2:
+            q = q.args[0]
+        if isinstance(q, Expr) and q.head == "Pattern" and len(q.args) == 2 and isinstance(q.args[0], Symbol):
+            name = q.args[0].name
+            if name in b2:
+                if isinstance(b2[name], tuple) or not same(b2[name], d):
+                    return
+            else:
+                b2[name] = d
+    yield from match(rest[0], expr, b2, ev)
+
+
+def _match_each(p, chunk, b, ev):
+    if not chunk:
+        yield b
+        return
+    for b2 in match(p, chunk[0], b, ev):
+        yield from _match_each(p, chunk[1:], b2, ev)
+
+
+_OPTIONAL_DEFAULTS = {"Plus": 0, "Times": 1, "Power": 1}
+
+
 def _match_seq(pats, i, args, j, b, ev, head, flat):
     if i == len(pats):
         if j == len(args):
             yield b
         return
     p = pats[i]
+    inner, pname = p, None
+    if isinstance(inner, Expr) and inner.head == "Pattern" and len(inner.args) == 2 and \
+            isinstance(inner.args[0], Symbol):
+        pname, inner = inner.args[0].name, inner.args[1]
+    if isinstance(inner, Expr) and inner.head in ("Repeated", "RepeatedNull") and len(inner.args) in (1, 2):
+        lo, hi = _repeat_bounds(inner)
+        for k in range(max(lo, 0), min(hi, len(args) - j) + 1):
+            chunk = tuple(args[j:j + k])
+            for b2 in _match_each(inner.args[0], chunk, b, ev):
+                if pname is not None:
+                    if pname in b2:
+                        if not (isinstance(b2[pname], tuple) and len(b2[pname]) == k
+                                and all(same(x, y) for x, y in zip(b2[pname], chunk))):
+                            continue
+                    else:
+                        b2 = dict(b2)
+                        b2[pname] = chunk
+                yield from _match_seq(pats, i + 1, args, j + k, b2, ev, head, flat)
+        return
+    if isinstance(p, Expr) and p.head == "Optional" and len(p.args) in (1, 2):
+        if j < len(args):
+            for b2 in match(p.args[0], args[j], b, ev):
+                yield from _match_seq(pats, i + 1, args, j + 1, b2, ev, head, flat)
+        if len(p.args) == 2:
+            default = p.args[1]
+        elif isinstance(head, str) and head in _OPTIONAL_DEFAULTS:
+            default = _OPTIONAL_DEFAULTS[head]
+            if head == "Power" and i != 1:
+                return
+        else:
+            return                          # no Default value for this head: x_. cannot be omitted
+        q = p.args[0]
+        while isinstance(q, Expr) and q.head in ("Condition", "PatternTest") and len(q.args) == 2:
+            q = q.args[0]
+        b2 = b
+        if isinstance(q, Expr) and q.head == "Pattern" and len(q.args) == 2 and isinstance(q.args[0], Symbol):
+            name = q.args[0].name
+            if name in b:
+                if isinstance(b[name], tuple) or not same(b[name], default):
+                    return
+            else:
+                b2 = dict(b)
+                b2[name] = default
+        yield from _match_seq(pats, i + 1, args, j, b2, ev, head, flat)
+        return
     info = _seq_info(p)
     remaining = len(args) - j
     if info is not None:
