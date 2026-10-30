@@ -40,29 +40,56 @@ def _lists(args, fname, min_n=1):
     return [list_arg(a, fname) for a in args]
 
 
+def _set_args(args, fname):
+    """Positional lists and the SameTest option (None = SameQ)."""
+    from .wl_common import split_options
+    pos, opts = split_options(args, {"SameTest"}, fname)
+    return pos, opts.get("SameTest")
+
+
+def _set_result(items, test):
+    from .wl_common import dedup
+    if test is None:
+        return _sorted_set(items)
+    return L(*dedup(sorted(items, key=_okey), test))
+
+
+def _member_t(x, items, test):
+    if test is None:
+        return _member(x, items)
+    from .wl_common import tester
+    t = tester(test)
+    return any(t(x, y) for y in items)
+
+
 @fn("Union", area=AREA, status="promoted",
-    notes="variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed (legacy "
-          "2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9})")
+    notes="variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; "
+          "SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9})")
 def _union(*args):
-    if not args:
+    pos, test = _set_args(args, "Union")
+    if not pos:
         return L()
-    ls = _lists(args, "Union")
-    return _sorted_set([x for l in ls for x in l])
+    ls = _lists(pos, "Union")
+    return _set_result([x for l in ls for x in l], test)
 
 
-@fn("Intersection", area=AREA, status="fixed", notes="variadic; canonical order (legacy sorted by string form)")
+@fn("Intersection", area=AREA, status="fixed",
+    notes="variadic; canonical order (legacy sorted by string form); SameTest -> f")
 def _intersection(*args):
-    ls = _lists(args, "Intersection")
-    common = [x for x in ls[0] if all(_member(x, l) for l in ls[1:])]
-    return _sorted_set(common)
+    pos, test = _set_args(args, "Intersection")
+    ls = _lists(pos, "Intersection")
+    common = [x for x in ls[0] if all(_member_t(x, l, test) for l in ls[1:])]
+    return _set_result(common, test)
 
 
 @fn("Complement", area=AREA, status="fixed",
-    notes="Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form)")
+    notes="Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form); "
+          "SameTest -> f")
 def _complement(*args):
-    ls = _lists(args, "Complement")
+    pos, test = _set_args(args, "Complement")
+    ls = _lists(pos, "Complement")
     rest = [x for l in ls[1:] for x in l]
-    return _sorted_set([x for x in ls[0] if not _member(x, rest)])
+    return _set_result([x for x in ls[0] if not _member_t(x, rest, test)], test)
 
 
 @fn("SetDifference", area=AREA, status="fixed", notes="alias of Complement[a, b] (canonical order)")
@@ -99,8 +126,11 @@ def _subsetq(a, b):
 
 @fn("DeleteDuplicates", area=AREA, status="fixed",
     notes="SameQ comparison keeping first occurrences (legacy compared string forms, so the string \"x\" and "
-          "the symbol x were treated as duplicates)")
-def _deldup(a):
+          "the symbol x were treated as duplicates); DeleteDuplicates[list, test]")
+def _deldup(a, test=None):
+    if test is not None:
+        from .wl_common import dedup
+        return L(*dedup(list_arg(a, "DeleteDuplicates"), test))
     return L(*_dedup(list_arg(a, "DeleteDuplicates")))
 
 
@@ -136,10 +166,19 @@ def _interleave(a, b, *more):
 
 
 @fn("Partition", area=AREA, status="fixed",
-    notes="Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); legacy "
-          "truncated non-integer n")
+    notes="Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); "
+          "Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n")
 def _partition(a, n, d=None):
     items = list_arg(a, "Partition")
+    if isinstance(n, Expr) and n.head == "UpTo" and len(n.args) == 1:
+        k = pos_int(n.args[0], "Partition", "block size")
+        step = k if d is None else pos_int(d, "Partition", "offset")
+        out = []
+        for i in range(0, len(items), step):
+            out.append(L(*items[i:i + k]))
+            if i + k >= len(items):
+                break
+        return L(*out)
     k = pos_int(n, "Partition", "block size")
     step = k if d is None else pos_int(d, "Partition", "offset")
     return L(*(L(*items[i:i + k]) for i in range(0, len(items) - k + 1, step)))
@@ -196,28 +235,68 @@ def _differences(a, n=1):
 
 
 @fn("GroupBy", area=AREA, status="fixed",
-    notes="legacy ignored the function and grouped equal values; now GroupBy[list, f] -> Association[k -> {...}] "
-          "keyed by f[elem] in order of first appearance (Association is an inert head in MikoshiLang)")
-def _groupby(a, f):
-    from ..evaluate import evaluate
-    items = list_arg(a, "GroupBy")
-    head = f.name if isinstance(f, Symbol) else f
-    keys, groups = [], []
-    for x in items:
-        k = evaluate(Expr(head, x))
-        for i, kk in enumerate(keys):
-            if _same(k, kk):
-                groups[i].append(x)
-                break
+    notes="legacy ignored the function and grouped equal values; now GroupBy[list, f] -> <|k -> {...}|> keyed by "
+          "f[elem] in order of first appearance; GroupBy[list, f -> g] maps g over each group's elements, "
+          "GroupBy[list, spec, red] applies red to each group, GroupBy[list, {f1, f2}] nests; associations group "
+          "their values")
+def _groupby(a, f, red=None):
+    from .wl_common import items_of, apply, classes
+    from ..kernel_lists import make_assoc
+    from ..kernel_lists import is_assoc, rule_value as _rv
+    from .wl_common import ev as _ev
+    rule_value = lambda r: _rv(r, _ev)  # noqa: E731
+    fs = list(f.args) if is_list(f) else [f]
+    if is_assoc(a):
+        # associations group their key -> value rules by f[value]; each group stays an association
+        def go_assoc(rules, fs):
+            g0 = fs[0]
+            if isinstance(g0, Expr) and g0.head in ("Rule", "RuleDelayed") and len(g0.args) == 2:
+                kf, vf = g0.args
+            else:
+                kf, vf = g0, None
+            keys, groups = classes(rules, keyf=lambda r: apply(kf, rule_value(r)))
+            out = []
+            for k, g in zip(keys, groups):
+                g = [Expr("Rule", r.args[0], apply(vf, rule_value(r)) if vf is not None else rule_value(r))
+                     for r in g]
+                v = go_assoc(g, fs[1:]) if len(fs) > 1 else make_assoc([(r.args[0], r.args[1]) for r in g])
+                if red is not None and len(fs) == 1:
+                    v = apply(red, v)
+                out.append((k, v))
+            return make_assoc(out)
+        return go_assoc(list(a.args), fs)
+    items = items_of(a, "GroupBy")
+
+    def go(xs, fs):
+        g0 = fs[0]
+        if isinstance(g0, Expr) and g0.head in ("Rule", "RuleDelayed") and len(g0.args) == 2:
+            kf, vf = g0.args
         else:
-            keys.append(k)
-            groups.append([x])
-    return Expr("Association", *(Expr("Rule", k, L(*g)) for k, g in zip(keys, groups)))
+            kf, vf = g0, None
+        keys, groups = classes(xs, keyf=lambda e: apply(kf, e))
+        out = []
+        for k, g in zip(keys, groups):
+            vals = [apply(vf, e) for e in g] if vf is not None else g
+            if len(fs) > 1:
+                v = go(g if vf is None else vals, fs[1:])
+            else:
+                v = L(*vals)
+                if red is not None:
+                    v = apply(red, v)
+            out.append((k, v))
+        return make_assoc(out)
+    return go(items, fs)
 
 
-@fn("Tally", area=AREA, status="promoted", notes="{{elem, count}, ...} in order of first appearance (SameQ)")
-def _tally(a):
+@fn("Tally", area=AREA, status="promoted",
+    notes="{{elem, count}, ...} in order of first appearance (SameQ); Tally[list, test] uses the first "
+          "representative of each class")
+def _tally(a, test=None):
     items = list_arg(a, "Tally")
+    if test is not None:
+        from .wl_common import classes
+        keys, groups = classes(items, test=test)
+        return L(*(L(k, len(g)) for k, g in zip(keys, groups)))
     keys, counts = [], []
     for x in items:
         for i, k in enumerate(keys):

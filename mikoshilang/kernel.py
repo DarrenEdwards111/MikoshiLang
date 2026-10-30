@@ -557,6 +557,12 @@ def replace_slots(body, args):
     """Substitute #n and ##n in a pure-function body (stops at nested Function)."""
     if isinstance(body, Expr):
         if body.head == "Slot" and len(body.args) == 1:
+            if isinstance(body.args[0], str):          # #name -> #1["name"]
+                if not args:
+                    raise ValueError(f"Function: slot #{body.args[0]} requested but no argument given")
+                if isinstance(args[0], Expr):
+                    return Expr(args[0], body.args[0])
+                raise ValueError(f"Function: #{body.args[0]} needs an association argument, got {args[0]!r}")
             i = int(body.args[0])
             if i > len(args):
                 raise ValueError(f"Function: slot #{i} requested but only {len(args)} argument(s) given")
@@ -1008,6 +1014,14 @@ def _assign(lhs, rhs, ev):
             return
         if isinstance(lhs.head, str) and lhs.head in ("Pattern", "Condition"):
             raise ValueError("Cannot assign to a pattern")
+        if (isinstance(lhs.head, str) and len(lhs.args) == 1 and lhs.head in st.own
+                and isinstance(st.own[lhs.head], Expr) and st.own[lhs.head].head == "Association"):
+            # assoc[key] = value updates the association stored in the symbol (Wolfram semantics)
+            from .kernel_lists import make_assoc
+            key = ev(lhs.args[0])
+            st.own[lhs.head] = make_assoc(list(st.own[lhs.head].args) + [Expr("Rule", key, rhs)])
+            st.note_write(lhs.head, rhs)
+            return
         head = lhs.head
         if not isinstance(head, str) and not isinstance(head, Expr):
             raise ValueError("Invalid assignment target")
@@ -2740,8 +2754,18 @@ _REL = {"Equal": sp.Eq, "Unequal": sp.Ne, "Less": sp.Lt, "Greater": sp.Gt,
 
 
 def _compare(a, ev, expr):
-    if len(a) != 2:
-        raise ValueError("Comparison expects two arguments")
+    if len(a) < 2:
+        return True                       # Wolfram: Equal[x] and Less[] etc. are True
+    if len(a) > 2:
+        # Equal[a, b, c] / Less[a, b, c] chain adjacent pairs; Unequal[a, b, c] needs all pairs distinct
+        pairs = ([(a[i], a[j]) for i in range(len(a)) for j in range(i + 1, len(a))] if expr.head == "Unequal"
+                 else list(zip(a, a[1:])))
+        vals = [ev(Expr(expr.head, x, y)) for x, y in pairs]
+        if any(v is False for v in vals):
+            return False
+        if all(v is True for v in vals):
+            return True
+        return expr
     if expr.head in ("Equal", "Unequal"):
         r = _b_equal(a, ev, expr)
         if r is not UNHANDLED:
@@ -2777,3 +2801,7 @@ def _b_together(a, ev, expr):
 def _b_cancel(a, ev, expr):
     _need(a, 1, "Cancel")
     return from_sp(sp.cancel(to_sp(a[0])))
+
+
+# Wolfram level / sequence specifications, associations and operator forms (replaces several builtins above).
+from . import kernel_lists  # noqa: E402,F401

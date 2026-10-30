@@ -263,12 +263,22 @@ def _evaluate(expr, depth: int) -> Any:
         except kernel.ReturnSignal as r:
             return r.value
 
-    # 8. Kernel built-ins
+    # 8. Kernel built-ins (an operator form such as Select[crit] stays unevaluated until applied)
+    from .kernel_lists import OPERATOR_FORMS
+    op = OPERATOR_FORMS.get(head) if isinstance(head, str) else None
+    if op is not None and len(new_args) == op[0]:
+        return new_expr
     r = kernel.apply_builtin(new_expr, ev)
     if r is not kernel.UNHANDLED:
         return r
 
     if not isinstance(head, str):
+        # 8b. Associations as functions, Key[k][assoc], compositions and operator forms (Select[crit][list])
+        if isinstance(head, Expr) and isinstance(head.head, str):
+            from .kernel_lists import apply_compound_head
+            r = apply_compound_head(head, new_args, ev)
+            if r is not kernel.UNHANDLED:
+                return r
         return new_expr
 
     # 9. Reviewed function library
