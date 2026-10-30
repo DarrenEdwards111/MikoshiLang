@@ -67,7 +67,7 @@ CASES = [
     ("Hypergeometric1F1[0.5, 1.5, -2.]", mp.hyp1f1(0.5, 1.5, -2)),
     ("Hypergeometric2F1[1, 1, 2, 0.5]", mp.hyp2f1(1, 1, 2, 0.5)), ("Hypergeometric2F1[0.5, 0.5, 1.5, 0.25]", mp.hyp2f1(0.5, 0.5, 1.5, 0.25)),
     ("Hypergeometric2F1[1, 1, 2, -1/2]", mp.hyp2f1(1, 1, 2, -0.5)),
-    ("LegendreQ[0, 0.5]", mp.legenq(0, 0, 0.5)), ("LegendreQ[2, 0.3]", mp.legenq(2, 0, 0.3)), ("LegendreQ[1, x]", "x ArcTanh[x] - 1"),
+    ("LegendreQ[0, 0.5]", mp.legenq(0, 0, 0.5)), ("LegendreQ[2, 0.3]", mp.legenq(2, 0, 0.3)), ("LegendreQ[1, x]", "x (Log[1 + x] - Log[1 - x])/2 - 1"),
     ("LambertW[1.]", mp.lambertw(1)), ("LambertW[0]", "0"), ("LambertW[E]", "1"),
     ("ProductLog[1.]", mp.lambertw(1)), ("ProductLog[-1, -0.2]", mp.lambertw(-0.2, -1)), ("ProductLog[2.5]", mp.lambertw(2.5)),
     ("StruveH[0, 1.]", mp.struveh(0, 1)), ("StruveH[1, 2.5]", mp.struveh(1, 2.5)), ("StruveH[2, 0.5]", mp.struveh(2, 0.5)),

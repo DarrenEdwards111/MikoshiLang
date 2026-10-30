@@ -9,7 +9,7 @@ import mpmath as mp
 import pytest
 import sympy as sp
 
-from _harness import Pred, Raises, check, ids
+from _harness import Pred, Raises, check, ids, to_complex
 
 mp.mp.dps = 50
 
@@ -31,8 +31,7 @@ def HP(ref, digits, what=None):
 
 
 def Near(want, tol=1e-12):
-    return Pred(lambda g: abs(complex(sp.N(sp.sympify(g) if not isinstance(g, (int, float, complex)) else g))
-                              - complex(want)) <= tol * max(1, abs(complex(want))), f"~{want}")
+    return Pred(lambda g: abs(to_complex(g) - complex(want)) <= tol * max(1, abs(complex(want))), f"~{want}")
 
 
 PI_RATIONALIZE_UNION = ("{3, 201/64, 267/85, 311/99, 333/106, 55358/17621, 72043/22932, 85533/27226, 94053/29938, "
@@ -162,7 +161,182 @@ NUMERICS = [
     ("Im[2]", "0"), ("Im[2.5 - 1.5 I]", -1.5), ("Im[Exp[I Pi/3]]", "Sqrt[3]/2"),
 ]
 
-CASES = NUMERICS
+f = mp.mpf
+JAC = {"SN": "sn", "CN": "cn", "DN": "dn", "SC": "sc", "SD": "sd", "CD": "cd", "CS": "cs", "DS": "ds", "DC": "dc",
+       "NS": "ns", "NC": "nc", "ND": "nd"}
+JAC_M0 = {"SN": "Sin[u]", "CN": "Cos[u]", "DN": "1", "SC": "Tan[u]", "SD": "Sin[u]", "CD": "Cos[u]", "CS": "Cot[u]",
+          "DS": "Csc[u]", "DC": "Sec[u]", "NS": "Csc[u]", "NC": "Sec[u]", "ND": "1"}
+JAC_U0 = {"SN": "0", "CN": "1", "DN": "1", "SC": "0", "SD": "0", "CD": "1", "DC": "1", "NC": "1", "ND": "1"}
+
+
+def _jac_cases():
+    out = []
+    for k, e in JAC.items():
+        out.append((f"N[Jacobi{k}[7/10, 3/10], 30]", HP(lambda e=e: mp.ellipfun(e, f(7) / 10, m=f(3) / 10), 30)))
+        out.append((f"Jacobi{k}[u, 0]", JAC_M0[k]))
+        if k in JAC_U0:
+            out.append((f"Jacobi{k}[0, m]", JAC_U0[k]))
+        else:
+            out.append((f"Jacobi{k}[0.3, 1.5]", Near(complex(mp.ellipfun(e, 0.3, m=1.5)), 1e-10)))
+    return out
+
+
+def _invjac_cases():
+    out = []
+    for k, e in [("SN", "sn"), ("CN", "cn"), ("DN", "dn"), ("SC", "sc"), ("CS", "cs"), ("NS", "ns"), ("NC", "nc"),
+                 ("SD", "sd"), ("CD", "cd")]:
+        v = {"DN": f("0.9"), "NS": f(2), "NC": f(2), "CS": f(3)}.get(k, f("0.4"))
+        vs = str(v)
+        out.append((f"Jacobi{k}[InverseJacobi{k}[{vs}, 0.3], 0.3]", Near(complex(v), 1e-10)))
+        out.append((f"N[Jacobi{k}[InverseJacobi{k}[{vs}`30, 3/10], 3/10], 25]", HP(v, 25)))
+        out.append((f"InverseJacobi{k}[{vs}, 0.3] > 0", True))
+    return out
+
+
+SPECIAL = [
+    # GammaRegularized
+    ("GammaRegularized[2, 0]", "1"), ("GammaRegularized[a, Infinity]", "0"), ("GammaRegularized[a, 0]", "1"),
+    ("GammaRegularized[3, 2]", "5 E^-2"),
+    ("N[GammaRegularized[1/3, 2], 30]", HP(lambda: mp.gammainc(f(1) / 3, 2, regularized=True), 30)),
+    ("GammaRegularized[2.5, 1., 3.]", Near(complex(mp.gammainc(2.5, 1, 3, regularized=True)))),
+    # incomplete Beta / BetaRegularized
+    ("Beta[1/2, 2, 3]", "11/192"), ("N[Beta[3/10, 5/2, 3/2], 30]", HP(lambda: mp.betainc(f(5) / 2, f(3) / 2, 0, f(3) / 10), 30)), ("MachineNumberQ[N[Beta[0.3`30, 2.5, 1.5], 30]]", True), ("Precision[N[Beta[0.3`20, 5/2, 3/2], 30]]", "20."),
+    ("Beta[0.2, 0.7, 2, 3]", Near(complex(mp.betainc(2, 3, 0.2, 0.7)))), ("Beta[1, 2, 3]", "1/12"),
+    ("BetaRegularized[1/2, 2, 3]", "11/16"), ("BetaRegularized[1, 2, 3]", "1"), ("BetaRegularized[0, 2, 3]", "0"),
+    ("N[BetaRegularized[1/3, 1/2, 5/2], 30]", HP(lambda: mp.betainc(f(1) / 2, f(5) / 2, 0, f(1) / 3, regularized=True), 30)),
+    ("BetaRegularized[0.1, 0.4, 2, 3]", Near(complex(mp.betainc(2, 3, 0.1, 0.4, regularized=True)))),
+    # Erf[z0, z1], InverseErf, InverseErfc
+    ("Erf[0, x]", "Erf[x]"), ("Erf[1., 2.]", Near(complex(mp.erf(2) - mp.erf(1)))),
+    ("N[Erf[1/2, 3/2], 30]", HP(lambda: mp.erf(f(3) / 2) - mp.erf(f(1) / 2), 30)),
+    ("InverseErf[0]", "0"), ("InverseErf[1]", "Infinity"), ("InverseErf[-1]", "-Infinity"),
+    ("InverseErf[0.5]", Near(0.4769362762044699)), ("N[InverseErf[3/10], 30]", HP(lambda: mp.erfinv(f(3) / 10), 30)),
+    ("Erf[InverseErf[0.999999]]", Near(0.999999, 1e-12)), ("InverseErf[2.]", Raises()),
+    ("InverseErfc[1]", "0"), ("InverseErfc[0]", "Infinity"), ("InverseErfc[2]", "-Infinity"),
+    ("InverseErfc[0.3]", Near(complex(mp.erfinv(0.7)))), ("Erfc[InverseErfc[1.*^-20]]", Near(1e-20, 1e-10)),
+    ("N[InverseErfc[1/10], 30]", HP(lambda: mp.erfinv(1 - f(1) / 10), 30)),
+    # hyperbolic and Fresnel integrals
+    ("SinhIntegral[0]", "0"), ("SinhIntegral[1.]", Near(complex(mp.shi(1)))), ("SinhIntegral[-x]", "-SinhIntegral[x]"),
+    ("N[SinhIntegral[2], 30]", HP(lambda: mp.shi(2), 30)),
+    ("CoshIntegral[0]", "-Infinity"), ("CoshIntegral[1.]", Near(complex(mp.chi(1)))),
+    ("N[CoshIntegral[3], 30]", HP(lambda: mp.chi(3), 30)), ("CoshIntegral[-1.]", Near(complex(mp.chi(-1)))),
+    ("FresnelS[0]", "0"), ("FresnelS[Infinity]", "1/2"), ("FresnelS[1.]", Near(complex(mp.fresnels(1)))),
+    ("N[FresnelS[3/2], 30]", HP(lambda: mp.fresnels(f(3) / 2), 30)),
+    ("FresnelC[0]", "0"), ("FresnelC[Infinity]", "1/2"), ("FresnelC[1.]", Near(complex(mp.fresnelc(1)))),
+    ("N[FresnelC[3/2], 30]", HP(lambda: mp.fresnelc(f(3) / 2), 30)),
+    # spherical Bessel / Hankel, Airy derivatives
+    ("SphericalBesselY[0, x]", "-Cos[x]/x"), ("SphericalBesselY[1, 2.]", Near(complex(-mp.cos(2) / 4 - mp.sin(2) / 2))),
+    ("N[SphericalBesselY[2, 3], 30]", HP(lambda: mp.sqrt(mp.pi / 6) * mp.bessely(f(5) / 2, 3), 30)),
+    ("SphericalHankelH1[0, x]", "-I E^(I x)/x"), ("SphericalHankelH1[1, 2.]",
+     Near(complex(mp.sqrt(mp.pi / 4) * mp.hankel1(1.5, 2)))),
+    ("N[SphericalHankelH1[2, 1/2], 20]", Near(complex(mp.sqrt(mp.pi) * mp.hankel1(2.5, 0.5)), 1e-15)),
+    ("SphericalHankelH2[0, x]", "I E^(-I x)/x"), ("SphericalHankelH2[1, 2.]",
+     Near(complex(mp.sqrt(mp.pi / 4) * mp.hankel2(1.5, 2)))),
+    ("N[SphericalHankelH2[2, 1/2], 20]", Near(complex(mp.sqrt(mp.pi) * mp.hankel2(2.5, 0.5)), 1e-15)),
+    ("AiryAiPrime[0]", "-1/(3^(1/3) Gamma[1/3])"), ("AiryAiPrime[1.]", Near(complex(mp.airyai(1, derivative=1)))),
+    ("N[AiryAiPrime[-2], 30]", HP(lambda: mp.airyai(-2, derivative=1), 30)),
+    ("AiryBiPrime[0]", "3^(1/6)/Gamma[1/3]"), ("AiryBiPrime[1.]", Near(complex(mp.airybi(1, derivative=1)))),
+    ("N[AiryBiPrime[-2], 30]", HP(lambda: mp.airybi(-2, derivative=1), 30)),
+    # generalised incomplete Gamma
+    ("Gamma[2, 0, Infinity]", "1"), ("Gamma[1, 1, 2]", "E^-1 - E^-2"), ("Gamma[2.5, 1., 3.]", Near(complex(mp.gammainc(2.5, 1, 3)))),
+    # PolyLog
+    ("PolyLog[2, 1]", "Pi^2/6"), ("PolyLog[1, z]", "-Log[1 - z]"), ("PolyLog[0, z]", "z/(1 - z)"),
+    ("PolyLog[-1, z]", "z/(1 - z)^2"), ("PolyLog[2, 1/2]", "Pi^2/12 - Log[2]^2/2"), ("PolyLog[2, -1]", "-Pi^2/12"),
+    ("PolyLog[3, 1/2]", "(-2 Pi^2 Log[2] + 4 Log[2]^3 + 21 Zeta[3])/24"), ("PolyLog[2, .9]", Near(1.299714723004959)),
+    ("PolyLog[0, 6.]", Near(-1.2)), ("PolyLog[2, 3.]", Near(complex(mp.polylog(2, 3)))),
+    ("N[PolyLog[5/2, 1/3], 30]", HP(lambda: mp.polylog(f(5) / 2, f(1) / 3), 30)),
+    # Hurwitz zeta, Zeta[s, a] (Wolfram convention), LerchPhi, StieltjesGamma
+    ("Zeta[2, 1/2]", "Pi^2/2"), ("Zeta[2, 1]", "Pi^2/6"), ("N[Zeta[3, 1/3], 30]", HP(lambda: mp.zeta(3, f(1) / 3), 30)),
+    ("Zeta[2, -1.5]", Near(complex(mp.zeta(2, 0.5) + 1 / 2.25 + 4))),
+    ("HurwitzZeta[2, 1]", "Pi^2/6"), ("HurwitzZeta[3, 2.5]", Near(complex(mp.zeta(3, 2.5)))),
+    ("N[HurwitzZeta[3/2, 1/4], 30]", HP(lambda: mp.zeta(f(3) / 2, f(1) / 4), 30)),
+    ("LerchPhi[2, 3, -1.5]", Near(51.9819 - 2.1346j, 1e-5)), ("LerchPhi[7., 1, 2]",
+     Near(-0.179424 - 0.0641141j, 1e-5)), ("LerchPhi[0.7, 1, 2]", Near(complex(mp.lerchphi(0.7, 1, 2)))),
+    ("LerchPhi[49., 0, 2]", Near(-1 / 48)), ("LerchPhi[0.5, 2, -2.5]", Near(complex(mp.mpf(0.5) ** 3 / 0.25 * 0 + sum(0.5 ** k / ((k - 2.5) ** 2) for k in range(3)) + 0.5 ** 3 * mp.lerchphi(0.5, 2, 0.5)))),
+    ("N[LerchPhi[1/2, 2, 1/3], 30]", HP(lambda: mp.lerchphi(f(1) / 2, 2, f(1) / 3), 30)),
+    ("HurwitzLerchPhi[0.5, 2, 1.5]", Near(complex(mp.lerchphi(0.5, 2, 1.5)))), ("HurwitzLerchPhi[-0.5, 1, 2]", Near(complex(mp.lerchphi(-0.5, 1, 2)))),
+    ("N[HurwitzLerchPhi[1/3, 3, 2], 30]", HP(lambda: mp.lerchphi(f(1) / 3, 3, 2), 30)),
+    ("StieltjesGamma[0]", "EulerGamma"), ("StieltjesGamma[1.]", Near(complex(mp.stieltjes(1)))),
+    ("N[StieltjesGamma[2], 30]", HP(lambda: mp.stieltjes(2), 30)), ("StieltjesGamma[0, 1/2]", "EulerGamma + 2 Log[2]"),
+    ("StieltjesGamma[1, 0.5]", Near(complex(mp.stieltjes(1, 0.5)))),
+    # Tricomi U, generalised and regularised hypergeometric functions, MeijerG
+    ("HypergeometricU[3, 2, 1.]", Near(0.105479, 1e-5)), ("HypergeometricU[0, b, z]", "1"),
+    ("N[HypergeometricU[1/3, 2/3, 2], 30]", HP(f("0.73215920249551738412474815958614"), 30)),
+    ("HypergeometricU[3, 1.2, 3. I]", Near(complex(mp.hyperu(3, 1.2, 3j)))),
+    ("HypergeometricPFQ[{}, {}, z]", "E^z"), ("HypergeometricPFQ[{1, 1}, {2}, -z]", "Log[1 + z]/z"),
+    ("HypergeometricPFQ[{1, 2, 3}, {4, 5}, 0.5]", Near(complex(mp.hyp3f2(1, 2, 3, 4, 5, 0.5)))),
+    ("N[HypergeometricPFQ[{1/2, 1/3}, {1/4}, 1/5], 30]", HP(lambda: mp.hyp2f1(f(1) / 2, f(1) / 3, f(1) / 4, f(1) / 5), 30)),
+    ("HypergeometricPFQ[{-2, 1}, {3}, z]", "1 - 2 z/3 + z^2/6"),
+    ("HypergeometricPFQRegularized[{1}, {-1}, 0.5]", Near(complex(0.25 * mp.exp(0.5)))),
+    ("HypergeometricPFQRegularized[{1, 2}, {3, 4}, 0.3]", Near(complex(mp.hyper([1, 2], [3, 4], 0.3) / 12))),
+    ("HypergeometricPFQRegularized[{1}, {1/2}, 0]", "1/Sqrt[Pi]"),
+    ("Hypergeometric0F1Regularized[1/2, 0.4]", Near(complex(mp.hyp0f1(0.5, 0.4) / mp.gamma(0.5)))),
+    ("Hypergeometric0F1Regularized[-1, 1.]", Near(complex(mp.besseli(2, 2)))),
+    ("N[Hypergeometric0F1Regularized[3, 2], 30]", HP(lambda: mp.hyp0f1(3, 2) / 2, 30)),
+    ("Hypergeometric1F1Regularized[1, 2, 0.5]", Near(complex(mp.hyp1f1(1, 2, 0.5)))),
+    ("Hypergeometric1F1Regularized[2, -1, 0.5]", Near(complex(0.75 * mp.hyp1f1(4, 3, 0.5)))),
+    ("N[Hypergeometric1F1Regularized[1/3, 3/2, 2], 30]", HP(lambda: mp.hyp1f1(f(1) / 3, f(3) / 2, 2) / mp.gamma(f(3) / 2), 30)),
+    ("Hypergeometric2F1Regularized[1, 2, 3, 0.5]", Near(complex(mp.hyp2f1(1, 2, 3, 0.5) / 2))),
+    ("Hypergeometric2F1Regularized[1, 2, -1, 0.25]",
+     Near(complex(1 * 2 * 2 * 3 * 0.25 ** 2 / 2 * mp.hyp2f1(3, 4, 3, 0.25)))),
+    ("N[Hypergeometric2F1Regularized[1/2, 1/3, 5/2, 1/4], 30]",
+     HP(lambda: mp.hyp2f1(f(1) / 2, f(1) / 3, f(5) / 2, f(1) / 4) / mp.gamma(f(5) / 2), 30)),
+    ("N[MeijerG[{{}, {2}}, {{1/2, 3/2}, {}}, 3], 30]", HP(f("0.041591159875396983670330390749778758626529715159039"), 30)),
+    ("MeijerG[{{1}, {2}}, {{2.3, 1.5}, {4}}, 3]", Near(-1.82257421144959, 1e-10)),
+    ("MeijerG[{{}, {}}, {{0}, {}}, 2.]", Near(complex(mp.exp(-2)))),
+    # BarnesG, Pochhammer, FactorialPower
+    ("BarnesG[10]", "5056584744960000"), ("BarnesG[3]", "1"), ("BarnesG[0]", "0"), ("BarnesG[-2]", "0"),
+    ("BarnesG[0.5]", Near(0.603244281209446)), ("N[BarnesG[1/7], 20]", HP(f("0.15978438500356974041"), 19)),
+    ("Pochhammer[a, 0]", "1"), ("Pochhammer[2, 3]", "24"), ("Pochhammer[x, 3]", "x (1 + x) (2 + x)"),
+    ("Pochhammer[1/2, -1]", "-2"), ("Pochhammer[2.5, 1.5]", Near(complex(mp.rf(2.5, 1.5)))),
+    ("N[Pochhammer[1/3, 1/2], 30]", HP(lambda: mp.rf(f(1) / 3, f(1) / 2), 30)),
+    ("FactorialPower[5, 2]", "20"), ("FactorialPower[x, 3]", "FactorialPower[x, 3]"), ("FactorialPower[10, 3, 2]", "480"),
+    ("FactorialPower[5.5, 2.5]", Near(complex(mp.gamma(6.5) / mp.gamma(4)))), ("FactorialPower[5, 0]", "1"),
+    # Weierstrass elliptic functions
+    ("WeierstrassPPrime[0.4, {1, 2}]^2 - (4 WeierstrassP[0.4, {1, 2}]^3 - WeierstrassP[0.4, {1, 2}] - 2) // Chop", "0"),
+    ("Chop[WeierstrassPPrime[0.7, {2, -1}]^2 - (4 WeierstrassP[0.7, {2, -1}]^3 - 2 WeierstrassP[0.7, {2, -1}] + 1), 10^-9]", "0"),
+    ("Abs[WeierstrassP[0.01, {1, 2}] - 10^4] < 0.1", True), ("WeierstrassP[0.3, {0, 0}]", Raises()),
+    ("Abs[WeierstrassPPrime[0.01, {1, 2}] + 2*10^6] < 10", True),
+    ("WeierstrassPPrime[0.3, {0, 0}]", Raises()),
+] + _jac_cases() + _invjac_cases()
+
+NUMBER_THEORY = [
+    ("LucasL[3, x]", "x^3 + 3 x"), ("LucasL[0, x]", "2"), ("LucasL[5, 2]", "82"), ("LucasL[4, 1]", "7"),
+    ("HarmonicNumber[1/2]", "2 - 2 Log[2]"), ("HarmonicNumber[3/2]", "8/3 - 2 Log[2]"), ("HarmonicNumber[5]", "137/60"),
+    ("HarmonicNumber[3, 2]", "49/36"),
+    ("CatalanNumber[1/2]", "8/(3 Pi)"), ("CatalanNumber[4]", "14"), ("CatalanNumber[n]", "CatalanNumber[n]"),
+    ("PowerMod[3, 1/2, 11]", "5"), ("PowerMod[2, 1/2, 7]", "3"), ("PowerMod[3, 1/2, 7]", "PowerMod[3, 1/2, 7]"),
+    ("PowerMod[2, 3/2, 7]", "6"), ("PowerMod[3, -1, 7]", "5"),
+    ("MultiplicativeOrder[3, 7, {2, 6}]", "2"), ("MultiplicativeOrder[2, 7, {3}]", "MultiplicativeOrder[2, 7, {3}]"),
+    ("MultiplicativeOrder[10, 41, {1}]", "5"), ("MultiplicativeOrder[{2, 3}, 7]", "{3, 6}"),
+    ("PrimitiveRoot[7, 4]", "5"), ("PrimitiveRoot[23, 6]", "7"), ("PrimitiveRoot[8, 2]", "PrimitiveRoot[8, 2]"),
+    ("MangoldtLambda[8]", "Log[2]"), ("MangoldtLambda[6]", "0"), ("MangoldtLambda[1]", "0"), ("MangoldtLambda[49]", "Log[7]"),
+    ("MangoldtLambda[0]", Raises()),
+    ("LiouvilleLambda[12]", "-1"), ("LiouvilleLambda[30]", "-1"), ("LiouvilleLambda[1]", "1"), ("LiouvilleLambda[36]", "1"),
+    ("Table[LiouvilleLambda[n], {n, 10}]", "{1, -1, -1, 1, -1, 1, -1, -1, 1, 1}"),
+    ("DivisorSum[20, #^2 &]", "546"), ("DivisorSum[20, # &, # < 10 &]", "12"), ("DivisorSum[1, f]", "f[1]"),
+    ("DivisorSum[6, f]", "f[1] + f[2] + f[3] + f[6]"), ("DivisorSum[12, MoebiusMu]", "0"),
+    ("PrimeQ[RandomPrime[100]]", True), ("RandomPrime[{24, 28}]", Raises()), ("Length[RandomPrime[{10, 20}, 5]]", "5"),
+    ("Union[Table[RandomPrime[{2, 3}], {200}]]", "{2, 3}"), ("Dimensions[RandomPrime[50, {2, 3}]]", "{2, 3}"),
+    ("RandomPrime[{14, 16}]", Raises()),
+    # corrected special functions
+    ("ExpIntegralE[2, 0]", "1"), ("ExpIntegralE[3, 0]", "1/2"), ("ExpIntegralE[1, 0]", "ComplexInfinity"),
+    ("ExpIntegralE[1/2, 0]", "ComplexInfinity"), ("N[ExpIntegralE[1/2, 2], 30]", HP(lambda: mp.expint(f(1) / 2, 2), 30)),
+    ("CosIntegral[0]", "-Infinity"), ("CosIntegral[-1.]", Near(complex(mp.ci(1)) + 3.141592653589793j)),
+    ("N[CosIntegral[2], 30]", HP(lambda: mp.ci(2), 30)),
+    ("LaguerreL[1/2, 0.3]", Near(complex(mp.laguerre(0.5, 0, 0.3)))), ("LaguerreL[1/2, 2, 0.3]", Near(complex(mp.laguerre(0.5, 2, 0.3)))),
+    ("LaguerreL[3, x]", "1 - 3 x + 3 x^2/2 - x^3/6"), ("LaguerreL[2, a, x]", "1 + 3 a/2 + a^2/2 - 2 x + x^2/2 - a x"),
+    ("N[LaguerreL[1/3, 1/2, 2], 30]", HP(lambda: mp.laguerre(f(1) / 3, f(1) / 2, 2), 30)),
+    ("LegendreQ[0, 2.]", Near(0.5493061443340549 - 1.5707963267948966j)), ("LegendreQ[2, 0.5]", Near(-0.8186632680417568)),
+    ("LegendreQ[1, x]", "x (Log[1 + x] - Log[1 - x])/2 - 1"), ("LegendreQ[2, 1, 0.5]", Near(complex(mp.legenq(2, 1, 0.5, type=2)))),
+    ("LegendreQ[1, 1, 0.3]", Near(complex(mp.legenq(1, 1, 0.3, type=2)))), ("LegendreQ[1, 0, x]", "x (Log[1 + x] - Log[1 - x])/2 - 1"),
+    ("LegendreQ[0, 0, 3, 2.]", Near(0.5493061443340549)), ("LegendreQ[1, 1, 3, 2.5]", Near(complex(mp.legenq(1, 1, 2.5, type=3)))),
+    ("LegendreQ[1, 0, 5, x]", Raises()),
+    ("LegendreP[2, 1, 3, 2.]", Near(10.392304845413264)), ("LegendreP[2, 1, 2, 0.5]", Near(-1.299038105676658)),
+    ("LegendreP[2, 1, 7, x]", Raises()), ("LegendreP[1/2, 0.3]", Near(complex(mp.legenp(0.5, 0, 0.3)))),
+    ("LegendreP[2, 1, x]", "-3 x Sqrt[1 - x^2]"), ("LegendreP[3, x]", "-3 x/2 + 5 x^3/2"),
+]
+
+CASES = NUMERICS + SPECIAL + NUMBER_THEORY
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
