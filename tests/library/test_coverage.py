@@ -84,3 +84,19 @@ def test_quarantine_list_is_disjoint_from_reviewed_heads():
     names = names if isinstance(names, list) else list(names)
     overlap = [n for n in names if library.STATUS.get(n, (0, "quarantined"))[1] != "quarantined"]
     assert not overlap, f"reviewed heads still on the quarantine list: {overlap[:20]}"
+
+
+def test_every_quarantined_name_raises():
+    """Each remaining quarantined name must raise NotImplementedError, never return a value."""
+    from mikoshilang import Session
+    names = json.loads((pathlib.Path(library.__file__).parent.parent / "quarantined.json").read_text())
+    returned = []
+    for n in names:
+        try:
+            Session().evaluate(f"{n}[1]")
+            returned.append(n)
+        except NotImplementedError:
+            pass
+        except Exception as exc:  # any other exception is also not a silent answer, but should not happen
+            returned.append(f"{n}: {type(exc).__name__}")
+    assert not returned, f"quarantined names that did not raise NotImplementedError: {returned[:20]}"

@@ -53,6 +53,13 @@ CASES = [
     ("Total[{1, 2, 3}]", "6"), ("Total[{}]", "0"),
     ("Transpose[{{1, 2}, {3, 4}}]", "{{1, 3}, {2, 4}}"), ("Transpose[{{1, 2, 3}}]", "{{1}, {2}, {3}}"),
     ("Table[i^2, {i, 3}]", "{1, 4, 9}"), ("Table[x, 2]", "{x, x}"),
+    # kernel heads that were wrongly listed as quarantined
+    ("AtomQ[x]", True), ("AtomQ[{1}]", False), ("AtomQ[\"s\"]", True),
+    ("ListQ[{}]", True), ("ListQ[1]", False),
+    ("StringQ[\"a\"]", True), ("StringQ[1]", False),
+    ("ToString[1]", "\"1\""), ("ToString[x^2]", "\"x^2\""),
+    ("ReplaceAll[x + 1, x -> 2]", "3"), ("ReplaceAll[{x, y}, {x -> 1, y -> 2}]", "{1, 2}"),
+    ("Distance2D[{0, 0}, {3, 4}]", "5"), ("Distance2D[{0, 0}, {1, 1}]", "Sqrt[2]"), ("Distance2D[{1, 2}]", Raises()),
 ]
 
 
