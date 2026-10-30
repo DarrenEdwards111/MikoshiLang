@@ -931,3 +931,40 @@ for _n in ("StringExpression", "Shortest", "Longest", "RegularExpression", "Digi
            "EndOfString", "StartOfLine", "EndOfLine", "WordBoundary", "Whitespace", "NumberString", "IgnoreCase",
            "Overlaps"):
     record(_n, AREA, "added", "string pattern object / option interpreted by the batch-1 string functions")
+
+
+@fn("StringExtract", area=AREA, status="added",
+    notes="StringExtract[s, n] gives the n-th whitespace-separated piece (spans, lists and negative n allowed); "
+          "StringExtract[s, sep -> n] splits at sep")
+def _stringextract(s, spec):
+    st = _s(s, "StringExtract")
+    if _is_rule(spec):
+        pieces = ev(Expr("StringSplit", st, spec.args[0]))
+        spec = spec.args[1]
+    else:
+        pieces = ev(Expr("StringSplit", st))
+    return ev(Expr("Part", pieces, spec))
+
+
+@fn("StringReplaceList", area=AREA, status="added",
+    notes="every string obtained by replacing a single match of the rules (one result per match position and "
+          "rule, left to right); StringReplaceList[s, rules, n] keeps at most n")
+def _stringreplacelist(s, r, n=None):
+    def one(x):
+        st = _s(x, "StringReplaceList")
+        alts = _rules_and_patterns(r)
+        compiled = [(_rx(pt, st), rr) for pt, rr in alts]
+        if any(rr is None for _c, rr in compiled):
+            raise ValueError("StringReplaceList: expected rules")
+        out = []
+        for i in range(len(st)):
+            for (rx, ctx), rr in compiled:
+                m = rx.match(st, i)
+                if m and m.end() > m.start():
+                    v = _rhs(rr, m, ctx)
+                    out.append(st[:i] + v + st[m.end():] if isinstance(v, str)
+                               else Expr("StringExpression", st[:i], v, st[m.end():]))
+        if n is not None:
+            out = out[:nonneg_int(n, "StringReplaceList", "count")]
+        return L(*out)
+    return _strmap(s, one)

@@ -1075,7 +1075,7 @@ for _n in ("Select", "SelectFirst", "Cases", "DeleteCases", "Count", "Position",
            "Prepend", "Delete", "Extract", "StringReplace", "StringCases", "StringMatchQ", "StringContainsQ",
            "StringStartsQ", "StringEndsQ", "StringDelete", "StringFreeQ", "StringPosition",
            "KeyTake", "KeyDrop", "KeySelect", "KeySortBy", "Merge", "CountsBy", "MaximalBy", "MinimalBy",
-           "TakeLargest", "TakeSmallest", "DeleteDuplicatesBy", "AnyTrue", "AllTrue", "NoneTrue", "ContainsAll",
+           "TakeLargest", "TakeSmallest", "DeleteDuplicatesBy", "AnyTrue", "AllTrue", "NoneTrue", "AllMatch", "AnyMatch", "NoneMatch", "ContainsAll",
            "ContainsAny", "ContainsNone", "ContainsOnly", "ContainsExactly", "KeyExistsQ", "KeyMemberQ", "KeyFreeQ",
            "Lookup", "SequenceReplace", "Between"):
     operator_form(_n, 1, "first")          # f[op][x] -> f[x, op]
@@ -1110,6 +1110,8 @@ def apply_compound_head(head, args, ev):
         if is_list(x) and all(is_rule(r) for r in x.args):
             return assoc_lookup(make_assoc(x.args), head.args[0], ev)
         return K.UNHANDLED
+    if h == "ReverseApplied" and len(head.args) == 1:
+        return ev(call(head.args[0], *reversed(args)))
     if h == "Composition":
         if not head.args:
             return args[0] if len(args) == 1 else Expr("Sequence", *args)

@@ -491,6 +491,42 @@ EXTRA = [
     ("StringMatchQ[\"3.14\", NumberString]", True), ("StringMatchQ[\"3.1.4\", NumberString]", False),
 ]
 
+# Part 2: outputs checked against the reference-page example outputs
+PART2 = [
+    ("AllMatch[{x^2, x^3, x^5, x^6}, x^_]", True), ("AllMatch[{x^2, y^3}, x^_]", False), ("AllMatch[_Integer][{1, 2}]", True),
+    ("AnyMatch[{a, 1}, _Integer]", True), ("AnyMatch[{a, b}, _Integer]", False), ("AnyMatch[_Integer][{a, 1}]", True),
+    ("NoneMatch[{a, b}, _Integer]", True), ("NoneMatch[{a, 1}, _Integer]", False), ("NoneMatch[{}, _]", True),
+    ("Comap[{f, g, h}, x]", "{f[x], g[x], h[x]}"), ("Comap[{Sin, Cos, Tan}, Pi/3]", "{Sqrt[3]/2, 1/2, Sqrt[3]}"),
+    ("Comap[<|a -> f, b -> g|>, x]", "<|a -> f[x], b -> g[x]|>"),
+    ("ComapApply[{f, g, h}, {1, 2}]", "{f[1, 2], g[1, 2], h[1, 2]}"), ("ComapApply[<|a -> f|>, {x, y}]", "<|a -> f[x, y]|>"),
+    ("ComapApply[{Plus, Times}, {2, 3}]", "{5, 6}"),
+    ("FoldPairList[{p[#1, #2], q[#1, #2]} &, u, {1, 2, 3}]", "{p[u, 1], p[q[u, 1], 2], p[q[q[u, 1], 2], 3]}"),
+    ("FoldPairList[{p[#1, #2], q[#1, #2]} &, u, {1, 2}, g]", "{g[{p[u, 1], q[u, 1]}], g[{p[q[u, 1], 2], q[q[u, 1], 2]}]}"),
+    ("FoldPairList[{p[#1, #2], q[#1, #2]} &, {a, b, c}]", "{p[a, b], p[q[a, b], c]}"),
+    ("FoldPairList[TakeDrop, {a, b, c, d, e, f}, {1, 3, 2}]", "{{a}, {b, c, d}, {e, f}}"),
+    ("FoldPair[{p[#1, #2], q[#1, #2]} &, u, {1, 2, 3}]", "p[q[q[u, 1], 2], 3]"),
+    ("FoldPair[{p[#1, #2], q[#1, #2]} &, u, {1, 2, 3}, Last]", "q[q[q[u, 1], 2], 3]"),
+    ("FoldPair[TakeDrop, {a, b, c, d, e, f}, {1, 3, 2}]", "{e, f}"),
+    ("ReverseApplied[f][a, b, c]", "f[c, b, a]"), ("ReverseApplied[List][1, 2]", "{2, 1}"), ("ReverseApplied[Subtract][1, 3]", "2"),
+    ("LexicographicSort[{{c, d}, {a, b, c, d}}]", "{{a, b, c, d}, {c, d}}"),
+    ("LexicographicSort[{{b, c}, {a, b, c}, {b, b, a}}]", "{{a, b, c}, {b, b, a}, {b, c}}"),
+    ("LexicographicSort[{h[b, c], h[a, b, c], h[b, b, a]}]", "{h[a, b, c], h[b, b, a], h[b, c]}"),
+    ("LexicographicSort[{{1, 2}, {1}}]", "{{1}, {1, 2}}"),
+    ("LeafCount[1 + a + b^2]", "6"), ("LeafCount[{f[][x], g[y][x], h[g[y]][x]}]", "10"),
+    ("LeafCount[{f[][x], g[y][x], h[g[y]][x]}, Heads -> False]", "3"), ("LeafCount[1/2]", "3"), ("LeafCount[x]", "1"),
+    ("IntegerLength[12345]", "5"), ("IntegerLength[0]", "0"), ("IntegerLength[255, 16]", "2"), ("IntegerLength[-100]", "3"),
+    ("IntegerReverse[123456]", "654321"), ("IntegerReverse[2015, 2]", "2015"), ("IntegerReverse[1234, 10, 6]", "432100"),
+    ("IntegerReverse[1234]", "4321"),
+    ("StringExtract[\"a bbb  cccc aa   d\", 2]", S("bbb")), ("StringExtract[\"a bbb  cccc aa   d\", 2 ;; 4]", SL(["bbb", "cccc", "aa"])),
+    ("StringExtract[\"a--bbb--ccc--dddd\", \"--\" -> 3]", S("ccc")), ("StringExtract[\"a bbb  cccc aa   d\", -1]", S("d")),
+    ("StringExtract[\"a bbb  cccc aa   d\", {1, 3}]", SL(["a", "cccc"])),
+    ("StringReplaceList[\"cccc\", \"c\" -> \"XYX\"]", SL(["XYXccc", "cXYXcc", "ccXYXc", "cccXYX"])),
+    ("StringReplaceList[\"abcdeabacde\", {\"abc\" -> \"X\", \"cde\" -> \"Y\"}]", SL(["Xdeabacde", "abYabacde", "abcdeabaY"])),
+    ("StringReplaceList[\"abcd acbd\", RegularExpression[\"[ab]\"] -> \"XX\"]",
+     SL(["XXbcd acbd", "aXXcd acbd", "abcd XXcbd", "abcd acXXd"])),
+    ("BinCounts[{1, 3, 2, 1, 4, 5, 6, 2}, {{-Infinity, 2, 5, 7, Infinity}}]", "{2, 4, 2, 0}"),
+]
+
 # ---------------------------------------------------------------- independent cross-checks
 def _xcheck_cases():
     out = []
@@ -517,13 +553,13 @@ def _xcheck_cases():
         out.append((f"IntegerString[{n}, {b}]", S(digits)))
     xs = [3, 1, 4, 1, 5, 9, 2, 6]
     out.append((f"Ordering[{{{', '.join(map(str, xs))}}}]", "{" + ", ".join(str(i + 1) for i in sorted(range(len(xs)), key=lambda i: xs[i])) + "}"))
-    out.append(("Subsequences[Range[4], {{2}}]", "{" + ", ".join("{" + f"{i}, {i + 1}" + "}" for i in range(1, 4)) + "}"))
+    out.append(("Subsequences[Range[4], {2}]", "{" + ", ".join("{" + f"{i}, {i + 1}" + "}" for i in range(1, 4)) + "}"))
     return out
 
 
 XCHECK = _xcheck_cases()
 
-CASES = KERNEL + LISTS + STRINGS + ASSOC + EXTRA + XCHECK
+CASES = KERNEL + LISTS + STRINGS + ASSOC + EXTRA + PART2 + XCHECK
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))

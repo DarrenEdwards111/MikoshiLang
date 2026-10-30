@@ -1697,3 +1697,174 @@ for _n, _note in [("Composition", "f @* g; Composition[f, g][x] = f[g[x]]"),
                   ("RepeatedNull", "p... in sequences"),
                   ("Optional", "x_:d and x_. (Plus/Times/Power defaults)")]:
     record(_n, "language (batch 1)", "added", _note)
+
+
+# ---------------------------------------------------------------- batch 1, part 2
+def _matches_all(x, patt, fname):
+    items = items_of(x, fname)
+    return [K.first_match(patt, e, ev) is not None for e in items]
+
+
+@fn("AllMatch", **ADDED, notes="True if every element (or association value) matches the pattern; operator form")
+def _allmatch(x, patt):
+    return all(_matches_all(x, patt, "AllMatch"))
+
+
+@fn("AnyMatch", **ADDED, notes="True if some element matches the pattern; operator form")
+def _anymatch(x, patt):
+    return any(_matches_all(x, patt, "AnyMatch"))
+
+
+@fn("NoneMatch", **ADDED, notes="True if no element matches the pattern; operator form")
+def _nonematch(x, patt):
+    return not any(_matches_all(x, patt, "NoneMatch"))
+
+
+@fn("Comap", **ADDED, notes="Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys)")
+def _comap(fs, x):
+    if is_assoc(fs):
+        return Expr("Association", *(Expr("Rule", r.args[0], apply(KL.rule_value(r, ev), x)) for r in fs.args))
+    if not isinstance(fs, Expr) or KL.atomq(fs):
+        raise ValueError("Comap: the first argument must be a list or expression of functions")
+    return ev(Expr(fs.head, *(K.call(f, x) for f in fs.args)))
+
+
+@fn("ComapApply", **ADDED, notes="ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...}")
+def _comapapply(fs, xs):
+    args = items_of(xs, "ComapApply")
+    if is_assoc(fs):
+        return Expr("Association", *(Expr("Rule", r.args[0], apply(KL.rule_value(r, ev), *args)) for r in fs.args))
+    if not isinstance(fs, Expr) or KL.atomq(fs):
+        raise ValueError("ComapApply: the first argument must be a list or expression of functions")
+    return ev(Expr(fs.head, *(K.call(f, *args) for f in fs.args)))
+
+
+def _fold_pairs(f, args, fname):
+    if len(args) == 1:
+        items = items_of(args[0], fname)
+        if not items:
+            raise ValueError(f"{fname}: the list must not be empty when no initial value is given")
+        y, items = items[0], items[1:]
+    elif len(args) == 2:
+        y, items = args[0], items_of(args[1], fname)
+    else:
+        raise ValueError(f"{fname}: expected {fname}[f, y0, list] or {fname}[f, list]")
+    pairs = []
+    for x in items:
+        r = apply(f, y, x)
+        if not (is_list(r) and len(r.args) == 2):
+            raise ValueError(f"{fname}: f must return a pair {{output, new state}}, not {r!r}")
+        pairs.append(r)
+        y = r.args[1]
+    return pairs
+
+
+@fn("FoldPairList", **ADDED,
+    notes="FoldPairList[f, y0, {x1, ...}]: f[y, x] returns {output, new y}; the list of outputs; "
+          "FoldPairList[f, y0, list, g] gives g[{output, y}] instead; FoldPairList[f, list] starts from the first "
+          "element")
+def _foldpairlist(f, *args):
+    g = None
+    if len(args) == 3:
+        args, g = args[:2], args[2]
+    pairs = _fold_pairs(f, args, "FoldPairList")
+    return L(*(p.args[0] if g is None else apply(g, p) for p in pairs))
+
+
+@fn("FoldPair", **ADDED, notes="the last output of FoldPairList; FoldPair[f, y0, list, g] gives g[last pair]")
+def _foldpair(f, *args):
+    g = None
+    if len(args) == 3:
+        args, g = args[:2], args[2]
+    pairs = _fold_pairs(f, args, "FoldPair")
+    if not pairs:
+        raise ValueError("FoldPair: nothing to fold")
+    return pairs[-1].args[0] if g is None else apply(g, pairs[-1])
+
+
+@fn("ReverseApplied", **ADDED, notes="ReverseApplied[f][a, b, c] = f[c, b, a]")
+def _reverseapplied(*args):
+    raise Unevaluated()
+
+
+def _lex_key(e):
+    return tuple(canonical(x, "LexicographicSort") for x in e.args) if isinstance(e, Expr) else (canonical(e, "LexicographicSort"),)
+
+
+@fn("LexicographicSort", **ADDED,
+    notes="sorts expressions by comparing their elements in canonical order, a proper prefix first; "
+          "LexicographicSort[list, p] uses ordering function p on elements")
+def _lexsort(x, p=None):
+    items = items_of(x, "LexicographicSort")
+    if p is None:
+        return _rebuild(x, sorted(items, key=_lex_key))
+    import functools
+
+    def cmp(a, b):
+        xa, xb = list(a.args), list(b.args)
+        for u, v in zip(xa, xb):
+            if K.same(u, v):
+                continue
+            r = apply(p, u, v)
+            if r is True or r == 1:
+                return -1
+            if r is False or r == -1:
+                return 1
+        return len(xa) - len(xb)
+    return _rebuild(x, sorted(items, key=functools.cmp_to_key(cmp)))
+
+
+def _leafcount(e, heads=True):
+    from ..formatting import rational_value
+    if isinstance(e, complex) or (isinstance(e, Expr) and e.head == "Complex"):
+        return 3
+    if not isinstance(e, (int, bool)) and rational_value(e) is not None:
+        return 3                          # Rational[p, q]
+    if not isinstance(e, Expr):
+        return 1
+    h = _leafcount(Symbol(e.head) if isinstance(e.head, str) else e.head, heads) if heads else 0
+    return h + sum(_leafcount(a, heads) for a in e.args)
+
+
+@fn("LeafCount", **ADDED,
+    notes="number of atomic subexpressions including heads (Rational and Complex count as 3); Heads -> False "
+          "skips heads")
+def _leafcountf(e, *opts):
+    _, o = split_options(opts, {"Heads"}, "LeafCount")
+    heads = o.get("Heads", True)
+    return _leafcount(e, heads is not False)
+
+
+def _base_digits(n, b):
+    d = []
+    while n:
+        d.append(n % b)
+        n //= b
+    return d[::-1]
+
+
+@fn("IntegerLength", **ADDED, notes="number of base-b digits of |n| (default 10); IntegerLength[0] = 0; threads")
+def _integerlength(n, b=10):
+    if is_list(n):
+        return L(*(_integerlength(x, b) for x in n.args))
+    k = abs(int_value(n, "IntegerLength", "integer"))
+    base = int_value(b, "IntegerLength", "base", 2)
+    return len(_base_digits(k, base))
+
+
+@fn("IntegerReverse", **ADDED,
+    notes="the integer with the base-b digits of |n| reversed; IntegerReverse[n, b, len] pads to len digits "
+          "first; threads")
+def _integerreverse(n, b=10, length=None):
+    if is_list(n):
+        return L(*(_integerreverse(x, b, length) for x in n.args))
+    k = abs(int_value(n, "IntegerReverse", "integer"))
+    base = int_value(b, "IntegerReverse", "base", 2)
+    d = _base_digits(k, base)
+    if length is not None:
+        w = int_value(length, "IntegerReverse", "length", 0)
+        d = ([0] * max(0, w - len(d)) + d)[-w:] if w else []
+    v = 0
+    for x in reversed(d):
+        v = v * base + x
+    return v
