@@ -93,8 +93,57 @@ def _cuberoot(z):
     return numeric_out(sp.real_root(s, 3) if s.is_number else sp.cbrt(s), z)
 
 
-error("Root", AREA, "Wolfram's Root[f, k] denotes an algebraic number (the k-th root of a polynomial); "
-      "the legacy Root[a, n] = a^(1/n) had different semantics. Use Surd[a, n] or Power[a, 1/n].")
+@fn("Root", area=AREA, status="fixed",
+    notes="Wolfram Root[f, k]: the k-th root of the polynomial f[x] (f a pure function), ordered as Wolfram: real "
+          "roots ascending, then complex roots by real part, then |Im|, conjugate pairs adjacent (negative imaginary "
+          "part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has "
+          "the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay "
+          "Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. "
+          "Legacy Root[a, n] meant a^(1/n) (now Surd/Power)")
+def _root(f, k):
+    if not (isinstance(f, Expr) and f.head == "Function" and len(f.args) == 1):
+        raise ValueError("Root[f, k]: f must be a pure function such as #^3 - 2 &")
+    from ..math_ops import root_to_sympy, _ROOT_VAR as x
+    kk = sym(k, "Root")
+    if not (kk.is_Integer and kk >= 1):
+        raise ValueError("Root[f, k]: k must be a positive integer")
+    from ..kernel import replace_slots
+    body = sp.expand(sym(replace_slots(f.args[0], (Symbol(x.name),)), "Root"))
+    if body.free_symbols - {x}:
+        raise Unevaluated()
+    if not body.is_polynomial(x) or sp.degree(body, x) < 1:
+        raise ValueError("Root[f, k]: f[x] must be a non-constant polynomial in x")
+    n = int(sp.degree(body, x))
+    if kk > n:
+        raise ValueError(f"Root[f, k]: k = {kk} exceeds the degree {n}")
+    if body.has(sp.Float):
+        roots = sp.Poly(body, x).nroots(n=30)
+        roots = sorted(roots, key=lambda r: (0 if abs(sp.im(r)) < 1e-25 else 1, float(sp.re(r)), abs(float(sp.im(r))),
+                                             float(sp.im(r))))
+        r = roots[int(kk) - 1]
+        return R(sp.Float(sp.re(r), 15) if abs(sp.im(r)) < 1e-25 else sp.Float(sp.re(r), 15) + sp.I * sp.Float(sp.im(r), 15))
+    if any(not c.is_rational for c in sp.Poly(body, x).all_coeffs()):
+        raise Unevaluated()
+    from ..math_ops import wolfram_root_order, root_values
+    order0, vals0 = root_values(body, x)
+    tv = vals0[order0[int(kk) - 1]]
+    # find the irreducible factor containing the root and the root's (Wolfram) index within it
+    for fac, _mult in sp.factor_list(body, x)[1]:
+        m = int(sp.degree(fac, x))
+        order, vals = root_values(fac, x)
+        for j in range(m):
+            if abs(vals[order[j]] - tv) < 1e-12 * max(1.0, abs(tv)):
+                lead = sp.Poly(fac, x).LC()
+                fac = sp.expand(fac / lead) if lead < 0 else fac
+                terms = len(sp.Poly(fac, x).terms())
+                if m <= 2 or terms == 2:
+                    for rv in sp.roots(sp.Poly(fac, x), multiple=True):
+                        if abs(complex(sp.N(rv, 30)) - tv) < 1e-12 * max(1.0, abs(tv)):
+                            return R(sp.nsimplify(rv) if rv.is_Rational else sp.radsimp(rv))
+                from ..kernel import substitute
+                body_out = substitute(R(fac), {x.name: Expr("Slot", 1)})
+                return Expr("Root", Expr("Function", body_out), j + 1)
+    raise ArithmeticError("Root: could not isolate the requested root")
 
 
 @fn("Surd", area=AREA, status="promoted", listable=True, notes="real n-th root (Wolfram Surd)")

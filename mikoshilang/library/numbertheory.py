@@ -299,10 +299,13 @@ def _euler(n, x=None):
 fn("EulerNumber", area=AREA, status="verified", listable=True, notes="Euler numbers E_n (E_1 = 0, E_4 = 5)")(_euler)
 fn("EulerE", area=AREA, status="promoted", listable=True, notes="EulerE[n] and EulerE[n, x]")(_euler)
 
-error("Catalan", AREA, "in the Wolfram Language Catalan is Catalan's constant (0.9159...), not a function; "
-      "use CatalanNumber[n] for Catalan numbers.",
-      notes="legacy Catalan[n] gave Catalan numbers, conflicting with Wolfram's constant Catalan; now raises "
-            "and points to CatalanNumber")
+@fn("Catalan", area=AREA, status="fixed",
+    notes="Wolfram constant Catalan = 0.915965594177219... (SymPy Catalan; N[Catalan, n] to any precision, "
+          "Sum[(-1)^k/(2k+1)^2, {k, 0, Infinity}] -> Catalan); Catalan[...] used as a function raises ValueError "
+          "pointing to CatalanNumber; legacy Catalan[n] gave Catalan numbers")
+def _catalan_call(*args):
+    raise ValueError("Catalan is Catalan's constant (0.915965...), not a function; use CatalanNumber[n] for "
+                     "Catalan numbers")
 
 
 @fn("CatalanNumber", area=AREA, status="fixed", listable=True,
