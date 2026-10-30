@@ -42,10 +42,12 @@ class SessionState:
 
     def __init__(self):
         self.own: Dict[str, Any] = {}               # OwnValues: x = 5
-        self.exact: Dict[Any, tuple] = {}           # pattern-free DownValues: tag(lhs) -> (lhs, rhs)
-        self.down: Dict[str, List[tuple]] = {}      # pattern DownValues: key -> [(lhs, rhs, generality)]
+        self.exact: Dict[Any, tuple] = {}           # pattern-free DownValues/SubValues: tag(lhs) -> (lhs, rhs)
+        self.down: Dict[str, List[tuple]] = {}      # pattern DownValues/SubValues: key -> [(lhs, rhs, generality)]
         self.attrs: Dict[str, set] = {}             # user attributes
         self.counter = 0                            # Module variable counter
+        self.temporaries: set = set()               # live Module-local symbols (Wolfram's Temporary)
+        self.escape_seq = 0                         # bumped when a definition stores a reference to a temporary
 
     # Backwards compatible tuple-style access: state()[0] = values, state()[1] = definitions
     def __getitem__(self, index):
@@ -61,6 +63,89 @@ class SessionState:
         self.exact.clear()
         self.down.clear()
         self.attrs.clear()
+        self.temporaries.clear()
+
+    # ── whole-symbol snapshots (used by Block) ──
+
+    def snapshot(self, name: str):
+        """Remove and return every definition attached to ``name``.
+
+        Covers OwnValues, DownValues and SubValues (exact and pattern-based,
+        all stored under the innermost head) and attributes.
+        """
+        exact = {k: v for k, v in self.exact.items() if _def_key(v[0]) == name}
+        for k in exact:
+            del self.exact[k]
+        return (name in self.own, self.own.pop(name, None), exact,
+                self.down.pop(name, None), self.attrs.pop(name, None))
+
+    def restore(self, name: str, snap):
+        had_own, own, exact, down, attrs = snap
+        # Drop whatever was defined for name while it was localised ...
+        self.own.pop(name, None)
+        for k in [k for k, v in self.exact.items() if _def_key(v[0]) == name]:
+            del self.exact[k]
+        self.down.pop(name, None)
+        self.attrs.pop(name, None)
+        # ... and put the original definitions back exactly.
+        if had_own:
+            self.own[name] = own
+        self.exact.update(exact)
+        if down is not None:
+            self.down[name] = down
+        if attrs is not None:
+            self.attrs[name] = attrs
+
+    # ── Module temporaries ──
+
+    def note_write(self, owner: str, *content):
+        """Record that a definition for ``owner`` now refers to ``content``.
+
+        If that content mentions a live Module temporary (other than owner
+        itself), the temporary may have escaped its Module and must not be
+        cleared when the Module returns.
+        """
+        if not self.temporaries:
+            return
+        names: set = set()
+        for c in content:
+            symbol_names(c, names)
+        names.discard(owner)
+        if names & self.temporaries:
+            self.escape_seq += 1
+
+    def definitions_of(self, name: str):
+        """All stored expressions belonging to symbol ``name``."""
+        out = []
+        if name in self.own:
+            out.append(self.own[name])
+        for l, r in self.exact.values():
+            if _def_key(l) == name:
+                out.extend((l, r))
+        for l, r, _ in self.down.get(name, ()):
+            out.extend((l, r))
+        return out
+
+    def referenced_from_outside(self, names: set) -> set:
+        """Which of ``names`` are referenced by a definition of a symbol not in ``names``."""
+        found: set = set()
+
+        def scan(owner, *content):
+            if owner in names:
+                return
+            refs: set = set()
+            for c in content:
+                symbol_names(c, refs)
+            found.update(refs & names)
+
+        for k, v in self.own.items():
+            scan(k, v)
+        for l, r in self.exact.values():
+            scan(_def_key(l), l, r)
+        for k, defs in self.down.items():
+            for l, r, _ in defs:
+                scan(k, l, r)
+        return found
 
 
 _state: ContextVar[Optional[SessionState]] = ContextVar("mikoshilang_state", default=None)
@@ -261,35 +346,211 @@ def has_pattern(e) -> bool:
 
 
 # ─────────────────────────── substitution ───────────────────────────
+#
+# ``substitute`` is the single place where values are inserted into held code:
+# Function application, With, Module renaming, and the right-hand sides of
+# definitions and rules.  It follows Wolfram's lexical scoping rules:
+#
+# * a variable bound by an inner scoping construct (Function, Module, With,
+#   Block, or a pattern name on the left of Rule/RuleDelayed/Set/SetDelayed/
+#   Condition) shadows the outer one, so it is never replaced inside that
+#   construct;
+# * substitution is capture-avoiding: if a value being inserted mentions a
+#   symbol that an inner lexical construct binds, that inner variable is
+#   renamed to a fresh ``name$`` first (as Wolfram does), so
+#   ``Function[y, Function[x, x + y]][x]`` gives ``Function[x$, x$ + x]``.
+#
+# Block is dynamic, so its variables shadow but are never renamed: renaming
+# would change which global symbol the Block localises.
+
+_LEXICAL_SCOPES = ("Function", "Module", "With")
+_PATTERN_SCOPES = ("Rule", "RuleDelayed", "Set", "SetDelayed", "Condition", "UpSet", "UpSetDelayed")
+
+
+def symbol_names(t, out=None) -> set:
+    """Every symbol name (including string heads) occurring anywhere in t."""
+    if out is None:
+        out = set()
+    stack = [t]
+    while stack:
+        e = stack.pop()
+        if isinstance(e, Symbol):
+            out.add(e.name)
+        elif isinstance(e, Expr):
+            if isinstance(e.head, str):
+                out.add(e.head)
+            else:
+                stack.append(e.head)
+            stack.extend(e.args)
+        elif isinstance(e, tuple):
+            stack.extend(e)
+    return out
+
+
+def pattern_names(t) -> List[str]:
+    """Names bound by Pattern[name, ...] anywhere inside t (in order, no duplicates)."""
+    out: List[str] = []
+    stack = [t]
+    while stack:
+        e = stack.pop()
+        if isinstance(e, Expr):
+            if e.head == "Pattern" and len(e.args) == 2 and isinstance(e.args[0], Symbol):
+                if e.args[0].name not in out:
+                    out.append(e.args[0].name)
+            if isinstance(e.head, Expr):
+                stack.append(e.head)
+            stack.extend(reversed(e.args))
+    return out
+
+
+def rename(t, old: str, new: str):
+    """Structural alpha-renaming of every occurrence of symbol ``old`` (binders included)."""
+    if isinstance(t, Symbol):
+        return Symbol(new) if t.name == old else t
+    if isinstance(t, Expr):
+        h = t.head
+        if isinstance(h, str):
+            h = new if h == old else h
+        else:
+            h = rename(h, old, new)
+        return Expr(h, *(rename(a, old, new) for a in t.args))
+    return t
+
+
+def _fresh(name: str, avoid: set) -> str:
+    cand = name + "$"
+    while cand in avoid:
+        cand += "$"
+    return cand
+
+
+def _function_params(t) -> Optional[List[str]]:
+    if len(t.args) < 2:
+        return None
+    p = t.args[0]
+    if isinstance(p, Symbol):
+        return [p.name]
+    if is_list(p) and all(isinstance(x, Symbol) for x in p.args):
+        return [x.name for x in p.args]
+    return None
+
+
+def _scope_spec_names(spec) -> Optional[List[str]]:
+    if not is_list(spec):
+        return None
+    out = []
+    for v in spec.args:
+        if isinstance(v, Symbol):
+            out.append(v.name)
+        elif (isinstance(v, Expr) and v.head in ("Set", "SetDelayed") and len(v.args) == 2
+              and isinstance(v.args[0], Symbol)):
+            out.append(v.args[0].name)
+        else:
+            return None
+    return out
+
+
+class _Subst:
+    __slots__ = ("b", "_value_names")
+
+    def __init__(self, b):
+        self.b = b
+        self._value_names = None
+
+    def value_names(self) -> set:
+        if self._value_names is None:
+            names: set = set()
+            for v in self.b.values():
+                symbol_names(v, names)
+            self._value_names = names
+        return self._value_names
 
 
 def substitute(t, b: Dict[str, Any]):
-    """Replace symbols bound in b (sequence bindings are tuples and splice)."""
+    """Capture-avoiding substitution of the symbols bound in b (tuple values splice)."""
     if not b:
         return t
+    return _subst(t, b, _Subst(b))
+
+
+def _narrow(b, ctx, bound):
+    """Bindings visible inside a construct that binds ``bound``."""
+    if not any(n in b for n in bound):
+        return b, ctx
+    nb = {k: v for k, v in b.items() if k not in bound}
+    return nb, _Subst(nb)
+
+
+def _alpha(t, bound, b, ctx, renamable):
+    """Rename bound variables of construct t that would capture free symbols of b's values."""
+    clash = [n for n in bound if n in renamable] if renamable else []
+    if not clash:
+        return t, bound
+    vn = ctx.value_names()
+    clash = [n for n in clash if n in vn]
+    if not clash:
+        return t, bound
+    avoid = symbol_names(t) | vn | set(b)
+    bound = list(bound)
+    for n in clash:
+        fresh = _fresh(n, avoid)
+        avoid.add(fresh)
+        t = rename(t, n, fresh)
+        bound[bound.index(n)] = fresh
+    return t, bound
+
+
+def _subst(t, b, ctx):
     if isinstance(t, Symbol):
         if t.name in b:
             v = b[t.name]
             return Expr("Sequence", *v) if isinstance(v, tuple) else v
         return t
-    if isinstance(t, Expr):
-        h = t.head
-        if isinstance(h, str):
-            if h == "Pattern" and len(t.args) == 2:
-                return Expr("Pattern", t.args[0], substitute(t.args[1], b))
-            if h in b and not isinstance(b[h], tuple):
-                nh = b[h]
-                h = nh.name if isinstance(nh, Symbol) else nh if isinstance(nh, Expr) else h
+    if not isinstance(t, Expr):
+        return t
+    h = t.head
+    if isinstance(h, str) and t.args:
+        # ── lexical scoping constructs: shadow, and rename to avoid capture ──
+        if h == "Function":
+            params = _function_params(t)
+            if params is not None:
+                t, params = _alpha(t, params, b, ctx, params)
+                nb, nctx = _narrow(b, ctx, params)
+                return Expr("Function", t.args[0], *(_subst(a, nb, nctx) for a in t.args[1:]))
+        elif h in ("Module", "With", "Block") and len(t.args) == 2:
+            names = _scope_spec_names(t.args[0])
+            if names is not None:
+                if h != "Block":
+                    t, names = _alpha(t, names, b, ctx, names)
+                nb, nctx = _narrow(b, ctx, names)
+                spec = []
+                for v in t.args[0].args:
+                    if isinstance(v, Symbol):
+                        spec.append(v)
+                    else:  # initial values live in the enclosing scope
+                        spec.append(Expr(v.head, v.args[0], _subst(v.args[1], b, ctx)))
+                return Expr(h, Expr("List", *spec), _subst(t.args[1], nb, nctx))
+        elif h in _PATTERN_SCOPES and len(t.args) == 2:
+            names = pattern_names(t.args[0])
+            if names:
+                t, names = _alpha(t, names, b, ctx, names)
+                nb, nctx = _narrow(b, ctx, names)
+                return Expr(h, _subst(t.args[0], nb, nctx), _subst(t.args[1], nb, nctx))
+        if h == "Pattern" and len(t.args) == 2:
+            return Expr("Pattern", t.args[0], _subst(t.args[1], b, ctx))
+    if isinstance(h, str):
+        if h in b and not isinstance(b[h], tuple):
+            nh = b[h]
+            h = nh.name if isinstance(nh, Symbol) else nh if isinstance(nh, Expr) else h
+    else:
+        h = _subst(h, b, ctx)
+    args = []
+    for a in t.args:
+        if isinstance(a, Symbol) and a.name in b and isinstance(b[a.name], tuple):
+            args.extend(b[a.name])
         else:
-            h = substitute(h, b)
-        args = []
-        for a in t.args:
-            if isinstance(a, Symbol) and a.name in b and isinstance(b[a.name], tuple):
-                args.extend(b[a.name])
-            else:
-                args.append(substitute(a, b))
-        return Expr(h, *args)
-    return t
+            args.append(_subst(a, b, ctx))
+    return Expr(h, *args)
 
 
 def replace_slots(body, args):
@@ -536,6 +797,7 @@ def _condition_tag(rhs):
 
 def store_definition(lhs, rhs):
     st = state()
+    st.note_write(_def_key(lhs), lhs, rhs)
     if not has_pattern(lhs):
         st.exact[tag(lhs)] = (lhs, rhs)
         return
@@ -727,6 +989,7 @@ def _assign(lhs, rhs, ev):
         if lhs.name in ("Pi", "E", "I", "Infinity") or "Protected" in BUILTIN_ATTRIBUTES.get(lhs.name, ()):
             raise ValueError(f"Symbol {lhs.name} is protected")
         st.own[lhs.name] = rhs
+        st.note_write(lhs.name, rhs)
         return
     if isinstance(lhs, Expr):
         if lhs.head == "List":
@@ -741,6 +1004,7 @@ def _assign(lhs, rhs, ev):
                 raise ValueError("Part assignment needs a symbol with a value")
             idx = [ev(i) for i in lhs.args[1:]]
             st.own[target.name] = _set_part(ev(target), idx, rhs)
+            st.note_write(target.name, rhs)
             return
         if isinstance(lhs.head, str) and lhs.head in ("Pattern", "Condition"):
             raise ValueError("Cannot assign to a pattern")
@@ -792,6 +1056,7 @@ def _modify(target, op, amount, ev, post=False):
     if op == "Divide":
         new = ev(Expr("Times", old, Expr("Power", amount, -1)))
     st.own[target.name] = new
+    st.note_write(target.name, new)
     return old if post else new
 
 
@@ -813,6 +1078,13 @@ def _scope_vars(spec):
 
 
 def _module(spec, body, ev):
+    """Module: lexical scoping with fresh ``x$n`` symbols.
+
+    Like Wolfram's Temporary symbols, locals that are still referenced when the
+    Module returns (closures, values stored in global definitions, values
+    carried out by Return/Throw) keep their definitions; unreferenced ones are
+    removed.
+    """
     st = state()
     vars_ = _scope_vars(spec)
     st.counter += 1
@@ -822,35 +1094,75 @@ def _module(spec, body, ev):
     for name, init in vars_:
         if init is not None:
             inits[name] = ev(init.args[1]) if init.head == "Set" else init.args[1]
+    locals_ = {sym.name for sym in mapping.values()}
+    st.temporaries.update(locals_)
     for name, value in inits.items():
-        st.own[mapping[name].name] = value
+        local = mapping[name].name
+        st.own[local] = value
+        st.note_write(local, value)
+    seq = st.escape_seq
+    roots: list = []
+    ok = False
     try:
-        return ev(substitute(body, mapping))
+        result = ev(substitute(body, mapping))
+        roots.append(result)
+        ok = True
+        return result
+    except (ReturnSignal, ThrowSignal) as sig:
+        roots.append(sig.value)
+        ok = True
+        raise
     finally:
-        for sym in mapping.values():
-            clear_symbol(sym.name, all_=True)
+        _release_temporaries(st, locals_, roots if ok else [], st.escape_seq != seq)
+
+
+def _release_temporaries(st, locals_, roots, scan_state):
+    """Clear Module locals unless they are reachable from roots or other definitions."""
+    live: set = set()
+    if roots or scan_state:
+        names: set = set()
+        for r in roots:
+            symbol_names(r, names)
+        if scan_state:
+            names |= st.referenced_from_outside(locals_)
+        frontier = list(names & st.temporaries)
+        # Follow references through the definitions of reachable temporaries.
+        while frontier:
+            t = frontier.pop()
+            if t in live:
+                continue
+            live.add(t)
+            refs: set = set()
+            for c in st.definitions_of(t):
+                symbol_names(c, refs)
+            frontier.extend((refs & st.temporaries) - live)
+    for name in locals_:
+        if name not in live:
+            clear_symbol(name, all_=True)
+            st.temporaries.discard(name)
 
 
 def _block(spec, body, ev):
+    """Block: dynamic scoping.  Every definition of each variable (OwnValues,
+    DownValues, SubValues, attributes) is set aside for the duration of the
+    body and restored afterwards, whatever way the body exits."""
     st = state()
     vars_ = _scope_vars(spec)
-    saved = []
+    # Initial values are evaluated before any variable is localised (Wolfram semantics).
+    inits = []
     for name, init in vars_:
-        saved.append((name, name in st.own, st.own.get(name), st.down.pop(name, None)))
+        if init is not None:
+            inits.append((name, ev(init.args[1]) if init.head == "Set" else init.args[1]))
+    saved = []
     try:
-        for name, init in vars_:
-            st.own.pop(name, None)
-            if init is not None:
-                st.own[name] = ev(init.args[1]) if init.head == "Set" else init.args[1]
+        for name, _ in vars_:
+            saved.append((name, st.snapshot(name)))
+        for name, value in inits:
+            st.own[name] = value
         return ev(body)
     finally:
-        for name, had, old, downs in saved:
-            if had:
-                st.own[name] = old
-            else:
-                st.own.pop(name, None)
-            if downs is not None:
-                st.down[name] = downs
+        for name, snap in reversed(saved):
+            st.restore(name, snap)
 
 
 def _with(spec, body, ev):
