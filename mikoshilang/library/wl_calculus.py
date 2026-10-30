@@ -1570,3 +1570,606 @@ def _implicitd(eqn, ys, xspec):
         derivs.append([sp.simplify(sol[0][s_]) for s_ in syms_])
     res = [sp.simplify(v.xreplace({F: y for y, F in funcs.items()})) for v in derivs[-1]]
     return out(res[0]) if not is_list(ys) else L(*(out(r) for r in res))
+
+
+# ───────────────────────────── integral transforms and Fourier series ─────────────────────────────
+
+from . import transforms as _TR   # noqa: E402
+
+_fourier_default = _TR._fourier
+_lt_default = _TR._lt
+
+
+def _fparams(opts, fname, default):
+    p = opts.get("FourierParameters")
+    if p is None:
+        return default
+    if not (is_list(p) and len(p.args) == 2):
+        raise ValueError(f"{fname}: FourierParameters must be {{a, b}}")
+    a, b = sym(p.args[0], fname), sym(p.args[1], fname)
+    if not (a.is_real and a.is_number and b.is_real and b.is_number and b != 0):
+        raise NotImplementedError(f"{fname}: FourierParameters must be numeric {{a, b}} with b != 0")
+    return a, b
+
+
+def _equation_thread(e, f):
+    if isinstance(e, Expr) and e.head == "Equal":
+        return Expr("Equal", *(f(x) for x in e.args))
+    if is_list(e):
+        return L(*(f(x) for x in e.args))
+    return None
+
+
+def _ft_general(fname, e, t, w, rest, inverse):
+    _, opts = split_opts(rest, {"FourierParameters", "Assumptions", "GenerateConditions"}, fname)
+    if _:
+        raise ValueError(f"{fname}: unexpected arguments")
+    th = _equation_thread(e, lambda x: _ft_general(fname, x, t, w, rest, inverse))
+    if th is not None:
+        return th
+    a, b = _fparams(opts, fname, (sp.Integer(0), sp.Integer(1)))
+    if (a, b) == (0, 1):
+        return _fourier_default(fname, e, t, w, -1 if inverse else 1)
+    wv = variable(w, fname)
+    tmp = Symbol("FTtmp$")
+    D = sym(_fourier_default(fname, e, t, tmp, -1 if inverse else 1), fname)
+    D = D.subs(sp.Symbol("FTtmp$"), b * wv)
+    c = sp.sqrt(sp.Abs(b) / (2 * sp.pi) ** (1 + a if inverse else 1 - a)) * sp.sqrt(2 * sp.pi)
+    return out(sp.simplify(c * D))
+
+
+@replace("FourierTransform", _TR.AREA,
+         "Wolfram convention (1/√(2π)) ∫ f e^(iωt) dt, numerically verified at frequencies of both signs (raises "
+         "if SymPy's closed form cannot be verified); batch 4: FourierParameters -> {a, b} (numeric) gives "
+         "Sqrt[|b|/(2π)^(1-a)] ∫ f e^(i b ω t) dt, threads over equations and lists")
+def _ft4(e, t, w, *rest):
+    return _ft_general("FourierTransform", e, t, w, rest, False)
+
+
+@replace("InverseFourierTransform", _TR.AREA,
+         "Wolfram convention (1/√(2π)) ∫ F e^(-iωt) dω, numerically verified; batch 4: FourierParameters -> "
+         "{a, b} gives Sqrt[|b|/(2π)^(1+a)] ∫ F e^(-i b ω t) dω, threads over equations and lists")
+def _ift4(e, w, t, *rest):
+    return _ft_general("InverseFourierTransform", e, w, t, rest, True)
+
+
+def _half_line_numeric(f, tv, kern, params):
+    import mpmath as mp
+    g = sp.lambdify(tv, f.subs(params), "mpmath")
+
+    def val(w):
+        return mp.quadosc(lambda tt: g(tt) * kern(w * tt), [0, mp.inf], omega=abs(w))
+    return val
+
+
+def _sincos_transform(fname, e, t, w, rest, kind, inverse):
+    import mpmath as mp
+    _, opts = split_opts(rest, {"FourierParameters", "Assumptions", "GenerateConditions"}, fname)
+    if _:
+        raise ValueError(f"{fname}: unexpected arguments")
+    th = _equation_thread(e, lambda x: _sincos_transform(fname, x, t, w, rest, kind, inverse))
+    if th is not None:
+        return th
+    a, b = _fparams(opts, fname, (sp.Integer(0), sp.Integer(1)))
+    f = to_heaviside(sym(e, fname))
+    tv, wv = variable(t, fname), variable(w, fname)
+    tp = sp.Symbol(tv.name, positive=True)
+    f = f.xreplace({tv: tp})
+    wp = sp.Symbol("w_", positive=True)
+    trig = sp.sin if kind == "sin" else sp.cos
+    try:
+        r = sp.integrate(f * trig(wp * tp), (tp, 0, sp.oo), conds="none")
+    except Exception:
+        raise Unevaluated()
+    if r.has(sp.Integral) or r.has(sp.meijerg) or r.has(sp.zoo, sp.nan) or r.has(sp.exp_polar):
+        raise Unevaluated()
+    if r.has(sp.oo):
+        raise NotImplementedError(f"{fname}: the transform does not exist as a function (divergent integral)")
+    params = {s_: sp.Rational(7, 5) + i * sp.Rational(3, 10)
+              for i, s_ in enumerate(sorted(f.free_symbols - {tp}, key=str))}
+    kern = mp.sin if kind == "sin" else mp.cos
+    try:
+        num = _half_line_numeric(f, tp, kern, params)
+        ref = [(x, complex(num(x))) for x in (0.45, 1.3, 2.2)]
+    except Exception:
+        raise NotImplementedError(f"{fname}: could not verify the transform numerically")
+    cf = sp.lambdify(wp, r.subs(params), "mpmath")
+    try:
+        ok = all(abs(complex(cf(x)) - v) <= 1e-7 * max(1.0, abs(v)) for x, v in ref)
+    except Exception:
+        ok = False
+    if not ok:
+        raise NotImplementedError(f"{fname}: SymPy's closed form failed numerical verification for this input")
+    # Wolfram returns the closed form valid for ω > 0 (the transforms are defined on the half line)
+    wr = sp.Symbol(wv.name, positive=True)
+    base = r.subs(wp, wr)
+    if b < 0:
+        base = (-1 if kind == "sin" else 1) * base
+        b = -b
+    c = 2 * sp.sqrt(sp.Abs(b) / (2 * sp.pi) ** ((1 + a) if inverse else (1 - a)))
+    res = sp.simplify(c * base.subs(wr, b * wr))
+    return out(res.xreplace({wr: wv}))
+
+
+def _mk_sincos(name, kind, inverse):
+    lo = "∫_0^∞ f sin(ωt) dt" if kind == "sin" else "∫_0^∞ f cos(ωt) dt"
+
+    @fn(name, area=_TR.AREA, status="added",
+        notes=f"{name}[f, t, ω] = Sqrt[2/π] {lo} (Wolfram default); FourierParameters -> {{a, b}} (numeric) gives "
+              f"2 Sqrt[|b|/(2π)^(1{'+' if inverse else '-'}a)] times the integral with frequency b ω; the closed "
+              "form is checked numerically at three frequencies and returned in the form valid for ω > 0 (as Wolfram); threads over "
+              "equations; unevaluated if SymPy has no closed form")
+    def _impl(e, t, w, *rest):
+        return _sincos_transform(name, e, t, w, rest, kind, inverse)
+    return _impl
+
+
+for _nm, _kd, _inv in (("FourierSinTransform", "sin", False), ("FourierCosTransform", "cos", False),
+                       ("InverseFourierSinTransform", "sin", True), ("InverseFourierCosTransform", "cos", True)):
+    _mk_sincos(_nm, _kd, _inv)
+
+
+def _undef_transform_ok(r, cls):
+    for node in sp.preorder_traversal(r):
+        if isinstance(node, cls):
+            if not isinstance(node.args[0], AppliedUndef):
+                return False
+    return True
+
+
+@replace("LaplaceTransform", _TR.AREA,
+         "∫_0^∞ f e^(-st) dt (same convention as Wolfram/SymPy), convergence conditions dropped; batch 4: "
+         "derivatives of undefined functions (LaplaceTransform[f'[t], t, s] -> s LaplaceTransform[f[t], t, s] - "
+         "f[0]), HeavisideTheta and DiracDelta shifts, threads over equations and lists; unevaluated when SymPy "
+         "cannot transform")
+def _lt4(e, t, s, *rest):
+    _, opts = split_opts(rest, {"Assumptions", "GenerateConditions"}, "LaplaceTransform")
+    th = _equation_thread(e, lambda x: _lt4(x, t, s, *rest))
+    if th is not None:
+        return th
+    f = to_heaviside(sym(e, "LaplaceTransform"))
+    tv, sv = variable(t, "LaplaceTransform"), variable(s, "LaplaceTransform")
+    if isinstance(f, AppliedUndef):
+        raise Unevaluated()
+    r = sp.laplace_transform(f, tv, sv, noconds=True)
+    if r.has(sp.LaplaceTransform):
+        if not _undef_transform_ok(r, sp.LaplaceTransform):
+            raise Unevaluated()
+        r = sp.expand(r)
+        return _laplace_out(r)
+    return out(sp.simplify(r))
+
+
+def _laplace_out(r):
+    """SymPy result containing LaplaceTransform(f(t), t, s) of undefined functions -> Wolfram expression."""
+    reps = {}
+    for node in sp.preorder_traversal(r):
+        if isinstance(node, sp.LaplaceTransform):
+            d = sp.Dummy("LT")
+            reps[node] = d
+    rr = r.xreplace(reps)
+    e = out(rr)
+    from ..expr import Expr as E_
+    back = {}
+    for node, d in reps.items():
+        back[d] = Expr("LaplaceTransform", out(node.args[0]), out(node.args[1]), out(node.args[2]))
+    return _ev(Expr("ReplaceAll", e, L(*(rule(R(d), v) for d, v in back.items()))))
+
+
+def _fs_opts(rest, fname):
+    _, opts = split_opts(rest, {"FourierParameters", "Assumptions", "GenerateConditions"}, fname)
+    if _:
+        raise ValueError(f"{fname}: unexpected arguments")
+    p = opts.get("FourierParameters")
+    if p is not None:
+        a, b = _fparams(opts, fname, (1, 1))
+        if (a, b) != (1, 1):
+            raise NotImplementedError(f"{fname}: only the default FourierParameters -> {{1, 1}} is supported")
+
+
+def _fs_integral(g, tv, lo, hi, fname):
+    try:
+        r = sp.integrate(g, (tv, lo, hi))
+    except Exception:
+        raise Unevaluated()
+    if r.has(sp.Integral) or r.has(sp.zoo, sp.nan, sp.oo):
+        raise Unevaluated()
+    return r
+
+
+def _check_coeff(general, nsym, direct, fname):
+    """Compare a symbolic-n coefficient with directly computed integer cases."""
+    for k in (1, 2, 3, -1, -2, 5):
+        if k < 0 and direct(k) is None:
+            continue
+        want = direct(k)
+        got = general.subs(nsym, k)
+        if want is None:
+            continue
+        if abs(complex(sp.N(sp.expand_complex(got - want), 30))) > 1e-20:
+            raise ArithmeticError(f"{fname}: the general coefficient failed verification")
+
+
+def _symbolic_coeff(make_integrand, tv, lo, hi, scale, n, fname, n0_scale=None, allow_negative=True):
+    """Coefficient for symbolic n: Piecewise[{{c0, n == 0}}, g(n)] unless g(0) == c0."""
+    nv = variable(n, fname)
+    ni = sp.Symbol(nv.name, integer=True, nonzero=True)
+    g = _fs_integral(make_integrand(ni), tv, lo, hi, fname) * scale
+    g = g.rewrite(sp.cos) if g.has(sp.exp) and not make_integrand(0).has(sp.exp) else g
+    if isinstance(g, sp.Piecewise):
+        raise Unevaluated()
+    g = sp.simplify(g)
+    c0 = sp.simplify(_fs_integral(make_integrand(0), tv, lo, hi, fname) * (n0_scale if n0_scale is not None else scale))
+
+    def direct(k):
+        if k < 0 and not allow_negative:
+            return None
+        return _fs_integral(make_integrand(k), tv, lo, hi, fname) * scale
+    _check_coeff(g, ni, direct, fname)
+    g = g.xreplace({ni: sp.Symbol(nv.name)})
+    try:
+        g0 = sp.limit(g, sp.Symbol(nv.name), 0) if g.subs(sp.Symbol(nv.name), 0).has(sp.zoo, sp.nan) else \
+            g.subs(sp.Symbol(nv.name), 0)
+        same = sp.simplify(g.subs(sp.Symbol(nv.name), 0) - c0) == 0 and not g.subs(sp.Symbol(nv.name), 0).has(
+            sp.zoo, sp.nan)
+    except Exception:
+        same = False
+    if same:
+        return out(g)
+    return Expr("Piecewise", L(L(out(c0), Expr("Equal", n, 0))), out(g))
+
+
+@fn("FourierCoefficient", area=AREA, status="added",
+    notes="FourierCoefficient[f, t, n] = 1/(2π) ∫_{-π}^{π} f e^(-int) dt (Wolfram default FourierParameters "
+          "{1, 1}; other parameters raise); integer or symbolic n (symbolic n is integer: a separate n == 0 "
+          "value appears as Piecewise[{{c0, n == 0}}, g[n]]); the general term is checked against direct "
+          "integrals at n = ±1, ±2, 3, 5")
+def _fcoeff(e, t, n, *rest):
+    _fs_opts(rest, "FourierCoefficient")
+    tv = variable(t, "FourierCoefficient")
+    f = to_heaviside(sym(e, "FourierCoefficient"))
+    scale = 1 / (2 * sp.pi)
+    nn = sym(n, "FourierCoefficient")
+    if nn.is_integer:
+        return out(sp.simplify(_fs_integral(f * sp.exp(-sp.I * nn * tv), tv, -sp.pi, sp.pi, "FourierCoefficient")
+                               * scale))
+    if not isinstance(n, Symbol):
+        raise ValueError("FourierCoefficient: n must be an integer or a symbol")
+    return _symbolic_coeff(lambda k: f * sp.exp(-sp.I * k * tv), tv, -sp.pi, sp.pi, scale, n, "FourierCoefficient")
+
+
+def _trig_coeff(kind, e, t, n, rest, fname):
+    _fs_opts(rest, fname)
+    tv = variable(t, fname)
+    f = to_heaviside(sym(e, fname))
+    trig = sp.cos if kind == "cos" else sp.sin
+    nn = sym(n, fname)
+    if nn.is_integer:
+        if nn < 0:
+            raise ValueError(f"{fname}: n must be non-negative")
+        scale = 1 / sp.pi if (kind == "cos" and nn == 0) else 2 / sp.pi
+        return out(sp.simplify(_fs_integral(f * trig(nn * tv), tv, 0, sp.pi, fname) * scale))
+    if not isinstance(n, Symbol):
+        raise ValueError(f"{fname}: n must be an integer or a symbol")
+    return _symbolic_coeff(lambda k: f * trig(k * tv), tv, 0, sp.pi, 2 / sp.pi, n, fname,
+                           n0_scale=(1 / sp.pi if kind == "cos" else 2 / sp.pi), allow_negative=False)
+
+
+@fn("FourierCosCoefficient", area=AREA, status="added",
+    notes="FourierCosCoefficient[f, t, n] = 2/π ∫_0^π f cos(nt) dt, with 1/π ∫_0^π f dt for n = 0 (Wolfram); "
+          "symbolic n checked against direct integrals")
+def _fcc(e, t, n, *rest):
+    return _trig_coeff("cos", e, t, n, rest, "FourierCosCoefficient")
+
+
+@fn("FourierSinCoefficient", area=AREA, status="added",
+    notes="FourierSinCoefficient[f, t, n] = 2/π ∫_0^π f sin(nt) dt (Wolfram); symbolic n checked against direct "
+          "integrals")
+def _fsc(e, t, n, *rest):
+    return _trig_coeff("sin", e, t, n, rest, "FourierSinCoefficient")
+
+
+def _fs_order(k, fname):
+    return nonneg_int(k, fname, "order")
+
+
+@fn("FourierSeries", area=AREA, status="added",
+    notes="FourierSeries[f, t, k] = Σ_{n=-k}^{k} FourierCoefficient[f, t, n] E^(I n t) (Wolfram default "
+          "parameters; others raise)")
+def _fseries(e, t, k, *rest):
+    _fs_opts(rest, "FourierSeries")
+    kk = _fs_order(k, "FourierSeries")
+    tv = variable(t, "FourierSeries")
+    f = to_heaviside(sym(e, "FourierSeries"))
+    tot = sp.Integer(0)
+    for n in range(-kk, kk + 1):
+        c = sp.simplify(_fs_integral(f * sp.exp(-sp.I * n * tv), tv, -sp.pi, sp.pi, "FourierSeries") / (2 * sp.pi))
+        tot += c * sp.exp(sp.I * n * tv)
+    return out(tot)
+
+
+@fn("FourierTrigSeries", area=AREA, status="added",
+    notes="FourierTrigSeries[f, t, k] = a0 + Σ_{n=1}^{k} (a_n Cos[n t] + b_n Sin[n t]) with a0 = 1/(2π)∫f, "
+          "a_n = 1/π ∫_{-π}^{π} f cos(nt), b_n = 1/π ∫_{-π}^{π} f sin(nt) (Wolfram default parameters)")
+def _ftrig(e, t, k, *rest):
+    _fs_opts(rest, "FourierTrigSeries")
+    kk = _fs_order(k, "FourierTrigSeries")
+    tv = variable(t, "FourierTrigSeries")
+    f = to_heaviside(sym(e, "FourierTrigSeries"))
+    tot = sp.simplify(_fs_integral(f, tv, -sp.pi, sp.pi, "FourierTrigSeries") / (2 * sp.pi))
+    for n in range(1, kk + 1):
+        an = sp.simplify(_fs_integral(f * sp.cos(n * tv), tv, -sp.pi, sp.pi, "FourierTrigSeries") / sp.pi)
+        bn = sp.simplify(_fs_integral(f * sp.sin(n * tv), tv, -sp.pi, sp.pi, "FourierTrigSeries") / sp.pi)
+        tot += an * sp.cos(n * tv) + bn * sp.sin(n * tv)
+    return out(tot)
+
+
+@fn("FourierCosSeries", area=AREA, status="added",
+    notes="FourierCosSeries[f, t, k] = Σ_{n=0}^{k} FourierCosCoefficient[f, t, n] Cos[n t] (even extension of f "
+          "on [0, π])")
+def _fcosser(e, t, k, *rest):
+    _fs_opts(rest, "FourierCosSeries")
+    kk = _fs_order(k, "FourierCosSeries")
+    tv = variable(t, "FourierCosSeries")
+    f = to_heaviside(sym(e, "FourierCosSeries"))
+    tot = sp.Integer(0)
+    for n in range(0, kk + 1):
+        sc = 1 / sp.pi if n == 0 else 2 / sp.pi
+        tot += sp.simplify(_fs_integral(f * sp.cos(n * tv), tv, 0, sp.pi, "FourierCosSeries") * sc) * sp.cos(n * tv)
+    return out(tot)
+
+
+@fn("FourierSinSeries", area=AREA, status="added",
+    notes="FourierSinSeries[f, t, k] = Σ_{n=1}^{k} FourierSinCoefficient[f, t, n] Sin[n t] (odd extension of f "
+          "on [0, π])")
+def _fsinser(e, t, k, *rest):
+    _fs_opts(rest, "FourierSinSeries")
+    kk = _fs_order(k, "FourierSinSeries")
+    tv = variable(t, "FourierSinSeries")
+    f = to_heaviside(sym(e, "FourierSinSeries"))
+    tot = sp.Integer(0)
+    for n in range(1, kk + 1):
+        tot += sp.simplify(_fs_integral(f * sp.sin(n * tv), tv, 0, sp.pi, "FourierSinSeries") * 2 / sp.pi) \
+            * sp.sin(n * tv)
+    return out(tot)
+
+
+@fn("MellinTransform", area=_TR.AREA, status="added",
+    notes="MellinTransform[f, x, s] = ∫_0^∞ x^(s-1) f dx (Wolfram); convergence strip dropped (generic value), "
+          "checked numerically at two real s inside the strip; unevaluated if SymPy has no closed form")
+def _mellin(e, x, s, *rest):
+    import mpmath as mp
+    _, opts = split_opts(rest, {"Assumptions", "GenerateConditions"}, "MellinTransform")
+    f = sym(e, "MellinTransform")
+    xv, sv = variable(x, "MellinTransform"), variable(s, "MellinTransform")
+    try:
+        r = sp.mellin_transform(f, xv, sv)
+    except Exception:
+        raise Unevaluated()
+    if isinstance(r, sp.MellinTransform) or not isinstance(r, tuple):
+        raise Unevaluated()
+    val, (lo, hi), _c = r
+    if val.has(sp.MellinTransform, sp.meijerg):
+        raise Unevaluated()
+    if not f.free_symbols - {xv} and lo.is_number and hi.is_number:
+        lo_f = float(lo) if lo.is_finite else -5.0
+        hi_f = float(hi) if hi.is_finite else lo_f + 6.0
+        if lo_f == -5.0 and not lo.is_finite:
+            lo_f = hi_f - 6.0
+        g = sp.lambdify(xv, f, "mpmath")
+        for frac in (0.35, 0.7):
+            s0 = lo_f + frac * (hi_f - lo_f)
+            num = mp.quad(lambda y: mp.exp(s0 * y) * g(mp.exp(y)), [-mp.inf, 0, mp.inf])
+            got = complex(sp.N(val.subs(sv, s0)))
+            if abs(got - complex(num)) > 1e-7 * max(1.0, abs(num)):
+                raise NotImplementedError("MellinTransform: SymPy's closed form failed numerical verification")
+    return out(sp.simplify(val))
+
+
+@fn("InverseMellinTransform", area=_TR.AREA, status="added",
+    notes="InverseMellinTransform[F, s, x] via SymPy (fundamental strip inferred); result checked by transforming "
+          "back with MellinTransform; unevaluated otherwise")
+def _imellin(e, s, x, *rest):
+    F = sym(e, "InverseMellinTransform")
+    sv, xv = variable(s, "InverseMellinTransform"), variable(x, "InverseMellinTransform")
+    xp = sp.Symbol(xv.name, positive=True)
+    r = None
+    for strip in ((0, sp.oo), (-sp.oo, 0), (0, 1), (-1, 0)):
+        try:
+            r = sp.inverse_mellin_transform(F, sv, xp, strip)
+        except Exception:
+            r = None
+            continue
+        if not r.has(sp.InverseMellinTransform, sp.meijerg):
+            break
+        r = None
+    if r is None:
+        raise Unevaluated()
+    r = sp.simplify(r.rewrite(sp.Piecewise)) if r.has(sp.Heaviside) else sp.simplify(r)
+    try:
+        back = sp.mellin_transform(r, xp, sv, noconds=True)
+        if sp.simplify(back - F) != 0:
+            raise NotImplementedError("InverseMellinTransform: result failed verification")
+    except NotImplementedError:
+        raise
+    except Exception:
+        raise NotImplementedError("InverseMellinTransform: could not verify the result")
+    return out(r.xreplace({xp: xv}))
+
+
+# ───────────────────────────── vector calculus in curvilinear coordinates, curves ─────────────────────────────
+
+from . import calculus as _CA   # noqa: E402
+
+
+def _chart(c, n, fname):
+    name = c if isinstance(c, str) else None
+    if name is None:
+        raise ValueError(f"{fname}: the coordinate system must be a string such as \"Spherical\"")
+    return name
+
+
+def _scale_factors(name, xs, fname):
+    n = len(xs)
+    if name == "Cartesian":
+        return [sp.Integer(1)] * n
+    if name == "Polar" and n == 2:
+        return [sp.Integer(1), xs[0]]
+    if name == "Cylindrical" and n == 3:
+        return [sp.Integer(1), xs[0], sp.Integer(1)]
+    if name == "Spherical" and n == 3:
+        return [sp.Integer(1), xs[0], xs[0] * sp.sin(xs[1])]
+    raise NotImplementedError(f"{fname}: coordinate system {name!r} in {n} dimensions is not supported "
+                              "(Cartesian, Polar {r, θ}, Cylindrical {r, θ, z}, Spherical {r, θ, φ})")
+
+
+def _vc_setup(vs, chart, fname):
+    xs = _CA._vars_list(vs, fname)
+    h = _scale_factors(_chart(chart, len(xs), fname), xs, fname)
+    return xs, h
+
+
+def _simp(v):
+    return sp.simplify(v)
+
+
+def _grad_c(f, xs, h):
+    return [_simp(sp.diff(f, x) / hi) for x, hi in zip(xs, h)]
+
+
+def _div_c(F, xs, h):
+    H = sp.Mul(*h)
+    return _simp(sp.Add(*(sp.diff(H * Fi / hi, x) for Fi, x, hi in zip(F, xs, h))) / H)
+
+
+def _curl_c(F, xs, h):
+    if len(xs) == 2:
+        return _simp((sp.diff(h[1] * F[1], xs[0]) - sp.diff(h[0] * F[0], xs[1])) / (h[0] * h[1]))
+    res = []
+    for i in range(3):
+        j, k = (i + 1) % 3, (i + 2) % 3
+        res.append(_simp((sp.diff(h[k] * F[k], xs[j]) - sp.diff(h[j] * F[j], xs[k])) / (h[j] * h[k])))
+    return res
+
+
+def _wrap_vc(name, impl3, notes):
+    orig = REGISTRY_get(name)
+
+    @replace(name, _CA.AREA, notes)
+    def _w(f, vs, *chart):
+        if not chart:
+            return orig(f, vs)
+        if len(chart) != 1:
+            raise ValueError(f"{name}: expected {name}[f, vars, chart]")
+        xs, h = _vc_setup(vs, chart[0], name)
+        return impl3(f, xs, h)
+    return _w
+
+
+def REGISTRY_get(name):
+    """The existing implementation(s) of a library function as one callable (dispatch on argument count)."""
+    from .core import REGISTRY
+    impls = list(REGISTRY[name].impls)
+
+    def call(*args):
+        for f_, lo, hi in impls:
+            if len(args) >= lo and (hi is None or len(args) <= hi):
+                return f_(*args)
+        raise ValueError(f"{name} called with {len(args)} argument(s)")
+    return call
+
+
+def _g3(f, xs, h):
+    if is_list(f):
+        raise NotImplementedError("Grad: the gradient of a vector field in curvilinear coordinates is not supported")
+    return out(_grad_c(sym(f, "Grad"), xs, h))
+
+
+def _d3(F, xs, h):
+    comps = [sym(c, "Div") for c in list_arg(F, "Div", "vector field")]
+    _CA._same_len(comps, xs, "Div")
+    return out(_div_c(comps, xs, h))
+
+
+def _c3(F, xs, h):
+    comps = [sym(c, "Curl") for c in list_arg(F, "Curl", "vector field")]
+    _CA._same_len(comps, xs, "Curl")
+    if len(comps) not in (2, 3):
+        raise ValueError("Curl: only 2- and 3-dimensional fields are supported")
+    return out(_curl_c(comps, xs, h))
+
+
+def _l3(f, xs, h):
+    v = sym(f, "Laplacian")
+    return out(_div_c(_grad_c(v, xs, h), xs, h))
+
+
+from .core import list_arg   # noqa: E402
+
+_wrap_vc("Grad", _g3, "Grad[f, {x1, ..., xn}] (Cartesian; a vector field gives the Jacobian); batch 4: "
+         "Grad[f, vars, chart] for \"Cartesian\", \"Polar\" {r, θ}, \"Cylindrical\" {r, θ, z}, \"Spherical\" "
+         "{r, θ, φ} (θ polar angle) in the orthonormal basis (Wolfram)")
+_wrap_vc("Div", _d3, "Div[{f1, ..., fn}, {x1, ..., xn}] (Cartesian); batch 4: Div[F, vars, chart] for Polar, "
+         "Cylindrical, Spherical (orthonormal components, Wolfram)")
+_wrap_vc("Curl", _c3, "3D curl and the 2D scalar curl; batch 4: Curl[F, vars, chart] for Polar (scalar), "
+         "Cylindrical and Spherical (orthonormal components, Wolfram)")
+_wrap_vc("Laplacian", _l3, "Laplacian[f, {x1, ..., xn}] (Cartesian); batch 4: Laplacian[f, vars, chart] for "
+         "Polar, Cylindrical, Spherical (Wolfram)")
+
+
+_orig_arclength = REGISTRY_get("ArcLength")
+
+
+@replace("ArcLength", _CA.AREA,
+         "ArcLength[f, {x, a, b}] = ∫ Sqrt[1 + f'^2] (graph of f, MikoshiLang); batch 4: Wolfram's parametric form "
+         "ArcLength[{x1[t], ..., xn[t]}, {t, a, b}] = ∫ Sqrt[Σ xi'^2] dt, ArcLength[Line[{p1, ...}]] (polyline), "
+         "ArcLength[Circle[c, r]] = 2 π r; numeric input gives numeric output")
+def _arclength4(f, *spec):
+    if not spec:
+        if isinstance(f, Expr) and f.head == "Line" and len(f.args) == 1:
+            pts = [[sym(c, "ArcLength") for c in list_arg(p, "ArcLength", "point")]
+                   for p in list_arg(f.args[0], "ArcLength", "point list", 2)]
+            tot = sp.Add(*(sp.sqrt(sp.Add(*((a - b) ** 2 for a, b in zip(p, q)))) for p, q in zip(pts, pts[1:])))
+            return numeric_out(sp.simplify(tot), f)
+        if isinstance(f, Expr) and f.head == "Circle" and len(f.args) in (1, 2):
+            r = sym(f.args[1], "ArcLength") if len(f.args) == 2 else sp.Integer(1)
+            if is_list(f.args[1] if len(f.args) == 2 else L()) and len(f.args) == 2:
+                raise NotImplementedError("ArcLength: ellipses are not supported")
+            return numeric_out(2 * sp.pi * r, f)
+        raise ValueError("ArcLength: expected a curve and {t, a, b}, a Line or a Circle")
+    if len(spec) != 1:
+        raise ValueError("ArcLength: expected ArcLength[curve, {t, a, b}]")
+    if is_list(f):
+        t, a, b = _CA._int_spec(spec[0], "ArcLength")
+        comps = [sym(c, "ArcLength") for c in f.args]
+        tr = sp.Symbol(t.name, real=True)
+        integrand = sp.simplify(sp.sqrt(sp.Add(*(sp.diff(c.xreplace({t: tr}), tr) ** 2 for c in comps))))
+        val = sp.integrate(integrand, (tr, a, b))
+        if isinstance(val, sp.Basic) and val.has(sp.Integral):
+            raise Unevaluated()
+        return numeric_out(_CA._check_result(sp.simplify(val), "ArcLength"), f, spec[0])
+    return _orig_arclength(f, spec[0])
+
+
+@fn("ArcCurvature", area=_CA.AREA, status="added",
+    notes="ArcCurvature[{x1[t], ..., xn[t]}, t] = Sqrt[|r'|^2 |r''|^2 - (r'.r'')^2]/|r'|^3 (t real; gives "
+          "|x'y'' - y'x''|/(x'^2 + y'^2)^(3/2) in 2D, |r' x r''|/|r'|^3 in 3D); ArcCurvature[f, x] for the graph "
+          "y = f(x): Abs[f'']/(1 + f'^2)^(3/2)")
+def _arccurv(f, t, *rest):
+    if rest:
+        raise NotImplementedError("ArcCurvature: coordinate charts are not supported")
+    tv = variable(t, "ArcCurvature")
+    tr = sp.Symbol(tv.name, real=True)
+    comps = [sym(c, "ArcCurvature") for c in f.args] if is_list(f) else [tr, sym(f, "ArcCurvature")]
+    comps = [c.xreplace({tv: tr}) for c in comps]
+    d1 = [sp.diff(c, tr) for c in comps]
+    d2 = [sp.diff(c, tr, 2) for c in comps]
+    if len(comps) == 2:
+        num = sp.Abs(d1[0] * d2[1] - d1[1] * d2[0])
+    else:
+        n1 = sp.Add(*(a ** 2 for a in d1))
+        n2 = sp.Add(*(a ** 2 for a in d2))
+        dot = sp.Add(*(a * b for a, b in zip(d1, d2)))
+        num = sp.sqrt(sp.simplify(n1 * n2 - dot ** 2))
+    den = sp.Add(*(a ** 2 for a in d1)) ** sp.Rational(3, 2)
+    return out(sp.simplify(num / den).xreplace({tr: tv}))
