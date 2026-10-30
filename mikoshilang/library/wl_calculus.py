@@ -78,13 +78,24 @@ def _heaviside(*args):
 
 
 @fn("ConditionalExpression", area=AREA, status="added",
-    notes="ConditionalExpression[expr, cond]: expr when cond is True, Undefined when cond is False, otherwise "
-          "unevaluated (returned by Integrate and the Fourier coefficient functions for parameter conditions)")
+    notes="ConditionalExpression[expr, cond]: expr when cond is True, Undefined when cond is False, nested "
+          "conditions combine with And (ConditionalExpression[ConditionalExpression[x, a], b] = "
+          "ConditionalExpression[x, a && b]), otherwise unevaluated (returned by Integrate, Sum, Solve and the "
+          "Fourier coefficient functions for parameter conditions; arithmetic on ConditionalExpression objects is "
+          "not propagated).  Single implementation shared by batches 4 and 6.")
 def _condexpr(e, c):
     if is_true(c):
         return e
     if is_false(c):
         return Symbol("Undefined")
+    if isinstance(e, Expr) and e.head == "ConditionalExpression" and len(e.args) == 2:
+        from .wl_common import ev
+        c2 = ev(Expr("And", e.args[1], c))
+        if is_true(c2):
+            return e.args[0]
+        if is_false(c2):
+            return Symbol("Undefined")
+        return Expr("ConditionalExpression", e.args[0], c2)
     raise Unevaluated()
 
 

@@ -32,6 +32,15 @@ def _binomial(n, k):
     if _intq(n) and _intq(k):
         return _binom_int(int(n), int(k))
     sn, sk = sym(n, "Binomial"), sym(k, "Binomial")
+    if (isinstance(n, float) or isinstance(k, float)) and sn.is_real and sk.is_real and sn.is_number \
+            and sk.is_number and not any(isinstance(v, sp.Float) and v._prec > 53 for v in (sn, sk)):
+        # batch 6: machine-precision arguments are evaluated with guard digits (Binomial[10, 3.] = 120.,
+        # previously 120.00000000000001)
+        import mpmath
+        with mpmath.workprec(113):
+            v = mpmath.binomial(mpmath.mpf(sp.Float(sn, 30)), mpmath.mpf(sp.Float(sk, 30)))
+        if isinstance(v, mpmath.mpf) and mpmath.isfinite(v):
+            return float(v)
     return numeric_out(sp.binomial(sn, sk), n, k)
 
 
@@ -166,16 +175,22 @@ def _kspec(spec, fname):
 
 @fn("IntegerPartitions", area=AREA, status="fixed",
     notes="legacy returned the number of partitions; Wolfram IntegerPartitions lists them in reverse "
-          "lexicographic order; supports [n], [n, k], [n, {k}], [n, {kmin, kmax}], [n, kspec, {s1, ...}]")
-def _intpartitions(n, kspec=None, elems=None):
+          "lexicographic order; supports [n], [n, k], [n, {k}], [n, {kmin, kmax}], [n, kspec, {s1, ...} or All] and "
+          "[n, kspec, sspec, m] (first m partitions, batch 6)")
+def _intpartitions(n, kspec=None, elems=None, count=None):
     k = int_arg(n, "IntegerPartitions")
     if k < 0:
         return L()
     lo, hi = (0, None) if kspec is None else _kspec(kspec, "IntegerPartitions")
     allowed = None
-    if elems is not None:
+    if elems is not None and not (isinstance(elems, Symbol) and elems.name == "All"):
         allowed = {pos_int(e, "IntegerPartitions", "part") for e in list_arg(elems, "IntegerPartitions")}
-    return L(*(L(*p) for p in _partitions(k, lo=lo, hi=hi, allowed=allowed)))
+    parts = _partitions(k, lo=lo, hi=hi, allowed=allowed)
+    if count is not None:
+        # batch 6: IntegerPartitions[n, kspec, sspec, m] gives at most m partitions (the first m)
+        m = nonneg_int(count, "IntegerPartitions", "number of partitions")
+        parts = parts[:m]
+    return L(*(L(*p) for p in parts))
 
 
 @fn("PartitionsList", area=AREA, status="fixed",
@@ -263,14 +278,83 @@ def _subsets(items, lo, hi):
     return out
 
 
+def _subset_sizes(spec, n, fname):
+    """Sizes requested by a Subsets length spec (batch 6 adds {min, max, step})."""
+    if is_list(spec) and len(spec.args) == 3:
+        a = nonneg_int(spec.args[0], fname, "length")
+        b = nonneg_int(spec.args[1], fname, "length")
+        d = int_arg(spec.args[2], fname, "step")
+        if d == 0:
+            raise ValueError(f"{fname}: the length step must be non-zero")
+        return [r for r in range(a, b + (1 if d > 0 else -1), d) if r <= n]
+    lo, hi = (0, None) if spec is None else _kspec(spec, fname)
+    return list(range(lo, (n if hi is None else min(hi, n)) + 1))
+
+
+def _unrank_subset(items, sizes, r):
+    """The r-th (0-based) subset in Wolfram order for the given sizes, or None when out of range."""
+    n = len(items)
+    for size in sizes:
+        c = math.comb(n, size)
+        if r < c:
+            out, start = [], 0
+            for left in range(size, 0, -1):
+                for i in range(start, n):
+                    cnt = math.comb(n - i - 1, left - 1)
+                    if r < cnt:
+                        out.append(items[i])
+                        start = i + 1
+                        break
+                    r -= cnt
+            return out
+        r -= c
+    return None
+
+
 @fn("Subsets", area=AREA, status="fixed",
-    notes="Subsets[list], [list, n], [list, {n}], [list, {min, max}] in Wolfram order (by size, then position)")
-def _subsets_fn(lst, spec=None):
-    items = list_arg(lst, "Subsets")
-    lo, hi = (0, None) if spec is None else _kspec(spec, "Subsets")
-    if 2 ** len(items) > 1 << 20 and spec is None:
+    notes="Subsets[list], [list, n], [list, {n}], [list, {min, max}], [list, {min, max, step}] in Wolfram order "
+          "(by size, then position); batch 6 adds Subsets[list, nspec, s] (first s), [list, nspec, {s}] (the s-th, "
+          "computed by unranking) and [list, nspec, {m, n(, step)}], and any head (Subsets[f[a, b]])")
+def _subsets_fn(lst, spec=None, take=None):
+    head = "List"
+    if is_list(lst):
+        items = list(lst.args)
+    elif isinstance(lst, Expr) and not isinstance(lst, Symbol) and isinstance(lst.head, str) and lst.args:
+        head, items = lst.head, list(lst.args)
+    else:
+        items = list_arg(lst, "Subsets")
+    if spec is not None and isinstance(spec, Symbol) and spec.name == "All":
+        spec = None
+    sizes = _subset_sizes(spec, len(items), "Subsets")
+    total = sum(math.comb(len(items), r) for r in sizes)
+    mk = lambda c: Expr(head, *c)
+    if take is None:
+        if total > 1 << 20:
+            raise ValueError("Subsets: too many subsets to list")
+        return L(*(mk(c) for r in sizes for c in itertools.combinations(items, r)))
+    if _intq(take):
+        k = int(take)
+        idx = list(range(min(k, total))) if k >= 0 else list(range(max(total + k, 0), total))
+    elif is_list(take) and len(take.args) in (1, 2, 3) and all(_intq(v) for v in take.args):
+        vals = [int(v) for v in take.args]
+        if len(vals) == 1:
+            i = vals[0]
+            i = i - 1 if i > 0 else total + i
+            if i < 0 or i >= total or vals[0] == 0:
+                raise ValueError(f"Subsets: subset {vals[0]} does not exist (there are {total})")
+            return mk(_unrank_subset(items, sizes, i))
+        a, b = vals[0], vals[1]
+        step = vals[2] if len(vals) == 3 else 1
+        if step == 0 or a == 0 or b == 0:
+            raise ValueError("Subsets: invalid subset range")
+        a = a - 1 if a > 0 else total + a
+        b = b - 1 if b > 0 else total + b
+        idx = [i for i in range(a, b + (1 if step > 0 else -1), step) if 0 <= i < total]
+    else:
+        raise ValueError(f"Subsets: invalid subset specification {take!r}")
+    if len(idx) > 1 << 20:
         raise ValueError("Subsets: too many subsets to list")
-    return L(*_subsets(items, lo, hi))
+    return L(*(mk(_unrank_subset(items, sizes, i)) for i in idx))
 
 
 @fn("PowerSet", area=AREA, status="verified", listable=False, notes="MikoshiLang alias of Subsets[list]")
@@ -290,14 +374,44 @@ def _cartesian(*lists):
     return L(*(L(*t) for t in itertools.product(*seqs)))
 
 
-@fn("Tuples", area=AREA, status="promoted", notes="Tuples[list, n] and Tuples[{l1, l2, ...}]")
+def _reshape(flat, dims):
+    if len(dims) == 1:
+        return L(*flat)
+    step = len(flat) // dims[0]
+    return L(*(_reshape(flat[i * step:(i + 1) * step], dims[1:]) for i in range(dims[0])))
+
+
+@fn("Tuples", area=AREA, status="promoted",
+    notes="Tuples[list, n] and Tuples[{l1, l2, ...}]; batch 6 adds Tuples[list, {n1, n2, ...}] (all n1 x n2 x ... "
+          "arrays) and any head (Tuples[f[a, b], 2] = {f[a, a], f[a, b], f[b, a], f[b, b]})")
 def _tuples(lst, n=None):
+    head = "List"
     if n is None:
         seqs = [list_arg(l, "Tuples") for l in list_arg(lst, "Tuples")]
+        dims = None
     else:
-        k = nonneg_int(n, "Tuples", "length")
-        seqs = [list_arg(lst, "Tuples")] * k
-    return L(*(L(*t) for t in itertools.product(*seqs)))
+        if is_list(lst):
+            items = list(lst.args)
+        elif isinstance(lst, Expr) and not isinstance(lst, Symbol) and isinstance(lst.head, str) and lst.args:
+            head, items = lst.head, list(lst.args)
+        else:
+            items = list_arg(lst, "Tuples")
+        if is_list(n):
+            dims = [nonneg_int(d, "Tuples", "dimension") for d in n.args]
+            if not dims:
+                raise ValueError("Tuples: the dimension list must not be empty")
+            k = math.prod(dims)
+            head = "List"
+        else:
+            dims = None
+            k = nonneg_int(n, "Tuples", "length")
+        seqs = [items] * k
+    total = math.prod(len(q) for q in seqs)
+    if total > 1 << 20:
+        raise ValueError("Tuples: too many tuples to list")
+    if dims is not None:
+        return L(*(_reshape(list(t), dims) for t in itertools.product(*seqs)))
+    return L(*(Expr(head, *t) for t in itertools.product(*seqs)))
 
 
 @fn("HookLengthFormula", area=AREA, status="fixed",

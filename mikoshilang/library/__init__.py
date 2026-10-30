@@ -9,3 +9,4 @@ from .core import REGISTRY, STATUS, ERRORS, UNHANDLED, Unevaluated, dispatch  # 
 from . import elementary, special, numbertheory, combinatorics, algebra, calculus, linalg, lists, strings, statistics, applied, logic, graphs, numerics, transforms, plots, ml, kernelheads, assume, wl_lists, wl_strings, wl_assoc, wl_numerics, wl_special, wl_numcalc, wl_interp, wl_linalg  # noqa: F401,E402
 from . import wl_symbolic, wl_calculus, wl_algebra  # noqa: F401,E402  (coverage batch 4)
 from . import wl_graphs, wl_stats  # noqa: F401,E402  (coverage batch 5)
+from . import wl_combinat, wl_logic, wl_discrete  # noqa: F401,E402  (coverage batch 6)
