@@ -50,8 +50,15 @@ What is implemented, and checked by value-level tests (see `tests/`):
 - **Patterns** — `_`, `x_`, `x_Head`, `__`, `___` (with heads), Condition `/;`,
   PatternTest `?` (`x_?EvenQ`, `_?(# > 0 &)`), `Alternatives[...]`, `HoldPattern`,
   backtracking sequence matching, Orderless (up to 8 arguments) and Flat heads.
-- **Scoping** — `Module` (lexical renaming to `x$n`, locals removed afterwards),
-  `Block` (dynamic, values restored even on error) and `With` (substitution).
+- **Scoping** — `Module` (lexical renaming to `x$n`; like Wolfram's Temporary
+  symbols, locals that escape in closures or stored definitions keep their
+  values, unreferenced ones are removed), `Block` (dynamic; OwnValues,
+  DownValues, SubValues and attributes are all set aside and restored, even on
+  error, `Throw` or `Return`) and `With`. Substitution into `Function`, `With`,
+  `Module`, rule and definition bodies is capture-avoiding: inner binders
+  (including pattern names) shadow outer ones and are renamed to `x$` when a
+  free symbol would otherwise be captured, so
+  `Function[y, Function[x, x + y]][x]` is `Function[x$, x$ + x]`.
 - **Functions** — `#`, `#n`, `##`, `body &`, `(body &)[args]`, `Function[x, body]`,
   `Function[{x, y}, body]`, `f @ x`, `x // f`, `/@`, `@@`, `@@@`, `Map`, `Apply`,
   `MapThread`, `MapIndexed`, `Select`, `Nest`, `NestList`, `FixedPoint`,
