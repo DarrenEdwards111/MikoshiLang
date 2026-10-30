@@ -43,11 +43,37 @@ _conn("Nand", lambda b: not all(b), "variadic Not[And[...]]")
 _conn("Nor", lambda b: not any(b), "variadic Not[Or[...]]")
 
 
+_BOOL_HEADS = {"And": sp.And, "Or": sp.Or, "Not": sp.Not, "Xor": sp.Xor, "Implies": sp.Implies,
+               "Equivalent": sp.Equivalent, "Iff": sp.Equivalent, "Nand": sp.Nand, "Nor": sp.Nor,
+               "Xnor": lambda *a: sp.Not(sp.Xor(*a))}
+
+
+def _to_bool(e, fname):
+    if e is True or e is False:
+        return sp.true if e else sp.false
+    if isinstance(e, Symbol):
+        if e.name in ("True", "False"):
+            return sp.true if e.name == "True" else sp.false
+        return sp.Symbol(e.name)
+    if isinstance(e, Expr) and isinstance(e.head, str) and e.head in _BOOL_HEADS:
+        return _BOOL_HEADS[e.head](*(_to_bool(a, fname) for a in e.args))
+    raise ValueError(f"{fname}: argument must be a Boolean expression of symbols, &&, ||, ! and friends")
+
+
 def _bexpr(e, fname):
-    v = sym(e, fname)
-    if not isinstance(v, (sp.logic.boolalg.Boolean, sp.Symbol)) and v not in (sp.true, sp.false):
-        raise ValueError(f"{fname}: argument must be a Boolean expression")
-    return v
+    return _to_bool(e, fname)
+
+
+def _from_bool(v):
+    if v is sp.true or v is sp.false:
+        return bool(v)
+    if isinstance(v, sp.Symbol):
+        return Symbol(v.name)
+    name = {sp.And: "And", sp.Or: "Or", sp.Not: "Not", sp.Xor: "Xor", sp.Implies: "Implies",
+            sp.Equivalent: "Equivalent"}.get(type(v))
+    if name is None:
+        raise ValueError(f"unexpected Boolean form {v}")
+    return Expr(name, *(_from_bool(a) for a in v.args))
 
 
 def _vars(v):
@@ -94,14 +120,19 @@ def _sat(e):
 
 @fn("CNF", area=AREA, status="verified", notes="conjunctive normal form (SymPy to_cnf; Wolfram BooleanConvert[e, \"CNF\"])")
 def _cnf(e):
-    return R(sp.to_cnf(_bexpr(e, "CNF")))
+    return _from_bool(sp.to_cnf(_bexpr(e, "CNF")))
 
 
 @fn("DNF", area=AREA, status="verified", notes="disjunctive normal form (SymPy to_dnf)")
 def _dnf(e):
-    return R(sp.to_dnf(_bexpr(e, "DNF")))
+    return _from_bool(sp.to_dnf(_bexpr(e, "DNF")))
 
 
 @fn("BooleanMinimize", area=AREA, status="verified", notes="minimal DNF (SymPy simplify_logic, Quine-McCluskey)")
 def _bmin(e):
-    return R(sp.simplify_logic(_bexpr(e, "BooleanMinimize"), form="dnf"))
+    v = _bexpr(e, "BooleanMinimize")
+    if not sp.satisfiable(v):
+        return False
+    if not sp.satisfiable(sp.Not(v)):
+        return True
+    return _from_bool(sp.simplify_logic(v, form="dnf", force=True))
