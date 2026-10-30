@@ -54,8 +54,20 @@ _FIXED_CONST = {"LightYear": "was 9.461e15 (rounded to 4 digits)", "Parsec": "wa
                 "MolarVolumeIdealGas": "only a 1-argument form existed, ignoring its argument"}
 
 
+def _derived():
+    import math
+    h, c, k, NA, e = 6.62607015e-34, 299792458.0, 1.380649e-23, 6.02214076e23, 1.602176634e-19
+    R = NA * k
+    return {"ReducedPlanckConstant": h / (2 * math.pi), "GasConstant": R, "FaradayConstant": NA * e,
+            "StefanBoltzmannConstant": 2 * math.pi ** 5 * k ** 4 / (15 * h ** 3 * c ** 2),
+            "MolarVolumeIdealGas": R * 273.15 / 100000}
+
+
+_DERIVED = _derived()     # exact SI relations, not the truncated printed CODATA digits
+
+
 def _cval(name):
-    return float(_C[name][0])
+    return _DERIVED.get(name, float(_C[name][0]))
 
 
 def _const(name):
@@ -107,7 +119,19 @@ def _nonzero(v, f, what):
     return v
 
 
-def _formula(name, area, nargs, body, notes, defaults=None, measured=False, status="fixed"):
+def _nonneg(v, f, what):
+    if v.is_number and v.is_real and v < 0:
+        raise ValueError(f"{f}: {what} must be non-negative")
+    return v
+
+
+def _positive(v, f, what):
+    if v.is_number and v.is_real and not v > 0:
+        raise ValueError(f"{f}: {what} must be positive")
+    return v
+
+
+def _formula(name, area, nargs, body, notes, defaults=None, measured=False, status="fixed", check=None):
     """Register formula `body(*sympy_args)`; defaults: list of (name_of_constant or value) for optional args."""
     defaults = defaults or []
 
@@ -122,10 +146,12 @@ def _formula(name, area, nargs, body, notes, defaults=None, measured=False, stat
         for i in range(len(args), hi):
             d = defaults[i - nargs]
             if isinstance(d, str):
-                vals.append(sp.Float(_C[d][0], 15))
+                vals.append(sp.Float(_cval(d), 15))
                 used_measured = True
             else:
                 vals.append(sp.sympify(d))
+        if check is not None:
+            check(vals, name)
         return _num(body(*vals, fname=name), *args, measured=used_measured)
     return impl
 
@@ -160,12 +186,28 @@ _formula("ProjectileMaxHeight", PHYS, 2, lambda v, a, g, fname: v ** 2 * sp.sin(
          "v^2 Sin[theta]^2/(2 g), theta in degrees; " + GRAV, defaults=["StandardGravity"])
 _formula("HeatCapacity", PHYS, 2, lambda Q, dT, fname: _div(Q, dT, fname, "temperature change"), "Q/dT, " + NUM)
 _formula("ThermalExpansion", PHYS, 3, lambda L0, a, dT, fname: L0 * (1 + a * dT), "L0 (1 + alpha dT), " + NUM)
+def _check_sb(v, f):
+    _nonneg(v[0], f, "temperature (K)")
+    if v[1].is_number and not 0 <= v[1] <= 1:
+        raise ValueError(f"{f}: emissivity must be in [0, 1]")
+
+
+def _check_carnot(v, f):
+    _positive(v[0], f, "hot temperature (K)")
+    _nonneg(v[1], f, "cold temperature (K)")
+    if v[0].is_number and v[1].is_number and v[1] > v[0]:
+        raise ValueError(f"{f}: cold temperature exceeds hot temperature")
+
+
 _formula("StefanBoltzmann", PHYS, 1, lambda T, eps, s, fname: eps * s * T ** 4,
-         "emitted power per area eps sigma T^4; default sigma is CODATA 5.670374419e-8 (legacy 5.67e-8)",
-         defaults=[1, "StefanBoltzmannConstant"])
+         "StefanBoltzmann[T, emissivity = 1]: emitted power per area eps sigma T^4; sigma from the SI definition "
+         "(legacy 5.67e-8); emissivity outside [0, 1] or T < 0 raises",
+         defaults=[1, "StefanBoltzmannConstant"], check=_check_sb)
 _formula("CarnotEfficiency", PHYS, 2, lambda Th, Tc, fname: 1 - _div(Tc, Th, fname, "hot temperature"),
-         "1 - Tc/Th, " + NUM)
-_formula("EntropyChange", PHYS, 2, lambda Q, T, fname: _div(Q, T, fname, "temperature"), "Q/T, " + NUM)
+         "CarnotEfficiency[Th, Tc] = 1 - Tc/Th (kelvin), " + NUM + "; Th <= 0, Tc < 0 or Tc > Th raise "
+         "(legacy returned negative efficiencies)", check=_check_carnot)
+_formula("EntropyChange", PHYS, 2, lambda Q, T, fname: _div(Q, T, fname, "temperature"), "Q/T, " + NUM + "; T <= 0 raises",
+         check=lambda v, f: _positive(v[1], f, "temperature (K)"))
 _formula("CoulombForce", PHYS, 3, lambda q1, q2, r, k, fname: k * q1 * q2 / _nonzero(r, fname, "distance") ** 2,
          "k q1 q2/r^2; " + CONSTS, defaults=["CoulombConstant"])
 _formula("ElectricField", PHYS, 2, lambda Q, r, k, fname: k * Q / _nonzero(r, fname, "distance") ** 2,
@@ -180,7 +222,9 @@ _formula("MagneticFieldWire", PHYS, 2, lambda I, r, mu0, fname: mu0 * I / (2 * s
          "mu0 I/(2 Pi r); default mu0 is CODATA 1.25663706212e-6", defaults=["VacuumPermeability"])
 _formula("FaradayLaw", PHYS, 2, lambda dPhi, dt, fname: -_div(dPhi, dt, fname, "time"), "-dPhi/dt, " + NUM)
 _formula("InductanceEnergy", PHYS, 2, lambda Lh, I, fname: Lh * I ** 2 / 2, "L I^2/2, " + NUM)
-_formula("LCFrequency", PHYS, 2, lambda Lh, C, fname: 1 / (2 * sp.pi * sp.sqrt(Lh * C)), "1/(2 Pi Sqrt[L C]), " + NUM)
+_formula("LCFrequency", PHYS, 2, lambda Lh, C, fname: 1 / (2 * sp.pi * sp.sqrt(Lh * C)),
+         "1/(2 Pi Sqrt[L C]), " + NUM + "; L, C <= 0 raise",
+         check=lambda v, f: (_positive(v[0], f, "inductance"), _positive(v[1], f, "capacitance")))
 _formula("Magnification", PHYS, 2, lambda di, do, fname: -_div(di, do, fname, "object distance"), "-di/do, " + NUM)
 _formula("PhotonEnergy", PHYS, 1, lambda lam, h, c, fname: h * c / _nonzero(lam, fname, "wavelength"),
          "h c/lambda; " + CONSTS, defaults=["PlanckConstant", "SpeedOfLight"])
@@ -218,7 +262,7 @@ _formula("RelativisticMass", PHYS, 2, lambda m0, v, c, fname: m0 * _gamma_factor
          "gamma m0; default c = 299792458 (legacy 3e8)", defaults=["SpeedOfLight"])
 _formula("MassEnergyEquivalence", PHYS, 1, lambda m, c, fname: m * c ** 2,
          "m c^2; default c = 299792458 (legacy 3e8)", defaults=["SpeedOfLight"])
-_formula("UncertaintyProduct", PHYS, 2, lambda dx, dp, hbar, fname: dx * dp / hbar,
+_formula("UncertaintyProduct", PHYS, 2, lambda dx, dp, hbar, fname: dx * dp / _nonzero(hbar, fname, "hbar"),
          "dx dp/hbar (dimensionless, >= 1/2 by Heisenberg); default hbar is CODATA (legacy 1.055e-34)",
          defaults=["ReducedPlanckConstant"])
 
@@ -232,6 +276,8 @@ def _bohr(n=None, a0=None):
     if n is None:
         return base
     k = _x(n, "BohrRadius")
+    if k.is_number and not (k.is_Integer and k >= 1):
+        raise ValueError("BohrRadius: n must be a positive integer")
     return _num(k ** 2 * base, n, measured=a0 is None)
 
 
@@ -263,7 +309,11 @@ def _snell(n1, th, n2):
 # ─────────────────────────── geometry ───────────────────────────
 
 def _g(name, nargs, body, notes):
-    _formula(name, GEO, nargs, body, notes)
+    def check(v, f):
+        for x in v:
+            _nonneg(x, f, "lengths and areas")
+    _formula(name, GEO, nargs, body, notes + "; negative lengths raise (legacy returned e.g. CircleArea[-1] = Pi)",
+             check=check)
 
 
 _g("CircleArea", 1, lambda r, fname: sp.pi * r ** 2, "Pi r^2 (exact)")
@@ -361,6 +411,8 @@ def _polyarea(pts):
     notes="n.({x, y, z} - p) == 0 expanded, exact (legacy converted to floats)")
 def _plane(p, n):
     a, nn = _points(p, "PlaneEquation", 3), _points(n, "PlaneEquation", 3)
+    if all(v.is_number and v == 0 for v in nn):
+        raise ValueError("PlaneEquation: the normal vector must be non-zero")
     x, y, z = sp.symbols("x y z")
     lhs = sp.expand(nn[0] * (x - a[0]) + nn[1] * (y - a[1]) + nn[2] * (z - a[2]))
     return Expr("Equal", numeric_out(lhs, p, n), 0)
@@ -401,7 +453,14 @@ FN = "exact for exact input; legacy rounded to cents/6 digits or used floats"
 
 
 def _f(name, nargs, body, notes):
-    _formula(name, FIN, nargs, body, notes)
+    import inspect
+    params = list(inspect.signature(body).parameters)
+
+    def check(v, f):
+        for p, x in zip(params, v):
+            if p in ("r", "g") and x.is_number and x.is_real and x <= -1:
+                raise ValueError(f"{f}: rates must be greater than -1 (-100%)")
+    _formula(name, FIN, nargs, body, notes, check=check)
 
 
 def _annuity_factor(r, n):
