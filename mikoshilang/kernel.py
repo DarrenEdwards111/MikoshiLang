@@ -2923,3 +2923,4 @@ def _b_cancel(a, ev, expr):
 
 # Wolfram level / sequence specifications, associations and operator forms (replaces several builtins above).
 from . import kernel_lists  # noqa: E402,F401
+from . import kernel_linalg  # noqa: E402,F401  (batch 3: Dot, Det, Inverse)
