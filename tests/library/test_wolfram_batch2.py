@@ -395,7 +395,45 @@ NUMCALC = [
     ("FindFit[{{1, 2}, {2, 4}, {3, 6}}, {a x, a > 0}, {a}, x]", Raises()),
 ]
 
-CASES = NUMERICS + SPECIAL + NUMBER_THEORY + NUMCALC
+INTERP = [
+    # Interpolation (reference page: Interpolation[{1, 2, 3, 5, 8, 5}][2.5] = 2.4375)
+    ("Interpolation[{1, 2, 3, 5, 8, 5}][2.5]", Near(2.4375)), ("Interpolation[{1, 2, 3, 5, 8, 5}, 2.5]", Near(2.4375)),
+    ("Interpolation[{1, 2, 3, 5, 8, 5}][3]", Near(3.0, 1e-14)),
+    ("Interpolation[{{0, 0}, {1, 1}, {2, 4}, {3, 9}}][1.5]", Near(2.25)),
+    ("Interpolation[{{0, 0}, {1, 1}, {2, 4}, {3, 9}}, InterpolationOrder -> 1][1.5]", Near(2.5)),
+    ("Interpolation[{{0, 0}, {1, 1}, {2, 8}, {3, 27}, {4, 64}}][2.5]", Near(15.625)),
+    ("Interpolation[{{0, 0}, {1, 1}, {2, 8}, {3, 27}, {4, 64}}]'[2.5]", Near(18.75)),
+    ("Interpolation[{{0, 0}, {1, 1}, {2, 8}, {3, 27}, {4, 64}}][{0.5, 3.5}]", "{0.125, 42.875}"),
+    ("Interpolation[{{1, 2}, {1, 3}}]", Raises()), ("Interpolation[{{0, {1, 2}}, {1, {2, 3}}}]", Raises()),
+    # ListInterpolation
+    ("ListInterpolation[{0, 1, 4, 9, 16}, {{0, 1}}][0.5]", Near(4.0)), ("ListInterpolation[{1, 4, 9, 16}][2.5]", Near(6.25)),
+    ("ListInterpolation[{1, 2, 3}, {{0, 2}}][1.5]", Near(2.5)), ("ListInterpolation[{{1, 2}, {3, 4}}]", Raises()),
+    # InterpolatingFunction objects
+    ("Head[Interpolation[{1, 2, 4}]]", "InterpolatingFunction"),
+    ("Head[Interpolation[{1, 2, 4}]] === InterpolatingFunction", True),
+    ("MatchQ[ListInterpolation[{1, 2, 4}], InterpolatingFunction[{{1., 3.}}, _String]]", True),
+    ("Head[NDSolveValue[{y'[x] == 1, y[0] == 0}, y, {x, 0, 1}]] === InterpolatingFunction", True),
+    ("First[Interpolation[{{0, 1}, {2, 3}, {5, 1}}]]", "{{0., 5.}}"),
+    ("Derivative[2][Interpolation[{{0, 0}, {1, 1}, {2, 4}, {3, 9}}]][1.2]", Near(2.0, 1e-10)),
+    ("InterpolatingFunction[{{0, 1}}, \"nosuch\"][0.5]", Raises()),
+    # NDSolve / NDSolveValue (reference page: {y[10.5], y'[12.5]} /. s = {{0.0469302, 0.113798}})
+    ("{y[10.5], y'[12.5]} /. NDSolve[{y'[x] == y[x] Cos[x + y[x]], y[0] == 1}, y, {x, 0, 30}]",
+     Pred(lambda g: abs(g.args[0].args[0] - 0.0469302) < 1e-6 and abs(g.args[0].args[1] - 0.113798) < 1e-6, "doc values")),
+    ("(y /. First[NDSolve[{y'[x] == -y[x], y[0] == 1}, y, {x, 0, 2}]])[1.]", Near(float(mp.exp(-1)), 1e-8)),
+    ("NDSolve[{y'[x] == y[x], y[1] == 1}, y[x], {x, 0, 2}] /. x -> 0", Pred(lambda g: abs(g.args[0].args[0].args[1] - float(mp.exp(-1))) < 1e-8, "{{y[0] -> E^-1}}")),
+    ("Head[NDSolve[{y'[x] == -y[x], y[0] == 1}, y, {x, 0, 2}][[1, 1, 2]]]", "InterpolatingFunction"),
+    ("NDSolve[{y''[x] == y[x], y[0] == 1, y[1] == 2}, y, {x, 0, 1}]", Raises()),
+    ("NDSolve[{y'[x] == y[x]}, y, {x, 0, 1}]", Raises()),
+    ("{x[1.], y[1.]} /. First[NDSolve[{x'[t] == -y[t] - x[t]^2, y'[t] == 2 x[t] - y[t]^3, x[0] == y[0] == 1}, {x, y}, {t, 20}]]",
+     Pred(lambda g: abs(g.args[0] + 0.17032312) < 1e-7 and abs(g.args[1] - 0.70724363) < 1e-7, "SciPy reference")),
+    ("NDSolveValue[{y''[x] + y[x] == 0, y[0] == 0, y'[0] == 1}, y, {x, 0, 10}][Pi/2]", Near(1.0, 1e-8)),
+    ("NDSolveValue[{y''[x] + y[x] == 0, y[0] == 0, y'[0] == 1}, y, {x, 0, 10}]'[Pi]", Near(-1.0, 1e-8)),
+    ("NDSolveValue[{y'[t] == y[t] (1 - y[t]), y[0] == 0.1}, y[t], {t, 0, 5}] /. t -> 3", Near(float(1 / (1 + 9 * mp.exp(-3))), 1e-8)),
+    ("NDSolveValue[{y'[x] == x, y[1] == 0}, y, {x, 0, 2}][0]", Near(-0.5, 1e-9)),
+    ("NDSolveValue[{y'[x] == -y[x], y[0] == 1}, y, {x, 0, 1}, WorkingPrecision -> 30]", Raises()),
+]
+
+CASES = NUMERICS + SPECIAL + NUMBER_THEORY + NUMCALC + INTERP
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))

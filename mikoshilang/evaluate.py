@@ -256,6 +256,18 @@ def _evaluate(expr, depth: int) -> Any:
                 return kernel.apply_function(head, new_args, ev)
             except kernel.ReturnSignal as r:
                 return r.value
+        if head.head == "InterpolatingFunction":
+            from .library.wl_interp import apply_ifun
+            r = apply_ifun(head, new_args)
+            if r is not None:
+                return r
+        if (isinstance(head.head, Expr) and head.head.head == "Derivative" and len(head.args) == 1
+                and isinstance(head.args[0], Expr) and head.args[0].head == "InterpolatingFunction"
+                and len(head.head.args) == 1 and isinstance(head.head.args[0], int)):
+            from .library.wl_interp import apply_ifun
+            r = apply_ifun(head.args[0], new_args, head.head.args[0])
+            if r is not None:
+                return r
         if isinstance(head.head, Expr) and head.head.head == "Derivative":
             r = kernel.apply_derivative(head, new_args, ev)
             if r is not kernel.UNHANDLED:

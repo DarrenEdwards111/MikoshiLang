@@ -3184,9 +3184,9 @@ InterfaceSwitched,Notebook Documents & Presentation,infeasible,,front end / note
 Interleaving,Images,missing,3,,0,ImageRepresentation
 IntermediateTest,Core Language & Structure,missing,2,,0,SystematicTestingAndVerification
 InternallyBalancedDecomposition,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems AnalysisOfStateSpaceModels
-InterpolatingFunction,Data Manipulation & Analysis,missing,2,,0,CurveFittingAndApproximateFunctions DifferentialEquations
+InterpolatingFunction,Data Manipulation & Analysis,implemented,2,,0,CurveFittingAndApproximateFunctions DifferentialEquations
 InterpolatingPolynomial,Data Manipulation & Analysis,missing,2,,0,CurveFittingAndApproximateFunctions PolynomialFactoring
-Interpolation,Data Manipulation & Analysis,missing,2,,0,DataTransformsAndSmoothing Statistics TimeSeries NumericalData
+Interpolation,Data Manipulation & Analysis,implemented,2,,0,DataTransformsAndSmoothing Statistics TimeSeries NumericalData
 InterpolationOrder,Visualization & Graphics,missing,3,,0,PlottingOptions SystemModelSimulation
 InterpolationPoints,Core Language & Structure,missing,2,,0,NonparametricStatisticalDistributions
 Interpretation,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,GeneralizedInput DefiningCustomNotation
@@ -3602,7 +3602,7 @@ ListFitPlot,Data Manipulation & Analysis,missing,2,,0,TimeSeries StatisticalVisu
 ListFitPlot3D,Data Manipulation & Analysis,missing,2,,0,StatisticalVisualization DateAndTimeVisualization
 ListFormat,"Options, system variables & unclassified",missing,3,,0,
 ListFourierSequenceTransform,Higher Mathematical Computation,missing,2,,0,SummationTransforms SignalFilteringAndFilterDesign
-ListInterpolation,Data Manipulation & Analysis,missing,2,,0,CurveFittingAndApproximateFunctions CreatingAndImportingSignals
+ListInterpolation,Data Manipulation & Analysis,implemented,2,,0,CurveFittingAndApproximateFunctions CreatingAndImportingSignals
 ListLineIntegralConvolutionPlot,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
 ListLinePlot,Data Manipulation & Analysis,missing,1,,10,DataVisualization FunctionVisualization ChartingAndInformationVisualization ScientificDataAnalysis
 ListLinePlot3D,Data Manipulation & Analysis,missing,2,,0,DataVisualization DateAndTimeVisualization TabularVisualization
@@ -4065,8 +4065,8 @@ NCaputoD,"Options, system variables & unclassified",missing,3,,0,
 NContourIntegrate,Visualization & Graphics,missing,3,,0,FunctionsOfComplexVariables
 NDEigensystem,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers DifferentialEquations PDEModelingAndAnalysis DifferentialOperators
 NDEigenvalues,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers DifferentialEquations PDEModelingAndAnalysis DifferentialOperators
-NDSolve,Symbolic & Numeric Computation,missing,2,,0,NumericalEvaluationAndPrecision EquationSolving Calculus GeometricComputation
-NDSolveValue,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers SymbolicArrays DifferentialEquations PDEModelingAndAnalysis
+NDSolve,Symbolic & Numeric Computation,implemented,2,,0,NumericalEvaluationAndPrecision EquationSolving Calculus GeometricComputation
+NDSolveValue,Symbolic & Numeric Computation,implemented,2,,0,GeometricSolvers SymbolicArrays DifferentialEquations PDEModelingAndAnalysis
 NExpectation,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics SocialNetworks GeometricSolvers ProbabilityWithQuantities
 NFractionalD,"Options, system variables & unclassified",missing,3,,0,
 NHoldAll,Core Language & Structure,missing,1,,0,Attributes EvaluationControl
