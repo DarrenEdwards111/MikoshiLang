@@ -86,49 +86,58 @@ Before the audit, 12 of 50 failed. **All 12 were caused by our code**, not by th
 After the fixes: **50/50 pass** (run twice). These tests are excluded from default runs and CI
 (`addopts = -m 'not live_service'`) because they depend on mutable remote data.
 
+## Wolfram batch 1
+
+Batch 1 adds Wolfram built-ins for lists, strings, string patterns and associations, plus the language objects they need (operator forms, `Key`, `Missing`, `Span`, `UpTo`, `Repeated`, `Optional`, ...). These heads have status `added`. Kernel builtins whose semantics were extended to match Wolfram are recorded as `fixed`. Each has at least 3 differential cases in `tests/library/test_wolfram_batch1.py`, checked against the output examples on the Wolfram reference pages. Overall progress towards the documented Wolfram built-ins is tracked in `docs/wolfram_coverage_roadmap.md`.
+
 
 ## Status counts
 
 | Status | Heads | Meaning |
 |---|---|---|
-| verified | 133 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
-| fixed | 437 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
-| promoted | 30 | was quarantined; now properly implemented and tested |
-| kernel | 54 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
+| verified | 129 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
+| fixed | 476 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
+| promoted | 32 | was quarantined; now properly implemented and tested |
+| added | 209 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| kernel | 34 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 0 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **654** | 620 pre-audit inventory heads, all with a status, plus 34 promoted/aliased heads |
+| **total reviewed** | **880** | 620 pre-audit inventory heads, all with a status, plus 260 promoted/aliased heads |
 
-Remaining unreviewed quarantined names: **5354** (all raise NotImplementedError; see below).
+Remaining unreviewed quarantined names: **5347** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **2249**.
+Differential test cases in tests/library: **3202**.
 
 
 ## By area
 
-| Area | verified | fixed | promoted | kernel | error | quarantined |
-|---|---|---|---|---|---|---|
-| algebra | 12 | 12 | 2 | 0 | 0 | 0 |
-| calculus | 9 | 24 | 3 | 1 | 0 | 0 |
-| combinatorics | 5 | 13 | 6 | 0 | 0 | 0 |
-| constants | 0 | 33 | 0 | 0 | 0 | 0 |
-| elementary | 33 | 7 | 1 | 0 | 0 | 0 |
-| finance | 0 | 20 | 0 | 0 | 0 | 0 |
-| geometry | 0 | 29 | 0 | 0 | 0 | 0 |
-| graphs | 3 | 14 | 0 | 0 | 0 | 0 |
-| kernel | 0 | 0 | 0 | 53 | 0 | 0 |
-| linear algebra | 8 | 40 | 1 | 0 | 0 | 0 |
-| lists and sets | 4 | 14 | 2 | 0 | 0 | 0 |
-| logic | 6 | 7 | 0 | 0 | 0 | 0 |
-| ml | 4 | 0 | 0 | 0 | 0 | 0 |
-| number theory | 3 | 49 | 4 | 0 | 0 | 0 |
-| numerics | 4 | 5 | 0 | 0 | 0 | 0 |
-| physics | 0 | 48 | 0 | 0 | 0 | 0 |
-| plots | 0 | 14 | 0 | 0 | 0 | 0 |
-| special functions | 12 | 30 | 7 | 0 | 0 | 0 |
-| statistics | 9 | 38 | 4 | 0 | 0 | 0 |
-| strings and dates | 16 | 26 | 0 | 0 | 0 | 0 |
-| transforms | 5 | 14 | 0 | 0 | 0 | 0 |
+| Area | verified | fixed | promoted | added | kernel | error | quarantined |
+|---|---|---|---|---|---|---|---|
+| algebra | 12 | 12 | 2 | 0 | 0 | 0 | 0 |
+| associations (batch 1) | 0 | 0 | 0 | 25 | 0 | 0 | 0 |
+| calculus | 9 | 24 | 3 | 0 | 1 | 0 | 0 |
+| combinatorics | 5 | 13 | 6 | 0 | 0 | 0 | 0 |
+| constants | 0 | 33 | 0 | 0 | 0 | 0 | 0 |
+| elementary | 33 | 7 | 1 | 0 | 0 | 0 | 0 |
+| finance | 0 | 20 | 0 | 0 | 0 | 0 | 0 |
+| geometry | 0 | 29 | 0 | 0 | 0 | 0 | 0 |
+| graphs | 3 | 14 | 0 | 0 | 0 | 0 | 0 |
+| kernel | 0 | 35 | 0 | 0 | 33 | 0 | 0 |
+| language (batch 1) | 0 | 0 | 0 | 19 | 0 | 0 | 0 |
+| linear algebra | 8 | 40 | 1 | 0 | 0 | 0 | 0 |
+| lists (batch 1) | 0 | 0 | 2 | 107 | 0 | 0 | 0 |
+| lists and sets | 4 | 14 | 2 | 0 | 0 | 0 | 0 |
+| logic | 6 | 7 | 0 | 0 | 0 | 0 | 0 |
+| ml | 4 | 0 | 0 | 0 | 0 | 0 | 0 |
+| number theory | 3 | 49 | 4 | 0 | 0 | 0 | 0 |
+| numerics | 4 | 5 | 0 | 0 | 0 | 0 | 0 |
+| physics | 0 | 48 | 0 | 0 | 0 | 0 | 0 |
+| plots | 0 | 14 | 0 | 0 | 0 | 0 | 0 |
+| special functions | 12 | 30 | 7 | 0 | 0 | 0 | 0 |
+| statistics | 9 | 38 | 4 | 0 | 0 | 0 | 0 |
+| strings (batch 1) | 0 | 7 | 0 | 58 | 0 | 0 | 0 |
+| strings and dates | 12 | 23 | 0 | 0 | 0 | 0 | 0 |
+| transforms | 5 | 14 | 0 | 0 | 0 | 0 | 0 |
 
 ## Every function
 
@@ -165,6 +174,36 @@ Cases = number of differential test cases in which the head occurs.
 | `TrigExpand` | verified | 3 | SymPy expand_trig followed by Expand |
 | `TrigReduce` | verified | 3 | products and powers of trig functions to multiple angles (SymPy fu TR8) |
 | `TrigToExp` | verified | 3 | rewrite trig/hyperbolic functions as exponentials |
+
+### associations (batch 1)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `AssociateTo` | added | 3 | AssociateTo[a, k -> v] (or a list of rules) updates the association stored in symbol a and returns it |
+| `Association` | added | 3 | normalises <\|...\|>: lists of rules and nested associations are flattened in, a repeated key keeps its first position and takes the last value; non-rule arguments raise |
+| `AssociationMap` | added | 4 | AssociationMap[f, {k1, ...}] gives <\|k1 -> f[k1], ...\|>; on an association f is applied to each rule and must return a rule |
+| `AssociationQ` | added | 3 | True for a valid association |
+| `AssociationThread` | added | 4 | AssociationThread[{k...}, {v...}] or [{k...} -> {v...}]; lengths must agree; repeated keys keep the last value |
+| `DeleteMissing` | added | 3 | drops Missing[...] elements of a list (or entries of an association); DeleteMissing[list, n] works down to level n (n a positive integer or Infinity) |
+| `KeyComplement` | added | 3 | entries of the first association whose keys are in none of the others |
+| `KeyDrop` | added | 3 | entries whose keys are not listed; rule lists and lists of associations thread |
+| `KeyDropFrom` | added | 3 | KeyDropFrom[a, key or keys] removes entries from the association stored in a |
+| `KeyExistsQ` | added | 3 | True if the key is present (SameQ on keys) |
+| `KeyFreeQ` | added | 3 | True if no key matches the pattern |
+| `KeyIntersection` | added | 3 | each association restricted to the keys common to all, in the order of the first association |
+| `KeyMap` | added | 3 | KeyMap[f, assoc] applies f to every key (later entries win when keys collide) |
+| `KeyMemberQ` | added | 3 | True if some key matches the pattern |
+| `KeySelect` | added | 3 | entries whose key k gives crit[k] True |
+| `KeySort` | added | 3 | entries ordered by canonical order of keys, or by the ordering function p |
+| `KeySortBy` | added | 3 | entries ordered by canonical order of f[key] (stable for ties) |
+| `KeyTake` | added | 3 | entries for the given keys in the order the keys are listed (absent keys ignored); rule lists give rule lists; lists of associations thread |
+| `KeyUnion` | added | 3 | each association extended to the union of keys (in order of first appearance); absent keys get Missing["KeyAbsent", k] (or f[k] with KeyUnion[list, f]) |
+| `KeyValueMap` | added | 3 | {f[k1, v1], f[k2, v2], ...} |
+| `Keys` | added | 4 | keys of an association in order; Keys of a rule list gives each rule's key; lists of associations thread; Keys[a, f] applies f to each key |
+| `Lookup` | added | 7 | Lookup[assoc, key] (Missing["KeyAbsent", key] if absent), Lookup[assoc, key, default], a list of keys gives a list, a list of associations threads; rule lists act as associations |
+| `Merge` | added | 4 | Merge[{a1, a2, ...}, f] gives <\|k -> f[{values for k}]\|> with keys in order of first appearance; rule lists act as associations |
+| `MissingQ` | added | 3 | True for Missing[...] expressions |
+| `Values` | added | 3 | values of an association in order (RuleDelayed values evaluated); rule lists and lists of associations thread; Values[a, f] applies f to each value |
 
 ### calculus
 
@@ -279,7 +318,7 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Abs` | verified | 10 | verified against SymPy/mpmath |
+| `Abs` | verified | 20 | verified against SymPy/mpmath |
 | `ArcCos` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCosh` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCot` | verified | 3 | verified against SymPy/mpmath |
@@ -291,7 +330,7 @@ Cases = number of differential test cases in which the head occurs.
 | `ArcTanh` | verified | 3 | verified against SymPy/mpmath |
 | `Ceiling` | verified | 3 | verified against SymPy/mpmath |
 | `Conjugate` | verified | 3 | verified against SymPy/mpmath |
-| `Cos` | verified | 21 | verified against SymPy/mpmath |
+| `Cos` | verified | 23 | verified against SymPy/mpmath |
 | `Cosh` | verified | 4 | verified against SymPy/mpmath |
 | `Cot` | verified | 3 | verified against SymPy/mpmath |
 | `Coth` | verified | 3 | verified against SymPy/mpmath |
@@ -306,7 +345,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Log2` | verified | 3 | log base 2; Log2[0] = -Infinity |
 | `Max` | fixed | 4 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
 | `Min` | fixed | 4 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
-| `Mod` | verified | 5 | Mod[m, n] has the sign of n (Wolfram); Mod[m, 0] raises |
+| `Mod` | verified | 11 | Mod[m, n] has the sign of n (Wolfram); Mod[m, 0] raises |
 | `Quotient` | verified | 4 | Quotient[m, n] = Floor[m/n] |
 | `RealPart` | verified | 3 | verified against SymPy/mpmath |
 | `Root` | fixed | 36 | Wolfram Root[f, k]: the k-th root of the polynomial f[x] (f a pure function), ordered as Wolfram: real roots ascending, then complex roots by real part, then \|Im\|, conjugate pairs adjacent (negative imaginary part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. Legacy Root[a, n] meant a^(1/n) (now Surd/Power) |
@@ -314,11 +353,11 @@ Cases = number of differential test cases in which the head occurs.
 | `Sec` | verified | 3 | verified against SymPy/mpmath |
 | `Sech` | verified | 3 | verified against SymPy/mpmath |
 | `Sign` | verified | 4 | verified against SymPy/mpmath |
-| `Sin` | verified | 33 | verified against SymPy/mpmath |
+| `Sin` | verified | 35 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
-| `Sqrt` | verified | 25 | verified against SymPy/mpmath |
+| `Sqrt` | verified | 26 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
-| `Tan` | verified | 3 | verified against SymPy/mpmath |
+| `Tan` | verified | 4 | verified against SymPy/mpmath |
 | `Tanh` | verified | 3 | verified against SymPy/mpmath |
 
 ### finance
@@ -407,58 +446,97 @@ Cases = number of differential test cases in which the head occurs.
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `Apart` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Append` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `AtomQ` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `Append` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule |
+| `Apply` | fixed | 3 | kernel builtin extended in batch 1: level specifications (f @@@ expr); an association gives f[values] |
+| `AtomQ` | fixed | 6 | kernel builtin extended in batch 1: associations and rationals are atoms |
 | `Cancel` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Cases` | fixed | 6 | kernel builtin extended in batch 1: level specifications and a maximum count |
+| `Count` | fixed | 4 | kernel builtin extended in batch 1: level specifications |
 | `D` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `DSolve` | kernel | 1 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `DeleteCases` | fixed | 3 | kernel builtin extended in batch 1: level specifications and a maximum count |
 | `Det` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Diff` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Distance2D` | kernel | 3 | kernel builtin, Euclidean distance of two 2D points (not a Wolfram name; equals EuclideanDistance) |
 | `Dot` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `DotProduct` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Drop` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `EvenQ` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `First` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Flatten` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `IntegerQ` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Drop` | fixed | 5 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
+| `Equal` | fixed | 6 | kernel builtin extended in batch 1: more than two arguments chain |
+| `EvenQ` | kernel | 24 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `First` | fixed | 9 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
+| `Flatten` | fixed | 5 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
+| `FreeQ` | fixed | 4 | kernel builtin extended in batch 1: level specifications, Heads -> False |
+| `IntegerQ` | kernel | 6 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Inverse` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Join` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Last` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Length` | kernel | 13 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Join` | fixed | 5 | kernel builtin extended in batch 1: Join[..., n] at level n; associations merge (later values win) |
+| `Last` | fixed | 14 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
+| `Length` | fixed | 20 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
+| `Less` | fixed | 3 | kernel builtin extended in batch 1: more than two arguments chain |
 | `Limit` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `List` | fixed | 4 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
 | `ListQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
-| `MemberQ` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Most` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Map` | fixed | 8 | kernel builtin extended in batch 1: level specifications (n, {n}, {m, n}, negative), associations, operator form Map[f] |
+| `MapAll` | fixed | 3 | kernel builtin extended in batch 1: f //@ expr |
+| `MapIndexed` | fixed | 3 | kernel builtin extended in batch 1: level specifications; associations index by Key[k] |
+| `MemberQ` | fixed | 5 | kernel builtin extended in batch 1: level specifications |
+| `Most` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
 | `N` | kernel | 54 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Negative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NonNegative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `NumberQ` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `OddQ` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Part` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Normal` | fixed | 3 | kernel builtin extended in batch 1: associations become rule lists at the first level only; Normal[expr, h] |
+| `NumberQ` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `OddQ` | kernel | 14 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Part` | fixed | 4 | kernel builtin extended in batch 1: Span (i;;j;;k), All, position lists, negative indices, Key[k] and string keys of associations |
 | `PartialD` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Plus` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Position` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Plus` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Position` | fixed | 5 | kernel builtin extended in batch 1: level specifications, a maximum count, Heads -> False |
 | `Positive` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Power` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Prepend` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Prepend` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule; any head |
 | `PrimeQ` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Range` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Range` | fixed | 8 | kernel builtin extended in batch 1: rational, real and symbolic steps |
 | `ReplaceAll` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
-| `Rest` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Reverse` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Rest` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
+| `Reverse` | fixed | 6 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
+| `Select` | fixed | 11 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
 | `Series` | kernel | 1 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Solve` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Sort` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Sort` | fixed | 5 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
 | `StringJoin` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringLength` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `StringLength` | kernel | 6 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `StringQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
-| `Take` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Times` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `ToString` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `Take` | fixed | 7 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
+| `Thread` | fixed | 3 | kernel builtin extended in batch 1: Thread[f[...], h] and Thread[expr, h, n]; rules thread |
+| `Times` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `ToString` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Together` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Total` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Transpose` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Total` | fixed | 9 | kernel builtin extended in batch 1: Total[list, n], {n}, {n1, n2}, Infinity; associations |
+| `Transpose` | fixed | 5 | kernel builtin extended in batch 1: permutation specifications (including repeated levels for diagonals) |
+| `Unequal` | fixed | 5 | kernel builtin extended in batch 1: more than two arguments need all pairs distinct |
+
+### language (batch 1)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `Composition` | added | 3 | f @* g; Composition[f, g][x] = f[g[x]] |
+| `EqualTo` | added | 3 | operator x == y |
+| `Except` | added | 5 | Except[c] and Except[c, p] in patterns |
+| `GreaterEqualThan` | added | 3 | operator x >= y |
+| `GreaterThan` | added | 3 | operator GreaterThan[y][x] = x > y |
+| `Key` | added | 4 | Key[k] in Part and as an operator on associations |
+| `LessEqualThan` | added | 3 | operator x <= y |
+| `LessThan` | added | 3 | operator x < y |
+| `Missing` | added | 8 | inert; Missing["KeyAbsent", k] for absent keys |
+| `Nothing` | added | 6 | removed from lists |
+| `Optional` | added | 3 | x_:d and x_. (Plus/Times/Power defaults) |
+| `Repeated` | added | 3 | p.. and Repeated[p, n \| {m, n}] in sequences |
+| `RepeatedNull` | added | 3 | p... in sequences |
+| `RightComposition` | added | 3 | f /* g; RightComposition[f, g][x] = g[f[x]] |
+| `SameAs` | added | 3 | operator x === y |
+| `Span` | added | 3 | i ;; j ;; k in Part, Take and Drop |
+| `Splice` | added | 4 | spliced into lists |
+| `UnequalTo` | added | 3 | operator x != y |
+| `UpTo` | added | 9 | UpTo[n] in Take, Drop, Partition, ... |
 
 ### linear algebra
 
@@ -514,6 +592,120 @@ Cases = number of differential test cases in which the head occurs.
 | `VectorAngle` | fixed | 4 | ArcCos[u.Conjugate[v]/(\|u\| \|v\|)]; zero vectors and different lengths raise |
 | `ZeroMatrix` | fixed | 3 | m x n zero matrix (MikoshiLang); ZeroMatrix[n] is n x n; non-integer sizes raise |
 
+### lists (batch 1)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `AllMatch` | added | 3 | True if every element (or association value) matches the pattern; operator form |
+| `AllTrue` | added | 3 | test[e] is True for every element (stops at the first failure); optional level |
+| `AnyMatch` | added | 3 | True if some element matches the pattern; operator form |
+| `AnyTrue` | added | 3 | test[e] is True for some element (stops at the first success); optional level |
+| `AppendTo` | added | 3 | AppendTo[s, e] sets s = Append[s, e] and returns the new value (s must have a value) |
+| `Array` | added | 5 | Array[f, n], Array[f, {n1, n2, ...}], origin r or {r1, ...}, {a, b} ranges and head h |
+| `ArrayDepth` | added | 3 | depth to which expr is a full array of lists (0 for non-lists) |
+| `ArrayFlatten` | added | 3 | ArrayFlatten[{{m11, m12, ...}, ...}] builds a block matrix; scalar blocks (e.g. 0) become constant blocks of the matching size |
+| `ArrayQ` | added | 6 | ArrayQ[expr], ArrayQ[expr, n] (n may be a pattern) and ArrayQ[expr, n, test] for the elements |
+| `ArrayReshape` | added | 3 | ArrayReshape[list, dims]: the flattened elements arranged with the given dimensions, padded with 0 (or the given padding) when there are too few |
+| `Between` | added | 4 | min <= x <= max for {min, max}, or within any interval of {{min1, max1}, ...}; Between[{min, max}] is an operator form |
+| `BinCounts` | added | 6 | counts in bins [b_k, b_k+1): BinCounts[data, dx] (bins at multiples of dx), BinCounts[data, {min, max, dx}] and BinCounts[data, {{b1, b2, ...}}] |
+| `BinLists` | added | 3 | the elements falling in each bin [b_k, b_k+1), with the same bin specifications as BinCounts |
+| `BlockMap` | added | 3 | BlockMap[f, list, n] = Map[f, Partition[list, n]]; BlockMap[f, list, n, d] |
+| `BooleanQ` | promoted | 3 | True exactly for True and False |
+| `Catenate` | added | 3 | joins a list of lists (and/or associations, whose values are used) into one list |
+| `Comap` | added | 3 | Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys) |
+| `ComapApply` | added | 3 | ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...} |
+| `ComposeList` | added | 3 | ComposeList[{f1, f2, ...}, x] = {x, f1[x], f2[f1[x]], ...} |
+| `ConstantArray` | added | 4 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
+| `Construct` | added | 3 | Construct[f, x, y, ...] = f[x, y, ...] |
+| `ContainsAll` | added | 3 | every element of e2 occurs in e1 (SameQ or SameTest) |
+| `ContainsAny` | added | 3 | some element of e2 occurs in e1 |
+| `ContainsExactly` | added | 4 | e1 and e2 have the same distinct elements |
+| `ContainsNone` | added | 3 | no element of e2 occurs in e1 |
+| `ContainsOnly` | added | 3 | every element of e1 occurs in e2 |
+| `CountDistinct` | added | 3 | number of distinct (SameQ) elements; CountDistinct[list, test] |
+| `CountDistinctBy` | added | 3 | number of distinct values of f |
+| `Counts` | added | 3 | <\|e -> count, ...\|> in order of first appearance (SameQ) |
+| `CountsBy` | added | 3 | <\|f[e] -> count, ...\|> in order of first appearance |
+| `Delete` | added | 3 | Delete[expr, n], Delete[expr, {i, j, ...}] and Delete[expr, {{...}, ...}] (positions refer to the original expression) |
+| `DeleteAdjacentDuplicates` | added | 3 | removes elements equal (SameQ, or the given test) to their predecessor |
+| `DeleteDuplicatesBy` | added | 3 | keeps the first element for each distinct (SameQ) value of f |
+| `DeleteElements` | added | 3 | DeleteElements[list, elems] removes every occurrence of the elements; DeleteElements[list, n -> elems] at most n of each |
+| `Depth` | added | 4 | 1 for atoms, else 1 + the maximum depth of the elements (heads ignored; an association is one level) |
+| `Dimensions` | added | 7 | dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, Dimensions[{f[a], f[b]}] = {2}); Dimensions[expr, n] at most n levels |
+| `DisjointQ` | added | 3 | the lists have no element in common |
+| `DuplicateFreeQ` | added | 3 | no two elements are SameQ (or equivalent under the given test) |
+| `Extract` | added | 3 | Extract[expr, pos], Extract[expr, {pos1, pos2, ...}] and Extract[expr, pos, h] |
+| `FirstCase` | added | 3 | FirstCase[expr, patt \| patt :> rhs, default, levelspec]; default level {1}; Missing["NotFound"] when nothing matches |
+| `FirstPosition` | added | 3 | first position matching patt in Position order; Missing["NotFound"] or the given default; optional level specification |
+| `FlattenAt` | added | 3 | FlattenAt[list, n], FlattenAt[list, {i, j, ...}] and several positions {{...}, ...}: splices the sublist at that position into its parent |
+| `FoldPair` | added | 3 | the last output of FoldPairList; FoldPair[f, y0, list, g] gives g[last pair] |
+| `FoldPairList` | added | 4 | FoldPairList[f, y0, {x1, ...}]: f[y, x] returns {output, new y}; the list of outputs; FoldPairList[f, y0, list, g] gives g[{output, y}] instead; FoldPairList[f, list] starts from the first element |
+| `Gather` | promoted | 3 | classes of identical (SameQ) elements in order of first appearance; Gather[list, test] |
+| `GatherBy` | added | 3 | classes with identical f values, in order of first appearance; GatherBy[list, {f1, f2}] nests |
+| `Insert` | added | 3 | Insert[list, elem, n] (negative n counts from the end: -1 appends), Insert[expr, elem, {i, j, ...}] and several positions {{...}, ...} |
+| `IntegerLength` | added | 4 | number of base-b digits of \|n\| (default 10); IntegerLength[0] = 0; threads |
+| `IntegerReverse` | added | 4 | the integer with the base-b digits of \|n\| reversed; IntegerReverse[n, b, len] pads to len digits first; threads |
+| `IntersectingQ` | added | 3 | the lists have at least one element in common |
+| `LeafCount` | added | 5 | number of atomic subexpressions including heads (Rational and Complex count as 3); Heads -> False skips heads |
+| `LengthWhile` | added | 3 | number of leading elements for which crit is True |
+| `Level` | added | 5 | Level[expr, levelspec] (post-order, as Wolfram; associations are one level of values); Level[expr, spec, f] gives f[parts...]; Heads -> True |
+| `LexicographicSort` | added | 4 | sorts expressions by comparing their elements in canonical order, a proper prefix first; LexicographicSort[list, p] uses ordering function p on elements |
+| `MapApply` | added | 3 | MapApply[f, expr] = f @@@ expr = Apply[f, expr, {1}] |
+| `MapAt` | added | 4 | MapAt[f, expr, n \| {i, j, ...} \| {{...}, ...}]; positions may use negative indices, All, Span and Key; a repeated position applies f repeatedly |
+| `MatrixQ` | added | 4 | a list of equal-length lists (depth-2 full array); MatrixQ[expr, test] |
+| `MaximalBy` | added | 3 | MaximalBy[list, f]: all elements maximising f (canonical order of f values), in their original order; MaximalBy[list, f, n \| UpTo[n]]: the n largest by f |
+| `MinMax` | added | 4 | {Min[list], Max[list]}; MinMax[list, d] = {min - d, max + d}; MinMax[list, {dmin, dmax}]; Scaled[s] pads by s times the range |
+| `MinimalBy` | added | 3 | MinimalBy[list, f]: all elements minimising f; MinimalBy[list, f, n]: the n smallest by f |
+| `Minus` | added | 6 | Minus[x] = -x (Times[-1, x]); threads over lists |
+| `NestWhile` | added | 3 | applies f while test[result] is True; NestWhile[f, x, test, m \| All, max, n] |
+| `NestWhileList` | added | 3 | the list of results of NestWhile, starting with x |
+| `NoneMatch` | added | 3 | True if no element matches the pattern; operator form |
+| `NoneTrue` | added | 3 | test[e] is True for no element; optional level |
+| `NumericalSort` | added | 3 | sorts numeric elements by numerical value (ties by canonical order); non-numeric elements raise |
+| `Operate` | added | 4 | Operate[p, f[x, y]] = p[f][x, y]; Operate[p, expr, 0] = p[expr]; Operate[p, expr, n] applies p to the head n levels down (f[a][b] at level 2 gives p[f][a][b]); an atomic head that deep leaves expr unchanged |
+| `Order` | added | 3 | 1 if e1 comes before e2 in canonical order, -1 if after, 0 if identical |
+| `OrderedQ` | added | 4 | True when the elements are in canonical (non-decreasing) order, or ordered by p |
+| `Ordering` | added | 5 | positions that put the list in canonical order (stable); Ordering[list, n] the first n (negative n: the last n), Ordering[list, n, p] with ordering p |
+| `OrderingBy` | added | 3 | positions that sort the list by f (ties by canonical order of the elements); OrderingBy[list, f, n] |
+| `PadLeft` | added | 4 | PadLeft[list, n, x] pads on the left with x (default 0) or keeps the last n elements; PadLeft[list, {n1, n2}] and PadLeft[ragged] (to a full array); cyclic list padding raises |
+| `PadRight` | added | 4 | PadRight[list, n, x] pads on the right with x (default 0) or keeps the first n elements; PadRight[list, {n1, n2}] and PadRight[ragged]; cyclic list padding raises |
+| `Pick` | added | 3 | Pick[list, sel] keeps elements whose selector is True; Pick[list, sel, patt] those whose selector matches patt; nested selector lists pick at deeper levels |
+| `PositionIndex` | added | 3 | <\|e -> {positions}, ...\|> in order of first appearance |
+| `PositionLargest` | added | 3 | positions of the largest element(s); PositionLargest[list, n] positions of the n largest in decreasing order |
+| `PositionSmallest` | added | 3 | positions of the smallest element(s); PositionSmallest[list, n] |
+| `PowerRange` | added | 3 | PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r] |
+| `PrependTo` | added | 3 | PrependTo[s, e] sets s = Prepend[s, e] and returns the new value |
+| `Ratios` | added | 3 | successive ratios a[i+1]/a[i]; Ratios[list, n] for n-th ratios |
+| `Reap` | added | 6 | Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list] |
+| `Replace` | added | 6 | Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives a list of results |
+| `ReplaceList` | added | 5 | all results of applying the rules to the whole expression in every way they match (sequence patterns give one result per split; Orderless heads give each distinct binding once, in matcher order rather than Wolfram's); ReplaceList[expr, rules, n] keeps at most n |
+| `ReplacePart` | added | 3 | ReplacePart[expr, pos -> new], lists of rules, lists of positions, position patterns such as {i_, i_} -> 0 and pos :> new (evaluated per position) |
+| `ReverseApplied` | added | 3 | ReverseApplied[f][a, b, c] = f[c, b, a] |
+| `ReverseSort` | added | 3 | Reverse[Sort[list]] (reverse canonical order); ReverseSort[list, p] |
+| `ReverseSortBy` | added | 3 | Reverse[SortBy[list, f]]: decreasing f values, ties in reverse canonical order |
+| `Scan` | added | 4 | evaluates f on each element (or each part at the given levels) for its side effects; returns Null (Return[v] inside f returns v) |
+| `SelectFirst` | added | 3 | first element with crit[e] True, else Missing["NotFound"] or the default |
+| `SequenceCases` | added | 4 | non-overlapping runs matching a list pattern ({a, _}, {__Integer}, {x_, y_} /; cond, ...; the longest match at each start) or patt -> rhs; Overlaps -> True |
+| `SequenceCount` | added | 3 | number of non-overlapping occurrences of a sublist or list pattern |
+| `SequencePosition` | added | 4 | {start, end} of runs matching a list pattern; overlapping matches are included (Overlaps -> True default); Overlaps -> False |
+| `SequenceReplace` | added | 3 | replaces non-overlapping runs matching a list pattern -> rhs (rhs is one element) |
+| `SequenceSplit` | added | 3 | splits at runs matching a list pattern (empty pieces at the ends dropped, as Wolfram); patt -> rhs keeps rhs between the pieces |
+| `SortBy` | added | 4 | sorts by canonical order of f[e] (ties by the canonical order of e); SortBy[list, {f1, f2, ...}] lexicographic; SortBy[list, f, p] uses ordering p; associations are sorted by value |
+| `Sow` | added | 6 | Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap (outside Reap, Sow just returns e) |
+| `Split` | added | 3 | runs of identical (SameQ) adjacent elements; Split[list, test] tests adjacent pairs |
+| `SplitBy` | added | 3 | runs with identical f values; SplitBy[list, {f1, f2, ...}] splits recursively |
+| `Subdivide` | added | 3 | Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values |
+| `Subsequences` | added | 4 | contiguous subsequences by length then position; Subsequences[list, n \| {n} \| {m, n}] |
+| `TakeDrop` | added | 5 | TakeDrop[list, spec] = {Take[list, spec], Drop[list, spec]} |
+| `TakeLargest` | added | 4 | the n largest numeric elements in decreasing order (Missing[...] ignored); UpTo[n]; an association gives an association |
+| `TakeLargestBy` | added | 3 | the n elements with the largest numeric f values, in decreasing order of f |
+| `TakeList` | added | 3 | TakeList[list, {n1, n2, ...}] gives successive pieces; ni may be UpTo[k] or All |
+| `TakeSmallest` | added | 3 | the n smallest numeric elements in increasing order (Missing[...] ignored); UpTo[n]; an association gives an association |
+| `TakeSmallestBy` | added | 3 | the n elements with the smallest numeric f values, in increasing order of f |
+| `TakeWhile` | added | 3 | leading elements for which crit is True |
+| `Through` | added | 3 | Through[p[f, g][x]] = p[f[x], g[x]]; Through[expr, h] only when p is h |
+| `VectorQ` | added | 4 | a list none of whose elements is a list; VectorQ[expr, test] |
+
 ### lists and sets
 
 | Function | Status | Cases | Notes |
@@ -521,14 +713,14 @@ Cases = number of differential test cases in which the head occurs.
 | `Accumulate` | fixed | 3 | exact running totals (legacy converted to floats and rounded to 10 digits); works on symbols |
 | `Cardinality` | fixed | 3 | number of distinct elements (legacy returned Length, counting duplicates) |
 | `Chunk` | verified | 3 | consecutive blocks of size n, last one possibly shorter (MikoshiLang) |
-| `Complement` | fixed | 3 | Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form) |
-| `DeleteDuplicates` | fixed | 3 | SameQ comparison keeping first occurrences (legacy compared string forms, so the string "x" and the symbol x were treated as duplicates) |
+| `Complement` | fixed | 4 | Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form); SameTest -> f |
+| `DeleteDuplicates` | fixed | 4 | SameQ comparison keeping first occurrences (legacy compared string forms, so the string "x" and the symbol x were treated as duplicates); DeleteDuplicates[list, test] |
 | `Differences` | fixed | 3 | exact successive differences, Differences[list, n] for n-th differences (legacy used rounded floats) |
 | `ElementQ` | fixed | 3 | ElementQ[x, list]: SameQ membership (legacy used ==, so ElementQ[1, {1.0}] was True; MemberQ gives False) |
-| `GroupBy` | fixed | 3 | legacy ignored the function and grouped equal values; now GroupBy[list, f] -> Association[k -> {...}] keyed by f[elem] in order of first appearance (Association is an inert head in MikoshiLang) |
+| `GroupBy` | fixed | 7 | legacy ignored the function and grouped equal values; now GroupBy[list, f] -> <\|k -> {...}\|> keyed by f[elem] in order of first appearance; GroupBy[list, f -> g] maps g over each group's elements, GroupBy[list, spec, red] applies red to each group, GroupBy[list, {f1, f2}] nests; associations group their values |
 | `Interleave` | fixed | 3 | {a1, b1, ..., a2, b2, ...} for two or more lists (MikoshiLang); unequal lengths now raise (legacy silently truncated) |
-| `Intersection` | fixed | 4 | variadic; canonical order (legacy sorted by string form) |
-| `Partition` | fixed | 4 | Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); legacy truncated non-integer n |
+| `Intersection` | fixed | 5 | variadic; canonical order (legacy sorted by string form); SameTest -> f |
+| `Partition` | fixed | 6 | Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n |
 | `Riffle` | fixed | 3 | Riffle[list, x] and Riffle[list, {y1, ...}] (interleaves when the second list has n or n - 1 elements; legacy inserted the whole list each time) |
 | `RotateLeft` | verified | 3 | RotateLeft[list] and RotateLeft[list, n] (n may be negative) |
 | `RotateRight` | verified | 3 | RotateRight[list] and RotateRight[list, n] |
@@ -536,8 +728,8 @@ Cases = number of differential test cases in which the head occurs.
 | `SlidingWindow` | verified | 3 | overlapping windows = Partition[list, n, 1] (MikoshiLang) |
 | `SubsetQ` | fixed | 3 | SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse) |
 | `SymmetricDifference` | fixed | 3 | elements in exactly one of the two lists, canonical order (legacy sorted by string form) |
-| `Tally` | promoted | 3 | {{elem, count}, ...} in order of first appearance (SameQ) |
-| `Union` | promoted | 4 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
+| `Tally` | promoted | 4 | {{elem, count}, ...} in order of first appearance (SameQ); Tally[list, test] uses the first representative of each class |
+| `Union` | promoted | 5 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
 
 ### logic
 
@@ -823,6 +1015,76 @@ Cases = number of differential test cases in which the head occurs.
 | `ZScore` | fixed | 3 | (x - mu)/sigma, exact; sigma <= 0 raises (legacy rounded floats) |
 | `ZScoreNormalize` | fixed | 3 | (x - Mean)/StandardDeviation (Wolfram Standardize), exact for exact data (legacy converted to floats and rounded to 10 digits) |
 
+### strings (batch 1)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `Alphabet` | added | 3 | Alphabet[] and Alphabet["English"] give the 26 lower-case letters; other languages are not supported (curated data) |
+| `Capitalize` | added | 4 | upper-cases the first character and leaves the rest; Capitalize[s, "AllWords"] does that for every word, "LongWords" for words longer than three characters, "FirstWord" = default ("TitleCase" with its small-word rules is not supported) |
+| `CharacterRange` | added | 3 | characters from c1 to c2 by code point (strings or integer codes); empty when c2 < c1 |
+| `Decapitalize` | added | 3 | lower-cases the first character only |
+| `DigitCharacter` | added | 13 | string pattern object / option interpreted by the batch-1 string functions |
+| `DigitQ` | added | 3 | True when every character of the string satisfies the test (so True for ""); non-strings False |
+| `EditDistance` | added | 32 | Levenshtein distance (insertions, deletions, substitutions) between strings or lists; IgnoreCase |
+| `EndOfLine` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `EndOfString` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `FromLetterNumber` | added | 4 | the n-th lower-case English letter for 1 <= n <= 26 (negative n counts from z, 0 gives " "); other values raise; threads over lists |
+| `FromRomanNumeral` | added | 13 | integer value of a Roman numeral string ("N" -> 0) |
+| `HammingDistance` | added | 4 | number of differing positions between equal-length strings or lists (unequal lengths raise); IgnoreCase |
+| `HexadecimalCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `IgnoreCase` | added | 9 | string pattern object / option interpreted by the batch-1 string functions |
+| `IntegerString` | added | 10 | digits of \|n\| (the sign is dropped, as Wolfram) in base 2-36 with lower-case letters, padded with zeros or truncated to the last len digits; IntegerString[n, "Roman"]; threads over lists |
+| `LetterCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `LetterNumber` | added | 3 | position of a letter in the English alphabet (either case), 0 for other characters; a string of several characters gives a list; threads over lists |
+| `LetterQ` | added | 4 | True when every character of the string satisfies the test (so True for ""); non-strings False |
+| `Longest` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `LongestCommonSequence` | added | 3 | longest common (not necessarily contiguous) subsequence of two strings or lists by dynamic programming; among equal-length answers the one found by the standard back-trace is returned |
+| `LongestCommonSubsequence` | added | 3 | longest contiguous common run of two strings or lists (Wolfram's meaning; the non-contiguous one is LongestCommonSequence); ties go to the earliest position in the first argument |
+| `LowerCaseQ` | added | 4 | True when every character of the string satisfies the test (so True for ""); non-strings False |
+| `NumberString` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `Overlaps` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `PalindromeQ` | added | 5 | True for a string, list or non-negative integer (decimal digits) equal to its reverse; other expressions False |
+| `PrintableASCIIQ` | added | 3 | True when every character of the string satisfies the test (so True for ""); non-strings False |
+| `PunctuationCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `RegularExpression` | added | 4 | string pattern object / option interpreted by the batch-1 string functions |
+| `RemoveDiacritics` | added | 4 | drops combining marks after Unicode NFKD decomposition (ligatures such as æ are kept) |
+| `RomanNumeral` | added | 14 | Roman numeral string of n for 1-4999 (sign dropped); RomanNumeral[0] gives "N"; threads over lists; the overbar forms for n >= 5000 are not supported |
+| `Shortest` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `StartOfLine` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `StartOfString` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `StringCases` | added | 32 | substrings matching a string pattern, or rule right-hand sides with named parts substituted; StringCases[s, p, n]; Overlaps -> False by default; IgnoreCase |
+| `StringContainsQ` | fixed | 8 | string patterns (legacy: literal substrings only); IgnoreCase; threads over lists |
+| `StringCount` | fixed | 10 | non-overlapping matches of a string pattern (legacy: literal substrings only); Overlaps -> True counts one match per start position; IgnoreCase; the empty literal raises |
+| `StringDelete` | fixed | 7 | deletes every match of a string pattern (or list of patterns); IgnoreCase; the legacy slice form StringDelete[s, i, j] raises (use StringDrop[s, {i, j}]) |
+| `StringEndsQ` | fixed | 6 | string patterns (legacy: literal suffix only); IgnoreCase |
+| `StringExpression` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `StringExtract` | added | 5 | StringExtract[s, n] gives the n-th whitespace-separated piece (spans, lists and negative n allowed); StringExtract[s, sep -> n] splits at sep |
+| `StringFreeQ` | added | 3 | not StringContainsQ; string patterns; IgnoreCase |
+| `StringMatchQ` | added | 17 | whole-string match against a string pattern; literal patterns use the metacharacters * (any characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists |
+| `StringPartition` | added | 3 | substrings of length n (incomplete final piece dropped), offset d, or UpTo[n] keeping the remainder |
+| `StringPosition` | added | 4 | {{start, end}, ...} 1-based; Overlaps -> True by default (one match per start position), StringPosition[s, p, n]; IgnoreCase |
+| `StringReplace` | fixed | 20 | StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts substitute into the right-hand side; RegularExpression rules accept "$1" group references; non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises |
+| `StringReplaceList` | added | 3 | every string obtained by replacing a single match of the rules (one result per match position and rule, left to right); StringReplaceList[s, rules, n] keeps at most n |
+| `StringReplacePart` | added | 3 | StringReplacePart[s, new, {m, n}], a list of ranges with one new string, or a list of new strings matched to the ranges; negative positions count from the end |
+| `StringRiffle` | added | 7 | StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per level above), StringRiffle[list, sep], StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings are converted with ToString |
+| `StringRotateLeft` | added | 3 | cyclic rotation by n characters (default 1) |
+| `StringRotateRight` | added | 3 | cyclic rotation by n characters (default 1) |
+| `StringSplit` | added | 15 | splits at whitespace or at matches of a string pattern; empty pieces at the ends are dropped (kept with StringSplit[s, p, All]), interior ones kept; p -> r inserts r at each split; StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists |
+| `StringStartsQ` | fixed | 6 | string patterns (legacy: literal prefix only); IgnoreCase |
+| `StringTakeDrop` | added | 3 | {StringTake[s, spec], StringDrop[s, spec]} |
+| `StringTrim` | fixed | 7 | StringTrim[s] removes leading and trailing whitespace; StringTrim[s, p] removes a leading and a trailing match of the string pattern p |
+| `Symbol` | added | 8 | Symbol["name"] gives the symbol (evaluated); invalid names raise |
+| `SymbolName` | added | 3 | name of a symbol as a string (no context prefix) |
+| `TextWords` | added | 3 | words of the text: runs of letters/digits, keeping internal apostrophes and hyphens (rule-based; Wolfram's tokenizer may differ on unusual punctuation) |
+| `ToExpression` | added | 5 | parses and evaluates InputForm text; ToExpression[s, InputForm, h] wraps the unevaluated parse in h (e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated |
+| `ToLowerCase` | added | 3 | lower-cases every letter; threads over lists |
+| `ToUpperCase` | added | 6 | upper-cases every letter; threads over lists |
+| `UpperCaseQ` | added | 4 | True when every character of the string satisfies the test (so True for ""); non-strings False |
+| `Whitespace` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `WhitespaceCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `WordBoundary` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `WordCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+
 ### strings and dates
 
 | Function | Status | Cases | Notes |
@@ -847,24 +1109,17 @@ Cases = number of differential test cases in which the head occurs.
 | `SHA512` | verified | 3 | hex digest of the UTF-8 bytes (= Hash[s, "SHA512", "HexString"]) |
 | `StringCapitalize` | fixed | 3 | upper-cases the first character only (Wolfram Capitalize); legacy also lower-cased the rest ("iPhone" -> "Iphone") |
 | `StringCenter` | fixed | 3 | centres s in width n (extra padding on the right, MikoshiLang); single-character fill, width checked |
-| `StringContainsQ` | verified | 3 | literal substring test |
-| `StringCount` | fixed | 3 | non-overlapping occurrences of a literal substring; the empty substring now raises |
-| `StringDelete` | fixed | 3 | Wolfram StringDelete[s, "sub"] / [s, {"a", "b"}] deletes every occurrence; the legacy slice form StringDelete[s, i, j] now raises (use StringDrop[s, {i, j}]) |
 | `StringDrop` | fixed | 3 | StringDrop[s, n], [s, -n], [s, {n}], [s, {m, n}] |
-| `StringEndsQ` | verified | 3 | literal suffix test |
 | `StringInsert` | fixed | 3 | Wolfram argument order StringInsert[s, new, n]: new starts at position n (negative n counts from the end, -1 appends); legacy was StringInsert[s, i, new] with 0-based i |
 | `StringPadLeft` | fixed | 3 | pads on the left or truncates to the rightmost n characters, as Wolfram (legacy never truncated); single-character padding |
 | `StringPadRight` | fixed | 3 | pads on the right or truncates to the leftmost n characters, as Wolfram; single-character padding |
 | `StringPart` | fixed | 3 | 1-based (legacy was 0-based: StringPart["abc", 1] gave "b"); negative positions count from the end; a list of positions gives a list |
 | `StringRepeat` | fixed | 4 | StringRepeat[s, n] for n >= 1; legacy truncated non-integers |
-| `StringReplace` | fixed | 3 | Wolfram StringReplace[s, "a" -> "b"], [s, {rules}], [s, rules, n] (left-to-right, rules tried in order); the legacy form StringReplace[s, old, new] now raises |
 | `StringReverse` | verified | 3 | reverses the characters |
-| `StringStartsQ` | verified | 3 | literal prefix test |
 | `StringTake` | fixed | 4 | StringTake[s, n], [s, -n], [s, {n}], [s, {m, n}] (legacy: only the first n, and Python slicing silently accepted negative/out-of-range n) |
 | `StringToLowerCase` | verified | 3 | alias of ToLowerCase |
 | `StringToTitleCase` | fixed | 3 | capitalises the first letter of each whitespace-separated word and leaves the rest unchanged; legacy str.title() mangled words ("don't" -> "Don'T", "NASA" -> "Nasa") |
 | `StringToUpperCase` | verified | 3 | alias of ToUpperCase |
-| `StringTrim` | verified | 3 | removes leading and trailing whitespace |
 | `TimeString` | fixed | 3 | TimeString[] -> "HH:MM:SS" (MikoshiLang); legacy only had a 1-argument form that ignored its argument |
 | `ToCharacterCode` | fixed | 3 | list of all character codes (legacy returned only the first code); lists of strings thread |
 | `UnixTime` | fixed | 3 | UnixTime[] = whole seconds since 1970-01-01 00:00 UTC; UnixTime[{y, m, d, ...}] interprets the date in UTC; legacy only had a 1-argument form that ignored its argument |

@@ -21,7 +21,8 @@ _INFIX = {
     "Equal": ("==", P_COMPARE), "Unequal": ("!=", P_COMPARE), "Less": ("<", P_COMPARE),
     "Greater": (">", P_COMPARE), "LessEqual": ("<=", P_COMPARE), "GreaterEqual": (">=", P_COMPARE),
     "SameQ": ("===", P_SAMEQ), "UnsameQ": ("=!=", P_SAMEQ), "And": ("&&", P_AND), "Or": ("||", P_OR),
-    "StringJoin": ("<>", P_STRINGJOIN),
+    "StringJoin": ("<>", P_STRINGJOIN), "Alternatives": ("|", 160), "StringExpression": ("~~", 135),
+    "Composition": ("@*", 625), "RightComposition": ("/*", 624),
 }
 _BINARY = {
     "Rule": ("->", P_RULE), "RuleDelayed": (":>", P_RULE), "Set": ("=", P_SET),
@@ -277,13 +278,31 @@ def input_form(e, parent: int = 0) -> str:
         if h == "Not" and len(args) == 1:
             return _paren("!" + input_form(args[0], P_NOT), P_NOT, parent)
         if h == "Pattern" and len(args) == 2 and isinstance(args[0], Symbol):
-            return args[0].name + input_form(args[1], P_ATOM)
+            if isinstance(args[1], Expr) and args[1].head in ("Blank", "BlankSequence", "BlankNullSequence"):
+                return args[0].name + input_form(args[1], P_ATOM)
+            return _paren(args[0].name + ":" + input_form(args[1], 151), 150, parent)
+        if h == "Optional" and len(args) == 1 and isinstance(args[0], Expr) and args[0].head in ("Pattern", "Blank") \
+                and input_form(args[0]).endswith("_"):
+            return input_form(args[0]) + "."
+        if h == "Optional" and len(args) == 2:
+            return _paren(input_form(args[0], 141) + ":" + input_form(args[1], 141), 140, parent)
+        if h in ("Repeated", "RepeatedNull") and len(args) == 1:
+            return _paren(input_form(args[0], 171) + (".." if h == "Repeated" else "..."), 170, parent)
+        if h == "Association":
+            return "<|" + ", ".join(input_form(a) for a in args) + "|>"
+        if h == "Span" and len(args) in (2, 3):
+            parts = [input_form(a, 306) for a in args]
+            if isinstance(args[1], Symbol) and args[1].name == "All":
+                parts[1] = ""
+            return _paren(";;".join(parts), 305, parent)
         if h in ("Blank", "BlankSequence", "BlankNullSequence") and len(args) <= 1:
             mark = {"Blank": "_", "BlankSequence": "__", "BlankNullSequence": "___"}[h]
             return mark + (args[0].name if args and isinstance(args[0], Symbol) else "")
         if h == "PatternTest" and len(args) == 2:
             return input_form(args[0], P_ATOM) + "?" + input_form(args[1], P_ATOM)
         if h == "Slot" and len(args) == 1:
+            if isinstance(args[0], str):
+                return "#" + args[0]
             return "#" if args[0] == 1 else f"#{args[0]}"
         if h == "SlotSequence" and len(args) == 1:
             return "##" if args[0] == 1 else f"##{args[0]}"

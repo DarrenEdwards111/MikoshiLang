@@ -11,7 +11,9 @@ Every function exposed by the library is registered here with an audit status:
   fallback was removed;
 * ``quarantined`` - the legacy rule was removed and the name now raises the
   quarantine error;
-* ``promoted`` - a previously quarantined name with a new, tested implementation.
+* ``promoted`` - a previously quarantined name with a new, tested implementation;
+* ``added``    - a Wolfram built-in that MikoshiLang did not have, implemented in a coverage batch
+  (see docs/wolfram_coverage_roadmap.md) with differential tests.
 
 Library functions receive evaluated arguments and return MikoshiLang
 expressions.  They raise :class:`Unevaluated` to leave a call unevaluated
@@ -48,7 +50,7 @@ class Entry:
 
 REGISTRY: Dict[str, Entry] = {}
 STATUS: Dict[str, tuple] = {}     # every audited name -> (area, status, notes)
-_VALID = {"verified", "fixed", "error", "kernel", "quarantined", "promoted"}
+_VALID = {"verified", "fixed", "error", "kernel", "quarantined", "promoted", "added"}
 
 
 def _arity(fn):

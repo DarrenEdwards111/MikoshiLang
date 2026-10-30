@@ -83,3 +83,7 @@ Before the audit, 12 of 50 failed. **All 12 were caused by our code**, not by th
 
 After the fixes: **50/50 pass** (run twice). These tests are excluded from default runs and CI
 (`addopts = -m 'not live_service'`) because they depend on mutable remote data.
+
+## Wolfram batch 1
+
+Batch 1 adds Wolfram built-ins for lists, strings, string patterns and associations, plus the language objects they need (operator forms, `Key`, `Missing`, `Span`, `UpTo`, `Repeated`, `Optional`, ...). These heads have status `added`. Kernel builtins whose semantics were extended to match Wolfram are recorded as `fixed`. Each has at least 3 differential cases in `tests/library/test_wolfram_batch1.py`, checked against the output examples on the Wolfram reference pages. Overall progress towards the documented Wolfram built-ins is tracked in `docs/wolfram_coverage_roadmap.md`.

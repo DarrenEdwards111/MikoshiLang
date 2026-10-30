@@ -80,68 +80,6 @@ def _sinsert(s, new, n):
     return st[:pos] + nw + st[pos:]
 
 
-def _patterns(p, fname):
-    if isinstance(p, str):
-        return [p]
-    if is_list(p) and all(isinstance(x, str) for x in p.args):
-        return list(p.args)
-    raise NotImplementedError(f"{fname}: only literal string patterns (or lists of them) are supported")
-
-
-@fn("StringDelete", area=AREA, status="fixed",
-    notes="Wolfram StringDelete[s, \"sub\"] / [s, {\"a\", \"b\"}] deletes every occurrence; the legacy slice form "
-          "StringDelete[s, i, j] now raises (use StringDrop[s, {i, j}])")
-def _sdelete(s, p, *rest):
-    if rest:
-        raise ValueError("StringDelete[s, i, j] is not Wolfram syntax; use StringDrop[s, {i, j}]")
-    st = _s(s, "StringDelete")
-    return _replace_all(st, [(x, "") for x in _patterns(p, "StringDelete")], None)
-
-
-def _replace_all(st, rules, limit):
-    if any(a == "" for a, _ in rules):
-        raise ValueError("cannot replace the empty string")
-    out, i, n = [], 0, 0
-    while i < len(st):
-        if limit is None or n < limit:
-            for a, b in rules:
-                if st.startswith(a, i):
-                    out.append(b)
-                    i += len(a)
-                    n += 1
-                    break
-            else:
-                out.append(st[i])
-                i += 1
-        else:
-            out.append(st[i:])
-            break
-    return "".join(out)
-
-
-def _str_rules(r, fname):
-    rs = list(r.args) if is_list(r) else [r]
-    out = []
-    for x in rs:
-        if isinstance(x, Expr) and x.head in ("Rule", "RuleDelayed") and len(x.args) == 2 \
-                and isinstance(x.args[0], str) and isinstance(x.args[1], str):
-            out.append((x.args[0], x.args[1]))
-        else:
-            raise NotImplementedError(f"{fname}: only literal string rules \"a\" -> \"b\" are supported")
-    return out
-
-
-@fn("StringReplace", area=AREA, status="fixed",
-    notes="Wolfram StringReplace[s, \"a\" -> \"b\"], [s, {rules}], [s, rules, n] (left-to-right, rules tried in "
-          "order); the legacy form StringReplace[s, old, new] now raises")
-def _sreplace(s, r, n=None):
-    st = _s(s, "StringReplace")
-    if isinstance(r, str) and isinstance(n, str):
-        raise ValueError("StringReplace[s, old, new] is not Wolfram syntax; use StringReplace[s, old -> new]")
-    lim = None if n is None else nonneg_int(n, "StringReplace", "count")
-    return _replace_all(st, _str_rules(r, "StringReplace"), lim)
-
-
 def _pad_char(c, fname):
     ch = _s(c, fname, "padding")
     if len(ch) != 1:
@@ -213,35 +151,6 @@ def _title(s):
         out.append(ch.upper() if prev_space else ch)
         prev_space = ch.isspace()
     return "".join(out)
-
-
-@fn("StringTrim", area=AREA, status="verified", notes="removes leading and trailing whitespace")
-def _strim(s):
-    return _s(s, "StringTrim").strip()
-
-
-@fn("StringCount", area=AREA, status="fixed",
-    notes="non-overlapping occurrences of a literal substring; the empty substring now raises")
-def _scount(s, sub):
-    st, p = _s(s, "StringCount"), _s(sub, "StringCount", "substring")
-    if p == "":
-        raise ValueError("StringCount: substring must be non-empty")
-    return st.count(p)
-
-
-@fn("StringContainsQ", area=AREA, status="verified", notes="literal substring test")
-def _scontains(s, sub):
-    return _s(sub, "StringContainsQ", "substring") in _s(s, "StringContainsQ")
-
-
-@fn("StringStartsQ", area=AREA, status="verified", notes="literal prefix test")
-def _sstarts(s, p):
-    return _s(s, "StringStartsQ").startswith(_s(p, "StringStartsQ", "prefix"))
-
-
-@fn("StringEndsQ", area=AREA, status="verified", notes="literal suffix test")
-def _sends(s, p):
-    return _s(s, "StringEndsQ").endswith(_s(p, "StringEndsQ", "suffix"))
 
 
 @fn("Characters", area=AREA, status="verified", notes="list of single-character strings")

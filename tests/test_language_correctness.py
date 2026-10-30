@@ -13,7 +13,7 @@ from mikoshilang.extended_helper import make_rule
 @pytest.fixture
 def session(): return Session()
 
-@pytest.mark.parametrize('source', ['y’’[x]', '1+2 ]] junk', 'x % 2', 'x ~ y', 'x === ', '"unterminated', '(* unterminated', '1:2', 'x_.', 'f[[1]', '{1,2}.{3,4}'])
+@pytest.mark.parametrize('source', ['y’’[x]', '1+2 ]] junk', 'x % 2', 'x ~ y', 'x === ', '"unterminated', '(* unterminated', '1:2', 'f[[1]', '{1,2}.{3,4}'])
 def test_malformed_input_rejected(source):
     with pytest.raises(ParseError): parse(source)
 
@@ -95,7 +95,7 @@ def test_real_hash_not_placeholder(session):
     for value in ['abc','different message']:
         assert session.evaluate(f'SHA256["{value}"]')==hashlib.sha256(value.encode()).hexdigest()
 
-@pytest.mark.parametrize('source',['Range[n]','Range[1,5,0]','Range[1.5]','Table[i,{i,1,n}]','Table[i,{i,1,200000}]'])
+@pytest.mark.parametrize('source',['Range[n]','Range[1,5,0]','Table[i,{i,1,n}]','Table[i,{i,1,200000}]'])
 def test_bad_iteration_rejected(session,source):
     with pytest.raises(ValueError):session.evaluate(source)
 

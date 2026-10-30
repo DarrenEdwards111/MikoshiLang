@@ -41,7 +41,10 @@ _TOKEN_SPEC = [
     ("SETDELAYED",r':='),
     ("SET",       r'(?<![=!<>])=(?!=)'),
     ("RULEDELAYED", r':>'),
+    ("COLON",     r':(?![=>])'),
+    ("MAPALL", r'//@'),
     ("MAP", r'/@'),
+    ("COMPOSITION", r'@\*'),
     ("APPLYLEVEL1", r'@@@'),
     ("APPLY", r'@@'),
     ("AT",        r'@'),
@@ -56,10 +59,14 @@ _TOKEN_SPEC = [
     ("GEQ",       r'>='),
     ("LEQ",       r'<='),
     ("STRINGJOIN", r'<>'),
+    ("LASSOC",    r'<\|'),
+    ("RASSOC",    r'\|>'),
+    ("STRINGEXPR", r'~~'),
     ("GREATER",   r'>(?!>)'),
     ("LESS",      r'<(?!<)'),
     ("AND",       r'&&'),
     ("OR",        r'\|\|'),
+    ("ALTERNATIVES", r'\|'),
     ("NOT",       r'!(?!=)'),
     ("INCREMENT", r'\+\+'),
     ("ADDTO",     r'\+='),
@@ -69,7 +76,8 @@ _TOKEN_SPEC = [
     ("MINUS",     r'-'),
     ("TIMESBY",   r'\*='),
     ("TIMES",     r'\*'),
-    ("DIVIDE",    r'/(?![.;@/=])'),
+    ("RIGHTCOMPOSITION", r'/\*'),
+    ("DIVIDE",    r'/(?![.;@/=*])'),
     ("POWER",     r'\^'),
     ("LSQUARE",   r'\['),
     ("RSQUARE",   r'\]'),
@@ -78,12 +86,17 @@ _TOKEN_SPEC = [
     ("LPAREN",    r'\((?!\*)'),
     ("RPAREN",    r'\)'),
     ("COMMA",     r','),
+    ("SPAN",      r';;'),
     ("SEMICOLON", r';'),
+    ("REPEATEDNULL", r'\.\.\.'),
+    ("REPEATED",  r'\.\.'),
+    ("BLANKOPT",  r'_\.(?![.0-9])'),
     ("BLANKNS",   r'___'),
     ("BLANKS",    r'__'),
     ("BLANK",     r'_'),
     ("SYMBOL",    r'[A-Za-z$][A-Za-z0-9$]*'),
     ("SLOTSEQ",   r'##[0-9]*'),
+    ("SLOTNAME",  r'#[A-Za-z][A-Za-z0-9]*'),
     ("SLOT",      r'#[0-9]*'),
     ("FUNCTION",  r'&(?!&)'),
     ("PRIME",     r"'+"),
@@ -94,8 +107,9 @@ _TOKEN_SPEC = [
 
 _TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _TOKEN_SPEC), re.DOTALL)
 
-_STATEMENT_END = ("INTEGER", "FLOAT", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE",
-                  "FUNCTION", "SLOT", "SLOTSEQ", "INCREMENT", "DECREMENT", "BLANK", "BLANKS", "BLANKNS")
+_STATEMENT_END = ("INTEGER", "FLOAT", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "RASSOC",
+                  "FUNCTION", "SLOT", "SLOTSEQ", "SLOTNAME", "INCREMENT", "DECREMENT", "BLANK", "BLANKS",
+                  "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL")
 
 
 def tokenize(text: str) -> ListType[Token]:
@@ -117,9 +131,9 @@ def tokenize(text: str) -> ListType[Token]:
             continue
         if kind in ("WS", "COMMENT"):
             continue
-        if kind in ("LPAREN", "LSQUARE", "LBRACE"):
+        if kind in ("LPAREN", "LSQUARE", "LBRACE", "LASSOC"):
             level += 1
-        elif kind in ("RPAREN", "RSQUARE", "RBRACE"):
+        elif kind in ("RPAREN", "RSQUARE", "RBRACE", "RASSOC"):
             level -= 1
         if kind == "INTEGER":
             value = int(value)
@@ -217,7 +231,7 @@ class Parser:
         while self.at("FUNCTION"):
             self.advance()
             expr = Expr("Function", expr)
-            while self.at("LSQUARE", "MAP", "APPLY", "APPLYLEVEL1", "AT"):
+            while self.at("LSQUARE", "MAP", "APPLY", "APPLYLEVEL1", "AT", "MAPALL"):
                 if self.at("LSQUARE"):
                     self.advance()
                     args = self._parse_arglist("RSQUARE")
@@ -228,6 +242,8 @@ class Parser:
                 rhs = self.parse_replace_all()
                 if op == "MAP":
                     expr = Expr("Map", expr, rhs)
+                elif op == "MAPALL":
+                    expr = Expr("MapAll", expr, rhs)
                 elif op == "APPLY":
                     expr = Expr("Apply", expr, rhs)
                 elif op == "APPLYLEVEL1":
@@ -256,11 +272,53 @@ class Parser:
 
     def parse_condition(self) -> Any:
         """Handle /; (Condition)."""
-        expr = self.parse_or()
+        expr = self.parse_string_expression()
         while self.at("CONDITION"):
             self.advance()
-            cond = self.parse_or()
+            cond = self.parse_string_expression()
             expr = Expr("Condition", expr, cond)
+        return expr
+
+    def parse_string_expression(self) -> Any:
+        """Handle a ~~ b ~~ ... (StringExpression, flat; precedence 135)."""
+        expr = self.parse_colon()
+        if self.at("STRINGEXPR"):
+            parts = [expr]
+            while self.at("STRINGEXPR"):
+                self.advance()
+                parts.append(self.parse_colon())
+            return Expr("StringExpression", *parts)
+        return expr
+
+    def parse_colon(self) -> Any:
+        """Handle x : patt (Pattern) and x_ : default (Optional), precedence 140-150."""
+        expr = self.parse_alternatives()
+        if self.at("COLON"):
+            self.advance()
+            rhs = self.parse_alternatives()
+            if isinstance(expr, Symbol):
+                return Expr("Pattern", expr, rhs)
+            if isinstance(expr, Expr) and expr.head in ("Pattern", "Blank", "BlankSequence", "BlankNullSequence"):
+                return Expr("Optional", expr, rhs)
+            raise ParseError("':' must follow a symbol (x:patt) or a pattern (x_:default)")
+        return expr
+
+    def parse_alternatives(self) -> Any:
+        """Handle a | b | ... (Alternatives, flat; precedence 160)."""
+        expr = self.parse_repeated()
+        if self.at("ALTERNATIVES"):
+            alts = [expr]
+            while self.at("ALTERNATIVES"):
+                self.advance()
+                alts.append(self.parse_repeated())
+            return Expr("Alternatives", *alts)
+        return expr
+
+    def parse_repeated(self) -> Any:
+        """Handle postfix p.. (Repeated) and p... (RepeatedNull), precedence 170."""
+        expr = self.parse_or()
+        while self.at("REPEATED", "REPEATEDNULL"):
+            expr = Expr("Repeated" if self.advance().type == "REPEATED" else "RepeatedNull", expr)
         return expr
 
     def parse_or(self) -> Any:
@@ -293,12 +351,31 @@ class Parser:
         "SAMEQ": "SameQ", "UNSAMEQ": "UnsameQ",
     }
 
+    _EXPR_START = ("INTEGER", "FLOAT", "STRING", "SYMBOL", "LPAREN", "LBRACE", "LASSOC", "MINUS", "PLUS",
+                   "SLOT", "SLOTSEQ", "SLOTNAME", "BLANK", "BLANKS", "BLANKNS", "BLANKOPT", "NOT")
+
+    def parse_span(self) -> Any:
+        """Handle i;;j, i;;j;;k, ;;j, i;; and ;; (Span, precedence 305)."""
+        if self.at("SPAN"):
+            start = 1
+        else:
+            start = self.parse_stringjoin()
+            if not self.at("SPAN"):
+                return start
+        self.advance()
+        end = self.parse_stringjoin() if self.at(*self._EXPR_START) else Symbol("All")
+        if self.at("SPAN"):
+            self.advance()
+            step = self.parse_stringjoin()
+            return Expr("Span", start, end, step)
+        return Expr("Span", start, end)
+
     def parse_comparison(self) -> Any:
-        expr = self.parse_stringjoin()
+        expr = self.parse_span()
         comparisons = []
         while self.peek() is not None and self.peek().type in self._COMP_OPS:
             op = self._COMP_OPS[self.advance().type]
-            rhs = self.parse_stringjoin()
+            rhs = self.parse_span()
             comparisons.append(Expr(op, expr, rhs))
             expr = rhs
         if not comparisons:
@@ -356,7 +433,8 @@ class Parser:
         tok = self.peek()
         if tok is None:
             return False
-        return tok.type in ("SYMBOL", "LPAREN", "LBRACE", "INTEGER", "FLOAT", "SLOT", "SLOTSEQ")
+        return tok.type in ("SYMBOL", "LPAREN", "LBRACE", "LASSOC", "INTEGER", "FLOAT", "SLOT", "SLOTSEQ",
+                            "SLOTNAME")
 
     def parse_unary(self) -> Any:
         if self.at("MINUS"):
@@ -369,11 +447,13 @@ class Parser:
             self.advance()
             return self.parse_unary()
         expr = self.parse_power()
-        if self.at("MAP", "APPLY", "APPLYLEVEL1"):
+        if self.at("MAP", "APPLY", "APPLYLEVEL1", "MAPALL"):
             op = self.advance().type
             rhs = self.parse_unary()
             if op == "MAP":
                 expr = Expr("Map", expr, rhs)
+            elif op == "MAPALL":
+                expr = Expr("MapAll", expr, rhs)
             elif op == "APPLY":
                 expr = Expr("Apply", expr, rhs)
             else:
@@ -381,13 +461,25 @@ class Parser:
         return expr
 
     def parse_power(self) -> Any:
-        base = self.parse_prefix_application()
+        base = self.parse_composition()
         if self.at("POWER"):
             self.advance()
             # Right-associative
             exp = self.parse_unary()
             return Expr("Power", base, exp)
         return base
+
+    def parse_composition(self) -> Any:
+        """Handle f @* g (Composition) and f /* g (RightComposition), flat."""
+        expr = self.parse_prefix_application()
+        while self.at("COMPOSITION", "RIGHTCOMPOSITION"):
+            head = "Composition" if self.advance().type == "COMPOSITION" else "RightComposition"
+            rhs = self.parse_prefix_application()
+            if isinstance(expr, Expr) and expr.head == head:
+                expr = Expr(head, *expr.args, rhs)
+            else:
+                expr = Expr(head, expr, rhs)
+        return expr
 
     def parse_prefix_application(self) -> Any:
         """Handle f @ x  (== f[x]), right-associative."""
@@ -438,7 +530,7 @@ class Parser:
     def _factorial_position(self) -> bool:
         nxt = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
         return nxt is None or nxt.type not in (
-            "SYMBOL", "INTEGER", "FLOAT", "LPAREN", "LBRACE", "SLOT", "SLOTSEQ", "STRING")
+            "SYMBOL", "INTEGER", "FLOAT", "LPAREN", "LBRACE", "LASSOC", "SLOT", "SLOTSEQ", "SLOTNAME", "STRING")
 
     def _blank_tail(self, kind: str):
         """After _, __ or ___, read an optional head constraint."""
@@ -467,6 +559,10 @@ class Parser:
                 raise ParseError("Slots start at #1 (#0 is not supported)")
             return Expr("Slot", index)
 
+        if tok.type == "SLOTNAME":
+            self.advance()
+            return Expr("Slot", tok.value[1:])
+
         if tok.type == "SLOTSEQ":
             self.advance()
             index = int(tok.value[2:] or "1")
@@ -488,11 +584,18 @@ class Parser:
             if name == "False":
                 return False
             nxt = self.peek()
+            if nxt is not None and nxt.type == "BLANKOPT" and nxt.pos == tok.pos + len(name):
+                self.advance()
+                return Expr("Optional", Expr("Pattern", Symbol(name), Expr("Blank")))
             if nxt is not None and nxt.type in _blank_kinds and nxt.pos == tok.pos + len(name):
                 self.advance()
                 blank = self._blank_tail(_blank_kinds[nxt.type])
                 return self._pattern_test(Expr("Pattern", Symbol(name), blank))
             return Symbol(name)
+
+        if tok.type == "BLANKOPT":
+            self.advance()
+            return Expr("Optional", Expr("Blank"))
 
         if tok.type in _blank_kinds:
             self.advance()
@@ -509,6 +612,12 @@ class Parser:
             args = self._parse_arglist("RBRACE")
             self.expect("RBRACE")
             return Expr("List", *args)
+
+        if tok.type == "LASSOC":
+            self.advance()
+            args = self._parse_arglist("RASSOC")
+            self.expect("RASSOC")
+            return Expr("Association", *args)
 
         raise ParseError(f"Unexpected token: {tok}")
 

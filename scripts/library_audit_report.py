@@ -15,7 +15,8 @@ from mikoshilang.runtime import _quarantined  # noqa: E402
 
 MODULES = ["test_elementary", "test_special", "test_numbertheory", "test_combinatorics", "test_algebra",
            "test_calculus", "test_linalg", "test_lists_strings", "test_statistics", "test_applied",
-           "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes"]
+           "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes",
+           "test_wolfram_batch1"]
 IDENT = re.compile(r"(?<![A-Za-z0-9\"])([A-Z][A-Za-z0-9]*)")
 
 used = collections.Counter()
@@ -33,7 +34,7 @@ by_area = collections.defaultdict(collections.Counter)
 for h, (a, s, _n) in library.STATUS.items():
     by_area[a][s] += 1
 
-STATUSES = ("verified", "fixed", "promoted", "kernel", "error", "quarantined")
+STATUSES = ("verified", "fixed", "promoted", "added", "kernel", "error", "quarantined")
 out = []
 w = out.append
 w("# MikoshiLang bundled library audit\n")
@@ -44,6 +45,7 @@ meaning = {
     "verified": "legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references",
     "fixed": "legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested",
     "promoted": "was quarantined; now properly implemented and tested",
+    "added": "new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples",
     "kernel": "implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed",
     "error": "raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram)",
     "quarantined": "raises NotImplementedError (legacy implementation wrong and not worth fixing)",
