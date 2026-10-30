@@ -50,6 +50,8 @@ _TOKEN_SPEC = [
     ("APPLYLEVEL1", r'@@@'),
     ("APPLY", r'@@'),
     ("AT",        r'@'),
+    ("TWOWAYRULE", r'<->'),
+    ("NAMEDOP",   r'\\\[(?:DirectedEdge|UndirectedEdge|Distributed|TwoWayRule)\]'),
     ("RULE",      r'->'),
     ("REPLACEREPEATED", r'//\.'),
     ("POSTFIXAPP", r'//'),
@@ -319,6 +321,11 @@ class Parser:
             op = self.advance().type
             rhs = self.parse_rule()
             expr = Expr("RuleDelayed" if op == "RULEDELAYED" else "Rule", expr, rhs)
+        elif self.at("TWOWAYRULE", "NAMEDOP"):        # a <-> b, \[DirectedEdge], \[UndirectedEdge], \[Distributed]
+            tok = self.advance()
+            head = "TwoWayRule" if tok.type == "TWOWAYRULE" else tok.value[2:-1]
+            rhs = self.parse_rule()
+            expr = Expr(head, expr, rhs)
         return expr
 
     def parse_condition(self) -> Any:
