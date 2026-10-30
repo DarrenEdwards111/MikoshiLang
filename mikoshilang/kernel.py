@@ -2567,6 +2567,8 @@ def _b_not(a, ev, expr):
         return False
     if a[0] is False:
         return True
+    if isinstance(a[0], Expr) and a[0].head == "Not" and len(a[0].args) == 1:
+        return a[0].args[0]                      # Not[Not[x]] = x
     return expr
 
 

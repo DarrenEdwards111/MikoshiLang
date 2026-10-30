@@ -1092,11 +1092,21 @@ _COMPARATORS = {"GreaterThan": "Greater", "LessThan": "Less", "GreaterEqualThan"
 _CURRIED_ONLY = {"SameAs"} | set(_COMPARATORS)
 
 
+# Library hooks for other compound heads, e.g. BooleanFunction[k, n][args] (coverage batch 6):
+# head name -> hook(head_expr, args, ev) returning a value or K.UNHANDLED.
+COMPOUND_HEAD_HOOKS = {}
+
+
 def apply_compound_head(head, args, ev):
     """f[ops...][args...] for associations, Key, compositions and operator forms; UNHANDLED otherwise."""
     h = head.head
     if not isinstance(h, str):
         return K.UNHANDLED
+    hook = COMPOUND_HEAD_HOOKS.get(h)
+    if hook is not None:
+        r = hook(head, args, ev)
+        if r is not K.UNHANDLED:
+            return r
     if h == "Association":
         if len(args) != 1:
             raise ValueError("assoc[key] takes exactly one key")

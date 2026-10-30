@@ -259,7 +259,151 @@ COUNTING = [
     ("Length[Tuples[{0, 1}, {2, 2}]]", "16"), ("Dimensions[Tuples[{0, 1}, {2, 3}]]", "{64, 2, 3}"),
 ]
 
-CASES = PERMUTATIONS + GROUPS + COUNTING
+
+def tt(f, n):
+    """Truth table of a Python predicate in Tuples[{True, False}, n] order, as Wolfram source."""
+    vals = [f(*row) for row in itertools.product([True, False], repeat=n)]
+    return "{" + ", ".join("True" if v else "False" for v in vals) + "}"
+
+
+def bf_index(f, n):
+    """Wolfram BooleanFunction index: FromDigits[Boole[BooleanTable[f]], 2]."""
+    k = 0
+    for row in itertools.product([True, False], repeat=n):
+        k = 2 * k + (1 if f(*row) else 0)
+    return k
+
+
+def equiv(src, ref):
+    return (f"TautologyQ[Equivalent[{src}, {ref}]]", True)
+
+
+MAJ = lambda *a: sum(a) > len(a) // 2
+XOR3 = lambda a, b, c: (a ^ b) ^ c
+
+LOGIC = [
+    # Boole / Majority
+    ("Boole[True]", "1"), ("Boole[False]", "0"), ("Boole[{True, False, x}]", "{1, 0, Boole[x]}"),
+    ("Boole[x]", "Boole[x]"), ("Total[Boole[BooleanTable[Xor[a, b, c], {a, b, c}]]]", "4"),
+    ("Majority[True, False, True]", True), ("Majority[False, False, True]", False),
+    ("Majority[True, True, False, False, True]", True), ("Majority[a, b, c]", "Majority[a, b, c]"),
+    ("Majority[True, False]", Raises()),
+    ("BooleanTable[Majority[a, b, c], {a, b, c}]", tt(MAJ, 3)),
+    ("BooleanTable[Majority[a, b, c, d, e], {a, b, c, d, e}]", tt(MAJ, 5)),
+    # BooleanVariables (canonical order)
+    ("BooleanVariables[(a || b) && !c]", "{a, b, c}"), ("BooleanVariables[Xor[z, y] || x]", "{x, y, z}"),
+    ("BooleanVariables[True]", "{}"), ("BooleanVariables[(p && q) || x > 0]", "{p, q, x > 0}"),
+    # BooleanTable: rows in Tuples[{True, False}, n] order (reference page)
+    ("BooleanTable[p || q, {p, q}]", tt(lambda p, q: p or q, 2)),
+    ("BooleanTable[p || q, {p}, {q}]", "{{True, True}, {True, False}}"),
+    ("BooleanTable[And[a, b, c], {a}, {b}, {c}]", "{{{True, False}, {False, False}}, {{False, False}, {False, False}}}"),
+    ("BooleanTable[And[c, Or[a, b]]]", tt(lambda a, b, c: c and (a or b), 3)),
+    ("BooleanTable[And[c, Or[a, b]]] === BooleanTable[And[c, Or[a, b]], BooleanVariables[And[c, Or[a, b]]]]", True),
+    ("BooleanTable[Xor[a, b], {a, b}]", "Xor @@@ Tuples[{True, False}, 2]"),
+    ("BooleanTable[Xnor[a, b, c], {a, b, c}]", "Xnor @@@ Tuples[{True, False}, 3]"),
+    ("BooleanTable[f[a, b], {a, b}]", "{f[True, True], f[True, False], f[False, True], f[False, False]}"),
+    ("BooleanTable[{a, b} -> And[a, b], {a, b}]",
+     "{{True, True} -> True, {True, False} -> False, {False, True} -> False, {False, False} -> False}"),
+    ("BooleanTable[Xor[a, b, c], {a, b}]", "{c, !c, !c, c}"),
+    ("BooleanTable[Implies[a, b], {b, a}]", tt(lambda b, a: (not a) or b, 2)),
+    ("BooleanTable[And[#1, #2, #3] &]", tt(lambda a, b, c: a and b and c, 3)),
+    ("Length[BooleanTable[Xor[a, b, c, d], {a, b, c, d}]]", "16"),
+    # BooleanFunction: truth table digits IntegerDigits[k, 2, 2^n]
+    ("FromDigits[Boole[BooleanTable[BooleanFunction[30, 3]]], 2]", "30"),
+    ("BooleanTable[BooleanFunction[30, 3]]", tt(lambda a, b, c: bool((30 >> (7 - (4 * (not a) + 2 * (not b) + (not c)))) & 1), 3)),
+    ("BooleanFunction[8, 2][True, True]", True), ("BooleanFunction[8, 2][True, False]", False),
+    ("BooleanFunction[%d, 3][True, False, False]" % bf_index(XOR3, 3), True),
+    ("BooleanFunction[%d, 3][True, True, False]" % bf_index(XOR3, 3), False),
+    ("BooleanFunction[{True, False, False, False}]", "BooleanFunction[8, 2]"),
+    ("BooleanFunction[BooleanTable[Implies[a, b], {a, b}]]", "BooleanFunction[%d, 2]" % bf_index(lambda a, b: (not a) or b, 2)),
+    equiv("BooleanFunction[30, {p, q, r}]", "Xor[p, q || r]"),
+    equiv("BooleanFunction[BooleanTable[Implies[a, b], {a, b}], {a, b}]", "Implies[a, b]"),
+    ("BooleanFunction[16, 2]", Raises()), ("BooleanFunction[k, 2]", "BooleanFunction[k, 2]"),
+    ("BooleanFunction[{True, False, True}]", Raises()),
+    # BooleanCountingFunction: kmax (at most), {k} (exactly), {k1, k2}, {{kmin, kmax}}
+    ("BooleanCountingFunction[{2}, 3][True, True, False]", True), ("BooleanCountingFunction[1, 3][True, True, False]", False),
+    ("BooleanTable[BooleanCountingFunction[2, 3]]", tt(lambda a, b, c: a + b + c <= 2, 3)),
+    ("BooleanTable[BooleanCountingFunction[{{1, 2}}, 3]]", tt(lambda a, b, c: 1 <= a + b + c <= 2, 3)),
+    equiv("BooleanCountingFunction[{2, 3}, {a, b, c, d}]", "BooleanCountingFunction[{2, 3}, 4][a, b, c, d]"),
+    ("SatisfiabilityCount[BooleanCountingFunction[{2, 3}, 4][a, b, c, d]]", "10"),
+    ("SatisfiabilityCount[BooleanCountingFunction[3, 20]]", str(sum(math.comb(20, k) for k in range(4)))),
+    # SatisfiableQ / TautologyQ / SatisfiabilityCount
+    ("SatisfiableQ[a && !a]", False), ("SatisfiableQ[a || b, {a, b}]", True), ("SatisfiableQ[Xor[a, b, c]]", True),
+    ("SatisfiableQ[!Implies[Implies[a, b] && a, b], {a, b}]", False),
+    ("SatisfiableQ[And @@ Table[x[i] || !x[i + 1], {i, 1, 30}] && !x[1] && x[31]]", False),
+    ("TautologyQ[a || !a]", True), ("TautologyQ[Implies[Implies[a, b] && a, b]]", True), ("TautologyQ[a || b]", False),
+    ("TautologyQ[Equivalent[!(a && b), !a || !b]]", True),
+    ("TautologyQ[Implies[x && (y || z), Equivalent[Xor[x, y, z], BooleanConvert[Xor[x, y, z], \"DNF\", x && (y || z)]]]]",
+     True),
+    ("SatisfiableQ[x > 0 && x < 0]", Raises()), ("TautologyQ[a || b, {a}]", Raises()),
+    ("SatisfiabilityCount[Xor[a, b, c]]", "4"), ("SatisfiabilityCount[Xor[a, b, c], {a, b, c}]", "4"),
+    ("SatisfiabilityCount[a, {a, b}]", "2"), ("SatisfiabilityCount[a && !a]", "0"),
+    ("SatisfiabilityCount[Majority[a, b, c, d, e]]", "16"),
+    ("SatisfiabilityCount[BooleanFunction[%d, 4]]" % (2 ** 15 + 2 ** 3 + 1), "3"),
+    ("Count[BooleanTable[BooleanFunction[1234567, 5]], True] == SatisfiabilityCount[BooleanFunction[1234567, 5]]", True),
+    # SatisfiabilityInstances: valid instances, {} when unsatisfiable
+    ("SatisfiabilityInstances[Equivalent[a, b], {a, b}]", "{{False, False}}"),
+    ("SatisfiabilityInstances[Equivalent[a, b], {a, b}, 4]", "{{False, False}, {True, True}}"),
+    ("Sort[SatisfiabilityInstances[a || b, {a, b}, All]]", "Sort[{{True, True}, {True, False}, {False, True}}]"),
+    ("Sort[SatisfiabilityInstances[Xor[a, b, c], {a, b, c}, 2^3]]",
+     "Sort[Select[Tuples[{True, False}, 3], Xor @@ # &]]"),
+    ("SatisfiabilityInstances[!Implies[Implies[a, b] && a, b], {a, b}]", "{}"),
+    ("And @@ (BooleanFunction[30, 3] @@@ SatisfiabilityInstances[BooleanFunction[30, 3], 3])", True),
+    ("Length[SatisfiabilityInstances[BooleanFunction[30, 3], 3]]", "3"),
+    ("SatisfiabilityInstances[a || b]", Raises()),
+    # BooleanConvert: equivalent output in the requested shape
+    equiv("BooleanConvert[Equivalent[x, y, z]]", "Equivalent[x, y, z]"),
+    ("BooleanConvert[Equivalent[x, y, z]]", Pred(lambda g: g.head == "Or" and all(t.head == "And" for t in g.args), "DNF")),
+    ("BooleanConvert[Xor[x, y], \"CNF\"]", Pred(lambda g: g.head == "And" and all(t.head == "Or" for t in g.args), "CNF")),
+    equiv("BooleanConvert[Xor[x, y], \"CNF\"]", "Xor[x, y]"),
+    equiv("BooleanConvert[Xor[x, y], \"NAND\"]", "Xor[x, y]"),
+    ("FreeQ[BooleanConvert[Xor[x, y], \"NAND\"], And | Or | Xor]", True),
+    equiv("BooleanConvert[Xor[x, y], \"NOR\"]", "Xor[x, y]"), ("FreeQ[BooleanConvert[Xor[x, y], \"NOR\"], And | Or]", True),
+    equiv("BooleanConvert[Majority[a, b, c], \"AND\"]", "Majority[a, b, c]"),
+    ("FreeQ[BooleanConvert[Majority[a, b, c], \"AND\"], Or]", True),
+    equiv("BooleanConvert[Majority[a, b, c], \"OR\"]", "Majority[a, b, c]"),
+    ("FreeQ[BooleanConvert[Majority[a, b, c], \"OR\"], And]", True),
+    ("BooleanConvert[x || y, \"ANF\"]", "Xor[x, y, x && y]"), ("BooleanConvert[!x, \"ANF\"]", "Xor[True, x]"),
+    ("BooleanConvert[Xor[a, b, c], \"ANF\"]", "Xor[a, b, c]"), ("BooleanConvert[a && !a, \"ANF\"]", False),
+    equiv("BooleanConvert[Equivalent[a, b, c], \"ESOP\"]", "Equivalent[a, b, c]"),
+    equiv("BooleanConvert[BooleanFunction[228, 3][a, b, c]]", "BooleanFunction[228, 3][a, b, c]"),
+    ("BooleanConvert[Xor[x, y, z], \"DNF\", x && (y || z)]", Pred(lambda g: g.head in ("And", "Or"), "DNF")),
+    ("BooleanConvert[a || !a]", True), ("BooleanConvert[x || y, \"ITE\"]", Raises()),
+    # LogicalExpand
+    ("LogicalExpand[(a || b) && c]", "(a && c) || (b && c)"), ("LogicalExpand[!(a && b)]", "!a || !b"),
+    equiv("LogicalExpand[Xor[a, b]]", "Xor[a, b]"), equiv("LogicalExpand[Implies[a, b && c]]", "Implies[a, b && c]"),
+    ("LogicalExpand[{a, b} == {c, d}]", "a == c && b == d"), ("LogicalExpand[{a, b} != {c, d}]", "a != c || b != d"),
+    ("LogicalExpand[(x > 0 || y) && z]", "(x > 0 && z) || (y && z)"), ("LogicalExpand[a && !a]", False),
+    # ConditionalExpression
+    ("ConditionalExpression[x^2, True]", "x^2"), ("ConditionalExpression[x^2, False]", "Undefined"),
+    ("ConditionalExpression[ConditionalExpression[x, a], b]", "ConditionalExpression[x, a && b]"),
+    ("ConditionalExpression[x, x > 0]", "ConditionalExpression[x, x > 0]"),
+    ("ConditionalExpression[1/n, n > 0] /. n -> 2", "1/2"),
+    # ForAll / Exists / Resolve over Booleans
+    ("ForAll[x, True]", True), ("ForAll[x, y]", "y"), ("Exists[x, False]", False), ("ForAll[x, x > 0]", "ForAll[x, x > 0]"),
+    ("Exists[{x, y}, x && y]", "Exists[{x, y}, x && y]"), ("ForAll[1, x]", Raises()),
+    ("Resolve[Exists[x, x || y]]", True), ("Resolve[ForAll[x, x || y]]", "y"), ("Resolve[Exists[x, x && !x]]", False),
+    ("Resolve[ForAll[{x, y}, Implies[x && y, z]]]", "z"), equiv("Resolve[Exists[x, Xor[x, y] && z]]", "z"),
+    ("Resolve[ForAll[x, x, y]]", "y"), ("Resolve[Exists[x, x, y]]", "y"),
+    ("Resolve[ForAll[x, Exists[y, Xor[x, y]]]]", True), ("Resolve[Exists[y, ForAll[x, Xor[x, y]]]]", False),
+    ("Resolve[ForAll[x, x^2 >= 0], Reals]", Raises(NotImplementedError)),
+    ("Resolve[Exists[x, x > 0 && y]]", Raises(NotImplementedError)), ("Resolve[a && b]", "a && b"),
+    # corrections: partial evaluation of connectives (Wolfram simplifies True/False arguments away)
+    ("Xor[True, True, c]", "c"), ("Xor[True, c]", "!c"), ("Xor[False, c, d]", "Xor[c, d]"), ("Xor[True, False]", True),
+    ("Not[Not[a]]", Pred(lambda g: str(g) == "a", "a")), ("!!(a && b)", "a && b"), ("Xnor[True, a]", "a"), ("Xnor[False, a]", "!a"), ("Xnor[True, True]", True),
+    ("Implies[True, b]", "b"), ("Implies[False, b]", True), ("Implies[a, True]", True), ("Implies[a, False]", "!a"),
+    ("Implies[a, b]", "Implies[a, b]"),
+    ("Nand[True, x]", "!x"), ("Nand[False, x]", True), ("Nand[True, x, y]", "Nand[x, y]"),
+    ("Nor[False, x]", "!x"), ("Nor[True, x]", False), ("Nor[False, x, y]", "Nor[x, y]"),
+    ("Equivalent[True, a, b]", "a && b"), ("Equivalent[False, a]", "!a"), ("Equivalent[True, False, a]", False),
+    ("Equivalent[False, a, b]", "!a && !b"), ("Equivalent[a, b]", "Equivalent[a, b]"),
+    # Conjunction / Disjunction
+    ("Conjunction[a || b, {a}]", "b"), ("Disjunction[a && b, {a}]", "b"), ("Conjunction[Xor[a, b], {a, b}]", False),
+    ("Disjunction[Xor[a, b], {a, b}]", True), equiv("Conjunction[Majority[a, b, c], {c}]", "a && b"),
+    equiv("Disjunction[Majority[a, b, c], {c}]", "a || b"),
+]
+
+CASES = PERMUTATIONS + GROUPS + COUNTING + LOGIC
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
