@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""Report the enabled dispatcher; name counts are not correctness guarantees."""
-def main():
-    from mikoshilang.evaluate import _ensure_extended, _rules_by_head
-    from mikoshilang.runtime import _quarantined
-    _ensure_extended()
-    print(f'Enabled extension heads: {len(_rules_by_head)} (not formally verified)')
-    print(f'Quarantined legacy names: {len(_quarantined)} (core overloads may remain)')
-    print('Language special forms are implemented separately in runtime.py.')
-    for name in sorted(_rules_by_head):
-        print(name)
+"""Report the audited bundled library: every exposed head with its audit status.
 
-if __name__ == '__main__':
+Statuses: verified (legacy behaviour confirmed against references), fixed (wrong legacy behaviour
+corrected), promoted (formerly quarantined, now implemented and tested), kernel (implemented by the
+evaluator kernel), error (raises a clear NotImplementedError pointing at the Wolfram replacement),
+quarantined (raises NotImplementedError). See docs/library_audit.md.
+"""
+from collections import Counter
+
+
+def main():
+    from mikoshilang import library
+    from mikoshilang.runtime import _quarantined
+    counts = Counter(s for _area, s, _notes in library.STATUS.values())
+    print(f"Audited library heads: {len(library.STATUS)}")
+    for status in ("verified", "fixed", "promoted", "kernel", "error", "quarantined"):
+        print(f"  {status:12s} {counts.get(status, 0)}")
+    print(f"Quarantined legacy names (raise NotImplementedError): {len(_quarantined)}")
+    for name in sorted(library.STATUS):
+        area, status, _notes = library.STATUS[name]
+        print(f"{name}\t{area}\t{status}")
+
+
+if __name__ == "__main__":
     main()
