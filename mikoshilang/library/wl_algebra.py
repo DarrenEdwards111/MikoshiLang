@@ -1752,11 +1752,9 @@ def _optimize(obj, vs, kind, fname, dom=None):
     if dom is not None:
         raise NotImplementedError(f"{fname}: a domain argument is not supported")
     fv = sym(f, fname)
+    if cons is True:
+        return None             # unconstrained: the reviewed implementation (unchanged)
     if len(xs) != 1:
-        if cons is True:
-            from .core import REGISTRY
-            base = "Minimize" if kind == "min" else "Maximize"
-            return None
         raise NotImplementedError(f"{fname}: constrained optimisation in several variables is not supported")
     x = xs[0]
     S = sp.S.Reals if cons is True else _feasible_set(cons, x, fname)
