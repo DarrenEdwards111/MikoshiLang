@@ -226,7 +226,10 @@ class TestLinearAlgebra:
         assert r is not None
 
     def test_trace(self):
-        assert ev("Trace[{{1, 0}, {0, 2}}]") == 3
+        # Wolfram: Tr is the matrix trace; Trace traces evaluation and is rejected clearly.
+        assert ev("Tr[{{1, 0}, {0, 2}}]") == 3
+        with pytest.raises(NotImplementedError, match="Tr"):
+            ev("Trace[{{1, 0}, {0, 2}}]")
 
     def test_eigenvalues(self):
         r = ev("Eigenvalues[{{2, 1}, {1, 2}}]")
@@ -299,12 +302,12 @@ class TestStatistics:
         assert ev("Mode[{1, 2, 2, 3}]") == 2
 
     def test_stdev(self):
-        r = ev("StandardDeviation[{2, 4, 4, 4, 5, 5, 7, 9}]")
-        assert isinstance(r, float) and r > 0
+        # exact sample standard deviation, as in Wolfram: 4 Sqrt[2/7]
+        r = ev("N[StandardDeviation[{2, 4, 4, 4, 5, 5, 7, 9}]]")
+        assert abs(r - 4 * (2 / 7) ** 0.5) < 1e-12
 
     def test_variance(self):
-        r = ev("Variance[{2, 4, 4, 4, 5, 5, 7, 9}]")
-        assert isinstance(r, float) and r > 0
+        assert ev("Variance[{2, 4, 4, 4, 5, 5, 7, 9}]") == ev("32/7")
 
     def test_correlation(self):
         r = ev("Correlation[{1, 2, 3, 4, 5}, {2, 4, 6, 8, 10}]")
@@ -322,8 +325,11 @@ class TestStatistics:
     @needs_scipy
 
     def test_ttest(self):
-        r = ev("TTest[{1, 2, 3}, {4, 5, 6}]")
-        assert isinstance(r, Expr)
+        # Wolfram two-sample form is TTest[{data1, data2}] (Welch); p = 0.0161...
+        r = ev("TTest[{{1, 2, 3}, {4, 5, 6}}]")
+        assert abs(r - 0.021311641128756713) < 1e-12
+        with pytest.raises(ValueError):
+            ev("TTest[{1, 2, 3}, {4, 5, 6}]")
 
     @needs_scipy
 
@@ -338,29 +344,27 @@ class TestStatistics:
         assert isinstance(r, Expr)
 
     def test_effect_size(self):
-        r = ev("EffectSize[{1, 2, 3}, {4, 5, 6}]")
-        assert isinstance(r, float)
+        assert ev("EffectSize[{1, 2, 3}, {4, 5, 6}]") == -3
 
     @needs_scipy
 
     def test_pdf(self):
-        r = ev("PDF[NormalDistribution[0, 1], 0]")
-        assert abs(r - 0.3989422804) < 0.001
+        assert ev("PDF[NormalDistribution[0, 1], 0]") == ev("1/Sqrt[2 Pi]")
+        assert abs(ev("N[PDF[NormalDistribution[0, 1], 0]]") - 0.3989422804014327) < 1e-15
 
     @needs_scipy
 
     def test_cdf(self):
-        r = ev("CDF[NormalDistribution[0, 1], 0]")
-        assert abs(r - 0.5) < 0.001
+        assert ev("CDF[NormalDistribution[0, 1], 0]") == ev("1/2")
 
     @needs_scipy
 
     def test_inverse_cdf(self):
         r = ev("InverseCDF[NormalDistribution[0, 1], 0.975]")
-        assert abs(r - 1.96) < 0.01
+        assert abs(r - 1.959963984540054) < 1e-12
 
     def test_random_sample(self):
-        r = ev("RandomSample[NormalDistribution[0, 1], 10]")
+        r = ev("RandomVariate[NormalDistribution[0, 1], 10]")
         assert isinstance(r, Expr) and r.head == "List" and len(r.args) == 10
 
     @needs_scipy
@@ -404,7 +408,9 @@ class TestNumberTheory:
         assert ev("Lucas[5]") == 11
 
     def test_catalan(self):
-        assert ev("Catalan[5]") == 42
+        assert ev("CatalanNumber[5]") == 42
+        with pytest.raises(NotImplementedError, match="CatalanNumber"):
+            ev("Catalan[5]")
 
     def test_bell(self):
         assert ev("Bell[5]") == 52
@@ -427,7 +433,9 @@ class TestCombinatorics:
         assert ev("Binomial[10, 3]") == 120
 
     def test_permutations(self):
-        assert ev("Permutations[5, 3]") == 60
+        assert len(ev("Permutations[{1, 2, 3, 4, 5}, {3}]").args) == 60
+        with pytest.raises(ValueError):
+            ev("Permutations[5, 3]")
 
     def test_derangements(self):
         assert ev("Derangements[5]") == 44
@@ -447,7 +455,7 @@ class TestCombinatorics:
         assert r == 5
 
     def test_multinomial(self):
-        assert ev("Multinomial[6, {2, 2, 2}]") == 90
+        assert ev("Multinomial[2, 2, 2]") == 90
 
 
 # ── GEOMETRY ─────────────────────────────────────────────────
@@ -581,7 +589,9 @@ class TestSetTheory:
         assert ev("ElementQ[2, {1, 2, 3}]") == True
 
     def test_subset_q(self):
-        assert ev("SubsetQ[{1, 2}, {1, 2, 3}]") == True
+        # Wolfram SubsetQ[list1, list2] tests whether list2 is a subset of list1
+        assert ev("SubsetQ[{1, 2, 3}, {1, 2}]") is True
+        assert ev("SubsetQ[{1, 2}, {1, 2, 3}]") is False
 
 
 # ── SIGNAL PROCESSING ───────────────────────────────────────
