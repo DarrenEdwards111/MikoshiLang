@@ -29,36 +29,83 @@ mikoshilang
 from mikoshilang import Session
 s = Session()                       # isolated definitions; network disabled
 assert s.evaluate('f[x_] := x^2; f[3]') == 9
-assert s.evaluate('x^2 /. x -> 3') == 9
-print(s.evaluate('Map[#^2 &, {1,2,3}]'))  # {1, 4, 9}
-print(s.evaluate('Solve[x^2 == 4,x]'))   # {-2, 2}, values, not Wolfram rule lists
+assert s.evaluate('fib[0]=0; fib[1]=1; fib[n_] := fib[n] = fib[n-1] + fib[n-2]; fib[60]') == 1548008755920
+assert s.evaluate('Module[{t = 2}, t^3]') == 8          # and t stays unassigned
+print(s.evaluate('Solve[{x + y == 3, x - y == 1}, {x, y}]'))  # {{x -> 2, y -> 1}}
+print(s.evaluate("DSolve[{y'[x] == y[x], y[0] == 1}, y[x], x]"))  # {{y[x] -> E^x}}
+print(s.evaluate('Series[Exp[x], {x, 0, 3}]'))   # 1 + x + x^2/2 + x^3/6 + O[x]^4
+print(s.evaluate('Sqrt[Pi]'), s.evaluate('Integrate[x^2, x]'))  # Sqrt[Pi] x^3/3
 print(s.evaluate('N[Pi,50]'))            # high-precision SymPy number, not float
 ```
 
 ## Language contract
 
-- Strict lexing and end-of-input checks: unknown characters and extra closing
-  delimiters are errors. Unsupported derivative-prime notation is rejected, not dropped.
-- Arithmetic, comparisons, lists, calls, assignments, delayed definitions,
-  named/typed/sequence patterns, replacement rules (`->`, `:>`, `/.`), lazy `If`,
-  `Map`, `Apply`, `/@`, `@@`, and slot-based pure functions (`#`, `#2`, `&`).
-- Top-level newlines or semicolons separate statements. Newlines inside brackets
-  or after an operator permit continuation. This is a subset of Wolfram syntax,
-  not a claim of full Wolfram compatibility. `Module`, `Do`, `While`, arbitrary
-  conditions, postfix `//`, and derivative-prime syntax are not implemented.
-- Exact integer/rational arithmetic and basic canonical algebra use SymPy.
-  Decimal literals are machine precision; requesting more digits cannot recover
-  information already lost in a decimal input. `N[...,p]` for p > 15 preserves
-  SymPy precision. The general bridges do not guess exact rationals from floats.
-- Unknown user function heads remain symbolic, not “successfully computed”.
-  Definitions belong to a Session; notebooks and REPLs each use their own Session.
-  The legacy `evaluate`/`parse_and_eval` API uses a shared default session.
-- `Range`/`Table` require integer bounds and nonzero steps; no guessed 1..10 bounds.
-  Their output is limited to 100,000 entries. This is not a complete resource sandbox.
-- Core numerical/algebra/calculus, linear-algebra, chemistry, units, signal and
-  plotting APIs remain available. Optional dependencies may be required.
-- `Distance2D` has an explicit two-point implementation. Advanced curvature and
-  topology placeholders remain unavailable rather than returning invented answers.
+What is implemented, and checked by value-level tests (see `tests/`):
+
+- **Definitions** — `=`, `:=`, DownValues ordered by specificity (`f[0] = 1` is tried
+  before `f[n_Integer]`, which is tried before `f[n_]`; ties keep definition order),
+  memoisation `f[n_] := f[n] = ...`, conditional definitions `lhs := rhs /; test`
+  (kept separately from the unconditional `lhs := rhs`), `Clear`, `ClearAll`, `Unset`,
+  part assignment `l[[2]] = v`, `+=`, `-=`, `*=`, `/=`, `++`, `--`.
+- **Patterns** — `_`, `x_`, `x_Head`, `__`, `___` (with heads), Condition `/;`,
+  PatternTest `?` (`x_?EvenQ`, `_?(# > 0 &)`), `Alternatives[...]`, `HoldPattern`,
+  backtracking sequence matching, Orderless (up to 8 arguments) and Flat heads.
+- **Scoping** — `Module` (lexical renaming to `x$n`, locals removed afterwards),
+  `Block` (dynamic, values restored even on error) and `With` (substitution).
+- **Functions** — `#`, `#n`, `##`, `body &`, `(body &)[args]`, `Function[x, body]`,
+  `Function[{x, y}, body]`, `f @ x`, `x // f`, `/@`, `@@`, `@@@`, `Map`, `Apply`,
+  `MapThread`, `MapIndexed`, `Select`, `Nest`, `NestList`, `FixedPoint`,
+  `FixedPointList`, `Fold`, `FoldList`, `Thread`, `Outer`, `Inner`, `Identity`.
+- **Control flow** — `If` (2–4 arguments), `Which`, `Switch`, `Do`, `While`, `For`,
+  `Table` (multiple iterators, `{i, list}`), `Break`, `Continue`, `Return`,
+  `Catch`/`Throw`, `CompoundExpression`. Loops are capped at 10^6 iterations.
+- **Attributes** — `SetAttributes`/`ClearAttributes`/`Attributes` with working
+  `HoldAll`, `HoldFirst`, `HoldRest`, `Listable`, `Flat`, `Orderless`
+  (`SequenceHold`, `Protected`, `OneIdentity` are accepted). Arithmetic and
+  elementary functions are Listable (`{1,2} + {3,4}`, `Sin[{0, Pi/2}]`).
+- **Lists and structure** — `Part`/`[[ ]]` (negative indices, lists, `All`), `Length`,
+  `Head`, `First`, `Last`, `Rest`, `Most`, `Append`, `Prepend`, `Join`, `Take`, `Drop`,
+  `Reverse`, `Flatten`, `Sort` (canonical order for numbers, strings, symbols and
+  lists, or with an ordering function), `Cases`, `DeleteCases`, `Position`, `Count`,
+  `MemberQ`, `FreeQ`, `MatchQ`, `Total`, `Range`, `Dot`, `Transpose`, `Inverse`, `Det`.
+- **Holding** — `Hold`, `HoldForm`, `HoldComplete`, `ReleaseHold`, `Evaluate`.
+- **Strings** — `StringJoin`/`<>`, `ToString`, `StringLength`.
+- **Calculus/algebra** — `D` (including `D[f, x, y]` and `{x, n}`), prime notation
+  `y'[x]`, `y''[x]`, `f'[a]` for defined functions; `Solve` on equations and systems
+  returning Wolfram rule lists (`{{x -> 2, y -> 1}}`, `{}` only when there is no
+  solution); `DSolve` for ODEs and ODE systems in `y[x]`, with initial conditions,
+  returning `{{y[x] -> ...}}` (constants `C[1]`, `C[2]`) or `y -> Function[{x}, ...]`;
+  `Series[f, {x, x0, n}]` up to and including order n plus an `O[x]^(n+1)` term
+  (`Normal` drops it); two-sided `Limit` (`Indeterminate` when one-sided limits differ).
+- **Display** — the default form is re-parseable InputForm (`x^3/3`, `Sqrt[Pi]`,
+  `1/(2*x)`, `E^x`); `InputForm[...]`, `FullForm[...]` (`Rational[1, 3]`), `ToString`.
+- Exact integer/rational arithmetic and canonical algebra use SymPy. Decimal literals
+  are machine precision; `N[..., p]` for p > 15 keeps SymPy precision. The bridges do
+  not guess exact rationals from floats.
+- Strict lexing: unknown characters and extra closing delimiters are errors.
+  Unknown user heads remain symbolic. Definitions belong to a `Session`; the legacy
+  `evaluate`/`parse_and_eval` API uses a shared default session.
+- Recursion is limited to depth 1024 (`RecursionError`), `Range`/`Table` to
+  100,000 entries. This is not a resource sandbox.
+
+**Not supported (raises an error rather than guessing):** optional patterns (`x_.`,
+`x_:v`), the `|` and `..` pattern operators, `Span` (`;;`), the `.` operator (use
+`Dot[...]`), `%`, associations, UpValues/TagSet, `#0`, `Function` with an
+attributes argument, `Sort` of general symbolic expressions without an ordering
+function, `Map`/`Apply` at levels other than `{1}`, multivariate `Series`, `Solve`
+with inequalities or a domain, `Limit` directions, PDEs. Term order in sums follows
+SymPy's canonical order, which is close to but not always identical to Wolfram's
+(e.g. `a^2 + b^2 + 2*a*b`). `Solve[expr, x]` with a bare expression is treated as
+`expr == 0` (SymPy convention). The Python helper `series(expr, x, x0, n)` now also
+includes the x^n term (Wolfram semantics) and returns the polynomial without `O`.
+
+Compatibility notes for 3.8: `Solve` now returns rule lists (previously bare values);
+`Inverse`/`Transpose` return plain nested lists (previously a `Matrix` head);
+`Log[b, z]` is the base-b logarithm (the old bridge had the arguments reversed);
+`Exp[x]` evaluates to `E^x`; sums and products are n-ary rather than nested binary.
+
+The retained `extended`, `extended2` and `extended3` rule wrappers outside this list
+are not all verified; check results for consequential uses.
 
 ## Knowledge and hosting
 
@@ -78,15 +125,20 @@ alone do not provide that isolation.
 ## Tests
 
 ```sh
-python -m pip install '.[all]' pytest build
+python -m pip install '.[all,test]' build
 python -m pytest -q              # offline tests, including audit regressions
+# A plain `pip install . pytest` also works: plotting/property suites skip.
 python -m build                 # sdist and wheel
 # Optional, mutable external-service integration tests (may fail offline):
 python -m pytest -m live_service tests/test_knowledge.py tests/test_knowledge_full.py
 ```
 
-GitHub Actions runs offline tests and package builds on Python 3.9 and 3.12.
-New regressions check actual values, precision, malformed-input rejection, session
+GitHub Actions runs offline tests and package builds on Python 3.9, 3.12 and 3.13,
+plus a minimal-install job without extras. `tests/test_differential_sympy.py`
+compares 120+ expressions with independent SymPy computations (including Solve rule
+lists and DSolve solutions substituted back into the ODE), and
+`tests/test_properties.py` uses hypothesis for algebraic laws, list identities,
+InputForm/FullForm round-trips, recursion and scoping. Other regressions check actual values, precision, malformed-input rejection, session
 isolation, lazy branching, quarantine and offline imports. Legacy shape-only tests
 are not evidence that every historical library entry works. `test_all_functions.py`
 now compares expected answers and labels samples without expectations unverified.

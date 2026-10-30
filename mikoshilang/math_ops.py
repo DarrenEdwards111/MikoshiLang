@@ -3,63 +3,157 @@
 from __future__ import annotations
 from typing import Any, Optional
 import sympy as sp
+from sympy.core.function import AppliedUndef
 from .expr import Expr, Symbol
 
 
 # ── Conversion: MikoshiLang <-> SymPy ──
 
+_CONSTANTS = {"Pi": sp.pi, "E": sp.E, "I": sp.I, "Infinity": sp.oo,
+              "ComplexInfinity": sp.zoo, "Indeterminate": sp.nan, "GoldenRatio": sp.GoldenRatio,
+              "EulerGamma": sp.EulerGamma, "Degree": sp.pi / 180}
+
+_FUNCS = {
+    "Sin": sp.sin, "Cos": sp.cos, "Tan": sp.tan, "Cot": sp.cot, "Sec": sp.sec, "Csc": sp.csc,
+    "ArcSin": sp.asin, "ArcCos": sp.acos, "ArcCot": sp.acot,
+    "Sinh": sp.sinh, "Cosh": sp.cosh, "Tanh": sp.tanh, "Coth": sp.coth,
+    "ArcSinh": sp.asinh, "ArcCosh": sp.acosh, "ArcTanh": sp.atanh,
+    "Exp": sp.exp, "Sqrt": sp.sqrt, "Abs": sp.Abs, "Sign": sp.sign,
+    "Floor": sp.floor, "Ceiling": sp.ceiling, "Factorial": sp.factorial, "Gamma": sp.gamma,
+    "Beta": sp.beta, "Zeta": sp.zeta, "Conjugate": sp.conjugate, "Re": sp.re, "Im": sp.im,
+    "RealPart": sp.re, "ImaginaryPart": sp.im, "Binomial": sp.binomial, "Erf": sp.erf,
+    "Max": sp.Max, "Min": sp.Min, "Mod": sp.Mod, "BesselJ": sp.besselj, "BesselY": sp.bessely,
+    "LogGamma": sp.loggamma, "PolyGamma": sp.polygamma, "Fibonacci": sp.fibonacci,
+}
+
+_INV_FUNCS = {
+    sp.sin: "Sin", sp.cos: "Cos", sp.tan: "Tan", sp.cot: "Cot", sp.sec: "Sec", sp.csc: "Csc",
+    sp.asin: "ArcSin", sp.acos: "ArcCos", sp.atan: "ArcTan", sp.acot: "ArcCot", sp.atan2: "ArcTan",
+    sp.sinh: "Sinh", sp.cosh: "Cosh", sp.tanh: "Tanh", sp.coth: "Coth",
+    sp.asinh: "ArcSinh", sp.acosh: "ArcCosh", sp.atanh: "ArcTanh",
+    sp.exp: "Exp", sp.log: "Log", sp.Abs: "Abs", sp.sign: "Sign",
+    sp.floor: "Floor", sp.ceiling: "Ceiling", sp.factorial: "Factorial", sp.gamma: "Gamma",
+    sp.beta: "Beta", sp.zeta: "Zeta", sp.conjugate: "Conjugate", sp.re: "Re", sp.im: "Im",
+    sp.binomial: "Binomial", sp.erf: "Erf", sp.Max: "Max", sp.Min: "Min", sp.Mod: "Mod",
+    sp.besselj: "BesselJ", sp.bessely: "BesselY", sp.loggamma: "LogGamma",
+    sp.polygamma: "PolyGamma", sp.fibonacci: "Fibonacci",
+}
+
+# Heads whose contents must never be handed to SymPy (holding / structural / procedural forms).
+NON_ALGEBRAIC_HEADS = frozenset({
+    "Hold", "HoldForm", "HoldComplete", "HoldPattern", "Function", "Pattern", "Blank",
+    "BlankSequence", "BlankNullSequence", "Condition", "PatternTest", "Alternatives", "Rule",
+    "RuleDelayed", "Set", "SetDelayed", "CompoundExpression", "Module", "Block", "With", "If",
+    "Which", "Switch", "Do", "While", "For", "Table", "Slot", "SlotSequence", "Sequence",
+    "ReplaceAll", "ReplaceRepeated", "Part", "String", "Association", "Graphics", "Error",
+    "InputForm", "FullForm", "Solve", "DSolve", "Series", "Take", "Drop", "Select", "Map", "Apply",
+    "Matrix",
+})
+
+
+def _derivative_to_sympy(head, args):
+    """Derivative[n1, n2, ...][f][a1, a2, ...] -> SymPy Derivative / Subs."""
+    orders = [int(n) for n in head.head.args]
+    f = head.args[0] if head.args else None
+    if not isinstance(f, Symbol) or len(orders) != len(args):
+        raise ValueError("Unsupported Derivative form")
+    sargs = [to_sympy(a) for a in args]
+    func = sp.Function(f.name)
+    if all(isinstance(a, sp.Symbol) for a in sargs) and len(set(sargs)) == len(sargs):
+        spec = [(a, n) for a, n in zip(sargs, orders) if n]
+        return sp.Derivative(func(*sargs), *spec) if spec else func(*sargs)
+    dummies = [sp.Dummy(f"t{i}") for i in range(len(sargs))]
+    spec = [(d, n) for d, n in zip(dummies, orders) if n]
+    return sp.Subs(sp.Derivative(func(*dummies), *spec), tuple(dummies), tuple(sargs))
+
+
+def _order_to_sympy(arg):
+    syms = sorted(arg.free_symbols, key=str)
+    if len(syms) != 1:
+        raise ValueError("O[...] needs exactly one variable")
+    s = syms[0]
+    if arg == s:
+        return sp.Order(s)
+    point = sp.solve(arg, s)
+    if len(point) != 1:
+        raise ValueError("Unsupported O[...] argument")
+    return sp.Order(arg, (s, point[0]))
+
+
 def to_sympy(expr) -> Any:
     """Convert a MikoshiLang expression to a SymPy expression."""
     if isinstance(expr, str):
         raise TypeError("Strings are not symbolic expressions; parse source explicitly")
+    if isinstance(expr, bool):
+        return sp.true if expr else sp.false
     if isinstance(expr, (int, float)):
         return sp.sympify(expr)
-    if isinstance(expr, bool):
-        return expr
+    if isinstance(expr, complex):
+        return sp.sympify(expr)
     if isinstance(expr, Symbol):
-        if expr.name == "Pi":
-            return sp.pi
-        if expr.name == "E":
-            return sp.E
-        if expr.name == "I":
-            return sp.I
-        if expr.name == "Infinity":
-            return sp.oo
+        if expr.name in _CONSTANTS:
+            return _CONSTANTS[expr.name]
         return sp.Symbol(expr.name)
     if isinstance(expr, Expr):
         head = expr.head
+        if isinstance(head, Expr):
+            if isinstance(head.head, Expr) and head.head.head == "Derivative":
+                return _derivative_to_sympy(head, expr.args)
+            raise ValueError("Cannot convert a compound head to SymPy")
+        if head in NON_ALGEBRAIC_HEADS:
+            raise ValueError(f"Cannot convert {head} to SymPy")
+        if head == "List":
+            return [to_sympy(a) for a in expr.args]
+        if head == "Rational" and len(expr.args) == 2:
+            return sp.Rational(to_sympy(expr.args[0]), to_sympy(expr.args[1]))
         args = [to_sympy(a) for a in expr.args]
+        if head == "O" and len(args) == 1:
+            return _order_to_sympy(args[0])
         _map = {
-            "List": lambda a: a,
             "Equal": lambda a: sp.Eq(*a, evaluate=False),
             "Unequal": lambda a: sp.Ne(*a, evaluate=False),
-            "Plus": lambda a: sum(a),
+            "Plus": lambda a: sp.Add(*a),
             "Times": lambda a: sp.Mul(*a),
             "Power": lambda a: a[0] ** a[1],
-            "Sin": lambda a: sp.sin(a[0]),
-            "Cos": lambda a: sp.cos(a[0]),
-            "Tan": lambda a: sp.tan(a[0]),
-            "ArcSin": lambda a: sp.asin(a[0]),
-            "ArcCos": lambda a: sp.acos(a[0]),
-            "ArcTan": lambda a: sp.atan(a[0]),
-            "Exp": lambda a: sp.exp(a[0]),
-            "Log": lambda a: sp.log(*a),
-            "Sqrt": lambda a: sp.sqrt(a[0]),
-            "Abs": lambda a: sp.Abs(a[0]),
+            "Log": lambda a: sp.log(a[0]) if len(a) == 1 else sp.log(a[1], a[0]),
+            "ArcTan": lambda a: sp.atan(a[0]) if len(a) == 1 else sp.atan2(a[1], a[0]),
         }
         if head in _map:
             return _map[head](args)
-        # Fallback: try SymPy function
-        if hasattr(sp, head.lower()):
-            return getattr(sp, head.lower())(*args)
-        raise ValueError(f"Cannot convert {head} to SymPy")
-    if isinstance(expr, (sp.Basic, sp.MatrixBase, complex)):
+        if head in _FUNCS:
+            return _FUNCS[head](*args)
+        candidate = getattr(sp, head.lower(), None)
+        if isinstance(candidate, type) and issubclass(candidate, sp.Function):
+            return candidate(*args)
+        # Unknown heads are undefined functions: f[x] -> f(x)
+        return sp.Function(head)(*args)
+    if isinstance(expr, (sp.Basic, sp.MatrixBase)):
         return sp.sympify(expr)
     raise TypeError(f"Unsupported symbolic value type: {type(expr).__name__}")
 
 
+def _order_from_sympy(o):
+    e = o.expr
+    point = o.point[0] if o.point else 0
+    var = o.variables[0] if o.variables else None
+    if var is None:
+        return Expr("O", from_sympy(e))
+    base = var - point if point != 0 else var
+    k = sp.degree(sp.expand(e.subs(var, sp.Symbol("_u") + point)), sp.Symbol("_u")) if e.is_polynomial(var) else None
+    if k is not None and sp.expand(e.subs(var, sp.Symbol("_u") + point)) == sp.Symbol("_u") ** k:
+        inner = Expr("O", from_sympy(base))
+        return inner if k == 1 else Expr("Power", inner, int(k))
+    return Expr("O", from_sympy(e))
+
+
 def from_sympy(sexpr) -> Any:
     """Convert a SymPy expression back to MikoshiLang."""
+    if isinstance(sexpr, bool):
+        return sexpr
+    if sexpr is sp.true:
+        return True
+    if sexpr is sp.false:
+        return False
     if sexpr is sp.pi:
         return Symbol("Pi")
     if sexpr is sp.E:
@@ -70,6 +164,17 @@ def from_sympy(sexpr) -> Any:
         return Symbol("Infinity")
     if sexpr is sp.zoo:
         return Symbol("ComplexInfinity")
+    if sexpr is sp.nan:
+        return Symbol("Indeterminate")
+    if sexpr is sp.GoldenRatio:
+        return Symbol("GoldenRatio")
+    if sexpr is sp.EulerGamma:
+        return Symbol("EulerGamma")
+    if isinstance(sexpr, (list, tuple, sp.Tuple)):
+        return Expr("List", *(from_sympy(a) for a in sexpr))
+    if isinstance(sexpr, sp.MatrixBase):
+        return Expr("List", *(Expr("List", *(from_sympy(sexpr[i, j]) for j in range(sexpr.cols)))
+                              for i in range(sexpr.rows)))
     if isinstance(sexpr, sp.Integer):
         return int(sexpr)
     if isinstance(sexpr, sp.Rational):
@@ -77,37 +182,63 @@ def from_sympy(sexpr) -> Any:
             return int(sexpr.p)
         return Expr("Times", int(sexpr.p), Expr("Power", int(sexpr.q), -1))
     if isinstance(sexpr, sp.Float):
-        return sexpr
+        # machine precision -> Python float; arbitrary precision stays a SymPy Float
+        return float(sexpr) if sexpr._prec <= 53 else sexpr
     if isinstance(sexpr, sp.Symbol):
         return Symbol(str(sexpr))
+    if isinstance(sexpr, sp.Order):
+        return _order_from_sympy(sexpr)
     if isinstance(sexpr, sp.Add):
-        args = [from_sympy(a) for a in sexpr.args]
-        if len(args) == 1:
-            return args[0]
-        result = args[0]
-        for a in args[1:]:
-            result = Expr("Plus", result, a)
-        return result
+        terms = [a for a in sexpr.args if not isinstance(a, sp.Order)]
+        orders = [a for a in sexpr.args if isinstance(a, sp.Order)]
+        if orders and terms and orders[0].variables:
+            var = orders[0].variables[0]
+            terms = sorted(terms, key=lambda t: (sp.degree(t, var) if t.is_polynomial(var) else 0,
+                                                 sp.default_sort_key(t)))
+        else:
+            # Close to Wolfram's canonical order: 1 + 3*x + 3*x^2 + x^3
+            terms = sorted(terms, key=sp.default_sort_key)
+        args = [from_sympy(a) for a in terms + orders]
+        return args[0] if len(args) == 1 else Expr("Plus", *args)
     if isinstance(sexpr, sp.Mul):
         args = [from_sympy(a) for a in sexpr.args]
-        if len(args) == 1:
-            return args[0]
-        result = args[0]
-        for a in args[1:]:
-            result = Expr("Times", result, a)
-        return result
+        return args[0] if len(args) == 1 else Expr("Times", *args)
     if isinstance(sexpr, sp.Pow):
         return Expr("Power", from_sympy(sexpr.base), from_sympy(sexpr.exp))
-    if isinstance(sexpr, sp.sin):
-        return Expr("Sin", from_sympy(sexpr.args[0]))
-    if isinstance(sexpr, sp.cos):
-        return Expr("Cos", from_sympy(sexpr.args[0]))
-    if isinstance(sexpr, sp.tan):
-        return Expr("Tan", from_sympy(sexpr.args[0]))
+    if isinstance(sexpr, sp.Derivative):
+        f = sexpr.expr
+        if isinstance(f, AppliedUndef) and all(isinstance(a, sp.Symbol) for a in f.args):
+            counts = dict(sexpr.variable_count)
+            orders = [int(counts.get(a, 0)) for a in f.args]
+            if sum(orders) == sum(int(c) for c in counts.values()):
+                head = Expr(Expr("Derivative", *orders), Symbol(type(f).__name__))
+                return Expr(head, *(from_sympy(a) for a in f.args))
+        spec = [Expr("List", from_sympy(v), int(c)) if c != 1 else from_sympy(v) for v, c in sexpr.variable_count]
+        return Expr("D", from_sympy(f), *spec)
+    if isinstance(sexpr, AppliedUndef):
+        return Expr(type(sexpr).__name__, *(from_sympy(a) for a in sexpr.args))
+    if isinstance(sexpr, sp.Equality):
+        return Expr("Equal", from_sympy(sexpr.lhs), from_sympy(sexpr.rhs))
+    _rel = {sp.Unequality: "Unequal", sp.StrictLessThan: "Less", sp.StrictGreaterThan: "Greater",
+            sp.LessThan: "LessEqual", sp.GreaterThan: "GreaterEqual"}
+    if type(sexpr) in _rel:
+        return Expr(_rel[type(sexpr)], from_sympy(sexpr.lhs), from_sympy(sexpr.rhs))
+    if isinstance(sexpr, sp.And):
+        return Expr("And", *(from_sympy(a) for a in sexpr.args))
+    if isinstance(sexpr, sp.Or):
+        return Expr("Or", *(from_sympy(a) for a in sexpr.args))
+    if isinstance(sexpr, sp.Not):
+        return Expr("Not", from_sympy(sexpr.args[0]))
     if isinstance(sexpr, sp.exp):
-        return Expr("Exp", from_sympy(sexpr.args[0]))
+        return Expr("Power", Symbol("E"), from_sympy(sexpr.args[0]))
     if isinstance(sexpr, sp.log):
-        return Expr("Log", *(from_sympy(a) for a in sexpr.args))
+        if len(sexpr.args) == 2:
+            return Expr("Log", from_sympy(sexpr.args[1]), from_sympy(sexpr.args[0]))
+        return Expr("Log", from_sympy(sexpr.args[0]))
+    if isinstance(sexpr, sp.atan2):
+        return Expr("ArcTan", from_sympy(sexpr.args[1]), from_sympy(sexpr.args[0]))
+    if type(sexpr) in _INV_FUNCS:
+        return Expr(_INV_FUNCS[type(sexpr)], *(from_sympy(a) for a in sexpr.args))
     if isinstance(sexpr, sp.Number):
         return float(sexpr)
     # Fallback
@@ -163,8 +294,12 @@ def limit(expr, var, point) -> Any:
 
 
 def series(expr, var, point=0, order=6) -> Any:
-    """Taylor series expansion."""
+    """Taylor polynomial through order ``order`` inclusive (Wolfram's Normal[Series[...]]).
+
+    Unlike ``sympy.series`` (whose ``n`` is exclusive) the x^order term is included.
+    Use the ``Series`` language function to keep the O[x]^(n+1) term.
+    """
     sv = to_sympy(var) if isinstance(var, Symbol) else sp.Symbol(str(var))
-    s = sp.series(to_sympy(expr), sv, to_sympy(point), order)
-    # Remove O() term
+    # Wolfram semantics: include terms up to and including order n, plus O[x]^(n+1)
+    s = sp.series(to_sympy(expr), sv, to_sympy(point), order + 1)
     return from_sympy(s.removeO())

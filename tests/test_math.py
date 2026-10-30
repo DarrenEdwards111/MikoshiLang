@@ -196,10 +196,10 @@ class TestLimit:
 
 class TestSeries:
     def test_exp_series(self):
-        # e^x around 0 to order 4: 1 + x + x²/2 + x³/6
+        # e^x around 0 through order 4 (Wolfram semantics: x^4 term included)
         e = Expr("Exp", x)
         r = series(e, x, 0, 4)
         s = to_sympy(r)
         sx = sp.Symbol("x")
-        expected = 1 + sx + sx ** 2 / 2 + sx ** 3 / 6
+        expected = 1 + sx + sx ** 2 / 2 + sx ** 3 / 6 + sx ** 4 / 24
         assert sp.simplify(s - expected) == 0

@@ -30,6 +30,9 @@ def _to_sympy(expr):
         return _constants.get(name, sp.Symbol(name))
     if isinstance(expr, Expr):
         head = expr.head
+        if not isinstance(head, str) or head in ("O", "Rational"):
+            from .math_ops import to_sympy as _core_to_sympy
+            return _core_to_sympy(expr)
         args = [_to_sympy(a) for a in expr.args]
 
         _func_map = {
@@ -50,7 +53,7 @@ def _to_sympy(expr):
             'ArcCosh': lambda a: sp.acosh(a[0]),
             'ArcTanh': lambda a: sp.atanh(a[0]),
             'Exp': lambda a: sp.exp(a[0]),
-            'Log': lambda a: sp.log(a[0]) if len(a) == 1 else sp.log(a[0], a[1]),
+            'Log': lambda a: sp.log(a[0]) if len(a) == 1 else sp.log(a[1], a[0]),
             'Sqrt': lambda a: sp.sqrt(a[0]),
             'Abs': lambda a: sp.Abs(a[0]),
             'Sign': lambda a: sp.sign(a[0]),
@@ -88,6 +91,12 @@ def _to_sympy(expr):
 def _from_sympy(result):
     """Convert SymPy expression back to MikoshiLang expr."""
     import sympy as sp
+    from .math_ops import from_sympy as _core_from_sympy
+
+    if isinstance(result, sp.MatrixBase):
+        return _core_from_sympy(result)
+    if isinstance(result, sp.Basic) and not isinstance(result, (sp.FiniteSet, sp.Set)):
+        return _core_from_sympy(result)
 
     if isinstance(result, sp.Integer):
         return int(result)
@@ -618,7 +627,8 @@ def build_extended_rules():
     # Special functions
     rule1("Exp", lambda a: _from_sympy(sp.exp(_to_sympy(a))))
     rule1("Log", lambda a: _from_sympy(sp.log(_to_sympy(a))))
-    rule2("Log", lambda a, b: _from_sympy(sp.log(_to_sympy(a), _to_sympy(b))))
+    # Wolfram: Log[b, z] is the base-b logarithm of z
+    rule2("Log", lambda a, b: _from_sympy(sp.log(_to_sympy(b), _to_sympy(a))))
     rule1("Log2", lambda a: _from_sympy(sp.log(_to_sympy(a), 2)))
     rule1("Log10", lambda a: _from_sympy(sp.log(_to_sympy(a), 10)))
     rule1("Sqrt", lambda a: _from_sympy(sp.sqrt(_to_sympy(a))))

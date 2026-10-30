@@ -36,27 +36,40 @@ _TOKEN_SPEC = [
     ("FLOAT",     r'\d+\.\d*([eE][+-]?\d+)?|\.\d+([eE][+-]?\d+)?|\d+[eE][+-]?\d+'),
     ("INTEGER",   r'\d+'),
     ("STRING",    r'"(?:\\.|[^"\\])*"'),
+    ("SAMEQ",     r'==='),
+    ("UNSAMEQ",   r'=!='),
     ("SETDELAYED",r':='),
     ("SET",       r'(?<![=!<>])=(?!=)'),
     ("RULEDELAYED", r':>'),
     ("MAP", r'/@'),
+    ("APPLYLEVEL1", r'@@@'),
     ("APPLY", r'@@'),
+    ("AT",        r'@'),
     ("RULE",      r'->'),
+    ("REPLACEREPEATED", r'//\.'),
+    ("POSTFIXAPP", r'//'),
     ("REPLACEALL",r'/\.'),
     ("CONDITION", r'/;'),
+    ("DIVIDEBY",  r'/='),
     ("EQUAL",     r'=='),
     ("UNEQUAL",   r'!='),
     ("GEQ",       r'>='),
     ("LEQ",       r'<='),
+    ("STRINGJOIN", r'<>'),
     ("GREATER",   r'>(?!>)'),
     ("LESS",      r'<(?!<)'),
     ("AND",       r'&&'),
     ("OR",        r'\|\|'),
     ("NOT",       r'!(?!=)'),
+    ("INCREMENT", r'\+\+'),
+    ("ADDTO",     r'\+='),
     ("PLUS",      r'\+'),
+    ("DECREMENT", r'--'),
+    ("SUBTRACTFROM", r'-='),
     ("MINUS",     r'-'),
+    ("TIMESBY",   r'\*='),
     ("TIMES",     r'\*'),
-    ("DIVIDE",    r'/(?![.;@])'),
+    ("DIVIDE",    r'/(?![.;@/=])'),
     ("POWER",     r'\^'),
     ("LSQUARE",   r'\['),
     ("RSQUARE",   r'\]'),
@@ -70,19 +83,26 @@ _TOKEN_SPEC = [
     ("BLANKS",    r'__'),
     ("BLANK",     r'_'),
     ("SYMBOL",    r'[A-Za-z$][A-Za-z0-9$]*'),
+    ("SLOTSEQ",   r'##[0-9]*'),
     ("SLOT",      r'#[0-9]*'),
     ("FUNCTION",  r'&(?!&)'),
+    ("PRIME",     r"'+"),
+    ("QUESTION",  r'\?'),
     ("WS",        r'[ \t\r]+'),
     ("NEWLINE",   r'\n'),
 ]
 
 _TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _TOKEN_SPEC), re.DOTALL)
 
+_STATEMENT_END = ("INTEGER", "FLOAT", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE",
+                  "FUNCTION", "SLOT", "SLOTSEQ", "INCREMENT", "DECREMENT", "BLANK", "BLANKS", "BLANKNS")
+
 
 def tokenize(text: str) -> ListType[Token]:
     """Tokenize Wolfram-style input text."""
     tokens = []
     end = 0
+    level = 0
     for m in _TOKEN_RE.finditer(text):
         if m.start() != end:
             raise ParseError(f"Unsupported character at position {end}: {text[end]!r}")
@@ -92,12 +112,15 @@ def tokenize(text: str) -> ListType[Token]:
         pos = m.start()
         if kind == "NEWLINE":
             # Newlines separate top-level statements, never implicit products.
-            level = sum(t.type in ("LPAREN", "LSQUARE", "LBRACE") for t in tokens) - sum(t.type in ("RPAREN", "RSQUARE", "RBRACE") for t in tokens)
-            if level == 0 and tokens and tokens[-1].type in ("INTEGER", "FLOAT", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "FUNCTION"):
+            if level == 0 and tokens and tokens[-1].type in _STATEMENT_END:
                 tokens.append(Token("SEMICOLON", ";", pos))
             continue
         if kind in ("WS", "COMMENT"):
             continue
+        if kind in ("LPAREN", "LSQUARE", "LBRACE"):
+            level += 1
+        elif kind in ("RPAREN", "RSQUARE", "RBRACE"):
+            level -= 1
         if kind == "INTEGER":
             value = int(value)
         elif kind == "FLOAT":
@@ -168,46 +191,76 @@ class Parser:
         return expr
 
     def parse_assignment(self) -> Any:
-        """Handle = and := assignments."""
+        """Handle =, :=, +=, -=, *=, /= (right-associative)."""
+        expr = self.parse_postfix_application()
+        ops = {"SET": "Set", "SETDELAYED": "SetDelayed", "ADDTO": "AddTo",
+               "SUBTRACTFROM": "SubtractFrom", "TIMESBY": "TimesBy", "DIVIDEBY": "DivideBy"}
+        tok = self.peek()
+        if tok is not None and tok.type in ops:
+            self.advance()
+            rhs = self.parse_assignment()
+            return Expr(ops[tok.type], expr, rhs)
+        return expr
+
+    def parse_postfix_application(self) -> Any:
+        """Handle expr // f  (== f[expr]), lowest precedence above assignment."""
+        expr = self.parse_function()
+        while self.at("POSTFIXAPP"):
+            self.advance()
+            f = self.parse_function()
+            expr = Expr(_as_head(f), expr)
+        return expr
+
+    def parse_function(self) -> Any:
+        """Handle postfix & (pure functions) and direct application (body &)[args]."""
         expr = self.parse_replace_all()
-        if self.at("SET"):
+        while self.at("FUNCTION"):
             self.advance()
-            rhs = self.parse_replace_all()
-            return Expr("Set", expr, rhs)
-        if self.at("SETDELAYED"):
-            self.advance()
-            rhs = self.parse_replace_all()
-            return Expr("SetDelayed", expr, rhs)
+            expr = Expr("Function", expr)
+            while self.at("LSQUARE", "MAP", "APPLY", "APPLYLEVEL1", "AT"):
+                if self.at("LSQUARE"):
+                    self.advance()
+                    args = self._parse_arglist("RSQUARE")
+                    self.expect("RSQUARE")
+                    expr = Expr(expr, *args)
+                    continue
+                op = self.advance().type
+                rhs = self.parse_replace_all()
+                if op == "MAP":
+                    expr = Expr("Map", expr, rhs)
+                elif op == "APPLY":
+                    expr = Expr("Apply", expr, rhs)
+                elif op == "APPLYLEVEL1":
+                    expr = Expr("Apply", expr, rhs, Expr("List", 1))
+                else:
+                    expr = Expr(expr, rhs)
         return expr
 
     def parse_replace_all(self) -> Any:
-        """Handle /. (ReplaceAll)."""
-        expr = self.parse_condition()
-        while self.at("REPLACEALL"):
-            self.advance()
-            rhs = self.parse_condition()
-            expr = Expr("ReplaceAll", expr, rhs)
-        return expr
-
-    def parse_condition(self) -> Any:
-        """Handle /; (Condition)."""
+        """Handle /. (ReplaceAll) and //. (ReplaceRepeated), left-associative."""
         expr = self.parse_rule()
-        if self.at("CONDITION"):
-            self.advance()
-            cond = self.parse_rule()
-            expr = Expr("Condition", expr, cond)
+        while self.at("REPLACEALL", "REPLACEREPEATED"):
+            op = self.advance().type
+            rhs = self.parse_rule()
+            expr = Expr("ReplaceAll" if op == "REPLACEALL" else "ReplaceRepeated", expr, rhs)
         return expr
 
     def parse_rule(self) -> Any:
-        """Handle -> (Rule)."""
-        expr = self.parse_or()
+        """Handle -> and :> (right-associative). Condition binds tighter, as in Wolfram."""
+        expr = self.parse_condition()
         if self.at("RULE", "RULEDELAYED"):
             op = self.advance().type
             rhs = self.parse_rule()
             expr = Expr("RuleDelayed" if op == "RULEDELAYED" else "Rule", expr, rhs)
-        if self.at("FUNCTION"):
+        return expr
+
+    def parse_condition(self) -> Any:
+        """Handle /; (Condition)."""
+        expr = self.parse_or()
+        while self.at("CONDITION"):
             self.advance()
-            expr = Expr("Function", expr)
+            cond = self.parse_or()
+            expr = Expr("Condition", expr, cond)
         return expr
 
     def parse_or(self) -> Any:
@@ -233,19 +286,36 @@ class Parser:
             return Expr("Not", operand)
         return self.parse_comparison()
 
+    _COMP_OPS = {
+        "EQUAL": "Equal", "UNEQUAL": "Unequal",
+        "LESS": "Less", "GREATER": "Greater",
+        "LEQ": "LessEqual", "GEQ": "GreaterEqual",
+        "SAMEQ": "SameQ", "UNSAMEQ": "UnsameQ",
+    }
+
     def parse_comparison(self) -> Any:
+        expr = self.parse_stringjoin()
+        comparisons = []
+        while self.peek() is not None and self.peek().type in self._COMP_OPS:
+            op = self._COMP_OPS[self.advance().type]
+            rhs = self.parse_stringjoin()
+            comparisons.append(Expr(op, expr, rhs))
+            expr = rhs
+        if not comparisons:
+            return expr
+        if len(comparisons) == 1:
+            return comparisons[0]
+        # a < b < c  ==  a < b && b < c
+        return Expr("And", *comparisons)
+
+    def parse_stringjoin(self) -> Any:
         expr = self.parse_addition()
-        comp_ops = {
-            "EQUAL": "Equal", "UNEQUAL": "Unequal",
-            "LESS": "Less", "GREATER": "Greater",
-            "LEQ": "LessEqual", "GEQ": "GreaterEqual",
-        }
-        tok = self.peek()
-        if tok and tok.type in comp_ops:
-            op = comp_ops[tok.type]
-            self.advance()
-            rhs = self.parse_addition()
-            return Expr(op, expr, rhs)
+        if self.at("STRINGJOIN"):
+            parts = [expr]
+            while self.at("STRINGJOIN"):
+                self.advance()
+                parts.append(self.parse_addition())
+            return Expr("StringJoin", *parts)
         return expr
 
     def parse_addition(self) -> Any:
@@ -271,7 +341,7 @@ class Parser:
                 self.advance()
                 rhs = self.parse_unary()
                 expr = Expr("Times", expr, Expr("Power", rhs, -1))
-            # Implicit multiplication: number followed by symbol/function/paren/brace
+            # Implicit multiplication: juxtaposition
             elif self._can_implicit_multiply(expr):
                 rhs = self.parse_unary()
                 expr = Expr("Times", expr, rhs)
@@ -284,30 +354,32 @@ class Parser:
         tok = self.peek()
         if tok is None:
             return False
-        if tok.type in ("SYMBOL", "LPAREN", "LBRACE", "INTEGER", "FLOAT"):
-            # Only if the previous expression is a "value" type
-            # Avoid implicit mult after operators
-            return True
-        return False
+        return tok.type in ("SYMBOL", "LPAREN", "LBRACE", "INTEGER", "FLOAT", "SLOT", "SLOTSEQ")
 
     def parse_unary(self) -> Any:
         if self.at("MINUS"):
             self.advance()
             operand = self.parse_unary()
-            if isinstance(operand, (int, float)):
+            if isinstance(operand, (int, float)) and not isinstance(operand, bool):
                 return -operand
             return Expr("Times", -1, operand)
         if self.at("PLUS"):
             self.advance()
             return self.parse_unary()
         expr = self.parse_power()
-        if self.at("MAP", "APPLY"):
+        if self.at("MAP", "APPLY", "APPLYLEVEL1"):
             op = self.advance().type
-            expr = Expr("Map" if op == "MAP" else "Apply", expr, self.parse_unary())
+            rhs = self.parse_unary()
+            if op == "MAP":
+                expr = Expr("Map", expr, rhs)
+            elif op == "APPLY":
+                expr = Expr("Apply", expr, rhs)
+            else:
+                expr = Expr("Apply", expr, rhs, Expr("List", 1))
         return expr
 
     def parse_power(self) -> Any:
-        base = self.parse_postfix()
+        base = self.parse_prefix_application()
         if self.at("POWER"):
             self.advance()
             # Right-associative
@@ -315,25 +387,71 @@ class Parser:
             return Expr("Power", base, exp)
         return base
 
+    def parse_prefix_application(self) -> Any:
+        """Handle f @ x  (== f[x]), right-associative."""
+        expr = self.parse_postfix()
+        if self.at("AT"):
+            self.advance()
+            arg = self.parse_prefix_application()
+            return Expr(_as_head(expr), arg)
+        return expr
+
     def parse_postfix(self) -> Any:
-        """Handle function calls f[...] and factorial !"""
+        """Handle calls f[...], Part x[[i]], derivatives f', x++, x--, and factorial n!"""
         expr = self.parse_atom()
         while True:
-            if self.at("LSQUARE"):
-                # Function call: head[args]
-                head = expr.name if isinstance(expr, Symbol) else expr
+            tok = self.peek()
+            if tok is None:
+                break
+            if tok.type == "LSQUARE":
+                nxt = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
+                if nxt is not None and nxt.type == "LSQUARE" and nxt.pos == tok.pos + 1:
+                    # Part: expr[[i, j, ...]]
+                    self.advance(); self.advance()
+                    args = self._parse_arglist("RSQUARE")
+                    if not args:
+                        raise ParseError("Empty Part specification")
+                    self.expect("RSQUARE")
+                    close = self.expect("RSQUARE")
+                    expr = Expr("Part", expr, *args)
+                    continue
+                head = _as_head(expr)
                 self.advance()  # consume [
                 args = self._parse_arglist("RSQUARE")
                 self.expect("RSQUARE")
                 expr = Expr(head, *args)
-            elif self.at("LPAREN"):
-                # Implicit multiplication: expr(...)
-                # But only if expr is a value, not an operator result
-                # Actually this is handled by implicit mult in parse_multiplication
-                break
+            elif tok.type == "PRIME":
+                self.advance()
+                expr = Expr(Expr("Derivative", len(tok.value)), expr)
+            elif tok.type in ("INCREMENT", "DECREMENT"):
+                self.advance()
+                expr = Expr("Increment" if tok.type == "INCREMENT" else "Decrement", expr)
+            elif tok.type == "NOT" and self._factorial_position():
+                self.advance()
+                expr = Expr("Factorial", expr)
             else:
                 break
         return expr
+
+    def _factorial_position(self) -> bool:
+        nxt = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
+        return nxt is None or nxt.type not in (
+            "SYMBOL", "INTEGER", "FLOAT", "LPAREN", "LBRACE", "SLOT", "SLOTSEQ", "STRING")
+
+    def _blank_tail(self, kind: str):
+        """After _, __ or ___, read an optional head constraint."""
+        head = None
+        if self.at("SYMBOL") and self.peek().pos == self.tokens[self.pos - 1].pos + len(
+                {"Blank": "_", "BlankSequence": "__", "BlankNullSequence": "___"}[kind]):
+            head = self.advance().value
+        return Expr(kind, Symbol(head)) if head else Expr(kind)
+
+    def _pattern_test(self, pattern):
+        if self.at("QUESTION"):
+            self.advance()
+            test = self.parse_atom()
+            return Expr("PatternTest", pattern, test)
+        return pattern
 
     def parse_atom(self) -> Any:
         tok = self.peek()
@@ -344,59 +462,39 @@ class Parser:
             self.advance()
             index = int(tok.value[1:] or "1")
             if index < 1:
-                raise ParseError("Slots start at #1")
+                raise ParseError("Slots start at #1 (#0 is not supported)")
             return Expr("Slot", index)
 
-        if tok.type == "INTEGER":
+        if tok.type == "SLOTSEQ":
+            self.advance()
+            index = int(tok.value[2:] or "1")
+            if index < 1:
+                raise ParseError("Slot sequences start at ##1")
+            return Expr("SlotSequence", index)
+
+        if tok.type in ("INTEGER", "FLOAT", "STRING"):
             self.advance()
             return tok.value
 
-        if tok.type == "FLOAT":
-            self.advance()
-            return tok.value
-
-        if tok.type == "STRING":
-            self.advance()
-            return tok.value
+        _blank_kinds = {"BLANK": "Blank", "BLANKS": "BlankSequence", "BLANKNS": "BlankNullSequence"}
 
         if tok.type == "SYMBOL":
             self.advance()
             name = tok.value
-            # Check for keywords
             if name == "True":
                 return True
             if name == "False":
                 return False
-            # Check for pattern syntax: x_, x_Integer, x__, x___
-            if self.at("BLANKNS"):
+            nxt = self.peek()
+            if nxt is not None and nxt.type in _blank_kinds and nxt.pos == tok.pos + len(name):
                 self.advance()
-                return Expr("Pattern", Symbol(name), Expr("BlankNullSequence"))
-            if self.at("BLANKS"):
-                self.advance()
-                return Expr("Pattern", Symbol(name), Expr("BlankSequence"))
-            if self.at("BLANK"):
-                self.advance()
-                # Check for head constraint: x_Integer
-                if self.at("SYMBOL"):
-                    head = self.advance().value
-                    return Expr("Pattern", Symbol(name), Expr("Blank", Symbol(head)))
-                return Expr("Pattern", Symbol(name), Expr("Blank"))
+                blank = self._blank_tail(_blank_kinds[nxt.type])
+                return self._pattern_test(Expr("Pattern", Symbol(name), blank))
             return Symbol(name)
 
-        if tok.type == "BLANK":
+        if tok.type in _blank_kinds:
             self.advance()
-            if self.at("SYMBOL"):
-                head = self.advance().value
-                return Expr("Blank", Symbol(head))
-            return Expr("Blank")
-
-        if tok.type == "BLANKS":
-            self.advance()
-            return Expr("BlankSequence")
-
-        if tok.type == "BLANKNS":
-            self.advance()
-            return Expr("BlankNullSequence")
+            return self._pattern_test(self._blank_tail(_blank_kinds[tok.type]))
 
         if tok.type == "LPAREN":
             self.advance()
@@ -422,6 +520,15 @@ class Parser:
             self.advance()
             args.append(self.parse_expression())
         return args
+
+
+def _as_head(expr):
+    """Turn a parsed operand into an expression head (symbol name or compound head)."""
+    if isinstance(expr, Symbol):
+        return expr.name
+    if isinstance(expr, Expr):
+        return expr
+    raise ParseError(f"{expr!r} cannot be used as a function head")
 
 
 def parse(text: str) -> Any:
