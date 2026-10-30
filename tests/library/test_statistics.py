@@ -88,7 +88,11 @@ CASES = [
     ("CohensD[{1, 2, 3}, {4, 5, 6}]", "-3"), ("CohensD[{4, 5, 6}, {1, 2, 3}]", "3"), ("CohensD[{1}, {2}]", Raises()),
     ("EffectSize[{1, 2, 3}, {4, 5, 6}]", "-3"), ("EffectSize[{2, 4}, {2, 4}]", "0"), ("EffectSize[{1}, {1, 2}]", Raises()),
     ("LinearRegression[{1, 2, 3}, {2, 4, 6}]", Pred(lambda r: str(r.args[0].args[1]) == "2", "slope 2")),
-    ("LinearRegression[{1, 2, 3}, {2, 4, 7}]", Pred(lambda r: {str(x.args[0]): str(x.args[1]) for x in r.args}["r_squared"] in ("75/76", "Times[75, Power[76, -1]]") or True, "rules")),
+    ("LinearRegression[{1, 2, 3}, {2, 4, 7}]", Pred(lambda r: [str(x.args[1]) for x in r.args[:3]] == ["5/2", "-2/3", "75/76"]
+                                                    and abs(float(r.args[3].args[1]) - 0.0731863950403274) < 1e-12
+                                                    and abs(float(r.args[4].args[1]) - 0.28867513459481337) < 1e-12, "scipy linregress")),
+    ("LinearRegression[{1, 2, 3, 4}, {1, 3, 2, 5}]", Pred(lambda r: abs(float(r.args[3].args[1]) - 0.16847815937970018) < 1e-12
+                                                        and abs(float(r.args[4].args[1]) - 0.5196152422706632) < 1e-12, "scipy linregress")),
     ("LinearRegression[{1, 1}, {1, 2}]", Raises()),
     ("RandomSample[{1, 2, 3}]", Pred(lambda r: sorted(r.args) == [1, 2, 3], "a permutation")),
     ("RandomSample[{a, b, c, d}, 2]", Pred(lambda r: len(r.args) == 2 and len(set(map(str, r.args))) == 2, "2 distinct")),

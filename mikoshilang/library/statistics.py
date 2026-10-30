@@ -769,7 +769,7 @@ def _kruskal(*groups):
 
 
 @fn("LinearRegression", area=AREA, status="fixed",
-    notes="{slope, intercept, r_squared} exact least squares plus p_value and std_error (SciPy); legacy rounded")
+    notes="{slope, intercept, r_squared} exact least squares plus p_value and std_error of the slope (t-test, as scipy.stats.linregress; no SciPy needed); legacy rounded")
 def _linreg(x, y):
     a, b, items = _pair(x, y, "LinearRegression")
     va = _var(a)
@@ -782,9 +782,18 @@ def _linreg(x, y):
     out = [rule(Symbol("slope"), _out(slope, items)), rule(Symbol("intercept"), _out(intercept, items)),
            rule(Symbol("r_squared"), _out(r2, items))]
     if len(a) > 2:
-        st = _scipy("LinearRegression")
-        res = st.linregress(_floats(a), _floats(b))
-        out += [rule(Symbol("p_value"), float(res.pvalue)), rule(Symbol("std_error"), float(res.stderr))]
+        # two-sided t-test of slope = 0 with n - 2 degrees of freedom (matches scipy.stats.linregress)
+        import mpmath as mpm
+        n, df = len(a), len(a) - 2
+        sxx = sum((u - _mean(a)) ** 2 for u in a)
+        ssr = sum((v - intercept - slope * u) ** 2 for u, v in zip(a, b))
+        se = mpm.sqrt(mpm.mpf(sp.N(ssr / df / sxx, 30)))
+        if se == 0:
+            pv = 0.0
+        else:
+            t = mpm.mpf(sp.N(slope, 30)) / se
+            pv = float(mpm.betainc(df / 2.0, 0.5, 0, df / (df + t * t), regularized=True))
+        out += [rule(Symbol("p_value"), pv), rule(Symbol("std_error"), float(se))]
     return L(*out)
 
 
