@@ -120,14 +120,14 @@ $LocalBase,System Operation & Setup,missing,3,,0,WolframSystemSetup LocalObjects
 $LocalSymbolBase,System Operation & Setup,missing,3,,0,WolframSystemSetup LocalObjects
 $MachineAddresses,External Interfaces & Connections,missing,3,,0,NetworkProgramming InternetAndWebRelatedData SystemInformation CloudExecutionMetadata
 $MachineDomains,Core Language & Structure,missing,2,,0,ExternalOperations NetworkProgramming InternetAndWebRelatedData SystemInformation
-$MachineEpsilon,Symbolic & Numeric Computation,missing,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
+$MachineEpsilon,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
 $MachineID,System Operation & Setup,missing,3,,0,WolframSystemSetup SystemInformation SystemAndLicenseManagement
 $MachineName,System Operation & Setup,missing,3,,0,WolframSystemSetup SystemInformation CloudExecutionMetadata SystemAndLicenseManagement
-$MachinePrecision,Symbolic & Numeric Computation,missing,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
+$MachinePrecision,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
 $MachineType,Core Language & Structure,missing,2,,0,SystemInformation
 $MaxDisplayedChildren,"Options, system variables & unclassified",missing,3,,0,
 $MaxExtraPrecision,Core Language & Structure,missing,2,,0,GlobalComputationSettingsAndParameters PrecisionAndAccuracyControl SessionCustomization
-$MaxMachineNumber,Symbolic & Numeric Computation,missing,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
+$MaxMachineNumber,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
 $MaxNumber,Core Language & Structure,missing,2,,0,SystemInformation MemoryMeasurementAndOptimization RepresentationOfNumbers
 $MaxPiecewiseCases,Core Language & Structure,missing,2,,0,GlobalComputationSettingsAndParameters
 $MaxPrecision,Core Language & Structure,missing,2,,0,GlobalComputationSettingsAndParameters MemoryMeasurementAndOptimization RepresentationOfNumbers PrecisionAndAccuracyControl
@@ -136,7 +136,7 @@ $MessageGroups,Core Language & Structure,missing,2,,0,Messages
 $MessageList,Core Language & Structure,missing,2,,0,Messages
 $MessagePrePrint,Core Language & Structure,missing,2,,0,Messages SessionCustomization
 $Messages,"Options, system variables & unclassified",missing,3,,0,
-$MinMachineNumber,Symbolic & Numeric Computation,missing,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
+$MinMachineNumber,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
 $MinNumber,Core Language & Structure,missing,2,,0,SystemInformation RepresentationOfNumbers
 $MinPrecision,Symbolic & Numeric Computation,missing,2,,0,GlobalComputationSettingsAndParameters RepresentationOfNumbers PrecisionAndAccuracyControl SessionCustomization
 $MobilePhone,External Interfaces & Connections,missing,3,,0,AccessingExternalServicesAndAPIs MailMessagesEtc
@@ -250,7 +250,7 @@ AbortKernels,Core Language & Structure,missing,2,,0,ParallelComputing ParallelCo
 AbortProtect,Core Language & Structure,missing,1,,0,PackageDevelopment RobustnessAndErrorHandling FlowControl PackageBulletproofing
 Above,Visualization & Graphics,missing,3,,0,3DGraphicsOptions
 Abs,Symbolic & Numeric Computation,implemented,1,,3,MathematicalFunctions NumericalEvaluationAndPrecision ImageProcessing GPUComputing
-AbsArg,Symbolic & Numeric Computation,missing,2,,0,ComplexNumbers RepresentationOfNumbers AnglesAndPolarCoordinates
+AbsArg,Symbolic & Numeric Computation,implemented,2,,0,ComplexNumbers RepresentationOfNumbers AnglesAndPolarCoordinates
 AbsArgPlot,Visualization & Graphics,missing,3,,0,FunctionVisualization FunctionsOfComplexVariables ComplexVisualization
 AbsoluteCorrelation,Data Manipulation & Analysis,missing,2,,0,DescriptiveStatistics SymbolicArrays StatisticalMomentsAndGeneratingFunctions
 AbsoluteCorrelationFunction,Higher Mathematical Computation,missing,2,,0,RandomProcesses TimeSeriesProcesses StochasticDifferentialEquationProcesses
@@ -265,7 +265,7 @@ AbsoluteTiming,Core Language & Structure,missing,2,,1,TuningAndDebugging DateAnd
 AcceptanceThreshold,"Options, system variables & unclassified",missing,3,,0,
 AccountingForm,Symbolic & Numeric Computation,missing,2,,0,DisplayOfNumbers
 Accumulate,Core Language & Structure,implemented,1,,1,DataTransformsAndSmoothing DiscreteCalculus TimeSeries GPUComputing
-Accuracy,Symbolic & Numeric Computation,missing,1,,2,NumericalEvaluationAndPrecision RepresentationOfNumbers PrecisionAndAccuracyControl
+Accuracy,Symbolic & Numeric Computation,implemented,1,,2,NumericalEvaluationAndPrecision RepresentationOfNumbers PrecisionAndAccuracyControl
 AccuracyGoal,Symbolic & Numeric Computation,missing,2,,0,NumericalEvaluationAndPrecision PrecisionAndAccuracyControl DifferentialEquations
 AcousticAbsorbingValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
 AcousticImpedanceValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
@@ -441,7 +441,7 @@ ArcTan,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions GPU
 ArcTanDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
 ArcTanh,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing ElementaryFunctions HyperbolicFunctions InverseFunctions
 Area,Geometry,missing,2,,0,Calculus PlaneGeometry SolidGeometry GeometricPropertiesAndMeasures
-Arg,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions GPUComputing FunctionsOfComplexVariables ComplexNumbers
+Arg,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions GPUComputing FunctionsOfComplexVariables ComplexNumbers
 ArgMax,Symbolic & Numeric Computation,missing,2,,0,Optimization DiscreteCalculus GeometricSolvers SymbolicArrays
 ArgMin,Symbolic & Numeric Computation,missing,2,,0,Optimization DiscreteCalculus GeometricSolvers SymbolicArrays
 ArgumentsOptions,Core Language & Structure,missing,2,,0,PackageDevelopment RobustnessAndErrorHandling OptionsManagement PackageBulletproofing
@@ -1059,7 +1059,7 @@ ChineseRemainder,Symbolic & Numeric Computation,implemented,2,,0,NumberTheory Nu
 ChoiceButtons,User Interface Construction,infeasible,,front end / notebooks,0,DialogBoxes
 ChoiceDialog,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects CustomInterfaceConstruction FlowControl SettingUpUserInteractions
 CholeskyDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra LinearSystems MatrixDecompositions
-Chop,Symbolic & Numeric Computation,missing,2,,0,BasicImageManipulation NumericalFunctions PrecisionAndAccuracyControl
+Chop,Symbolic & Numeric Computation,implemented,2,,0,BasicImageManipulation NumericalFunctions PrecisionAndAccuracyControl
 ChromaticPolynomial,Graphs & Networks,missing,2,,0,GraphPropertiesAndMeasurements ComputationOnGraphs
 ChromaticityPlot,Images,missing,2,,1,DataVisualization ColorProcessing ComputationalPhotography
 ChromaticityPlot3D,Data Manipulation & Analysis,missing,2,,1,DataVisualization ColorProcessing
@@ -1097,7 +1097,7 @@ ClickPane,Visualization & Graphics,missing,3,,0,DynamicVisualization GraphicsInt
 ClickToCopy,User Interface Construction,missing,3,,0,ControlObjects CustomInterfaceConstruction ClipboardOperations DialogBoxes
 ClickToCopyEnabled,"Options, system variables & unclassified",missing,3,,0,
 CliffordAlgebra,"Options, system variables & unclassified",missing,3,,0,
-Clip,Data Manipulation & Analysis,missing,2,,0,DataTransformsAndSmoothing MathematicalFunctions BasicImageManipulation ScientificDataAnalysis
+Clip,Data Manipulation & Analysis,implemented,2,,0,DataTransformsAndSmoothing MathematicalFunctions BasicImageManipulation ScientificDataAnalysis
 ClipPlanes,Visualization & Graphics,missing,3,,0,LifeSciencesAndMedicineDataAndComputation 3DGraphicsOptions
 ClipPlanesStyle,Visualization & Graphics,missing,3,,0,3DGraphicsOptions
 ClipRange,"Options, system variables & unclassified",missing,3,,0,
@@ -1658,7 +1658,7 @@ DelimiterFlashTime,Notebook Documents & Presentation,infeasible,,front end / not
 Delimiters,"Options, system variables & unclassified",missing,3,,0,
 DeliveryFunction,"Options, system variables & unclassified",missing,3,,0,
 Dendrogram,Data Manipulation & Analysis,missing,1,,2,Statistics DataVisualization TextAnalysis SequenceAlignmentAndComparison
-Denominator,Symbolic & Numeric Computation,missing,2,,0,FormulaManipulation RepresentationOfNumbers RationalFunctions
+Denominator,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation RepresentationOfNumbers RationalFunctions
 DensityHistogram,Data Manipulation & Analysis,missing,2,,0,StatisticalVisualization DateAndTimeVisualization TabularVisualization RandomVariables
 DensityPlot,Data Manipulation & Analysis,missing,2,,0,FunctionVisualization GeometricSolvers DateAndTimeVisualization
 DensityPlot3D,Data Manipulation & Analysis,missing,2,,0,FunctionVisualization GeometricSolvers DateAndTimeVisualization
@@ -2073,7 +2073,7 @@ EventSeries,Data Manipulation & Analysis,missing,2,,0,WDFWolframDataFramework Ti
 EventSeriesAccumulate,Time-Related Computation,missing,2,,0,TimeSeries EventSeries TimeAndEventSeriesDataSources
 EventSeriesQ,Higher Mathematical Computation,missing,2,,0,EventSeries
 ExactBlackmanWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
-ExactNumberQ,Symbolic & Numeric Computation,missing,2,,0,RepresentationOfNumbers
+ExactNumberQ,Symbolic & Numeric Computation,implemented,2,,0,RepresentationOfNumbers
 ExampleData,Images,infeasible,,curated data,3,TuningAndDebugging SpeechComputation MathematicalData TextAnalysis
 Except,Core Language & Structure,implemented,1,,1,RulesAndPatterns StringManipulation Patterns StringPatterns
 Exception,Core Language & Structure,missing,1,,0,RobustnessAndErrorHandling FlowControl PackageBulletproofing
@@ -2439,7 +2439,7 @@ FractionBoxOptions,"Options, system variables & unclassified",infeasible,,front 
 FractionalBrownianMotionProcess,Higher Mathematical Computation,missing,2,,0,ParametricRandomProcesses
 FractionalD,"Options, system variables & unclassified",missing,3,,0,
 FractionalGaussianNoiseProcess,Higher Mathematical Computation,missing,2,,0,ParametricRandomProcesses
-FractionalPart,Symbolic & Numeric Computation,missing,2,,0,GPUComputing NumericalFunctions RepresentationOfNumbers
+FractionalPart,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing NumericalFunctions RepresentationOfNumbers
 Frame,Visualization & Graphics,missing,1,,2,DataVisualization FunctionVisualization GraphicsOptionsAndStyling LayoutAndTables
 FrameBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 FrameBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
@@ -2963,7 +2963,7 @@ IgnoreIsotopes,"Options, system variables & unclassified",missing,3,,0,
 IgnorePunctuation,"Options, system variables & unclassified",missing,3,,0,
 IgnoreStereochemistry,"Options, system variables & unclassified",missing,3,,0,
 IgnoringInactive,Core Language & Structure,missing,1,,0,EvaluationControl
-Im,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions NumericalEvaluationAndPrecision GPUComputing FunctionsOfComplexVariables
+Im,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumericalEvaluationAndPrecision GPUComputing FunctionsOfComplexVariables
 Image,Images,missing,2,,1,WDFWolframDataFramework ImageProcessing MapsAndCartography WolframDataRepository
 Image3D,Images,missing,1,,2,ImageProcessing 3DImages ImageComputationForMicroscopy CreatingAndImportingImages
 Image3DProjection,Images,missing,3,,0,3DImages ImageComputationForMicroscopy
@@ -3113,7 +3113,7 @@ IndexGraph,Graphs & Networks,missing,2,,0,GraphModifications
 Indexed,Core Language & Structure,missing,2,,0,OperationsOnVectors PartsOfMatrices
 InertEvaluate,"Options, system variables & unclassified",missing,3,,0,
 InertExpression,"Options, system variables & unclassified",missing,3,,0,
-InexactNumberQ,Symbolic & Numeric Computation,missing,2,,0,RepresentationOfNumbers
+InexactNumberQ,Symbolic & Numeric Computation,implemented,2,,0,RepresentationOfNumbers
 InfiniteFuture,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 InfiniteLine,Geometry,missing,2,,0,GeometricComputation PlaneGeometry SolidGeometry GeometricSpecialRegions
 InfiniteLineThrough,"Options, system variables & unclassified",missing,3,,0,
@@ -3170,7 +3170,7 @@ IntegerDigits,Symbolic & Numeric Computation,implemented,1,,14,MathematicalFunct
 IntegerExponent,Symbolic & Numeric Computation,missing,2,,0,BitwiseOperations IntegerFunctions NumberTheoreticFunctions RepresentationOfNumbers
 IntegerLength,Symbolic & Numeric Computation,implemented,1,,1,IntegerFunctions RepresentationOfNumbers NumberDigits
 IntegerName,Core Language & Structure,infeasible,,curated data,2,LinguisticData LocaleAndInternationalization TextConstruction DisplayOfNumbers
-IntegerPart,Symbolic & Numeric Computation,missing,2,,0,GPUComputing NumericalFunctions RepresentationOfNumbers NumberDigits
+IntegerPart,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing NumericalFunctions RepresentationOfNumbers NumberDigits
 IntegerPartitions,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics NumberTheory IntegerFunctions NumberTheoreticFunctions
 IntegerQ,Symbolic & Numeric Computation,implemented,1,,2,NumericalEvaluationAndPrecision TestingExpressions Conditionals NumericalFunctions
 IntegerReverse,Symbolic & Numeric Computation,implemented,1,,1,IntegerFunctions NumberTheoreticFunctions NumberDigits
@@ -3710,8 +3710,8 @@ LyapunovSolve,Symbolic & Numeric Computation,missing,2,,0,EquationSolving Contro
 LyonsGroupLy,Higher Mathematical Computation,missing,2,,0,NamedGroups
 MAProcess,Higher Mathematical Computation,missing,2,,0,MarkovProcesses TimeSeriesProcesses
 MIMETypeToFormatList,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting
-MachineNumberQ,Core Language & Structure,missing,1,,0,TestingExpressions RepresentationOfNumbers PrecisionAndAccuracyControl AtomicElementsOfExpressions
-MachinePrecision,Symbolic & Numeric Computation,missing,2,,0,PrecisionAndAccuracyControl
+MachineNumberQ,Core Language & Structure,implemented,1,,0,TestingExpressions RepresentationOfNumbers PrecisionAndAccuracyControl AtomicElementsOfExpressions
+MachinePrecision,Symbolic & Numeric Computation,implemented,2,,0,PrecisionAndAccuracyControl
 Magenta,Visualization & Graphics,missing,3,,0,Colors
 MagneticFieldIntensity,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
 MagneticFluxDensity,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
@@ -4336,7 +4336,7 @@ NumberQ,Core Language & Structure,implemented,1,,1,Expressions TestingExpression
 NumberSeparator,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LocaleAndInternationalization MathTypesettingOptionsAndTweaking
 NumberSigns,"Options, system variables & unclassified",missing,3,,0,
 NumberString,Core Language & Structure,implemented,1,,1,StringManipulation StringPatterns
-Numerator,Symbolic & Numeric Computation,missing,2,,0,FormulaManipulation RepresentationOfNumbers RationalFunctions
+Numerator,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation RepresentationOfNumbers RationalFunctions
 NumeratorDenominator,Symbolic & Numeric Computation,missing,2,,0,RepresentationOfNumbers RationalFunctions
 NumericArray,Core Language & Structure,missing,1,,0,ListManipulation BinaryData NetEncoderDecoder
 NumericArrayQ,Data Manipulation & Analysis,missing,2,,0,BinaryData
@@ -4773,7 +4773,7 @@ Precedes,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,S
 PrecedesEqual,"Options, system variables & unclassified",missing,3,,0,
 PrecedesSlantEqual,"Options, system variables & unclassified",missing,3,,0,
 PrecedesTilde,"Options, system variables & unclassified",missing,3,,0,
-Precision,Symbolic & Numeric Computation,missing,2,,0,NumericalEvaluationAndPrecision RepresentationOfNumbers PrecisionAndAccuracyControl AtomicElementsOfExpressions
+Precision,Symbolic & Numeric Computation,implemented,2,,0,NumericalEvaluationAndPrecision RepresentationOfNumbers PrecisionAndAccuracyControl AtomicElementsOfExpressions
 PrecisionGoal,Symbolic & Numeric Computation,missing,2,,0,NumericalEvaluationAndPrecision PrecisionAndAccuracyControl DifferentialEquations
 Predict,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,MachineLearning TabularProcessing LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis
 PredictorFunction,Core Language & Structure,infeasible,,ML models / LLM services,0,ScientificModels SupervisedMachineLearning NonparametricStatisticalDistributions
@@ -4894,7 +4894,7 @@ Quiet,Core Language & Structure,missing,1,,0,PackageDevelopment TuningAndDebuggi
 QuietEcho,Core Language & Structure,missing,2,,0,TuningAndDebugging
 Quit,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels
 Quotient,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumericalFunctions IntegerFunctions
-QuotientRemainder,Symbolic & Numeric Computation,missing,2,,0,IntegerFunctions
+QuotientRemainder,Symbolic & Numeric Computation,implemented,2,,0,IntegerFunctions
 RFixedPoints,Symbolic & Numeric Computation,missing,2,,0,RecurrenceAndSumFunctions
 RGBColor,Visualization & Graphics,missing,1,,5,WDFWolframDataFramework SymbolicGraphicsLanguage ColorProcessing MapsAndCartography
 RSolve,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving Calculus DiscreteMathematics DiscreteCalculus
@@ -4955,7 +4955,7 @@ RasterSize,Sound & Video,infeasible,,audio / video,0,VideoCreation
 Rasterize,Images,missing,1,,5,TuningAndDebugging ImageProcessing RasterImageFormats GraphicsTransformations
 Rational,Core Language & Structure,implemented,2,,0,WDFWolframDataFramework RepresentationOfNumbers AtomicElementsOfExpressions
 RationalExpressionQ,Core Language & Structure,missing,1,,0,TestingExpressions FunctionProperties
-Rationalize,Higher Mathematical Computation,missing,2,,0,NumberTheory NumberRecognition ContinuedFractionsAndRationalApproximations
+Rationalize,Higher Mathematical Computation,implemented,2,,0,NumberTheory NumberRecognition ContinuedFractionsAndRationalApproximations
 Rationals,Higher Mathematical Computation,missing,2,,0,NumberTheory AssumptionsAndDomains NumberRecognition
 Ratios,Core Language & Structure,implemented,1,,0,DiscreteCalculus GPUComputing NumericalData ApplyingFunctionsToLists
 RawBoxes,Core Language & Structure,missing,2,,0,ClipboardOperations
@@ -4968,8 +4968,8 @@ RawMemoryRead,Core Language & Structure,missing,2,,0,ForeignFunctionInterface CL
 RawMemoryWrite,Core Language & Structure,missing,2,,0,ForeignFunctionInterface CLanguageInterface
 RawPointer,External Interfaces & Connections,missing,3,,0,CallingExternalPrograms ForeignFunctionInterface CLanguageInterface
 RayleighDistribution,Symbolic & Numeric Computation,missing,2,,0,NormalRelatedDistributions DistributionsInCommunicationSystems ExponentialRelatedDistributions
-Re,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions NumericalEvaluationAndPrecision GPUComputing FunctionsOfComplexVariables
-ReIm,Symbolic & Numeric Computation,missing,2,,0,FunctionsOfComplexVariables ComplexNumbers RepresentationOfNumbers AnglesAndPolarCoordinates
+Re,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumericalEvaluationAndPrecision GPUComputing FunctionsOfComplexVariables
+ReIm,Symbolic & Numeric Computation,implemented,2,,0,FunctionsOfComplexVariables ComplexNumbers RepresentationOfNumbers AnglesAndPolarCoordinates
 ReImLabels,Visualization & Graphics,missing,3,,0,ComplexVisualization
 ReImPlot,Visualization & Graphics,missing,3,,0,FunctionVisualization FunctionsOfComplexVariables ComplexVisualization
 ReImStyle,Visualization & Graphics,missing,3,,0,ComplexVisualization
@@ -4983,9 +4983,9 @@ ReadList,Core Language & Structure,missing,1,,0,ImportingAndExporting FileOperat
 ReadProtected,Core Language & Structure,missing,1,,0,Attributes PackageBulletproofing
 ReadString,External Interfaces & Connections,missing,3,,0,ExternalOperations FileOperations NetworkProgramming Files
 Real,Core Language & Structure,implemented,1,,1,WDFWolframDataFramework ExpressionStructure RepresentationOfNumbers LowLevelFileOperations
-RealAbs,Symbolic & Numeric Computation,missing,2,,0,GPUComputing NumericalFunctions ElementaryFunctions
+RealAbs,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing NumericalFunctions ElementaryFunctions
 RealBlockDiagonalForm,"Options, system variables & unclassified",missing,3,,0,
-RealDigits,Symbolic & Numeric Computation,missing,1,,1,NumericalEvaluationAndPrecision NumberTheory ConstructingLists MathematicalConstants
+RealDigits,Symbolic & Numeric Computation,implemented,1,,1,NumericalEvaluationAndPrecision NumberTheory ConstructingLists MathematicalConstants
 RealExponent,Symbolic & Numeric Computation,missing,2,,0,RepresentationOfNumbers
 RealSign,Symbolic & Numeric Computation,missing,2,,0,GPUComputing NumericalFunctions
 RealValuedNumberQ,Core Language & Structure,missing,1,,0,TestingExpressions RepresentationOfNumbers AtomicElementsOfExpressions
@@ -5126,7 +5126,7 @@ RerankingMethod,"Options, system variables & unclassified",missing,3,,0,
 Resampling,"Options, system variables & unclassified",missing,3,,0,
 ResamplingAlgorithmData,"Options, system variables & unclassified",infeasible,,curated data,0,
 ResamplingMethod,Time-Related Computation,missing,2,,0,TimeSeries
-Rescale,Symbolic & Numeric Computation,missing,2,,0,DataTransformsAndSmoothing MathematicalFunctions ScientificDataAnalysis NumericalData
+Rescale,Symbolic & Numeric Computation,implemented,2,,0,DataTransformsAndSmoothing MathematicalFunctions ScientificDataAnalysis NumericalData
 RescalingTransform,Geometry,missing,2,,0,GeometricTransforms
 ResetDirectory,External Interfaces & Connections,missing,3,,0,DirectoriesAndDirectoryOperations
 ReshapeLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
@@ -5376,7 +5376,7 @@ ServiceSubmit,External Interfaces & Connections,infeasible,,Wolfram Cloud / exte
 SessionSubmit,Knowledge Representation & Natural Language,missing,3,,0,DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
 SessionTime,Core Language & Structure,missing,2,,0,DateAndTime TimeMeasurementAndOptimization WolframSystemSessionInformation
 Set,Core Language & Structure,implemented,1,,31,LanguageOverview VariablesAndFunctions RulesAndPatterns ProceduralProgramming
-SetAccuracy,Symbolic & Numeric Computation,missing,2,,0,PrecisionAndAccuracyControl
+SetAccuracy,Symbolic & Numeric Computation,implemented,2,,0,PrecisionAndAccuracyControl
 SetAlphaChannel,Images,missing,3,,0,ImageProcessing BasicImageManipulation ColorProcessing Colors
 SetAttributes,Core Language & Structure,implemented,1,,0,Attributes
 SetCloudDirectory,System Operation & Setup,missing,3,,0,ManagingContentInTheCloud
@@ -5388,7 +5388,7 @@ SetFileDate,External Interfaces & Connections,missing,3,,0,FileOperations
 SetFileFormatProperties,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting
 SetOptions,Core Language & Structure,missing,2,,1,PackageDevelopment WolframDataRepository LowLevelNotebookProgramming CreatingFormsAndApps
 SetPermissions,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,StructuredDataInTheCloud CloudPermissionsControl
-SetPrecision,Symbolic & Numeric Computation,missing,2,,0,PrecisionAndAccuracyControl
+SetPrecision,Symbolic & Numeric Computation,implemented,2,,0,PrecisionAndAccuracyControl
 SetSelectedNotebook,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming
 SetSharedFunction,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
 SetSharedVariable,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
@@ -6363,7 +6363,7 @@ UnitVector,Core Language & Structure,missing,2,,0,OperationsOnVectors
 UnitVectorLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 UnitaryMatrix,Symbolic & Numeric Computation,missing,2,,0,StructuredArrays MatrixDecompositions
 UnitaryMatrixQ,Symbolic & Numeric Computation,missing,2,,0,MatrixPredicates
-Unitize,Symbolic & Numeric Computation,missing,2,,0,NumericalFunctions
+Unitize,Symbolic & Numeric Computation,implemented,2,,0,NumericalFunctions
 UnityDimensions,"Options, system variables & unclassified",missing,3,,0,
 UniverseModelData,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData
 UniversityData,"Options, system variables & unclassified",infeasible,,curated data,0,

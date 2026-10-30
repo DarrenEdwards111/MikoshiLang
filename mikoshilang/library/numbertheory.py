@@ -434,11 +434,33 @@ def _fromdigits(ds, b=10):
             raise ValueError(f"FromDigits: digit out of range for base {base}")
         vals = [sp.Integer(v) for v in vals]
     else:
-        vals = [sym(v, "FromDigits") for v in list_arg(ds, "FromDigits")]
+        items = list_arg(ds, "FromDigits")
+        if len(items) == 2 and is_list(items[0]) and not is_list(items[1]):
+            return _fromdigits_real(items[0], items[1], base)          # FromDigits[{digits, exponent}, b]
+        vals = [sym(v, "FromDigits") for v in items]
     acc = sp.Integer(0)
     for v in vals:
         acc = acc * base + v
     return R(sp.expand(acc))
+
+
+def _fromdigits_real(digs, e, base):
+    """Inverse of RealDigits: {{d1, d2, ..., {r1, ..., rk}}, e} (a trailing nested list repeats forever)."""
+    items = list(digs.args)
+    rep = []
+    if items and is_list(items[-1]):
+        rep = [sym(v, "FromDigits") for v in items[-1].args]
+        items = items[:-1]
+    head = [sym(v, "FromDigits") for v in items]
+    ex = sym(e, "FromDigits")
+    val = sp.Integer(0)
+    for i, d in enumerate(head, 1):
+        val += d * base ** (-i)
+    if rep:
+        k, n0 = len(rep), len(head)
+        block = sum(d * base ** (k - j) for j, d in enumerate(rep, 1))
+        val += block / (base ** k - 1) * base ** (-n0)
+    return R(sp.nsimplify(sp.expand(val * base ** ex)) if not has_float(digs) else sp.expand(val * base ** ex))
 
 
 @fn("BaseConvert", area=AREA, status="fixed",

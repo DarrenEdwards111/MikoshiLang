@@ -33,6 +33,8 @@ _KEYWORDS = {
 
 _TOKEN_SPEC = [
     ("COMMENT",   r'\(\*.*?\*\)'),
+    ("BIGNUM",    r'(?:\d+\.\d*|\.\d+|\d+)(?:``-?(?:\d+\.?\d*|\.\d+)|`(?:\d+\.?\d*|\.\d+)?)(?:\*\^[+-]?\d+)?'),
+    ("SCINUM",    r'(?:\d+\.\d*|\.\d+|\d+)\*\^[+-]?\d+'),
     ("FLOAT",     r'\d+\.\d*([eE][+-]?\d+)?|\.\d+([eE][+-]?\d+)?|\d+[eE][+-]?\d+'),
     ("INTEGER",   r'\d+'),
     ("STRING",    r'"(?:\\.|[^"\\])*"'),
@@ -107,9 +109,54 @@ _TOKEN_SPEC = [
 
 _TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _TOKEN_SPEC), re.DOTALL)
 
-_STATEMENT_END = ("INTEGER", "FLOAT", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "RASSOC",
+_STATEMENT_END = ("INTEGER", "FLOAT", "BIGNUM", "SCINUM", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "RASSOC",
                   "FUNCTION", "SLOT", "SLOTSEQ", "SLOTNAME", "INCREMENT", "DECREMENT", "BLANK", "BLANKS",
                   "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL")
+
+
+def _dps_bits(dps: float) -> int:
+    """Binary precision for ``dps`` decimal digits (mpmath's dps_to_prec, so N[x, n] and x`n agree)."""
+    return max(1, int(round((dps + 1) * 3.321928094887362)))
+
+
+def _number_literal(text: str):
+    """Wolfram number marks: ``1.5`30`` (precision 30), ``1.5``20`` (accuracy 20), ``1.5` `` (machine) and
+    ``1.5*^-3`` (scientific notation).  Precision at or below machine precision gives a machine number
+    (MikoshiLang keeps no low-precision bignums)."""
+    import sympy as sp
+    from fractions import Fraction
+    exp = 0
+    if "*^" in text:
+        text, e = text.split("*^")
+        exp = int(e)
+    mark = None
+    if "``" in text:
+        text, acc = text.split("``")
+        mark = ("acc", float(acc))
+    elif "`" in text:
+        text, prec = text.split("`")
+        mark = ("prec", float(prec)) if prec else ("machine", None)
+    if mark is None and "." not in text:          # 2*^3 is the exact integer 2000; 2*^-3 is 1/500
+        v = Fraction(int(text)) * Fraction(10) ** exp
+        if v.denominator == 1:
+            return int(v)
+        from .math_ops import from_sympy
+        return from_sympy(sp.Rational(v.numerator, v.denominator))
+    mant = f"{text}e{exp}" if exp else text
+    if mark is None or mark[0] == "machine":
+        return float(mant)
+    exact = sp.Rational(Fraction(mant if "e" not in mant else Fraction(text) * Fraction(10) ** exp))
+    if mark[0] == "acc":
+        import math
+        prec = mark[1] + (math.log10(abs(exact)) if exact != 0 else 0)
+        if exact == 0:
+            return sp.Float(0, precision=_dps_bits(mark[1]))
+    else:
+        prec = mark[1]
+    bits = _dps_bits(prec)
+    if prec <= 15.954589770191003:
+        return float(exact)
+    return sp.Float(exact, precision=bits)
 
 
 def tokenize(text: str) -> ListType[Token]:
@@ -139,6 +186,9 @@ def tokenize(text: str) -> ListType[Token]:
             value = int(value)
         elif kind == "FLOAT":
             value = float(value)
+        elif kind in ("BIGNUM", "SCINUM"):
+            value = _number_literal(value)
+            kind = "INTEGER" if isinstance(value, int) else "FLOAT"
         elif kind == "STRING":
             try:
                 value = json.loads(value)

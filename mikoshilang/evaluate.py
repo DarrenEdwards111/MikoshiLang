@@ -160,7 +160,11 @@ def _evaluate(expr, depth: int) -> Any:
         if expr.name in own:
             return evaluate(own[expr.name], depth + 1)
         if expr.name == "Null":
-            return None                     # the symbol Null is the null value (what x; evaluates to)
+            return None
+        if expr.name.startswith("$"):
+            from .library.wl_numerics import SYSTEM_CONSTANTS
+            if expr.name in SYSTEM_CONSTANTS:
+                return SYSTEM_CONSTANTS[expr.name]                     # the symbol Null is the null value (what x; evaluates to)
         return True if expr.name == "$Assumptions" else expr     # Wolfram default $Assumptions = True
     if not isinstance(expr, Expr):
         return expr
