@@ -39,6 +39,66 @@ _INV_FUNCS = {
     sp.polygamma: "PolyGamma", sp.fibonacci: "Fibonacci",
 }
 
+
+# Additional special functions (Wolfram head -> SymPy constructor).
+def _gamma_w(*a):
+    if len(a) == 1:
+        return sp.gamma(a[0])
+    if len(a) == 2:
+        return sp.uppergamma(a[0], a[1])
+    return sp.uppergamma(a[0], a[1]) - sp.uppergamma(a[0], a[2])
+
+
+def _legendre_w(*a):
+    return sp.legendre(*a) if len(a) == 2 else sp.assoc_legendre(*a)
+
+
+def _laguerre_w(*a):
+    return sp.laguerre(*a) if len(a) == 2 else sp.assoc_laguerre(*a)
+
+
+def _polygamma_w(*a):
+    return sp.polygamma(0, a[0]) if len(a) == 1 else sp.polygamma(*a)
+
+
+def _hyper_w(p, q):
+    def make(*a):
+        return sp.hyper(list(a[:p]), list(a[p:p + q]), a[p + q])
+    return make
+
+
+def _elliptic_e_w(*a):
+    return sp.elliptic_e(*a)
+
+
+def _elliptic_pi_w(*a):
+    return sp.elliptic_pi(*a)
+
+
+_FUNCS.update({
+    "Gamma": _gamma_w, "LegendreP": _legendre_w, "LaguerreL": _laguerre_w, "PolyGamma": _polygamma_w,
+    "BetaRegularized": lambda *a: (sp.betainc_regularized(a[1], a[2], 0, a[0]) if len(a) == 3
+                                   else sp.betainc_regularized(a[2], a[3], a[0], a[1])),
+    "Erfc": sp.erfc, "Erfi": sp.erfi, "InverseErf": sp.erfinv, "InverseErfc": sp.erfcinv, "ExpIntegralEi": sp.Ei, "ExpIntegralE": sp.expint,
+    "LogIntegral": sp.li, "SinIntegral": sp.Si, "CosIntegral": sp.Ci, "SinhIntegral": sp.Shi,
+    "CoshIntegral": sp.Chi, "BesselI": sp.besseli, "BesselK": sp.besselk, "HankelH1": sp.hankel1,
+    "HankelH2": sp.hankel2, "AiryAi": sp.airyai, "AiryBi": sp.airybi, "AiryAiPrime": sp.airyaiprime,
+    "AiryBiPrime": sp.airybiprime, "SphericalBesselJ": sp.jn, "SphericalBesselY": sp.yn,
+    "ChebyshevT": sp.chebyshevt, "ChebyshevU": sp.chebyshevu, "HermiteH": sp.hermite,
+    "GegenbauerC": sp.gegenbauer, "JacobiP": sp.jacobi, "SphericalHarmonicY": sp.Ynm,
+    "EllipticK": sp.elliptic_k, "EllipticF": sp.elliptic_f, "EllipticE": _elliptic_e_w,
+    "EllipticPi": _elliptic_pi_w, "ProductLog": lambda *a: sp.LambertW(a[-1], a[0]) if len(a) == 2 else sp.LambertW(a[0]),
+    "LambertW": sp.LambertW, "DirichletEta": sp.dirichlet_eta, "HarmonicNumber": sp.harmonic,
+    "Hypergeometric0F1": _hyper_w(0, 1), "Hypergeometric1F1": _hyper_w(1, 1),
+    "Hypergeometric2F1": _hyper_w(2, 1), "KroneckerDelta": sp.KroneckerDelta,
+    "DiracDelta": sp.DiracDelta, "HeavisideTheta": sp.Heaviside, "Pochhammer": sp.RisingFactorial,
+    "Factorial2": sp.factorial2, "Subfactorial": sp.subfactorial, "CatalanNumber": sp.catalan,
+    "BellB": sp.bell, "BernoulliB": sp.bernoulli, "EulerE": sp.euler, "LucasL": sp.lucas,
+    "EulerPhi": sp.totient, "PrimePi": sp.primepi, "StruveH": sp.Function("StruveH"),
+    "Arg": sp.arg, "Csch": sp.csch, "Sech": sp.sech, "ArcSec": sp.asec, "ArcCsc": sp.acsc,
+    "ArcSech": sp.asech, "ArcCsch": sp.acsch, "ArcCoth": sp.acoth,
+})
+
 # Heads whose contents must never be handed to SymPy (holding / structural / procedural forms).
 NON_ALGEBRAIC_HEADS = frozenset({
     "Hold", "HoldForm", "HoldComplete", "HoldPattern", "Function", "Pattern", "Blank",
@@ -104,6 +164,14 @@ def to_sympy(expr) -> Any:
             raise ValueError(f"Cannot convert {head} to SymPy")
         if head == "List":
             return [to_sympy(a) for a in expr.args]
+        if head == "Piecewise" and expr.args and isinstance(expr.args[0], Expr) and expr.args[0].head == "List":
+            pairs = []
+            for pc in expr.args[0].args:
+                if not (isinstance(pc, Expr) and pc.head == "List" and len(pc.args) == 2):
+                    raise ValueError("Piecewise expects {{value, condition}, ...}")
+                pairs.append((to_sympy(pc.args[0]), to_sympy(pc.args[1])))
+            default = to_sympy(expr.args[1]) if len(expr.args) > 1 else sp.Integer(0)
+            return sp.Piecewise(*pairs, (default, True))
         if head == "Rational" and len(expr.args) == 2:
             return sp.Rational(to_sympy(expr.args[0]), to_sympy(expr.args[1]))
         args = [to_sympy(a) for a in expr.args]
@@ -146,6 +214,78 @@ def _order_from_sympy(o):
     return Expr("O", from_sympy(e))
 
 
+
+_INV_FUNCS.update({
+    sp.erfc: "Erfc", sp.erfi: "Erfi", sp.erfinv: "InverseErf", sp.erfcinv: "InverseErfc", sp.Ei: "ExpIntegralEi", sp.expint: "ExpIntegralE",
+    sp.li: "LogIntegral", sp.Si: "SinIntegral", sp.Ci: "CosIntegral", sp.Shi: "SinhIntegral",
+    sp.Chi: "CoshIntegral", sp.besseli: "BesselI", sp.besselk: "BesselK", sp.hankel1: "HankelH1",
+    sp.hankel2: "HankelH2", sp.airyai: "AiryAi", sp.airybi: "AiryBi", sp.airyaiprime: "AiryAiPrime",
+    sp.airybiprime: "AiryBiPrime", sp.jn: "SphericalBesselJ", sp.yn: "SphericalBesselY",
+    sp.chebyshevt: "ChebyshevT", sp.chebyshevu: "ChebyshevU", sp.hermite: "HermiteH",
+    sp.gegenbauer: "GegenbauerC", sp.jacobi: "JacobiP", sp.Ynm: "SphericalHarmonicY",
+    sp.elliptic_k: "EllipticK", sp.elliptic_f: "EllipticF", sp.elliptic_e: "EllipticE",
+    sp.elliptic_pi: "EllipticPi", sp.dirichlet_eta: "DirichletEta", sp.harmonic: "HarmonicNumber",
+    sp.legendre: "LegendreP", sp.assoc_legendre: "LegendreP", sp.laguerre: "LaguerreL",
+    sp.assoc_laguerre: "LaguerreL", sp.uppergamma: "Gamma", sp.KroneckerDelta: "KroneckerDelta",
+    sp.DiracDelta: "DiracDelta", sp.Heaviside: "HeavisideTheta", sp.RisingFactorial: "Pochhammer",
+    sp.factorial2: "Factorial2", sp.subfactorial: "Subfactorial", sp.catalan: "CatalanNumber",
+    sp.bell: "BellB", sp.bernoulli: "BernoulliB", sp.euler: "EulerE", sp.lucas: "LucasL",
+    sp.totient: "EulerPhi", sp.primepi: "PrimePi", sp.arg: "Arg", sp.csch: "Csch", sp.sech: "Sech",
+    sp.asec: "ArcSec", sp.acsc: "ArcCsc", sp.asech: "ArcSech", sp.acsch: "ArcCsch", sp.acoth: "ArcCoth",
+    sp.loggamma: "LogGamma",
+})
+
+
+def _special_from_sympy(sexpr):
+    """Structured conversions that are not a plain head rename (None if not applicable)."""
+    if isinstance(sexpr, sp.LambertW):
+        a = [from_sympy(x) for x in sexpr.args]
+        return Expr("ProductLog", a[0]) if len(a) == 1 else Expr("ProductLog", a[1], a[0])
+    if isinstance(sexpr, sp.lowergamma):
+        a, z = (from_sympy(x) for x in sexpr.args)
+        return Expr("Gamma", a, 0, z)
+    if isinstance(sexpr, sp.hyper):
+        ap = [from_sympy(x) for x in sexpr.ap]
+        bq = [from_sympy(x) for x in sexpr.bq]
+        z = from_sympy(sexpr.argument)
+        name = {(0, 1): "Hypergeometric0F1", (1, 1): "Hypergeometric1F1", (2, 1): "Hypergeometric2F1"}.get(
+            (len(ap), len(bq)))
+        if name:
+            return Expr(name, *ap, *bq, z)
+        return Expr("HypergeometricPFQ", Expr("List", *ap), Expr("List", *bq), z)
+    if isinstance(sexpr, sp.betainc_regularized):
+        a, b, x1, x2 = (from_sympy(x) for x in sexpr.args)
+        if sexpr.args[2] == 0:
+            return Expr("BetaRegularized", x2, a, b)          # Wolfram BetaRegularized[z, a, b]
+        return Expr("BetaRegularized", x1, x2, a, b)
+    if isinstance(sexpr, sp.polygamma) and sexpr.args[0] == 0:
+        return Expr("PolyGamma", from_sympy(sexpr.args[1]))
+    if isinstance(sexpr, sp.Piecewise):
+        pieces, default = [], None
+        for e, c in sexpr.args:
+            if c is sp.true:
+                default = from_sympy(e)
+            else:
+                pieces.append(Expr("List", from_sympy(e), from_sympy(c)))
+        return Expr("Piecewise", Expr("List", *pieces), *([default] if default is not None else []))
+    if isinstance(sexpr, sp.Integral):
+        f = from_sympy(sexpr.function)
+        lims = []
+        for lim in sexpr.limits:
+            if len(lim) == 1:
+                lims.append(from_sympy(lim[0]))
+            else:
+                lims.append(Expr("List", *(from_sympy(x) for x in lim)))
+        return Expr("Integrate", f, *lims)
+    if isinstance(sexpr, sp.Sum):
+        return Expr("Sum", from_sympy(sexpr.function),
+                    *(Expr("List", *(from_sympy(x) for x in lim)) for lim in sexpr.limits))
+    if isinstance(sexpr, sp.Product):
+        return Expr("Product", from_sympy(sexpr.function),
+                    *(Expr("List", *(from_sympy(x) for x in lim)) for lim in sexpr.limits))
+    return None
+
+
 def from_sympy(sexpr) -> Any:
     """Convert a SymPy expression back to MikoshiLang."""
     if isinstance(sexpr, bool):
@@ -164,6 +304,8 @@ def from_sympy(sexpr) -> Any:
         return Symbol("Infinity")
     if sexpr is sp.zoo:
         return Symbol("ComplexInfinity")
+    if sexpr is sp.S.NegativeInfinity:
+        return Expr("Times", -1, Symbol("Infinity"))
     if sexpr is sp.nan:
         return Symbol("Indeterminate")
     if sexpr is sp.GoldenRatio:
@@ -237,6 +379,9 @@ def from_sympy(sexpr) -> Any:
         return Expr("Log", from_sympy(sexpr.args[0]))
     if isinstance(sexpr, sp.atan2):
         return Expr("ArcTan", from_sympy(sexpr.args[1]), from_sympy(sexpr.args[0]))
+    special = _special_from_sympy(sexpr)
+    if special is not None:
+        return special
     if type(sexpr) in _INV_FUNCS:
         return Expr(_INV_FUNCS[type(sexpr)], *(from_sympy(a) for a in sexpr.args))
     if isinstance(sexpr, sp.Number):

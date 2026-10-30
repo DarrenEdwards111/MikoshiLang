@@ -5,23 +5,16 @@ from typing import Any, Dict, Set
 from .expr import Expr, Symbol
 from .rules import SIMPLIFICATION_RULES, replace
 
-# Lazy load extended rules to avoid circular imports
-_extended_loaded = False
-_extended_rules = []
-_rules_by_head = {}
+# The reviewed function library (mikoshilang.library) replaces the legacy
+# extended/extended2/extended3/visualization rule tables, which are no longer
+# loaded: every exposed function is registered there with an audit status.
+_rules_by_head = {}   # kept for backward compatibility; always empty
+
 
 def _ensure_extended():
-    global _extended_loaded, _extended_rules
-    if not _extended_loaded:
-        from .extended import EXTENDED_RULES
-        from .extended2 import EXTENDED2_RULES
-        from .extended3 import EXTENDED3_RULES
-        from .visualization import VISUALIZATION_RULES
-        _extended_rules = (EXTENDED_RULES + EXTENDED2_RULES + EXTENDED3_RULES
-                           + VISUALIZATION_RULES)
-        for rule in _extended_rules:
-            _rules_by_head.setdefault(rule.pattern.head, []).append(rule)
-        _extended_loaded = True
+    """Backward-compatible no-op: the legacy rule tables are no longer loaded."""
+    from . import library  # noqa: F401  (registers the reviewed library)
+
 
 # Hold attributes
 _HOLD_ALL: Set[str] = set()
@@ -186,20 +179,18 @@ def _evaluate(expr, depth: int) -> Any:
     if not isinstance(head, str):
         return new_expr
 
-    # 9. Legacy rule library
+    # 9. Reviewed function library
     result = replace(new_expr, SIMPLIFICATION_RULES)
     if isinstance(result, Expr) and result == new_expr:
-        _ensure_extended()
-        if _extended_rules:
-            ext_result = replace(new_expr, _rules_by_head.get(head, []))
-            if ext_result != new_expr:
-                result = ext_result
+        from . import library
+        lib = library.dispatch(head, new_expr.args)
+        if lib is library.UNHANDLED:
+            if head not in library.REGISTRY:
+                from .runtime import reject_quarantined
+                reject_quarantined(head)
+            return new_expr
+        result = lib
 
     if isinstance(result, Expr) and result != new_expr:
         result = evaluate(result, depth + 1)
-
-    from .pattern import match
-    if result == new_expr and not any(match(r.pattern, new_expr) is not None for r in _rules_by_head.get(head, [])):
-        from .runtime import reject_quarantined
-        reject_quarantined(head)
     return result
