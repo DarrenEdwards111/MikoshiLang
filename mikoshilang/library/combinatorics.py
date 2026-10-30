@@ -343,6 +343,60 @@ def _fibseq(n):
     return L(*out)
 
 
-record("YoungTableaux", AREA, "quarantined",
-       "legacy built a single StandardTableau and returned its size (not the tableaux, not their count); "
-       "quarantined: use HookLengthFormula[shape] for the number of standard tableaux")
+_SYT_LIMIT = 100000
+
+
+def _syt_partitions(n):
+    def rec(n, mx):
+        if n == 0:
+            yield []
+            return
+        for k in range(min(n, mx), 0, -1):
+            for rest in rec(n - k, k):
+                yield [k] + rest
+    return list(rec(n, n))
+
+
+def _syt(shape):
+    """All standard Young tableaux of the given shape, in lexicographic order of their row words."""
+    n = sum(shape)
+    rows = [[] for _ in shape]
+    out = []
+
+    def place(k):
+        if k > n:
+            out.append([list(r) for r in rows])
+            return
+        for i, r in enumerate(rows):
+            if len(r) < shape[i] and (i == 0 or len(rows[i - 1]) > len(r)):
+                r.append(k)
+                place(k + 1)
+                r.pop()
+    place(1)
+    out.sort(key=lambda t: [x for r in t for x in r])
+    return out
+
+
+@fn("YoungTableaux", area=AREA, status="promoted",
+    notes="YoungTableaux[shape]: all standard Young tableaux of the partition shape (rows strictly increase left "
+          "to right and down columns), sorted by row word, as Combinatorica Tableaux[shape]; their number equals "
+          "HookLengthFormula[shape]. YoungTableaux[n]: all standard tableaux with n cells (over all partitions in "
+          "reverse-lexicographic order), whose number is the number of involutions of n. Refuses more than "
+          f"{_SYT_LIMIT} tableaux. Legacy built one tableau and returned its size")
+def _young(arg):
+    if is_list(arg):
+        shape = [pos_int(p, "YoungTableaux", "part") for p in list_arg(arg, "YoungTableaux")]
+        if any(shape[i] < shape[i + 1] for i in range(len(shape) - 1)):
+            raise ValueError("YoungTableaux: shape must be a weakly decreasing list of positive integers")
+        shapes = [shape]
+    else:
+        n = nonneg_int(arg, "YoungTableaux", "n")
+        shapes = _syt_partitions(n)
+    total = sum(_hook(L(*sh)) for sh in shapes) if shapes and shapes[0] else 1
+    if total > _SYT_LIMIT:
+        raise ValueError(f"YoungTableaux: {total} tableaux is more than the limit {_SYT_LIMIT}; use "
+                         "HookLengthFormula[shape] to count them")
+    out = []
+    for sh in shapes:
+        out.extend(_syt(sh))
+    return L(*(L(*(L(*r) for r in t)) for t in out))

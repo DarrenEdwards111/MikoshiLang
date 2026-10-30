@@ -87,7 +87,7 @@ def test_sequence_adapter():
 def test_bad_registry_entries_rejected(pattern):
     with pytest.raises((ValueError,ParseError)): make_rule(pattern,lambda x:x)
 
-@pytest.mark.parametrize('source',['RiemannTensor[g,x]','Power1[2]','YoungTableaux[{2,1}]','HodgeDual[x]'])
+@pytest.mark.parametrize('source',['RiemannTensor[g,x]','Power1[2]','AFTModel[1,2,3]','HodgeDual[x]'])
 def test_quarantined_no_fake_answer(session,source):
     with pytest.raises(NotImplementedError):session.evaluate(source)
 
