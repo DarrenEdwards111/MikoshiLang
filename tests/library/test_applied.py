@@ -26,7 +26,7 @@ CONSTANTS = [
 
 CASES = []
 for name, val in CONSTANTS:
-    CASES += [(f"{name}[]", val, 1e-9), (f"{name}[1]", Raises(ValueError)),
+    CASES += [(f"{name}[]", val, 1e-9), (f"{name}[1]", Raises(ValueError)), (f"N[{name}[]]", float(val), 1e-9),
               (f"PhysicalConstant[\"{name}\"]", val, 1e-9) if name not in ("WienDisplacementConstant",) else (f"{name}[]", val, 1e-9)]
 CASES += [("PhysicalConstant[\"NoSuchConstant\"]", Raises()), ("PhysicalConstant[3]", Raises()),
           ("BohrRadius[]", a0, 1e-9), ("BohrRadius[2]", 4 * a0, 1e-9), ("BohrRadius[3, 1]", "9"), ("BohrRadius[0]", Raises())]
