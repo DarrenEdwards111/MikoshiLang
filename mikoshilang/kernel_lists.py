@@ -858,15 +858,28 @@ def _b_count(a, ev, expr):
     return sum(1 for _, sub in walk(a[0], spec, ev=ev) if K.first_match(a[1], sub, ev) is not None)
 
 
+def _heads_option(a, name):
+    """Strip a trailing Heads -> True/False option; returns (args, heads)."""
+    a = list(a)
+    heads = True
+    if a and is_rule(a[-1]) and is_sym(a[-1].args[0], "Heads"):
+        v = a.pop().args[1]
+        if v is not True and v is not False:
+            raise ValueError(f"{name}: Heads must be True or False")
+        heads = v
+    return a, heads
+
+
 @builtin("Position")
 def _b_position(a, ev, expr):
+    a, heads = _heads_option(a, "Position")
     need(a, 2, "Position", 4)
     spec = level_spec(a[2] if len(a) >= 3 else None, (0, INF))
     limit = _limit(a[3], "Position") if len(a) == 4 else None
     out = []
     if limit == 0:
         return L()
-    for pos, sub in walk(a[0], spec, heads=True, ev=ev):
+    for pos, sub in walk(a[0], spec, heads=heads, ev=ev):
         if K.first_match(a[1], sub, ev) is not None:
             out.append(pos_expr(pos))
             if limit is not None and len(out) >= limit:
@@ -885,9 +898,10 @@ def _b_memberq(a, ev, expr):
 
 @builtin("FreeQ")
 def _b_freeq(a, ev, expr):
+    a, heads = _heads_option(a, "FreeQ")
     need(a, 2, "FreeQ", 3)
     spec = level_spec(a[2] if len(a) == 3 else None, (0, INF))
-    return not any(K.first_match(a[1], sub, ev) is not None for _, sub in walk(a[0], spec, heads=True, ev=ev))
+    return not any(K.first_match(a[1], sub, ev) is not None for _, sub in walk(a[0], spec, heads=heads, ev=ev))
 
 
 @builtin("Map")

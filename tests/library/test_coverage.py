@@ -2,7 +2,7 @@
 
 * every head in the pre-audit inventory (``inventory_heads.txt``, the 620 heads the legacy library
   exposed) has a status in ``library.STATUS``;
-* every verified / fixed / promoted head has at least three differential cases;
+* every verified / fixed / promoted / added head has at least three differential cases;
 * every error or quarantined head has at least one case asserting that it raises;
 * every kernel head has at least one case.
 """
@@ -21,7 +21,8 @@ from mikoshilang import library
 HERE = pathlib.Path(__file__).parent
 MODULES = ["test_elementary", "test_special", "test_numbertheory", "test_combinatorics", "test_algebra",
            "test_calculus", "test_linalg", "test_lists_strings", "test_statistics", "test_applied",
-           "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes"]
+           "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes",
+           "test_wolfram_batch1"]
 OPTIONAL = ["scipy", "matplotlib", "sklearn", "networkx", "plotly", "numpy"]
 NAME = re.compile(r"\s*([A-Za-z][A-Za-z0-9]*)")
 
@@ -64,8 +65,8 @@ def test_every_inventory_head_has_status():
 
 def test_tested_heads_have_three_cases():
     thin = {h: len(USED.get(h, [])) for h, (_a, s, _n) in library.STATUS.items()
-            if s in ("verified", "fixed", "promoted") and len(USED.get(h, [])) < 3}
-    assert not thin, f"verified/fixed/promoted heads with fewer than 3 cases: {thin}"
+            if s in ("verified", "fixed", "promoted", "added") and len(USED.get(h, [])) < 3}
+    assert not thin, f"verified/fixed/promoted/added heads with fewer than 3 cases: {thin}"
 
 
 def test_error_and_quarantined_heads_raise():

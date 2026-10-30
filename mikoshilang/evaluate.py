@@ -159,6 +159,8 @@ def _evaluate(expr, depth: int) -> Any:
         own = kernel.state().own
         if expr.name in own:
             return evaluate(own[expr.name], depth + 1)
+        if expr.name == "Null":
+            return None                     # the symbol Null is the null value (what x; evaluates to)
         return True if expr.name == "$Assumptions" else expr     # Wolfram default $Assumptions = True
     if not isinstance(expr, Expr):
         return expr

@@ -1825,7 +1825,7 @@ def _b_head(a, ev, expr):
     _need(a, 1, "Head")
     from .formatting import rational_value
     x = a[0]
-    if isinstance(x, bool) or isinstance(x, Symbol):
+    if isinstance(x, bool) or isinstance(x, Symbol) or x is None:
         return Symbol("Complex") if isinstance(x, Symbol) and x.name == "I" else Symbol("Symbol")
     if is_int(x):
         return Symbol("Integer")

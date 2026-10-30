@@ -7,6 +7,7 @@ implementations -- itertools, collections, NumPy -- for the structural ones).
 from __future__ import annotations
 
 import contextvars
+import itertools
 import math
 
 import sympy as sp
@@ -14,7 +15,7 @@ import sympy as sp
 from ..expr import Expr, Symbol
 from .. import kernel as K
 from .. import kernel_lists as KL
-from .core import fn, Unevaluated
+from .core import fn, record, Unevaluated
 from .wl_common import (L, ev, apply, true, is_sym, is_list, is_int, is_assoc, is_rule, same, items_of,
                         canonical, tester, dedup, classes, real_number, int_value, upto, split_options)
 
@@ -612,6 +613,19 @@ def _minimalby(x, f, n=None):
 
 
 def _take_extreme(x, n, fname, largest, f=None):
+    if is_assoc(x):
+        # associations keep the selected entries (as an association)
+        rules = list(x.args)
+        vals = KL.assoc_values(x, ev)
+        chosen = _take_extreme(L(*vals), n, fname, largest, f)
+        used, out = set(), []
+        for v in chosen.args:
+            for i, w in enumerate(vals):
+                if i not in used and K.same(v, w):
+                    used.add(i)
+                    out.append(rules[i])
+                    break
+        return Expr("Association", *out)
     items = items_of(x, fname)
     pairs = []
     for i, e in enumerate(items):
@@ -624,12 +638,14 @@ def _take_extreme(x, n, fname, largest, f=None):
     return L(*(e for _, _, e in pairs[:k]))
 
 
-@fn("TakeLargest", **ADDED, notes="the n largest numeric elements in decreasing order (Missing[...] ignored); UpTo[n]")
+@fn("TakeLargest", **ADDED, notes="the n largest numeric elements in decreasing order (Missing[...] ignored); UpTo[n]; "
+                                  "an association gives an association")
 def _takelargest(x, n):
     return _take_extreme(x, n, "TakeLargest", True)
 
 
-@fn("TakeSmallest", **ADDED, notes="the n smallest numeric elements in increasing order (Missing[...] ignored); UpTo[n]")
+@fn("TakeSmallest", **ADDED, notes="the n smallest numeric elements in increasing order (Missing[...] ignored); "
+                                   "UpTo[n]; an association gives an association")
 def _takesmallest(x, n):
     return _take_extreme(x, n, "TakeSmallest", False)
 
@@ -668,29 +684,43 @@ def _possmallest(x, n=None):
     return _position_extreme(x, n, "PositionSmallest", False)
 
 
-# sequence functions (fixed-length sequence patterns) ----------------------------------------------
+# sequence functions (list patterns over runs of elements) ----------------------------------------------
 
-def _seq_pattern(patt, fname):
+def _fixed_length(patt):
+    """Length of a list pattern made of single-element patterns, else None."""
     if not is_list(patt):
-        raise ValueError(f"{fname}: the sequence pattern must be a list such as {{a, _}}")
+        return None
     for p in patt.args:
-        if K._seq_info(p) is not None or (isinstance(p, Expr) and p.head in ("Repeated", "RepeatedNull",
-                                                                             "PatternSequence", "Optional")):
-            raise NotImplementedError(f"{fname}: variable-length sequence patterns are not supported yet; use a "
-                                      "list of single-element patterns")
+        q = p.args[1] if isinstance(p, Expr) and p.head == "Pattern" and len(p.args) == 2 else p
+        if K._seq_info(p) is not None or (isinstance(q, Expr) and q.head in (
+                "Repeated", "RepeatedNull", "PatternSequence", "Optional", "BlankSequence", "BlankNullSequence")):
+            return None
     return len(patt.args)
 
 
+def _match_at(items, i, patt, n):
+    """(stop, bindings) of the longest non-empty run starting at i that matches patt, or None."""
+    stops = [i + n] if n is not None else range(len(items), i, -1)
+    for j in stops:
+        if j > len(items) or j <= i:
+            continue
+        b = K.first_match(patt, L(*items[i:j]), ev)
+        if b is not None:
+            return j, b
+    return None
+
+
 def _seq_matches(items, patt, fname, overlaps=False):
-    """(start, stop, bindings) of matches of a fixed-length list pattern, left to right."""
-    n = _seq_pattern(patt, fname)
+    """(start, stop, bindings) of runs matching a list pattern (any pattern for a list, including __, ..,
+    and conditions), left to right; at each start the longest match is taken."""
+    n = _fixed_length(patt)
     out = []
     i = 0
-    while i + n <= len(items):
-        b = K.first_match(patt, L(*items[i:i + n]), lambda z: ev(z))
-        if b is not None and n > 0:
-            out.append((i, i + n, b))
-            i += 1 if overlaps else n
+    while i < len(items):
+        hit = _match_at(items, i, patt, n)
+        if hit is not None:
+            out.append((i, hit[0], hit[1]))
+            i += 1 if overlaps else hit[0] - i
         else:
             i += 1
     return out
@@ -702,8 +732,9 @@ def _seq_rule(r):
     return r, None
 
 
-@fn("SequenceCases", **ADDED, notes="non-overlapping runs matching a fixed-length list pattern {p1, p2, ...} "
-                                    "(or patt -> rhs); Overlaps -> True; variable-length patterns raise")
+@fn("SequenceCases", **ADDED, notes="non-overlapping runs matching a list pattern ({a, _}, {__Integer}, "
+                                    "{x_, y_} /; cond, ...; the longest match at each start) or patt -> rhs; "
+                                    "Overlaps -> True")
 def _seqcases(x, patt, *rest):
     rest, opts = split_options(rest, {"Overlaps"}, "SequenceCases")
     items = items_of(x, "SequenceCases")
@@ -719,7 +750,7 @@ def _seqcases(x, patt, *rest):
     return L(*out)
 
 
-@fn("SequencePosition", **ADDED, notes="{start, end} of runs matching a fixed-length list pattern; overlapping "
+@fn("SequencePosition", **ADDED, notes="{start, end} of runs matching a list pattern; overlapping "
                                        "matches are included (Overlaps -> True default); Overlaps -> False")
 def _seqpos(x, patt, *rest):
     rest, opts = split_options(rest, {"Overlaps"}, "SequencePosition")
@@ -731,13 +762,14 @@ def _seqpos(x, patt, *rest):
     return L(*out)
 
 
-@fn("SequenceCount", **ADDED, notes="number of non-overlapping occurrences of a sublist or fixed-length list pattern")
+@fn("SequenceCount", **ADDED, notes="number of non-overlapping occurrences of a sublist or list pattern")
 def _seqcount(x, patt, *rest):
     rest, opts = split_options(rest, {"Overlaps"}, "SequenceCount")
     return len(_seq_matches(items_of(x, "SequenceCount"), patt, "SequenceCount", opts.get("Overlaps") is True))
 
 
-@fn("SequenceReplace", **ADDED, notes="replaces non-overlapping runs matching {p1, ...} -> rhs (rhs is one element)")
+@fn("SequenceReplace", **ADDED, notes="replaces non-overlapping runs matching a list pattern -> rhs (rhs is one "
+                                       "element)")
 def _seqreplace(x, rules, n=None):
     items = items_of(x, "SequenceReplace")
     rs = list(rules.args) if is_list(rules) and rules.args and all(is_rule(r) for r in rules.args) else [rules]
@@ -749,12 +781,10 @@ def _seqreplace(x, rules, n=None):
         hit = None
         if limit is None or count < limit:
             for r in rs:
-                k = _seq_pattern(r.args[0], "SequenceReplace")
-                if k and i + k <= len(items):
-                    b = K.first_match(r.args[0], L(*items[i:i + k]), lambda z: ev(z))
-                    if b is not None:
-                        hit = (k, r, b)
-                        break
+                m = _match_at(items, i, r.args[0], _fixed_length(r.args[0]))
+                if m is not None:
+                    hit = (m[0] - i, r, m[1])
+                    break
         if hit:
             k, r, b = hit
             out.append(ev(K.substitute(r.args[1], b)))
@@ -766,7 +796,7 @@ def _seqreplace(x, rules, n=None):
     return _rebuild(x, out)
 
 
-@fn("SequenceSplit", **ADDED, notes="splits at runs matching a fixed-length list pattern (empty pieces at the ends "
+@fn("SequenceSplit", **ADDED, notes="splits at runs matching a list pattern (empty pieces at the ends "
                                     "dropped, as Wolfram); patt -> rhs keeps rhs between the pieces")
 def _seqsplit(x, patt, n=None):
     items = items_of(x, "SequenceSplit")
@@ -807,7 +837,8 @@ def _depth(x, *rest):
     return KL.depth(x)
 
 
-@fn("Dimensions", **ADDED, notes="dimensions of a full array of any head (Dimensions[f[a, b]] = {2}); "
+@fn("Dimensions", **ADDED, notes="dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, "
+                                 "Dimensions[{f[a], f[b]}] = {2}); "
                                  "Dimensions[expr, n] at most n levels")
 def _dimensions(x, n=None):
     if not isinstance(x, Expr) or KL.atomq(x) and not KL.is_assoc(x):
@@ -821,7 +852,7 @@ def _dimensions(x, n=None):
 def _dims_any(x):
     dims = []
     level = [x]
-    while level and all(isinstance(e, Expr) and (not KL.atomq(e) or KL.is_assoc(e)) and e.head == level[0].head
+    while level and all(isinstance(e, Expr) and (not KL.atomq(e) or KL.is_assoc(e)) and e.head == x.head
                         for e in level):
         lens = {len(e.args) for e in level}
         if len(lens) != 1:
@@ -1160,7 +1191,17 @@ def _orderingby(x, f, n=None):
                                     "non-numeric elements raise")
 def _numericalsort(x):
     items = items_of(x, "NumericalSort")
-    return _rebuild(x, sorted(items, key=lambda e: (_num_key(e, "NumericalSort"), canonical(e, "NumericalSort"))))
+    keyed = sorted(((_num_key(e, "NumericalSort"), i, e) for i, e in enumerate(items)), key=lambda t: (t[0], t[1]))
+    out = []
+    for _v, grp in itertools.groupby(keyed, key=lambda t: t[0]):
+        run = [e for _k, _i, e in grp]
+        if len(run) > 1:
+            try:
+                run = sorted(run, key=lambda e: canonical(e, "NumericalSort"))
+            except NotImplementedError:
+                pass                              # equal values without a canonical order keep their order
+        out.extend(run)
+    return _rebuild(x, out)
 
 
 @fn("DeleteDuplicatesBy", **ADDED, notes="keeps the first element for each distinct (SameQ) value of f")
@@ -1260,10 +1301,22 @@ def _positionindex(x):
     return KL.make_assoc([(k, L(*(i + 1 for i in g))) for k, g in zip(ks, groups)])
 
 
+def _edge(v, fname):
+    """A bin edge: a real number or +-Infinity."""
+    if is_sym(v, "Infinity") or (isinstance(v, Expr) and v.head == "DirectedInfinity" and v.args == (1,)):
+        return sp.oo
+    if isinstance(v, Expr) and v.head == "DirectedInfinity" and v.args == (-1,):
+        return -sp.oo
+    if isinstance(v, Expr) and v.head == "Times" and len(v.args) == 2 and v.args[0] == -1 and \
+            is_sym(v.args[1], "Infinity"):
+        return -sp.oo
+    return real_number(v, fname, "bin edge")
+
+
 def _bins(data, spec, fname):
     vals = [real_number(v, fname, "data value") for v in data]
     if is_list(spec) and len(spec.args) == 1 and is_list(spec.args[0]):
-        edges = [real_number(v, fname, "bin edge") for v in spec.args[0].args]
+        edges = [_edge(v, fname) for v in spec.args[0].args]
         if any(edges[i] >= edges[i + 1] for i in range(len(edges) - 1)):
             raise ValueError(f"{fname}: bin edges must be increasing")
         return edges
@@ -1338,14 +1391,19 @@ def _ratios(x, n=1):
 
 
 @fn("MinMax", **ADDED, notes="{Min[list], Max[list]}; MinMax[list, d] = {min - d, max + d}; "
-                             "MinMax[list, {dmin, dmax}]")
+                             "MinMax[list, {dmin, dmax}]; Scaled[s] pads by s times the range")
 def _minmax(x, d=None):
     items = items_of(x, "MinMax")
     lo, hi = ev(Expr("Min", L(*items))), ev(Expr("Max", L(*items)))
     if d is None:
         return L(lo, hi)
     d1, d2 = (d.args if is_list(d) and len(d.args) == 2 else (d, d))
-    return L(ev(Expr("Plus", lo, Expr("Times", -1, d1))), ev(Expr("Plus", hi, d2)))
+
+    def scaled(v):
+        if isinstance(v, Expr) and v.head == "Scaled" and len(v.args) == 1:
+            return Expr("Times", v.args[0], Expr("Plus", hi, Expr("Times", -1, lo)))
+        return v
+    return L(ev(Expr("Plus", lo, Expr("Times", -1, scaled(d1)))), ev(Expr("Plus", hi, scaled(d2))))
 
 
 # ─────────────────────────── functional ───────────────────────────
@@ -1379,17 +1437,24 @@ def _through(x, h=None):
     return ev(Expr(p.head, *(K.call(f, *x.args) for f in p.args)))
 
 
-@fn("Operate", **ADDED, notes="Operate[p, f[x, y]] = p[f][x, y]; Operate[p, expr, 0] = p[expr]")
+@fn("Operate", **ADDED, notes="Operate[p, f[x, y]] = p[f][x, y]; Operate[p, expr, 0] = p[expr]; Operate[p, expr, n] "
+                              "applies p to the head n levels down (f[a][b] at level 2 gives p[f][a][b]); an atomic "
+                              "head that deep leaves expr unchanged")
 def _operate(p, x, n=1):
     k = int_value(n, "Operate", "level", 0)
-    if k == 0:
-        return apply(p, x)
-    if k != 1:
-        raise NotImplementedError("Operate: only levels 0 and 1 are supported")
-    if not isinstance(x, Expr) or KL.atomq(x):
-        return x
-    h = Symbol(x.head) if isinstance(x.head, str) else x.head
-    return ev(Expr(K.call(p, h), *x.args))
+
+    def go(e, k):
+        if k == 0:
+            return K.call(p, e)
+        if not isinstance(e, Expr) or KL.atomq(e):
+            return e
+        h = Symbol(e.head) if isinstance(e.head, str) else e.head
+        if k == 1:
+            return Expr(K.call(p, h), *e.args)
+        if not isinstance(h, Expr):
+            return e
+        return Expr(go(h, k - 1), *e.args)
+    return ev(go(x, k))
 
 
 @fn("Construct", **ADDED, notes="Construct[f, x, y, ...] = f[x, y, ...]")
@@ -1607,3 +1672,28 @@ def _replacelist(e, r, n=None):
                 return L(*out)
             out.append(ev(K.substitute(rule.args[1], b)))
     return L(*out)
+
+
+@fn("Minus", **ADDED, notes="Minus[x] = -x (Times[-1, x]); threads over lists")
+def _minus(x):
+    return ev(Expr("Times", -1, x))
+
+
+K.BUILTIN_ATTRIBUTES.setdefault("Minus", set()).update({"Listable", "NumericFunction", "Protected"})
+
+
+# Language objects implemented in kernel_lists / the matcher in batch 1.
+for _n, _note in [("Composition", "f @* g; Composition[f, g][x] = f[g[x]]"),
+                  ("RightComposition", "f /* g; RightComposition[f, g][x] = g[f[x]]"),
+                  ("GreaterThan", "operator GreaterThan[y][x] = x > y"), ("LessThan", "operator x < y"),
+                  ("GreaterEqualThan", "operator x >= y"), ("LessEqualThan", "operator x <= y"),
+                  ("EqualTo", "operator x == y"), ("UnequalTo", "operator x != y"), ("SameAs", "operator x === y"),
+                  ("Key", "Key[k] in Part and as an operator on associations"),
+                  ("Missing", "inert; Missing[\"KeyAbsent\", k] for absent keys"),
+                  ("Nothing", "removed from lists"), ("Splice", "spliced into lists"),
+                  ("Span", "i ;; j ;; k in Part, Take and Drop"), ("UpTo", "UpTo[n] in Take, Drop, Partition, ..."),
+                  ("Except", "Except[c] and Except[c, p] in patterns"),
+                  ("Repeated", "p.. and Repeated[p, n | {m, n}] in sequences"),
+                  ("RepeatedNull", "p... in sequences"),
+                  ("Optional", "x_:d and x_. (Plus/Times/Power defaults)")]:
+    record(_n, "language (batch 1)", "added", _note)

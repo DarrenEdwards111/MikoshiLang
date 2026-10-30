@@ -15,7 +15,7 @@ import unicodedata
 
 from ..expr import Expr, Symbol
 from .. import kernel_lists as KL
-from .core import fn, Unevaluated, nonneg_int, pos_int, int_arg, string_arg
+from .core import fn, record, Unevaluated, nonneg_int, pos_int, int_arg, string_arg
 from .wl_common import L, ev, apply, is_sym, is_list, is_rule, split_options
 
 AREA = "strings (batch 1)"
@@ -923,3 +923,11 @@ def _palindromeq(x):
         return d == d[::-1]
     return False
 
+
+
+# String pattern objects and options interpreted by the functions above (not functions themselves).
+for _n in ("StringExpression", "Shortest", "Longest", "RegularExpression", "DigitCharacter", "LetterCharacter",
+           "WordCharacter", "WhitespaceCharacter", "PunctuationCharacter", "HexadecimalCharacter", "StartOfString",
+           "EndOfString", "StartOfLine", "EndOfLine", "WordBoundary", "Whitespace", "NumberString", "IgnoreCase",
+           "Overlaps"):
+    record(_n, AREA, "added", "string pattern object / option interpreted by the batch-1 string functions")
