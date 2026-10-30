@@ -1412,7 +1412,7 @@ def _simple_cycles(gr, lo, hi, limit):
         for w, _, k in adj[u]:
             if w == u:
                 continue
-            if w == start and len(path_e) + 1 >= max(lo, 1 if d else 3) and (d or len(path_e) >= 2):
+            if w == start and max(lo, 2 if d else 3) <= len(path_e) + 1 <= hi:
                 cyc = path_e + [k]
                 key = frozenset(cyc)
                 if key not in seen:
@@ -2159,6 +2159,9 @@ def _eigc(g, kind=None):
         return L()
     if kind not in (None, "In", "Out"):
         raise ValueError('EigenvectorCentrality: the second argument must be "In" or "Out"')
+    if len(_components(gr)) != 1:
+        raise ValueError("EigenvectorCentrality: the graph is not (strongly) connected; Wolfram's per-component "
+                         "normalisation is not reproduced")
     sym = not gr.directed
     M = m.T if (kind != "Out") else m
     _, v = _principal(M, "EigenvectorCentrality", sym)
