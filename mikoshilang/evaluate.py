@@ -17,13 +17,20 @@ def _ensure_extended():
 
 
 # Hold attributes
-_HOLD_ALL: Set[str] = set()
+_HOLD_ALL: Set[str] = {"Trace", "Assuming"}   # library heads that receive unevaluated arguments
 _HOLD_FIRST: Set[str] = set()
 
 _MAX_DEPTH = 1024  # matches Wolfram's default $RecursionLimit
 _memo: Dict[int, Any] = {}
 
 import sys as _sys
+from contextvars import ContextVar as _ContextVar
+
+# Evaluation tracing for Trace[expr]: a stack of frames (None when not tracing). Each frame collects
+# ("nested", chain) for argument evaluations, ("form", expr) for the expression after its arguments
+# were evaluated, and ("splice", chain) for re-evaluations of a rewritten expression.
+_TRACE = _ContextVar("mikoshilang_trace", default=None)
+_TRACE_ARG = _ContextVar("mikoshilang_trace_arg", default=False)
 if _sys.getrecursionlimit() < 20000:
     _sys.setrecursionlimit(20000)
 
@@ -47,6 +54,8 @@ def evaluate(expr, depth: int = 0) -> Any:
     Sequence splicing, Flat/Orderless/Listable, user DownValues (most specific
     first), kernel built-ins, then the legacy rule library.
     """
+    if depth > 0 and _TRACE.get() is not None:
+        return _traced(expr, depth)
     if depth == 0:
         from .kernel import ReturnSignal, BreakSignal, ContinueSignal, ThrowSignal
         try:
@@ -60,6 +69,84 @@ def evaluate(expr, depth: int = 0) -> Any:
     return _evaluate(expr, depth)
 
 
+def _traced(expr, depth):
+    stack = _TRACE.get()
+    is_arg = _TRACE_ARG.get()
+    tok = _TRACE_ARG.set(False)
+    frame = []
+    stack.append(frame)
+    try:
+        r = _evaluate(expr, depth)
+    finally:
+        stack.pop()
+        _TRACE_ARG.reset(tok)
+    chain = _trace_chain(expr, frame, r, start=bool(stack) and not is_arg and len(stack) > 1)
+    if stack:
+        if not is_arg:
+            stack[-1].append(("splice", chain))
+        elif len(chain) > 1 or any(isinstance(c, list) for c in chain):
+            stack[-1].append(("nested", chain))
+    return r
+
+
+def _trace_chain(expr, items, r, start=False):
+    out = []
+
+    def add(x):
+        if not (out and not isinstance(out[-1], list) and _same(out[-1], x)):
+            out.append(x)
+
+    if start or not any(k == "nested" for k, _ in items):
+        add(expr)
+    for k, c in items:
+        if k == "nested":
+            out.append(c)
+        elif k == "form":
+            add(c)
+        else:
+            for el in c:
+                if isinstance(el, list):
+                    out.append(el)
+                else:
+                    add(el)
+    add(r)
+    return out
+
+
+def _same(a, b):
+    try:
+        return type(a) is type(b) and a == b
+    except Exception:
+        return False
+
+
+def trace_evaluation(expr):
+    """Evaluate expr while recording the Wolfram-style evaluation chain; returns (chain, value)."""
+    stack = [[]]
+    tok = _TRACE.set(stack)
+    atok = _TRACE_ARG.set(False)
+    try:
+        r = evaluate(expr, 1)
+    finally:
+        _TRACE.reset(tok)
+        _TRACE_ARG.reset(atok)
+    top = stack[0]
+    chain = top[0][1] if top else [expr, r]
+    if len(chain) == 1:       # nothing happened: Wolfram returns {}
+        chain = []
+    return chain, r
+
+
+def _ev_arg(x, depth):
+    if _TRACE.get() is None:
+        return evaluate(x, depth)
+    tok = _TRACE_ARG.set(True)
+    try:
+        return evaluate(x, depth)
+    finally:
+        _TRACE_ARG.reset(tok)
+
+
 def _evaluate(expr, depth: int) -> Any:
     if depth > _MAX_DEPTH:
         raise RecursionError(f"Evaluation depth exceeded {_MAX_DEPTH}")
@@ -70,7 +157,9 @@ def _evaluate(expr, depth: int) -> Any:
     from . import kernel
     if isinstance(expr, Symbol):
         own = kernel.state().own
-        return evaluate(own[expr.name], depth + 1) if expr.name in own else expr
+        if expr.name in own:
+            return evaluate(own[expr.name], depth + 1)
+        return True if expr.name == "$Assumptions" else expr     # Wolfram default $Assumptions = True
     if not isinstance(expr, Expr):
         return expr
 
@@ -110,14 +199,15 @@ def _evaluate(expr, depth: int) -> Any:
 
     # 4. Arguments, respecting Hold attributes
     attrs = kernel.attributes(head) if isinstance(head, str) else set()
+    eva = lambda x: _ev_arg(x, depth + 1)  # noqa: E731
     if head in _HOLD_ALL or "HoldAll" in attrs:
         new_args = list(expr.args)
     elif head in _HOLD_FIRST or "HoldFirst" in attrs:
-        new_args = list(expr.args[:1]) + [ev(a) for a in expr.args[1:]]
+        new_args = list(expr.args[:1]) + [eva(a) for a in expr.args[1:]]
     elif "HoldRest" in attrs:
-        new_args = [ev(a) for a in expr.args[:1]] + list(expr.args[1:])
+        new_args = [eva(a) for a in expr.args[:1]] + list(expr.args[1:])
     else:
-        new_args = [ev(a) for a in expr.args]
+        new_args = [eva(a) for a in expr.args]
 
     # 5. Sequence splicing, Flat, Orderless, Listable
     if "SequenceHold" not in attrs and any(isinstance(a, Expr) and a.head == "Sequence" for a in new_args):
@@ -150,6 +240,8 @@ def _evaluate(expr, depth: int) -> Any:
                                  for i in range(n))))
 
     new_expr = Expr(head, *new_args)
+    if _TRACE.get() is not None and _TRACE.get():
+        _TRACE.get()[-1].append(("form", new_expr))
 
     # 6. Pure functions and derivatives as heads
     if isinstance(head, Expr):

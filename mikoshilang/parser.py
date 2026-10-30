@@ -325,6 +325,8 @@ class Parser:
             rhs = self.parse_multiplication()
             if tok.type == "PLUS":
                 expr = Expr("Plus", expr, rhs)
+            elif isinstance(rhs, (int, float)) and not isinstance(rhs, bool):
+                expr = Expr("Plus", expr, -rhs)          # Wolfram FullForm: a - 1 is Plus[a, -1]
             else:
                 expr = Expr("Plus", expr, Expr("Times", -1, rhs))
         return expr

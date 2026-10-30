@@ -11,7 +11,7 @@ from .expr import Expr, Symbol
 
 _CONSTANTS = {"Pi": sp.pi, "E": sp.E, "I": sp.I, "Infinity": sp.oo,
               "ComplexInfinity": sp.zoo, "Indeterminate": sp.nan, "GoldenRatio": sp.GoldenRatio,
-              "EulerGamma": sp.EulerGamma, "Degree": sp.pi / 180}
+              "EulerGamma": sp.EulerGamma, "Degree": sp.pi / 180, "Catalan": sp.Catalan}
 
 _FUNCS = {
     "Sin": sp.sin, "Cos": sp.cos, "Tan": sp.tan, "Cot": sp.cot, "Sec": sp.sec, "Csc": sp.csc,
@@ -111,6 +111,66 @@ NON_ALGEBRAIC_HEADS = frozenset({
 })
 
 
+_ROOT_VAR = sp.Symbol("RootVar$")
+
+
+def root_values(poly_expr, x):
+    """(order, values): SymPy CRootOf indices in Wolfram Root order, and a complex approximation of the root
+    with each SymPy index. Wolfram order: real roots ascending, then complex roots by increasing real part, then
+    increasing |Im|, conjugates adjacent with the negative imaginary part first. (SymPy orders complex roots by
+    its isolating intervals, which differs, e.g. for x^7 + 3x + 1.)"""
+    key = (sp.srepr(sp.Poly(poly_expr, x).monic().as_expr()), str(x))
+    hit = _ROOT_ORDER_CACHE.get(key)
+    if hit is not None:
+        return hit
+    p = sp.Poly(poly_expr, x)
+    sqf = sp.Poly(sp.quo(p, sp.gcd(p, p.diff(x))), x)       # distinct roots
+    nums = [complex(r) for r in sqf.nroots(n=30, maxsteps=500)]
+    nreal = len(p.real_roots())       # with multiplicity; CRootOf lists these first, ascending
+    cplx = [r for r in nums if abs(r.imag) >= 1e-20]
+    values = {}
+    for i in range(p.degree()):
+        c = sp.CRootOf(poly_expr, x, i)
+        if not isinstance(c, sp.CRootOf):          # SymPy evaluated it (rational / repeated root)
+            values[i] = complex(c)
+        elif i < nreal:
+            values[i] = complex(c.evalf(20))
+        else:
+            iv = c._get_interval()
+            inside = [r for r in cplx if float(iv.ax) <= r.real <= float(iv.bx) and float(iv.ay) <= r.imag <= float(iv.by)]
+            values[i] = inside[0] if inside else complex(c.evalf(20))
+    comp = sorted(range(nreal, p.degree()),
+                  key=lambda i: (round(values[i].real, 12), round(abs(values[i].imag), 12), values[i].imag))
+    out = (list(range(nreal)) + comp, values)
+    _ROOT_ORDER_CACHE[key] = out
+    return out
+
+
+def wolfram_root_order(poly_expr, x):
+    return root_values(poly_expr, x)[0]
+
+
+_ROOT_ORDER_CACHE = {}
+
+
+def root_to_sympy(expr):
+    """Root[f, k] (f a pure function of one slot) -> SymPy CRootOf(poly, k - 1)."""
+    from .kernel import replace_slots
+    if len(expr.args) != 2 or not (isinstance(expr.args[0], Expr) and expr.args[0].head == "Function"
+                                   and len(expr.args[0].args) == 1):
+        raise ValueError("Root[f, k] needs a pure function f such as #^3 - 2 &")
+    body = to_sympy(replace_slots(expr.args[0].args[0], (Symbol(_ROOT_VAR.name),)))
+    k = to_sympy(expr.args[1])
+    if not (k.is_Integer and k >= 1):
+        raise ValueError("Root[f, k]: k must be a positive integer")
+    if not body.is_polynomial(_ROOT_VAR) or body.free_symbols - {_ROOT_VAR}:
+        raise ValueError("Root[f, k]: f[x] must be a polynomial in x with numeric coefficients")
+    n = int(sp.degree(body, _ROOT_VAR))
+    if int(k) > n:
+        raise ValueError(f"Root[f, k]: k = {k} exceeds the degree {n}")
+    return sp.CRootOf(body, _ROOT_VAR, wolfram_root_order(body, _ROOT_VAR)[int(k) - 1])
+
+
 def _derivative_to_sympy(head, args):
     """Derivative[n1, n2, ...][f][a1, a2, ...] -> SymPy Derivative / Subs."""
     orders = [int(n) for n in head.head.args]
@@ -162,6 +222,8 @@ def to_sympy(expr) -> Any:
             raise ValueError("Cannot convert a compound head to SymPy")
         if head in NON_ALGEBRAIC_HEADS:
             raise ValueError(f"Cannot convert {head} to SymPy")
+        if head == "Root":
+            return root_to_sympy(expr)
         if head == "List":
             return [to_sympy(a) for a in expr.args]
         if head == "Piecewise" and expr.args and isinstance(expr.args[0], Expr) and expr.args[0].head == "List":
@@ -312,6 +374,24 @@ def from_sympy(sexpr) -> Any:
         return Symbol("GoldenRatio")
     if sexpr is sp.EulerGamma:
         return Symbol("EulerGamma")
+    if sexpr is sp.Catalan:
+        return Symbol("Catalan")
+    if isinstance(sexpr, sp.Subs) and isinstance(sexpr.expr, sp.Derivative):
+        d = sexpr.expr
+        fexpr = d.expr
+        if isinstance(fexpr, sp.core.function.AppliedUndef) and tuple(fexpr.args) == tuple(sexpr.variables):
+            counts = dict(d.variable_count)
+            orders = [int(counts.get(v, 0)) for v in fexpr.args]
+            pts = dict(zip(sexpr.variables, sexpr.point))
+            return Expr(Expr(Expr("Derivative", *orders), Symbol(str(fexpr.func))),
+                        *(from_sympy(pts[v]) for v in fexpr.args))
+    if isinstance(sexpr, sp.CRootOf):
+        x = sexpr.poly.gen
+        body = from_sympy(sexpr.poly.as_expr().subs(x, _ROOT_VAR))
+        from .kernel import substitute
+        order = wolfram_root_order(sexpr.poly.as_expr(), x)
+        return Expr("Root", Expr("Function", substitute(body, {_ROOT_VAR.name: Expr("Slot", 1)})),
+                    order.index(int(sexpr.index)) + 1)
     if isinstance(sexpr, (list, tuple, sp.Tuple)):
         return Expr("List", *(from_sympy(a) for a in sexpr))
     if isinstance(sexpr, sp.MatrixBase):
