@@ -1182,3 +1182,391 @@ def _composeseries(s1, s2, *more):
     comp = sp.expand(_compose_poly(A.poly(), B.poly(), x, m))
     terms = [(sp.Integer(k), comp.coeff(x, k)) for k in range(0, m) if comp.coeff(x, k) != 0]
     return SeriesData(x, sp.Integer(0), terms, sp.Integer(m)).to_expr()
+
+
+# ───────────────────────────── sums, recurrences, ODEs ─────────────────────────────
+
+def _sum_piecewise(v, gen, fname):
+    """SymPy returns Piecewise((value, convergence condition), (Sum(...), True)) for parametric series."""
+    if isinstance(v, sp.Piecewise):
+        branches = [(e, c) for e, c in v.args if c is not sp.true]
+        default = [e for e, c in v.args if c is sp.true]
+        if len(branches) == 1 and default and default[0].has(sp.Sum, sp.Product):
+            e, c = branches[0]
+            return e, c
+        if any(e.has(sp.Sum, sp.Product) for e, _ in v.args):
+            raise Unevaluated()
+    return v, None
+
+
+def _sumprod4(f, specs, fname, op, gen):
+    from .calculus import _iter_spec, _check_result
+    v = sym(f, fname)
+    conds = []
+    for spec in reversed(specs):              # first iterator is outermost
+        i, it = _iter_spec(spec, fname)
+        if it[0] == "list":
+            terms = [v.subs(i, x) for x in it[1]]
+            v = sp.Add(*terms) if op == "sum" else sp.Mul(*terms)
+            continue
+        lo, hi, step = it[1], it[2], it[3]
+        if step is not None:
+            if not (lo.is_number and hi.is_number and step.is_number) or step == 0:
+                raise NotImplementedError(f"{fname}: a step requires numeric bounds")
+            n = sp.floor((hi - lo) / step)
+            terms = [v.subs(i, lo + k * step) for k in range(int(n) + 1)] if n >= 0 else []
+            v = (sp.Add if op == "sum" else sp.Mul)(*terms) if terms else sp.Integer(0 if op == "sum" else 1)
+            continue
+        if lo.is_number and hi.is_number and hi.is_finite and lo.is_finite:
+            n = sp.floor(hi - lo)
+            if n < 0:
+                v = sp.Integer(0 if op == "sum" else 1)
+                continue
+            if n <= 2000:
+                terms = [v.subs(i, lo + k) for k in range(int(n) + 1)]
+                v = sp.Add(*terms) if op == "sum" else sp.Mul(*terms)
+                continue
+        ii = sp.Dummy(i.name, integer=True)
+        r = (sp.summation if op == "sum" else sp.product)(v.subs(i, ii), (ii, lo, hi))
+        r = r.xreplace({ii: i}) if isinstance(r, sp.Basic) else r
+        r, c = _sum_piecewise(r, gen, fname)
+        if c is not None:
+            conds.append(c)
+        if isinstance(r, sp.Basic) and r.has(sp.Sum, sp.Product):
+            raise Unevaluated()
+        v = _check_result(r, fname)
+    if isinstance(v, sp.Basic) and v.free_symbols:
+        v = sp.simplify(v)
+    return v, conds
+
+
+def _sum_common(fname, op, f, args):
+    from .assume import from_sym
+    specs, opts = split_opts(args, {"GenerateConditions", "Assumptions", "Regularization", "VerifyConvergence",
+                                    "Method"}, fname)
+    for k in ("Regularization", "Method"):
+        if k in opts:
+            raise NotImplementedError(f"{fname}: the option {k} is not supported")
+    if not specs:
+        raise ValueError(f"{fname} needs an iterator")
+    v, conds = _sumprod4(f, specs, fname, op, opts.get("GenerateConditions"))
+    value = numeric_out(wl_fix(v), f, *specs)
+    if conds and is_true(opts.get("GenerateConditions", False)):
+        return Expr("ConditionalExpression", value, from_sym(sp.And(*[_wl_condition(c) for c in conds])))
+    return value
+
+
+@replace("Sum", AREA,
+         "batch 4: as before ({i, n}, {i, a, b}, {i, a, b, di}, {i, {values}}, several iterators, first outermost; "
+         "divergent sums to +-Infinity give that limit, other non-convergent sums stay unevaluated), plus "
+         "parametric series that SymPy sums under a convergence condition: Wolfram's generic value by default "
+         "(Sum[x^k, {k, 0, Infinity}] -> 1/(1 - x); previously a recursion error) and "
+         "ConditionalExpression[value, cond] with GenerateConditions -> True")
+def _sum(f, *args):
+    return _sum_common("Sum", "sum", f, args)
+
+
+@replace("Product", AREA,
+         "batch 4: as Sum (finite, symbolic and infinite products via SymPy; parametric products give the generic "
+         "value, ConditionalExpression with GenerateConditions -> True)")
+def _product(f, *args):
+    return _sum_common("Product", "product", f, args)
+
+
+@fn("SumConvergence", area=AREA, status="added",
+    notes="SumConvergence[f, n]: True/False for the convergence of Sum[f, {n, k, Infinity}] (SymPy's ratio, root, "
+          "integral, comparison, alternating-series tests); the p-series family 1/n^p and n^p r^n with a "
+          "parameter gives the Wolfram condition (Re[p] > 1, Abs[r] < 1); undecided cases stay unevaluated")
+def _sumconvergence(f, n, *opts):
+    v = sym(f, "SumConvergence")
+    nv = variable(n, "SumConvergence")
+    ni = sp.Symbol(nv.name, integer=True, positive=True)
+    g = v.xreplace({nv: ni})
+    params = g.free_symbols - {ni}
+    if params:
+        # f = c n^q r^n with exponents/bases depending on parameters
+        c, rest = g.as_independent(ni, as_Add=False)
+        q, r = sp.Integer(0), sp.Integer(1)
+        for fac in sp.Mul.make_args(rest):
+            if isinstance(fac, sp.Pow) and fac.base == ni and not fac.exp.has(ni):
+                q += fac.exp
+            elif fac == ni:
+                q += 1
+            elif isinstance(fac, sp.Pow) and fac.exp == ni and not fac.base.has(ni):
+                r *= fac.base
+            elif isinstance(fac, sp.exp) and sp.expand(fac.args[0] / ni).free_symbols.isdisjoint({ni}):
+                r *= sp.exp(sp.expand(fac.args[0] / ni))
+            else:
+                raise Unevaluated()
+        if c == 0:
+            return True
+        from .assume import from_sym
+        if r == 1:
+            return from_sym(sp.re(-q) > 1)
+        if not q.free_symbols:
+            return from_sym(sp.Abs(r) < 1)
+        raise Unevaluated()
+    start = 1
+    for k in range(1, 60):
+        val = g.subs(ni, k)
+        if val.has(sp.zoo, sp.nan, sp.oo, -sp.oo):
+            start = k + 1
+    try:
+        res = sp.Sum(g, (ni, start, sp.oo)).is_convergent()
+    except Exception:
+        raise Unevaluated()
+    if res is sp.true or res is True:
+        return True
+    if res is sp.false or res is False:
+        return False
+    raise Unevaluated()
+
+
+def _rec_parts(eq, name, nv, fname):
+    a = sp.Function(name)
+    eqs = list(eq.args) if is_list(eq) else [eq]
+    rec, ics = None, {}
+    for e in eqs:
+        se = sym(e, fname)
+        if isinstance(se, sp.Equality) and isinstance(se.lhs, AppliedUndef) and se.lhs.func == a \
+                and not se.lhs.args[0].has(nv) and not se.rhs.has(a):
+            ics[se.lhs] = se.rhs
+        elif rec is None:
+            rec = se
+        else:
+            raise NotImplementedError(f"{fname}: systems of recurrences are not supported")
+    if rec is None:
+        raise ValueError(f"{fname}: no recurrence equation given")
+    if isinstance(rec, sp.Equality):
+        rec = rec.lhs - rec.rhs
+    return a, rec, ics
+
+
+def _rsolve_core(eq, fexpr, n, fname):
+    """(name, list of SymPy solutions for a(n)) with every solution checked against the recurrence."""
+    nv = variable(n, fname)
+    if isinstance(fexpr, Symbol):
+        name = fexpr.name
+    elif isinstance(fexpr, Expr) and isinstance(fexpr.head, str) and len(fexpr.args) == 1 and \
+            isinstance(fexpr.args[0], Symbol) and fexpr.args[0].name == nv.name:
+        name = fexpr.head
+    else:
+        raise ValueError(f"{fname}: the unknown must be given as a[n] or a")
+    a, rec, ics = _rec_parts(eq, name, nv, fname)
+    sol = sp.rsolve(rec, a(nv), ics or None)
+    if sol is None:
+        raise NotImplementedError(f"{fname}: SymPy could not solve this recurrence")
+    sols = sol if isinstance(sol, list) else [sol]
+    if sols and isinstance(sols[0], dict):
+        sols = [s_[a(nv)] for s_ in sols]
+    checked = []
+    for s_ in sols:
+        s_ = sp.simplify(s_)
+        resid = rec.replace(lambda e: isinstance(e, AppliedUndef) and e.func == a,
+                            lambda e: s_.subs(nv, e.args[0]))
+        ok = sp.simplify(sp.expandfunc(resid) if hasattr(sp, "expandfunc") else resid) == 0
+        if not ok:
+            consts = sorted((c for c in s_.free_symbols if c.name[:1] == "C" and c.name[1:].isdigit()), key=str)
+            vals = {c: sp.Rational(3 + i, 7) for i, c in enumerate(consts)}
+            others = {p: sp.Rational(5 + i, 11) for i, p in enumerate(sorted(resid.free_symbols - {nv} - set(consts),
+                                                                               key=str))}
+            ok = all(abs(complex(sp.N(resid.subs(vals).subs(others).subs(nv, k), 30))) < 1e-15 for k in range(2, 9))
+        if not ok:
+            raise ArithmeticError(f"{fname}: the solution failed verification")
+        for lhs, rhs in ics.items():
+            if sp.simplify(s_.subs(nv, lhs.args[0]) - rhs) != 0:
+                raise ArithmeticError(f"{fname}: the solution does not satisfy the initial conditions")
+        consts = {c: sp.Symbol(f"C{int(c.name[1:]) + 1}") for c in s_.free_symbols
+                  if c.name[:1] == "C" and c.name[1:].isdigit()}
+        checked.append(s_.xreplace(consts))
+    return name, nv, checked
+
+
+def _with_constants(e):
+    return K._constants_to_c(e)
+
+
+@replace("RSolve", AREA,
+         "batch 4: RSolve[eqns, a[n], n] -> {{a[n] -> ...}} and RSolve[eqns, a, n] -> {{a -> Function[{n}, ...]}}; "
+         "linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every "
+         "solution is substituted back into the recurrence and the initial conditions; free constants are C[1], "
+         "C[2], ...; systems raise")
+def _rsolve(eq, fexpr, n):
+    name, nv, sols = _rsolve_core(eq, fexpr, n, "RSolve")
+    rules = []
+    for s_ in sols:
+        if isinstance(fexpr, Symbol):
+            rules.append(L(rule(fexpr, Expr("Function", L(Symbol(nv.name)), out(s_)))))
+        else:
+            rules.append(L(rule(fexpr, out(s_))))
+    return _with_constants(L(*rules))
+
+
+@fn("RSolveValue", area=AREA, status="added",
+    notes="RSolveValue[eqns, a[n], n] gives the solution value, RSolveValue[eqns, a, n] a pure function, "
+          "RSolveValue[eqns, expr, n] the value of expr (e.g. a[10]); checked like RSolve")
+def _rsolvevalue(eq, target, n):
+    nv = variable(n, "RSolveValue")
+    if isinstance(target, Symbol):
+        fexpr, name = target, target.name
+    elif isinstance(target, Expr) and isinstance(target.head, str) and len(target.args) == 1:
+        fexpr, name = Expr(target.head, Symbol(nv.name)), target.head
+    else:
+        raise ValueError("RSolveValue: the unknown must be given as a[n] or a")
+    _, _, sols = _rsolve_core(eq, fexpr, n, "RSolveValue")
+    if len(sols) != 1:
+        raise NotImplementedError("RSolveValue: several solutions")
+    s_ = sols[0]
+    if isinstance(target, Symbol):
+        return _with_constants(Expr("Function", L(Symbol(nv.name)), out(s_)))
+    val = s_.subs(sp.Symbol(nv.name), sym(target.args[0], "RSolveValue"))
+    return _with_constants(out(sp.simplify(val)))
+
+
+_orig_dsolve = K._BUILTINS["DSolve"]
+
+
+def _check_ode_solution(eqs, sol_rules, ev, fname):
+    """Substitute a DSolve solution into the equations; symbolic zero or a numeric check at sample points."""
+    import random
+    rnd = random.Random(11)
+    for e in eqs:
+        if not (isinstance(e, Expr) and e.head == "Equal" and len(e.args) == 2):
+            continue
+        res = ev(Expr("ReplaceAll", Expr("Subtract", e.args[0], e.args[1]), sol_rules))
+        try:
+            v = K.to_sp(res)
+        except Exception:
+            raise ArithmeticError(f"{fname}: could not verify the solution")
+        if isinstance(v, list) or v.has(sp.Derivative) or any(isinstance(t, AppliedUndef) for t in sp.preorder_traversal(v)):
+            raise ArithmeticError(f"{fname}: could not verify the solution")
+        try:
+            if sp.simplify(v) == 0:
+                continue
+        except Exception:
+            pass
+        free = sorted(v.free_symbols, key=str)
+        good = 0
+        for _ in range(5):
+            vals = {s_: sp.Rational(rnd.randint(3, 19), 10) for s_ in free}
+            try:
+                z = complex(sp.N(v.subs(vals), 30))
+            except Exception:
+                continue
+            if abs(z) > 1e-12:
+                raise ArithmeticError(f"{fname}: the solution failed verification")
+            good += 1
+        if good == 0:
+            raise ArithmeticError(f"{fname}: could not verify the solution")
+
+
+def _dsolve_checked(a, ev, expr, fname):
+    if len(a) != 3:
+        raise ValueError(f"{fname} expects {fname}[eqns, y, x]")
+    if is_list(a[2]):
+        raise NotImplementedError(f"{fname}: partial differential equations are not supported")
+    res = _orig_dsolve(a, ev, expr)
+    if not is_list(res):
+        return res
+    eqs = KL_equations(a[0])
+    funcs = list(a[1].args) if is_list(a[1]) else [a[1]]
+    for sol in res.args:
+        # rules for y[x] forms are turned into y -> Function[{x}, ...] for substitution into derivatives
+        subs = []
+        for r in sol.args:
+            lhs, rhs = r.args
+            if isinstance(lhs, Expr) and isinstance(lhs.head, str):
+                subs.append(rule(Symbol(lhs.head), Expr("Function", L(*lhs.args), rhs)))
+            else:
+                subs.append(r)
+        _check_ode_solution(eqs, L(*subs), ev, fname)
+    return res
+
+
+def KL_equations(e):
+    if is_list(e) or (isinstance(e, Expr) and e.head == "And"):
+        return [x for y in e.args for x in KL_equations(y)]
+    return [e]
+
+
+@kernel_override("DSolve", AREA,
+                 "batch 4: every solution returned by DSolve (ODEs and ODE systems in one variable, initial "
+                 "conditions, y[x] or y forms) is now substituted back into the equations and checked (symbolically, "
+                 "else numerically at sample points); PDEs raise. Free constants may be numbered differently from "
+                 "Wolfram (the solution family is the same)")
+def _b_dsolve(a, ev, expr):
+    return _dsolve_checked(a, ev, expr, "DSolve")
+
+
+@fn("DSolveValue", area=AREA, status="added",
+    notes="DSolveValue[eqns, y[x], x] gives the solution value, DSolveValue[eqns, y, x] a pure function, "
+          "DSolveValue[eqns, expr, x] the value of expr; several solutions give a list; checked like DSolve")
+def _dsolvevalue(eqs, target, x):
+    from ..evaluate import evaluate
+    ev = lambda e: evaluate(e, 1)   # noqa: E731
+    if isinstance(target, Symbol) or (isinstance(target, Expr) and isinstance(target.head, str)
+                                      and len(target.args) == 1 and target.args[0] == x):
+        unknown = target
+    else:
+        heads = sorted({e.head for e in _applied(eqs) if isinstance(e.head, str)})
+        if len(heads) != 1:
+            raise ValueError("DSolveValue: cannot identify the unknown function")
+        unknown = Symbol(heads[0])
+    res = _dsolve_checked([eqs, unknown, x], ev, Expr("DSolve", eqs, unknown, x), "DSolveValue")
+    if not is_list(res):
+        raise Unevaluated()
+    vals = [ev(Expr("ReplaceAll", target, sol)) for sol in res.args]
+    return vals[0] if len(vals) == 1 else L(*vals)
+
+
+def _applied(e):
+    outl = []
+    if isinstance(e, Expr):
+        if isinstance(e.head, str) and e.head not in ("List", "Equal", "Plus", "Times", "Power", "And") and \
+                len(e.args) == 1 and isinstance(e.args[0], Symbol):
+            outl.append(e)
+        for a in e.args:
+            outl.extend(_applied(a))
+    return outl
+
+
+@fn("ImplicitD", area=AREA, status="added",
+    notes="ImplicitD[f == g, y, x] = dy/dx for y defined implicitly (ImplicitD[x^2 + y^2 == 1, y, x] -> -x/y), "
+          "ImplicitD[eqn, y, {x, n}] higher derivatives (expressed in x and y), ImplicitD[{eqns}, {y1, y2}, x] "
+          "for systems")
+def _implicitd(eqn, ys, xspec):
+    if is_list(xspec):
+        if len(xspec.args) != 2:
+            raise ValueError("ImplicitD: give {x, n}")
+        x, n = xspec.args[0], nonneg_int(xspec.args[1], "ImplicitD", "order")
+    else:
+        x, n = xspec, 1
+    xv = variable(x, "ImplicitD")
+    eq_list = list(eqn.args) if is_list(eqn) else [eqn]
+    y_list = list(ys.args) if is_list(ys) else [ys]
+    if not all(isinstance(y, Symbol) for y in y_list) or len(eq_list) != len(y_list):
+        raise ValueError("ImplicitD: give one equation per dependent variable")
+    yv = [sp.Symbol(y.name) for y in y_list]
+    funcs = {y: sp.Function(y.name)(xv) for y in yv}
+    exprs = []
+    for e in eq_list:
+        if not (isinstance(e, Expr) and e.head == "Equal" and len(e.args) == 2):
+            raise ValueError("ImplicitD: expected equations")
+        exprs.append((sym(e.args[0], "ImplicitD") - sym(e.args[1], "ImplicitD")).xreplace(funcs))
+    derivs = []
+    current = list(exprs)
+    for order in range(1, n + 1):
+        unknowns = [sp.Derivative(funcs[y], (xv, order)) for y in yv]
+        current = [sp.diff(c, xv) for c in (exprs if order == 1 else current)]
+        syms_ = [sp.Dummy(f"d{i}") for i in range(len(yv))]
+        eqs = [c.xreplace(dict(zip(unknowns, syms_))) for c in current]
+        for k in range(len(derivs) - 1, -1, -1):        # highest known order first
+            eqs = [e.xreplace({sp.Derivative(funcs[y], (xv, k + 1)) if k else sp.Derivative(funcs[y], xv): val
+                               for y, val in zip(yv, derivs[k])}) for e in eqs]
+        eqs = [sp.expand(e) for e in eqs]
+        sol = sp.solve(eqs, syms_, dict=True)
+        if len(sol) != 1:
+            raise NotImplementedError("ImplicitD: cannot solve for the derivative")
+        derivs.append([sp.simplify(sol[0][s_]) for s_ in syms_])
+    res = [sp.simplify(v.xreplace({F: y for y, F in funcs.items()})) for v in derivs[-1]]
+    return out(res[0]) if not is_list(ys) else L(*(out(r) for r in res))
