@@ -336,7 +336,66 @@ NUMBER_THEORY = [
     ("LegendreP[2, 1, x]", "-3 x Sqrt[1 - x^2]"), ("LegendreP[3, x]", "-3 x/2 + 5 x^3/2"),
 ]
 
-CASES = NUMERICS + SPECIAL + NUMBER_THEORY
+NUMCALC = [
+    # NIntegrate (Wolfram reference page values; mpmath references)
+    ("NIntegrate[Sin[Sin[x]], {x, 0, 2}]", Near(1.24706, 1e-5)), ("NIntegrate[x^x, {x, 1, 5}]", Near(1241.03, 1e-5)),
+    ("NIntegrate[Sin[x], {x, 0, Pi}]", Near(2.0)), ("NIntegrate[Exp[-x^2], {x, -Infinity, Infinity}]", Near(1.7724538509055159)),
+    ("NIntegrate[1/Sqrt[x], {x, 0, 1}]", Near(2.0, 1e-10)), ("NIntegrate[x y, {x, 0, 1}, {y, 0, x}]", Near(0.125)),
+    ("NIntegrate[1/Sqrt[Abs[x]], {x, -1, 0, 1}]", Near(4.0, 1e-10)),
+    ("NIntegrate[Exp[I x], {x, 0, 1}]", Near(complex(mp.sin(1)) + 1j * complex(1 - mp.cos(1)))),
+    ("NIntegrate[Exp[-x^2], {x, 0, 1}, WorkingPrecision -> 30]", HP(lambda: mp.sqrt(mp.pi) / 2 * mp.erf(1), 28)),
+    ("NIntegrate[Exp[-x] Log[x], {x, 0, Infinity}]", Near(-0.5772156649015329, 1e-10)),
+    ("NIntegrate[1/x, {x, 0, 1}]", Raises()), ("MachineNumberQ[NIntegrate[x^2, {x, 0, 1}]]", True),
+    ("NIntegrate[x^2, {x, 0, 1}, Method -> \"GaussKronrod\"]", Near(1 / 3)),
+    # NSum / NProduct
+    ("NSum[1/n^2, {n, 1, Infinity}]", Near(1.6449340668482264)), ("NSum[(-1)^n/n, {n, 1, Infinity}]", Near(-0.6931471805599453)),
+    ("NSum[1/n^3, {n, 1, Infinity}, WorkingPrecision -> 30]", HP(lambda: mp.zeta(3), 28)),
+    ("NSum[1/n^2, {n, 1, Infinity, 2}]", Near(1.2337005501361697)), ("NSum[k, {k, 1, 100}]", Near(5050.0)),
+    ("NSum[1/(i^2 j^2), {i, 1, Infinity}, {j, 1, 3}]", Near(float(mp.zeta(2) * (1 + mp.mpf(1) / 4 + mp.mpf(1) / 9)), 1e-9)),
+    ("NSum[1/n, {n, 1, Infinity}]", Raises()),
+    ("NProduct[1 - 1/n^2, {n, 2, Infinity}]", Near(0.5, 1e-10)), ("NProduct[k, {k, 1, 10}]", Near(3628800.0)),
+    ("NProduct[1 + 1/n^2, {n, 1, Infinity}]", Near(float(mp.sinh(mp.pi) / mp.pi), 1e-9)),
+    ("NProduct[1 + 1/2^k, {k, 1, Infinity}, WorkingPrecision -> 25]", HP(lambda: mp.nprod(lambda k: 1 + mp.mpf(2) ** -k, [1, mp.inf]), 20)),
+    # NSolve / NRoots
+    ("NSolve[x^5 - 2 x + 3 == 0, x]", Pred(lambda g: len(g.args) == 5 and abs(complex(g.args[0].args[0].args[1]) + 1.42361) < 1e-5, "5 roots, first -1.42361")),
+    ("NSolve[x^5 - 2 x + 3 == 0, x, Reals]", Pred(lambda g: len(g.args) == 1 and abs(g.args[0].args[0].args[1] + 1.4236058485523317) < 1e-12, "{{x -> -1.42361}}")),
+    ("NSolve[x^3 - 2 x + 1 == 0, x]", "{{x -> -1.618033988749895}, {x -> 0.6180339887498949}, {x -> 1.}}"),
+    ("Length[NSolve[x^2 == 0, x]]", "2"), ("NSolve[x^4 == 1, x, Reals]", "{{x -> -1.}, {x -> 1.}}"),
+    ("Length[NSolve[{x^2 + y^3 == 1, 2 x + 3 y == 4}, {x, y}]]", "3"),
+    ("NSolve[{x^2 + y^3 == 1, 2 x + 3 y == 4}, {x, y}, Reals]", Pred(lambda g: len(g.args) == 1 and abs(g.args[0].args[0].args[1] - 7.93641) < 1e-5, "x -> 7.93641")),
+    ("NSolve[x^2 - 2 == 0, x, WorkingPrecision -> 30]", Pred(lambda g: HP(mp.sqrt(2), 28).f(g.args[1].args[0].args[1]), "Sqrt[2] to 30 digits")),
+    ("NSolve[Sin[x] == 0, x]", Raises()),
+    ("NRoots[x^3 - 1 == 0, x]", Pred(lambda g: g.head == "Or" and len(g.args) == 3, "three roots")),
+    ("NRoots[x^2 - 3 x + 2 == 0, x]", "x == 1. || x == 2."), ("NRoots[x - 5 == 0, x]", "x == 5."), ("NRoots[Sin[x] == 0, x]", Raises()),
+    # FindRoot
+    ("FindRoot[Sin[x] + Exp[x], {x, 0}]", "{x -> -0.5885327439818611}"),
+    ("FindRoot[Cos[x] == x, {x, 1}, WorkingPrecision -> 30]", Pred(lambda g: HP(mp.findroot(lambda t: mp.cos(t) - t, 1), 28).f(g.args[0].args[1]), "30 digits")),
+    ("FindRoot[{x^2 + y^2 == 1, y == x^3}, {{x, 1}, {y, 1}}]", Pred(lambda g: abs(g.args[0].args[1] - 0.826031357654187) < 1e-12, "x -> 0.826031")),
+    ("FindRoot[x^2 + 1, {x, I}]", Pred(lambda g: abs(complex(to_complex(g.args[0].args[1])) - 1j) < 1e-12, "x -> I")),
+    ("FindRoot[Cos[x] - x, {x, 0, 1}]", Pred(lambda g: abs(g.args[0].args[1] - 0.7390851332151607) < 1e-12, "secant")),
+    ("FindRoot[x^2 + 1, {x, 1}]", Raises()),
+    # FindMaximum / NMinimize / NMaximize
+    ("FindMaximum[Sin[x], {x, 1}]", Pred(lambda g: abs(g.args[0] - 1) < 1e-12 and abs(g.args[1].args[0].args[1] - 1.5707963267948966) < 1e-7, "{1., {x -> 1.5708}}")),
+    ("FindMaximum[-(x - 2)^2 + 3, {x, 0}]", Pred(lambda g: abs(g.args[0] - 3) < 1e-12, "3")),
+    ("FindMaximum[x Exp[-x^2 - y^2], {{x, 1}, {y, 1}}]", Pred(lambda g: abs(g.args[0] - float(1 / mp.sqrt(2 * mp.e))) < 1e-10, "1/Sqrt[2 E]")),
+    ("NMinimize[x^4 - 3 x^2 - x, x]", Pred(lambda g: abs(g.args[0] + 3.513905038934781) < 1e-9, "-3.51391")),
+    ("NMinimize[{x^2 + y^2, x + y >= 2}, {x, y}]", Pred(lambda g: abs(g.args[0] - 2) < 1e-8, "2")),
+    ("NMinimize[{(x - 3)^2, 0 <= x <= 2}, x]", Pred(lambda g: abs(g.args[0] - 1) < 1e-8, "1 at x = 2")),
+    ("NMinimize[x, x]", Raises()), ("NMinimize[{x, Element[x, Integers]}, x]", Raises()),
+    ("NMaximize[{x + y, x^2 + y^2 <= 1}, {x, y}]", Pred(lambda g: abs(g.args[0] - 2 ** 0.5) < 1e-8, "Sqrt[2]")),
+    ("NMaximize[Sin[x] Exp[-x^2], x]", Pred(lambda g: abs(g.args[0] - 0.39665) < 1e-4, "0.39665")),
+    ("NMaximize[{x y, x + y == 4}, {x, y}]", Pred(lambda g: abs(g.args[0] - 4) < 1e-8, "4")),
+    # Fit / FindFit
+    ("Coefficient[Fit[{{0, 1}, {1, 0}, {3, 2}, {5, 4}}, {1, x}, x], x]", Near(0.6949152542372882, 1e-10)),
+    ("Fit[{{0, 1}, {1, 0}, {3, 2}, {5, 4}}, {1, x}, x] /. x -> 0", Near(0.18644067796610184, 1e-10)),
+    ("Chop[Fit[{1, 4, 9, 16}, {1, x, x^2}, x], 10^-10]", "1. x^2"),
+    ("Chop[Fit[{{0, 0, 1}, {1, 0, 3}, {0, 1, 4}, {1, 1, 6}}, {1, x, y}, {x, y}] - (1. + 2. x + 3. y), 10^-10]", "0"),
+    ("a /. FindFit[{{0, 1.}, {1, 2.7}, {2, 7.4}, {3, 20.1}}, a Exp[b x], {a, b}, x]", Near(0.9983168, 1e-6)),
+    ("w /. FindFit[Table[{k/4, 3 Sin[k/2]}, {k, 0, 12}], a Sin[w x], {a, {w, 1.8}}, x]", Near(2.0, 1e-8)),
+    ("FindFit[{{1, 2}, {2, 4}, {3, 6}}, {a x, a > 0}, {a}, x]", Raises()),
+]
+
+CASES = NUMERICS + SPECIAL + NUMBER_THEORY + NUMCALC
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
