@@ -14,12 +14,20 @@ def _vars(v, fname):
     return [variable(v, fname)]
 
 
-@fn("Simplify", area=AREA, status="verified",
-    notes="SymPy simplify; Simplify[e, assumptions] raises (assumptions are not supported)")
+@fn("Simplify", area=AREA, status="fixed",
+    notes="SymPy simplify; Simplify[e, assum] and Simplify[e, Assumptions -> a] (default $Assumptions) refine "
+          "with the assumptions before and after simplifying (Simplify[Sqrt[x^2], x > 0] -> x); legacy rejected "
+          "assumptions")
 def _simplify(e, *assum):
-    if assum:
-        raise NotImplementedError("Simplify: assumptions are not supported")
-    return R(sp.simplify(sym(e, "Simplify")))
+    from .assume import split_option, effective, to_sym, from_sym
+    rest, opt = split_option(assum, "Simplify")
+    if len(rest) > 1:
+        raise ValueError("Simplify[expr, assum] takes one assumption argument")
+    A = effective(rest, opt, "Simplify")
+    v = A.refine(to_sym(e, "Simplify"))
+    if isinstance(v, sp.Basic) and not isinstance(v, sp.logic.boolalg.BooleanAtom):
+        v = A.refine(sp.simplify(v))
+    return from_sym(A.unapply(v))
 
 
 @fn("Expand", area=AREA, status="fixed",
@@ -86,10 +94,13 @@ def _coefflist(e, v):
     return _coeff_list(p, gens)
 
 
-error("Degree", AREA, "in the Wolfram Language Degree is the constant Pi/180, not a function; "
-      "use Exponent[p, x] for the degree of a polynomial.",
-      notes="legacy Degree[p, x] returned the polynomial degree, conflicting with Wolfram's constant Degree; "
-            "now raises and points to Exponent (promoted)")
+@fn("Degree", area=AREA, status="fixed",
+    notes="Wolfram constant Degree = Pi/180 (30 Degree -> Pi/6, Sin[30 Degree] -> 1/2, N[Degree] -> 0.0174533); "
+          "Degree[...] used as a function raises ValueError pointing to Exponent; legacy Degree[p, x] returned the "
+          "polynomial degree")
+def _degree_call(*args):
+    raise ValueError("Degree is the constant Pi/180, not a function; use Exponent[p, x] for the degree of a "
+                     "polynomial")
 
 
 @fn("Exponent", area=AREA, status="promoted", notes="Exponent[p, x]: highest power of x (Exponent[0, x] = -Infinity)")
@@ -222,7 +233,4 @@ def _ratdenom(e):
     return R(sp.radsimp(sym(e, "RationalizeDenominator")))
 
 
-error("Refine", AREA, "assumptions are not supported by MikoshiLang.")
-error("Assumptions", AREA, "MikoshiLang symbols carry no assumptions, so Assumptions[expr] cannot report any "
-      "(Wolfram's $Assumptions mechanism is not implemented).",
-      notes="legacy always returned {} because converted symbols never carry assumptions; now raises")
+# Refine, Assuming and the Assumptions option live in assume.py

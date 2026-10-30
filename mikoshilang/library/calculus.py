@@ -22,18 +22,45 @@ def _int_spec(spec, fname):
     raise ValueError(f"{fname}: each variable specification must be x or {{x, a, b}}")
 
 
-@fn("Integrate", area=AREA, status="verified",
+@fn("Integrate", area=AREA, status="fixed",
     notes="indefinite (no constant) and definite integrals; several variables as Wolfram (the last "
-          "specification is innermost, so its bounds may depend on earlier variables); indeterminate results "
-          "raise; integrals SymPy cannot do stay as Integrate[...]")
+          "specification is innermost, so its bounds may depend on earlier variables); Assumptions -> a option "
+          "(default $Assumptions). Results that hold only under a condition are returned as Wolfram "
+          "ConditionalExpression[value, cond] (Integrate[Exp[-a x], {x, 0, Infinity}] -> "
+          "ConditionalExpression[1/a, Abs[Arg[a]] < Pi/2]); under assumptions that imply the condition the plain "
+          "value is returned, and assumptions that contradict it raise (divergent). Previously such integrals hit "
+          "the recursion limit. Indeterminate results raise; integrals SymPy cannot do stay as Integrate[...]")
 def _integrate(f, *specs):
+    from .assume import split_option, effective
+    specs, opt = split_option(specs, "Integrate")
     if not specs:
         raise ValueError("Integrate needs at least one variable specification")
-    v = sym(f, "Integrate")
+    A = effective([], opt, "Integrate")
+    v = A.apply(sym(f, "Integrate"))
+    conds = []
     for spec in reversed(specs):            # Wolfram: Integrate[f, x, y] integrates over y first
-        s = _int_spec(spec, "Integrate")
-        v = sp.integrate(v, s)
+        s_ = _int_spec(spec, "Integrate")
+        s_ = A.apply(s_) if isinstance(s_, sp.Basic) else tuple(A.apply(t) for t in s_)
+        v = sp.integrate(v, s_)
+        if isinstance(v, sp.Piecewise):
+            branches = [(e, c) for e, c in v.args if c is not sp.true]
+            default = [e for e, c in v.args if c is sp.true]
+            if default and default[0].has(sp.Integral) and len(branches) == 1:
+                e, c = branches[0]
+                c = A.refine(c)
+                if c is sp.false:
+                    raise ValueError("Integrate: the integral does not converge under the given assumptions")
+                if c is not sp.true:
+                    conds.append(c)
+                v = e
     v = _check_result(v, "Integrate")
+    if A.subs and isinstance(v, sp.Basic):
+        v = A.refine(sp.simplify(v)) if v.has(sp.Abs, sp.sign, sp.arg, sp.Piecewise) else v
+    v = A.unapply(v)
+    if conds:
+        from .assume import from_sym
+        cond = A.unapply(sp.And(*conds))
+        return Expr("ConditionalExpression", numeric_out(v, f, *specs), from_sym(cond))
     return numeric_out(v, f, *specs)
 
 
@@ -608,7 +635,83 @@ def _separable(eq, y, x):
     return _constants_to_c(L(*out))
 
 
-error("LaplaceODESolve", AREA, "Laplace-transform ODE solving is not supported; use DSolve.",
-      notes="legacy applied laplace_transform to an equation containing y(t) and solved for an unrelated "
-            "symbol Y(s), so it could not return correct solutions; now raises")
+@fn("LaplaceODESolve", area=AREA, status="fixed",
+    notes="MikoshiLang helper (not a Wolfram built-in): LaplaceODESolve[eqn | {eqn, y[0] == a, y'[0] == b, ...}, "
+          "y, t] solves a linear constant-coefficient ODE by the Laplace transform and returns {{y[t] -> sol}} like "
+          "DSolve, valid for t > 0. Initial values that are not given appear as y[0], y'[0], ... (Laplace "
+          "form) rather than C[k]. Every solution is substituted back into the ODE and the initial conditions "
+          "before it is returned. Non-linear or variable-coefficient equations raise (use DSolve). Legacy "
+          "transformed the raw equation and solved for an unrelated symbol, so it never returned a solution")
+def _laplace_ode(eqs, y, t):
+    from ..kernel import substitute
+    fname = "LaplaceODESolve"
+    if not isinstance(y, Symbol):
+        raise ValueError(f"{fname}: the second argument must be the function name y (not y[t])")
+    tv = variable(t, fname)
+    items = list(eqs.args) if is_list(eqs) else [eqs]
+    yf = sp.Function(y.name)
+    ode, ics = None, {}
+    for it in items:
+        v = sym(it, fname)
+        if not isinstance(v, sp.Equality):
+            raise ValueError(f"{fname}: expected equations (lhs == rhs)")
+        lhs = v.lhs
+        if isinstance(lhs, sp.Subs) and isinstance(lhs.expr, sp.Derivative) and lhs.point == (0,):
+            ics[lhs.expr.derivative_count] = v.rhs
+        elif lhs == yf(0):
+            ics[0] = v.rhs
+        elif v.has(tv):
+            if ode is not None:
+                raise ValueError(f"{fname}: only one differential equation is supported")
+            ode = v.lhs - v.rhs
+        else:
+            raise ValueError(f"{fname}: initial conditions must have the form y[0] == a or y'[0] == b, ...")
+    if ode is None:
+        raise ValueError(f"{fname}: no differential equation in {tv}")
+    derivs = [d for d in ode.atoms(sp.Derivative) if d.expr == yf(tv)]
+    order = max([d.derivative_count for d in derivs] + [0])
+    if order == 0:
+        raise ValueError(f"{fname}: the equation contains no derivative of {y.name}")
+    D = [sp.Dummy(f"d{k}") for k in range(order + 1)]
+    rep = {yf(tv).diff(tv, k) if k else yf(tv): D[k] for k in range(order + 1)}
+    e = sp.expand(ode.subs({k: v for k, v in sorted(rep.items(), key=lambda kv: -D.index(kv[1]))}))
+    if e.has(yf):
+        raise ValueError(f"{fname}: {y.name} must appear only as {y.name}[{tv}] and its derivatives")
+    coeffs = [e.coeff(D[k]) for k in range(order + 1)]
+    forcing = sp.expand(e - sum(c * d for c, d in zip(coeffs, D)))
+    if any(c.has(tv) or c.free_symbols & set(D) for c in coeffs) or forcing.free_symbols & set(D):
+        raise ValueError(f"{fname}: only linear equations with constant coefficients can be solved by Laplace "
+                         "transform; use DSolve")
+    if sp.Poly(e - forcing, *D).total_degree() != 1:
+        raise ValueError(f"{fname}: the equation is not linear in {y.name}")
+    s_ = sp.Dummy("s")
+    marks = [sp.Symbol(f"LaplaceIC${k}") for k in range(order)]
+    c = [ics.get(k, marks[k]) for k in range(order)]
+    G = sp.laplace_transform(forcing, tv, s_, noconds=True) if forcing != 0 else sp.Integer(0)
+    if isinstance(G, sp.LaplaceTransform) or (isinstance(G, sp.Basic) and G.has(sp.LaplaceTransform)):
+        raise NotImplementedError(f"{fname}: SymPy cannot transform the forcing term {forcing}")
+    Yv = sp.Symbol("Y")
+    lap = sum(a * (s_ ** k * Yv - sum(s_ ** (k - 1 - j) * c[j] for j in range(k))) for k, a in enumerate(coeffs)) + G
+    Ys = sp.solve(lap, Yv)
+    if len(Ys) != 1:
+        raise ValueError(f"{fname}: could not solve the transformed equation")
+    tp = sp.Symbol(tv.name, positive=True)
+    sol = sp.inverse_laplace_transform(sp.apart(sp.together(Ys[0]), s_), s_, tp)
+    if sol.has(sp.InverseLaplaceTransform):
+        raise NotImplementedError(f"{fname}: SymPy could not invert the transform")
+    sol = sp.simplify(sol.subs(sp.Heaviside(tp), 1)).subs(tp, tv)
+    # verify: the ODE residual and the initial conditions
+    resid = sp.simplify(ode.subs(yf(tv), sol).doit())
+    ok = resid == 0
+    for k in range(order):
+        ok = ok and sp.simplify(sp.limit(sol.diff(tv, k), tv, 0, "+") - c[k]) == 0
+    if not ok:
+        raise ArithmeticError(f"{fname}: the Laplace-transform solution failed verification")
+    out = R(sol)
+    back = {m.name: (Expr(y.name, 0) if k == 0 else Expr(Expr(Expr("Derivative", k), y), 0))
+            for k, m in enumerate(marks)}
+    out = substitute(out, back)
+    return L(L(rule(Expr(y.name, Symbol(tv.name)), out)))
+
+
 record("Table", AREA, "kernel", "Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed")
