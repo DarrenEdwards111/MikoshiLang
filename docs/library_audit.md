@@ -90,23 +90,36 @@ After the fixes: **50/50 pass** (run twice). These tests are excluded from defau
 
 Batch 1 adds Wolfram built-ins for lists, strings, string patterns and associations, plus the language objects they need (operator forms, `Key`, `Missing`, `Span`, `UpTo`, `Repeated`, `Optional`, ...). These heads have status `added`. Kernel builtins whose semantics were extended to match Wolfram are recorded as `fixed`. Each has at least 3 differential cases in `tests/library/test_wolfram_batch1.py`, checked against the output examples on the Wolfram reference pages. Overall progress towards the documented Wolfram built-ins is tracked in `docs/wolfram_coverage_roadmap.md`.
 
+## Wolfram batch 2
+
+Batch 2 adds numerics and special functions. Areas `numerics (batch 2)`, `special functions (batch 2)` and `number theory (batch 2)` cover:
+
+- the precision model: number marks `x`p`, `x``a` and `*^`; `Precision`, `Accuracy`, `SetPrecision` and `SetAccuracy`; and precision propagation. A result has the lowest precision among its inputs, and a machine number among the inputs makes the result a machine number.
+- `Rationalize`, `Chop`, `RealDigits` and `FromDigits`.
+- rounding with steps.
+- mpmath-backed special functions, which are exact at special values and arbitrary precision under `N`.
+- numerical calculus: `NIntegrate`, `NSum`, `NProduct`, `NSolve`, `NRoots`, `FindRoot`, `NMinimize`, `NMaximize`, `Fit` and `FindFit`.
+- `Interpolation` and `NDSolve`, which return `InterpolatingFunction` objects.
+
+Existing heads whose semantics were corrected are recorded as `fixed`. Each head has at least 3 differential cases in `tests/library/test_wolfram_batch2.py`. The cases are checked against values from the Wolfram reference pages, or against mpmath/SciPy computed at higher precision.
+
 
 ## Status counts
 
 | Status | Heads | Meaning |
 |---|---|---|
-| verified | 129 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
-| fixed | 476 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
-| promoted | 32 | was quarantined; now properly implemented and tested |
-| added | 209 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| verified | 123 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
+| fixed | 483 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
+| promoted | 29 | was quarantined; now properly implemented and tested |
+| added | 310 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 34 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 0 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **880** | 620 pre-audit inventory heads, all with a status, plus 260 promoted/aliased heads |
+| **total reviewed** | **979** | 620 pre-audit inventory heads, all with a status, plus 359 promoted/aliased heads |
 
-Remaining unreviewed quarantined names: **5347** (all raise NotImplementedError; see below).
+Remaining unreviewed quarantined names: **5329** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **3202**.
+Differential test cases in tests/library: **3810**.
 
 
 ## By area
@@ -116,9 +129,9 @@ Differential test cases in tests/library: **3202**.
 | algebra | 12 | 12 | 2 | 0 | 0 | 0 | 0 |
 | associations (batch 1) | 0 | 0 | 0 | 25 | 0 | 0 | 0 |
 | calculus | 9 | 24 | 3 | 0 | 1 | 0 | 0 |
-| combinatorics | 5 | 13 | 6 | 0 | 0 | 0 | 0 |
+| combinatorics | 5 | 12 | 6 | 0 | 0 | 0 | 0 |
 | constants | 0 | 33 | 0 | 0 | 0 | 0 | 0 |
-| elementary | 33 | 7 | 1 | 0 | 0 | 0 | 0 |
+| elementary | 28 | 12 | 1 | 1 | 0 | 0 | 0 |
 | finance | 0 | 20 | 0 | 0 | 0 | 0 | 0 |
 | geometry | 0 | 29 | 0 | 0 | 0 | 0 | 0 |
 | graphs | 3 | 14 | 0 | 0 | 0 | 0 | 0 |
@@ -129,11 +142,14 @@ Differential test cases in tests/library: **3202**.
 | lists and sets | 4 | 14 | 2 | 0 | 0 | 0 | 0 |
 | logic | 6 | 7 | 0 | 0 | 0 | 0 | 0 |
 | ml | 4 | 0 | 0 | 0 | 0 | 0 | 0 |
-| number theory | 3 | 49 | 4 | 0 | 0 | 0 | 0 |
+| number theory | 3 | 51 | 3 | 0 | 0 | 0 | 0 |
+| number theory (batch 2) | 0 | 0 | 0 | 4 | 0 | 0 | 0 |
 | numerics | 4 | 5 | 0 | 0 | 0 | 0 | 0 |
+| numerics (batch 2) | 0 | 0 | 0 | 44 | 0 | 0 | 0 |
 | physics | 0 | 48 | 0 | 0 | 0 | 0 | 0 |
 | plots | 0 | 14 | 0 | 0 | 0 | 0 | 0 |
-| special functions | 12 | 30 | 7 | 0 | 0 | 0 | 0 |
+| special functions | 11 | 28 | 5 | 0 | 0 | 0 | 0 |
+| special functions (batch 2) | 0 | 3 | 0 | 52 | 0 | 0 | 0 |
 | statistics | 9 | 38 | 4 | 0 | 0 | 0 | 0 |
 | strings (batch 1) | 0 | 7 | 0 | 58 | 0 | 0 | 0 |
 | strings and dates | 12 | 23 | 0 | 0 | 0 | 0 | 0 |
@@ -149,8 +165,8 @@ Cases = number of differential test cases in which the head occurs.
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `Assuming` | promoted | 4 | Assuming[assum, expr] evaluates expr with $Assumptions = $Assumptions && assum (held arguments), restoring $Assumptions afterwards, as in Wolfram |
-| `Assumptions` | fixed | 13 | Wolfram option name: Assumptions -> cond is accepted by Simplify, Refine and Integrate (default $Assumptions, which is True unless set or changed by Assuming). Assumptions[...] used as a function raises ValueError (legacy Assumptions[expr] always returned {}) |
-| `Coefficient` | fixed | 5 | legacy used Poly.nth, failing for non-polynomial expressions and negative powers; now Coefficient[e, x] and Coefficient[e, x, n] on the expanded expression (n may be 0 or negative) |
+| `Assumptions` | fixed | 9 | Wolfram option name: Assumptions -> cond is accepted by Simplify, Refine and Integrate (default $Assumptions, which is True unless set or changed by Assuming). Assumptions[...] used as a function raises ValueError (legacy Assumptions[expr] always returned {}) |
+| `Coefficient` | fixed | 6 | legacy used Poly.nth, failing for non-polynomial expressions and negative powers; now Coefficient[e, x] and Coefficient[e, x, n] on the expanded expression (n may be 0 or negative) |
 | `CoefficientList` | fixed | 3 | returned coefficients from the highest power down; Wolfram lists them from x^0 upwards; nested lists for {x, y} |
 | `Collect` | verified | 3 | Collect[e, x] and Collect[e, {x, y}] |
 | `CompleteTheSquare` | fixed | 3 | a (x - h)^2 + k form (MikoshiLang); non-quadratics now raise instead of returning an Error expression |
@@ -242,7 +258,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
 | `Sum` | fixed | 9 | added {i, n}, {i, a, b, step} and {i, {values}} iterators and multiple iterators (first outermost); sums divergent to +-Infinity return that limit, other non-convergent sums stay unevaluated, indeterminate (nan) results raise |
-| `Table` | kernel | 3 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 8 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
@@ -261,7 +277,6 @@ Cases = number of differential test cases in which the head occurs.
 | `Factorial2` | promoted | 3 | Wolfram name for the double factorial |
 | `FibonacciSequence` | verified | 3 | first n Fibonacci numbers F0, F1, ... (MikoshiLang) |
 | `GeometricSequence` | fixed | 3 | first n terms a, a r, ...; exact for exact input (legacy converted to floats and rounded) |
-| `HarmonicNumber` | fixed | 4 | HarmonicNumber[n] and HarmonicNumber[n, r]; exact; symbolic n stays symbolic; legacy truncated reals |
 | `HookLengthFormula` | fixed | 5 | legacy subtracted the row index from each hook (wrong counts / ZeroDivisionError); now the number of standard Young tableaux of the shape |
 | `IntegerPartitions` | fixed | 4 | legacy returned the number of partitions; Wolfram IntegerPartitions lists them in reverse lexicographic order; supports [n], [n, k], [n, {k}], [n, {kmin, kmax}], [n, kspec, {s1, ...}] |
 | `Multinomial` | fixed | 4 | legacy Multinomial[n, {k...}] was not Wolfram's form; now Multinomial[n1, n2, ...] = (n1 + n2 + ...)!/(n1! n2! ...), exact for any exact arguments |
@@ -318,7 +333,7 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Abs` | verified | 20 | verified against SymPy/mpmath |
+| `Abs` | verified | 23 | verified against SymPy/mpmath |
 | `ArcCos` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCosh` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCot` | verified | 3 | verified against SymPy/mpmath |
@@ -328,34 +343,35 @@ Cases = number of differential test cases in which the head occurs.
 | `ArcSinh` | verified | 3 | verified against SymPy/mpmath |
 | `ArcTan` | fixed | 5 | ArcTan[x, y] was atan2(x, y); Wolfram's ArcTan[x, y] is the angle of the point (x, y), atan2(y, x) |
 | `ArcTanh` | verified | 3 | verified against SymPy/mpmath |
-| `Ceiling` | verified | 3 | verified against SymPy/mpmath |
+| `Ceiling` | fixed | 8 | Ceiling[x] and Ceiling[x, a] (a Ceiling[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `Conjugate` | verified | 3 | verified against SymPy/mpmath |
-| `Cos` | verified | 23 | verified against SymPy/mpmath |
+| `Cos` | verified | 26 | verified against SymPy/mpmath |
 | `Cosh` | verified | 4 | verified against SymPy/mpmath |
 | `Cot` | verified | 3 | verified against SymPy/mpmath |
 | `Coth` | verified | 3 | verified against SymPy/mpmath |
 | `Csc` | verified | 3 | verified against SymPy/mpmath |
 | `Csch` | verified | 3 | verified against SymPy/mpmath |
 | `CubeRoot` | fixed | 3 | returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2) |
-| `Exp` | verified | 31 | verified against SymPy/mpmath |
-| `Floor` | verified | 4 | verified against SymPy/mpmath |
+| `Exp` | verified | 43 | verified against SymPy/mpmath |
+| `Floor` | fixed | 14 | Floor[x] and Floor[x, a] (a Floor[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `ImaginaryPart` | verified | 3 | verified against SymPy/mpmath |
-| `Log` | fixed | 11 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
+| `Log` | fixed | 12 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
 | `Log10` | verified | 3 | log base 10; Log10[0] = -Infinity |
 | `Log2` | verified | 3 | log base 2; Log2[0] = -Infinity |
 | `Max` | fixed | 4 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
 | `Min` | fixed | 4 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
-| `Mod` | verified | 11 | Mod[m, n] has the sign of n (Wolfram); Mod[m, 0] raises |
-| `Quotient` | verified | 4 | Quotient[m, n] = Floor[m/n] |
+| `Mod` | fixed | 24 | Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset form and complex arguments were missing |
+| `Quotient` | fixed | 11 | Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = Floor[(m - d)/n]; complex arguments use Round |
+| `QuotientRemainder` | added | 4 | {Quotient[m, n], Mod[m, n]} |
 | `RealPart` | verified | 3 | verified against SymPy/mpmath |
 | `Root` | fixed | 36 | Wolfram Root[f, k]: the k-th root of the polynomial f[x] (f a pure function), ordered as Wolfram: real roots ascending, then complex roots by real part, then \|Im\|, conjugate pairs adjacent (negative imaginary part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. Legacy Root[a, n] meant a^(1/n) (now Surd/Power) |
-| `Round` | fixed | 7 | Round[x] was not implemented and Round[x, a] returned floats (Round[7, 5] = 5.0); now Wolfram half-to-even rounding, exact for exact input |
+| `Round` | fixed | 16 | Round[x] was not implemented and Round[x, a] returned floats (Round[7, 5] = 5.0); now Wolfram half-to-even rounding, exact for exact input |
 | `Sec` | verified | 3 | verified against SymPy/mpmath |
 | `Sech` | verified | 3 | verified against SymPy/mpmath |
-| `Sign` | verified | 4 | verified against SymPy/mpmath |
-| `Sin` | verified | 35 | verified against SymPy/mpmath |
+| `Sign` | fixed | 9 | Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals |
+| `Sin` | verified | 44 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
-| `Sqrt` | verified | 26 | verified against SymPy/mpmath |
+| `Sqrt` | verified | 33 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
 | `Tan` | verified | 4 | verified against SymPy/mpmath |
 | `Tanh` | verified | 3 | verified against SymPy/mpmath |
@@ -463,14 +479,14 @@ Cases = number of differential test cases in which the head occurs.
 | `Drop` | fixed | 5 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Equal` | fixed | 6 | kernel builtin extended in batch 1: more than two arguments chain |
 | `EvenQ` | kernel | 24 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `First` | fixed | 9 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
+| `First` | fixed | 15 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
 | `Flatten` | fixed | 5 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
 | `FreeQ` | fixed | 4 | kernel builtin extended in batch 1: level specifications, Heads -> False |
 | `IntegerQ` | kernel | 6 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Inverse` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Join` | fixed | 5 | kernel builtin extended in batch 1: Join[..., n] at level n; associations merge (later values win) |
-| `Last` | fixed | 14 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
-| `Length` | fixed | 20 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
+| `Last` | fixed | 15 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
+| `Length` | fixed | 25 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
 | `Less` | fixed | 3 | kernel builtin extended in batch 1: more than two arguments chain |
 | `Limit` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `List` | fixed | 4 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
@@ -480,7 +496,7 @@ Cases = number of differential test cases in which the head occurs.
 | `MapIndexed` | fixed | 3 | kernel builtin extended in batch 1: level specifications; associations index by Key[k] |
 | `MemberQ` | fixed | 5 | kernel builtin extended in batch 1: level specifications |
 | `Most` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
-| `N` | kernel | 54 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `N` | kernel | 136 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Negative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NonNegative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Normal` | fixed | 3 | kernel builtin extended in batch 1: associations become rule lists at the first level only; Normal[expr, h] |
@@ -493,8 +509,8 @@ Cases = number of differential test cases in which the head occurs.
 | `Positive` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Power` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Prepend` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule; any head |
-| `PrimeQ` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Range` | fixed | 8 | kernel builtin extended in batch 1: rational, real and symbolic steps |
+| `PrimeQ` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Range` | fixed | 9 | kernel builtin extended in batch 1: rational, real and symbolic steps |
 | `ReplaceAll` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Rest` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
 | `Reverse` | fixed | 6 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
@@ -631,7 +647,7 @@ Cases = number of differential test cases in which the head occurs.
 | `DeleteDuplicatesBy` | added | 3 | keeps the first element for each distinct (SameQ) value of f |
 | `DeleteElements` | added | 3 | DeleteElements[list, elems] removes every occurrence of the elements; DeleteElements[list, n -> elems] at most n of each |
 | `Depth` | added | 4 | 1 for atoms, else 1 + the maximum depth of the elements (heads ignored; an association is one level) |
-| `Dimensions` | added | 7 | dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, Dimensions[{f[a], f[b]}] = {2}); Dimensions[expr, n] at most n levels |
+| `Dimensions` | added | 8 | dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, Dimensions[{f[a], f[b]}] = {2}); Dimensions[expr, n] at most n levels |
 | `DisjointQ` | added | 3 | the lists have no element in common |
 | `DuplicateFreeQ` | added | 3 | no two elements are SameQ (or equivalent under the given test) |
 | `Extract` | added | 3 | Extract[expr, pos], Extract[expr, {pos1, pos2, ...}] and Extract[expr, pos, h] |
@@ -729,7 +745,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SubsetQ` | fixed | 3 | SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse) |
 | `SymmetricDifference` | fixed | 3 | elements in exactly one of the two lists, canonical order (legacy sorted by string form) |
 | `Tally` | promoted | 4 | {{elem, count}, ...} in order of first appearance (SameQ); Tally[list, test] uses the first representative of each class |
-| `Union` | promoted | 5 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
+| `Union` | promoted | 7 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
 
 ### logic
 
@@ -772,7 +788,7 @@ Cases = number of differential test cases in which the head occurs.
 | `BernoulliNumber` | fixed | 3 | Bernoulli[1] returned +1/2 (SymPy >= 1.12 convention); Wolfram BernoulliB[1] = -1/2 |
 | `CarmichaelLambda` | fixed | 4 | CarmichaelLambda[-n] = CarmichaelLambda[n]; 0 raises; legacy truncated non-integer arguments with int(); now exact integers only |
 | `Catalan` | fixed | 5 | Wolfram constant Catalan = 0.915965594177219... (SymPy Catalan; N[Catalan, n] to any precision, Sum[(-1)^k/(2k+1)^2, {k, 0, Infinity}] -> Catalan); Catalan[...] used as a function raises ValueError pointing to CatalanNumber; legacy Catalan[n] gave Catalan numbers |
-| `CatalanNumber` | fixed | 3 | exact for any exact argument, symbolic n stays unevaluated; legacy truncated non-integer arguments with int(); now exact integers only |
+| `CatalanNumber` | fixed | 6 | exact for any exact argument, symbolic n stays unevaluated; legacy truncated non-integer arguments with int(); now exact integers only |
 | `ChineseRemainder` | fixed | 3 | smallest non-negative solution; non-coprime moduli handled; no solution leaves the call unevaluated (legacy returned an Error expression) |
 | `CollatzLength` | fixed | 4 | number of terms of CollatzSequence[n] (including n and 1); legacy looped forever for n <= 0 |
 | `CollatzSequence` | fixed | 3 | legacy looped forever for n <= 0; now n must be a positive integer |
@@ -790,8 +806,9 @@ Cases = number of differential test cases in which the head occurs.
 | `FactorInteger` | fixed | 4 | FactorInteger[1] returned {} (Wolfram {{1,1}}), 0 and rationals failed; now {{-1,1},...} for negatives, negative exponents for rationals |
 | `Fibonacci` | fixed | 4 | symbolic n raised TypeError (now unevaluated); negative n, real n and Fibonacci[n, x] added |
 | `FibonacciNumber` | fixed | 3 | MikoshiLang alias of Fibonacci |
-| `FromDigits` | fixed | 3 | now accepts digit strings (letters a-z = 10-35), symbolic digits and digits >= base as Wolfram; legacy silently used base 10 for invalid bases |
+| `FromDigits` | fixed | 8 | now accepts digit strings (letters a-z = 10-35), symbolic digits and digits >= base as Wolfram; legacy silently used base 10 for invalid bases |
 | `GCD` | fixed | 4 | now variadic, exact for rationals, GCD[] = 0; legacy truncated reals (GCD[2.5, 5] = 1) |
+| `HarmonicNumber` | fixed | 8 | HarmonicNumber[n] for rational n in closed form (HarmonicNumber[1/2] = 2 - 2 Log[2], legacy left it unevaluated); HarmonicNumber[n, r] |
 | `IntegerDigits` | fixed | 5 | legacy silently used base 10 for a non-integer base; now IntegerDigits[n], [n, b], [n, b, len] (digits of \|n\|, padded/truncated on the left) |
 | `IsPrime` | verified | 4 | MikoshiLang alias of PrimeQ (same kernel implementation) |
 | `JacobiSymbol` | fixed | 4 | m must be a positive odd integer (clear error otherwise); legacy truncated non-integer arguments with int(); now exact integers only |
@@ -800,17 +817,17 @@ Cases = number of differential test cases in which the head occurs.
 | `LCM` | fixed | 3 | now variadic, exact for rationals, LCM[] = 1; legacy truncated reals |
 | `LegendreSymbol` | fixed | 4 | p must be an odd prime (clear error otherwise); legacy truncated non-integer arguments with int(); now exact integers only |
 | `Lucas` | fixed | 3 | MikoshiLang alias of LucasL; negative and real n added; legacy truncated non-integer arguments with int(); now exact integers only |
-| `LucasL` | promoted | 3 | Lucas numbers L_n |
+| `LucasL` | fixed | 7 | LucasL[n, x] Lucas polynomials L_0 = 2, L_1 = x, L_n = x L_(n-1) + L_(n-2) (LucasL[3, x] = x^3 + 3 x); the 2-argument form was missing |
 | `ModularInverse` | fixed | 3 | raises a clear error when no inverse exists (legacy leaked a Python ValueError) |
-| `MoebiusMu` | fixed | 3 | MoebiusMu[-n] = MoebiusMu[n]; 0 raises |
-| `MultiplicativeOrder` | fixed | 3 | raises a clear error when gcd(k, n) != 1; legacy truncated non-integer arguments with int(); now exact integers only |
+| `MoebiusMu` | fixed | 4 | MoebiusMu[-n] = MoebiusMu[n]; 0 raises |
+| `MultiplicativeOrder` | fixed | 7 | raises a clear error when gcd(k, n) != 1; legacy truncated non-integer arguments with int(); now exact integers only |
 | `NextPrime` | fixed | 4 | legacy truncated reals and ignored negative primes; now NextPrime[x] is the smallest prime > x (primes include -2, -3, ... as in Wolfram) and NextPrime[x, k] the k-th |
-| `PowerMod` | fixed | 4 | negative exponents use the modular inverse and raise when it does not exist; rational exponents raise |
+| `PowerMod` | fixed | 9 | negative exponents use the modular inverse and raise when it does not exist; rational exponents raise |
 | `Prime` | fixed | 4 | Prime[n] for positive integers only; legacy truncated non-integer arguments with int(); now exact integers only |
 | `PrimeFactorization` | fixed | 3 | MikoshiLang alias of FactorInteger |
 | `PrimePi` | fixed | 4 | PrimePi[x] for real x counts primes <= x (legacy truncated with int(), wrong for negative floats) |
 | `PrimePowerQ` | fixed | 4 | True for p^k with k >= 1; False for 0, 1 and non-integers; negative integers raise (Gaussian/negative conventions not supported); legacy truncated reals |
-| `PrimitiveRoot` | fixed | 3 | smallest primitive root; legacy returned None (displayed as nothing) when none exists, now unevaluated like Wolfram |
+| `PrimitiveRoot` | fixed | 6 | smallest primitive root; legacy returned None (displayed as nothing) when none exists, now unevaluated like Wolfram |
 | `PrimitiveRootQ` | fixed | 3 | PrimitiveRootQ[a, n]: True when a generates the units mod n; False when gcd(a, n) != 1 (legacy raised a SymPy ValueError) |
 | `QuadraticResidues` | verified | 3 | sorted residues x^2 mod n including 0 (MikoshiLang function); n must be positive |
 | `Radical` | fixed | 3 | product of the distinct primes dividing n; Radical[0] raises; legacy truncated non-integer arguments with int(); now exact integers only |
@@ -818,6 +835,15 @@ Cases = number of differential test cases in which the head occurs.
 | `Stirling` | fixed | 3 | Stirling[n, k] = StirlingS2[n, k]; Stirling[n, k, 1] now gives the signed numbers like StirlingS1 |
 | `StirlingS1` | fixed | 4 | returned unsigned Stirling numbers (StirlingS1[3, 2] = 3); Wolfram uses signed numbers (-3) |
 | `StirlingS2` | fixed | 3 | Stirling numbers of the second kind; legacy truncated non-integer arguments with int(); now exact integers only |
+
+### number theory (batch 2)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `DivisorSum` | added | 5 | DivisorSum[n, form] = Sum of form[d] over the positive divisors d of n; DivisorSum[n, form, cond] keeps the divisors for which cond[d] is True |
+| `LiouvilleLambda` | added | 5 | Liouville function (-1)^Omega(n), Omega counting prime factors with multiplicity; LiouvilleLambda[1] = 1 |
+| `MangoldtLambda` | added | 5 | von Mangoldt function: Log[p] if n is a power of the prime p, else 0; MangoldtLambda[1] = 0 |
+| `RandomPrime` | added | 6 | RandomPrime[n] is a uniformly random prime in [2, n]; RandomPrime[{a, b}]; RandomPrime[range, k] a list of k primes (independent draws); raises when the range contains no prime |
 
 ### numerics
 
@@ -832,6 +858,55 @@ Cases = number of differential test cases in which the head occurs.
 | `SecantMethod` | fixed | 4 | SecantMethod[f, x, x0, x1, tol=1e-10, maxIter=100]; raises on failure (legacy returned Error[...]) |
 | `SimpsonsRule` | fixed | 4 | composite Simpson rule; n (default 100) must be even (legacy silently used n+1) |
 | `TrapezoidalRule` | verified | 4 | composite trapezoid rule with n panels (default 100) |
+
+### numerics (batch 2)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$MachineEpsilon` | added | 4 | 2^-52 = 2.22045*10^-16 |
+| `$MachinePrecision` | added | 3 | 53 Log10[2] = 15.9546 |
+| `$MaxMachineNumber` | added | 3 | 1.79769*10^308 |
+| `$MinMachineNumber` | added | 3 | 2.22507*10^-308 |
+| `AbsArg` | added | 3 | {Abs[z], Arg[z]} |
+| `Accuracy` | added | 6 | Accuracy[x] = Precision[x] - Log10[Abs[x]] (digits after the decimal point); Infinity for exact numbers; machine zero has Accuracy -Log10[$MinMachineNumber] = 307.653; the minimum over an expression |
+| `Arg` | added | 6 | argument in (-Pi, Pi]; Arg[0] = 0 (Wolfram); Arg[-1] = Pi; exact for exact input |
+| `Chop` | added | 13 | Chop[expr, delta] replaces approximate real numbers (and real or imaginary parts) with absolute value below delta (default 10^-10) by exact 0; exact numbers are untouched |
+| `Clip` | added | 9 | Clip[x] clips to [-1, 1]; Clip[x, {min, max}]; Clip[x, {min, max}, {vmin, vmax}] gives vmin below and vmax above; threads over lists; symbolic x stays unevaluated |
+| `Denominator` | added | 6 | denominator of a rational number or of the factors with negative exponents (Denominator[x/y^2] = y^2); 1 for sums and approximate numbers |
+| `ExactNumberQ` | added | 5 | True for integers, rationals and exact complex numbers; False for approximate numbers and for numeric expressions such as Pi or Sqrt[2] (which are not numbers) |
+| `FindFit` | added | 3 | FindFit[data, expr, pars, vars] nonlinear least squares -> {a -> a*, ...}; pars may be {{a, a0}, ...} with starting values (default 1); constraints FindFit[data, {expr, cons}, ...] are not supported |
+| `FindMaximum` | added | 3 | FindMaximum[f, {x, x0}] / {{x, x0}, {y, y0}} -> {fmax, {x -> xmax, ...}}: FindMinimum of -f (local, BFGS); non-convergence raises |
+| `FindRoot` | added | 6 | FindRoot[f, {x, x0}] / [lhs == rhs, {x, x0}] / {x, x0, x1} (secant) / {x, x0, xmin, xmax} (bounded) and systems FindRoot[{eqs}, {{x, x0}, {y, y0}}] -> {x -> root, ...}; complex starting values search in the complex plane; WorkingPrecision -> p; raises when no root is found |
+| `Fit` | added | 4 | Fit[data, {f1, f2, ...}, vars] linear least-squares fit -> c1 f1 + c2 f2 + ... (data {y1, y2, ...} at x = 1, 2, ... or {{x, y}, ...} or {{x1, x2, y}, ...}); machine-precision coefficients |
+| `FractionalPart` | added | 9 | FractionalPart[x] = x - IntegerPart[x] (same sign as x: FractionalPart[-2.4] = -0.4), separately for real and imaginary parts; exact for exact input |
+| `Im` | added | 3 | imaginary part (Wolfram name; RealPart/ImaginaryPart are the legacy MikoshiLang names); exact for exact input, 0 (exact) for the imaginary part of a real |
+| `InexactNumberQ` | added | 3 | True for approximate (machine or arbitrary-precision) real and complex numbers |
+| `IntegerPart` | added | 8 | integer part (truncation toward zero) as an exact integer, separately for real and imaginary parts; IntegerPart[Infinity] = Infinity |
+| `InterpolatingFunction` | added | 4 | InterpolatingFunction[{{xmin, xmax}}, id] objects from Interpolation / ListInterpolation / NDSolve: ifun[x], ifun'[x], Derivative[n][ifun][x], lists of points; real arguments; outside the domain the end polynomials extrapolate |
+| `Interpolation` | added | 14 | Interpolation[{f1, f2, ...}] (x = 1, 2, ...) and Interpolation[{{x1, f1}, ...}] -> InterpolatingFunction: piecewise polynomials of InterpolationOrder (default 3) through the nearest order+1 points (Wolfram's default method; exact through the data); Interpolation[data, x] evaluates at x; one-dimensional data only (derivative data and grids raise) |
+| `ListInterpolation` | added | 5 | ListInterpolation[{f1, ..., fn}] on x = 1..n and ListInterpolation[list, {{xmin, xmax}}] on an equally spaced grid -> InterpolatingFunction (same piecewise polynomials as Interpolation); 1-D only |
+| `MachineNumberQ` | added | 7 | True for machine-precision real and complex numbers only |
+| `MachinePrecision` | added | 5 | symbol for machine precision; N[MachinePrecision] = 15.9546 (53 Log10[2]) |
+| `NDSolve` | added | 7 | NDSolve[{odes, ics}, y, {x, xmin, xmax}] (also y[x], and systems {y, z}) for initial-value problems of any order that can be solved for the highest derivatives -> {{y -> InterpolatingFunction[...]}} (or {{y[x] -> InterpolatingFunction[...][x]}}); SciPy DOP853 (Radau fallback for stiff problems), rtol 1e-10; the initial point may be inside the range; machine precision only; boundary-value problems, DAEs, PDEs and delay equations raise |
+| `NDSolveValue` | added | 6 | NDSolveValue[{odes, ics}, y, {x, xmin, xmax}] -> InterpolatingFunction (y[x] -> ifun[x], {y, z} -> list); same solver and limits as NDSolve |
+| `NIntegrate` | added | 13 | numerical integration NIntegrate[f, {x, a, b}, {y, c, d}, ...] (later limits may depend on earlier variables, Wolfram order), infinite ranges, intermediate points {x, a, x1, ..., b} for interior singularities, complex-valued integrands and complex contours; WorkingPrecision -> p for arbitrary precision (mpmath tanh-sinh / Gauss-Legendre: Method -> "DoubleExponential" \| "GaussKronrod") |
+| `NMaximize` | added | 3 | NMaximize[f, vars] / [{f, cons}, vars] -> {fmax, {x -> x*, ...}} (NMinimize of -f) |
+| `NMinimize` | added | 5 | NMinimize[f, vars] / NMinimize[{f, cons}, vars] -> {fmin, {x -> x*, ...}}: global numeric search (differential evolution when every variable is bounded, plus 40 seeded multi-start SLSQP/BFGS local searches; constraints: <, <=, >, >=, ==, Inequality, And); like Wolfram's it is a heuristic global method; integer domains raise |
+| `NProduct` | added | 4 | NProduct[f, {n, nmin, nmax}] (also infinite products, mpmath nprod); WorkingPrecision -> p |
+| `NRoots` | added | 4 | NRoots[poly == 0, x] gives x == r1 \|\| x == r2 \|\| ... with roots repeated by multiplicity (machine precision, or the precision of approximate coefficients); non-polynomials raise |
+| `NSolve` | added | 9 | NSolve[eqns, vars] numerical solutions of polynomial (and rational) equations and systems as {{x -> x1}, ...} with every complex root repeated by multiplicity; NSolve[eqns, vars, Reals] keeps real solutions; WorkingPrecision -> p; transcendental equations raise (use FindRoot) |
+| `NSum` | added | 7 | NSum[f, {n, nmin, nmax}] and {n, nmin, nmax, dn}, multiple iterators, nmax = Infinity (mpmath nsum: Richardson/Shanks/Euler-Maclaurin acceleration, alternating series); WorkingPrecision -> p; finite short ranges are summed directly; divergent sums raise |
+| `Numerator` | added | 5 | numerator of a rational number or of a product with negative exponents (Numerator[x^2 y^-3] = x^2); sums are not combined over a common denominator (Numerator[a/b + c/d] is the whole sum) |
+| `Precision` | added | 17 | Precision[x]: Infinity for exact numbers and symbolic expressions without approximate numbers, MachinePrecision for machine numbers, the decimal precision of a bignum; the minimum over an expression (a machine number makes the whole expression MachinePrecision). An arbitrary-precision zero has Precision 0. |
+| `Rationalize` | added | 16 | Rationalize[x] gives the first continued-fraction convergent p/q with \|p/q - x\| < 10^-4/q^2, or x unchanged when there is none (Rationalize[N[Pi]] = 3.14159); Rationalize[x, dx] gives the first convergent within dx, refined to the smallest semiconvergent within dx (Rationalize[Pi, 1/1000] = 201/64); Rationalize[x, 0] gives the simplest rational within the precision of x; applies to every approximate number of an expression |
+| `Re` | added | 3 | real part (Wolfram name; RealPart/ImaginaryPart are the legacy MikoshiLang names); exact for exact input, 0 (exact) for the imaginary part of a real |
+| `ReIm` | added | 3 | {Re[z], Im[z]} |
+| `RealAbs` | added | 5 | absolute value for real numbers; stays unevaluated for symbolic and non-real arguments |
+| `RealDigits` | added | 23 | RealDigits[x, b, len, n]: {digits, exponent}. Machine numbers give their full precision (16 decimal digits, 53 binary), digits beyond the precision of an approximate number are Indeterminate; exact rationals give the exact digits with the recurring block as a nested list (RealDigits[19/7] = {{2, {7, 1, 4, 2, 8, 5}}, 1}); exact irrationals need len. Digits are of Abs[x]; an approximate number's digits are those of its exact binary value, rounded at its precision |
+| `Rescale` | added | 6 | Rescale[x, {min, max}] = (x - min)/(max - min); Rescale[x, {min, max}, {ymin, ymax}]; Rescale[list] uses Min[list] and Max[list]; works symbolically |
+| `SetAccuracy` | added | 3 | SetAccuracy[expr, a]: each number gets precision a + Log10[Abs[x]] (an arbitrary-precision zero keeps accuracy a) |
+| `SetPrecision` | added | 10 | SetPrecision[expr, p] sets every number in expr (and the numeric constants Pi, E, ...) to precision p: machine numbers keep their exact binary value padded with binary zeros (SetPrecision[0.1, 20] = 0.10000000000000000555), p = Infinity converts approximate numbers to the exact rationals they represent, p = MachinePrecision gives machine numbers; the result is re-evaluated |
+| `Unitize` | added | 4 | Unitize[x] is 0 for x == 0 and 1 otherwise (exact integers, also for 0.); Unitize[x, dx] is 0 when Abs[x] < dx; threads over lists |
 
 ### physics
 
@@ -915,10 +990,10 @@ Cases = number of differential test cases in which the head occurs.
 | `BesselJ` | verified | 4 | Bessel function (same convention as Wolfram/mpmath) |
 | `BesselK` | verified | 3 | Bessel function (same convention as Wolfram/mpmath) |
 | `BesselY` | verified | 3 | Bessel function (same convention as Wolfram/mpmath) |
-| `Beta` | fixed | 3 | Euler beta, exact closed forms for numeric arguments (Beta[1/2, 1/2] = Pi; legacy left it unevaluated) |
+| `Beta` | fixed | 9 | Euler beta, exact closed forms for numeric arguments (Beta[1/2, 1/2] = Pi; legacy left it unevaluated) |
 | `ChebyshevT` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `ChebyshevU` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
-| `CosIntegral` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
+| `CosIntegral` | fixed | 6 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `DiGamma` | verified | 3 | MikoshiLang alias of PolyGamma[z] |
 | `DirichletEta` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `DiscreteDelta` | promoted | 4 | Wolfram DiscreteDelta[n1, n2, ...]: 1 if every argument is 0, 0 if any argument is a non-zero number; symbolic arguments stay unevaluated (previously always inert) |
@@ -927,37 +1002,92 @@ Cases = number of differential test cases in which the head occurs.
 | `EllipticF` | fixed | 3 | EllipticF[phi, m]; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `EllipticK` | fixed | 3 | parameter m convention (Wolfram); now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `EllipticPi` | fixed | 3 | EllipticPi[n, m] complete; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
-| `Erf` | verified | 3 | error function |
-| `Erfc` | verified | 3 | complementary error function |
+| `Erf` | verified | 7 | error function |
+| `Erfc` | verified | 4 | complementary error function |
 | `Erfi` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
-| `ExpIntegralE` | promoted | 3 | ExpIntegralE[n, z] (generalised exponential integral) |
 | `ExpIntegralEi` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
-| `Gamma` | verified | 6 | Euler gamma (SymPy) |
+| `Gamma` | verified | 10 | Euler gamma (SymPy) |
 | `GegenbauerC` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `HankelH1` | fixed | 3 | H1 = J + I Y; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `HankelH2` | fixed | 3 | H2 = J - I Y; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `HermiteH` | fixed | 3 | physicists' Hermite polynomials; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
-| `HurwitzZeta` | fixed | 3 | HurwitzZeta[s, a]; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
+| `HurwitzZeta` | fixed | 6 | HurwitzZeta[s, a]; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `Hypergeometric0F1` | fixed | 3 | 0F1(; b; z); now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `Hypergeometric1F1` | fixed | 3 | Kummer 1F1(a; b; z); now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `Hypergeometric2F1` | fixed | 3 | Gauss 2F1(a, b; c; z); the 2-argument legacy form returned an Error expression and now raises an arity error; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `JacobiP` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `KroneckerDelta` | promoted | 6 | variadic: 1 if all arguments are equal, 0 if any differ, KroneckerDelta[n] = 1 iff n == 0; symbolic arguments stay unevaluated |
-| `LaguerreL` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
+| `LaguerreL` | fixed | 8 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `LambertW` | fixed | 3 | LambertW[z] and LambertW[z, k] (branch k; note Wolfram's ProductLog[k, z] argument order); legacy returned Python complex numbers for every input |
-| `LegendreP` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
-| `LegendreQ` | fixed | 3 | legacy used scipy lpmv (an associated Legendre P), so LegendreQ was LegendreP; now Legendre Q of the second kind (Wolfram type 2, \|x\| < 1) by the three-term recurrence from Q0 = ArcTanh[x] |
 | `LogGamma` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `LogIntegral` | fixed | 3 | LogIntegral[x] = li(x); now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `PolyGamma` | verified | 3 | PolyGamma[z] = digamma |
 | `ProductLog` | promoted | 3 | Wolfram ProductLog[z] and ProductLog[k, z] |
 | `SinIntegral` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
-| `SphericalBesselJ` | promoted | 4 | spherical Bessel j_n(z) |
 | `SphericalHarmonicY` | fixed | 4 | Y_l^m(theta, phi) with the Condon-Shortley phase (Wolfram); legacy forced floats and returned Python complex |
 | `StruveH` | promoted | 3 | Struve H_n(z), numeric via mpmath |
 | `TriGamma` | fixed | 3 | TriGamma[z] = PolyGamma[1, z]; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `UnitStep` | promoted | 5 | Wolfram UnitStep[x1, ...]: 1 if every argument is >= 0 (UnitStep[0] = 1), 0 if any is < 0; real arguments only; symbolic arguments stay unevaluated (previously always inert) |
-| `Zeta` | verified | 4 | Riemann zeta |
+
+### special functions (batch 2)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `AiryAiPrime` | added | 3 | derivative of AiryAi; AiryAiPrime[0] = -1/(3^(1/3) Gamma[1/3]) |
+| `AiryBiPrime` | added | 3 | derivative of AiryBi; AiryBiPrime[0] = 3^(1/6)/Gamma[1/3] |
+| `BarnesG` | added | 6 | Barnes G-function, G(z + 1) = Gamma(z) G(z); BarnesG[n] = Prod[k!, {k, 0, n - 2}] for positive integers, 0 at non-positive integers; mpmath barnesg |
+| `BetaRegularized` | added | 5 | BetaRegularized[z, a, b] = Beta[z, a, b]/Beta[a, b]; exact for positive integer a, b |
+| `CoshIntegral` | added | 4 | Chi(z) = EulerGamma + Log[z] + Integral[(Cosh[t] - 1)/t, {t, 0, z}], branch cut along the negative real axis (CoshIntegral[-1.] = 0.837867 + 3.14159 I); CoshIntegral[0] = -Infinity |
+| `ExpIntegralE` | fixed | 8 | ExpIntegralE[n, 0] = 1/(n - 1) for n > 1 and ComplexInfinity for n <= 1 (legacy left the integer cases unevaluated); numeric values at any precision via mpmath |
+| `FactorialPower` | added | 5 | falling factorial x (x - 1) ... (x - n + 1) = Gamma[x + 1]/Gamma[x - n + 1]; FactorialPower[x, n, h] = x (x - h) ... (x - (n - 1) h); stays unevaluated for symbolic x |
+| `FresnelC` | added | 4 | FresnelC[z] = Integral[Cos[Pi t^2/2], {t, 0, z}]; FresnelC[Infinity] = 1/2 |
+| `FresnelS` | added | 4 | FresnelS[z] = Integral[Sin[Pi t^2/2], {t, 0, z}]; FresnelS[Infinity] = 1/2 |
+| `GammaRegularized` | added | 6 | GammaRegularized[a, z] = Gamma[a, z]/Gamma[a] (regularized upper incomplete gamma Q); exact for positive integer a; mpmath gammainc(regularized=True) |
+| `HurwitzLerchPhi` | added | 3 | HurwitzLerchPhi[z, s, a] = Sum[z^k/(k + a)^s, {k, 0, Infinity}] (principal powers) |
+| `Hypergeometric0F1Regularized` | added | 3 | regularized 0F1: Hypergeometric0F1/Gamma[b] (finite for non-positive integer b, e.g. via the limit formula z^(m+1) (a)_(m+1)/(m+1)! 0F1(a + m + 1; m + 2; z) for b = -m) |
+| `Hypergeometric1F1Regularized` | added | 3 | regularized 1F1: Hypergeometric1F1/Gamma[b] (finite for non-positive integer b, e.g. via the limit formula z^(m+1) (a)_(m+1)/(m+1)! 1F1(a + m + 1; m + 2; z) for b = -m) |
+| `Hypergeometric2F1Regularized` | added | 3 | regularized 2F1: Hypergeometric2F1/Gamma[b] (finite for non-positive integer b, e.g. via the limit formula z^(m+1) (a)_(m+1)/(m+1)! 2F1(a + m + 1; m + 2; z) for b = -m) |
+| `HypergeometricPFQ` | added | 5 | generalized hypergeometric function pFq(a1, ..., ap; b1, ..., bq; z); exact closed forms via SymPy hyperexpand; p = q + 1 has the branch cut [1, Infinity) |
+| `HypergeometricPFQRegularized` | added | 3 | regularized generalized hypergeometric function pFq(a1, ..., ap; b1, ..., bq; z)/Prod[Gamma[bj]] (finite for non-positive integer bj) |
+| `HypergeometricU` | added | 4 | Tricomi confluent hypergeometric function U(a, b, z) (branch cut along the negative real axis); HypergeometricU[0, b, z] = 1 |
+| `InverseErf` | added | 7 | inverse of Erf on [-1, 1]: InverseErf[0] = 0, InverseErf[1] = Infinity; complex and \|x\| > 1 arguments raise (not supported) |
+| `InverseErfc` | added | 6 | inverse of Erfc on [0, 2] (Newton refinement keeps full relative precision for tiny arguments); complex arguments raise (not supported) |
+| `InverseJacobiCD` | added | 3 | inverse of JacobiCD in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `InverseJacobiCN` | added | 3 | inverse of JacobiCN in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `InverseJacobiCS` | added | 3 | inverse of JacobiCS in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `InverseJacobiDN` | added | 3 | inverse of JacobiDN in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `InverseJacobiNC` | added | 3 | inverse of JacobiNC in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `InverseJacobiNS` | added | 3 | inverse of JacobiNS in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `InverseJacobiSC` | added | 3 | inverse of JacobiSC in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `InverseJacobiSD` | added | 3 | inverse of JacobiSD in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `InverseJacobiSN` | added | 3 | inverse of JacobiSN in its parameter-m form, via EllipticF (DLMF 22.15) on the principal real range; complex arguments and arguments outside that range raise (not supported) |
+| `JacobiCD` | added | 5 | Jacobi elliptic function cd(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiCN` | added | 5 | Jacobi elliptic function cn(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiCS` | added | 5 | Jacobi elliptic function cs(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiDC` | added | 3 | Jacobi elliptic function dc(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiDN` | added | 5 | Jacobi elliptic function dn(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiDS` | added | 3 | Jacobi elliptic function ds(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiNC` | added | 5 | Jacobi elliptic function nc(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiND` | added | 3 | Jacobi elliptic function nd(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiNS` | added | 5 | Jacobi elliptic function ns(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiSC` | added | 5 | Jacobi elliptic function sc(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiSD` | added | 5 | Jacobi elliptic function sd(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `JacobiSN` | added | 5 | Jacobi elliptic function sn(u \| m) with the parameter m = k^2 (Wolfram convention); reduces to trigonometric functions at m = 0 and hyperbolic functions at m = 1; mpmath ellipfun |
+| `LegendreP` | added | 9 | LegendreP[n, m, a, z] of type a: types 1 and 2 are ((1+z)/(1-z))^(m/2) 2F1 forms (Condon-Shortley), type 3 is ((z+1)/(z-1))^(m/2) with the cut (-Infinity, 1] |
+| `LegendreQ` | added | 12 | associated LegendreQ[n, m, x] (Wolfram type 1, Condon-Shortley; mpmath legenq type 2) |
+| `LerchPhi` | added | 6 | LerchPhi[z, s, a] = Sum[z^k/((k + a)^2)^(s/2), {k, 0, Infinity}] (Wolfram's definition; terms with k + a = 0 excluded); mpmath lerchphi for Re(a) > 0 |
+| `MeijerG` | added | 3 | MeijerG[{{a1, ..., an}, {an+1, ..., ap}}, {{b1, ..., bm}, {bm+1, ..., bq}}, z] (and the form with a final argument r) evaluated with mpmath meijerg for approximate arguments; exact arguments stay unevaluated (FunctionExpand is not implemented) |
+| `Pochhammer` | added | 6 | rising factorial (a)_n = Gamma[a + n]/Gamma[a]; exact for integer n (including negative n: Pochhammer[a, -n] = 1/((a - 1)...(a - n))); stays unevaluated for symbolic a (Wolfram) |
+| `PolyLog` | added | 11 | PolyLog[n, z] = Sum[z^k/k^n, {k, 1, Infinity}] continued analytically, branch cut [1, Infinity) (PolyLog[2, 2.] = 2.4674 - 2.17759 I); PolyLog[1, z] = -Log[1 - z], PolyLog[n, z] for integer n <= 0 is rational, PolyLog[s, 1] = Zeta[s], PolyLog[2, 1/2] = Pi^2/12 - Log[2]^2/2. The Nielsen form PolyLog[n, p, z] is not supported |
+| `SinhIntegral` | added | 4 | Shi(z) = Integral[Sinh[t]/t, {t, 0, z}]; mpmath shi |
+| `SphericalBesselJ` | fixed | 4 | j_n(z) = Sqrt[Pi/(2 z)] BesselJ[n + 1/2, z], elementary for integer n >= 0 (SphericalBesselJ[1, x] = Sin[x]/x^2 - Cos[x]/x; legacy left it unevaluated); any order and precision via mpmath |
+| `SphericalBesselY` | added | 3 | y_n(z) = Sqrt[Pi/(2 z)] BesselY[n + 1/2, z]; SphericalBesselY[n, 0] = ComplexInfinity |
+| `SphericalHankelH1` | added | 3 | h1_n(z) = SphericalBesselJ[n, z] + I SphericalBesselY[n, z] |
+| `SphericalHankelH2` | added | 3 | h2_n(z) = SphericalBesselJ[n, z] - I SphericalBesselY[n, z] |
+| `StieltjesGamma` | added | 5 | Stieltjes constants gamma_n (Laurent coefficients of Zeta at s = 1); StieltjesGamma[0] = EulerGamma |
+| `WeierstrassP` | added | 4 | WeierstrassP[u, {g2, g3}] via the Jacobi form e3 + (e1 - e3)/sn^2(Sqrt[e1 - e3] u \| m), m = (e2 - e3)/(e1 - e3), with e_i the roots of 4 t^3 - g2 t - g3 (valid for any ordering of the roots); approximate arguments only; degenerate invariants raise |
+| `WeierstrassPPrime` | added | 4 | derivative of WeierstrassP[u, {g2, g3}] with respect to u |
+| `Zeta` | fixed | 8 | Zeta[s, a] = Sum[((k + a)^2)^(-s/2), {k, 0, Infinity}] (terms with k + a = 0 excluded); this differs from HurwitzZeta[s, a] = Sum[(k + a)^-s] only for Re(a) < 0 (legacy returned the Hurwitz value there: Zeta[3, -1.5] = 0.118 instead of 16.71); exact values from SymPy (Zeta[2, 1/2] = Pi^2/2) |
 
 ### statistics
 
