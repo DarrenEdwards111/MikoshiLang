@@ -12,6 +12,10 @@ def ev(s):
 
 # ── CALCULUS ─────────────────────────────────────────────────
 
+
+import importlib.util
+needs_scipy = pytest.mark.skipif(importlib.util.find_spec("scipy") is None, reason="needs the [signal] extra (scipy)")
+
 class TestCalculus:
     def test_diff(self):
         assert ev("Diff[x^3, x]") is not None
@@ -306,6 +310,8 @@ class TestStatistics:
         r = ev("Correlation[{1, 2, 3, 4, 5}, {2, 4, 6, 8, 10}]")
         assert abs(r - 1.0) < 0.001
 
+    @needs_scipy
+
     def test_linear_regression(self):
         r = ev("LinearRegression[{1, 2, 3, 4, 5}, {2, 4, 6, 8, 10}]")
         assert isinstance(r, Expr) and r.head == "List"
@@ -313,13 +319,19 @@ class TestStatistics:
     def test_zscore(self):
         assert ev("ZScore[85, 75, 10]") == 1.0
 
+    @needs_scipy
+
     def test_ttest(self):
         r = ev("TTest[{1, 2, 3}, {4, 5, 6}]")
         assert isinstance(r, Expr)
 
+    @needs_scipy
+
     def test_shapiro(self):
         r = ev("ShapiroWilk[{1, 2, 3, 4, 5, 6, 7, 8}]")
         assert isinstance(r, Expr)
+
+    @needs_scipy
 
     def test_conf_interval(self):
         r = ev("ConfidenceInterval[{1, 2, 3, 4, 5}, 0.95]")
@@ -329,13 +341,19 @@ class TestStatistics:
         r = ev("EffectSize[{1, 2, 3}, {4, 5, 6}]")
         assert isinstance(r, float)
 
+    @needs_scipy
+
     def test_pdf(self):
         r = ev("PDF[NormalDistribution[0, 1], 0]")
         assert abs(r - 0.3989422804) < 0.001
 
+    @needs_scipy
+
     def test_cdf(self):
         r = ev("CDF[NormalDistribution[0, 1], 0]")
         assert abs(r - 0.5) < 0.001
+
+    @needs_scipy
 
     def test_inverse_cdf(self):
         r = ev("InverseCDF[NormalDistribution[0, 1], 0.975]")
@@ -344,6 +362,8 @@ class TestStatistics:
     def test_random_sample(self):
         r = ev("RandomSample[NormalDistribution[0, 1], 10]")
         assert isinstance(r, Expr) and r.head == "List" and len(r.args) == 10
+
+    @needs_scipy
 
     def test_anova(self):
         r = ev("ANOVA[{1, 2, 3}, {4, 5, 6}, {7, 8, 9}]")

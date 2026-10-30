@@ -1,7 +1,12 @@
 """Tests for MikoshiLang knowledge layer."""
 
 import pytest
-from mikoshilang import parse_and_eval
+from mikoshilang import Session
+
+
+def parse_and_eval(source):
+    """Knowledge heads are network-gated: opt in explicitly, as users must."""
+    return Session(allow_network=True).evaluate(source)
 
 
 def test_entity_search():

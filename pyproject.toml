@@ -27,6 +27,7 @@ plotting = ["matplotlib>=3.4"]
 visualization = ["matplotlib>=3.4", "plotly>=5.0"]
 chemistry = []
 units = []
+test = ["pytest>=7", "hypothesis>=6"]
 all = ["ipykernel>=6.0", "matplotlib>=3.4", "scipy>=1.7", "plotly>=5.0", "networkx>=2.6", "scikit-learn>=1.0"]
 
 [project.urls]

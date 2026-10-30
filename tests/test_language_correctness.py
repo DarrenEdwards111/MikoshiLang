@@ -13,7 +13,7 @@ from mikoshilang.extended_helper import make_rule
 @pytest.fixture
 def session(): return Session()
 
-@pytest.mark.parametrize('source', ["y''[x]", 'y’’[x]', '1+2 ]] junk', 'x @ y', 'x % 2', 'x ~ y', 'x === y', '"unterminated', '(* unterminated', '1:2'])
+@pytest.mark.parametrize('source', ['y’’[x]', '1+2 ]] junk', 'x % 2', 'x ~ y', 'x === ', '"unterminated', '(* unterminated', '1:2', 'x_.', 'f[[1]', '{1,2}.{3,4}'])
 def test_malformed_input_rejected(source):
     with pytest.raises(ParseError): parse(source)
 
@@ -29,8 +29,8 @@ def test_malformed_input_rejected(source):
     ('a=3\na+2',5),
     ('1 +\n2',3),
     ('Distance2D[{0,0},{3,4}]',5),
-    ('Solve[x^2 - 4 == 0,x]',Expr('List',-2,2)),
-    ('Solve[x^2 - 9 == 0,x]',Expr('List',-3,3)),
+    ('Solve[x^2 - 4 == 0,x]',Expr('List',Expr('List',Expr('Rule',Symbol('x'),-2)),Expr('List',Expr('Rule',Symbol('x'),2)))),
+    ('Solve[x^2 - 9 == 0,x]',Expr('List',Expr('List',Expr('Rule',Symbol('x'),-3)),Expr('List',Expr('Rule',Symbol('x'),3)))),
     ('Table[i^2,{i,1,5}]',Expr('List',1,4,9,16,25)),
     ('Range[5,1,-2]',Expr('List',5,3,1)),
     ('If[1 == 1,42,RiemannTensor[g,x]]',42),

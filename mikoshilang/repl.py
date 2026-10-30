@@ -89,7 +89,10 @@ def main():
             expr = parse(line)
             result = session.evaluate(expr)
             history_out[counter] = result
-            print(f"Out[{counter}]= {result}")
+            if result is not None:  # Null output is not printed, as in Wolfram
+                from .formatting import input_form
+                shown = result if isinstance(result, str) else input_form(result)
+                print(f"Out[{counter}]= {shown}")
         except ParseError as ex:
             print(f"  Parse error: {ex}")
         except Exception as ex:

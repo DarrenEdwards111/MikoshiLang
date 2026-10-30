@@ -132,92 +132,18 @@ def _wrap(x):
 
 
 def _format_atom(a):
-    if isinstance(a, Symbol):
-        return a.name
-    return repr(a)
-
-
-_PRECEDENCE = {"Plus": 1, "Times": 2, "Power": 3}
+    from .formatting import input_form
+    return input_form(a)
 
 
 def _format_expr(e: Expr, parent_prec: int = 0) -> str:
-    prec = _PRECEDENCE.get(e.head, 10)
-
-    if e.head == "Plus":
-        parts = []
-        for i, a in enumerate(e.args):
-            # Detect subtraction: Times[-1, expr], Times[negative, expr], or plain negative number
-            is_neg_times = (isinstance(a, Expr) and a.head == "Times" and len(a.args) >= 1
-                           and isinstance(a.args[0], (int, float)) and a.args[0] < 0)
-            is_neg_atom = isinstance(a, (int, float)) and a < 0
-            if i == 0:
-                if is_neg_times and a.args[0] == -1 and len(a.args) == 2:
-                    parts.append(f"-{_fmt(a.args[1], prec)}")
-                else:
-                    parts.append(_fmt(a, prec))
-            else:
-                if is_neg_atom:
-                    # Plain negative number: render as " - abs(n)"
-                    parts.append(f" - {_format_atom(abs(a))}")
-                elif is_neg_times:
-                    coeff = a.args[0]
-                    rest_args = a.args[1:]
-                    if coeff == -1 and len(rest_args) == 1:
-                        parts.append(f" - {_fmt(rest_args[0], prec)}")
-                    else:
-                        abs_coeff = abs(coeff)
-                        if abs_coeff == 1 and len(rest_args) == 1:
-                            pos_expr = rest_args[0]
-                        else:
-                            pos_expr = Expr("Times", abs_coeff, *rest_args)
-                        parts.append(f" - {_fmt(pos_expr, prec)}")
-                else:
-                    parts.append(f" + {_fmt(a, prec)}")
-        result = "".join(parts)
-        if parent_prec > prec:
-            result = f"({result})"
-        return result
-
-    if e.head == "Times":
-        parts = []
-        for a in e.args:
-            s = _fmt(a, prec)
-            parts.append(s)
-        result = "*".join(parts)
-        if parent_prec > prec:
-            result = f"({result})"
-        return result
-
-    if e.head == "Power":
-        base = _fmt(e.args[0], prec + 1)
-        exp = _fmt(e.args[1], 0)
-        result = f"{base}^{exp}"
-        if parent_prec > prec:
-            result = f"({result})"
-        return result
-
-    if e.head == "List":
-        inner = ", ".join(_fmt(a, 0) for a in e.args)
-        return "{" + inner + "}"
-
-    if e.head == "Matrix":
-        rows = []
-        for a in e.args:
-            if isinstance(a, Expr) and a.head == "List":
-                rows.append("{" + ", ".join(_fmt(x, 0) for x in a.args) + "}")
-            else:
-                rows.append(_fmt(a, 0))
-        return "Matrix[" + ", ".join(rows) + "]"
-
-    # Generic function notation
-    inner = ", ".join(_fmt(a, 0) for a in e.args)
-    return f"{e.head}[{inner}]"
+    from .formatting import input_form
+    return input_form(e)
 
 
 def _fmt(a, parent_prec: int = 0) -> str:
-    if isinstance(a, Expr):
-        return _format_expr(a, parent_prec)
-    return _format_atom(a)
+    from .formatting import input_form
+    return input_form(a)
 
 
 def symbols(*names: str):

@@ -1,7 +1,7 @@
 """Tests for advanced visualization module."""
 
 import pytest
-import matplotlib
+matplotlib = pytest.importorskip("matplotlib", reason="visualization tests need the [plotting] extra")
 matplotlib.use('Agg')  # Non-interactive backend for testing
 
 from mikoshilang.expr import Expr, Symbol
