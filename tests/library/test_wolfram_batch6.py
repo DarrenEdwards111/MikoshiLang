@@ -403,7 +403,262 @@ LOGIC = [
     equiv("Disjunction[Majority[a, b, c], {c}]", "a || b"),
 ]
 
-CASES = PERMUTATIONS + GROUPS + COUNTING + LOGIC
+# ─────────────────────────────── discrete mathematics (wl_discrete) ───────────────────────────────
+
+def L_(xs):
+    return "{" + ", ".join(L_(x) if isinstance(x, (list, tuple)) else fr_str(x) for x in xs) + "}"
+
+
+def fr_str(x):
+    if isinstance(x, Fraction):
+        return str(x.numerator) if x.denominator == 1 else f"{x.numerator}/{x.denominator}"
+    if isinstance(x, bool):
+        return "True" if x else "False"
+    return str(x)
+
+
+def farey_ref(n):
+    return sorted({Fraction(a, b) for b in range(1, n + 1) for a in range(0, b + 1)})
+
+
+def cf_ref(fr):
+    out = []
+    while True:
+        a = math.floor(fr)
+        out.append(a)
+        fr -= a
+        if fr == 0:
+            return out
+        fr = 1 / fr
+
+
+def eca_ref(rule, cells, t):
+    """Independent elementary CA on a zero background, width len(cells) + 2t (Wolfram's default region)."""
+    w = len(cells) + 2 * t
+    row = [0] * t + list(cells) + [0] * t
+    rows = [row]
+    for _ in range(t):
+        prev = [0] + rows[-1] + [0]
+        rows.append([(rule >> (4 * prev[i - 1] + 2 * prev[i] + prev[i + 1])) & 1 for i in range(1, w + 1)])
+    return rows
+
+
+def eca_cyclic(rule, cells, t):
+    rows = [list(cells)]
+    n = len(cells)
+    for _ in range(t):
+        r = rows[-1]
+        rows.append([(rule >> (4 * r[i - 1] + 2 * r[i] + r[(i + 1) % n])) & 1 for i in range(n)])
+    return rows
+
+
+def squares_r_ref(d, n):
+    m = math.isqrt(max(n, 0))
+    return sum(1 for v in itertools.product(range(-m, m + 1), repeat=d) if sum(x * x for x in v) == n)
+
+
+def powers_rep_ref(n, k, p):
+    m = 0
+    while (m + 1) ** p <= n:
+        m += 1
+    return [list(c) for c in itertools.combinations_with_replacement(range(m + 1), k) if sum(x ** p for x in c) == n]
+
+
+def prim_roots_ref(n):
+    phi = sp.totient(n)
+    return [g for g in range(1, n) if math.gcd(g, n) == 1 and sp.n_order(g, n) == phi]
+
+
+def ns_from(f, xs):
+    return "{" + ", ".join(fr_str(f(x)) for x in xs) + "}"
+
+
+THUE_MORSE = [0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1]  # A010060
+RUDIN_SHAPIRO = [1, 1, 1, -1, 1, 1, -1, 1, 1, 1, 1, -1, -1, -1, 1, -1, 1, 1, 1, -1, 1, 1, -1, 1, -1, -1, -1, 1, 1, 1,
+                 -1, 1]  # A020985
+PERFECT = [6, 28, 496, 8128, 33550336, 8589869056, 137438691328, 2305843008139952128]  # A000396
+MERSENNE = [2, 3, 5, 7, 13, 17, 19, 31, 61, 89, 107, 127, 521, 607, 1279]  # A000043
+
+DISCRETE = [
+    # Interval canonical form, union, intersection, membership
+    ("Interval[{3, 1}, {2, 5}, {7, 8}]", "Interval[{1, 5}, {7, 8}]"), ("Interval[{1, 2}, {2, 3}]", "Interval[{1, 3}]"),
+    ("Interval[{0, Infinity}, {-1, 1}]", "Interval[{-1, Infinity}]"), ("Interval[{1, 2}]", "Interval[{1, 2}]"),
+    ("Interval[{1, 2, 3}]", Raises()), ("Interval[{a, 1}]", "Interval[{a, 1}]"),
+    ("IntervalUnion[Interval[{1, 2}], Interval[{2, 4}], Interval[{6, Infinity}]]", "Interval[{1, 4}, {6, Infinity}]"),
+    ("IntervalUnion[Interval[{1, 2}], Interval[{3, 4}]]", "Interval[{1, 2}, {3, 4}]"), ("IntervalUnion[]", "Interval[]"),
+    ("IntervalUnion[Interval[{0, 1/2}], Interval[{0.25, 1}]]", "Interval[{0, 1}]"),
+    ("IntervalIntersection[Interval[{1, 3}, {5, 8}], Interval[{2, 6}]]", "Interval[{2, 3}, {5, 6}]"),
+    ("IntervalIntersection[Interval[{1, 2}], Interval[{3, 4}]]", "Interval[]"),
+    ("IntervalIntersection[Interval[{1, 2}], Interval[{2, 4}]]", "Interval[{2, 2}]"),
+    ("IntervalIntersection[Interval[{-Infinity, 0}], Interval[{-3, 5}], Interval[{-1, 1}]]", "Interval[{-1, 0}]"),
+    ("IntervalMemberQ[Interval[{1, 3}], 2]", True), ("IntervalMemberQ[Interval[{1, 3}], Pi]", False),
+    ("IntervalMemberQ[Interval[{1, 3}], E]", True), ("IntervalMemberQ[Interval[{1, 3}], Interval[{1.5, 2}]]", True),
+    ("IntervalMemberQ[Interval[{1, 3}], Interval[{2, 4}]]", False), ("IntervalMemberQ[Interval[{1, 3}], x]", False),
+    ("IntervalMemberQ[Interval[{1, 2}, {4, 5}], 3]", False),
+    # discrete calculus (forward differences)
+    ("DifferenceDelta[i^3, i]", "1 + 3 i + 3 i^2"), ("DifferenceDelta[i^3, {i, 2}]", "6 + 6 i"),
+    ("DifferenceDelta[i^3, {i, 3}]", "6"), ("DifferenceDelta[i^3, {i, 4}]", "0"), ("DifferenceDelta[2^i, i]", "2^i"),
+    ("DifferenceDelta[i!, i]", "i i!"), ("DifferenceDelta[Binomial[i, 2], i]", "i"),
+    ("DifferenceDelta[f[i], {i, 1, h}]", "f[h + i] - f[i]"), ("DifferenceDelta[i j, i, j]", "1"),
+    ("DifferenceDelta[i^2, {i, 1, 1/2}]", "1/4 + i"), ("DifferenceDelta[x, {1, 2}]", Raises()),
+    ("DiscreteShift[f[i], i]", "f[1 + i]"), ("DiscreteShift[f[i], {i, 2}]", "f[2 + i]"),
+    ("DiscreteShift[f[i], {i, 3, h}]", "f[i + 3 h]"), ("DiscreteShift[i^2, i]", "(1 + i)^2"),
+    ("DiscreteRatio[i!, i]", "1 + i"), ("DiscreteRatio[2^i i, i]", "2 (1 + i)/i"), ("DiscreteRatio[3^i, {i, 2}]", "1"),
+    ("DiscreteRatio[Binomial[n, i], i]", "(n - i)/(1 + i)"),
+    # linear recurrences
+    ("LinearRecurrence[{1, 1}, {1, 1}, 10]", ns_from(sp.fibonacci, range(1, 11))),
+    ("LinearRecurrence[{1, 1}, {1, 1}, {10}]", "55"), ("LinearRecurrence[{1, 1}, {1, 1}, {5, 8}]", "{5, 8, 13, 21}"),
+    ("LinearRecurrence[{1, 1}, {0, 1}, {10000}]", str(sp.fibonacci(9999))),
+    ("LinearRecurrence[{1, 1}, {0, 1}, {9000, 9002}]", ns_from(lambda k: sp.fibonacci(k - 1), range(9000, 9003))),
+    ("LinearRecurrence[{2, -1}, {1, 2}, 6]", "{1, 2, 3, 4, 5, 6}"),
+    ("LinearRecurrence[{0, 1, 1}, {3, 0, 2}, 10]", "{3, 0, 2, 3, 2, 5, 5, 7, 10, 12}"),  # Perrin, A001608
+    ("LinearRecurrence[{a, b}, {1, 1}, 4]", "{1, 1, a + b, b + a (a + b)}"),
+    ("LinearRecurrence[{1/2, 1/3}, {1, 1}, 4]", "{1, 1, 5/6, 3/4}"), ("LinearRecurrence[{1, 1}, {1, 1}, 0]", "{}"),
+    ("LinearRecurrence[{2, -1}, {1, 2, 3}, 5]", Raises()), ("LinearRecurrence[{1, 1}, {1, 1}, {0, 3}]", Raises()),
+    ("FindLinearRecurrence[{1, 1, 2, 3, 5, 8, 13}]", "{1, 1}"),
+    ("FindLinearRecurrence[" + ns_from(lambda k: k * k, range(1, 11)) + "]", "{3, -3, 1}"),
+    ("FindLinearRecurrence[{1, 2, 4, 8, 16}]", "{2}"),
+    ("FindLinearRecurrence[LinearRecurrence[{0, 1, 1}, {3, 0, 2}, 20]]", "{0, 1, 1}"),
+    ("FindLinearRecurrence[{1, 2, 3}]", "FindLinearRecurrence[{1, 2, 3}]"),
+    ("FindLinearRecurrence[" + ns_from(lambda k: k ** 3, range(1, 13)) + ", 3]",
+     "FindLinearRecurrence[" + ns_from(lambda k: k ** 3, range(1, 13)) + ", 3]"),
+    ("FindLinearRecurrence[{0, 0, 0}]", Raises()), ("FindLinearRecurrence[{1., 2., 4., 8.}]", Raises()),
+    ("RecurrenceTable[{a[n + 1] == 3 a[n], a[1] == 7}, a, {n, 1, 5}]", "{7, 21, 63, 189, 567}"),
+    ("RecurrenceTable[{a[n] == a[n - 1] + a[n - 2], a[1] == 1, a[2] == 1}, a[n], {n, 10}]",
+     ns_from(sp.fibonacci, range(1, 11))),
+    ("RecurrenceTable[{a[n + 1] == a[n] + n, a[0] == 0}, a[n]^2, {n, 0, 4}]", "{0, 0, 1, 9, 36}"),
+    ("RecurrenceTable[{x[n + 1] == y[n], y[n + 1] == x[n] + y[n], x[1] == 0, y[1] == 1}, {x, y}, {n, 1, 5}]",
+     "{{0, 1}, {1, 1}, {1, 2}, {2, 3}, {3, 5}}"),
+    ("RecurrenceTable[{a[n + 1] == n a[n], a[1] == 1}, a, {n, 1, 7}]", ns_from(math.factorial, range(0, 7))),
+    ("RecurrenceTable[{a[n + 1] == a[n]/2, a[1] == 1.}, a, {n, 1, 4}]", "{1., 0.5, 0.25, 0.125}"),
+    ("RecurrenceTable[{a[n + 2] == a[n + 1] + a[n], a[1] == 1}, a, {n, 1, 5}]", Raises()),
+    ("RecurrenceTable[{a[n]^2 == a[n - 1], a[1] == 4}, a, {n, 1, 3}]", Raises()),
+    # continued fractions
+    ("ContinuedFraction[415/93]", L_(cf_ref(Fraction(415, 93)))), ("ContinuedFraction[-7/3]", L_(cf_ref(Fraction(-7, 3)))),
+    ("ContinuedFraction[3]", "{3}"), ("ContinuedFraction[Sqrt[13]]", "{3, {1, 1, 1, 1, 6}}"),
+    ("ContinuedFraction[Sqrt[2]]", "{1, {2}}"), ("ContinuedFraction[GoldenRatio]", "{{1}}"),
+    ("ContinuedFraction[(3 + Sqrt[7])/5]", "{1, 7, {1, 2, 1, 8, 13, 8}}"),
+    ("ContinuedFraction[Pi, 10]", "{3, 7, 15, 1, 292, 1, 1, 1, 2, 1}"),  # A001203
+    ("ContinuedFraction[E, 12]", "{2, 1, 2, 1, 1, 4, 1, 1, 6, 1, 1, 8}"),  # A003417
+    ("ContinuedFraction[2^(1/3), 8]", "{1, 3, 1, 5, 1, 1, 4, 1}"),  # A002945
+    ("ContinuedFraction[Sqrt[7], 9]", "{2, 1, 1, 1, 4, 1, 1, 1, 4}"), ("ContinuedFraction[415/93, 2]", "{4, 2}"),
+    ("ContinuedFraction[0.1]", "{0, 10}"), ("ContinuedFraction[3.25]", "{3, 4}"), ("ContinuedFraction[-2.5]", "{-3, 2}"),
+    ("Take[ContinuedFraction[N[Pi]], 13]", "{3, 7, 15, 1, 292, 1, 1, 1, 2, 1, 3, 1, 14}"),
+    ("Take[ContinuedFraction[N[Pi, 30]], 26]", "ContinuedFraction[Pi, 26]"),
+    ("ContinuedFraction[Pi]", Raises()), ("ContinuedFraction[I]", Raises()), ("ContinuedFraction[x]", "ContinuedFraction[x]"),
+    ("FromContinuedFraction[{3, 1, 1, 1, 1, 6}]", "119/33"), ("FromContinuedFraction[{3, {1, 1, 1, 1, 6}}]", "Sqrt[13]"),
+    ("FromContinuedFraction[{1, {2}}]", "Sqrt[2]"), ("FromContinuedFraction[{a, b, c}]", "a + 1/(b + 1/c)"),
+    ("FromContinuedFraction[ContinuedFraction[(3 + Sqrt[7])/5]]", "(3 + Sqrt[7])/5"),
+    ("FromContinuedFraction[ContinuedFraction[415/93]]", "415/93"), ("FromContinuedFraction[{{1}}]", "GoldenRatio"),
+    ("FromContinuedFraction[{}]", Raises()), ("FromContinuedFraction[{1, {}}]", Raises()),
+    ("Convergents[{1, 2, 2, 2}]", "{1, 3/2, 7/5, 17/12}"), ("Convergents[Pi, 4]", "{3, 22/7, 333/106, 355/113}"),
+    ("Convergents[{a, b, c}]", "{a, a + 1/b, a + 1/(b + 1/c)}"), ("Convergents[7/3]", "{2, 7/3}"),
+    ("Convergents[Sqrt[2], 5]", "{1, 3/2, 7/5, 17/12, 41/29}"), ("Convergents[Sqrt[2]]", Raises()),
+    ("QuadraticIrrationalQ[Sqrt[2]]", True), ("QuadraticIrrationalQ[(1 + Sqrt[5])/2]", True),
+    ("QuadraticIrrationalQ[GoldenRatio]", True), ("QuadraticIrrationalQ[2^(1/3)]", False),
+    ("QuadraticIrrationalQ[Pi]", False), ("QuadraticIrrationalQ[3/4]", False), ("QuadraticIrrationalQ[1.414]", False),
+    ("QuadraticIrrationalQ[x]", False), ("QuadraticIrrationalQ[Sqrt[2] + Sqrt[3]]", False),
+    ("QuadraticIrrationalQ[Sqrt[8] - 1/3]", True),
+    ("FareySequence[5]", L_(farey_ref(5))), ("FareySequence[1]", "{0, 1}"), ("Length[FareySequence[40]]", str(len(farey_ref(40)))),
+    ("FareySequence[7, 4]", fr_str(farey_ref(7)[3])), ("FareySequence[5, -1]", "1"), ("FareySequence[0]", Raises()),
+    ("FareySequence[5, 20]", Raises()),
+    # bitwise operations (Python's infinite two's complement as the reference)
+    ("BitAnd[12, 10]", str(12 & 10)), ("BitAnd[]", "-1"), ("BitAnd[-1, 5]", "5"), ("BitAnd[-12, 7, 255]", str(-12 & 7 & 255)),
+    ("BitAnd[{1, 2, 3}, 1]", "{1, 0, 1}"), ("BitAnd[x, 1]", "BitAnd[x, 1]"), ("BitAnd[1.5, 1]", Raises()),
+    ("BitOr[12, 10]", str(12 | 10)), ("BitOr[]", "0"), ("BitOr[-8, 3]", str(-8 | 3)),
+    ("BitXor[12, 10, 3]", str(12 ^ 10 ^ 3)), ("BitXor[]", "0"), ("BitXor[-5, 9]", str(-5 ^ 9)),
+    ("BitNot[5]", "-6"), ("BitNot[-1]", "0"), ("BitNot[{0, 7}]", "{-1, -8}"),
+    ("BitShiftLeft[3, 4]", "48"), ("BitShiftLeft[5]", "10"), ("BitShiftLeft[48, -4]", "3"), ("BitShiftLeft[-3, 2]", "-12"),
+    ("BitShiftRight[-7, 1]", "IntegerPart[-7/2]"), ("BitShiftRight[7, -2]", "28"), ("BitShiftRight[1000, 3]", str(1000 >> 3)),
+    ("BitShiftRight[-1, 5]", "0"),
+    ("BitLength[255]", "8"), ("BitLength[256]", "9"), ("BitLength[-256]", "8"), ("BitLength[0]", "0"),
+    ("BitLength[2^1000]", "1001"),
+    ("BitGet[-1, 100]", "1"), ("BitGet[10, {0, 1, 2, 3}]", "{0, 1, 0, 1}"), ("BitGet[5, -1]", Raises()),
+    ("BitSet[0, 5]", "32"), ("BitSet[-33, 5]", str(-33 | 32)), ("BitSet[5, {1, 3}]", "{7, 13}"),
+    ("BitClear[-1, 0]", "-2"), ("BitClear[15, 2]", "11"), ("BitClear[8, 1]", "8"),
+    ("BitFlip[5, 1]", "7"), ("BitFlip[7, 1]", "5"), ("BitFlip[-1, 3]", str(-1 ^ 8)),
+    ("IntegerExponent[1000]", "3"), ("IntegerExponent[0, 2]", "Infinity"), ("IntegerExponent[-48, 2]", "4"),
+    ("IntegerExponent[2^10 3^5, 6]", "5"), ("IntegerExponent[7, 1]", Raises()),
+    # cellular automata and substitution systems
+    ("CellularAutomaton[30, {{1}, 0}, 3]", L_(eca_ref(30, [1], 3))), ("CellularAutomaton[110, {{1}, 0}, 6]", L_(eca_ref(110, [1], 6))),
+    ("CellularAutomaton[90, {{1}, 0}, 7]", L_(eca_ref(90, [1], 7))),
+    ("CellularAutomaton[30, {0, 0, 1, 0, 0}, 2]", L_(eca_cyclic(30, [0, 0, 1, 0, 0], 2))),
+    ("CellularAutomaton[90, {0, 0, 0, 1, 0, 0, 0}]", L_(eca_cyclic(90, [0, 0, 0, 1, 0, 0, 0], 1)[1])),
+    ("CellularAutomaton[{30, 2, 1}, {{1}, 0}, 2]", L_(eca_ref(30, [1], 2))),
+    ("CellularAutomaton[{{1, 1, 1} -> 0, {1, 1, 0} -> 0, {1, 0, 1} -> 0, {1, 0, 0} -> 1, {0, 1, 1} -> 1, {0, 1, 0} -> 1, "
+     "{0, 0, 1} -> 1, {0, 0, 0} -> 0}, {{1}, 0}, 2]", L_(eca_ref(30, [1], 2))),
+    ("CellularAutomaton[1, {{1}, 0}, 2]", "{{0, 0, 1, 0, 0}, {1, 0, 0, 0, 1}, {0, 0, 1, 0, 0}}"),
+    ("CellularAutomaton[256, {0, 1, 0}, 1]", Raises()), ("CellularAutomaton[{1599, {3, 1}}, {0, 1, 0}, 1]", Raises()),
+    ("SubstitutionSystem[{\"A\" -> \"AB\", \"B\" -> \"A\"}, \"A\", 4]", "{\"A\", \"AB\", \"ABA\", \"ABAAB\", \"ABAABABA\"}"),
+    ("SubstitutionSystem[{0 -> {0, 1}, 1 -> {1, 0}}, {0}, 4]", "{{0}, {0, 1}, {0, 1, 1, 0}, {0, 1, 1, 0, 1, 0, 0, 1}, "
+     + L_(THUE_MORSE[:16]) + "}"),
+    ("SubstitutionSystem[{\"A\" -> \"AB\", \"B\" -> \"A\"}, \"A\"]", "\"AB\""),
+    ("Map[StringLength, SubstitutionSystem[{\"A\" -> \"AB\", \"B\" -> \"A\"}, \"A\", 10]]",
+     ns_from(sp.fibonacci, range(2, 13))),
+    ("SubstitutionSystem[{\"AB\" -> \"B\"}, \"AB\", 1]", Raises()),
+    ("ThueMorse[Range[0, 31]]", L_(THUE_MORSE)), ("ThueMorse[2^40]", "1"), ("ThueMorse[-1]", Raises()),
+    ("RudinShapiro[Range[0, 31]]", L_(RUDIN_SHAPIRO)), ("RudinShapiro[0]", "1"), ("RudinShapiro[-3]", Raises()),
+    # integer predicates and representations
+    ("SquareFreeQ[30]", True), ("SquareFreeQ[12]", False), ("SquareFreeQ[0]", False), ("SquareFreeQ[1]", True),
+    ("SquareFreeQ[-30]", True), ("Select[Range[30], SquareFreeQ]",
+                                 ns_from(lambda k: k, [k for k in range(1, 31) if all(e == 1 for e in sp.factorint(k).values())])),
+    ("SquareFreeQ[x^2 - 1]", True), ("SquareFreeQ[(x - 1)^2 (x + 2)]", False), ("SquareFreeQ[2 x + 2]", Raises()),
+    ("SquareFreeQ[2.5]", False),
+    ("Map[PerfectNumberQ, {6, 28, 496, 8128, 12, 0, -6, 7.}]", "{True, True, True, True, False, False, False, False}"), ("PerfectNumberQ[{6}]", False),
+    ("Select[Range[10000], PerfectNumberQ]", "{6, 28, 496, 8128}"), ("PerfectNumberQ[" + str(PERFECT[-1]) + "]", True),
+    ("PerfectNumberQ[2^60 (2^61 - 1) + 2]", False),
+    ("PerfectNumber[Range[8]]", L_(PERFECT)), ("PerfectNumber[48] == 2^57885160 (2^57885161 - 1)", True),
+    ("PerfectNumber[49]", Raises()), ("PerfectNumber[0]", Raises()),
+    ("MersennePrimeExponent[Range[15]]", L_(MERSENNE)), ("MersennePrimeExponent[48]", "57885161"),
+    ("MersennePrimeExponent[49]", Raises()),
+    ("MersennePrimeExponentQ[{2, 11, 31, 57885161, 57885163}]", "{True, False, True, True, False}"),
+    ("Select[Range[1300], MersennePrimeExponentQ]", L_(MERSENNE)), ("MersennePrimeExponentQ[57885167]", Raises()),
+    ("MersennePrimeExponentQ[x]", False),
+    ("CompositeQ[{4, 7, 1, 0, -9, 2.5}]", "{True, False, False, False, True, False}"),
+    ("Select[Range[30], CompositeQ]", ns_from(lambda k: k, [k for k in range(2, 31) if not sp.isprime(k)])),
+    ("CompositeQ[2^61 - 1]", False), ("CompositeQ[2^67 - 1]", True), ("CompositeQ[x]", False),
+    ("PrimeNu[{12, 1, -30, 2^10}]", "{2, 0, 3, 1}"), ("PrimeNu[Range[20]]", ns_from(lambda k: len(sp.factorint(k)), range(1, 21))),
+    ("PrimeNu[0]", Raises()), ("PrimeNu[x]", "PrimeNu[x]"),
+    ("PrimeOmega[{12, 1, -30, 2^10}]", "{3, 0, 3, 10}"),
+    ("PrimeOmega[Range[20]]", ns_from(lambda k: sum(sp.factorint(k).values()), range(1, 21))), ("PrimeOmega[0]", Raises()),
+    ("Divisible[10, 5]", True), ("Divisible[10, 3]", False), ("Divisible[2 + 4 I, 2]", True), ("Divisible[3/2, 1/2]", True),
+    ("Divisible[5 + 5 I, 1 + 2 I]", Pred(lambda g: g is ((5 + 5j) / (1 + 2j) == complex(round(((5 + 5j) / (1 + 2j)).real),
+                                                                                         round(((5 + 5j) / (1 + 2j)).imag))),
+                                        "Gaussian divisibility")),
+    ("Divisible[{6, 7, 8}, 2]", "{True, False, True}"), ("Divisible[x, 2]", "Divisible[x, 2]"), ("Divisible[3, 0]", Raises()),
+    ("Divisible[3., 1]", Raises()),
+    ("CoprimeQ[3, 4]", True), ("CoprimeQ[6, 9]", False), ("CoprimeQ[2, 3, 4]", False), ("CoprimeQ[3, 5, 7]", True),
+    ("CoprimeQ[{3, 6}, 5]", "{True, True}"), ("CoprimeQ[1, 0]", True), ("CoprimeQ[4]", Raises()),
+    ("NumberExpand[1234]", "{1000, 200, 30, 4}"), ("NumberExpand[-12]", "{-10, -2}"),
+    ("NumberExpand[255, 2]", "{128, 64, 32, 16, 8, 4, 2, 1}"), ("NumberExpand[12, 10, 4]", "{0, 0, 10, 2}"),
+    ("NumberExpand[0]", "{0}"), ("Total[NumberExpand[987654321, 7]]", "987654321"), ("NumberExpand[1.5]", Raises()),
+    ("NumberDigit[1234, 2]", "2"), ("NumberDigit[Pi, -5]", "9"), ("NumberDigit[1/7, -3]", "2"), ("NumberDigit[255, 4, 2]", "1"),
+    ("NumberDigit[E, -10]", str(int(str(sp.N(sp.E, 20))[2 + 9]))), ("NumberDigit[-1234, 0]", "4"),
+    ("NumberDigit[1234, 7]", "0"),
+    ("SquaresR[2, 5]", str(squares_r_ref(2, 5))), ("SquaresR[4, 10]", str(squares_r_ref(4, 10))),
+    ("SquaresR[3, Range[0, 12]]", ns_from(lambda k: squares_r_ref(3, k), range(13))), ("SquaresR[2, -1]", "0"),
+    ("SquaresR[8, 3]", str(squares_r_ref(8, 3))), ("SquaresR[0, 4]", Raises()),
+    ("PowersRepresentations[50, 2, 2]", L_(powers_rep_ref(50, 2, 2))),
+    ("PowersRepresentations[1729, 2, 3]", L_(powers_rep_ref(1729, 2, 3))), ("PowersRepresentations[0, 2, 2]", "{{0, 0}}"),
+    ("PowersRepresentations[100, 3, 2]", L_(powers_rep_ref(100, 3, 2))), ("PowersRepresentations[3, 1, 2]", "{}"),
+    ("PrimitiveRootList[7]", L_(prim_roots_ref(7))), ("PrimitiveRootList[8]", "{}"), ("PrimitiveRootList[2]", "{1}"),
+    ("PrimitiveRootList[18]", L_(prim_roots_ref(18))), ("PrimitiveRootList[41]", L_(prim_roots_ref(41))),
+    ("PrimitiveRootList[1]", Raises()),
+    ("PowerModList[2, 1/2, 7]", L_([x for x in range(7) if x * x % 7 == 2])), ("PowerModList[3, 2, 7]", "{2}"),
+    ("PowerModList[2, -1, 4]", "{}"), ("PowerModList[4, 1/2, 15]", L_([x for x in range(15) if x * x % 15 == 4])),
+    ("PowerModList[3, 2/3, 13]", L_([x for x in range(13) if pow(x, 3, 13) == 9])), ("PowerModList[3, -1, 7]", "{5}"),
+    ("PowerModList[2, 1/2, 0]", Raises()),
+    ("MantissaExponent[3.4]", Pred(lambda g: abs(g.args[0] - 0.34) < 1e-15 and g.args[1] == 1, "{0.34, 1}")),
+    ("MantissaExponent[125]", "{1/8, 3}"), ("MantissaExponent[1/8, 2]", "{1/2, -2}"), ("MantissaExponent[Pi]", "{Pi/10, 1}"),
+    ("MantissaExponent[0]", "{0, 0}"), ("MantissaExponent[-1000]", "{-1/10, 4}"),
+    ("MantissaExponent[0.001]", Pred(lambda g: abs(g.args[0] - 0.1) < 1e-15 and g.args[1] == -2, "{0.1, -2}")),
+    ("MantissaExponent[1000.]", Pred(lambda g: abs(g.args[0] - 0.1) < 1e-15 and g.args[1] == 4, "{0.1, 4}")),
+    ("MantissaExponent[Sqrt[2] 10^20]", "{Sqrt[2]/10, 21}"), ("MantissaExponent[I]", Raises()),
+    ("MantissaExponent[x]", "MantissaExponent[x]"), ("MantissaExponent[7, 1]", Raises()),
+]
+
+
+CASES = PERMUTATIONS + GROUPS + COUNTING + LOGIC + DISCRETE
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
