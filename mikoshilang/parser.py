@@ -92,6 +92,7 @@ _TOKEN_SPEC = [
     ("SEMICOLON", r';'),
     ("REPEATEDNULL", r'\.\.\.'),
     ("REPEATED",  r'\.\.'),
+    ("DOT",       r'\.(?![0-9])'),
     ("BLANKOPT",  r'_\.(?![.0-9])'),
     ("BLANKNS",   r'___'),
     ("BLANKS",    r'__'),
@@ -496,10 +497,24 @@ class Parser:
         if self.at("PLUS"):
             self.advance()
             return self.parse_unary()
+        return self.parse_dot()
+
+    def parse_dot(self) -> Any:
+        """Handle a . b . c (Dot, precedence 490: between Times and Power/Map), flat."""
+        expr = self.parse_map()
+        if not self.at("DOT"):
+            return expr
+        args = [expr]
+        while self.at("DOT"):
+            self.advance()
+            args.append(self.parse_map())
+        return Expr("Dot", *args)
+
+    def parse_map(self) -> Any:
         expr = self.parse_power()
         if self.at("MAP", "APPLY", "APPLYLEVEL1", "MAPALL"):
             op = self.advance().type
-            rhs = self.parse_unary()
+            rhs = self.parse_unary() if self.at("MINUS", "PLUS") else self.parse_map()
             if op == "MAP":
                 expr = Expr("Map", expr, rhs)
             elif op == "MAPALL":
