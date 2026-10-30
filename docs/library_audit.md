@@ -108,39 +108,46 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 
 | Status | Heads | Meaning |
 |---|---|---|
-| verified | 123 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
-| fixed | 483 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
-| promoted | 29 | was quarantined; now properly implemented and tested |
-| added | 310 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
-| kernel | 34 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
+| verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
+| fixed | 502 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
+| promoted | 23 | was quarantined; now properly implemented and tested |
+| added | 707 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 0 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **979** | 620 pre-audit inventory heads, all with a status, plus 359 promoted/aliased heads |
+| **total reviewed** | **1376** | 620 pre-audit inventory heads, all with a status, plus 756 promoted/aliased heads |
 
-Remaining unreviewed quarantined names: **5329** (all raise NotImplementedError; see below).
+Remaining unreviewed quarantined names: **5298** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **3810**.
+Differential test cases in tests/library: **6433**.
 
 
 ## By area
 
 | Area | verified | fixed | promoted | added | kernel | error | quarantined |
 |---|---|---|---|---|---|---|---|
-| algebra | 12 | 12 | 2 | 0 | 0 | 0 | 0 |
+| algebra | 11 | 11 | 1 | 0 | 0 | 0 | 0 |
+| algebra (batch 4) | 0 | 6 | 0 | 43 | 0 | 0 | 0 |
 | associations (batch 1) | 0 | 0 | 0 | 25 | 0 | 0 | 0 |
-| calculus | 9 | 24 | 3 | 0 | 1 | 0 | 0 |
+| calculus | 8 | 22 | 0 | 1 | 1 | 0 | 0 |
+| calculus (batch 4) | 0 | 9 | 0 | 22 | 0 | 0 | 0 |
 | combinatorics | 5 | 12 | 6 | 0 | 0 | 0 | 0 |
+| combinatorics (batch 6) | 0 | 0 | 0 | 37 | 0 | 0 | 0 |
 | constants | 0 | 33 | 0 | 0 | 0 | 0 | 0 |
+| discrete mathematics (batch 6) | 0 | 0 | 0 | 48 | 0 | 0 | 0 |
 | elementary | 28 | 12 | 1 | 1 | 0 | 0 | 0 |
 | finance | 0 | 20 | 0 | 0 | 0 | 0 | 0 |
 | geometry | 0 | 29 | 0 | 0 | 0 | 0 | 0 |
 | graphs | 3 | 14 | 0 | 0 | 0 | 0 | 0 |
-| kernel | 0 | 35 | 0 | 0 | 33 | 0 | 0 |
+| graphs (batch 5) | 0 | 0 | 0 | 110 | 0 | 0 | 0 |
+| kernel | 0 | 34 | 0 | 0 | 24 | 0 | 0 |
 | language (batch 1) | 0 | 0 | 0 | 19 | 0 | 0 | 0 |
 | linear algebra | 8 | 40 | 1 | 0 | 0 | 0 | 0 |
+| linear algebra (batch 3) | 0 | 4 | 0 | 50 | 0 | 0 | 0 |
 | lists (batch 1) | 0 | 0 | 2 | 107 | 0 | 0 | 0 |
 | lists and sets | 4 | 14 | 2 | 0 | 0 | 0 | 0 |
-| logic | 6 | 7 | 0 | 0 | 0 | 0 | 0 |
+| logic | 5 | 8 | 0 | 0 | 0 | 0 | 0 |
+| logic (batch 6) | 0 | 0 | 0 | 17 | 0 | 0 | 0 |
 | ml | 4 | 0 | 0 | 0 | 0 | 0 | 0 |
 | number theory | 3 | 51 | 3 | 0 | 0 | 0 | 0 |
 | number theory (batch 2) | 0 | 0 | 0 | 4 | 0 | 0 | 0 |
@@ -150,10 +157,11 @@ Differential test cases in tests/library: **3810**.
 | plots | 0 | 14 | 0 | 0 | 0 | 0 | 0 |
 | special functions | 11 | 28 | 5 | 0 | 0 | 0 | 0 |
 | special functions (batch 2) | 0 | 3 | 0 | 52 | 0 | 0 | 0 |
-| statistics | 9 | 38 | 4 | 0 | 0 | 0 | 0 |
+| statistics | 9 | 40 | 2 | 0 | 0 | 0 | 0 |
+| statistics (batch 5) | 0 | 0 | 0 | 63 | 0 | 0 | 0 |
 | strings (batch 1) | 0 | 7 | 0 | 58 | 0 | 0 | 0 |
 | strings and dates | 12 | 23 | 0 | 0 | 0 | 0 | 0 |
-| transforms | 5 | 14 | 0 | 0 | 0 | 0 | 0 |
+| transforms | 4 | 15 | 0 | 6 | 0 | 0 | 0 |
 
 ## Every function
 
@@ -165,8 +173,8 @@ Cases = number of differential test cases in which the head occurs.
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `Assuming` | promoted | 4 | Assuming[assum, expr] evaluates expr with $Assumptions = $Assumptions && assum (held arguments), restoring $Assumptions afterwards, as in Wolfram |
-| `Assumptions` | fixed | 9 | Wolfram option name: Assumptions -> cond is accepted by Simplify, Refine and Integrate (default $Assumptions, which is True unless set or changed by Assuming). Assumptions[...] used as a function raises ValueError (legacy Assumptions[expr] always returned {}) |
-| `Coefficient` | fixed | 6 | legacy used Poly.nth, failing for non-polynomial expressions and negative powers; now Coefficient[e, x] and Coefficient[e, x, n] on the expanded expression (n may be 0 or negative) |
+| `Assumptions` | fixed | 11 | Wolfram option name: Assumptions -> cond is accepted by Simplify, Refine and Integrate (default $Assumptions, which is True unless set or changed by Assuming). Assumptions[...] used as a function raises ValueError (legacy Assumptions[expr] always returned {}) |
+| `Coefficient` | fixed | 7 | legacy used Poly.nth, failing for non-polynomial expressions and negative powers; now Coefficient[e, x] and Coefficient[e, x, n] on the expanded expression (n may be 0 or negative) |
 | `CoefficientList` | fixed | 3 | returned coefficients from the highest power down; Wolfram lists them from x^0 upwards; nested lists for {x, y} |
 | `Collect` | verified | 3 | Collect[e, x] and Collect[e, {x, y}] |
 | `CompleteTheSquare` | fixed | 3 | a (x - h)^2 + k form (MikoshiLang); non-quadratics now raise instead of returning an Error expression |
@@ -174,9 +182,6 @@ Cases = number of differential test cases in which the head occurs.
 | `Degree` | fixed | 6 | Wolfram constant Degree = Pi/180 (30 Degree -> Pi/6, Sin[30 Degree] -> 1/2, N[Degree] -> 0.0174533); Degree[...] used as a function raises ValueError pointing to Exponent; legacy Degree[p, x] returned the polynomial degree |
 | `Discriminant` | verified | 3 | SymPy discriminant (same normalisation as Wolfram) |
 | `ExpToTrig` | verified | 3 | rewrite exponentials as trig/hyperbolic functions |
-| `Expand` | fixed | 4 | now expands products and integer powers only, like Wolfram (legacy also rewrote Exp[a + b] -> E^a E^b and expanded inside function arguments); Expand[e, patt] raises |
-| `Exponent` | promoted | 4 | Exponent[p, x]: highest power of x (Exponent[0, x] = -Infinity) |
-| `Factor` | verified | 4 | factors over the rationals (SymPy factor) |
 | `PartialFractions` | verified | 3 | MikoshiLang alias of Apart[e, x] |
 | `PolynomialDivision` | verified | 3 | {quotient, remainder} (MikoshiLang) |
 | `PolynomialQuotient` | verified | 3 | quotient over the rationals (SymPy div) |
@@ -186,10 +191,64 @@ Cases = number of differential test cases in which the head occurs.
 | `RationalizeDenominator` | fixed | 3 | legacy multiplied by conj(d)/conj(d) (a no-op) and only simplified; now SymPy radsimp, e.g. 1/(1 + Sqrt[2]) -> -1 + Sqrt[2] |
 | `Refine` | fixed | 23 | Refine[expr, assum] / Refine[expr] (uses $Assumptions) / Refine[expr, Assumptions -> a]: SymPy refine with assumption-carrying symbols and Q-propositions (Refine[Sqrt[x^2], x > 0] -> x, Refine[Abs[x], x < 0] -> -x, Refine[Sin[n Pi], Element[n, Integers]] -> 0, Refine[x > 0, x > 1] -> True); relations that do not follow stay as they are. Legacy raised |
 | `Resultant` | verified | 3 | Sylvester resultant (SymPy) |
-| `Simplify` | fixed | 12 | SymPy simplify; Simplify[e, assum] and Simplify[e, Assumptions -> a] (default $Assumptions) refine with the assumptions before and after simplifying (Simplify[Sqrt[x^2], x > 0] -> x); legacy rejected assumptions |
+| `Simplify` | fixed | 17 | SymPy simplify; Simplify[e, assum] and Simplify[e, Assumptions -> a] (default $Assumptions) refine with the assumptions before and after simplifying (Simplify[Sqrt[x^2], x > 0] -> x); legacy rejected assumptions |
 | `TrigExpand` | verified | 3 | SymPy expand_trig followed by Expand |
 | `TrigReduce` | verified | 3 | products and powers of trig functions to multiple angles (SymPy fu TR8) |
 | `TrigToExp` | verified | 3 | rewrite trig/hyperbolic functions as exponentials |
+
+### algebra (batch 4)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `ArgMax` | added | 3 | ArgMax[f, x] / ArgMax[{f, cons}, x]: a maximising point, as Maximize |
+| `ArgMin` | added | 3 | ArgMin[f, x] / ArgMin[{f, cons}, x]: a minimising point (the boundary point if the infimum is not attained), as Minimize; {x, y} gives a list |
+| `CoefficientRules` | added | 3 | CoefficientRules[p, {x1, ...}] -> {{e1, ...} -> c, ...} for the nonzero terms, in lexicographic order (third argument: "Lexicographic", "DegreeLexicographic", "DegreeReverseLexicographic"); CoefficientRules[p] uses Variables[p]; CoefficientRules[0, vars] -> {} |
+| `CountRoots` | added | 4 | CountRoots[p, x]: number of real roots counted with multiplicity; CountRoots[p, {x, a, b}] in the closed interval [a, b] (real a, b) or the closed rectangle with corners a, b (complex a, b); exact (Sturm sequences, SymPy) |
+| `Decompose` | added | 3 | Decompose[p, x] -> {p1, ..., pn} with p = p1[p2[...pn[x]]] (functional decomposition, SymPy); indecomposable p gives {p}; checked by composing back |
+| `Element` | added | 15 | Element[x, dom] for dom in Reals, Integers, Rationals, Algebraics, Complexes, Primes, Booleans: True or False when decidable for explicit numbers (Element[Sqrt[2], Rationals] -> False, Element[Pi, Algebraics] -> False), unevaluated for symbols (used in assumptions); Element[{x1, ...}, dom] tests every element (False if any is False) |
+| `Eliminate` | added | 4 | Eliminate[eqns, vars]: polynomial equations with vars eliminated (lexicographic Gröbner basis elimination), returned as p == 0 relations joined with And (Wolfram may arrange the two sides differently); True when nothing remains |
+| `Expand` | fixed | 10 | Wolfram Expand: products and positive integer powers are distributed through nested sums and products ((x + 1)^2 (y + 1) -> 1 + 2 x + x^2 + y + 2 x y + x^2 y; legacy left (1 + x)^2 unexpanded inside products), not inside function arguments or denominators; Expand[e, x] expands only the parts containing x; threads over lists and equations; Modulus/Trig options raise |
+| `ExpandAll` | added | 3 | ExpandAll[e]: Expand applied to every subexpression, including function arguments and denominators (ExpandAll[Sin[(x + 1)^2]] -> Sin[1 + 2 x + x^2]); ExpandAll[e, x] only parts containing x |
+| `ExpandDenominator` | added | 3 | expands the denominator of a rational expression (ExpandDenominator[1/((x + 1) (x - 1))] -> 1/(-1 + x^2)), numerator kept |
+| `ExpandNumerator` | added | 3 | expands the numerator of a rational expression (Numerator/Denominator as Wolfram), denominator kept |
+| `Exponent` | fixed | 8 | Exponent[p, x]: highest power of x (Exponent[0, x] = -Infinity), also for sums of non-integer powers; batch 4: Exponent[p, x, h] applies h to the list of distinct exponents (in increasing order, 0 for a constant term): Exponent[x^3 + x, x, Min] -> 1, Exponent[1 + x^2, x, List] -> {0, 2}; threads over lists |
+| `Factor` | fixed | 11 | factors over the rationals (SymPy factor); batch 4: Extension -> a or {a, ...} (algebraic extension), GaussianIntegers -> True, Modulus -> p (prime; coefficients shown in 0..p-1 as Wolfram); threads over lists and equations; note the kernel distributes a numeric content over a single sum (2 (x^2 - 2) displays expanded) |
+| `FactorList` | added | 4 | FactorList[p] -> {{c, 1}, {f1, e1}, ...}: the numeric content first (always present, 1 when trivial), then the irreducible factors over the rationals with exponents; Extension, GaussianIntegers, Modulus |
+| `FactorSquareFree` | added | 3 | square-free factorisation (SymPy sqf): FactorSquareFree[x^3 - x^2 - x + 1] -> (-1 + x)^2 (1 + x) |
+| `FactorSquareFreeList` | added | 3 | FactorSquareFreeList[p] -> {{c, 1}, {f1, 1}, {f2, 2}, ...} (numeric content first, then square-free factors with their multiplicities) |
+| `FactorTerms` | added | 3 | FactorTerms[p] pulls out the overall numeric factor (FactorTerms[2 x^2 - 4] = 2 (-2 + x^2), which the kernel displays distributed); FactorTerms[p, x] also pulls out factors free of x; the leading coefficient of the remaining polynomial is made positive |
+| `FactorTermsList` | added | 3 | FactorTermsList[p] -> {numeric factor, polynomial}; FactorTermsList[p, {x, ...}] -> {numeric factor, factor free of the variables, remaining polynomial} |
+| `FullSimplify` | added | 6 | FullSimplify[e] / FullSimplify[e, assum]: the smallest (operation count, then length) of a wider set of equivalence-preserving rewrites than Simplify (simplify, factor, cancel, together, expand, trigsimp, fu, powsimp, radsimp, sqrtdenest, gammasimp, expand_func, exp rewriting, logcombine), applied after and before refining with the assumptions; every candidate is checked numerically against the input; threads over lists and equations |
+| `FunctionDomain` | added | 5 | FunctionDomain[f, x]: the largest real domain of f as a condition on x (FunctionDomain[1/x, x] -> x < 0 \|\| x > 0, FunctionDomain[Log[x^2 - 1], x] -> x < -1 \|\| x > 1) for elementary f (SymPy continuous domain; functions with jumps such as Floor raise); checked by sampling; other domains raise |
+| `FunctionExpand` | added | 3 | FunctionExpand[e]: special functions rewritten in simpler functions (SymPy expand_func: Gamma[x + 3] -> x (1 + x) (2 + x) Gamma[x], Binomial[n, 2] -> (n - 1) n/2, Beta -> Gamma ratio, PolyGamma and Zeta at special arguments), checked numerically; FunctionExpand[e, assum] refines with assumptions |
+| `FunctionPeriod` | added | 5 | FunctionPeriod[f, x]: the fundamental period (FunctionPeriod[Sin[x]^2, x] -> Pi; SymPy's periodicity can return a multiple, so T/k is tried for k = 2..24 and verified symbolically/numerically); non-periodic polynomials and rational functions give 0 (Wolfram); undecided cases stay unevaluated |
+| `FunctionRange` | added | 4 | FunctionRange[f, x, y]: the range of the real function f as a condition on y (FunctionRange[x^2, x, y] -> y >= 0, FunctionRange[Sin[x], x, y] -> -1 <= y <= 1) via SymPy function_range over the domain; elementary f in one variable without parameters |
+| `GroebnerBasis` | added | 5 | GroebnerBasis[{p1, ...}, {x1, ...}] (lexicographic, the default Wolfram MonomialOrder; also DegreeLexicographic, DegreeReverseLexicographic): reduced basis, each polynomial made primitive with integer coefficients and a positive leading coefficient, listed from the smallest leading monomial (Wolfram's order); GroebnerBasis[polys, vars, elims] eliminates elims; equations are moved to one side; Modulus -> p |
+| `HornerForm` | added | 3 | HornerForm[p] / HornerForm[p, x] / HornerForm[p, {x, y}]: nested Horner form (SymPy horner); rational functions: HornerForm of numerator and denominator |
+| `IrreduciblePolynomialQ` | added | 4 | True if the polynomial cannot be factored over the rationals (numeric content ignored, as units of Q); constants give False; Extension, GaussianIntegers, Modulus options |
+| `MaxValue` | added | 3 | MaxValue[f, x] / MaxValue[{f, cons}, x]: the maximum (or supremum) value, as Maximize |
+| `Maximize` | fixed | 5 | Maximize[f, x] (unconstrained, as before) and batch 4: Maximize[{f, cons}, x] for one variable, as Minimize |
+| `MinValue` | added | 3 | MinValue[f, x] / MinValue[{f, cons}, x]: the minimum (or infimum) value, as Minimize |
+| `MinimalPolynomial` | added | 4 | MinimalPolynomial[s, x]: the minimal polynomial of the algebraic number s over the rationals, primitive with integer coefficients and positive leading coefficient (Wolfram); MinimalPolynomial[s] gives a pure function; transcendental input raises |
+| `Minimize` | fixed | 8 | Minimize[f, x] / Minimize[f, {x, ...}] (unconstrained, as before) and batch 4: Minimize[{f, cons}, x] for one variable with polynomial/rational/Abs constraints: global minimum over the feasible set from critical points, closed endpoints and limits at open ends and ±Infinity -> {min, {x -> x0}}; an infimum that is not attained gives the boundary point ({0, {x -> 0}} for {x, x > 0}; {-Infinity, {x -> -Infinity}} when unbounded), as Wolfram (which also warns); constraints in several variables raise |
+| `MonomialList` | added | 3 | MonomialList[p, {x1, ...}] -> the terms (coefficient times monomial) in lexicographic order (third argument: monomial order); MonomialList[p] uses Variables[p] |
+| `PolynomialGCD` | added | 4 | greatest common divisor of polynomials with rational coefficients (rational functions: gcd of numerators over lcm of denominators, as Wolfram); Modulus -> p; PolynomialGCD[p] = p |
+| `PolynomialLCM` | added | 3 | least common multiple of polynomials (factored, as Wolfram); Modulus -> p |
+| `PolynomialMod` | added | 3 | PolynomialMod[p, m]: integer m reduces every coefficient into 0..m-1 (rational coefficients need m coprime to the denominators); a polynomial m in one variable with a unit leading coefficient gives the remainder of p modulo m (no division by the leading coefficient otherwise: raises); lists of moduli apply in turn |
+| `PolynomialQ` | added | 5 | PolynomialQ[e, x] / PolynomialQ[e, {x, ...}]: True if e is a polynomial in the variables (coefficients may be anything free of them; nonnegative integer powers only); PolynomialQ[e] in all its variables |
+| `PolynomialQuotientRemainder` | added | 3 | PolynomialQuotientRemainder[p, q, x] -> {quotient, remainder} with p = quotient q + remainder and deg remainder < deg q (rational coefficients); a zero divisor raises |
+| `PolynomialReduce` | added | 3 | PolynomialReduce[p, {p1, ...}, {x1, ...}] -> {{a1, ...}, b} with p = Σ ai pi + b and b reduced with respect to the leading terms (lexicographic order, SymPy reduced; for a Gröbner basis the remainder is unique) |
+| `PossibleZeroQ` | added | 4 | PossibleZeroQ[e]: True if e simplifies to 0 or is numerically 0 (40 digits) at several sample points of its variables, False otherwise (a heuristic, as in Wolfram) |
+| `Reduce` | added | 16 | Reduce[cond, x] / Reduce[cond, x, dom] in one variable: polynomial equations over the complexes (x == r1 \|\| ..., distinct roots), periodic equations (C[1] ∈ Integers && (x == ...)), polynomial, rational and Abs inequalities with And/Or over the reals (inequalities imply real x, as Wolfram) as interval conditions, and over the integers (finite ranges listed, else x ∈ Integers with bounds); linear equations with symbolic coefficients split into cases ((b == 0 && a == 0) \|\| (a != 0 && x == -b/a)); polynomial equation systems in several variables (Or of And of equations). Results of inequalities are checked by sampling; quantifiers and multivariate inequalities raise |
+| `Roots` | added | 5 | Roots[lhs == rhs, x] -> x == r1 \|\| x == r2 \|\| ... for polynomial equations (repeated roots repeated, as Wolfram; radicals up to degree 4 unless Cubics/Quartics -> False, Root objects beyond); a single root gives x == r; no roots gives False |
+| `Solve` | fixed | 22 | Solve[eqns, vars], Solve[eqns, vars, dom] (Reals, Integers, Complexes): polynomial roots with multiplicity in Wolfram order (real ascending, then complex), radicals up to degree 4 (Cubics/Quartics -> False give Root objects) and Root[...] for higher degree (legacy returned {} for x^5 - x + 1 == 0), periodic families as ConditionalExpression[..., C[1] ∈ Integers] (legacy returned only {0, Pi} for Sin[x] == 0), denominators' zeros excluded, polynomial/rational systems (underdetermined systems solved for the later variables, as Wolfram), linear and finite quadratic Diophantine equations over the Integers; every solution is substituted back; inequalities raise (use Reduce); transcendental equations SymPy cannot solve completely raise instead of returning a partial list |
+| `SolveValues` | added | 3 | SolveValues[eqns, x] -> {v1, v2, ...}; SolveValues[eqns, {x, y}] -> {{x1, y1}, ...}; same solver and checks as Solve (domains, multiplicity, periodic families) |
+| `SymmetricPolynomial` | added | 3 | SymmetricPolynomial[k, {x1, ..., xn}]: the k-th elementary symmetric polynomial (0 for k > n, 1 for k = 0) |
+| `SymmetricReduction` | added | 3 | SymmetricReduction[f, {x1, ..., xn}] -> {p, q}: p the symmetric part written in the elementary symmetric polynomials of the xi, q the remainder, f = p + q; SymmetricReduction[f, xs, {s1, ..., sn}] writes p in the si; checked by expansion |
+| `ToRadicals` | added | 4 | ToRadicals[e] rewrites Root objects of degree <= 4 (or solvable by radicals in SymPy) as radicals, matched to the root numerically; other roots stay Root[...] |
+| `ToRules` | added | 3 | ToRules[eqns]: x == a && y == b -> {x -> a, y -> b}; a disjunction gives one rule list per case as a Sequence (so {ToRules[...]} is a Solve-style list); False gives nothing |
+| `TrigFactor` | added | 3 | TrigFactor[e]: sums of sines and cosines turned into products (sum-to-product, Fu's TR9/TR10i), then factored (TrigFactor[Sin[x] + Sin[y]] -> 2 Cos[x/2 - y/2] Sin[x/2 + y/2]); the result is checked numerically; threads over lists |
+| `Variables` | added | 3 | Variables[poly]: the independent variables (symbols and non-polynomial subexpressions such as Sin[z]) of a polynomial or rational expression, sorted (Variables[x^2 + y Sin[z]] -> {x, y, Sin[z]}) |
 
 ### associations (batch 1)
 
@@ -225,50 +284,81 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `ArcLength` | verified | 3 | ArcLength[f, {x, a, b}] = Integrate[Sqrt[1 + f'^2], {x, a, b}] (MikoshiLang curve form) |
+| `ArcCurvature` | added | 4 | ArcCurvature[{x1[t], ..., xn[t]}, t] = Sqrt[\|r'\|^2 \|r''\|^2 - (r'.r'')^2]/\|r'\|^3 (t real; gives \|x'y'' - y'x''\|/(x'^2 + y'^2)^(3/2) in 2D, \|r' x r''\|/\|r'\|^3 in 3D); ArcCurvature[f, x] for the graph y = f(x): Abs[f'']/(1 + f'^2)^(3/2) |
+| `ArcLength` | fixed | 8 | ArcLength[f, {x, a, b}] = ∫ Sqrt[1 + f'^2] (graph of f, MikoshiLang); batch 4: Wolfram's parametric form ArcLength[{x1[t], ..., xn[t]}, {t, a, b}] = ∫ Sqrt[Σ xi'^2] dt, ArcLength[Line[{p1, ...}]] (polyline), ArcLength[Circle[c, r]] = 2 π r; numeric input gives numeric output |
 | `CriticalPoints` | fixed | 3 | solutions of grad f = 0 as rule lists (real and complex, as Solve); legacy silently dropped solutions SymPy returned as tuples (most multivariate cases) |
-| `Curl` | fixed | 4 | 3D curl; the 2D form Curl[{f1, f2}, {x, y}] = df2/dx - df1/dy added (Wolfram); other dimensions raise instead of returning an Error expression |
+| `Curl` | fixed | 7 | 3D curl and the 2D scalar curl; batch 4: Curl[F, vars, chart] for Polar (scalar), Cylindrical and Spherical (orthonormal components, Wolfram) |
 | `DefiniteIntegral` | fixed | 4 | definite integral DefiniteIntegral[f, {x, a, b}] (MikoshiLang); legacy silently computed an indefinite integral for a bare variable, now that raises |
 | `DirectionalDerivative` | fixed | 3 | grad f . u/\|u\| with an exact unit vector; legacy converted the direction to floats and did not normalise it (so it returned grad f . u) |
-| `Div` | promoted | 3 | Div[{f1, ..., fn}, {x1, ..., xn}] (Cartesian) |
+| `Div` | fixed | 6 | Div[{f1, ..., fn}, {x1, ..., xn}] (Cartesian); batch 4: Div[F, vars, chart] for Polar, Cylindrical, Spherical (orthonormal components, Wolfram) |
 | `Divergence` | fixed | 3 | sum of dF_i/dx_i (MikoshiLang; Wolfram Div); mismatched lengths now raise (legacy zip-truncated) |
 | `ExactODEQ` | verified | 3 | True when M dx + N dy = 0 is exact (dM/dy == dN/dx) |
 | `FindMinimum` | fixed | 3 | Wolfram FindMinimum[f, {x, x0}] / [f, {{x, x0}, {y, y0}}] -> {fmin, {x -> xmin, ...}} (local, numeric, BFGS via SciPy); the legacy form [f, {x, y}, {x0, y0}] is accepted and returns the same format; non-convergence raises |
 | `GeneratingFunction` | fixed | 3 | GeneratingFunction[{a0, a1, ...}, x] = a0 + a1 x + ... (MikoshiLang finite form); exact (legacy converted coefficients to floats); Wolfram's GeneratingFunction[expr, n, x] is not supported |
-| `Grad` | promoted | 3 | Grad[f, {x1, ..., xn}] (Cartesian); Grad of a vector field gives the Jacobian |
+| `Grad` | fixed | 8 | Grad[f, {x1, ..., xn}] (Cartesian; a vector field gives the Jacobian); batch 4: Grad[f, vars, chart] for "Cartesian", "Polar" {r, θ}, "Cylindrical" {r, θ, z}, "Spherical" {r, θ, φ} (θ polar angle) in the orthonormal basis (Wolfram) |
 | `Gradient` | verified | 3 | list of partial derivatives (MikoshiLang; Wolfram Grad) |
 | `HessianMatrix` | verified | 3 | matrix of second partial derivatives |
 | `InflectionPoints` | fixed | 3 | real points where f'' changes sign; legacy returned every root of f'' (so x^4 reported 0, which is not an inflection point) and complex roots |
-| `Integrate` | fixed | 13 | indefinite (no constant) and definite integrals; several variables as Wolfram (the last specification is innermost, so its bounds may depend on earlier variables); Assumptions -> a option (default $Assumptions). Results that hold only under a condition are returned as Wolfram ConditionalExpression[value, cond] (Integrate[Exp[-a x], {x, 0, Infinity}] -> ConditionalExpression[1/a, Abs[Arg[a]] < Pi/2]); under assumptions that imply the condition the plain value is returned, and assumptions that contradict it raise (divergent). Previously such integrals hit the recursion limit. Indeterminate results raise; integrals SymPy cannot do stay as Integrate[...] |
 | `IntegratingFactor` | fixed | 3 | mu(x) or mu(y) making M dx + N dy exact; the test is now applied to the simplified ratio and failure raises (legacy returned an Error expression) |
 | `JacobianMatrix` | verified | 3 | matrix dF_i/dx_j |
 | `LaplaceODESolve` | fixed | 12 | MikoshiLang helper (not a Wolfram built-in): LaplaceODESolve[eqn \| {eqn, y[0] == a, y'[0] == b, ...}, y, t] solves a linear constant-coefficient ODE by the Laplace transform and returns {{y[t] -> sol}} like DSolve, valid for t > 0. Initial values that are not given appear as y[0], y'[0], ... (Laplace form) rather than C[k]. Every solution is substituted back into the ODE and the initial conditions before it is returned. Non-linear or variable-coefficient equations raise (use DSolve). Legacy transformed the raw equation and solved for an unrelated symbol, so it never returned a solution |
-| `Laplacian` | promoted | 3 | Laplacian[f, {x1, ..., xn}] (Cartesian) |
+| `Laplacian` | fixed | 7 | Laplacian[f, {x1, ..., xn}] (Cartesian); batch 4: Laplacian[f, vars, chart] for Polar, Cylindrical, Spherical (Wolfram) |
 | `LaurentSeries` | fixed | 3 | LaurentSeries[f, x, a, n]: Laurent expansion up to (x - a)^n without the O-term (legacy kept an O-term and was exclusive in n) |
 | `LinearProgramming` | fixed | 4 | legacy solved A.x <= b with floats; Wolfram LinearProgramming[c, m, b] minimises c.x subject to m.x >= b and x >= 0; now exact (SymPy simplex); infeasible/unbounded problems raise |
 | `LyapunovDerivative` | fixed | 3 | dV/dt = grad V . F along x' = F(x) (MikoshiLang); mismatched lengths now raise (legacy zip-truncated) |
 | `MaClaurinSeries` | fixed | 4 | MaClaurinSeries[f, {x, n}] about 0 up to x^n (legacy used the point slot and an exclusive order); the 3-element form {x, 0, n} is accepted, a non-zero centre raises |
-| `Maximize` | fixed | 3 | exact global {max, {x -> x0}} (Wolfram format) for functions of one variable; legacy was a local SciPy search in a non-Wolfram format |
-| `Minimize` | fixed | 4 | legacy ran a local SciPy search and returned {x -> x0, MinValue -> v} floats (garbage for unbounded functions); now Wolfram's exact global {min, {x -> x0}} for functions of one variable; constrained/multivariate problems raise |
 | `NthDerivative` | fixed | 4 | NthDerivative[f, x, n] = D[f, {x, n}]; n must be a non-negative integer (legacy truncated reals) |
 | `ODEClassify` | verified | 3 | list of SymPy ODE hint names for eq, y, x (MikoshiLang) |
 | `PhasePlane` | fixed | 3 | equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped tuple-form solutions |
-| `Product` | fixed | 4 | added {i, n}, {i, a, b, step} and {i, {values}} iterators and multiple iterators |
-| `RSolve` | fixed | 3 | legacy called a SymPy Symbol (TypeError for every input); now RSolve[eq or {eq, a[0] == v, ...}, a[n], n] -> {{a[n] -> ...}} via SymPy rsolve |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Sum` | fixed | 9 | added {i, n}, {i, a, b, step} and {i, {values}} iterators and multiple iterators (first outermost); sums divergent to +-Infinity return that limit, other non-convergent sums stay unevaluated, indeterminate (nan) results raise |
-| `Table` | kernel | 8 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 12 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
+
+### calculus (batch 4)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `ComposeSeries` | added | 3 | ComposeSeries[s1, s2, ...] = s1(s2(...)) for power series about 0 where the inner series vanish at 0; the order is the one the truncations allow (ComposeSeries[Series[Exp[x], {x, 0, 5}], Series[Sin[x], {x, 0, 5}]] -> 1 + x + x^2/2 - x^4/8 - x^5/15 + O[x]^6) |
+| `ConditionalExpression` | added | 8 | ConditionalExpression[expr, cond]: expr when cond is True, Undefined when cond is False, nested conditions combine with And (ConditionalExpression[ConditionalExpression[x, a], b] = ConditionalExpression[x, a && b]), otherwise unevaluated (returned by Integrate, Sum, Solve and the Fourier coefficient functions for parameter conditions; arithmetic on ConditionalExpression objects is not propagated).  Single implementation shared by batches 4 and 6. |
+| `D` | fixed | 18 | batch 4: D[f, x, y, ...], D[f, {x, n}], D[f, {{x1, x2, ...}}] (gradient) and {{...}, n} (arrays of higher derivatives), threads over lists and equations (implicit differentiation D[x^2 + y[x]^2 == 1, x]), NonConstants -> {y}, derivatives with respect to f[x]; chain rule results are Wolfram Derivative forms (D[f[g[x]], x] -> f'[g[x]] g'[x]; previously D[f[g[x]], g[x]] g'[x]); symbolic orders stay unevaluated; D[f] with no variable returns f |
+| `DSolve` | fixed | 13 | batch 4: every solution returned by DSolve (ODEs and ODE systems in one variable, initial conditions, y[x] or y forms) is now substituted back into the equations and checked (symbolically, else numerically at sample points); PDEs raise. Free constants may be numbered differently from Wolfram (the solution family is the same) |
+| `DSolveValue` | added | 4 | DSolveValue[eqns, y[x], x] gives the solution value, DSolveValue[eqns, y, x] a pure function, DSolveValue[eqns, expr, x] the value of expr; several solutions give a list; checked like DSolve |
+| `Derivative` | added | 4 | Derivative[n1, n2, ...][f] for pure functions and built-in mathematical functions gives a pure function (Derivative[1][Sin] -> Cos[#1] &, Derivative[2][#^3 &] -> 6 #1 &); Derivative[n...][f][x...] evaluates for known f (Sin'[x] -> Cos[x], previously unevaluated) and stays symbolic for undefined f (f'[x], Derivative[1, 0][f][x, y]); Derivative[0][f] -> f |
+| `DiracDelta` | added | 6 | Wolfram DiracDelta[x1, ...]: 0 when any argument is a nonzero real number, unevaluated otherwise (DiracDelta[0] stays); complex numeric arguments raise; integrates and transforms through SymPy (Integrate[f[x] DiracDelta[x - a], {x, -Infinity, Infinity}] -> f[a]); D[HeavisideTheta[x], x] -> DiracDelta[x] |
+| `Dt` | added | 4 | total derivatives: Dt[f, x] treats every other symbol as a function of x (Dt[x^2 y, x] -> 2 x y + x^2 Dt[y, x]), Dt[f, {x, n}], Dt[f] is the total differential (Dt[x y] -> y Dt[x] + x Dt[y]); Constants -> {a, ...}; Dt[y, x] for an independent symbol y stays unevaluated; numeric constants (Pi, E, ...) have derivative 0 |
+| `FourierCoefficient` | added | 7 | FourierCoefficient[f, t, n] = 1/(2π) ∫_{-π}^{π} f e^(-int) dt (Wolfram default FourierParameters {1, 1}; other parameters raise); integer or symbolic n (symbolic n is integer: a separate n == 0 value appears as Piecewise[{{c0, n == 0}}, g[n]]); the general term is checked against direct integrals at n = ±1, ±2, 3, 5 |
+| `FourierCosCoefficient` | added | 3 | FourierCosCoefficient[f, t, n] = 2/π ∫_0^π f cos(nt) dt, with 1/π ∫_0^π f dt for n = 0 (Wolfram); symbolic n checked against direct integrals |
+| `FourierCosSeries` | added | 3 | FourierCosSeries[f, t, k] = Σ_{n=0}^{k} FourierCosCoefficient[f, t, n] Cos[n t] (even extension of f on [0, π]) |
+| `FourierSeries` | added | 3 | FourierSeries[f, t, k] = Σ_{n=-k}^{k} FourierCoefficient[f, t, n] E^(I n t) (Wolfram default parameters; others raise) |
+| `FourierSinCoefficient` | added | 3 | FourierSinCoefficient[f, t, n] = 2/π ∫_0^π f sin(nt) dt (Wolfram); symbolic n checked against direct integrals |
+| `FourierSinSeries` | added | 3 | FourierSinSeries[f, t, k] = Σ_{n=1}^{k} FourierSinCoefficient[f, t, n] Sin[n t] (odd extension of f on [0, π]) |
+| `FourierTrigSeries` | added | 3 | FourierTrigSeries[f, t, k] = a0 + Σ_{n=1}^{k} (a_n Cos[n t] + b_n Sin[n t]) with a0 = 1/(2π)∫f, a_n = 1/π ∫_{-π}^{π} f cos(nt), b_n = 1/π ∫_{-π}^{π} f sin(nt) (Wolfram default parameters) |
+| `HeavisideTheta` | added | 8 | Wolfram HeavisideTheta[x1, ...]: 1 when every argument is positive, 0 when any is negative, unevaluated at 0 (unlike UnitStep[0] = 1 and SymPy's Heaviside(0) = 1/2); D gives DiracDelta |
+| `ImplicitD` | added | 5 | ImplicitD[f == g, y, x] = dy/dx for y defined implicitly (ImplicitD[x^2 + y^2 == 1, y, x] -> -x/y), ImplicitD[eqn, y, {x, n}] higher derivatives (expressed in x and y), ImplicitD[{eqns}, {y1, y2}, x] for systems |
+| `Integrate` | fixed | 33 | batch 4: indefinite integrals (verified by differentiating back), definite, improper and multiple integrals (the last specification is innermost); options Assumptions, GenerateConditions (Automatic/True give ConditionalExpression[value, cond] when the result needs a parameter condition, e.g. Integrate[x^a, {x, 0, 1}] -> ConditionalExpression[1/(1 + a), Re[a] > -1]; False gives the generic value) and PrincipalValue -> True (Cauchy principal value, Integrate[1/x, {x, -1, 2}, PrincipalValue -> True] -> Log[2]); SymPy convergence conditions are rewritten in Wolfram form (Abs[Arg[a]] < Pi/2 -> Re[a] > 0); integrals that diverge to +-Infinity give that limit, indeterminate (oscillating/cancelling) ones raise; HeavisideTheta and DiracDelta integrands are supported; integrals SymPy cannot do stay unevaluated |
+| `InverseSeries` | added | 3 | InverseSeries[s] / InverseSeries[s, y] for a power series s = a1 x + a2 x^2 + ... + O[x]^n about 0 with a1 != 0: the series of the inverse function to the same order (InverseSeries[Series[Sin[x], {x, 0, 5}]] -> x + x^3/6 + 3 x^5/40 + O[x]^6); the result is checked by composing back |
+| `Limit` | fixed | 15 | batch 4: Limit[f, x -> a] (two-sided: Indeterminate when the one-sided limits differ), Direction -> "FromAbove" / "FromBelow" / -1 / 1 / "TwoSided", Assumptions, limits at +-Infinity, lists of functions, and multivariate limits Limit[f, {x, y} -> {a, b}] (continuity after cancellation, Indeterminate when two paths disagree, otherwise a clear error); oscillating limits raise (use MaxLimit/MinLimit); legacy rejected every option |
+| `MaxLimit` | added | 4 | upper limit (limsup) MaxLimit[f, x -> a] with Direction and Assumptions: the larger one-sided limit, or A + \|B\| for f = A + B Sin[g] / A + B Cos[g] with g -> +-Infinity (MaxLimit[Sin[1/x], x -> 0] -> 1); other oscillating functions raise |
+| `MinLimit` | added | 3 | lower limit (liminf) MinLimit[f, x -> a]; see MaxLimit (MinLimit[Sign[x], x -> 0] -> -1) |
+| `Normal` | fixed | 20 | batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate series) and evaluates the remaining polynomial; associations and other heads as before (batch 1) |
+| `O` | added | 3 | order term O[x]^n / O[x - x0]^n / O[1/x]^n of Series results (stays symbolic); Normal removes it; SeriesCoefficient, InverseSeries and ComposeSeries read it |
+| `Product` | fixed | 7 | batch 4: as Sum (finite, symbolic and infinite products via SymPy; parametric products give the generic value, ConditionalExpression with GenerateConditions -> True) |
+| `RSolve` | fixed | 10 | batch 4: RSolve[eqns, a[n], n] -> {{a[n] -> ...}} and RSolve[eqns, a, n] -> {{a -> Function[{n}, ...]}}; linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every solution is substituted back into the recurrence and the initial conditions; free constants are C[1], C[2], ...; systems raise |
+| `RSolveValue` | added | 4 | RSolveValue[eqns, a[n], n] gives the solution value, RSolveValue[eqns, a, n] a pure function, RSolveValue[eqns, expr, n] the value of expr (e.g. a[10]); checked like RSolve |
+| `Series` | fixed | 27 | batch 4: Series[f, {x, x0, n}] with Laurent and Puiseux terms, expansions at +-Infinity in powers of 1/x (O[1/x]^(n+1)), the O term always present (Series[1/x, {x, 0, 2}] -> 1/x + O[x]^3; previously dropped), expansions about x0 grouped in powers of (x - x0) (O[x - x0]^k); several variables Series[f, {x, x0, nx}, {y, y0, ny}] expand in x with coefficients that are series in y; threads over lists; functions SymPy cannot expand raise |
+| `SeriesCoefficient` | added | 9 | SeriesCoefficient[f, {x, x0, n}] (negative n for Laurent series, x0 may be Infinity: coefficient of (1/x)^n), several variables {x, x0, nx}, {y, y0, ny}, and SeriesCoefficient[series, n]; a symbolic n gives Piecewise[{{general term, n >= 0}}, 0] when SymPy finds a formal power series (checked against 10 Taylor coefficients); a coefficient beyond a given series' order is Indeterminate |
+| `Sum` | fixed | 15 | batch 4: as before ({i, n}, {i, a, b}, {i, a, b, di}, {i, {values}}, several iterators, first outermost; divergent sums to +-Infinity give that limit, other non-convergent sums stay unevaluated), plus parametric series that SymPy sums under a convergence condition: Wolfram's generic value by default (Sum[x^k, {k, 0, Infinity}] -> 1/(1 - x); previously a recursion error) and ConditionalExpression[value, cond] with GenerateConditions -> True |
+| `SumConvergence` | added | 7 | SumConvergence[f, n]: True/False for the convergence of Sum[f, {n, k, Infinity}] (SymPy's ratio, root, integral, comparison, alternating-series tests); the p-series family 1/n^p and n^p r^n with a parameter gives the Wolfram condition (Re[p] > 1, Abs[r] < 1); undecided cases stay unevaluated |
 
 ### combinatorics
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `ArithmeticSequence` | fixed | 3 | first n terms a, a + d, ...; exact for exact input (legacy converted to floats and rounded to 10 digits) |
-| `Binomial` | fixed | 8 | legacy truncated arguments with int() (Binomial[5/2, 1] = 2) and failed on symbols; now exact/symbolic with Wolfram's conventions for negative integers (Binomial[-1, -1] = 1) |
+| `Binomial` | fixed | 14 | legacy truncated arguments with int() (Binomial[5/2, 1] = 2) and failed on symbols; now exact/symbolic with Wolfram's conventions for negative integers (Binomial[-1, -1] = 1) |
 | `CartesianProduct` | verified | 3 | pairs {a, b} for a in the first list and b in the second (= Tuples[{l1, l2}]); now variadic |
 | `Compositions` | fixed | 3 | legacy returned k-subsets of {1..n-1}; now Compositions[n, k] lists all ordered k-tuples of non-negative integers summing to n (Combinatorica convention), lexicographic |
 | `Derangements` | verified | 4 | number of derangements !n (MikoshiLang; same as Subfactorial) |
@@ -278,7 +368,7 @@ Cases = number of differential test cases in which the head occurs.
 | `FibonacciSequence` | verified | 3 | first n Fibonacci numbers F0, F1, ... (MikoshiLang) |
 | `GeometricSequence` | fixed | 3 | first n terms a, a r, ...; exact for exact input (legacy converted to floats and rounded) |
 | `HookLengthFormula` | fixed | 5 | legacy subtracted the row index from each hook (wrong counts / ZeroDivisionError); now the number of standard Young tableaux of the shape |
-| `IntegerPartitions` | fixed | 4 | legacy returned the number of partitions; Wolfram IntegerPartitions lists them in reverse lexicographic order; supports [n], [n, k], [n, {k}], [n, {kmin, kmax}], [n, kspec, {s1, ...}] |
+| `IntegerPartitions` | fixed | 7 | legacy returned the number of partitions; Wolfram IntegerPartitions lists them in reverse lexicographic order; supports [n], [n, k], [n, {k}], [n, {kmin, kmax}], [n, kspec, {s1, ...} or All] and [n, kspec, sspec, m] (first m partitions, batch 6) |
 | `Multinomial` | fixed | 4 | legacy Multinomial[n, {k...}] was not Wolfram's form; now Multinomial[n1, n2, ...] = (n1 + n2 + ...)!/(n1! n2! ...), exact for any exact arguments |
 | `PartitionCount` | verified | 3 | MikoshiLang alias of PartitionsP |
 | `PartitionsList` | fixed | 3 | legacy reused one mutable dict (every entry was the last partition); now the partitions of n in Wolfram IntegerPartitions order |
@@ -287,9 +377,51 @@ Cases = number of differential test cases in which the head occurs.
 | `Permutations` | fixed | 4 | legacy Permutations[n, k] returned the count n!/(n-k)!; Wolfram lists permutations of a list (duplicates removed); Permutations[list, n] and [list, {n}] supported; integer arguments raise |
 | `PowerSet` | verified | 3 | MikoshiLang alias of Subsets[list] |
 | `Subfactorial` | promoted | 3 | !n |
-| `Subsets` | fixed | 3 | Subsets[list], [list, n], [list, {n}], [list, {min, max}] in Wolfram order (by size, then position) |
-| `Tuples` | promoted | 3 | Tuples[list, n] and Tuples[{l1, l2, ...}] |
+| `Subsets` | fixed | 12 | Subsets[list], [list, n], [list, {n}], [list, {min, max}], [list, {min, max, step}] in Wolfram order (by size, then position); batch 6 adds Subsets[list, nspec, s] (first s), [list, nspec, {s}] (the s-th, computed by unranking) and [list, nspec, {m, n(, step)}], and any head (Subsets[f[a, b]]) |
+| `Tuples` | promoted | 7 | Tuples[list, n] and Tuples[{l1, l2, ...}]; batch 6 adds Tuples[list, {n1, n2, ...}] (all n1 x n2 x ... arrays) and any head (Tuples[f[a, b], 2] = {f[a, a], f[a, b], f[b, a], f[b, b]}) |
 | `YoungTableaux` | promoted | 22 | YoungTableaux[shape]: all standard Young tableaux of the partition shape (rows strictly increase left to right and down columns), sorted by row word, as Combinatorica Tableaux[shape]; their number equals HookLengthFormula[shape]. YoungTableaux[n]: all standard tableaux with n cells (over all partitions in reverse-lexicographic order), whose number is the number of involutions of n. Refuses more than 100000 tableaux. Legacy built one tableau and returned its size |
+
+### combinatorics (batch 6)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `AbelianGroup` | added | 4 | AbelianGroup[{n1, n2, ...}] inert object (direct product of cyclic groups); GroupOrder supported |
+| `AlternatingFactorial` | added | 3 | Sum[(-1)^(n - k) k!, {k, n}] for integers n >= 0 (OEIS A005165); other arguments stay unevaluated |
+| `AlternatingGroup` | added | 12 | AlternatingGroup[n] inert group object (permutation representation on 1..n) for GroupOrder, GroupElements, GroupMultiplicationTable, GroupOrbits, Permute, ... |
+| `Cycles` | added | 57 | canonical form: 1-cycles dropped, each cycle starts with its smallest point, cycles sorted by first point; repeated or non-positive points raise |
+| `CyclicGroup` | added | 5 | CyclicGroup[n] inert group object (permutation representation on 1..n) for GroupOrder, GroupElements, GroupMultiplicationTable, GroupOrbits, Permute, ... |
+| `DihedralGroup` | added | 7 | DihedralGroup[n] inert group object (permutation representation on 1..n) for GroupOrder, GroupElements, GroupMultiplicationTable, GroupOrbits, Permute, ... |
+| `Fibonorial` | added | 3 | Product[Fibonacci[k], {k, n}] for integers n >= 0 (OEIS A003266); other arguments stay unevaluated |
+| `FindPermutation` | added | 6 | FindPermutation[e1, e2]: Cycles p with Permute[e1, p] == e2; FindPermutation[e] relative to Sort[e]; repeated elements (ambiguous) raise |
+| `FrobeniusNumber` | added | 7 | largest integer not a non-negative integer combination of the a_i; -1 if some a_i = 1; Infinity when GCD > 1 (round-robin shortest paths over residues of the smallest a_i) |
+| `FrobeniusSolve` | added | 6 | all non-negative integer solutions of a.x == b, sorted lexicographically; the 3-argument form (first m solutions) raises because Wolfram's selection order is not reproduced |
+| `GroupElementPosition` | added | 3 | position of a permutation (or list of them) in GroupElements[group]; non-members raise |
+| `GroupElementQ` | added | 5 | membership test for a permutation in a group |
+| `GroupElements` | added | 16 | all elements as Cycles objects sorted by image lists (Wolfram's standard order for a sorted base; the identity is first); GroupElements[g, {r1, ...}] picks positions (negative from the end) |
+| `GroupGenerators` | added | 4 | generators of a PermutationGroup (as given, identities removed), SymmetricGroup[n] ({Cycles[{{1, 2}}], Cycles[{{1, ..., n}}]}) and CyclicGroup[n]; other named groups raise because Wolfram's chosen generating sets are not reproduced |
+| `GroupMultiplicationTable` | added | 5 | m[[i, j]] = position of PermutationProduct[g_i, g_j] in GroupElements (array indexing) |
+| `GroupOrbits` | added | 3 | GroupOrbits[group] orbits of the support points; GroupOrbits[group, {p1, ...}] orbits of the given points; each orbit sorted, orbits ordered by smallest point |
+| `GroupOrder` | added | 15 | order of SymmetricGroup (n!), AlternatingGroup (n!/2, 1 for n <= 2), CyclicGroup (n), DihedralGroup (2n), AbelianGroup (product) or a PermutationGroup (Schreier-Sims via SymPy) |
+| `Hyperfactorial` | added | 3 | Product[k^k, {k, n}] for integers n >= 0 (Hyperfactorial[0] = 1); approximate real arguments via mpmath hyperfac; exact non-integers stay unevaluated |
+| `InversePermutation` | added | 4 | inverse of a Cycles object or permutation list (same representation as the input) |
+| `PermutationCycles` | added | 4 | disjoint-cycle form of a permutation list (i -> p_i) or canonical form of a Cycles object |
+| `PermutationCyclesQ` | added | 5 | True for a valid Cycles object (disjoint positive integer cycles), else False |
+| `PermutationGroup` | added | 13 | PermutationGroup[{g1, ...}] inert group generated by Cycles objects or permutation lists |
+| `PermutationLength` | added | 3 | number of points moved |
+| `PermutationList` | added | 6 | PermutationList[perm] (length PermutationMax) and PermutationList[perm, n] padded to length n; n smaller than the largest moved point raises |
+| `PermutationListQ` | added | 5 | True for a rearrangement of Range[n] (n >= 0) |
+| `PermutationMax` | added | 6 | largest moved point; identity -> -Infinity (Max of the empty support) |
+| `PermutationMin` | added | 3 | smallest moved point; identity -> Infinity |
+| `PermutationOrder` | added | 3 | LCM of the cycle lengths; identity -> 1 |
+| `PermutationPower` | added | 5 | n-th power (n any integer, negative = inverse powers) |
+| `PermutationProduct` | added | 11 | left-to-right product (apply the first permutation first); PermutationProduct[] = Cycles[{}], PermutationProduct[x] = x; all permutation lists give a list, otherwise Cycles |
+| `PermutationReplace` | added | 5 | replaces each positive integer in expr (at any depth in lists) by its image; Cycles objects in expr are relabelled (conjugated); a group gives the list of images under GroupElements |
+| `PermutationSupport` | added | 3 | sorted list of the points moved |
+| `Permute` | added | 7 | Permute[expr, perm] moves part i to position perm(i) (Permute[{a, b, c}, {2, 3, 1}] = {c, a, b}); a group gives the list over GroupElements |
+| `PolygonalNumber` | added | 5 | PolygonalNumber[n] = n (n + 1)/2 (triangular); PolygonalNumber[r, n] = n ((r - 2) n - (r - 4))/2; exact numeric arguments of any kind; symbolic arguments stay unevaluated |
+| `RandomPermutation` | added | 5 | RandomPermutation[n] (uniform on Range[n], a Cycles object), [n, k] k of them, [group], [group, k]; reproducible after SeedRandom (the stream differs from Wolfram's generator) |
+| `Signature` | added | 7 | sign (+1/-1) of the permutation that sorts the list into canonical order; 0 if any element is repeated |
+| `SymmetricGroup` | added | 17 | SymmetricGroup[n] inert group object (permutation representation on 1..n) for GroupOrder, GroupElements, GroupMultiplicationTable, GroupOrbits, Permute, ... |
 
 ### constants
 
@@ -329,11 +461,64 @@ Cases = number of differential test cases in which the head occurs.
 | `WienDisplacement` | fixed | 3 | Wien displacement constant b (m K), CODATA 2018; the legacy 1-argument form, which ignored its argument, now raises an arity error |
 | `WienDisplacementConstant` | fixed | 4 | CODATA 2018 (m K); only a 1-argument form existed, ignoring its argument |
 
+### discrete mathematics (batch 6)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `BitAnd` | added | 7 |  |
+| `BitClear` | added | 3 |  |
+| `BitFlip` | added | 3 |  |
+| `BitGet` | added | 3 |  |
+| `BitLength` | added | 5 | for negative n, the length of BitNot[n] (two's complement without the sign) |
+| `BitNot` | added | 3 |  |
+| `BitOr` | added | 3 |  |
+| `BitSet` | added | 3 |  |
+| `BitShiftLeft` | added | 4 | negative shifts shift right (IntegerPart) |
+| `BitShiftRight` | added | 4 | IntegerPart[n / 2^k] (rounds toward zero) |
+| `BitXor` | added | 3 |  |
+| `CellularAutomaton` | added | 10 | 1D rules (number, {n, k}, {n, k, r} or explicit neighbourhood rules); init a cyclic list or {{cells}, background}; CellularAutomaton[rule, init] is one step, [rule, init, t] gives t + 1 rows (the {{cells}, bg} form uses width m + 2 r t, Wolfram's default region) |
+| `CompositeQ` | added | 5 | integers; CompositeQ[-n] == CompositeQ[n] |
+| `ContinuedFraction` | added | 22 | rationals exactly; quadratic irrationals as {a1, ..., {period}}; other exact reals need the term count (certified at two precisions); inexact numbers give only the terms fixed by their precision |
+| `Convergents` | added | 6 | Convergents[list] for finite term lists (symbolic allowed); Convergents[x, n] via ContinuedFraction |
+| `CoprimeQ` | added | 7 | pairwise coprime integers |
+| `DifferenceDelta` | added | 11 | n-th forward difference sum_k (-1)^(n-k) C(n,k) f(i + k h); result simplified (expanded when polynomial) |
+| `DiscreteRatio` | added | 4 | iterated ratio r_{k+1}(i) = r_k(i + h) / r_k(i); simplified with combsimp/simplify |
+| `DiscreteShift` | added | 4 |  |
+| `Divisible` | added | 9 | exact numbers: n/m an integer (Gaussian integer for complex input) |
+| `FareySequence` | added | 7 |  |
+| `FindLinearRecurrence` | added | 8 | exact rational sequences only (Berlekamp-Massey); the minimal recurrence is returned only when the list holds at least twice its order of terms; stays unevaluated otherwise |
+| `FromContinuedFraction` | added | 9 | a trailing list is a period (gives the quadratic irrational); symbolic terms allowed for finite lists |
+| `IntegerExponent` | added | 5 | default base 10; IntegerExponent[0, b] = Infinity; negative n uses \|n\| |
+| `Interval` | added | 20 | canonical form only: endpoints ordered, components sorted and overlapping/touching components merged; interval arithmetic is not implemented |
+| `IntervalIntersection` | added | 4 |  |
+| `IntervalMemberQ` | added | 7 | False for symbolic x; an Interval x must lie within the union |
+| `IntervalUnion` | added | 4 |  |
+| `LinearRecurrence` | added | 13 | ker and init must have the same length (Wolfram's 'only the last Length[ker] values are used' case is refused); {n} gives the n-th term, {nmin, nmax} needs 1 <= nmin <= nmax; matrix kernels are not supported |
+| `MantissaExponent` | added | 12 | {m, e} with 1/b <= \|m\| < 1 and x == m b^e; exact input stays exact; MantissaExponent[0] = {0, 0} |
+| `MersennePrimeExponent` | added | 3 | k <= 48 |
+| `MersennePrimeExponentQ` | added | 4 | decided up to 57885161 and for composite n; larger primes raise |
+| `NumberDigit` | added | 7 | digit of \|x\| multiplying b^n; exact reals only (irrationals certified at two precisions) |
+| `NumberExpand` | added | 7 | integers only: digit values d b^k, sign carried by every term; length pads with leading zeros |
+| `PerfectNumber` | added | 4 | k <= 48 (verified Mersenne primes) |
+| `PerfectNumberQ` | added | 5 | even perfect numbers via the 48 known Mersenne prime exponents; odd n beyond 10^1500 raise |
+| `PowerModList` | added | 7 | all x in [0, m) with x^q == a^p (mod m) for s = p/q; brute force for m <= 10^6 |
+| `PowersRepresentations` | added | 5 | non-decreasing k-tuples of non-negative integers whose p-th powers sum to n, in lexicographic order |
+| `PrimeNu` | added | 4 | number of distinct prime factors of \|n\|; 0 raises |
+| `PrimeOmega` | added | 3 | prime factors of \|n\| counted with multiplicity; 0 raises |
+| `PrimitiveRootList` | added | 6 | sorted primitive roots modulo n; {} when none exist; n <= 10^7 |
+| `QuadraticIrrationalQ` | added | 10 | True for irrational real roots of rational quadratics; False for rationals, inexact and symbolic input and non-real numbers; raises when algebraicity cannot be decided |
+| `RecurrenceTable` | added | 8 | explicit recurrences: each equation must contain exactly one term of maximal shift, which is solved for; initial conditions are f[k] == value; iterator {n, nmax} (from 1) or {n, nmin, nmax} |
+| `RudinShapiro` | added | 3 | (-1)^(number of possibly overlapping 11 blocks) |
+| `SquareFreeQ` | added | 10 | integers (0 is not square-free) and polynomials with integer content 1 (via sqf_list) |
+| `SquaresR` | added | 6 | d <= 200, n <= 10^5 (exact counting) |
+| `SubstitutionSystem` | added | 5 | single-element rules on strings (character -> string) or lists (element -> list); SubstitutionSystem[rule, init, t] gives t + 1 states; neighbourhood rules are not supported |
+| `ThueMorse` | added | 3 |  |
+
 ### elementary
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Abs` | verified | 23 | verified against SymPy/mpmath |
+| `Abs` | verified | 37 | verified against SymPy/mpmath |
 | `ArcCos` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCosh` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCot` | verified | 3 | verified against SymPy/mpmath |
@@ -345,35 +530,35 @@ Cases = number of differential test cases in which the head occurs.
 | `ArcTanh` | verified | 3 | verified against SymPy/mpmath |
 | `Ceiling` | fixed | 8 | Ceiling[x] and Ceiling[x, a] (a Ceiling[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `Conjugate` | verified | 3 | verified against SymPy/mpmath |
-| `Cos` | verified | 26 | verified against SymPy/mpmath |
+| `Cos` | verified | 44 | verified against SymPy/mpmath |
 | `Cosh` | verified | 4 | verified against SymPy/mpmath |
 | `Cot` | verified | 3 | verified against SymPy/mpmath |
 | `Coth` | verified | 3 | verified against SymPy/mpmath |
 | `Csc` | verified | 3 | verified against SymPy/mpmath |
 | `Csch` | verified | 3 | verified against SymPy/mpmath |
 | `CubeRoot` | fixed | 3 | returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2) |
-| `Exp` | verified | 43 | verified against SymPy/mpmath |
-| `Floor` | fixed | 14 | Floor[x] and Floor[x, a] (a Floor[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
+| `Exp` | verified | 89 | verified against SymPy/mpmath |
+| `Floor` | fixed | 15 | Floor[x] and Floor[x, a] (a Floor[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `ImaginaryPart` | verified | 3 | verified against SymPy/mpmath |
-| `Log` | fixed | 12 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
+| `Log` | fixed | 21 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
 | `Log10` | verified | 3 | log base 10; Log10[0] = -Infinity |
 | `Log2` | verified | 3 | log base 2; Log2[0] = -Infinity |
-| `Max` | fixed | 4 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
-| `Min` | fixed | 4 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
+| `Max` | fixed | 5 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
+| `Min` | fixed | 5 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
 | `Mod` | fixed | 24 | Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset form and complex arguments were missing |
 | `Quotient` | fixed | 11 | Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = Floor[(m - d)/n]; complex arguments use Round |
 | `QuotientRemainder` | added | 4 | {Quotient[m, n], Mod[m, n]} |
 | `RealPart` | verified | 3 | verified against SymPy/mpmath |
-| `Root` | fixed | 36 | Wolfram Root[f, k]: the k-th root of the polynomial f[x] (f a pure function), ordered as Wolfram: real roots ascending, then complex roots by real part, then \|Im\|, conjugate pairs adjacent (negative imaginary part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. Legacy Root[a, n] meant a^(1/n) (now Surd/Power) |
+| `Root` | fixed | 40 | Wolfram Root[f, k]: the k-th root of the polynomial f[x] (f a pure function), ordered as Wolfram: real roots ascending, then complex roots by real part, then \|Im\|, conjugate pairs adjacent (negative imaginary part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. Legacy Root[a, n] meant a^(1/n) (now Surd/Power) |
 | `Round` | fixed | 16 | Round[x] was not implemented and Round[x, a] returned floats (Round[7, 5] = 5.0); now Wolfram half-to-even rounding, exact for exact input |
 | `Sec` | verified | 3 | verified against SymPy/mpmath |
 | `Sech` | verified | 3 | verified against SymPy/mpmath |
 | `Sign` | fixed | 9 | Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals |
-| `Sin` | verified | 44 | verified against SymPy/mpmath |
+| `Sin` | verified | 95 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
-| `Sqrt` | verified | 33 | verified against SymPy/mpmath |
+| `Sqrt` | verified | 73 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
-| `Tan` | verified | 4 | verified against SymPy/mpmath |
+| `Tan` | verified | 5 | verified against SymPy/mpmath |
 | `Tanh` | verified | 3 | verified against SymPy/mpmath |
 
 ### finance
@@ -439,23 +624,138 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `BetweennessCentrality` | fixed | 3 | {v -> c} unnormalised betweenness (Wolfram BetweennessCentrality); legacy returned NetworkX's normalised values; exact rationals (Brandes, unweighted) |
+| `BetweennessCentrality` | fixed | 9 | Graph or edge-rule input: list of unnormalised betweenness centralities in VertexList order (machine reals; directed graphs count ordered pairs; EdgeWeight respected); legacy: {v -> c} unnormalised betweenness (Wolfram BetweennessCentrality); legacy returned NetworkX's normalised values; exact rationals (Brandes, unweighted) |
 | `BipartiteQ` | verified | 3 | 2-colourability test (BFS) |
 | `ChromaticNumber` | fixed | 4 | exact chromatic number by backtracking (legacy used a greedy colouring, an upper bound only); graphs with more than 40 vertices raise |
 | `ClusteringCoefficient` | fixed | 3 | ClusteringCoefficient[g] = mean local clustering (vertices of degree < 2 count 0, as Wolfram MeanClusteringCoefficient), [g, v] local coefficient; exact rationals (legacy floats) |
-| `ConnectedComponents` | fixed | 3 | components largest first (Wolfram), vertices in order of appearance; legacy returned NetworkX set order |
+| `ConnectedComponents` | fixed | 9 | Graph or edge-rule input: connected components (strongly connected for directed graphs), largest first, vertices in VertexList order; legacy: components largest first (Wolfram), vertices in order of appearance; legacy returned NetworkX set order |
 | `ConnectedQ` | verified | 3 | True when the graph is connected |
 | `Dijkstra` | fixed | 3 | {v -> distance} for every reachable vertex, in vertex order |
-| `GraphCenter` | fixed | 3 | vertices of minimum eccentricity; disconnected graphs raise (legacy returned {} silently) |
-| `GraphDiameter` | fixed | 3 | maximum eccentricity; Infinity for disconnected graphs (legacy returned None) |
-| `GraphRadius` | fixed | 3 | minimum eccentricity; Infinity for disconnected graphs (legacy returned None) |
+| `GraphCenter` | fixed | 7 | vertices of minimum eccentricity; disconnected graphs raise; legacy: vertices of minimum eccentricity; disconnected graphs raise (legacy returned {} silently) |
+| `GraphDiameter` | fixed | 7 | maximum eccentricity (Infinity when not (strongly) connected); weighted with EdgeWeight; legacy: maximum eccentricity; Infinity for disconnected graphs (legacy returned None) |
+| `GraphRadius` | fixed | 7 | minimum eccentricity (Infinity when not (strongly) connected); legacy: minimum eccentricity; Infinity for disconnected graphs (legacy returned None) |
 | `MaximalMatching` | verified | 3 | a maximum-cardinality matching (NetworkX max_weight_matching with unit weights), edges sorted; requires NetworkX |
 | `MinimumSpanningTree` | fixed | 3 | edges of a minimum spanning forest (Kruskal, weights {u, v, w} supported); legacy needed NetworkX |
 | `PageRank` | fixed | 3 | {v -> rank} PageRank with damping 0.85 treating each edge as two directed links (power iteration to 1e-12, matches NetworkX); legacy required NetworkX |
 | `PathLength` | fixed | 3 | (weighted) shortest-path distance, Infinity when unreachable; unknown vertices raise |
 | `ShortestPath` | fixed | 4 | vertex list of a shortest (weighted) path, {} when unreachable (Wolfram FindShortestPath); unknown vertices raise |
 | `SpanningTree` | fixed | 3 | edges of a spanning forest (Kruskal) |
-| `VertexDegree` | fixed | 4 | number of incident edges (self-loops count twice, multi-edges counted); unknown vertices raise |
+| `VertexDegree` | fixed | 12 | VertexDegree[g] = degrees in VertexList order, VertexDegree[g, v]; self-loops count 2, multi-edges counted; directed: in + out; legacy: number of incident edges (self-loops count twice, multi-edges counted); unknown vertices raise |
+
+### graphs (batch 5)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `AcyclicGraphQ` | added | 5 | undirected: a forest (self-loops and multi-edges are cycles); directed: no directed cycle |
+| `AdjacencyGraph` | added | 6 | graph from an adjacency matrix (undirected when symmetric, else directed; entries > 1 give multi-edges, diagonal entries self-loops); AdjacencyGraph[{v...}, m] names the vertices |
+| `AdjacencyList` | added | 4 | AdjacencyList[g, v] = vertices adjacent to v (either direction), in VertexList order; AdjacencyList[g] for every vertex |
+| `AdjacencyMatrix` | added | 10 | dense form (Normal) of Wolfram's SparseArray: a_ij = number of edges i -> j, an undirected edge counts both ways, a self-loop adds 1 on the diagonal; the empty graph raises |
+| `BipartiteGraphQ` | added | 6 | 2-colourable (edge directions ignored; a self-loop makes it non-bipartite) |
+| `BreadthFirstScan` | added | 3 | BreadthFirstScan[g, s, {"event" -> f, ...}] calls f on events ("DiscoverVertex" f[u, v, d], "PrevisitVertex", "PostvisitVertex", "FrontierEdge", "CycleEdge", "UnvisitedVertex") in breadth-first order (neighbours in edge order) and returns g; use with Reap/Sow |
+| `ChromaticPolynomial` | added | 10 | chromatic polynomial in k (deletion-contraction with memoisation, expanded); multi-edges are merged, self-loops give 0; directions ignored; graphs with more than 30 edges raise |
+| `CirculantGraph` | added | 3 | CirculantGraph[n, {j1, ...}]: i <-> i + j (mod n) on 1..n, sorted edges |
+| `ClosenessCentrality` | added | 6 | 1/(mean distance to the reachable vertices), 0 for vertices that reach nothing; machine reals |
+| `CompleteGraph` | added | 31 | K_n on 1..n (edges i <-> j, i < j, lexicographic); CompleteGraph[{n1, n2, ...}] complete multipartite graph |
+| `CompleteGraphQ` | added | 3 | simple undirected graph with every pair of distinct vertices adjacent (directed: every ordered pair) |
+| `CompleteKaryTree` | added | 3 | CompleteKaryTree[n, k] (default k = 2): complete k-ary tree with n levels, vertices numbered breadth first |
+| `ConnectedGraphComponents` | added | 3 | Subgraph for each ConnectedComponents element |
+| `ConnectedGraphQ` | added | 5 | True for a connected graph (strongly connected when directed); the empty graph is not connected |
+| `CycleGraph` | added | 43 | C_n on 1..n: 1 <-> 2, ..., (n-1) <-> n, 1 <-> n; n >= 3 |
+| `DegreeCentrality` | added | 4 | DegreeCentrality[g] (= VertexDegree), [g, "In"], [g, "Out"] |
+| `DepthFirstScan` | added | 3 | DepthFirstScan[g, s, {"event" -> f, ...}]: as BreadthFirstScan, in depth-first order; returns g |
+| `DirectedEdge` | added | 3 | inert edge object (u <-> v is TwoWayRule, converted to UndirectedEdge inside Graph) |
+| `DirectedGraph` | added | 3 | each undirected edge u <-> v becomes the pair u -> v, v -> u (Wolfram's default conversion) |
+| `DirectedGraphQ` | added | 3 | True when every edge is directed (an edgeless graph is undirected) |
+| `EdgeAdd` | added | 3 | adds edges (and any new vertices); weights are not carried over |
+| `EdgeCapacity` | added | 5 | Graph option for FindMaximumFlow capacities |
+| `EdgeConnectivity` | added | 4 | minimum number (total weight) of edges whose removal disconnects an undirected graph; s-t form EdgeConnectivity[g, s, t] via maximum flow |
+| `EdgeCount` | added | 20 | number of edges (multi-edges and self-loops counted) |
+| `EdgeDelete` | added | 3 | removes every edge matching the given edges (undirected edges match either orientation) |
+| `EdgeIndex` | added | 3 | position of e in EdgeList[g]; unknown edges raise |
+| `EdgeList` | added | 4 | edges in Graph order (Rule given as DirectedEdge) |
+| `EdgeQ` | added | 4 | True when e is an edge of g (an undirected edge matches either orientation) |
+| `EdgeWeight` | added | 20 | Graph option; EdgeWeight[g] is not supported (use AnnotationValue) |
+| `EdgeWeightedGraphQ` | added | 3 | True when the graph carries EdgeWeight |
+| `EigenvectorCentrality` | added | 7 | principal eigenvector of the adjacency matrix normalised to total 1 ("In": left eigenvector, the default for directed graphs; "Out": right eigenvector); graphs whose principal eigenvalue is not simple (e.g. disconnected) raise; machine reals |
+| `EmptyGraphQ` | added | 3 | True when the graph has no edges |
+| `EulerianGraphQ` | added | 4 | True when there is a closed walk using every edge exactly once (even degrees / balanced in- and out-degrees, edges connected); edgeless graphs are not Eulerian |
+| `FindClique` | added | 7 | FindClique[g] = {a largest clique}; [g, n] a maximal clique of at most n vertices... (largest found), [g, {n}] a clique of exactly n vertices, [g, nspec, All] every such clique; vertices in VertexList order; directed graphs need edges both ways |
+| `FindCycle` | added | 11 | FindCycle[g] = {cycle} as a list of edges in traversal order ({} for acyclic graphs); [g, k] length at most k, [g, {k}] exactly k, [g, kspec, n] at most n cycles (All for all); shortest cycles first |
+| `FindEulerianCycle` | added | 7 | {cycle} as edges in traversal order (Hierholzer, multigraphs and self-loops allowed), {} when the graph is not Eulerian |
+| `FindGraphIsomorphism` | added | 3 | {<\|v1 -> w1, ...\|>} for one isomorphism (VF2 via NetworkX), {} when none; [g1, g2, n] / All for several; keys in VertexList order of g1 |
+| `FindHamiltonianCycle` | added | 7 | {cycle} as edges in traversal order starting at the first vertex, {} when the graph is not Hamiltonian (exact backtracking; graphs above 30 vertices raise) |
+| `FindHamiltonianPath` | added | 3 | a Hamiltonian path as a vertex list, {} when none (exact backtracking; graphs above 30 vertices raise) |
+| `FindIndependentVertexSet` | added | 5 | {a largest independent vertex set} (maximum clique of the complement; edge directions ignored); [g, {n}] an independent set of exactly n vertices; vertices in VertexList order |
+| `FindMaximumFlow` | added | 7 | value of a maximum s-t flow (Edmonds-Karp; capacities from EdgeCapacity, default 1; undirected edges carry flow either way); exact for exact capacities |
+| `FindMinimumCut` | added | 7 | {c, {part1, part2}}: a global minimum cut of a connected undirected graph (Stoer-Wagner, EdgeWeight respected; parts in VertexList order, the part with the first vertex first); disconnected graphs give 0; directed graphs raise |
+| `FindPath` | added | 6 | FindPath[g, s, t] = {path} with one simple path ({} when none); FindPath[g, s, t, k] paths of length at most k, [g, s, t, {k}] exactly k, [g, s, t, kspec, n] at most n paths (All for every path); paths are enumerated shortest first; unweighted lengths |
+| `FindShortestPath` | added | 7 | vertex list of a shortest path (BFS, or Dijkstra with EdgeWeight), {} when t is unreachable; unknown vertices raise |
+| `FindSpanningTree` | added | 6 | a minimum spanning tree (forest when disconnected) as a Graph on all the vertices (Kruskal with EdgeWeight, edges kept in the input orientation); directed graphs use the underlying undirected graph |
+| `FindVertexCover` | added | 4 | a minimum vertex cover (complement of a maximum independent set), as a flat vertex list in VertexList order |
+| `GlobalClusteringCoefficient` | added | 4 | 3 x triangles / connected triples (transitivity), exact; 0 when there are no triples; undirected graphs |
+| `Graph` | added | 281 | Graph[{e...}] and Graph[{v...}, {e...}] normalise to Graph[{v...}, {e...}, opts] (Rule -> DirectedEdge, TwoWayRule -> UndirectedEdge, vertices in order of first appearance); EdgeWeight/EdgeCapacity/VertexWeight options are used by the algorithms, presentation options are kept; unknown options, tagged edges and edges to unlisted vertices raise |
+| `GraphComplement` | added | 4 | same vertices; undirected: u <-> v (VertexList order) for every non-adjacent pair; directed: every missing u -> v; requires a simple (loop-free, no multi-edge) graph |
+| `GraphDensity` | added | 5 | m / (n (n - 1)/2) for undirected, m / (n (n - 1)) for directed graphs (exact) |
+| `GraphDifference` | added | 3 | vertices of g1 with the edges of g1 that are not in g2; multigraphs raise |
+| `GraphDisjointUnion` | added | 3 | disjoint union with vertices relabelled 1, 2, ... in order (Wolfram's relabelling) |
+| `GraphDistance` | added | 5 | GraphDistance[g, s, t] shortest distance (Infinity when unreachable); GraphDistance[g, s] to every vertex |
+| `GraphDistanceMatrix` | added | 7 | matrix of shortest distances in VertexList order (Infinity when unreachable) |
+| `GraphIntersection` | added | 3 | common vertices and common edges (order of the first graph); multigraphs raise |
+| `GraphPeriphery` | added | 4 | vertices of maximum eccentricity; disconnected graphs raise |
+| `GraphQ` | added | 4 | True for a valid Graph expression |
+| `GraphUnion` | added | 3 | vertices and edges of all the graphs (first occurrence order); multigraphs and weights raise |
+| `GridGraph` | added | 14 | GridGraph[{n1, ..., nk}]: vertices 1..n1*...*nk with the first coordinate varying fastest; edges between vertices one step apart in one coordinate, sorted |
+| `HITSCentrality` | added | 4 | {authorities, hubs}: authority = principal eigenvector of A^T.A normalised to total 1, hub = A.authority (Wolfram's definition); degenerate principal eigenvalues raise; machine reals |
+| `HamiltonianGraphQ` | added | 3 | True when a Hamiltonian cycle exists |
+| `HypercubeGraph` | added | 6 | Q_n on 1..2^n: i <-> j when the binary digits of i - 1 and j - 1 differ in one place |
+| `IncidenceMatrix` | added | 4 | vertices x edges: undirected 1 at each end (2 for a self-loop); directed -1 at the tail and 1 at the head; directed self-loops raise |
+| `IndependentVertexSetQ` | added | 3 | True when no two listed vertices are adjacent |
+| `IndexGraph` | added | 3 | vertices renamed 1, 2, ... in VertexList order (IndexGraph[g, r] starts at r) |
+| `IsomorphicGraphQ` | added | 6 | graph isomorphism (VF2 via NetworkX), direction-aware; multigraphs raise |
+| `KaryTree` | added | 7 | KaryTree[n, k] (default k = 2): n vertices 1..n, the children of i are k(i-1)+2, ..., k(i-1)+k+1 |
+| `KirchhoffMatrix` | added | 4 | Laplacian D - A of an undirected loop-free graph (multi-edges counted); directed graphs and self-loops raise |
+| `LineGraph` | added | 3 | undirected simple graphs: vertices 1..m for the edges, i <-> j when edges i and j share an endpoint |
+| `LocalClusteringCoefficient` | added | 4 | fraction of pairs of neighbours that are adjacent (0 for degree < 2), exact; undirected simple graphs |
+| `LoopFreeGraphQ` | added | 3 | no self-loops |
+| `MeanClusteringCoefficient` | added | 4 | mean of LocalClusteringCoefficient over all vertices, exact; undirected graphs |
+| `MixedGraphQ` | added | 3 | True when the graph has both directed and undirected edges |
+| `MultigraphQ` | added | 3 | has multiple edges between some pair of vertices |
+| `NeighborhoodGraph` | added | 4 | subgraph induced by the vertices within distance k (default 1) of v (undirected graphs; edges followed both ways for directed graphs) |
+| `PageRankCentrality` | added | 6 | PageRankCentrality[g, alpha] (default 0.85): solution of c = alpha A^T D^-1 c + (1 - alpha)/n normalised to total 1, undirected edges counted both ways; graphs with a vertex of out-degree 0 raise (Wolfram's dangling-vertex convention is not reproduced); machine reals |
+| `PathGraph` | added | 12 | PathGraph[{v1, ..., vn}]: v1 <-> v2 <-> ... <-> vn |
+| `PetersenGraph` | added | 34 | generalised Petersen graph GP(n, k) (default GP(5, 2)): outer cycle 1..n, spokes i <-> n + i, inner edges n + i <-> n + (i + k mod n) |
+| `PlanarGraphQ` | added | 4 | planarity test (edge directions ignored) via NetworkX's left-right planarity algorithm |
+| `RandomGraph` | added | 6 | RandomGraph[{n, m}] uniformly random simple undirected graph with n vertices and m edges; RandomGraph[{n, m}, k] a list of k; reproducible with SeedRandom (the random stream differs from Wolfram's) |
+| `ReverseGraph` | added | 3 | reverses every directed edge; undirected edges unchanged |
+| `SimpleGraphQ` | added | 4 | undirected, without self-loops or multiple edges |
+| `StarGraph` | added | 13 | S_n on 1..n with centre 1: 1 <-> 2, ..., 1 <-> n |
+| `Subgraph` | added | 4 | Subgraph[g, {v...}] = subgraph induced by the vertices (VertexList order kept); edges in the list are included with their endpoints |
+| `TopologicalSort` | added | 5 | a topological order of a directed acyclic graph (Kahn's algorithm, ties broken by VertexList order); graphs with a cycle or undirected edges raise |
+| `TreeGraphQ` | added | 7 | connected acyclic undirected graph (n - 1 edges); directed graphs: True for an out-tree with every vertex reachable from one root along the underlying tree |
+| `TuranGraph` | added | 3 | TuranGraph[n, k]: complete k-partite graph on 1..n with parts as equal as possible, consecutive |
+| `TwoWayRule` | added | 3 | inert edge object (u <-> v is TwoWayRule, converted to UndirectedEdge inside Graph) |
+| `UndirectedEdge` | added | 5 | inert edge object (u <-> v is TwoWayRule, converted to UndirectedEdge inside Graph) |
+| `UndirectedGraph` | added | 3 | every edge made undirected; for directed input, u -> v and v -> u become one edge (duplicates merged) |
+| `UndirectedGraphQ` | added | 4 | True when every edge is undirected |
+| `VertexAdd` | added | 3 | adds new vertices (existing ones are ignored) |
+| `VertexCount` | added | 9 | number of vertices |
+| `VertexCoverQ` | added | 3 | True when every edge has an endpoint in the list |
+| `VertexDelete` | added | 3 | removes the vertices and their incident edges |
+| `VertexEccentricity` | added | 5 | maximum distance from v to the other vertices; Infinity when some vertex is unreachable |
+| `VertexInComponent` | added | 3 | vertices that can reach v (v first, then breadth-first order); VertexInComponent[g, v, k] within k steps |
+| `VertexInDegree` | added | 3 | in-degrees in VertexList order or of one vertex; for undirected edges in- and out-degree equal the degree |
+| `VertexIndex` | added | 3 | position of v in VertexList[g]; unknown vertices raise |
+| `VertexList` | added | 3 | vertices in Graph order |
+| `VertexOutComponent` | added | 3 | vertices reachable from v (v first, then breadth-first order); VertexOutComponent[g, v, k] within k steps |
+| `VertexOutDegree` | added | 3 | out-degrees in VertexList order or of one vertex; for undirected edges in- and out-degree equal the degree |
+| `VertexQ` | added | 3 | True when v is a vertex of g |
+| `VertexWeight` | added | 4 | Graph option for vertex weights |
+| `VertexWeightedGraphQ` | added | 3 | True when the graph carries VertexWeight |
+| `WeaklyConnectedComponents` | added | 3 | components ignoring edge direction, largest first, vertices in VertexList order |
+| `WeaklyConnectedGraphQ` | added | 3 | connected when edge directions are ignored |
+| `WeightedAdjacencyMatrix` | added | 4 | a_ij = weight of the edge i -> j (0 when absent); multigraphs raise |
+| `WeightedGraphQ` | added | 3 | True when the graph carries edge or vertex weights |
+| `WheelGraph` | added | 3 | W_n on 1..n: hub 1 joined to the cycle 2..n; n >= 4 |
 
 ### kernel
 
@@ -467,39 +767,31 @@ Cases = number of differential test cases in which the head occurs.
 | `AtomQ` | fixed | 6 | kernel builtin extended in batch 1: associations and rationals are atoms |
 | `Cancel` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Cases` | fixed | 6 | kernel builtin extended in batch 1: level specifications and a maximum count |
-| `Count` | fixed | 4 | kernel builtin extended in batch 1: level specifications |
-| `D` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `DSolve` | kernel | 1 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Count` | fixed | 5 | kernel builtin extended in batch 1: level specifications |
 | `DeleteCases` | fixed | 3 | kernel builtin extended in batch 1: level specifications and a maximum count |
-| `Det` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Diff` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Distance2D` | kernel | 3 | kernel builtin, Euclidean distance of two 2D points (not a Wolfram name; equals EuclideanDistance) |
-| `Dot` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `DotProduct` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Drop` | fixed | 5 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
+| `Drop` | fixed | 6 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Equal` | fixed | 6 | kernel builtin extended in batch 1: more than two arguments chain |
 | `EvenQ` | kernel | 24 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `First` | fixed | 15 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
-| `Flatten` | fixed | 5 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
-| `FreeQ` | fixed | 4 | kernel builtin extended in batch 1: level specifications, Heads -> False |
-| `IntegerQ` | kernel | 6 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Inverse` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `First` | fixed | 24 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
+| `Flatten` | fixed | 6 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
+| `FreeQ` | fixed | 8 | kernel builtin extended in batch 1: level specifications, Heads -> False |
+| `IntegerQ` | kernel | 7 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Join` | fixed | 5 | kernel builtin extended in batch 1: Join[..., n] at level n; associations merge (later values win) |
 | `Last` | fixed | 15 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
-| `Length` | fixed | 25 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
+| `Length` | fixed | 40 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
 | `Less` | fixed | 3 | kernel builtin extended in batch 1: more than two arguments chain |
-| `Limit` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `List` | fixed | 4 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
+| `List` | fixed | 6 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
 | `ListQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
-| `Map` | fixed | 8 | kernel builtin extended in batch 1: level specifications (n, {n}, {m, n}, negative), associations, operator form Map[f] |
+| `Map` | fixed | 17 | kernel builtin extended in batch 1: level specifications (n, {n}, {m, n}, negative), associations, operator form Map[f] |
 | `MapAll` | fixed | 3 | kernel builtin extended in batch 1: f //@ expr |
 | `MapIndexed` | fixed | 3 | kernel builtin extended in batch 1: level specifications; associations index by Key[k] |
-| `MemberQ` | fixed | 5 | kernel builtin extended in batch 1: level specifications |
+| `MemberQ` | fixed | 7 | kernel builtin extended in batch 1: level specifications |
 | `Most` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
-| `N` | kernel | 136 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `N` | kernel | 284 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Negative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NonNegative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Normal` | fixed | 3 | kernel builtin extended in batch 1: associations become rule lists at the first level only; Normal[expr, h] |
 | `NumberQ` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `OddQ` | kernel | 14 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Part` | fixed | 4 | kernel builtin extended in batch 1: Span (i;;j;;k), All, position lists, negative indices, Key[k] and string keys of associations |
@@ -510,24 +802,22 @@ Cases = number of differential test cases in which the head occurs.
 | `Power` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Prepend` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule; any head |
 | `PrimeQ` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Range` | fixed | 9 | kernel builtin extended in batch 1: rational, real and symbolic steps |
+| `Range` | fixed | 33 | kernel builtin extended in batch 1: rational, real and symbolic steps |
 | `ReplaceAll` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Rest` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
 | `Reverse` | fixed | 6 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
-| `Select` | fixed | 11 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
-| `Series` | kernel | 1 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Solve` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Sort` | fixed | 5 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
+| `Select` | fixed | 15 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
+| `Sort` | fixed | 9 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
 | `StringJoin` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringLength` | kernel | 6 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `StringLength` | kernel | 7 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `StringQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
-| `Take` | fixed | 7 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
+| `Take` | fixed | 9 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Thread` | fixed | 3 | kernel builtin extended in batch 1: Thread[f[...], h] and Thread[expr, h, n]; rules thread |
 | `Times` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `ToString` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Together` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Total` | fixed | 9 | kernel builtin extended in batch 1: Total[list, n], {n}, {n1, n2}, Infinity; associations |
-| `Transpose` | fixed | 5 | kernel builtin extended in batch 1: permutation specifications (including repeated levels for diagonals) |
+| `Total` | fixed | 18 | kernel builtin extended in batch 1: Total[list, n], {n}, {n1, n2}, Infinity; associations |
+| `Transpose` | fixed | 9 | kernel builtin extended in batch 1: permutation specifications (including repeated levels for diagonals) |
 | `Unequal` | fixed | 5 | kernel builtin extended in batch 1: more than two arguments need all pairs distinct |
 
 ### language (batch 1)
@@ -552,7 +842,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Span` | added | 3 | i ;; j ;; k in Part, Take and Drop |
 | `Splice` | added | 4 | spliced into lists |
 | `UnequalTo` | added | 3 | operator x != y |
-| `UpTo` | added | 9 | UpTo[n] in Take, Drop, Partition, ... |
+| `UpTo` | added | 11 | UpTo[n] in Take, Drop, Partition, ... |
 
 ### linear algebra
 
@@ -567,19 +857,19 @@ Cases = number of differential test cases in which the head occurs.
 | `CrossProduct` | fixed | 3 | alias of Cross (exact) |
 | `DiagonalMatrix` | fixed | 3 | DiagonalMatrix[list] and DiagonalMatrix[list, k] (k-th diagonal) |
 | `DiagonalMatrixQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
-| `Eigenvalues` | fixed | 6 | eigenvalues with multiplicity in Wolfram order (decreasing absolute value; legacy returned SymPy's dict order) |
-| `Eigenvectors` | fixed | 3 | ordered like Eigenvalues, exact vectors scaled so the last non-zero entry is 1, zero vectors pad defective matrices (Wolfram); machine matrices give unit vectors |
+| `Eigenvalues` | fixed | 13 | eigenvalues with multiplicity in Wolfram order (decreasing absolute value; legacy returned SymPy's dict order). Eigenvalues[m, k] gives the k largest in absolute value (k < 0: the \|k\| smallest, i.e. Take[Eigenvalues[m], k]); Eigenvalues[m, UpTo[k]]; generalized {m, a} raises |
+| `Eigenvectors` | fixed | 6 | ordered like Eigenvalues, exact vectors scaled so the last non-zero entry is 1, zero vectors pad defective matrices (Wolfram); machine matrices give unit vectors; Eigenvectors[m, k] and UpTo[k] as for Eigenvalues |
 | `FrobeniusNorm` | fixed | 3 | exact Frobenius norm (legacy returned floats) |
 | `HermitianQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
 | `HessenbergDecomposition` | fixed | 3 | Wolfram {p, h} with m = p.h.ConjugateTranspose[p] (legacy returned {H -> h, Q -> q} rules); numeric |
-| `IdentityMatrix` | fixed | 3 | IdentityMatrix[n] and IdentityMatrix[{m, n}]; non-integer sizes raise (legacy truncated) |
+| `IdentityMatrix` | fixed | 7 | IdentityMatrix[n] and IdentityMatrix[{m, n}]; non-integer sizes raise (legacy truncated) |
 | `JordanForm` | verified | 3 | {s, j} with m = s.j.Inverse[s] (Wolfram JordanDecomposition convention) |
 | `KroneckerProduct` | fixed | 3 | variadic Kronecker product of matrices and/or vectors (vectors give vectors, as Wolfram) |
 | `LUDecomposition` | fixed | 3 | legacy ignored the row permutation (L.U != m whenever pivoting occurs); now Wolfram's {lu, p, c}: lu holds L (unit lower, below the diagonal) and U, m[[p]] == L.U, c = 0 for exact matrices and the infinity-norm condition number for machine matrices |
 | `LinearSolve` | fixed | 4 | solves m.x == b for a vector or matrix b; underdetermined systems give one particular solution (free parameters 0, as Wolfram); inconsistent systems raise |
 | `LowerTriangularMatrixQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
 | `MatrixCos` | fixed | 3 | exact (legacy summed a truncated Taylor series) |
-| `MatrixExp` | fixed | 4 | exact via the Jordan form (SymPy); machine matrices via SciPy expm |
+| `MatrixExp` | fixed | 5 | exact via the Jordan form (SymPy); machine matrices via SciPy expm |
 | `MatrixLog` | fixed | 3 | principal logarithm; legacy discarded the imaginary part (MatrixLog[{{-1, 0}, {0, 1}}] was wrong) |
 | `MatrixNullity` | verified | 3 | columns - rank (MikoshiLang) |
 | `MatrixPower` | fixed | 3 | integer powers (negative powers of singular matrices raise); symbolic n via diagonalisation |
@@ -608,6 +898,65 @@ Cases = number of differential test cases in which the head occurs.
 | `VectorAngle` | fixed | 4 | ArcCos[u.Conjugate[v]/(\|u\| \|v\|)]; zero vectors and different lengths raise |
 | `ZeroMatrix` | fixed | 3 | m x n zero matrix (MikoshiLang); ZeroMatrix[n] is n x n; non-integer sizes raise |
 
+### linear algebra (batch 3)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `Adjugate` | added | 6 | the adjugate (transposed cofactor matrix), Det[m] Inverse[m] for invertible m, defined for singular m too; exact (machine matrices are computed exactly from their binary values and rounded) |
+| `AntihermitianMatrixQ` | added | 3 | m == -ConjugateTranspose[m] (exact; Tolerance / SameTest as for HermitianMatrixQ) |
+| `AntisymmetricMatrixQ` | added | 4 | m == -Transpose[m] (exact; Tolerance / SameTest as for HermitianMatrixQ) |
+| `ArrayRules` | added | 5 | ArrayRules[array] gives {pos -> value, ...} for the entries that differ from 0 (in lexicographic position order) followed by {_, _, ...} -> 0; ArrayRules[array, default]; works on explicit rectangular arrays (SparseArray evaluates to its dense array in MikoshiLang) |
+| `BoxMatrix` | added | 5 | 1s in a box extending r index positions to each side: BoxMatrix[r] is (2r+1) x (2r+1) ones, BoxMatrix[r, w] (w x w, box centred), BoxMatrix[{r1, r2, ...}] and sizes {w1, ...}; integer radii only; an off-centre box (w - 2r - 1 odd) raises |
+| `CauchyMatrix` | added | 4 | entries 1/(x_i + y_j) (CauchyMatrix[x] = CauchyMatrix[x, x]), returned as the dense matrix; a zero denominator raises |
+| `ConjugateTranspose` | added | 6 | Conjugate[Transpose[m]] (and ConjugateTranspose[m, perm]); a vector or non-array raises like Transpose |
+| `CrossMatrix` | added | 3 | 1s on the central row and column (central lines in higher dimensions) extending r positions: CrossMatrix[r] is (2r+1) x (2r+1), CrossMatrix[r, w], CrossMatrix[{r1, ...}]; integer radii only |
+| `Det` | fixed | 25 | kernel builtin replaced in batch 3: non-square input raises a clear error (legacy raised SymPy's NonSquareMatrixError), a symbol leaves Det unevaluated (legacy raised TypeError), machine matrices use LAPACK, arbitrary-precision matrices keep their precision, symbolic determinants are expanded |
+| `Diagonal` | added | 7 | Diagonal[m] = {m[[1,1]], m[[2,2]], ...} (rectangular matrices too); Diagonal[m, k] is the k-th superdiagonal (k < 0: subdiagonal); entries are returned unevaluated-as-given |
+| `DiagonalizableMatrixQ` | added | 5 | m == s.d.Inverse[s] for a diagonal d (over the complex numbers): exact via SymPy; machine matrices test that the eigenvector matrix is well-conditioned (condition number < 10^8) |
+| `DiamondMatrix` | added | 4 | 1s where the Manhattan distance from the centre is at most r: DiamondMatrix[r] is (2r+1) x (2r+1), DiamondMatrix[r, w]; integer radii only, equal radii per dimension |
+| `Dot` | fixed | 10 | kernel builtin replaced in batch 3: any number of arguments and tensors of any rank (contracts the last index of each factor with the first of the next); symbolic factors leave Dot unevaluated (legacy raised); Dot[x] = x; incompatible shapes raise; infix a.b parses as Dot |
+| `DotProduct` | fixed | 5 | MikoshiLang alias of Dot for two vectors (now the batch-3 Dot) |
+| `Eigensystem` | added | 6 | {Eigenvalues[m], Eigenvectors[m]} with matching order (decreasing absolute value); Eigensystem[m, k] and UpTo[k]; generalized {m, a} raises |
+| `FourierMatrix` | added | 4 | FourierMatrix[n]: entries Exp[2 Pi I (r - 1)(s - 1)/n]/Sqrt[n] (Wolfram's default FourierParameters {0, 1}); exact |
+| `HankelMatrix` | added | 5 | HankelMatrix[n] (successive integers, zeros below the antidiagonal), HankelMatrix[c] (first column c, zeros below the antidiagonal), HankelMatrix[c, r] (first column c, last row r; r[[1]] is ignored and c[[-1]] used, as in Wolfram); always a dense matrix |
+| `HermitianMatrixQ` | added | 6 | m == ConjugateTranspose[m] (exact zero test; Tolerance -> t for approximate matrices, default 1e-12 at machine precision; SameTest -> f); False for non-matrices |
+| `HilbertMatrix` | added | 10 | entries 1/(i + j - 1); HilbertMatrix[n] and HilbertMatrix[{m, n}]; exact (use N for machine numbers) |
+| `IndefiniteMatrixQ` | added | 5 | the quadratic form takes both signs (neither positive nor negative semidefinite); the quadratic form is Re[Conjugate[x].m.x], so only the Hermitian part (m + ConjugateTranspose[m])/2 matters (Wolfram); exact matrices use principal minors, machine matrices the eigenvalues of the Hermitian part with a tolerance of n*$MachineEpsilon*max\|eigenvalue\|; False for symbolic matrices unless every sign can be proved, and for non-matrices |
+| `Inverse` | fixed | 16 | kernel builtin replaced in batch 3: a symbol leaves Inverse unevaluated (legacy raised), non-square and singular matrices raise clear errors, machine matrices use LAPACK, symbolic entries are cancelled |
+| `JordanDecomposition` | added | 6 | {s, j} with m == s.j.Inverse[s] and j in Jordan normal form (exact, SymPy); a machine matrix must be numerically diagonalizable (eigenvector matrix condition number < 10^8) and gives {eigenvectors as columns, diagonal eigenvalues}; otherwise it raises. The order of the Jordan blocks and the scaling of s can differ from Wolfram's (the decomposition is not unique) |
+| `LeastSquares` | added | 6 | the x minimising Norm[m.x - b] (minimum-norm solution when several exist, = PseudoInverse[m].b); b a vector or matrix; exact for exact input, LAPACK lstsq for machine input |
+| `LeviCivitaTensor` | added | 10 | the rank-d totally antisymmetric tensor (Signature of the index list), as a dense array: LeviCivitaTensor[d] (Wolfram returns the equivalent SparseArray; Normal gives this array) and LeviCivitaTensor[d, List] |
+| `LowerTriangularize` | added | 4 | zeros above the k-th diagonal (keeps m[[i,j]] with j - i <= k; default k = 0); rectangular matrices |
+| `MatrixForm` | added | 3 | display wrapper: MatrixForm[expr] stays as MatrixForm[expr] and does not affect evaluation of expr (as in Wolfram, it is not a matrix); the text REPL prints it as an aligned grid (matrix_form_text) |
+| `MatrixFunction` | added | 7 | MatrixFunction[f, m] for a square matrix and any scalar function f (symbol or pure function): exact via the Jordan form (SymPy analytic_func, derivatives of f on Jordan blocks); machine matrices via the eigendecomposition, which must be well-conditioned (else raises); f is evaluated by MikoshiLang |
+| `MatrixMinimalPolynomial` | added | 6 | the monic polynomial p of least degree with p(m) == 0 (exact; Krylov dependence of I, m, m^2, ...); inexact matrices raise |
+| `Minors` | added | 9 | Minors[m, k]: determinants of all k x k submatrices, rows and columns subsets in lexicographic order (Wolfram); Minors[m] = Minors[m, Min[Dimensions[m]] - 1]; Minors[m, k, f] applies f instead of Det; Minors[m, 0] = {{1}} |
+| `NegativeDefiniteMatrixQ` | added | 3 | Re[Conjugate[x].m.x] < 0 for all non-zero x; the quadratic form is Re[Conjugate[x].m.x], so only the Hermitian part (m + ConjugateTranspose[m])/2 matters (Wolfram); exact matrices use principal minors, machine matrices the eigenvalues of the Hermitian part with a tolerance of n*$MachineEpsilon*max\|eigenvalue\|; False for symbolic matrices unless every sign can be proved, and for non-matrices |
+| `NegativeSemidefiniteMatrixQ` | added | 3 | Re[Conjugate[x].m.x] <= 0 for all x; the quadratic form is Re[Conjugate[x].m.x], so only the Hermitian part (m + ConjugateTranspose[m])/2 matters (Wolfram); exact matrices use principal minors, machine matrices the eigenvalues of the Hermitian part with a tolerance of n*$MachineEpsilon*max\|eigenvalue\|; False for symbolic matrices unless every sign can be proved, and for non-matrices |
+| `NormalMatrixQ` | added | 4 | m.ConjugateTranspose[m] == ConjugateTranspose[m].m |
+| `OrthogonalMatrixQ` | added | 14 | p x q matrix: Transpose[m].m == IdentityMatrix[q] when p >= q, m.Transpose[m] == IdentityMatrix[p] when p <= q (no conjugation, as in Wolfram); options Normalized -> False (only orthogonal columns/rows), Tolerance -> t (infinity norm of the defect), SameTest -> f |
+| `Orthogonalize` | added | 9 | Gram-Schmidt orthonormal basis using the standard inner product Conjugate[u].v; the output has as many vectors as the input, linearly dependent vectors become zero vectors; machine vectors whose residual norm is at most 100 $MachineEpsilon (about 2.2*10^-14) of the original are treated as dependent (Tolerance -> t overrides); Orthogonalize[list, f] uses the inner product f on arbitrary elements |
+| `Permanent` | added | 5 | sum over permutations of products of entries (SymPy Matrix.per); square matrices |
+| `PositiveDefiniteMatrixQ` | added | 12 | Re[Conjugate[x].m.x] > 0 for all non-zero x; the quadratic form is Re[Conjugate[x].m.x], so only the Hermitian part (m + ConjugateTranspose[m])/2 matters (Wolfram); exact matrices use principal minors, machine matrices the eigenvalues of the Hermitian part with a tolerance of n*$MachineEpsilon*max\|eigenvalue\|; False for symbolic matrices unless every sign can be proved, and for non-matrices |
+| `PositiveSemidefiniteMatrixQ` | added | 5 | Re[Conjugate[x].m.x] >= 0 for all x; the quadratic form is Re[Conjugate[x].m.x], so only the Hermitian part (m + ConjugateTranspose[m])/2 matters (Wolfram); exact matrices use principal minors, machine matrices the eigenvalues of the Hermitian part with a tolerance of n*$MachineEpsilon*max\|eigenvalue\|; False for symbolic matrices unless every sign can be proved, and for non-matrices |
+| `Projection` | added | 8 | Projection[u, v] = (u.Conjugate[v]/v.Conjugate[v]) v; Projection[u, v, f] uses the inner product f[u, v]/f[v, v] v; projection onto the zero vector raises |
+| `ReflectionMatrix` | added | 5 | IdentityMatrix[n] - 2 v.ConjugateTranspose[v]/(Conjugate[v].v): reflection in the hyperplane normal to the numeric vector v |
+| `RotationMatrix` | added | 13 | RotationMatrix[t] (2D, counterclockwise), RotationMatrix[t, w] (3D, right-handed about the numeric axis w), RotationMatrix[t, {u, v}] (n-D, in the plane of u and v, from u towards v), RotationMatrix[{u, v}] (rotation taking the direction of u to that of v, in their plane; antiparallel vectors raise) |
+| `ScalingMatrix` | added | 3 | ScalingMatrix[{s1, ..., sn}] = DiagonalMatrix[{s1, ..., sn}]; ScalingMatrix[s, v] scales by s along the numeric direction v: IdentityMatrix + (s - 1) v.Transpose[v]/v.v |
+| `ShearingMatrix` | added | 7 | ShearingMatrix[t, v, n] = IdentityMatrix + Tan[t] Outer[Times, vp, Normalize[n]] where vp is the unit vector along the part of v perpendicular to n (Wolfram uses the projection for non-orthogonal v); determinant 1 |
+| `SingularValueList` | added | 12 | non-zero singular values in decreasing order (exact for exact matrices, LAPACK for machine matrices, where values below 100*10^-p times the largest are dropped); SingularValueList[m, k] (k < 0: smallest) and UpTo[k] use all Min[Dimensions[m]] values, zeros included; Tolerance -> t keeps values >= t times the largest; symbolic and generalized {m, a} inputs raise |
+| `SparseArray` | added | 11 | SparseArray[{pos -> v, ...}], SparseArray[rules, dims], SparseArray[rules, dims, default] and SparseArray[list] (positions may be patterns such as {i_, i_} -> 1; the first matching rule wins). MikoshiLang has no sparse storage: the result is the equivalent dense array, i.e. Normal[SparseArray[...]] in Wolfram (Head is List, not SparseArray); Band specifications raise |
+| `SquareMatrixQ` | added | 4 | True for a matrix with as many rows as columns, False for anything else |
+| `TensorContract` | added | 6 | TensorContract[t, {{s1, s2}, ...}] sums over each pair of slots of an explicit array; the remaining slots keep their order; paired slots must have equal dimensions and appear once |
+| `TensorDimensions` | added | 3 | Dimensions of an explicit rectangular array ({} for a number); symbolic tensors stay unevaluated |
+| `TensorProduct` | added | 7 | tensor (outer) product of explicit arrays, dimensions concatenated (Outer[Times, a, b] for arrays); numbers act as rank-0 tensors; TensorProduct[t] = t; symbolic factors leave it unevaluated |
+| `TensorRank` | added | 4 | the number of indices of an explicit rectangular array (ArrayDepth), 0 for a number; symbols and ragged lists stay unevaluated |
+| `TensorTranspose` | added | 4 | TensorTranspose[t, perm] for an explicit array: Transpose[t, perm] with perm a full permutation list of the slots (Cycles specifications are not supported) |
+| `ToeplitzMatrix` | added | 6 | ToeplitzMatrix[n] (symmetric, successive integers), ToeplitzMatrix[c] (symmetric, first column c), ToeplitzMatrix[c, r] (first column c, first row r; r[[1]] is ignored and c[[1]] used, as in Wolfram); always a dense matrix (Wolfram's TargetStructure option is not supported) |
+| `UnitaryMatrixQ` | added | 5 | as OrthogonalMatrixQ with ConjugateTranspose; options Normalized, Tolerance, SameTest |
+| `UpperTriangularize` | added | 5 | zeros below the k-th diagonal (keeps m[[i,j]] with j - i >= k; default k = 0); rectangular matrices |
+| `VandermondeMatrix` | added | 5 | rows {1, x_i, x_i^2, ...}: VandermondeMatrix[{x1, ..., xn}] (n x n) and VandermondeMatrix[x, k] (n x k), returned as the dense matrix (Wolfram returns a structured array whose Normal this is); confluent (repeated) nodes raise |
+
 ### lists (batch 1)
 
 | Function | Status | Cases | Notes |
@@ -617,7 +966,7 @@ Cases = number of differential test cases in which the head occurs.
 | `AnyMatch` | added | 3 | True if some element matches the pattern; operator form |
 | `AnyTrue` | added | 3 | test[e] is True for some element (stops at the first success); optional level |
 | `AppendTo` | added | 3 | AppendTo[s, e] sets s = Append[s, e] and returns the new value (s must have a value) |
-| `Array` | added | 5 | Array[f, n], Array[f, {n1, n2, ...}], origin r or {r1, ...}, {a, b} ranges and head h |
+| `Array` | added | 10 | Array[f, n], Array[f, {n1, n2, ...}], origin r or {r1, ...}, {a, b} ranges and head h |
 | `ArrayDepth` | added | 3 | depth to which expr is a full array of lists (0 for non-lists) |
 | `ArrayFlatten` | added | 3 | ArrayFlatten[{{m11, m12, ...}, ...}] builds a block matrix; scalar blocks (e.g. 0) become constant blocks of the matching size |
 | `ArrayQ` | added | 6 | ArrayQ[expr], ArrayQ[expr, n] (n may be a pattern) and ArrayQ[expr, n, test] for the elements |
@@ -631,7 +980,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Comap` | added | 3 | Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys) |
 | `ComapApply` | added | 3 | ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...} |
 | `ComposeList` | added | 3 | ComposeList[{f1, f2, ...}, x] = {x, f1[x], f2[f1[x]], ...} |
-| `ConstantArray` | added | 4 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
+| `ConstantArray` | added | 5 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
 | `Construct` | added | 3 | Construct[f, x, y, ...] = f[x, y, ...] |
 | `ContainsAll` | added | 3 | every element of e2 occurs in e1 (SameQ or SameTest) |
 | `ContainsAny` | added | 3 | some element of e2 occurs in e1 |
@@ -647,7 +996,7 @@ Cases = number of differential test cases in which the head occurs.
 | `DeleteDuplicatesBy` | added | 3 | keeps the first element for each distinct (SameQ) value of f |
 | `DeleteElements` | added | 3 | DeleteElements[list, elems] removes every occurrence of the elements; DeleteElements[list, n -> elems] at most n of each |
 | `Depth` | added | 4 | 1 for atoms, else 1 + the maximum depth of the elements (heads ignored; an association is one level) |
-| `Dimensions` | added | 8 | dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, Dimensions[{f[a], f[b]}] = {2}); Dimensions[expr, n] at most n levels |
+| `Dimensions` | added | 18 | dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, Dimensions[{f[a], f[b]}] = {2}); Dimensions[expr, n] at most n levels |
 | `DisjointQ` | added | 3 | the lists have no element in common |
 | `DuplicateFreeQ` | added | 3 | no two elements are SameQ (or equivalent under the given test) |
 | `Extract` | added | 3 | Extract[expr, pos], Extract[expr, {pos1, pos2, ...}] and Extract[expr, pos, h] |
@@ -692,7 +1041,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PowerRange` | added | 3 | PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r] |
 | `PrependTo` | added | 3 | PrependTo[s, e] sets s = Prepend[s, e] and returns the new value |
 | `Ratios` | added | 3 | successive ratios a[i+1]/a[i]; Ratios[list, n] for n-th ratios |
-| `Reap` | added | 6 | Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list] |
+| `Reap` | added | 10 | Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list] |
 | `Replace` | added | 6 | Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives a list of results |
 | `ReplaceList` | added | 5 | all results of applying the rules to the whole expression in every way they match (sequence patterns give one result per split; Orderless heads give each distinct binding once, in matcher order rather than Wolfram's); ReplaceList[expr, rules, n] keeps at most n |
 | `ReplacePart` | added | 3 | ReplacePart[expr, pos -> new], lists of rules, lists of positions, position patterns such as {i_, i_} -> 0 and pos :> new (evaluated per position) |
@@ -707,7 +1056,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SequenceReplace` | added | 3 | replaces non-overlapping runs matching a list pattern -> rhs (rhs is one element) |
 | `SequenceSplit` | added | 3 | splits at runs matching a list pattern (empty pieces at the ends dropped, as Wolfram); patt -> rhs keeps rhs between the pieces |
 | `SortBy` | added | 4 | sorts by canonical order of f[e] (ties by the canonical order of e); SortBy[list, {f1, f2, ...}] lexicographic; SortBy[list, f, p] uses ordering p; associations are sorted by value |
-| `Sow` | added | 6 | Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap (outside Reap, Sow just returns e) |
+| `Sow` | added | 10 | Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap (outside Reap, Sow just returns e) |
 | `Split` | added | 3 | runs of identical (SameQ) adjacent elements; Split[list, test] tests adjacent pairs |
 | `SplitBy` | added | 3 | runs with identical f values; SplitBy[list, {f1, f2, ...}] splits recursively |
 | `Subdivide` | added | 3 | Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values |
@@ -736,7 +1085,7 @@ Cases = number of differential test cases in which the head occurs.
 | `GroupBy` | fixed | 7 | legacy ignored the function and grouped equal values; now GroupBy[list, f] -> <\|k -> {...}\|> keyed by f[elem] in order of first appearance; GroupBy[list, f -> g] maps g over each group's elements, GroupBy[list, spec, red] applies red to each group, GroupBy[list, {f1, f2}] nests; associations group their values |
 | `Interleave` | fixed | 3 | {a1, b1, ..., a2, b2, ...} for two or more lists (MikoshiLang); unequal lengths now raise (legacy silently truncated) |
 | `Intersection` | fixed | 5 | variadic; canonical order (legacy sorted by string form); SameTest -> f |
-| `Partition` | fixed | 6 | Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n |
+| `Partition` | fixed | 7 | Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n |
 | `Riffle` | fixed | 3 | Riffle[list, x] and Riffle[list, {y1, ...}] (interleaves when the second list has n or n - 1 elements; legacy inserted the whole list each time) |
 | `RotateLeft` | verified | 3 | RotateLeft[list] and RotateLeft[list, n] (n may be negative) |
 | `RotateRight` | verified | 3 | RotateRight[list] and RotateRight[list, n] |
@@ -745,7 +1094,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SubsetQ` | fixed | 3 | SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse) |
 | `SymmetricDifference` | fixed | 3 | elements in exactly one of the two lists, canonical order (legacy sorted by string form) |
 | `Tally` | promoted | 4 | {{elem, count}, ...} in order of first appearance (SameQ); Tally[list, test] uses the first representative of each class |
-| `Union` | promoted | 7 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
+| `Union` | promoted | 9 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
 
 ### logic
 
@@ -755,15 +1104,37 @@ Cases = number of differential test cases in which the head occurs.
 | `BooleanMinimize` | verified | 4 | minimal DNF (SymPy simplify_logic, Quine-McCluskey) |
 | `CNF` | verified | 3 | conjunctive normal form (SymPy to_cnf; Wolfram BooleanConvert[e, "CNF"]) |
 | `DNF` | verified | 3 | disjunctive normal form (SymPy to_dnf) |
-| `Equivalent` | fixed | 4 | variadic; True when all arguments are equal booleans |
+| `Equivalent` | fixed | 30 | variadic; True when all arguments are equal booleans; Equivalent[True, a, b] = a && b, Equivalent[False, a] = !a, mixed True/False = False (batch 6) |
 | `Iff` | fixed | 4 | alias of Equivalent; legacy used Python bool() so Iff[x, y] was True for any symbols |
-| `Implies` | verified | 4 | Implies[p, q] for booleans; symbolic arguments stay unevaluated |
-| `Nand` | fixed | 4 | variadic Not[And[...]] |
-| `Nor` | fixed | 3 | variadic Not[Or[...]] |
+| `Implies` | fixed | 18 | Implies[p, q]; Implies[True, q] = q, Implies[False, q] = True, Implies[p, True] = True, Implies[p, False] = !p (batch 6) |
+| `Nand` | fixed | 7 | variadic Not[And[...]]; Nand[False, x] = True, Nand[True, x] = !x (batch 6) |
+| `Nor` | fixed | 6 | variadic Not[Or[...]]; Nor[True, x] = False, Nor[False, x] = !x (batch 6) |
 | `SATSolve` | fixed | 4 | one satisfying assignment {x -> True, ...} (all variables, alphabetical) or False; legacy omitted variables SymPy did not need and could return {True -> True} for tautologies |
 | `TruthTable` | verified | 3 | rows {v1, ..., vn, value} over all assignments, variables in alphabetical order (MikoshiLang) |
-| `Xnor` | fixed | 4 | Not[Xor[...]]; legacy used Python bool() so Xnor[x, y] was True for any symbols |
-| `Xor` | fixed | 5 | variadic exclusive or (odd number of True) |
+| `Xnor` | fixed | 8 | Not[Xor[...]] with the same partial evaluation as Xor (batch 6) |
+| `Xor` | fixed | 34 | variadic exclusive or; True/False arguments are simplified away (Xor[True, c] = !c, Xor[False, c] = c; batch 6) |
+
+### logic (batch 6)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `Boole` | added | 6 | Boole[True] = 1, Boole[False] = 0; other arguments stay unevaluated |
+| `BooleanConvert` | added | 22 | forms "DNF"/"SOP" (default), "CNF"/"POS" (minimal two-level forms), "ANF" (unique algebraic normal form, Xor of Ands), "ESOP" (given as the ANF, which is an exclusive sum of products), "NAND", "NOR", "AND", "OR" (two-level with Not); BooleanConvert[expr, form, cond] uses cond as a care set for DNF/CNF; other forms (IMPLIES, ITE, BFF, BDT, binary NAND/NOR) raise |
+| `BooleanCountingFunction` | added | 7 | BooleanCountingFunction[kmax, n] (at most kmax True), [{k}, n] (exactly k), [{k1, k2, ...}, n], [{{kmin, kmax}}, n] pure functions; with a variable list gives an equivalent minimal DNF |
+| `BooleanFunction` | added | 18 | BooleanFunction[k, n] pure function (truth table IntegerDigits[k, 2, 2^n] in Tuples[{True, False}, n] order; BooleanFunction[8, 2] is And) applied to True/False arguments; BooleanFunction[k, {vars}] and BooleanFunction[table, {vars}] give an equivalent minimal disjunctive normal form; BooleanFunction[table] gives BooleanFunction[k, n] |
+| `BooleanTable` | added | 23 | truth values over Tuples[{True, False}, n] (BooleanTable[expr] uses BooleanVariables); nested tables for several variable lists (outermost first); pure BooleanFunction / BooleanCountingFunction / Function; non-Boolean expressions are substituted (BooleanTable[f[a, b], {a, b}]) |
+| `BooleanVariables` | added | 5 | the distinct variables (non-connective atoms) of a Boolean expression in canonical order |
+| `Conjunction` | added | 3 | Conjunction[expr, {a1, ...}]: And of expr over all True/False values of the a_i, as an equivalent minimal DNF |
+| `Disjunction` | added | 3 | Disjunction[expr, {a1, ...}]: Or of expr over all True/False values of the a_i, as an equivalent minimal DNF |
+| `Exists` | added | 9 | Exists[x, expr] and Exists[x, cond, expr] (x a symbol or list of symbols); evaluates when the body does not depend on the variables (e.g. Exists[x, True] = True), otherwise stays for Resolve |
+| `ForAll` | added | 10 | ForAll[x, expr] and ForAll[x, cond, expr] (x a symbol or list of symbols); evaluates when the body does not depend on the variables (e.g. ForAll[x, True] = True), otherwise stays for Resolve |
+| `LogicalExpand` | added | 8 | expands Boolean connectives into a disjunction of conjunctions (distributing And over Or, pushing Not inwards, expanding Xor/Implies/Equivalent), removing contradictory and absorbed terms; equations between lists are split elementwise; non-Boolean atoms (equations, inequalities) are kept as they are (LogicalExpand[x y == 0] is not split into cases) |
+| `Majority` | added | 14 | True when more than half of the (odd number of) arguments are True, False when more than half are False; symbolic arguments stay unevaluated unless the count is already decided; an even number of arguments raises |
+| `Resolve` | added | 12 | eliminates ForAll/Exists from purely Boolean formulas (variables over Booleans) and returns an equivalent minimal DNF; quantifiers over non-Boolean formulas (real/complex/integer quantifier elimination) raise; quantifier-free input is returned unchanged |
+| `SatisfiabilityCount` | added | 9 | number of assignments (of BooleanVariables or the given variables, so extra variables double the count) that make the expression True |
+| `SatisfiabilityInstances` | added | 8 | SatisfiabilityInstances[expr, vars], [expr, vars, m], [expr, vars, All] and pure-function forms: lists of truth values that make expr True, enumerated with False before True (lexicographic); {} if unsatisfiable. Wolfram does not document which instances it returns first; every returned instance is valid |
+| `SatisfiableQ` | added | 6 | True if some assignment of the variables makes the expression True (exact truth table up to 22 variables, SymPy SAT solver beyond) |
+| `TautologyQ` | added | 22 | True if every assignment of the variables makes the expression True |
 
 ### ml
 
@@ -806,7 +1177,7 @@ Cases = number of differential test cases in which the head occurs.
 | `FactorInteger` | fixed | 4 | FactorInteger[1] returned {} (Wolfram {{1,1}}), 0 and rationals failed; now {{-1,1},...} for negatives, negative exponents for rationals |
 | `Fibonacci` | fixed | 4 | symbolic n raised TypeError (now unevaluated); negative n, real n and Fibonacci[n, x] added |
 | `FibonacciNumber` | fixed | 3 | MikoshiLang alias of Fibonacci |
-| `FromDigits` | fixed | 8 | now accepts digit strings (letters a-z = 10-35), symbolic digits and digits >= base as Wolfram; legacy silently used base 10 for invalid bases |
+| `FromDigits` | fixed | 9 | now accepts digit strings (letters a-z = 10-35), symbolic digits and digits >= base as Wolfram; legacy silently used base 10 for invalid bases |
 | `GCD` | fixed | 4 | now variadic, exact for rationals, GCD[] = 0; legacy truncated reals (GCD[2.5, 5] = 1) |
 | `HarmonicNumber` | fixed | 8 | HarmonicNumber[n] for rational n in closed form (HarmonicNumber[1/2] = 2 - 2 Log[2], legacy left it unevaluated); HarmonicNumber[n, r] |
 | `IntegerDigits` | fixed | 5 | legacy silently used base 10 for a non-integer base; now IntegerDigits[n], [n, b], [n, b, len] (digits of \|n\|, padded/truncated on the left) |
@@ -870,14 +1241,14 @@ Cases = number of differential test cases in which the head occurs.
 | `AbsArg` | added | 3 | {Abs[z], Arg[z]} |
 | `Accuracy` | added | 6 | Accuracy[x] = Precision[x] - Log10[Abs[x]] (digits after the decimal point); Infinity for exact numbers; machine zero has Accuracy -Log10[$MinMachineNumber] = 307.653; the minimum over an expression |
 | `Arg` | added | 6 | argument in (-Pi, Pi]; Arg[0] = 0 (Wolfram); Arg[-1] = Pi; exact for exact input |
-| `Chop` | added | 13 | Chop[expr, delta] replaces approximate real numbers (and real or imaginary parts) with absolute value below delta (default 10^-10) by exact 0; exact numbers are untouched |
+| `Chop` | added | 12 | Chop[expr, delta] replaces approximate real numbers (and real or imaginary parts) with absolute value below delta (default 10^-10) by exact 0; exact numbers are untouched |
 | `Clip` | added | 9 | Clip[x] clips to [-1, 1]; Clip[x, {min, max}]; Clip[x, {min, max}, {vmin, vmax}] gives vmin below and vmax above; threads over lists; symbolic x stays unevaluated |
 | `Denominator` | added | 6 | denominator of a rational number or of the factors with negative exponents (Denominator[x/y^2] = y^2); 1 for sums and approximate numbers |
 | `ExactNumberQ` | added | 5 | True for integers, rationals and exact complex numbers; False for approximate numbers and for numeric expressions such as Pi or Sqrt[2] (which are not numbers) |
 | `FindFit` | added | 3 | FindFit[data, expr, pars, vars] nonlinear least squares -> {a -> a*, ...}; pars may be {{a, a0}, ...} with starting values (default 1); constraints FindFit[data, {expr, cons}, ...] are not supported |
 | `FindMaximum` | added | 3 | FindMaximum[f, {x, x0}] / {{x, x0}, {y, y0}} -> {fmax, {x -> xmax, ...}}: FindMinimum of -f (local, BFGS); non-convergence raises |
 | `FindRoot` | added | 6 | FindRoot[f, {x, x0}] / [lhs == rhs, {x, x0}] / {x, x0, x1} (secant) / {x, x0, xmin, xmax} (bounded) and systems FindRoot[{eqs}, {{x, x0}, {y, y0}}] -> {x -> root, ...}; complex starting values search in the complex plane; WorkingPrecision -> p; raises when no root is found |
-| `Fit` | added | 4 | Fit[data, {f1, f2, ...}, vars] linear least-squares fit -> c1 f1 + c2 f2 + ... (data {y1, y2, ...} at x = 1, 2, ... or {{x, y}, ...} or {{x1, x2, y}, ...}); machine-precision coefficients |
+| `Fit` | added | 5 | Fit[data, {f1, f2, ...}, vars] linear least-squares fit -> c1 f1 + c2 f2 + ... (data {y1, y2, ...} at x = 1, 2, ... or {{x, y}, ...} or {{x1, x2, y}, ...}); machine-precision coefficients |
 | `FractionalPart` | added | 9 | FractionalPart[x] = x - IntegerPart[x] (same sign as x: FractionalPart[-2.4] = -0.4), separately for real and imaginary parts; exact for exact input |
 | `Im` | added | 3 | imaginary part (Wolfram name; RealPart/ImaginaryPart are the legacy MikoshiLang names); exact for exact input, 0 (exact) for the imaginary part of a real |
 | `InexactNumberQ` | added | 3 | True for approximate (machine or arbitrary-precision) real and complex numbers |
@@ -897,7 +1268,7 @@ Cases = number of differential test cases in which the head occurs.
 | `NSolve` | added | 9 | NSolve[eqns, vars] numerical solutions of polynomial (and rational) equations and systems as {{x -> x1}, ...} with every complex root repeated by multiplicity; NSolve[eqns, vars, Reals] keeps real solutions; WorkingPrecision -> p; transcendental equations raise (use FindRoot) |
 | `NSum` | added | 7 | NSum[f, {n, nmin, nmax}] and {n, nmin, nmax, dn}, multiple iterators, nmax = Infinity (mpmath nsum: Richardson/Shanks/Euler-Maclaurin acceleration, alternating series); WorkingPrecision -> p; finite short ranges are summed directly; divergent sums raise |
 | `Numerator` | added | 5 | numerator of a rational number or of a product with negative exponents (Numerator[x^2 y^-3] = x^2); sums are not combined over a common denominator (Numerator[a/b + c/d] is the whole sum) |
-| `Precision` | added | 17 | Precision[x]: Infinity for exact numbers and symbolic expressions without approximate numbers, MachinePrecision for machine numbers, the decimal precision of a bignum; the minimum over an expression (a machine number makes the whole expression MachinePrecision). An arbitrary-precision zero has Precision 0. |
+| `Precision` | added | 18 | Precision[x]: Infinity for exact numbers and symbolic expressions without approximate numbers, MachinePrecision for machine numbers, the decimal precision of a bignum; the minimum over an expression (a machine number makes the whole expression MachinePrecision). An arbitrary-precision zero has Precision 0. |
 | `Rationalize` | added | 16 | Rationalize[x] gives the first continued-fraction convergent p/q with \|p/q - x\| < 10^-4/q^2, or x unchanged when there is none (Rationalize[N[Pi]] = 3.14159); Rationalize[x, dx] gives the first convergent within dx, refined to the smallest semiconvergent within dx (Rationalize[Pi, 1/1000] = 201/64); Rationalize[x, 0] gives the simplest rational within the precision of x; applies to every approximate number of an expression |
 | `Re` | added | 3 | real part (Wolfram name; RealPart/ImaginaryPart are the legacy MikoshiLang names); exact for exact input, 0 (exact) for the imaginary part of a real |
 | `ReIm` | added | 3 | {Re[z], Im[z]} |
@@ -990,7 +1361,7 @@ Cases = number of differential test cases in which the head occurs.
 | `BesselJ` | verified | 4 | Bessel function (same convention as Wolfram/mpmath) |
 | `BesselK` | verified | 3 | Bessel function (same convention as Wolfram/mpmath) |
 | `BesselY` | verified | 3 | Bessel function (same convention as Wolfram/mpmath) |
-| `Beta` | fixed | 9 | Euler beta, exact closed forms for numeric arguments (Beta[1/2, 1/2] = Pi; legacy left it unevaluated) |
+| `Beta` | fixed | 10 | Euler beta, exact closed forms for numeric arguments (Beta[1/2, 1/2] = Pi; legacy left it unevaluated) |
 | `ChebyshevT` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `ChebyshevU` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `CosIntegral` | fixed | 6 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
@@ -1006,7 +1377,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Erfc` | verified | 4 | complementary error function |
 | `Erfi` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `ExpIntegralEi` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
-| `Gamma` | verified | 10 | Euler gamma (SymPy) |
+| `Gamma` | verified | 14 | Euler gamma (SymPy) |
 | `GegenbauerC` | fixed | 3 | now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `HankelH1` | fixed | 3 | H1 = J + I Y; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
 | `HankelH2` | fixed | 3 | H2 = J - I Y; now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats) |
@@ -1095,55 +1466,123 @@ Cases = number of differential test cases in which the head occurs.
 |---|---|---|---|
 | `ANOVA` | fixed | 3 | one-way ANOVA {F, p_value} for 2 or more groups (SciPy), unrounded |
 | `AndersonDarling` | fixed | 3 | {statistic, criticalValues, significanceLevels} for normality with estimated mean and sd (Stephens critical values with the 1 + 0.75/n + 2.25/n^2 correction, identical to SciPy anderson); computed directly, no SciPy needed (legacy relied on an API SciPy is removing) |
-| `BinomialDistribution` | verified | 5 | inert distribution object [n, p] |
-| `CDF` | fixed | 5 | exact CDFs (normal via Erfc, chi-squared via incomplete gamma, t and F via regularised incomplete beta); legacy rounded to 10 digits and truncated discrete arguments |
+| `BinomialDistribution` | verified | 11 | inert distribution object [n, p] |
+| `CDF` | fixed | 76 | batch 5 distributions: exact CDFs (regularised gamma/beta forms; discrete CDFs at Floor[x]); exact CDFs (normal via Erfc, chi-squared via incomplete gamma, t and F via regularised incomplete beta); legacy rounded to 10 digits and truncated discrete arguments |
 | `ChiSquaredDistribution` | verified | 3 | inert distribution object (nu degrees of freedom) |
 | `ChiSquaredTest` | fixed | 3 | {chi2 -> statistic, p_value -> p} for observed vs expected counts (SciPy chisquare), unrounded |
 | `CoefficientOfVariation` | fixed | 3 | StandardDeviation/Mean, exact for exact data (legacy converted to floats and rounded to 10 digits) |
 | `CohensD` | fixed | 3 | (mean1 - mean2)/pooled SD, exact for exact data (legacy converted to floats and rounded to 10 digits) |
 | `Commonest` | promoted | 3 | Commonest[list]: the most frequent elements in order of first appearance; Commonest[list, n]: the n most frequent, by decreasing frequency (ties by first appearance) |
 | `ConfidenceInterval` | fixed | 3 | t-based interval for the mean at the given level; legacy silently used 0.95 when the level was not a machine number (e.g. 9/10); now any level in (0, 1) and no rounding |
-| `Correlation` | fixed | 3 | Pearson correlation, exact for exact data (legacy converted to floats and rounded to 10 digits) |
-| `Covariance` | fixed | 3 | unbiased sample covariance, exact for exact data (legacy converted to floats and rounded to 10 digits) |
+| `Correlation` | fixed | 5 | Correlation[matrix] = correlation matrix of the columns, exact; Pearson correlation, exact for exact data (legacy converted to floats and rounded to 10 digits) |
+| `Covariance` | fixed | 7 | Covariance[dist] = covariance matrix of a multivariate distribution; Covariance[matrix] = covariance matrix of the columns (unbiased), exact; unbiased sample covariance, exact for exact data (legacy converted to floats and rounded to 10 digits) |
 | `EffectSize` | fixed | 3 | alias of CohensD, exact for exact data (legacy converted to floats and rounded to 10 digits) |
-| `ExponentialDistribution` | verified | 6 | inert distribution object (rate lambda) |
+| `ExponentialDistribution` | verified | 31 | inert distribution object (rate lambda) |
 | `FDistribution` | verified | 5 | inert F-ratio distribution [n, m] (Wolfram FRatioDistribution) |
-| `GeometricMean` | fixed | 3 | (x1 ... xn)^(1/n), exact for exact data (legacy converted to floats and rounded to 10 digits); requires positive data |
-| `HarmonicMean` | fixed | 3 | n / Sum[1/x], exact for exact data (legacy converted to floats and rounded to 10 digits); zero values raise |
+| `GeometricMean` | fixed | 3 | matrix data: the statistic of each column (Wolfram); (x1 ... xn)^(1/n), exact for exact data (legacy converted to floats and rounded to 10 digits); requires positive data |
+| `HarmonicMean` | fixed | 3 | matrix data: the statistic of each column (Wolfram); n / Sum[1/x], exact for exact data (legacy converted to floats and rounded to 10 digits); zero values raise |
 | `IQR` | fixed | 3 | Wolfram InterquartileRange: Q3 - Q1 with Quantile parameters {{1/2, 0}, {0, 1}}; legacy used NumPy's linear percentiles (a different estimator) |
-| `InverseCDF` | fixed | 5 | exact for normal, exponential and uniform (InverseCDF[NormalDistribution[0, 1], 1/2] = 0); numeric (mpmath root of the CDF) for t, chi-squared and F with machine-number p; legacy rounded to 10 digits and returned an Error expression for other distributions |
+| `InverseCDF` | fixed | 51 | batch 5 distributions: closed-form quantiles where they exist, smallest k with CDF >= p for discrete distributions, SciPy for machine-number p otherwise (exact p without a closed form stays unevaluated); exact for normal, exponential and uniform (InverseCDF[NormalDistribution[0, 1], 1/2] = 0); numeric (mpmath root of the CDF) for t, chi-squared and F with machine-number p; legacy rounded to 10 digits and returned an Error expression for other distributions |
 | `KendallCorrelation` | verified | 3 | {tau -> Kendall tau-b, p -> p-value} (SciPy) |
 | `KruskalWallis` | fixed | 3 | {H, p_value} for 2 or more groups (SciPy), unrounded |
-| `Kurtosis` | fixed | 3 | m4/m2^2 (Wolfram; normal data -> 3); legacy returned SciPy's excess (Fisher) kurtosis, i.e. 3 too small, rounded to 10 digits |
+| `Kurtosis` | fixed | 34 | matrix data: the statistic of each column (Wolfram); Kurtosis[dist] for every supported distribution (Indeterminate when undefined; Kurtosis is the non-excess kurtosis, 3 for the normal distribution); m4/m2^2 (Wolfram; normal data -> 3); legacy returned SciPy's excess (Fisher) kurtosis, i.e. 3 too small, rounded to 10 digits |
 | `LinearRegression` | fixed | 4 | {slope, intercept, r_squared} exact least squares plus p_value and std_error of the slope (t-test, as scipy.stats.linregress; no SciPy needed); legacy rounded |
 | `MAD` | fixed | 3 | median absolute deviation Median[Abs[x - Median[x]]] (Wolfram MedianDeviation), exact for exact data (legacy converted to floats and rounded to 10 digits) |
 | `MannWhitneyU` | fixed | 3 | {U -> statistic, p_value -> two-sided p} (SciPy), unrounded |
-| `Mean` | fixed | 9 | exact for exact data (legacy converted to floats and rounded to 10 digits); Mean[dist] gives the distribution mean |
-| `Median` | fixed | 3 | exact for exact data (legacy converted to floats and rounded to 10 digits); even length averages the two middle values |
+| `Mean` | fixed | 60 | matrix data: the statistic of each column (Wolfram); Mean[dist] for the batch 5 distributions (Indeterminate when the moment does not exist); exact for exact data (legacy converted to floats and rounded to 10 digits); Mean[dist] gives the distribution mean |
+| `Median` | fixed | 17 | matrix data: the statistic of each column (Wolfram); Median[dist] for every supported distribution (Indeterminate when undefined; Kurtosis is the non-excess kurtosis, 3 for the normal distribution); exact for exact data (legacy converted to floats and rounded to 10 digits); even length averages the two middle values |
 | `Mode` | fixed | 3 | the unique most frequent value (MikoshiLang); multimodal data now raises (legacy returned the first mode silently) - use Commonest |
-| `NormalDistribution` | verified | 13 | inert distribution object NormalDistribution[mu, sigma] (NormalDistribution[] = [0, 1]) |
-| `PDF` | fixed | 6 | exact/symbolic densities (legacy forced floats, rounded to 10 digits so PDF[NormalDistribution[0, 1], 10] was 0., and truncated Poisson/Binomial arguments with int()); PMF for discrete distributions |
+| `NormalDistribution` | verified | 37 | inert distribution object NormalDistribution[mu, sigma] (NormalDistribution[] = [0, 1]) |
+| `PDF` | fixed | 79 | batch 5 distributions: Wolfram densities/PMFs with Piecewise support conditions for symbolic x; exact/symbolic densities (legacy forced floats, rounded to 10 digits so PDF[NormalDistribution[0, 1], 10] was 0., and truncated Poisson/Binomial arguments with int()); PMF for discrete distributions |
 | `PearsonCorrelation` | fixed | 3 | {r -> exact Pearson r, p -> two-sided p-value (SciPy)} (MikoshiLang) |
 | `Percentile` | fixed | 3 | Percentile[list, p] with p in [0, 100] using linear interpolation between order statistics (NumPy/Excel convention, = Quantile[list, p/100, {{1, -1}, {0, 1}}]); now exact for exact data |
-| `PoissonDistribution` | verified | 5 | inert distribution object (mean mu) |
+| `PoissonDistribution` | verified | 24 | inert distribution object (mean mu) |
 | `Quantile` | fixed | 5 | Wolfram definition s[[Ceiling[n q]]] (q = 0 gives the minimum), lists of q and the 4-parameter form Quantile[list, q, {{a, b}, {c, d}}]; legacy used NumPy's linear interpolation (a different estimator) returning floats |
 | `RandomSample` | fixed | 3 | Wolfram RandomSample[list] / [list, n]: a random sample without replacement; legacy drew numbers from a distribution (now RandomVariate) and fell back to N(0, 1) for unknown input |
-| `RandomVariate` | promoted | 3 | RandomVariate[dist] and RandomVariate[dist, n] by inverse-CDF sampling (machine numbers; integers for discrete distributions) |
-| `SeedRandom` | promoted | 4 | SeedRandom[n] seeds RandomSample/RandomVariate |
+| `RandomVariate` | fixed | 18 | batch 5 distributions (including multivariate, empirical and transformed ones); RandomVariate[d, {n, m}] arrays; reproducible with SeedRandom (the random stream differs from Wolfram's); RandomVariate[dist] and RandomVariate[dist, n] by inverse-CDF sampling (machine numbers; integers for discrete distributions) |
+| `SeedRandom` | promoted | 14 | SeedRandom[n] seeds RandomSample/RandomVariate |
 | `ShapiroWilk` | fixed | 3 | {W -> statistic, p_value -> p} (SciPy), unrounded; n >= 3 |
-| `Skewness` | fixed | 3 | m3/m2^(3/2) with population moments (Wolfram), exact for exact data (legacy converted to floats and rounded to 10 digits) |
+| `Skewness` | fixed | 31 | matrix data: the statistic of each column (Wolfram); Skewness[dist] for every supported distribution (Indeterminate when undefined; Kurtosis is the non-excess kurtosis, 3 for the normal distribution); m3/m2^(3/2) with population moments (Wolfram), exact for exact data (legacy converted to floats and rounded to 10 digits) |
 | `SpearmanCorrelation` | fixed | 3 | {rho -> exact Spearman rho (average ranks for ties), p -> p-value (SciPy)} (MikoshiLang) |
-| `StandardDeviation` | fixed | 3 | Sqrt[Variance], exact for exact data (legacy converted to floats and rounded to 10 digits); StandardDeviation[dist] |
+| `StandardDeviation` | fixed | 27 | matrix data: the statistic of each column (Wolfram); StandardDeviation[dist] for the batch 5 distributions (Indeterminate when the moment does not exist); Sqrt[Variance], exact for exact data (legacy converted to floats and rounded to 10 digits); StandardDeviation[dist] |
 | `StandardError` | fixed | 3 | StandardDeviation/Sqrt[n] (standard error of the mean), exact for exact data (legacy converted to floats and rounded to 10 digits) |
-| `StudentTDistribution` | promoted | 3 | alias of TDistribution[nu] (Wolfram StudentTDistribution[nu]); inert distribution object for PDF/CDF/InverseCDF/Mean/Variance/RandomVariate |
+| `StudentTDistribution` | fixed | 18 | StudentTDistribution[mu, sigma, nu] (location-scale form): every distribution function via batch 5; inert Student t distribution [nu] |
 | `TDistribution` | verified | 3 | inert Student t distribution (MikoshiLang name; StudentTDistribution is the Wolfram name) |
 | `TTest` | fixed | 4 | Wolfram TTest[data] and TTest[data, mu0] return the two-sided one-sample p-value; TTest[{x, y}] the Welch two-sample p-value; legacy returned rounded rule lists and TTest[x, y] used the pooled-variance test (now raises with a pointer to TTest[{x, y}]) |
 | `TrimmedMean` | fixed | 3 | mean after dropping Floor[f n] values from each end (0 <= f < 1/2), exact for exact data (legacy converted to floats and rounded to 10 digits) |
-| `UniformDistribution` | verified | 7 | inert distribution UniformDistribution[{min, max}] (Wolfram); the legacy form [min, max] is accepted |
-| `Variance` | fixed | 7 | unbiased sample variance (n - 1), exact for exact data (legacy converted to floats and rounded to 10 digits); Variance[dist] |
+| `UniformDistribution` | verified | 19 | inert distribution UniformDistribution[{min, max}] (Wolfram); the legacy form [min, max] is accepted |
+| `Variance` | fixed | 52 | matrix data: the statistic of each column (Wolfram); Variance[dist] for the batch 5 distributions (Indeterminate when the moment does not exist); unbiased sample variance (n - 1), exact for exact data (legacy converted to floats and rounded to 10 digits); Variance[dist] |
 | `WilcoxonTest` | fixed | 3 | paired signed-rank test {W -> statistic, p_value -> p} (SciPy), unrounded |
 | `ZScore` | fixed | 3 | (x - mu)/sigma, exact; sigma <= 0 raises (legacy rounded floats) |
 | `ZScoreNormalize` | fixed | 3 | (x - Mean)/StandardDeviation (Wolfram Standardize), exact for exact data (legacy converted to floats and rounded to 10 digits) |
+
+### statistics (batch 5)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `BernoulliDistribution` | added | 23 | inert distribution object BernoulliDistribution; parameters validated |
+| `BetaDistribution` | added | 23 | inert distribution object BetaDistribution; parameters validated |
+| `CauchyDistribution` | added | 24 | inert distribution object CauchyDistribution; parameters validated |
+| `CentralMoment` | added | 12 | CentralMoment[data, r] = Mean[(data - Mean[data])^r]; CentralMoment[dist, r] exact |
+| `CentralMomentGeneratingFunction` | added | 3 | E[Exp[t (X - Mean)]] = Exp[-t mean] MomentGeneratingFunction |
+| `CharacteristicFunction` | added | 6 | E[Exp[I t X]] in closed form (exact); distributions without an elementary closed form stay unevaluated |
+| `ChiDistribution` | added | 19 | inert distribution object ChiDistribution; parameters validated |
+| `ChiSquareDistribution` | added | 19 | inert distribution object ChiSquareDistribution; parameters validated |
+| `ContraharmonicMean` | added | 3 | Total[data^2]/Total[data], exact; zero total raises |
+| `Cumulant` | added | 13 | Cumulant[dist, r] from the raw moments (exact); Cumulant[data, r] from the sample (biased) moments (Wolfram's moment-based definition: k1 = mean, k2 = second central moment, ...) |
+| `CumulantGeneratingFunction` | added | 3 | Log[MomentGeneratingFunction] |
+| `DiscreteUniformDistribution` | added | 23 | inert distribution object DiscreteUniformDistribution; parameters validated |
+| `Distributed` | added | 29 | x \[Distributed] dist, the inert random-variable declaration |
+| `EmpiricalDistribution` | added | 11 | EmpiricalDistribution[{x1, ...}] (equal weights) or [{w...} -> {x...}]: discrete distribution of the data (PDF = relative frequency, population moments) |
+| `ErlangDistribution` | added | 18 | inert distribution object ErlangDistribution; parameters validated |
+| `EstimatedDistribution` | added | 6 | the distribution with the maximum-likelihood parameters (see FindDistributionParameters) |
+| `Expectation` | added | 6 | Expectation[f, x \[Distributed] dist] (and lists of independent variables) by exact integration or summation (SymPy); expectations SymPy cannot do in closed form stay unevaluated |
+| `ExtremeValueDistribution` | added | 19 | inert distribution object ExtremeValueDistribution; parameters validated |
+| `FRatioDistribution` | added | 21 | inert distribution object FRatioDistribution; parameters validated |
+| `FindDistributionParameters` | added | 7 | maximum-likelihood estimates {p1 -> v1, ...} in closed form for Normal, Exponential, Poisson, Bernoulli, Geometric, Uniform, LogNormal, Laplace and Rayleigh; exact for exact data; other families raise |
+| `GammaDistribution` | added | 31 | inert distribution object GammaDistribution; parameters validated |
+| `GeometricDistribution` | added | 27 | inert distribution object GeometricDistribution; parameters validated |
+| `GumbelDistribution` | added | 21 | inert distribution object GumbelDistribution; parameters validated |
+| `HazardFunction` | added | 7 | PDF/SurvivalFunction; exact; numeric x outside the support gives 0 |
+| `HistogramList` | added | 6 | HistogramList[data, {dx}] (bins aligned at multiples of dx covering the data), [data, {min, max, dx}] and [data, {{b1, b2, ...}}]: {bin edges, counts} with bins [b_i, b_(i+1)); automatic binning raises |
+| `HypergeometricDistribution` | added | 23 | inert distribution object HypergeometricDistribution; parameters validated |
+| `InterquartileRange` | added | 4 | Q3 - Q1 with the Quartiles parameters {{1/2, 0}, {0, 1}}; InterquartileRange[dist] from the quantiles |
+| `InverseSurvivalFunction` | added | 3 | InverseCDF[dist, 1 - q] |
+| `KendallTau` | added | 6 | Kendall tau-b (ties corrected), exact; KendallTau[matrix] the matrix of coefficients |
+| `KolmogorovSmirnovTest` | added | 8 | KolmogorovSmirnovTest[data, dist] = two-sided p-value of the one-sample KS test against a fully specified continuous distribution (exact distribution of D, SciPy); [data, dist, "TestStatistic"] the statistic D (exact for exact data and closed-form CDFs); estimated parameters and the two-sample form raise |
+| `LaplaceDistribution` | added | 24 | inert distribution object LaplaceDistribution; parameters validated |
+| `LocationTest` | added | 5 | LocationTest[data, mu0, "TTest"] or "ZTest"-free explicit tests only: two-sided one-sample t-test p-value; Wolfram's automatic test selection is not reproduced, so LocationTest without an explicit test raises |
+| `LogNormalDistribution` | added | 23 | inert distribution object LogNormalDistribution; parameters validated |
+| `LogisticDistribution` | added | 19 | inert distribution object LogisticDistribution; parameters validated |
+| `MeanDeviation` | added | 4 | Mean[Abs[data - Mean[data]]], exact |
+| `MedianDeviation` | added | 5 | Median[Abs[data - Median[data]]], exact |
+| `Moment` | added | 19 | Moment[data, r] = Mean[data^r]; Moment[dist, r] the r-th raw moment (exact; Indeterminate when it does not exist) |
+| `MomentGeneratingFunction` | added | 7 | E[Exp[t X]] in closed form (exact); distributions without one (Cauchy, LogNormal, ...) stay unevaluated |
+| `MultinomialDistribution` | added | 9 | MultinomialDistribution[n, {p1, ...}]: PDF, CDF, Mean, Variance, Covariance, RandomVariate |
+| `MultinormalDistribution` | added | 9 | MultinormalDistribution[mu, Sigma] (and [Sigma] with zero mean): PDF, CDF (numeric, SciPy), Mean, Variance (diagonal), Covariance, RandomVariate; Sigma must be symmetric positive definite |
+| `NExpectation` | added | 3 | numerical expectation (mpmath quadrature / summation) of f over x \[Distributed] dist, machine reals |
+| `NProbability` | added | 3 | N[Probability[...]] (machine real) |
+| `NegativeBinomialDistribution` | added | 21 | inert distribution object NegativeBinomialDistribution; parameters validated |
+| `ParetoDistribution` | added | 26 | inert distribution object ParetoDistribution; parameters validated |
+| `Probability` | added | 10 | Probability[pred, x \[Distributed] dist] for a univariate event (inequalities, equalities and their And/Or combinations, solved over the reals) via the exact CDF; other events use exact expectation of Boole[pred] |
+| `QuartileDeviation` | added | 3 | InterquartileRange/2 |
+| `QuartileSkewness` | added | 3 | (Q1 - 2 Q2 + Q3)/(Q3 - Q1) with the Quartiles parameters |
+| `Quartiles` | added | 4 | Quantile[data, {1/4, 1/2, 3/4}, {{1/2, 0}, {0, 1}}] (Wolfram's definition); Quartiles[dist] = InverseCDF at 1/4, 1/2, 3/4 |
+| `RandomChoice` | added | 4 | RandomChoice[list], [list, n] (with replacement), [{w...} -> list, n] weighted; reproducible with SeedRandom |
+| `RandomInteger` | added | 5 | RandomInteger[] (0 or 1), [imax] (0..imax), [{imin, imax}], with a count n or dimensions {n, m}; reproducible with SeedRandom (stream differs from Wolfram's) |
+| `RandomReal` | added | 5 | RandomReal[] in [0, 1), [xmax], [{xmin, xmax}], with a count n or dimensions; machine reals; reproducible with SeedRandom |
+| `RayleighDistribution` | added | 20 | inert distribution object RayleighDistribution; parameters validated |
+| `RootMeanSquare` | added | 4 | Sqrt[Mean[data^2]] (Abs[x]^2 for complex), exact |
+| `SpearmanRho` | added | 7 | Pearson correlation of the (average) ranks, exact; SpearmanRho[matrix] the rank-correlation matrix |
+| `Standardize` | added | 5 | (data - Mean)/StandardDeviation; Standardize[data, f1, f2] with location and scale functions; exact |
+| `SurvivalFunction` | added | 48 | 1 - CDF[dist, x] (P(X > x)); exact; Piecewise for symbolic x |
+| `TransformedDistribution` | added | 6 | inert TransformedDistribution[f[x], x \[Distributed] dist]; Mean, Variance, StandardDeviation, Moment, Expectation-based functions and RandomVariate (no simplification to a named distribution) |
+| `TriangularDistribution` | added | 21 | inert distribution object TriangularDistribution; parameters validated |
+| `TrimmedVariance` | added | 4 | unbiased variance after dropping Floor[f n] values from each end (default f = 1/5); exact |
+| `VarianceTest` | added | 5 | VarianceTest[{d1, d2}, r0, "FisherRatio"]: two-sided F-test p-value for Var1/Var2 = r0; VarianceTest[data, s0, "ChiSquare"]: two-sided one-sample chi-square p-value; automatic test selection raises |
+| `WeibullDistribution` | added | 20 | inert distribution object WeibullDistribution; parameters validated |
+| `WinsorizedMean` | added | 4 | mean after replacing the Floor[f n] smallest and largest values by the nearest remaining values (default f = 1/5); exact |
+| `WinsorizedVariance` | added | 4 | unbiased variance of the winsorised data (default f = 1/5); exact |
 
 ### strings (batch 1)
 
@@ -1268,14 +1707,20 @@ Cases = number of differential test cases in which the head occurs.
 | `DiscreteFourierTransform` | fixed | 3 | X_k = Σ x_j e^(-2πi jk/n) (NumPy fft convention; Wolfram Fourier[] differs by 1/√n and sign); exact for exact input (n ≤ 64), complex floats otherwise; legacy FFT rounded results to 6 digits |
 | `DiscreteSineTransform` | verified | 3 | unnormalised DST-II, y_k = 2 Σ x_j sin(π(k+1)(2j+1)/(2n)) (SciPy dst default); exact for exact input |
 | `FFT` | fixed | 5 | X_k = Σ x_j e^(-2πi jk/n) (NumPy fft convention; Wolfram Fourier[] differs by 1/√n and sign); exact for exact input (n ≤ 64), complex floats otherwise; legacy FFT rounded results to 6 digits |
+| `FourierCosTransform` | added | 3 | FourierCosTransform[f, t, ω] = Sqrt[2/π] ∫_0^∞ f cos(ωt) dt (Wolfram default); FourierParameters -> {a, b} (numeric) gives 2 Sqrt[\|b\|/(2π)^(1-a)] times the integral with frequency b ω; the closed form is checked numerically at three frequencies and returned in the form valid for ω > 0 (as Wolfram); threads over equations; unevaluated if SymPy has no closed form |
 | `FourierDFT` | fixed | 3 | X_k = Σ x_j e^(-2πi jk/n) (NumPy fft convention; Wolfram Fourier[] differs by 1/√n and sign); exact for exact input (n ≤ 64), complex floats otherwise; legacy FFT rounded results to 6 digits |
-| `FourierTransform` | fixed | 6 | Wolfram convention (1/√(2π)) ∫ f e^(iωt) dt; legacy used SymPy's e^(-2πikx) convention, and SymPy silently assumes k > 0 (1/(1+t^2) gave √(π/2)E^w); every result is now checked numerically at frequencies of both signs and raises if it cannot be verified; unevaluated when SymPy cannot integrate |
+| `FourierSinTransform` | added | 3 | FourierSinTransform[f, t, ω] = Sqrt[2/π] ∫_0^∞ f sin(ωt) dt (Wolfram default); FourierParameters -> {a, b} (numeric) gives 2 Sqrt[\|b\|/(2π)^(1-a)] times the integral with frequency b ω; the closed form is checked numerically at three frequencies and returned in the form valid for ω > 0 (as Wolfram); threads over equations; unevaluated if SymPy has no closed form |
+| `FourierTransform` | fixed | 15 | Wolfram convention (1/√(2π)) ∫ f e^(iωt) dt, numerically verified at frequencies of both signs (raises if SymPy's closed form cannot be verified); batch 4: FourierParameters -> {a, b} (numeric) gives Sqrt[\|b\|/(2π)^(1-a)] ∫ f e^(i b ω t) dt, threads over equations and lists |
 | `HilbertTransform` | fixed | 3 | discrete Hilbert transform H[x] (imaginary part of SciPy's analytic signal); floats; legacy returned the complex analytic signal x + iH[x] under this name |
 | `InverseFFT` | fixed | 4 | x_j = (1/n) Σ X_k e^(2πi jk/n) (NumPy ifft); legacy discarded imaginary parts and rounded |
-| `InverseFourierTransform` | fixed | 3 | Wolfram convention (1/√(2π)) ∫ F e^(-iωt) dω; legacy used SymPy's convention; numerically verified like FourierTransform |
+| `InverseFourierCosTransform` | added | 3 | InverseFourierCosTransform[f, t, ω] = Sqrt[2/π] ∫_0^∞ f cos(ωt) dt (Wolfram default); FourierParameters -> {a, b} (numeric) gives 2 Sqrt[\|b\|/(2π)^(1+a)] times the integral with frequency b ω; the closed form is checked numerically at three frequencies and returned in the form valid for ω > 0 (as Wolfram); threads over equations; unevaluated if SymPy has no closed form |
+| `InverseFourierSinTransform` | added | 3 | InverseFourierSinTransform[f, t, ω] = Sqrt[2/π] ∫_0^∞ f sin(ωt) dt (Wolfram default); FourierParameters -> {a, b} (numeric) gives 2 Sqrt[\|b\|/(2π)^(1+a)] times the integral with frequency b ω; the closed form is checked numerically at three frequencies and returned in the form valid for ω > 0 (as Wolfram); threads over equations; unevaluated if SymPy has no closed form |
+| `InverseFourierTransform` | fixed | 4 | Wolfram convention (1/√(2π)) ∫ F e^(-iωt) dω, numerically verified; batch 4: FourierParameters -> {a, b} gives Sqrt[\|b\|/(2π)^(1+a)] ∫ F e^(-i b ω t) dω, threads over equations and lists |
 | `InverseLaplaceTransform` | fixed | 3 | inverse Laplace transform for t > 0 (Wolfram form); legacy kept SymPy's HeavisideTheta[t] factor |
+| `InverseMellinTransform` | added | 3 | InverseMellinTransform[F, s, x] via SymPy (fundamental strip inferred); result checked by transforming back with MellinTransform; unevaluated otherwise |
 | `InverseZTransform` | fixed | 17 | InverseZTransform[F, z, n] for rational F (causal, n >= 0, Wolfram convention F(z) = Σ f(n) z^-n): partial fractions in w = 1/z give c/(1 - p w)^k -> c Binomial[n + k - 1, k - 1] p^n and c w^m -> c DiscreteDelta[n - m]; F must stay finite as z -> Infinity (causal sequence). Every result is checked against the first 12 coefficients of the series of F at z = Infinity. Non-rational F stays unevaluated; legacy returned the input |
-| `LaplaceTransform` | verified | 4 | ∫_0^∞ f e^(-st) dt (same convention as Wolfram/SymPy), convergence conditions dropped; unevaluated when SymPy cannot transform |
+| `LaplaceTransform` | fixed | 9 | ∫_0^∞ f e^(-st) dt (same convention as Wolfram/SymPy), convergence conditions dropped; batch 4: derivatives of undefined functions (LaplaceTransform[f'[t], t, s] -> s LaplaceTransform[f[t], t, s] - f[0]), HeavisideTheta and DiracDelta shifts, threads over equations and lists; unevaluated when SymPy cannot transform |
+| `MellinTransform` | added | 6 | MellinTransform[f, x, s] = ∫_0^∞ x^(s-1) f dx (Wolfram); convergence strip dropped (generic value), checked numerically at two real s inside the strip; unevaluated if SymPy has no closed form |
 | `WaveletTransform` | fixed | 4 | WaveletTransform[list] or [list, "Haar"\|"db1"]: full Haar decomposition {cA_n, cD_n, ..., cD_1} (PyWavelets wavedec ordering, orthonormal 1/√2 scaling), exact; length must be a power of 2; other wavelets raise (legacy needed PyWavelets, which is not a dependency) |
 | `ZTransform` | fixed | 5 | Wolfram ZTransform[f, n, z] = Σ_{n=0}^∞ f(n) z^(-n) via symbolic summation (convergence conditions dropped); unevaluated when the sum has no closed form; legacy always returned itself |
 

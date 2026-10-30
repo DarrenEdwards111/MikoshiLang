@@ -50,6 +50,8 @@ _TOKEN_SPEC = [
     ("APPLYLEVEL1", r'@@@'),
     ("APPLY", r'@@'),
     ("AT",        r'@'),
+    ("TWOWAYRULE", r'<->'),
+    ("NAMEDOP",   r'\\\[(?:DirectedEdge|UndirectedEdge|Distributed|TwoWayRule)\]'),
     ("RULE",      r'->'),
     ("REPLACEREPEATED", r'//\.'),
     ("POSTFIXAPP", r'//'),
@@ -92,6 +94,7 @@ _TOKEN_SPEC = [
     ("SEMICOLON", r';'),
     ("REPEATEDNULL", r'\.\.\.'),
     ("REPEATED",  r'\.\.'),
+    ("DOT",       r'\.(?![0-9])'),
     ("BLANKOPT",  r'_\.(?![.0-9])'),
     ("BLANKNS",   r'___'),
     ("BLANKS",    r'__'),
@@ -318,6 +321,11 @@ class Parser:
             op = self.advance().type
             rhs = self.parse_rule()
             expr = Expr("RuleDelayed" if op == "RULEDELAYED" else "Rule", expr, rhs)
+        elif self.at("TWOWAYRULE", "NAMEDOP"):        # a <-> b, \[DirectedEdge], \[UndirectedEdge], \[Distributed]
+            tok = self.advance()
+            head = "TwoWayRule" if tok.type == "TWOWAYRULE" else tok.value[2:-1]
+            rhs = self.parse_rule()
+            expr = Expr(head, expr, rhs)
         return expr
 
     def parse_condition(self) -> Any:
@@ -372,20 +380,18 @@ class Parser:
         return expr
 
     def parse_or(self) -> Any:
-        expr = self.parse_and()
+        terms = [self.parse_and()]
         while self.at("OR"):
             self.advance()
-            rhs = self.parse_and()
-            expr = Expr("Or", expr, rhs)
-        return expr
+            terms.append(self.parse_and())
+        return terms[0] if len(terms) == 1 else Expr("Or", *terms)     # a op b op c parses to Or[a, b, c]
 
     def parse_and(self) -> Any:
-        expr = self.parse_not()
+        terms = [self.parse_not()]
         while self.at("AND"):
             self.advance()
-            rhs = self.parse_not()
-            expr = Expr("And", expr, rhs)
-        return expr
+            terms.append(self.parse_not())
+        return terms[0] if len(terms) == 1 else Expr("And", *terms)     # a op b op c parses to And[a, b, c]
 
     def parse_not(self) -> Any:
         if self.at("NOT"):
@@ -496,10 +502,24 @@ class Parser:
         if self.at("PLUS"):
             self.advance()
             return self.parse_unary()
+        return self.parse_dot()
+
+    def parse_dot(self) -> Any:
+        """Handle a . b . c (Dot, precedence 490: between Times and Power/Map), flat."""
+        expr = self.parse_map()
+        if not self.at("DOT"):
+            return expr
+        args = [expr]
+        while self.at("DOT"):
+            self.advance()
+            args.append(self.parse_map())
+        return Expr("Dot", *args)
+
+    def parse_map(self) -> Any:
         expr = self.parse_power()
         if self.at("MAP", "APPLY", "APPLYLEVEL1", "MAPALL"):
             op = self.advance().type
-            rhs = self.parse_unary()
+            rhs = self.parse_unary() if self.at("MINUS", "PLUS") else self.parse_map()
             if op == "MAP":
                 expr = Expr("Map", expr, rhs)
             elif op == "MAPALL":

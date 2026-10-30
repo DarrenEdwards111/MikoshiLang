@@ -1686,7 +1686,9 @@ def _h_and(a, ev, expr):
         v = ev(x)
         if v is False:
             return False
-        if v is not True:
+        if isinstance(v, Expr) and v.head == "And":     # Flat: a && (b && c) is And[a, b, c]
+            rest.extend(v.args)
+        elif v is not True:
             rest.append(v)
     if not rest:
         return True
@@ -1699,7 +1701,9 @@ def _h_or(a, ev, expr):
         v = ev(x)
         if v is True:
             return True
-        if v is not False:
+        if isinstance(v, Expr) and v.head == "Or":     # Flat: a || (b || c) is Or[a, b, c]
+            rest.extend(v.args)
+        elif v is not False:
             rest.append(v)
     if not rest:
         return False
@@ -2567,6 +2571,8 @@ def _b_not(a, ev, expr):
         return False
     if a[0] is False:
         return True
+    if isinstance(a[0], Expr) and a[0].head == "Not" and len(a[0].args) == 1:
+        return a[0].args[0]                      # Not[Not[x]] = x
     return expr
 
 
@@ -2923,3 +2929,8 @@ def _b_cancel(a, ev, expr):
 
 # Wolfram level / sequence specifications, associations and operator forms (replaces several builtins above).
 from . import kernel_lists  # noqa: E402,F401
+from . import kernel_linalg  # noqa: E402,F401  (batch 3: Dot, Det, Inverse)
+
+# Coverage batch 4 (library/wl_calculus.py, wl_algebra.py) replaces some kernel builtins (D, Limit, Series, Solve,
+# Normal, ...); load the reviewed library here so the replacements are installed before the first evaluation.
+from . import library  # noqa: E402,F401

@@ -13,7 +13,7 @@ from mikoshilang.extended_helper import make_rule
 @pytest.fixture
 def session(): return Session()
 
-@pytest.mark.parametrize('source', ['y’’[x]', '1+2 ]] junk', 'x % 2', 'x ~ y', 'x === ', '"unterminated', '(* unterminated', '1:2', 'f[[1]', '{1,2}.{3,4}'])
+@pytest.mark.parametrize('source', ['y’’[x]', '1+2 ]] junk', 'x % 2', 'x ~ y', 'x === ', '"unterminated', '(* unterminated', '1:2', 'f[[1]'])
 def test_malformed_input_rejected(source):
     with pytest.raises(ParseError): parse(source)
 
