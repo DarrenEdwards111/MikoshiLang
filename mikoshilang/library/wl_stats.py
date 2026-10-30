@@ -79,7 +79,12 @@ def _num(v):
     return isinstance(v, sp.Basic) and v.is_number
 
 
+_POS = []
+
+
 def _pos(v, what, name):
+    if isinstance(v, sp.Symbol):
+        _POS.append(v)
     if _num(v) and not v > 0:
         raise ValueError(f"{name}: {what} must be positive")
 
@@ -356,12 +361,12 @@ class StudentT(D):
         v = self.a[2]
         if self.need(2):
             return self.a[1] ** 2 * v / (v - 2)
-        return sp.oo if self.need(1) else sp.nan
+        return sp.nan
 
     def raw(self, r):
         m, s, v = self.a
         if not self.need(r):
-            return sp.nan if r % 2 or not self.need(r - 1) and r > 1 else sp.oo
+            return sp.nan
         # E[(m + s T)^r] with E[T^k] = v^(k/2) Gamma((k+1)/2) Gamma((v-k)/2)/(Sqrt[Pi] Gamma[v/2]) for even k
         out = 0
         for k in range(0, r + 1, 2):
@@ -683,15 +688,15 @@ class Pareto(D):
 
     def mean(self):
         k, al = self.a
-        return al * k / (al - 1) if self.need(1) else sp.oo
+        return al * k / (al - 1) if self.need(1) else sp.nan
 
     def var(self):
         k, al = self.a
-        return k ** 2 * al / ((al - 1) ** 2 * (al - 2)) if self.need(2) else (sp.oo if self.need(1) else sp.nan)
+        return k ** 2 * al / ((al - 1) ** 2 * (al - 2)) if self.need(2) else sp.nan
 
     def raw(self, r):
         k, al = self.a
-        return al * k ** r / (al - r) if self.need(r) else sp.oo
+        return al * k ** r / (al - r) if self.need(r) else sp.nan
 
     def sample(self, rng):
         k, al = float(self.a[0]), float(self.a[1])
@@ -838,6 +843,9 @@ class Chi(D):
 
     def sample(self, rng):
         return math.sqrt(2 * rng.gammavariate(float(self.a[0]) / 2, 1.0))
+
+    def scipy(self, st):
+        return st.chi(float(self.a[0]))
 
 
 # ── discrete ──
@@ -1163,7 +1171,10 @@ def dist_of(d, fname):
     if h == "EmpiricalDistribution":
         return _empirical(d, fname)
     if h in TABLE:
-        return TABLE[h](h, [_param(v, fname) for v in d.args])
+        del _POS[:]
+        dd = TABLE[h](h, [_param(v, fname) for v in d.args])
+        dd.pos = list(_POS)
+        return dd
     if h.endswith("Distribution"):
         raise NotImplementedError(f"{fname}: {h} is not supported")
     raise ValueError(f"{fname}: {d} is not a distribution")
@@ -1201,8 +1212,14 @@ def _out(v, *inputs):
     return numeric_out(v, *inputs)
 
 
-def _simp(v):
+def _simp(v, dd=None):
+    """simplify, treating parameters that the distribution requires to be positive as positive symbols"""
     try:
+        pos = getattr(dd, "pos", None) or []
+        if pos and isinstance(v, sp.Basic):
+            reps = {s: sp.Dummy(s.name, positive=True) for s in pos}
+            back = {d_: s for s, d_ in reps.items()}
+            return sp.simplify(sp.simplify(v.subs(reps)).subs(back))
         return sp.simplify(v)
     except Exception:  # pragma: no cover
         return v
@@ -1420,7 +1437,7 @@ def kurtosis(dd):
         return sp.Rational(27, 5)
     if isinstance(dd, StudentT):
         nu = dd.a[2]
-        return 3 + 6 / (nu - 4) if dd.need(4) else (sp.oo if dd.need(2) else sp.nan)
+        return 3 + 6 / (nu - 4) if dd.need(4) else sp.nan
     c4 = central_moment(dd, 4)
     if c4 is sp.nan:
         return sp.nan
@@ -1476,7 +1493,8 @@ def extend(name, impl, accepts, notes, status="fixed"):
 
 
 def _new_dist_first(args):
-    return bool(args) and isinstance(args[0], Expr) and args[0].head in NEW_DISTS
+    return bool(args) and isinstance(args[0], Expr) and (
+        args[0].head in NEW_DISTS or (args[0].head == "StudentTDistribution" and len(args[0].args) == 3))
 
 
 def _any_dist_first(args):
@@ -1543,7 +1561,7 @@ def _moment_fn(which):
             v = quantile_value(dd, sp.Rational(1, 2), (d,), "Median")
         if v is sp.nan:
             return INDET
-        return _out(_simp(v), d)
+        return _out(_simp(v, dd), d)
     return impl
 
 
@@ -1625,7 +1643,11 @@ def _cmgf(d, t):
 @fn("CumulantGeneratingFunction", area=AREA, status="added", notes="Log[MomentGeneratingFunction]")
 def _cgf(d, t):
     dd = dist_of(d, "CumulantGeneratingFunction")
-    return _out(_simp(sp.log(mgf_value(dd, sym(t, "CumulantGeneratingFunction")))), d, t)
+    m = _simp(mgf_value(dd, sym(t, "CumulantGeneratingFunction")), dd)
+    v = m.args[0] if isinstance(m, sp.exp) else sp.log(m)
+    if isinstance(v, sp.Add) and any(isinstance(a, sp.exp) for a in v.args) is False:
+        v = sp.expand(v)
+    return _out(_simp(v, dd), d, t)
 
 
 # ─────────────────────────── descriptive statistics on data ───────────────────────────
@@ -1659,8 +1681,8 @@ def _moment_data(x, r, central, fname):
 
 
 @fn("Moment", area=AREA, status="added",
-    notes="Moment[data, r] = Mean[data^r]; Moment[dist, r] the r-th raw moment (exact, Indeterminate/Infinity when "
-          "it does not exist)")
+    notes="Moment[data, r] = Mean[data^r]; Moment[dist, r] the r-th raw moment (exact; Indeterminate when it does "
+          "not exist)")
 def _moment(x, r):
     r = _order_r(r, "Moment")
     if is_dist(x):
@@ -2680,3 +2702,12 @@ def _histlist(data, spec=None):
                 counts[i] += 1
                 break
     return L(L(*(numeric_out(e, *items, spec) for e in edges)), L(*counts))
+
+
+def _student3(*args):
+    dist_of(Expr("StudentTDistribution", *args), "StudentTDistribution")
+    raise Unevaluated()
+
+
+extend("StudentTDistribution", _student3, lambda a: len(a) == 3,
+       "StudentTDistribution[mu, sigma, nu] (location-scale form): every distribution function via batch 5")

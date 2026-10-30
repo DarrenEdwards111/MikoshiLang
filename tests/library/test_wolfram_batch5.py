@@ -577,13 +577,437 @@ GRAPHS = [
     ("EdgeWeight", "EdgeWeight"), ("EdgeCapacity", "EdgeCapacity"), ("VertexWeight", "VertexWeight"),
 ]
 
-CASES = GRAPHS + GRAPHS_NX
+# ─────────────────────────── statistics: Wolfram definitions and documentation ───────────────────────────
+
+STATS = [
+    # distribution objects: inert, parameters validated
+    ("GammaDistribution[2, 3]", "GammaDistribution[2, 3]"), ("GammaDistribution[-1, 2]", Raises()),
+    ("GammaDistribution[a, b]", "GammaDistribution[a, b]"),
+    ("BetaDistribution[2, 3]", "BetaDistribution[2, 3]"), ("BetaDistribution[0, 3]", Raises()),
+    ("BetaDistribution[a, 1]", "BetaDistribution[a, 1]"),
+    ("ChiSquareDistribution[4]", "ChiSquareDistribution[4]"), ("ChiSquareDistribution[-4]", Raises()),
+    ("FRatioDistribution[2, 5]", "FRatioDistribution[2, 5]"), ("FRatioDistribution[2, 0]", Raises()),
+    ("LogNormalDistribution[0, 1]", "LogNormalDistribution[0, 1]"), ("LogNormalDistribution[0, -1]", Raises()),
+    ("CauchyDistribution[]", "CauchyDistribution[0, 1]"), ("CauchyDistribution[1, 0]", Raises()),
+    ("WeibullDistribution[2, 1]", "WeibullDistribution[2, 1]"), ("WeibullDistribution[0, 1]", Raises()),
+    ("LaplaceDistribution[0, 1]", "LaplaceDistribution[0, 1]"), ("LaplaceDistribution[0, -2]", Raises()),
+    ("LogisticDistribution[]", "LogisticDistribution[0, 1]"), ("LogisticDistribution[0, 0]", Raises()),
+    ("RayleighDistribution[2]", "RayleighDistribution[2]"), ("RayleighDistribution[0]", Raises()),
+    ("ParetoDistribution[1, 3]", "ParetoDistribution[1, 3]"), ("ParetoDistribution[1, 2, 3, 4, 5]", Raises()),
+    ("ParetoDistribution[-1, 3]", Raises()),
+    ("GumbelDistribution[]", "GumbelDistribution[0, 1]"), ("GumbelDistribution[0, -1]", Raises()),
+    ("ExtremeValueDistribution[]", "ExtremeValueDistribution[0, 1]"), ("ExtremeValueDistribution[0, 0]", Raises()),
+    ("TriangularDistribution[{0, 2}, 1]", "TriangularDistribution[{0, 2}, 1]"),
+    ("TriangularDistribution[{0, 2}, 3]", Raises()), ("TriangularDistribution[]", "TriangularDistribution[{0, 1}]"),
+    ("ErlangDistribution[3, 2]", "ErlangDistribution[3, 2]"), ("ErlangDistribution[3/2, 2]", Raises()),
+    ("ChiDistribution[3]", "ChiDistribution[3]"), ("ChiDistribution[0]", Raises()),
+    ("BernoulliDistribution[1/3]", "BernoulliDistribution[1/3]"), ("BernoulliDistribution[2]", Raises()),
+    ("GeometricDistribution[1/3]", "GeometricDistribution[1/3]"), ("GeometricDistribution[0]", Raises()),
+    ("NegativeBinomialDistribution[2, 1/2]", "NegativeBinomialDistribution[2, 1/2]"),
+    ("NegativeBinomialDistribution[2, 3/2]", Raises()),
+    ("HypergeometricDistribution[3, 5, 10]", "HypergeometricDistribution[3, 5, 10]"),
+    ("HypergeometricDistribution[11, 5, 10]", Raises()),
+    ("DiscreteUniformDistribution[{1, 6}]", "DiscreteUniformDistribution[{1, 6}]"),
+    ("DiscreteUniformDistribution[{6, 1}]", Raises()),
+    ("MultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}]", "MultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}]"),
+    ("MultinormalDistribution[{0, 0}, {{1, 2}, {2, 1}}]", Raises()),
+    ("MultinomialDistribution[3, {1/2, 1/4, 1/4}]", "MultinomialDistribution[3, {1/2, 1/4, 1/4}]"),
+    ("MultinomialDistribution[3, {1/2, 1/4}]", Raises()),
+    ("EmpiricalDistribution[{1, 2, 2, 3}]", "EmpiricalDistribution[{1, 2, 2, 3}]"),
+    ("EmpiricalDistribution[{1, 2} -> {3}]", Raises()),
+    # PDF / CDF (closed forms from the Wolfram reference pages)
+    ("PDF[GammaDistribution[2, 3], 1]", "1/(9 E^(1/3))"), ("PDF[GammaDistribution[2, 3], -1]", "0"),
+    ("PDF[GammaDistribution[2, 3], x]", "Piecewise[{{x E^(-x/3)/9, x > 0}}, 0]"),
+    ("CDF[GammaDistribution[2, 3], 3]", "1 - 2/E"), ("CDF[GammaDistribution[2, 3], -3]", "0"),
+    ("PDF[BetaDistribution[2, 3], 1/2]", "3/2"), ("PDF[BetaDistribution[2, 3], 2]", "0"),
+    ("CDF[BetaDistribution[2, 3], 1/2]", "11/16"), ("CDF[BetaDistribution[2, 3], 2]", "1"),
+    ("PDF[ChiSquareDistribution[2], x]", "Piecewise[{{E^(-x/2)/2, x > 0}}, 0]"),
+    ("CDF[ChiSquareDistribution[2], 2]", "1 - 1/E"), ("Mean[ChiSquareDistribution[n]]", "n"),
+    ("Variance[ChiSquareDistribution[n]]", "2 n"),
+    ("PDF[FRatioDistribution[2, 2], 1]", "1/4"), ("CDF[FRatioDistribution[2, 2], 1]", "1/2"),
+    ("Mean[FRatioDistribution[n, 5]]", "5/3"), ("Mean[FRatioDistribution[3, 2]]", "Indeterminate"),
+    ("Variance[FRatioDistribution[2, 6]]", "27/4"), ("Variance[FRatioDistribution[2, 4]]", "Indeterminate"),
+    ("CDF[LogNormalDistribution[0, 1], 1]", "1/2"), ("Median[LogNormalDistribution[m, s]]", "E^m"),
+    ("Mean[LogNormalDistribution[m, s]]", "E^(m + s^2/2)"), ("PDF[LogNormalDistribution[0, 1], 0]", "0"),
+    ("PDF[CauchyDistribution[0, 1], 0]", "1/Pi"), ("CDF[CauchyDistribution[0, 1], 1]", "3/4"),
+    ("Mean[CauchyDistribution[0, 1]]", "Indeterminate"), ("Variance[CauchyDistribution[a, b]]", "Indeterminate"),
+    ("InverseCDF[CauchyDistribution[a, b], 3/4]", "a + b"),
+    ("CDF[WeibullDistribution[2, 1], x]", "Piecewise[{{0, x <= 0}}, 1 - E^(-x^2)]"),
+    ("InverseCDF[WeibullDistribution[2, 1], 1/2]", "Sqrt[Log[2]]"), ("Mean[WeibullDistribution[a, b]]", "b Gamma[1 + 1/a]"),
+    ("PDF[LaplaceDistribution[0, 1], x]", "E^(-Abs[x])/2"), ("CDF[LaplaceDistribution[0, 1], -1]", "1/(2 E)"),
+    ("Variance[LaplaceDistribution[m, b]]", "2 b^2"), ("InverseCDF[LaplaceDistribution[0, 1], 3/4]", "Log[2]"),
+    ("CDF[LogisticDistribution[0, 1], 0]", "1/2"), ("Variance[LogisticDistribution[m, b]]", "Pi^2 b^2/3"),
+    ("InverseCDF[LogisticDistribution[0, 1], 3/4]", "Log[3]"),
+    ("Mean[RayleighDistribution[s]]", "s Sqrt[Pi/2]"), ("Variance[RayleighDistribution[s]]", "(4 - Pi) s^2/2"),
+    ("CDF[RayleighDistribution[1], 1]", "1 - E^(-1/2)"),
+    ("PDF[ParetoDistribution[1, 3], 2]", "3/16"), ("PDF[ParetoDistribution[1, 3], 1/2]", "0"),
+    ("CDF[ParetoDistribution[1, 3], 2]", "7/8"), ("Mean[ParetoDistribution[1, 3]]", "3/2"),
+    ("Mean[ParetoDistribution[1, 1]]", "Indeterminate"), ("Variance[ParetoDistribution[1, 3]]", "3/4"),
+    ("InverseCDF[ParetoDistribution[1, 1], 1/2]", "2"),
+    ("CDF[GumbelDistribution[0, 1], 0]", "1 - 1/E"), ("CDF[ExtremeValueDistribution[0, 1], 0]", "1/E"),
+    ("Mean[GumbelDistribution[a, b]]", "a - EulerGamma b"), ("Mean[ExtremeValueDistribution[a, b]]", "a + EulerGamma b"),
+    ("Variance[GumbelDistribution[a, b]]", "Pi^2 b^2/6"), ("Variance[ExtremeValueDistribution[a, b]]", "Pi^2 b^2/6"),
+    ("Kurtosis[ExtremeValueDistribution[0, 1]]", "27/5"),
+    ("PDF[TriangularDistribution[{0, 2}, 1], 1/2]", "1/2"), ("CDF[TriangularDistribution[{0, 2}, 1], 1]", "1/2"),
+    ("Mean[TriangularDistribution[{0, 2}, 1/2]]", "5/6"), ("Variance[TriangularDistribution[{0, 1}, 1/2]]", "1/24"),
+    ("InverseCDF[TriangularDistribution[{0, 2}, 1], 1/8]", "1/2"),
+    ("Mean[ErlangDistribution[k, l]]", "k/l"), ("Variance[ErlangDistribution[3, 2]]", "3/4"),
+    ("CDF[ErlangDistribution[1, 2], 1]", "1 - E^(-2)"),
+    ("Mean[ChiDistribution[2]]", "Sqrt[Pi/2]"), ("Variance[ChiDistribution[3]]", "3 - 8/Pi"),
+    ("CDF[ChiDistribution[2], 1]", "1 - E^(-1/2)"),
+    # discrete distributions
+    ("PDF[BernoulliDistribution[p], 1]", "p"), ("PDF[BernoulliDistribution[p], 0]", "1 - p"),
+    ("PDF[BernoulliDistribution[p], 2]", "0"), ("CDF[BernoulliDistribution[1/3], 1/2]", "2/3"),
+    ("Variance[BernoulliDistribution[p]]", "p (1 - p)"),
+    ("PDF[GeometricDistribution[1/3], 2]", "4/27"), ("CDF[GeometricDistribution[1/3], 2]", "19/27"),
+    ("PDF[GeometricDistribution[1/3], 5/2]", "0"), ("CDF[GeometricDistribution[1/3], 5/2]", "19/27"),
+    ("Mean[GeometricDistribution[p]]", "(1 - p)/p"), ("Variance[GeometricDistribution[p]]", "(1 - p)/p^2"),
+    ("PDF[NegativeBinomialDistribution[2, 1/2], 2]", "3/16"), ("Mean[NegativeBinomialDistribution[n, p]]", "n (1 - p)/p"),
+    ("Variance[NegativeBinomialDistribution[n, p]]", "n (1 - p)/p^2"),
+    ("CDF[NegativeBinomialDistribution[2, 1/2], 1]", "1/2"),
+    ("PDF[HypergeometricDistribution[3, 5, 10], 2]", "5/12"), ("PDF[HypergeometricDistribution[3, 5, 10], 4]", "0"),
+    ("Mean[HypergeometricDistribution[n, s, t]]", "n s/t"), ("Variance[HypergeometricDistribution[3, 5, 10]]", "7/12"),
+    ("CDF[HypergeometricDistribution[3, 5, 10], 0]", "1/12"),
+    ("PDF[DiscreteUniformDistribution[{1, 6}], 3]", "1/6"), ("PDF[DiscreteUniformDistribution[{1, 6}], 7]", "0"),
+    ("CDF[DiscreteUniformDistribution[{1, 6}], 2]", "1/3"), ("Mean[DiscreteUniformDistribution[{a, b}]]", "(a + b)/2"),
+    ("Variance[DiscreteUniformDistribution[{1, 6}]]", "35/12"), ("InverseCDF[DiscreteUniformDistribution[{1, 6}], 1/2]", "3"),
+    ("InverseCDF[GeometricDistribution[1/2], 3/4]", "1"), ("InverseCDF[BinomialDistribution[4, 1/2], 1/2]", "2"),
+    # empirical distribution
+    ("PDF[EmpiricalDistribution[{1, 2, 2, 3}], 2]", "1/2"), ("PDF[EmpiricalDistribution[{1, 2, 2, 3}], 5/2]", "0"),
+    ("CDF[EmpiricalDistribution[{1, 2, 2, 3}], 5/2]", "3/4"), ("Mean[EmpiricalDistribution[{1, 2, 2, 3}]]", "2"),
+    ("Variance[EmpiricalDistribution[{1, 2, 2, 3}]]", "1/2"),
+    ("Mean[EmpiricalDistribution[{1, 3} -> {0, 1}]]", "3/4"),
+    ("InverseCDF[EmpiricalDistribution[{1, 2, 2, 3}], 1/2]", "2"),
+    # moments of distributions (Indeterminate when they do not exist)
+    ("Skewness[ExponentialDistribution[2]]", "2"), ("Skewness[NormalDistribution[m, s]]", "0"),
+    ("Skewness[PoissonDistribution[m]]", "1/Sqrt[m]"), ("Skewness[GammaDistribution[k, t]]", "2/Sqrt[k]"),
+    ("Skewness[CauchyDistribution[0, 1]]", "Indeterminate"), ("Skewness[GumbelDistribution[0, 1]]", "-12 Sqrt[6] Zeta[3]/Pi^3"),
+    ("Kurtosis[NormalDistribution[m, s]]", "3"), ("Kurtosis[PoissonDistribution[3]]", "10/3"),
+    ("Kurtosis[ExponentialDistribution[l]]", "9"), ("Kurtosis[UniformDistribution[{0, 1}]]", "9/5"),
+    ("Kurtosis[StudentTDistribution[5]]", "9"), ("Kurtosis[StudentTDistribution[3]]", "Indeterminate"),
+    ("Kurtosis[LaplaceDistribution[0, 1]]", "6"), ("Kurtosis[LogisticDistribution[0, 1]]", "21/5"),
+    ("Median[PoissonDistribution[3]]", "3"), ("Median[ExponentialDistribution[l]]", "Log[2]/l"),
+    ("Median[NormalDistribution[m, s]]", "m"), ("Median[BinomialDistribution[10, 1/2]]", "5"),
+    ("Moment[GammaDistribution[2, 3], 3]", "648"), ("Moment[NormalDistribution[0, s], 4]", "3 s^4"),
+    ("Moment[PoissonDistribution[m], 2]", "m + m^2"), ("Moment[ExponentialDistribution[l], r]", "Moment[ExponentialDistribution[l], r]"),
+    ("Moment[ParetoDistribution[1, 3], 3]", "Indeterminate"), ("Moment[ExponentialDistribution[1], 0]", "1"),
+    ("Moment[UniformDistribution[{0, 1}], 3]", "1/4"), ("Moment[BinomialDistribution[2, p], 2]", "2 p + 2 p^2"),
+    ("CentralMoment[NormalDistribution[m, s], 4]", "3 s^4"), ("CentralMoment[ExponentialDistribution[1], 3]", "2"),
+    ("CentralMoment[PoissonDistribution[m], 3]", "m"), ("CentralMoment[CauchyDistribution[0, 1], 2]", "Indeterminate"),
+    ("Cumulant[PoissonDistribution[m], 4]", "m"), ("Cumulant[NormalDistribution[m, s], 3]", "0"),
+    ("Cumulant[ExponentialDistribution[1], 3]", "2"), ("Cumulant[NormalDistribution[m, s], 2]", "s^2"),
+    ("Cumulant[ExponentialDistribution[1], 0]", Raises()),
+    # survival, hazard, generating functions
+    ("SurvivalFunction[ExponentialDistribution[l], 2]", "E^(-2 l)"),
+    ("SurvivalFunction[ExponentialDistribution[l], x]", "Piecewise[{{1, x <= 0}}, E^(-l x)]"),
+    ("SurvivalFunction[PoissonDistribution[2], 1]", "1 - 3/E^2"), ("SurvivalFunction[ParetoDistribution[1, 3], 2]", "1/8"),
+    ("HazardFunction[ExponentialDistribution[2], 1]", "2"), ("HazardFunction[WeibullDistribution[2, 1], x]",
+                                                            "Piecewise[{{2 x, x > 0}}, 0]"),
+    ("HazardFunction[ExponentialDistribution[2], -1]", "0"), ("HazardFunction[GeometricDistribution[1/2], 3]", "1/2"),
+    ("InverseSurvivalFunction[ExponentialDistribution[1], 1/2]", "Log[2]"),
+    ("InverseSurvivalFunction[UniformDistribution[{0, 4}], 1/4]", "3"),
+    ("InverseSurvivalFunction[ParetoDistribution[1, 1], 1/4]", "4"),
+    ("CharacteristicFunction[NormalDistribution[m, s], t]", "E^(I m t - s^2 t^2/2)"),
+    ("CharacteristicFunction[CauchyDistribution[a, b], t]", "E^(I a t - b Abs[t])"),
+    ("CharacteristicFunction[BernoulliDistribution[p], t]", "1 - p + p E^(I t)"),
+    ("MomentGeneratingFunction[PoissonDistribution[m], t]", "E^(m (E^t - 1))"),
+    ("MomentGeneratingFunction[ExponentialDistribution[l], t]", "l/(l - t)"),
+    ("MomentGeneratingFunction[GammaDistribution[a, b], t]", "(1 - b t)^(-a)"),
+    ("MomentGeneratingFunction[CauchyDistribution[0, 1], t]", "MomentGeneratingFunction[CauchyDistribution[0, 1], t]"),
+    ("CentralMomentGeneratingFunction[NormalDistribution[m, s], t]", "E^(s^2 t^2/2)"),
+    ("CentralMomentGeneratingFunction[PoissonDistribution[m], t]", "E^(m (E^t - 1) - m t)"),
+    ("CentralMomentGeneratingFunction[ExponentialDistribution[1], t]", "E^(-t)/(1 - t)"),
+    ("CumulantGeneratingFunction[PoissonDistribution[m], t]", "m (E^t - 1)"),
+    ("CumulantGeneratingFunction[NormalDistribution[m, s], t]", "m t + s^2 t^2/2"),
+    ("CumulantGeneratingFunction[ExponentialDistribution[1], 1/2]", "Log[2]"),
+    # Expectation / Probability (x \[Distributed] dist)
+    ("Distributed[x, NormalDistribution[0, 1]]", "x \\[Distributed] NormalDistribution[0, 1]"),
+    ("(x \\[Distributed] PoissonDistribution[2])[[2]]", "PoissonDistribution[2]"),
+    ("Expectation[x^2, x \\[Distributed] NormalDistribution[0, s]]", "s^2"),
+    ("Expectation[x^2 + 1, x \\[Distributed] PoissonDistribution[m]]", "m^2 + m + 1"),
+    ("Expectation[E^x, x \\[Distributed] UniformDistribution[{0, 1}]]", "E - 1"),
+    ("Expectation[x y, {x \\[Distributed] BernoulliDistribution[1/2], y \\[Distributed] BernoulliDistribution[1/3]}]", "1/6"),
+    ("Expectation[x, x \\[Distributed] Foo[1]]", Raises()), ("Expectation[x, y]", Raises()),
+    ("Probability[x > 1, x \\[Distributed] ExponentialDistribution[2]]", "E^(-2)"),
+    ("Probability[1 <= x <= 3, x \\[Distributed] PoissonDistribution[2]]", "16/(3 E^2)"),
+    ("Probability[1 < x < 3, x \\[Distributed] PoissonDistribution[2]]", "2/E^2"),
+    ("Probability[x < 2 || x > 5, x \\[Distributed] UniformDistribution[{0, 10}]]", "7/10"),
+    ("Probability[x != 2, x \\[Distributed] BinomialDistribution[4, 1/2]]", "5/8"),
+    ("Probability[x == 2, x \\[Distributed] NormalDistribution[0, 1]]", "0"),
+    ("Probability[x^2 < 4, x \\[Distributed] DiscreteUniformDistribution[{-5, 5}]]", "3/11"),
+    ("Probability[x >= 2, x \\[Distributed] EmpiricalDistribution[{1, 2, 2, 3}]]", "3/4"),
+    ("Probability[Abs[x] < 1, x \\[Distributed] NormalDistribution[0, 1]]", "1 - Erfc[1/Sqrt[2]]"),
+    ("Probability[x > 2.5, x \\[Distributed] GeometricDistribution[1/2]]", Near(0.125)),
+    ("NProbability[x > 1.96, x \\[Distributed] NormalDistribution[0, 1]]", Near(0.024997895148220435, 1e-9)),
+    ("NProbability[x <= 1, x \\[Distributed] ExponentialDistribution[1]]", Near(1 - math.exp(-1), 1e-9)),
+    ("NProbability[x > 2, x \\[Distributed] PoissonDistribution[1]]", Near(1 - 2.5 * math.exp(-1), 1e-9)),
+    ("NExpectation[Sqrt[x], x \\[Distributed] ExponentialDistribution[1]]", Near(math.sqrt(math.pi) / 2, 1e-9)),
+    ("NExpectation[x^2, x \\[Distributed] NormalDistribution[1, 2]]", Near(5, 1e-9)),
+    ("NExpectation[1/(1 + x), x \\[Distributed] PoissonDistribution[1]]", Near(1 - math.exp(-1), 1e-9)),
+    # TransformedDistribution
+    ("Mean[TransformedDistribution[2 x + 1, x \\[Distributed] ExponentialDistribution[1]]]", "3"),
+    ("Variance[TransformedDistribution[2 x + 1, x \\[Distributed] ExponentialDistribution[1]]]", "4"),
+    ("StandardDeviation[TransformedDistribution[3 x, x \\[Distributed] NormalDistribution[0, 1]]]", "3"),
+    ("Moment[TransformedDistribution[x^2, x \\[Distributed] NormalDistribution[0, 1]], 2]", "3"),
+    ("TransformedDistribution[x, y]", Raises()),
+    # multivariate distributions
+    ("PDF[MultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}], {0, 0}]", "1/(2 Pi)"),
+    ("PDF[MultinormalDistribution[{{2, 1}, {1, 2}}], {1, 1}]", "1/(2 Sqrt[3] E^(1/3) Pi)"),
+    ("Mean[MultinormalDistribution[{1, 2}, {{2, 1}, {1, 2}}]]", "{1, 2}"),
+    ("Variance[MultinormalDistribution[{1, 2}, {{2, 1}, {1, 3}}]]", "{2, 3}"),
+    ("Covariance[MultinormalDistribution[{1, 2}, {{2, 1}, {1, 3}}]]", "{{2, 1}, {1, 3}}"),
+    ("CDF[MultinormalDistribution[{0}, {{1}}], {0}]", "1/2"),
+    ("PDF[MultinomialDistribution[3, {1/2, 1/4, 1/4}], {1, 1, 1}]", "3/16"),
+    ("PDF[MultinomialDistribution[3, {1/2, 1/4, 1/4}], {1, 1, 2}]", "0"),
+    ("Mean[MultinomialDistribution[n, {p, q}]]", "{n p, n q}"),
+    ("Covariance[MultinomialDistribution[4, {1/2, 1/2}]]", "{{1, -1}, {-1, 1}}"),
+    ("CDF[MultinomialDistribution[2, {1/2, 1/2}], {1, 1}]", "1/2"),
+    ("Length[RandomVariate[MultinomialDistribution[5, {1/2, 1/2}], 3]]", "3"),
+    ("Total[RandomVariate[MultinomialDistribution[5, {1/2, 1/3, 1/6}]]]", "5"),
+    ("Dimensions[RandomVariate[MultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}], 4]]", "{4, 2}"),
+    # descriptive statistics on data
+    ("Quartiles[{1, 2, 3, 4, 5, 6, 7}]", "{9/4, 4, 23/4}"), ("Quartiles[{1, 3, 4, 2, 5, 6}]", "{2, 7/2, 5}"),
+    ("Quartiles[{1., 2., 3., 4.}]", NearList([1.5, 2.5, 3.5])), ("Quartiles[ExponentialDistribution[1]]",
+                                                                  "{Log[4/3], Log[2], Log[4]}"),
+    ("InterquartileRange[{1, 3, 4, 7, 9, 10}]", "6"), ("InterquartileRange[{1, 2, 3, 4, 5, 6, 7}]", "7/2"),
+    ("N[InterquartileRange[NormalDistribution[0, 1]]]", Near(1.3489795003921634)),
+    ("InterquartileRange[UniformDistribution[{0, 4}]]", "2"),
+    ("QuartileDeviation[{1, 2, 3, 4, 5, 6, 7}]", "7/4"), ("QuartileDeviation[UniformDistribution[{0, 4}]]", "1"),
+    ("QuartileDeviation[{1, 3, 4, 7, 9, 10}]", "3"),
+    ("QuartileSkewness[{1, 2, 3, 4, 5, 6, 7}]", "0"), ("QuartileSkewness[{1, 2, 3, 4, 10, 20, 30}]", "47/61"),
+    ("QuartileSkewness[{1, 1, 1, 1}]", Raises()),
+    ("MeanDeviation[{1, 2, 3, 4, 10}]", "12/5"), ("MeanDeviation[{}]", Raises()),
+    ("MeanDeviation[{{1, 2}, {3, 6}}]", "{1, 2}"),
+    ("MedianDeviation[{1, 2, 3, 4, 10}]", "1"), ("MedianDeviation[{1, 2, 3, 4}]", "1"),
+    ("MedianDeviation[{{1, 2}, {3, 6}, {5, 7}}]", "{2, 1}"),
+    ("RootMeanSquare[{1, 2, 3}]", "Sqrt[14/3]"), ("RootMeanSquare[{3, -4}]", "5/Sqrt[2]"),
+    ("RootMeanSquare[{1., 1.}]", Near(1.0)),
+    ("ContraharmonicMean[{1, 2, 3}]", "7/3"), ("ContraharmonicMean[{1, -1}]", Raises()),
+    ("ContraharmonicMean[{2., 2.}]", Near(2.0)),
+    ("WinsorizedMean[{1, 2, 3, 4, 5, 6, 7, 8, 9, 100}, 0.1]", Near(5.5)),
+    ("WinsorizedMean[{1, 2, 3, 4, 5, 6, 7, 8, 9, 100}]", "11/2"), ("WinsorizedMean[{1, 2, 3}, 1/2]", Raises()),
+    ("WinsorizedVariance[{1, 2, 3, 4, 100}, 1/5]", "1"), ("WinsorizedVariance[{1, 2, 3, 4, 5}, 0]", "5/2"),
+    ("WinsorizedVariance[{1}]", Raises()),
+    ("TrimmedVariance[{1, 2, 3, 4, 100}, 1/5]", "1"), ("TrimmedVariance[{1, 2, 3, 4, 5}, 0]", "5/2"),
+    ("TrimmedVariance[{1, 2, 3}, 2/5]", Raises()),
+    ("Standardize[{1, 2, 3}]", "{-1, 0, 1}"), ("Standardize[{1, 1, 1}]", Raises()),
+    ("Standardize[{2, 4, 6}, Mean, 1 &]", "{-2, 0, 2}"), ("Standardize[{1., 3.}]", NearList([-1 / math.sqrt(2), 1 / math.sqrt(2)])),
+    ("Moment[{1, 2, 3, 4}, 2]", "15/2"), ("Moment[{1, 2, 3}, 0]", "1"), ("Moment[{1., 2.}, 3]", Near(4.5)),
+    ("CentralMoment[{1, 2, 3, 4}, 2]", "5/4"), ("CentralMoment[{1, 2, 3, 10}, 3]", "45"),
+    ("CentralMoment[{1, 2, 3}, 1]", "0"),
+    ("Cumulant[{1, 2, 3, 4}, 1]", "5/2"), ("Cumulant[{1, 2, 3, 4}, 2]", "5/4"), ("Cumulant[{1, 2, 3, 10}, 3]", "45"),
+    ("Cumulant[{1, 2, 3, 4}, 4]", "-17/8"),
+    ("SpearmanRho[{1, 2, 3, 4}, {1, 3, 2, 4}]", "4/5"), ("SpearmanRho[{1, 2, 3}, {3, 2, 1}]", "-1"),
+    ("SpearmanRho[{1, 2}, {1, 2, 3}]", Raises()), ("SpearmanRho[{1, 1, 1}, {1, 2, 3}]", Raises()),
+    ("SpearmanRho[{{1, 1}, {2, 3}, {3, 2}}]", "{{1, 1/2}, {1/2, 1}}"),
+    ("KendallTau[{1, 2, 3, 4}, {1, 3, 2, 4}]", "2/3"), ("KendallTau[{1, 2, 3}, {3, 2, 1}]", "-1"),
+    ("KendallTau[{1, 2}, {1}]", Raises()), ("KendallTau[{{1, 1}, {2, 3}, {3, 2}}]", "{{1, 1/3}, {1/3, 1}}"),
+    ("Mean[{{1, 2}, {3, 4}}]", "{2, 3}"), ("Variance[{{1, 2}, {3, 6}}]", "{2, 8}"),
+    ("Median[{{1, 5}, {2, 6}, {9, 7}}]", "{2, 6}"), ("StandardDeviation[{{1, 2}, {3, 6}}]", "{Sqrt[2], 2 Sqrt[2]}"),
+    ("Covariance[{{1, 2}, {2, 3}, {3, 5}}]", "{{1, 3/2}, {3/2, 7/3}}"),
+    ("Correlation[{{1, 2}, {2, 4}, {3, 6}}]", "{{1, 1}, {1, 1}}"),
+    # random numbers (seeded, reproducible; ranges and shapes)
+    ("SeedRandom[7]; seq7 = RandomInteger[{1, 6}, 20]; SeedRandom[7]; seq7 === RandomInteger[{1, 6}, 20]", True),
+    ("And @@ Map[1 <= # <= 6 &, RandomInteger[{1, 6}, 50]]", True), ("MemberQ[{0, 1}, RandomInteger[]]", True),
+    ("Dimensions[RandomInteger[5, {2, 3}]]", "{2, 3}"), ("RandomInteger[{3, 1}]", Raises()),
+    ("And @@ Map[2 <= # < 5 &, RandomReal[{2, 5}, 30]]", True), ("Dimensions[RandomReal[1, {4, 2}]]", "{4, 2}"),
+    ("0 <= RandomReal[] < 1", True), ("RandomReal[1, 2, WorkingPrecision -> 20]", Raises()),
+    ("SeedRandom[3]; seq3 = RandomReal[1, 5]; SeedRandom[3]; seq3 === RandomReal[1, 5]", True),
+    ("MemberQ[{a, b, c}, RandomChoice[{a, b, c}]]", True), ("Length[RandomChoice[{a, b}, 7]]", "7"),
+    ("Union[RandomChoice[{0, 1} -> {x, y}, 10]]", "{y}"), ("RandomChoice[{1, 2} -> {x}]", Raises()),
+    ("SeedRandom[5]; seq5 = RandomVariate[GammaDistribution[2, 3], 4]; SeedRandom[5]; "
+     "seq5 === RandomVariate[GammaDistribution[2, 3], 4]", True),
+    ("And @@ Map[0 <= # <= 1 &, RandomVariate[BetaDistribution[2, 3], 50]]", True),
+    ("And @@ Map[IntegerQ, RandomVariate[GeometricDistribution[1/3], 20]]", True),
+    ("Dimensions[RandomVariate[LaplaceDistribution[0, 1], {2, 3}]]", "{2, 3}"),
+    ("RandomVariate[GammaDistribution[kk, 1]]", Raises()),
+    ("Union[RandomVariate[EmpiricalDistribution[{0, 1} -> {7, 8}], 10]]", "{8}"),
+    ("And @@ Map[1 <= # <= 3 &, RandomVariate[TransformedDistribution[x + 1, x \\[Distributed] UniformDistribution[{0, 2}]], 10]]", True),
+    # estimation (closed-form maximum likelihood)
+    ("FindDistributionParameters[{1, 2, 3, 4}, NormalDistribution[m, s]]", "{m -> 5/2, s -> Sqrt[5]/2}"),
+    ("FindDistributionParameters[{1, 2, 3}, ExponentialDistribution[l]]", "{l -> 1/2}"),
+    ("FindDistributionParameters[{0, 1, 1, 1}, BernoulliDistribution[p]]", "{p -> 3/4}"),
+    ("FindDistributionParameters[{1, 2}, BetaDistribution[a, b]]", Raises()),
+    ("EstimatedDistribution[{1, 2, 3, 4}, PoissonDistribution[m]]", "PoissonDistribution[5/2]"),
+    ("EstimatedDistribution[{1, 5, 2}, UniformDistribution[{a, b}]]", "UniformDistribution[{1, 5}]"),
+    ("EstimatedDistribution[{0, 1, 3}, GeometricDistribution[p]]", "GeometricDistribution[3/7]"),
+    ("EstimatedDistribution[{1, 2, 3}, LaplaceDistribution[m, b]]", "LaplaceDistribution[2, 2/3]"),
+    ("EstimatedDistribution[{1, E, E^2}, LogNormalDistribution[m, s]]", "LogNormalDistribution[1, Sqrt[2/3]]"),
+    ("EstimatedDistribution[{1, 2}, NormalDistribution[0, s]]", Raises()),
+    # tests
+    ("KolmogorovSmirnovTest[{1/10, 1/2, 9/10}, UniformDistribution[{0, 1}], \"TestStatistic\"]", "7/30"),
+    ("KolmogorovSmirnovTest[{0.1, 0.5, 0.9}, UniformDistribution[{0, 1}], \"TestStatistic\"]", Near(7 / 30)),
+    ("KolmogorovSmirnovTest[{1, 2}]", Raises()), ("KolmogorovSmirnovTest[{1, 2}, PoissonDistribution[1]]", Raises()),
+    ("KolmogorovSmirnovTest[{1, 2}, NormalDistribution[0, 1], \"Bogus\"]", Raises()),
+    ("LocationTest[{1, 2, 3}]", Raises()), ("LocationTest[{1, 2, 3}, 0, \"Wilcoxon\"]", Raises()),
+    ("VarianceTest[{1, 2, 3}]", Raises()), ("VarianceTest[{1, 2, 3}, 1, \"Levene\"]", Raises()),
+    ("HistogramList[{1, 2, 2, 3, 5}, {2}]", "{{0, 2, 4, 6}, {1, 3, 1}}"),
+    ("HistogramList[{1, 2, 2, 3, 5}, {0, 6, 3}]", "{{0, 3, 6}, {3, 2}}"),
+    ("HistogramList[{1, 2, 2, 3, 5}, {{0, 1, 4, 10}}]", "{{0, 1, 4, 10}, {0, 4, 1}}"),
+    ("HistogramList[{1, 2}]", Raises()), ("HistogramList[{1, 2}, {0}]", Raises()),
+]
+
+
+# ─────────────────────────── statistics: SciPy / NumPy references ───────────────────────────
+
+STATS_SCIPY = []
+if HAVE_SCIPY:
+    import numpy as np
+    import scipy.stats as st
+
+    SCIPY_DISTS = [
+        ("GammaDistribution[2.5, 1.5]", st.gamma(2.5, scale=1.5), [0.7, 3.2]),
+        ("BetaDistribution[2.5, 1.5]", st.beta(2.5, 1.5), [0.2, 0.75]),
+        ("ChiSquareDistribution[5]", st.chi2(5), [1.5, 7.0]),
+        ("FRatioDistribution[5, 11]", st.f(5, 11), [0.5, 2.0]),
+        ("LogNormalDistribution[0.3, 0.8]", st.lognorm(0.8, scale=math.exp(0.3)), [0.5, 2.5]),
+        ("CauchyDistribution[1, 2]", st.cauchy(1, 2), [-1.0, 3.5]),
+        ("WeibullDistribution[1.7, 2.2]", st.weibull_min(1.7, scale=2.2), [0.5, 3.0]),
+        ("LaplaceDistribution[1, 2]", st.laplace(1, 2), [-1.0, 2.5]),
+        ("LogisticDistribution[1, 2]", st.logistic(1, 2), [-1.0, 2.5]),
+        ("RayleighDistribution[1.5]", st.rayleigh(scale=1.5), [0.5, 2.5]),
+        ("ParetoDistribution[2, 5]", st.pareto(5, scale=2), [2.5, 4.0]),
+        ("GumbelDistribution[1, 2]", st.gumbel_l(1, 2), [-1.0, 2.5]),
+        ("ExtremeValueDistribution[1, 2]", st.gumbel_r(1, 2), [-1.0, 2.5]),
+        ("TriangularDistribution[{1, 4}, 2]", st.triang(1 / 3, loc=1, scale=3), [1.5, 3.0]),
+        ("ErlangDistribution[3, 2]", st.erlang(3, scale=0.5), [0.5, 2.0]),
+        ("ChiDistribution[3]", st.chi(3), [0.5, 2.0]),
+        ("StudentTDistribution[1, 2, 7]", st.t(7, loc=1, scale=2), [0.0, 3.0]),
+        ("BernoulliDistribution[0.3]", st.bernoulli(0.3), [0, 1]),
+        ("GeometricDistribution[0.3]", st.geom(0.3, loc=-1), [0, 4]),
+        ("NegativeBinomialDistribution[3, 0.4]", st.nbinom(3, 0.4), [2, 6]),
+        ("HypergeometricDistribution[6, 7, 20]", st.hypergeom(20, 7, 6), [1, 3]),
+        ("DiscreteUniformDistribution[{2, 9}]", st.randint(2, 10), [3, 8]),
+    ]
+    for src, ref, pts in SCIPY_DISTS:
+        discrete = hasattr(ref.dist, "pmf")
+        for x in pts:
+            want = ref.pmf(x) if discrete else ref.pdf(x)
+            STATS_SCIPY.append((f"PDF[{src}, {x}]", Near(float(want), 1e-9)))
+            STATS_SCIPY.append((f"CDF[{src}, {x}]", Near(float(ref.cdf(x)), 1e-9)))
+            STATS_SCIPY.append((f"SurvivalFunction[{src}, {x}]", Near(float(ref.sf(x)), 1e-9)))
+        STATS_SCIPY.append((f"InverseCDF[{src}, 0.3]", Near(float(ref.ppf(0.3)), 1e-8)))
+        STATS_SCIPY.append((f"Median[{src}]" if "." in src else f"InverseCDF[{src}, 0.5]",
+                            Near(float(ref.median()), 1e-8)))
+        m, v, sk, ku = (float(t) for t in ref.stats(moments="mvsk"))
+        for head, want in (("Mean", m), ("Variance", v), ("StandardDeviation", math.sqrt(v) if v == v else v),
+                           ("Skewness", sk), ("Kurtosis", ku + 3)):
+            if math.isfinite(want):
+                STATS_SCIPY.append((f"N[{head}[{src}]]", Near(want, 1e-8)))
+            else:
+                STATS_SCIPY.append((f"{head}[{src}]", "Indeterminate"))
+
+    # hazard = pdf/sf, moments
+    for src, ref, x in (("GammaDistribution[2, 3]", st.gamma(2, scale=3), 2.0),
+                        ("WeibullDistribution[2, 1]", st.weibull_min(2), 0.8),
+                        ("LogNormalDistribution[0, 1]", st.lognorm(1), 1.5)):
+        STATS_SCIPY.append((f"HazardFunction[{src}, {x}]", Near(float(ref.pdf(x) / ref.sf(x)), 1e-9)))
+    for src, ref, r in (("GammaDistribution[2, 3]", st.gamma(2, scale=3), 4),
+                        ("BetaDistribution[2, 3]", st.beta(2, 3), 3),
+                        ("LogNormalDistribution[0, 1/2]", st.lognorm(0.5), 3),
+                        ("RayleighDistribution[2]", st.rayleigh(scale=2), 3),
+                        ("ChiDistribution[4]", st.chi(4), 3),
+                        ("HypergeometricDistribution[6, 7, 20]", st.hypergeom(20, 7, 6), 3)):
+        STATS_SCIPY.append((f"N[Moment[{src}, {r}]]", Near(float(ref.moment(r)), 1e-9)))
+    for src, ref, r in (("GammaDistribution[2, 3]", st.gamma(2, scale=3), 3),
+                        ("PoissonDistribution[3]", st.poisson(3), 4),
+                        ("NegativeBinomialDistribution[3, 2/5]", st.nbinom(3, 0.4), 3)):
+        c = float(ref.expect(lambda t: (t - ref.mean()) ** r))
+        STATS_SCIPY.append((f"N[CentralMoment[{src}, {r}]]", Near(c, 1e-7)))
+    STATS_SCIPY += [
+        ("N[Cumulant[GammaDistribution[2, 3], 3]]", Near(2 * 2 * 27.0)),
+        ("N[Cumulant[BinomialDistribution[10, 1/3], 3]]", Near(10 * (1 / 3) * (2 / 3) * (1 / 3), 1e-9)),
+        ("N[Cumulant[GeometricDistribution[1/2], 2]]", Near(float(st.geom(0.5).var()))),
+        ("N[CharacteristicFunction[ExponentialDistribution[2], 1.5]]", Near(2 / (2 - 1.5j), 1e-12)),
+        ("N[CharacteristicFunction[DiscreteUniformDistribution[{1, 3}], 0.5]]",
+         Near(sum(np.exp(1j * 0.5 * k) for k in (1, 2, 3)) / 3, 1e-12)),
+        ("N[CharacteristicFunction[LaplaceDistribution[0, 1], 0.5]]", Near(1 / (1 + 0.25), 1e-12)),
+        ("N[MomentGeneratingFunction[BinomialDistribution[5, 0.3], 0.4]]", Near((0.7 + 0.3 * math.exp(0.4)) ** 5)),
+        ("N[MomentGeneratingFunction[HypergeometricDistribution[2, 3, 5], 0.4]]",
+         Near(float(st.hypergeom(5, 3, 2).expect(lambda k: np.exp(0.4 * k))), 1e-9)),
+        ("N[MomentGeneratingFunction[GumbelDistribution[0, 1], 0.3]]", Near(math.gamma(1.3), 1e-12)),
+    ]
+    # data statistics against NumPy/SciPy
+    data_a = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3]
+    data_b = [2, 7, 1, 8, 2, 8, 1, 8, 2, 8]
+    data_f = [0.5, 2.25, 1.75, 3.5, 0.25, 4.0]
+    la, lb, lf = (str(d).replace("[", "{").replace("]", "}") for d in (data_a, data_b, data_f))
+    STATS_SCIPY += [
+        (f"N[SpearmanRho[{la}, {lb}]]", Near(float(st.spearmanr(data_a, data_b)[0]), 1e-12)),
+        (f"SpearmanRho[{lf}, {{1, 3, 2, 5, 4, 6}}]", Near(float(st.spearmanr(data_f, [1, 3, 2, 5, 4, 6])[0]), 1e-12)),
+        (f"N[KendallTau[{la}, {lb}]]", Near(float(st.kendalltau(data_a, data_b)[0]), 1e-12)),
+        (f"KendallTau[{lf}, {{1, 3, 2, 5, 4, 6}}]", Near(float(st.kendalltau(data_f, [1, 3, 2, 5, 4, 6])[0]), 1e-12)),
+        (f"N[MeanDeviation[{la}]]", Near(float(np.mean(np.abs(np.array(data_a) - np.mean(data_a)))))),
+        (f"N[MedianDeviation[{la}]]", Near(float(st.median_abs_deviation(data_a)))),
+        (f"MedianDeviation[{lf}]", Near(float(st.median_abs_deviation(data_f)))),
+        (f"N[RootMeanSquare[{la}]]", Near(float(np.sqrt(np.mean(np.square(data_a)))))),
+        (f"N[Moment[{la}, 3]]", Near(float(np.mean(np.power(data_a, 3))))),
+        (f"N[CentralMoment[{la}, 4]]", Near(float(st.moment(data_a, 4)))),
+        (f"CentralMoment[{lf}, 3]", Near(float(st.moment(data_f, 3)))),
+        (f"N[Cumulant[{la}, 3]]", Near(float(st.moment(data_a, 3)))),
+        (f"N[WinsorizedMean[{la}, 0.2]]", Near(float(np.mean(st.mstats.winsorize(np.array(data_a, float),
+                                                                                limits=(0.2, 0.2)))))),
+        (f"N[TrimmedVariance[{la}, 1/5]]", Near(float(np.var(sorted(data_a)[2:-2], ddof=1)))),
+        (f"N[WinsorizedVariance[{la}, 1/5]]", Near(float(np.var(st.mstats.winsorize(np.array(data_a, float),
+                                                                                   limits=(0.2, 0.2)), ddof=1)))),
+        (f"Standardize[{lf}]", NearList(list(st.zscore(data_f, ddof=1)))),
+        (f"N[Covariance[{{{{1, 2}}, {{2, 5}}, {{4, 4}}, {{7, 9}}}}]]",
+         Pred(lambda g: np.allclose(np.array(py(g), float), np.cov([[1, 2, 4, 7], [2, 5, 4, 9]])), "np.cov")),
+        (f"N[Correlation[{{{{1, 2}}, {{2, 5}}, {{4, 4}}, {{7, 9}}}}]]",
+         Pred(lambda g: np.allclose(np.array(py(g), float), np.corrcoef([[1, 2, 4, 7], [2, 5, 4, 9]])), "np.corrcoef")),
+        # KS: SciPy exact one-sample test
+        ("KolmogorovSmirnovTest[{0.1, 0.5, 0.9}, UniformDistribution[{0, 1}]]",
+         Near(float(st.kstest([0.1, 0.5, 0.9], "uniform", method="exact").pvalue), 1e-9)),
+        (f"KolmogorovSmirnovTest[{lf}, NormalDistribution[2, 1]]",
+         Near(float(st.kstest(data_f, st.norm(2, 1).cdf, method="exact").pvalue), 1e-9)),
+        (f"KolmogorovSmirnovTest[{lf}, ExponentialDistribution[1/2], \"TestStatistic\"]",
+         Near(float(st.kstest(data_f, st.expon(scale=2).cdf).statistic), 1e-9)),
+        # explicit-method location / variance tests
+        (f"LocationTest[{la}, 3, \"T\"]", Near(float(st.ttest_1samp(data_a, 3).pvalue), 1e-9)),
+        (f"LocationTest[{lf}, 1, \"T\"]", Near(float(st.ttest_1samp(data_f, 1).pvalue), 1e-9)),
+        (f"LocationTest[{lb}, 0, \"T\"]", Near(float(st.ttest_1samp(data_b, 0).pvalue), 1e-9)),
+        (f"VarianceTest[{{{la}, {lb}}}, 1, \"FisherRatio\"]",
+         Near(float(2 * min(st.f.cdf(np.var(data_a, ddof=1) / np.var(data_b, ddof=1), 9, 9),
+                            st.f.sf(np.var(data_a, ddof=1) / np.var(data_b, ddof=1), 9, 9))), 1e-9)),
+        (f"VarianceTest[{la}, 4, \"ChiSquare\"]",
+         Near(float(2 * min(st.chi2.cdf(9 * np.var(data_a, ddof=1) / 4, 9), st.chi2.sf(9 * np.var(data_a, ddof=1) / 4, 9))),
+              1e-9)),
+        (f"VarianceTest[{lf}, 1, \"ChiSquare\"]",
+         Near(float(2 * min(st.chi2.cdf(5 * np.var(data_f, ddof=1), 5), st.chi2.sf(5 * np.var(data_f, ddof=1), 5))), 1e-9)),
+        (f"HistogramList[{la}, {{0, 10, 2}}]",
+         Pred(lambda g: py(g)[1] == list(np.histogram(data_a, bins=[0, 2, 4, 6, 8, 10])[0]), "np.histogram")),
+        # MLE against SciPy fits
+        (f"FindDistributionParameters[{lf}, NormalDistribution[m, s]]",
+         Pred(lambda g: np.allclose([float(r.args[1]) for r in g.args], st.norm.fit(data_f)), "st.norm.fit")),
+        (f"FindDistributionParameters[{lf}, LogNormalDistribution[m, s]]",
+         Pred(lambda g: np.allclose([float(r.args[1]) for r in g.args],
+                                    [math.log(st.lognorm.fit(data_f, floc=0)[2]), st.lognorm.fit(data_f, floc=0)[0]],
+                                    rtol=1e-6), "st.lognorm.fit")),
+        (f"FindDistributionParameters[{lf}, RayleighDistribution[s]]",
+         Pred(lambda g: np.allclose([float(r.args[1]) for r in g.args], [st.rayleigh.fit(data_f, floc=0)[1]],
+                                    rtol=1e-6), "st.rayleigh.fit")),
+        # sample-moment check of random variates (seeded, loose tolerance)
+        ("SeedRandom[11]; Abs[Mean[RandomVariate[GammaDistribution[2, 3], 20000]] - 6] < 0.2", True),
+        ("SeedRandom[12]; Abs[Mean[RandomVariate[NegativeBinomialDistribution[3, 2/5], 20000]] - 4.5] < 0.15", True),
+        ("SeedRandom[13]; Abs[Variance[RandomVariate[LaplaceDistribution[0, 1], 20000]] - 2] < 0.15", True),
+        ("SeedRandom[14]; Abs[Mean[RandomVariate[GumbelDistribution[0, 1], 20000]] + 0.5772] < 0.05", True),
+        ("SeedRandom[15]; Abs[Mean[RandomVariate[HypergeometricDistribution[6, 7, 20], 20000]] - 2.1] < 0.05", True),
+    ]
+
+
+CASES = GRAPHS + GRAPHS_NX + STATS + STATS_SCIPY
 if not HAVE_NX:
     NEEDS_NX = ("PlanarGraphQ", "IsomorphicGraphQ", "FindGraphIsomorphism")
     CASES = [c for c in CASES if not any(n in c[0] for n in NEEDS_NX)]
 if not HAVE_NUMPY:
     NEEDS_NP = ("EigenvectorCentrality", "HITSCentrality", "PageRankCentrality")
     CASES = [c for c in CASES if not any(n in c[0] for n in NEEDS_NP)]
+
+
+if not HAVE_SCIPY:
+    # numeric quantiles without a closed form, multinormal CDFs and test p-values use SciPy
+    NEEDS_SP = ("KolmogorovSmirnovTest[{0.1, 0.5, 0.9}, UniformDistribution[{0, 1}]]", "InterquartileRange[Normal")
+    CASES = [c for c in CASES if not any(n in c[0] for n in NEEDS_SP)]
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
