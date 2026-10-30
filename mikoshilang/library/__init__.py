@@ -7,3 +7,4 @@ Every function exposed here was audited against an independent reference
 """
 from .core import REGISTRY, STATUS, ERRORS, UNHANDLED, Unevaluated, dispatch  # noqa: F401
 from . import elementary, special, numbertheory, combinatorics, algebra, calculus, linalg, lists, strings, statistics, applied, logic, graphs, numerics, transforms, plots, ml, kernelheads, assume, wl_lists, wl_strings, wl_assoc, wl_numerics, wl_special, wl_numcalc, wl_interp  # noqa: F401,E402
+from . import wl_symbolic, wl_calculus  # noqa: F401,E402  (coverage batch 4)

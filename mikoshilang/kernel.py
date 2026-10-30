@@ -2923,3 +2923,7 @@ def _b_cancel(a, ev, expr):
 
 # Wolfram level / sequence specifications, associations and operator forms (replaces several builtins above).
 from . import kernel_lists  # noqa: E402,F401
+
+# Coverage batch 4 (library/wl_calculus.py, wl_algebra.py) replaces some kernel builtins (D, Limit, Series, Solve,
+# Normal, ...); load the reviewed library here so the replacements are installed before the first evaluation.
+from . import library  # noqa: E402,F401
