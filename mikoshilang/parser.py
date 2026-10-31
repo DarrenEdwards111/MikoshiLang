@@ -41,6 +41,9 @@ _TOKEN_SPEC = [
     ("SAMEQ",     r'==='),
     ("UNSAMEQ",   r'=!='),
     ("SETDELAYED",r':='),
+    ("UPSETDELAYED", r'\^:='),
+    ("UPSET",     r'\^=(?!=)'),
+    ("UNSET",     r'=\.(?![0-9.])'),
     ("SET",       r'(?<![=!<>])=(?!=)'),
     ("RULEDELAYED", r':>'),
     ("COLON",     r':(?![=>])'),
@@ -54,15 +57,19 @@ _TOKEN_SPEC = [
     ("NAMEDOP",   r'\\\[(?:DirectedEdge|UndirectedEdge|Distributed|TwoWayRule)\]'),
     ("RULE",      r'->'),
     ("REPLACEREPEATED", r'//\.'),
+    ("APPLYTO",   r'//=(?!=)'),
     ("POSTFIXAPP", r'//'),
     ("REPLACEALL",r'/\.'),
     ("CONDITION", r'/;'),
+    ("TAGSET",    r'/:'),
     ("DIVIDEBY",  r'/='),
     ("EQUAL",     r'=='),
     ("UNEQUAL",   r'!='),
     ("GEQ",       r'>='),
     ("LEQ",       r'<='),
     ("STRINGJOIN", r'<>'),
+    ("GET",       r'<<[ \t]*(?:"(?:\\.|[^"\\])*"|[^\s;,\])}"]+)'),
+    ("OUT",       r'%(?:[0-9]+|%*)'),
     ("LASSOC",    r'<\|'),
     ("RASSOC",    r'\|>'),
     ("STRINGEXPR", r'~~'),
@@ -81,7 +88,7 @@ _TOKEN_SPEC = [
     ("TIMESBY",   r'\*='),
     ("TIMES",     r'\*'),
     ("RIGHTCOMPOSITION", r'/\*'),
-    ("DIVIDE",    r'/(?![.;@/=*])'),
+    ("DIVIDE",    r'/(?![.;@/=*:])'),
     ("POWER",     r'\^'),
     ("LSQUARE",   r'\['),
     ("RSQUARE",   r'\]'),
@@ -99,7 +106,7 @@ _TOKEN_SPEC = [
     ("BLANKNS",   r'___'),
     ("BLANKS",    r'__'),
     ("BLANK",     r'_'),
-    ("SYMBOL",    r'[A-Za-z$][A-Za-z0-9$]*'),
+    ("SYMBOL",    r'`?[A-Za-z$][A-Za-z0-9$]*(?:`[A-Za-z$][A-Za-z0-9$]*)*'),
     ("SLOTSEQ",   r'##[0-9]*'),
     ("SLOTNAME",  r'#[A-Za-z][A-Za-z0-9]*'),
     ("SLOT",      r'#[0-9]*'),
@@ -114,7 +121,7 @@ _TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _T
 
 _STATEMENT_END = ("INTEGER", "FLOAT", "BIGNUM", "SCINUM", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "RASSOC",
                   "FUNCTION", "SLOT", "SLOTSEQ", "SLOTNAME", "INCREMENT", "DECREMENT", "BLANK", "BLANKS",
-                  "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL")
+                  "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL", "OUT", "GET", "UNSET")
 
 
 def _dps_bits(dps: float) -> int:
@@ -258,11 +265,27 @@ class Parser:
         return expr
 
     def parse_assignment(self) -> Any:
-        """Handle =, :=, +=, -=, *=, /= (right-associative)."""
+        """Handle =, :=, ^=, ^:=, f /: lhs = rhs, =., +=, -=, *=, /=, //= (right-associative)."""
         expr = self.parse_postfix_application()
         ops = {"SET": "Set", "SETDELAYED": "SetDelayed", "ADDTO": "AddTo",
-               "SUBTRACTFROM": "SubtractFrom", "TIMESBY": "TimesBy", "DIVIDEBY": "DivideBy"}
+               "SUBTRACTFROM": "SubtractFrom", "TIMESBY": "TimesBy", "DIVIDEBY": "DivideBy",
+               "UPSET": "UpSet", "UPSETDELAYED": "UpSetDelayed", "APPLYTO": "ApplyTo"}
         tok = self.peek()
+        if tok is not None and tok.type == "UNSET":
+            self.advance()
+            return Expr("Unset", expr)
+        if tok is not None and tok.type == "TAGSET":
+            self.advance()
+            lhs = self.parse_postfix_application()
+            op = self.peek()
+            if op is not None and op.type == "UNSET":
+                self.advance()
+                return Expr("TagUnset", expr, lhs)
+            if op is None or op.type not in ("SET", "SETDELAYED"):
+                raise ParseError("'/:' must be followed by lhs = rhs, lhs := rhs or lhs =.")
+            self.advance()
+            rhs = self.parse_assignment()
+            return Expr("TagSet" if op.type == "SET" else "TagSetDelayed", expr, lhs, rhs)
         if tok is not None and tok.type in ops:
             self.advance()
             rhs = self.parse_assignment()
@@ -644,6 +667,20 @@ class Parser:
             self.advance()
             return tok.value
 
+        if tok.type == "OUT":                        # %, %%, %%%, %n
+            self.advance()
+            t = tok.value[1:]
+            if t.isdigit():
+                return Expr("Out", int(t))
+            return Expr("Out") if not t else Expr("Out", -(len(t) + 1))
+
+        if tok.type == "GET":                        # <<file or <<"file"
+            self.advance()
+            name = tok.value[2:].strip()
+            if name.startswith('"'):
+                name = json.loads(name)
+            return Expr("Get", name)
+
         _blank_kinds = {"BLANK": "Blank", "BLANKS": "BlankSequence", "BLANKNS": "BlankNullSequence"}
 
         if tok.type == "SYMBOL":
@@ -712,8 +749,27 @@ def _as_head(expr):
     raise ParseError(f"{expr!r} cannot be used as a function head")
 
 
+# Applied to every parsed expression (symbol creation and context resolution; set by wl_evaluation).
+POST_PARSE_HOOK = None
+
+
+def _information_query(text: str):
+    """?name and ??name (Information[\"name\", LongForm -> False] and Information[\"name\"])."""
+    body = text.strip()
+    long_form = body.startswith("??")
+    name = body[2:].strip() if long_form else body[1:].strip()
+    if not name or any(c.isspace() for c in name):
+        raise ParseError("? must be followed by a symbol name or a name pattern")
+    if long_form:
+        return Expr("Information", name)
+    return Expr("Information", name, Expr("Rule", Symbol("LongForm"), False))
+
+
 def parse(text: str) -> Any:
     """Parse a single Wolfram-style expression string into a MikoshiLang Expr."""
+    if text.lstrip().startswith("?"):
+        result = _information_query(text)
+        return POST_PARSE_HOOK(result) if POST_PARSE_HOOK is not None else result
     tokens = tokenize(text)
     if not tokens:
         return None
@@ -721,6 +777,8 @@ def parse(text: str) -> Any:
     result = parser.parse_expression()
     if parser.peek() is not None:
         raise ParseError(f"Unexpected trailing token: {parser.peek()}")
+    if POST_PARSE_HOOK is not None:
+        result = POST_PARSE_HOOK(result)
     return result
 
 

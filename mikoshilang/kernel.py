@@ -48,6 +48,9 @@ class SessionState:
         self.counter = 0                            # Module variable counter
         self.temporaries: set = set()               # live Module-local symbols (Wolfram's Temporary)
         self.escape_seq = 0                         # bumped when a definition stores a reference to a temporary
+        # Further per-symbol definitions (UpValues, NValues, Default, Options, ...): kind -> {symbol: value}.
+        # Kinds starting with "\x00" hold session-wide data (contexts, history) rather than per-symbol values.
+        self.ext: Dict[str, Dict[str, Any]] = {}
 
     # Backwards compatible tuple-style access: state()[0] = values, state()[1] = definitions
     def __getitem__(self, index):
@@ -64,6 +67,7 @@ class SessionState:
         self.down.clear()
         self.attrs.clear()
         self.temporaries.clear()
+        self.ext.clear()
 
     # ── whole-symbol snapshots (used by Block) ──
 
@@ -76,11 +80,17 @@ class SessionState:
         exact = {k: v for k, v in self.exact.items() if _def_key(v[0]) == name}
         for k in exact:
             del self.exact[k]
+        ext = {k: d.pop(name) for k, d in self.ext.items() if not k.startswith("\x00") and name in d}
         return (name in self.own, self.own.pop(name, None), exact,
-                self.down.pop(name, None), self.attrs.pop(name, None))
+                self.down.pop(name, None), self.attrs.pop(name, None), ext)
 
     def restore(self, name: str, snap):
-        had_own, own, exact, down, attrs = snap
+        had_own, own, exact, down, attrs, ext = snap
+        for k, d in self.ext.items():
+            if not k.startswith("\x00"):
+                d.pop(name, None)
+        for k, v in ext.items():
+            self.ext.setdefault(k, {})[name] = v
         # Drop whatever was defined for name while it was localised ...
         self.own.pop(name, None)
         for k in [k for k, v in self.exact.items() if _def_key(v[0]) == name]:
@@ -124,6 +134,8 @@ class SessionState:
                 out.extend((l, r))
         for l, r, _ in self.down.get(name, ()):
             out.extend((l, r))
+        for l, r, _ in self.ext.get("UpValues", {}).get(name, ()):
+            out.extend((l, r))
         return out
 
     def referenced_from_outside(self, names: set) -> set:
@@ -143,6 +155,9 @@ class SessionState:
         for l, r in self.exact.values():
             scan(_def_key(l), l, r)
         for k, defs in self.down.items():
+            for l, r, _ in defs:
+                scan(k, l, r)
+        for k, defs in self.ext.get("UpValues", {}).items():
             for l, r, _ in defs:
                 scan(k, l, r)
         return found
@@ -618,7 +633,19 @@ def _seq_info(p):
         p = p.args[1]
     if isinstance(p, Expr) and p.head in ("BlankSequence", "BlankNullSequence"):
         return (1 if p.head == "BlankSequence" else 0, name, p.args[0] if p.args else None, wrappers)
+    if isinstance(p, Expr) and p.head == "OptionsPattern" and len(p.args) <= 1:
+        # zero or more options (rules or lists of rules); bound under its name or, unnamed, "\x00opts"
+        return (0, name or "\x00opts", _OPTIONS_HEAD, wrappers)
     return None
+
+
+_OPTIONS_HEAD = object()
+
+
+def _is_option(a) -> bool:
+    if isinstance(a, Expr) and a.head in ("Rule", "RuleDelayed") and len(a.args) == 2:
+        return True
+    return isinstance(a, Expr) and a.head == "List" and all(_is_option(x) for x in a.args)
 
 
 def _is_single_blank(p) -> bool:
@@ -627,6 +654,10 @@ def _is_single_blank(p) -> bool:
     if isinstance(p, Expr) and p.head == "Pattern" and len(p.args) == 2:
         p = p.args[1]
     return isinstance(p, Expr) and p.head == "Blank"
+
+
+# Extra pattern objects (IgnoringInactive, ...): head -> fn(pat, expr, b, ev) yielding bindings.
+PATTERN_HOOKS: Dict[str, Any] = {}
 
 
 def match(pat, expr, b: Dict[str, Any], ev) -> Iterator[Dict[str, Any]]:
@@ -669,6 +700,9 @@ def match(pat, expr, b: Dict[str, Any], ev) -> Iterator[Dict[str, Any]]:
             return
         if h == "HoldPattern" and len(pat.args) == 1:
             yield from match(pat.args[0], expr, b, ev)
+            return
+        if h in PATTERN_HOOKS:
+            yield from PATTERN_HOOKS[h](pat, expr, b, ev)
             return
         if h == "Optional" and len(pat.args) in (1, 2):
             # outside an argument sequence an optional pattern matches like its pattern
@@ -778,6 +812,17 @@ def _match_each(p, chunk, b, ev):
 _OPTIONAL_DEFAULTS = {"Plus": 0, "Times": 1, "Power": 1}
 
 
+def user_default(head: str, i: int, n: int):
+    """Default[f, i, n] / Default[f, i] / Default[f] set by the user (UNHANDLED if none)."""
+    d = state().ext.get("Default", {}).get(head)
+    if not d:
+        return UNHANDLED
+    for key in ((i, n), (i,), ()):
+        if key in d:
+            return d[key]
+    return UNHANDLED
+
+
 def _match_seq(pats, i, args, j, b, ev, head, flat):
     if i == len(pats):
         if j == len(args):
@@ -809,6 +854,8 @@ def _match_seq(pats, i, args, j, b, ev, head, flat):
                 yield from _match_seq(pats, i + 1, args, j + 1, b2, ev, head, flat)
         if len(p.args) == 2:
             default = p.args[1]
+        elif isinstance(head, str) and user_default(head, i + 1, len(pats)) is not UNHANDLED:
+            default = user_default(head, i + 1, len(pats))
         elif isinstance(head, str) and head in _OPTIONAL_DEFAULTS:
             default = _OPTIONAL_DEFAULTS[head]
             if head == "Power" and i != 1:
@@ -835,7 +882,10 @@ def _match_seq(pats, i, args, j, b, ev, head, flat):
         min_len, name, hconstraint, wrappers = info
         for k in range(min_len, remaining + 1):
             chunk = tuple(args[j:j + k])
-            if hconstraint is not None and not all(_head_ok(a, hconstraint) for a in chunk):
+            if hconstraint is _OPTIONS_HEAD:
+                if not all(_is_option(a) for a in chunk):
+                    continue
+            elif hconstraint is not None and not all(_head_ok(a, hconstraint) for a in chunk):
                 continue
             b2 = b
             if name is not None:
@@ -939,6 +989,10 @@ def store_definition(lhs, rhs):
     defs.insert(pos, (lhs, rhs, g))
 
 
+# Rewrites OptionValue[name] in a definition's rhs to OptionValue[f, opts, name] (set by wl_evaluation).
+OPTION_VALUE_HOOK = None
+
+
 def apply_downvalues(expr, ev):
     st = state()
     if st.exact:
@@ -950,6 +1004,8 @@ def apply_downvalues(expr, ev):
         return UNHANDLED
     for lhs, rhs, _ in list(defs):
         for b in match(lhs, expr, {}, ev):
+            if OPTION_VALUE_HOOK is not None:
+                rhs = OPTION_VALUE_HOOK(lhs, rhs, b, expr)
             if isinstance(rhs, Expr) and rhs.head == "Condition" and len(rhs.args) == 2:
                 if ev(substitute(rhs.args[1], b)) is not True:
                     continue
@@ -964,8 +1020,15 @@ def clear_symbol(name: str, all_: bool = False):
     st.down.pop(name, None)
     for k in [k for k, (l, _) in st.exact.items() if _def_key(l) == name]:
         del st.exact[k]
+    for kind, d in st.ext.items():
+        if not kind.startswith("\x00") and (all_ or kind in EXT_VALUE_KINDS):
+            d.pop(name, None)
     if all_:
         st.attrs.pop(name, None)
+
+
+# ext kinds removed by Clear (values); ClearAll also removes the others (Default, Options, ...)
+EXT_VALUE_KINDS = {"UpValues", "NValues", "FormatValues"}
 
 
 # ─────────────────────────── canonical order ───────────────────────────
@@ -1104,10 +1167,30 @@ def _do(body, specs, ev):
 # ─────────────────────────── assignment ───────────────────────────
 
 
+# Assignment hooks for special left-hand sides (DownValues[f] = ..., Options[f] = ..., $Context = ...):
+# name -> fn(lhs, rhs, ev); registered by mikoshilang.library.wl_evaluation.
+ASSIGN_HOOKS: Dict[str, Any] = {}
+
+
+def is_protected(name: str) -> bool:
+    """Protected attribute of a symbol: built-in protection (unless removed by Unprotect) or the user's."""
+    st = state()
+    if "Protected" in st.attrs.get(name, ()):
+        return True
+    if name in ("Pi", "E", "I", "Infinity") or "Protected" in BUILTIN_ATTRIBUTES.get(name, ()):
+        return name not in st.ext.get("Unprotected", ())
+    return False
+
+
 def _assign(lhs, rhs, ev):
     st = state()
+    if ASSIGN_HOOKS:
+        key = lhs.name if isinstance(lhs, Symbol) else lhs.head if isinstance(lhs, Expr) else None
+        hk = ASSIGN_HOOKS.get(key) if isinstance(key, str) else None
+        if hk is not None:
+            return hk(lhs, rhs, ev)
     if isinstance(lhs, Symbol):
-        if lhs.name in ("Pi", "E", "I", "Infinity") or "Protected" in BUILTIN_ATTRIBUTES.get(lhs.name, ()):
+        if is_protected(lhs.name):
             raise ValueError(f"Symbol {lhs.name} is protected")
         st.own[lhs.name] = rhs
         st.note_write(lhs.name, rhs)
@@ -1141,7 +1224,7 @@ def _assign(lhs, rhs, ev):
         if not isinstance(head, str) and not isinstance(head, Expr):
             raise ValueError("Invalid assignment target")
         target_head = _def_key(lhs)
-        if "Protected" in BUILTIN_ATTRIBUTES.get(target_head, ()):
+        if is_protected(target_head):
             raise ValueError(f"{target_head} is protected; definitions for built-in heads are not allowed")
         if not has_pattern(lhs):
             hold = attributes(head) if isinstance(head, str) else set()

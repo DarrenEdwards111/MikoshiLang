@@ -31,6 +31,19 @@ from contextvars import ContextVar as _ContextVar
 # were evaluated, and ("splice", chain) for re-evaluations of a rewritten expression.
 _TRACE = _ContextVar("mikoshilang_trace", default=None)
 _TRACE_ARG = _ContextVar("mikoshilang_trace_arg", default=False)
+
+# Evaluation stack for Stack[] (frames [expr, live]; live is False once a later expression on the same evaluation
+# chain replaced it), StackInhibit and StackComplete; the evaluation-chain length for $IterationLimit.
+_STACK = _ContextVar("mikoshilang_stack", default=None)
+_STACK_INHIBIT = _ContextVar("mikoshilang_stack_inhibit", default=False)
+_CHAIN_NEXT = _ContextVar("mikoshilang_chain_next", default=0)
+
+# Hooks set by mikoshilang.library.wl_evaluation: getters for dynamic $-variables ($ModuleNumber, $Context, ...),
+# and calls made after the arguments are evaluated (Threaded before Listable threading, UpValues after it).
+SYSTEM_VARIABLES: Dict[str, Any] = {}
+STUB_HOOK = None
+PRE_LISTABLE_HOOK = None
+UPVALUE_HOOK = None
 if _sys.getrecursionlimit() < 20000:
     _sys.setrecursionlimit(20000)
 
@@ -148,23 +161,75 @@ def _ev_arg(x, depth):
 
 
 def _evaluate(expr, depth: int) -> Any:
+    if not isinstance(expr, Expr) or _STACK_INHIBIT.get():
+        return _evaluate_body(expr, depth)
+    frames = _STACK.get()
+    if frames is None:
+        frames = []
+        _STACK.set(frames)
+    frames.append([expr, True])
+    try:
+        return _evaluate_body(expr, depth)
+    finally:
+        frames.pop()
+
+
+def _supersede(chain):
+    """The current expression is rewritten: mark its stack frame and check $IterationLimit for the chain."""
+    frames = _STACK.get()
+    if frames and not _STACK_INHIBIT.get():
+        frames[-1][1] = False
+    if chain >= 19:
+        from .kernel import state
+        lim = state().own.get("$IterationLimit", 4096)
+        if isinstance(lim, int) and chain + 1 > lim:
+            raise RecursionError(f"$IterationLimit::itlim: Iteration limit of {lim} exceeded")
+    _CHAIN_NEXT.set(chain + 1)
+
+
+def _check_recursion(depth):
+    from .kernel import state
+    lim = state().own.get("$RecursionLimit", _MAX_DEPTH)
+    if isinstance(lim, int) and depth > lim:
+        raise RecursionError(f"$RecursionLimit::reclim: Recursion depth of {lim} exceeded")
+
+
+def _force(a, eva):
+    """Evaluate[x] in a held argument position is evaluated (not under HoldAllComplete)."""
+    if isinstance(a, Expr) and a.head == "Evaluate" and len(a.args) == 1:
+        return eva(a.args[0])
+    return a
+
+
+def _evaluate_body(expr, depth: int) -> Any:
+    chain = _CHAIN_NEXT.get()
+    if chain:
+        _CHAIN_NEXT.set(0)
     if depth > _MAX_DEPTH:
-        raise RecursionError(f"Evaluation depth exceeded {_MAX_DEPTH}")
+        _check_recursion(depth)
+    elif depth > 20:
+        _check_recursion(depth)
 
     # Atoms evaluate to themselves
     if isinstance(expr, (int, float, str, bool)) or expr is None:
         return expr
     from . import kernel
     if isinstance(expr, Symbol):
-        own = kernel.state().own
+        st = kernel.state()
+        own = st.own
         if expr.name in own:
             return evaluate(own[expr.name], depth + 1)
         if expr.name == "Null":
             return None
+        if st.ext and STUB_HOOK is not None and expr.name in st.ext.get("Stub", ()):
+            return STUB_HOOK(expr, depth)
         if expr.name.startswith("$"):
             from .library.wl_numerics import SYSTEM_CONSTANTS
             if expr.name in SYSTEM_CONSTANTS:
                 return SYSTEM_CONSTANTS[expr.name]                     # the symbol Null is the null value (what x; evaluates to)
+            getter = SYSTEM_VARIABLES.get(expr.name)
+            if getter is not None:
+                return getter()
         return True if expr.name == "$Assumptions" else expr     # Wolfram default $Assumptions = True
     if not isinstance(expr, Expr):
         return expr
@@ -203,20 +268,55 @@ def _evaluate(expr, depth: int) -> Any:
     if handled is not kernel.UNHANDLED:
         return handled
 
-    # 4. Arguments, respecting Hold attributes
+    # 4. Arguments, respecting Hold attributes (HoldAllComplete; SubValuesHoldAll for f[...][args])
     attrs = kernel.attributes(head) if isinstance(head, str) else set()
-    eva = lambda x: _ev_arg(x, depth + 1)  # noqa: E731
-    if head in _HOLD_ALL or "HoldAll" in attrs:
+    eva = lambda x: x if isinstance(x, Expr) and x.head == "Unevaluated" else _ev_arg(x, depth + 1)  # noqa: E731
+    complete = "HoldAllComplete" in attrs
+    n = len(expr.args)
+    if isinstance(head, Expr) and kernel.state().attrs:
+        h0 = head
+        while isinstance(h0, Expr):
+            h0 = h0.head
+        sub_hold = isinstance(h0, str) and "SubValuesHoldAll" in kernel.user_attributes(h0)
+    else:
+        sub_hold = False
+    if complete or sub_hold or head in _HOLD_ALL or "HoldAll" in attrs:
         new_args = list(expr.args)
+        evaluated = range(n) if sub_hold else ()
+        if not complete:
+            new_args = [_force(a, eva) for a in new_args]
     elif head in _HOLD_FIRST or "HoldFirst" in attrs:
-        new_args = list(expr.args[:1]) + [eva(a) for a in expr.args[1:]]
+        new_args = [_force(a, eva) for a in expr.args[:1]] + [eva(a) for a in expr.args[1:]]
+        evaluated = range(1, n)
     elif "HoldRest" in attrs:
-        new_args = [eva(a) for a in expr.args[:1]] + list(expr.args[1:])
+        new_args = [eva(a) for a in expr.args[:1]] + [_force(a, eva) for a in expr.args[1:]]
+        evaluated = range(min(n, 1))
     else:
         new_args = [eva(a) for a in expr.args]
+        evaluated = range(n)
+    # Unevaluated[x] in an evaluated position passes x unevaluated; restored if no rule applies
+    restore = None
+    if not complete:
+        for i in evaluated:
+            a = new_args[i]
+            if isinstance(a, Expr) and a.head == "Unevaluated" and len(a.args) == 1:
+                if restore is None:
+                    restore = list(new_args)
+                new_args[i] = a.args[0]
+    if restore is None:
+        return _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain)
+    r = _evaluate_rest(expr, head, list(new_args), attrs, depth, ev, complete, chain)
+    if isinstance(r, Expr) and r.head == head and len(r.args) == len(new_args) and \
+            all(x is y or x == y for x, y in zip(r.args, new_args)):
+        return Expr(head, *restore)
+    return r
 
+
+def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
+    from . import kernel
     # 5. Sequence splicing, Flat, Orderless, Listable
-    if "SequenceHold" not in attrs and any(isinstance(a, Expr) and a.head == "Sequence" for a in new_args):
+    if not complete and "SequenceHold" not in attrs and any(isinstance(a, Expr) and a.head == "Sequence"
+                                                            for a in new_args):
         spliced = []
         for a in new_args:
             if isinstance(a, Expr) and a.head == "Sequence":
@@ -237,6 +337,10 @@ def _evaluate(expr, depth: int) -> Any:
         new_args = sorted(new_args, key=kernel.order_key)
     if "OneIdentity" in uattrs and "Flat" in uattrs and len(new_args) == 1:
         pass
+    if PRE_LISTABLE_HOOK is not None:
+        r = PRE_LISTABLE_HOOK(head, new_args, attrs, ev)
+        if r is not kernel.UNHANDLED:
+            return r
     if "Listable" in attrs and any(kernel.is_list(a) for a in new_args):
         lengths = {len(a.args) for a in new_args if kernel.is_list(a)}
         if len(lengths) != 1:
@@ -248,6 +352,14 @@ def _evaluate(expr, depth: int) -> Any:
     new_expr = Expr(head, *new_args)
     if _TRACE.get() is not None and _TRACE.get():
         _TRACE.get()[-1].append(("form", new_expr))
+    if UPVALUE_HOOK is not None and not complete:
+        r = UPVALUE_HOOK(new_expr, ev)
+        if r is not kernel.UNHANDLED:
+            _supersede(chain)
+            try:
+                return ev(r)
+            except kernel.ReturnSignal as rs:
+                return rs.value
 
     # 6. Pure functions and derivatives as heads
     if isinstance(head, Expr):
@@ -276,6 +388,7 @@ def _evaluate(expr, depth: int) -> Any:
     # 7. User definitions (DownValues, most specific first)
     defined = kernel.apply_downvalues(new_expr, ev)
     if defined is not kernel.UNHANDLED:
+        _supersede(chain)
         try:
             return ev(defined)
         except kernel.ReturnSignal as r:
@@ -292,7 +405,7 @@ def _evaluate(expr, depth: int) -> Any:
 
     if not isinstance(head, str):
         # 8b. Associations as functions, Key[k][assoc], compositions and operator forms (Select[crit][list])
-        if isinstance(head, Expr) and isinstance(head.head, str):
+        if isinstance(head, Expr):
             from .kernel_lists import apply_compound_head
             r = apply_compound_head(head, new_args, ev)
             if r is not kernel.UNHANDLED:
@@ -312,5 +425,6 @@ def _evaluate(expr, depth: int) -> Any:
         result = lib
 
     if isinstance(result, Expr) and result != new_expr:
+        _supersede(chain)
         result = evaluate(result, depth + 1)
     return result
