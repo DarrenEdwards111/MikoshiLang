@@ -2095,3 +2095,647 @@ def _kcore(g: Expr, k: NonNegInteger, *rest: Expr) -> ListOf[ListOf[Expr]]:
         comps.append(sorted(comp))
     comps.sort(key=lambda c: (-len(c), c[0]))
     return L(*(_verts(gr, c) for c in comps))
+
+
+# ═══════════════════════════════════════ colouring ═══════════════════════════════════════
+
+_SEARCH_LIMIT = 2_000_000
+
+
+class _Done(Exception):
+    pass
+
+
+def _min_coloring(nb, n, fname):
+    """Minimum proper colouring (DSATUR branch and bound, clique lower bound); colours 0.. in first-use order."""
+    if n == 0:
+        return []
+    lb = max((len(c) for c in _max_cliques([set(s) for s in nb], n)), default=1)
+    deg = [len(nb[v]) for v in range(n)]
+    color = [-1] * n
+    best = {"k": n + 1, "c": None}
+    steps = [0]
+
+    def pick():
+        key, bv = None, None
+        for v in range(n):
+            if color[v] < 0:
+                kk = (len({color[w] for w in nb[v] if color[w] >= 0}), deg[v], -v)
+                if key is None or kk > key:
+                    key, bv = kk, v
+        return bv
+
+    def rec(used):
+        steps[0] += 1
+        if steps[0] > _SEARCH_LIMIT:
+            raise NotImplementedError(f"{fname}: the graph is too large for the exact colouring search")
+        v = pick()
+        if v is None:
+            best["k"], best["c"] = used, color[:]
+            if used <= lb:
+                raise _Done()
+            return
+        forb = {color[w] for w in nb[v] if color[w] >= 0}
+        for c in range(used + 1):
+            if c in forb or max(used, c + 1) >= best["k"]:
+                continue
+            color[v] = c
+            rec(max(used, c + 1))
+            color[v] = -1
+    try:
+        rec(0)
+    except _Done:
+        pass
+    cols, remap = best["c"], {}
+    out = []
+    for c in cols:
+        remap.setdefault(c, len(remap))
+        out.append(remap[c])
+    for v in range(n):
+        if any(out[v] == out[w] for w in nb[v]):
+            raise ArithmeticError(f"{fname}: internal check failed (the colouring is not proper)")
+    return out
+
+
+def _vertex_nb(gr, fname):
+    gr.require_pure(fname)
+    if gr.loops():
+        raise ValueError(f"{fname}: a graph with a self-loop has no proper vertex colouring")
+    return _simple_nb(gr)
+
+
+def _edge_nb(gr, fname):
+    gr.require_pure(fname)
+    if gr.loops():
+        raise ValueError(f"{fname}: a graph with a self-loop has no proper edge colouring")
+    m = len(gr.edges)
+    nb = [set() for _ in range(m)]
+    for a in range(m):
+        for b in range(a + 1, m):
+            if {gr.edges[a][0], gr.edges[a][1]} & {gr.edges[b][0], gr.edges[b][1]}:
+                nb[a].add(b)
+                nb[b].add(a)
+    return nb, m
+
+
+def _apply_colors(cols, spec, fname):
+    if spec is None:
+        return L(*(c + 1 for c in cols))
+    if not is_list(spec):
+        raise TypeError(f"{fname}: the colours must be given as a list")
+    k = max(cols) + 1 if cols else 0
+    if len(spec.args) < k:
+        raise ValueError(f"{fname}: {k} colours are needed but only {len(spec.args)} were given")
+    return L(*(spec.args[c] for c in cols))
+
+
+@fn("FindVertexColoring", area=AREA, status="added",
+    notes="FindVertexColoring[g]: a proper colouring with the minimum number of colours, as colours 1, 2, ... in "
+          "VertexList order (numbered by first use); FindVertexColoring[g, {c1, c2, ...}] uses the given colours and "
+          "raises ValueError when fewer than the chromatic number are given. Exact branch and bound (DSATUR order, "
+          "clique bound; NotImplementedError past 2*10^6 search nodes); edge directions are ignored; self-loops raise "
+          "ValueError. A valid optimal colouring may differ from Wolfram's. Check: self-check (the colouring is "
+          "verified proper; tests compare the count with known chromatic numbers).")
+def _fvcol(g: Expr, colors: ListOf[Expr] = None) -> ListOf[Expr]:
+    gr = _g(g, "FindVertexColoring")
+    return _apply_colors(_min_coloring(_vertex_nb(gr, "FindVertexColoring"), gr.n, "FindVertexColoring"), colors,
+                         "FindVertexColoring")
+
+
+@fn("VertexChromaticNumber", area=AREA, status="added",
+    notes="VertexChromaticNumber[g]: the minimum number of colours in a proper vertex colouring (0 for the empty "
+          "graph); exact search as in FindVertexColoring; self-loops raise ValueError. Check: self-check (colouring "
+          "verified; tests: Petersen 3, odd cycles 3, K_n n, bipartite 2).")
+def _vchrom(g: Expr) -> NonNegInteger:
+    gr = _g(g, "VertexChromaticNumber")
+    cols = _min_coloring(_vertex_nb(gr, "VertexChromaticNumber"), gr.n, "VertexChromaticNumber")
+    return max(cols) + 1 if cols else 0
+
+
+@fn("FindEdgeColoring", area=AREA, status="added",
+    notes="FindEdgeColoring[g]: a proper edge colouring with the minimum number of colours, as colours 1, 2, ... in "
+          "EdgeList order; FindEdgeColoring[g, {c1, ...}] uses the given colours. Exact colouring of the line graph "
+          "(multi-edges allowed, edge directions ignored, self-loops raise ValueError). Check: self-check (colouring "
+          "verified; tests: Petersen needs 4 = Delta + 1, bipartite graphs need Delta).")
+def _fecol(g: Expr, colors: ListOf[Expr] = None) -> ListOf[Expr]:
+    gr = _g(g, "FindEdgeColoring")
+    nb, m = _edge_nb(gr, "FindEdgeColoring")
+    return _apply_colors(_min_coloring(nb, m, "FindEdgeColoring"), colors, "FindEdgeColoring")
+
+
+@fn("EdgeChromaticNumber", area=AREA, status="added",
+    notes="EdgeChromaticNumber[g]: the chromatic index (minimum colours in a proper edge colouring; 0 without edges); "
+          "exact as in FindEdgeColoring. Check: self-check (tests: Vizing's bound Delta <= chi' <= Delta + 1, "
+          "Petersen 4, K4 3, K5 5).")
+def _echrom(g: Expr) -> NonNegInteger:
+    gr = _g(g, "EdgeChromaticNumber")
+    nb, m = _edge_nb(gr, "EdgeChromaticNumber")
+    cols = _min_coloring(nb, m, "EdgeChromaticNumber")
+    return max(cols) + 1 if cols else 0
+
+
+# ═══════════════════════════════════════ matchings and covers ═══════════════════════════════════════
+
+def _matching(gr, fname):
+    """Edge indices of a maximum matching (NetworkX blossom algorithm), in EdgeList order."""
+    nx = _nx()
+    gr.require_pure(fname)
+    X = nx.Graph()
+    X.add_nodes_from(range(gr.n))
+    first = {}
+    for k, (i, j, _) in enumerate(gr.edges):
+        if i != j:
+            key = (min(i, j), max(i, j))
+            if key not in first:
+                first[key] = k
+                X.add_edge(i, j)
+    pairs = nx.max_weight_matching(X, maxcardinality=True)
+    ks = sorted(first[(min(a, b), max(a, b))] for a, b in pairs)
+    if not _indep_ok(gr, ks):
+        raise ArithmeticError(f"{fname}: internal check failed (the matching is not independent)")
+    return ks
+
+
+@fn("FindIndependentEdgeSet", area=AREA, status="added",
+    notes="FindIndependentEdgeSet[g]: a maximum matching (Edmonds blossom algorithm via NetworkX, edge directions "
+          "ignored, self-loops never used), as edges in EdgeList order; NotImplementedError without NetworkX. A valid "
+          "maximum matching may differ from Wolfram's. Check: self-check (independence verified; tests compare sizes "
+          "with known matching numbers and IndependentEdgeSetQ).")
+def _fies(g: Expr) -> ListOf[Expr]:
+    gr = _g(g, "FindIndependentEdgeSet")
+    return L(*(gr.edge_exprs[k] for k in _matching(gr, "FindIndependentEdgeSet")))
+
+
+@fn("FindEdgeCover", area=AREA, status="added",
+    notes="FindEdgeCover[g]: a minimum edge cover: a maximum matching plus, for each unmatched vertex, its first "
+          "incident edge in EdgeList order (Gallai: size n - matching number); a vertex without incident edges "
+          "raises ValueError; edges in EdgeList order; needs NetworkX. Check: self-check (EdgeCoverQ verified and size "
+          "n - matching number; tests: paths, stars, Petersen).")
+def _fecover(g: Expr) -> ListOf[Expr]:
+    gr = _g(g, "FindEdgeCover")
+    ks = set(_matching(gr, "FindEdgeCover"))
+    covered = set()
+    for k in ks:
+        covered |= {gr.edges[k][0], gr.edges[k][1]}
+    for v in range(gr.n):
+        if v in covered:
+            continue
+        k = next((k for k, (i, j, _) in enumerate(gr.edges) if v in (i, j)), None)
+        if k is None:
+            raise ValueError(f"FindEdgeCover: vertex {gr.vertices[v]} has no incident edge, so there is no edge cover")
+        ks.add(k)
+        covered |= {gr.edges[k][0], gr.edges[k][1]}
+    if not _cover_ok(gr, ks):
+        raise ArithmeticError("FindEdgeCover: internal check failed (not an edge cover)")
+    return L(*(gr.edge_exprs[k] for k in sorted(ks)))
+
+
+# ═══════════════════════════════════════ k-cliques, clans, clubs, plexes ═══════════════════════════════════════
+
+def _bfs_dist(nb, s, allowed=None):
+    d = {s: 0}
+    q = deque([s])
+    while q:
+        u = q.popleft()
+        for w in nb[u]:
+            if w not in d and (allowed is None or w in allowed):
+                d[w] = d[u] + 1
+                q.append(w)
+    return d
+
+
+def _induced_diam_ok(nb, sset, k):
+    for s in sset:
+        d = _bfs_dist(nb, s, sset)
+        if len(d) < len(sset) or max(d.values()) > k:
+            return False
+    return True
+
+
+def _size_spec(nspec, n, fname):
+    if nspec is None:
+        return 1, n
+    if K.is_int(nspec) or isinstance(nspec, (bool, str)) or is_numeric_value(nspec):
+        return 1, _int(nspec, fname, 0, "the size bound")
+    if is_list(nspec) and len(nspec.args) == 1:
+        a = _int(nspec.args[0], fname, 0, "the size")
+        return a, a
+    if is_list(nspec) and len(nspec.args) == 2:
+        a, b = _int(nspec.args[0], fname, 0, "the size"), _int(nspec.args[1], fname, 0, "the size")
+        return a, b
+    if isinstance(nspec, Symbol) and nspec.name == "Infinity":
+        return 1, n
+    raise TypeError(f"{fname}: the size specification must be n, {{n}} or {{nmin, nmax}}, not {nspec!r}")
+
+
+def _count_spec(s, fname):
+    if s is None:
+        return 1
+    if isinstance(s, Symbol) and s.name in ("All", "Infinity"):
+        return None
+    return _int(s, fname, 0, "the number of sets")
+
+
+def _kfinder(name, kind, notes):
+    @fn(name, area=AREA, status="added", notes=notes)
+    def impl(g: Expr, k: PosInteger, nspec: Expr = None, s: Expr = None) -> ListOf[ListOf[Expr]]:
+        must = None
+        if is_list(g) and len(g.args) == 2 and isinstance(g.args[0], Expr) and g.args[0].head == "Graph":
+            g, must = g.args
+        gr = _g(g, name)
+        _need_undirected(gr, name)
+        k = _int(k, name, 1, "k")
+        n = gr.n
+        mv = gr.vidx(must, name) if must is not None else None
+        lo, hi = _size_spec(nspec, n, name)
+        cnt = _count_spec(s, name)
+        nb = _simple_nb(gr)
+        dist = [_bfs_dist(nb, v) for v in range(n)]
+
+        def kclique(c):
+            return all(dist[a].get(b, INF) <= k for a, b in itertools.combinations(c, 2))
+
+        def valid(c):
+            if kind == "clique":
+                return kclique(c)
+            if kind == "plex":
+                cs = set(c)
+                return all(len(nb[v] & cs) >= len(c) - k for v in c)
+            if kind == "club":
+                return _induced_diam_ok(nb, set(c), k)
+            # clan: a maximal k-clique whose induced subgraph has diameter <= k
+            if not kclique(c) or not _induced_diam_ok(nb, set(c), k):
+                return False
+            return not any(all(dist[v].get(u, INF) <= k for u in c) for v in range(n) if v not in c)
+        found = []
+        if cnt == 0:
+            return L()
+        if kind == "clique" and nspec is None and s is None:
+            pw = [set(u for u in range(n) if u != v and dist[v].get(u, INF) <= k) for v in range(n)]
+            cl = [c for c in _max_cliques(pw, n) if mv is None or mv in c] if n else []
+            if cl:
+                found = [sorted(min(cl, key=lambda c: (-len(c), c)))]
+        else:
+            steps = 0
+            for size in range(min(hi, n), max(lo, 1) - 1, -1):
+                for c in itertools.combinations(range(n), size):
+                    steps += 1
+                    if steps > _SEARCH_LIMIT:
+                        raise NotImplementedError(f"{name}: the graph is too large for the exhaustive search")
+                    if (mv is None or mv in c) and valid(c):
+                        found.append(list(c))
+                        if cnt is not None and len(found) >= cnt:
+                            break
+                if cnt is not None and len(found) >= cnt:
+                    break
+                if found and nspec is None:
+                    break
+        return L(*(_verts(gr, c) for c in found))
+    return impl
+
+
+_kfinder("FindKClique", "clique",
+         "FindKClique[g, k]: {set} with a largest k-clique (pairwise distances in g at most k), as maximum clique of "
+         "the k-th power of the underlying simple graph; FindKClique[g, k, nspec, s] gives at most s vertex sets with "
+         "pairwise distance <= k and sizes in nspec (n, {n} or {nmin, nmax}), largest first then by VertexList "
+         "positions; FindKClique[{g, v}, ...] keeps sets containing v; undirected graphs only; exhaustive search "
+         "limited to 2*10^6 candidate sets. Check: exact (tests: k = 1 is the maximum clique; on paths k-cliques have "
+         "k + 1 vertices).")
+_kfinder("FindKClan", "clan",
+         "FindKClan[g, k, ...]: largest k-clans (maximal k-cliques whose induced subgraph has diameter <= k), same "
+         "nspec/count/{g, v} forms and ordering as FindKClique; exhaustive search (limit 2*10^6 candidate sets); "
+         "undirected only. Check: exact (tests: every result is a maximal k-clique with induced diameter <= k; the "
+         "6-cycle with a pendant classic example).")
+_kfinder("FindKClub", "club",
+         "FindKClub[g, k, ...]: largest k-clubs (vertex sets whose induced subgraph is connected with diameter <= k), "
+         "same nspec/count/{g, v} forms as FindKClique; exhaustive search (limit 2*10^6 candidate sets); undirected "
+         "only. Check: exact (tests: induced diameter verified; a star is a 2-club).")
+_kfinder("FindKPlex", "plex",
+         "FindKPlex[g, k, ...]: largest k-plexes (every member adjacent to at least |S| - k members, so 1-plexes are "
+         "cliques), same nspec/count/{g, v} forms as FindKClique; exhaustive search (limit 2*10^6 candidate sets); "
+         "undirected only. Check: exact (tests: k = 1 equals the clique number; C4 is a 2-plex).")
+
+
+# ═══════════════════════════════════════ cuts, flows and paths ═══════════════════════════════════════
+
+class _Flow:
+    """Edmonds-Karp maximum flow on explicit arcs (u, v, capacity), keeping per-arc flow for path extraction."""
+
+    def __init__(self, n):
+        self.n = n
+        self.to, self.cap, self.cost, self.adj = [], [], [], [[] for _ in range(n)]
+
+    def arc(self, u, v, c, w=0):
+        k = len(self.to)
+        self.to += [v, u]
+        self.cap += [c, 0]
+        self.cost += [w, -w]
+        self.adj[u].append(k)
+        self.adj[v].append(k + 1)
+        return k
+
+    def run(self, s, t, limit=None, fname="flow"):
+        val = 0
+        self.orig = list(self.cap)
+        while limit is None or val < limit:
+            prev = {s: None}
+            q = deque([s])
+            while q and t not in prev:
+                u = q.popleft()
+                for k in self.adj[u]:
+                    v = self.to[k]
+                    if v not in prev and self.cap[k] > 0:
+                        prev[v] = k
+                        q.append(v)
+            if t not in prev:
+                break
+            path, v = [], t
+            while v != s:
+                k = prev[v]
+                path.append(k)
+                v = self.to[k ^ 1]
+            b = min(self.cap[k] for k in path)
+            if limit is not None:
+                b = min(b, limit - val)
+            if b == INF:
+                raise ValueError(f"{fname}: the flow is unbounded (a path with infinite capacity)")
+            for k in path:
+                self.cap[k] -= b
+                self.cap[k ^ 1] += b
+            val += b
+        return val
+
+    def reach(self, s):
+        seen, q = {s}, [s]
+        while q:
+            u = q.pop()
+            for k in self.adj[u]:
+                if self.cap[k] > 0 and self.to[k] not in seen:
+                    seen.add(self.to[k])
+                    q.append(self.to[k])
+        return seen
+
+    def flow_on(self, k):
+        return self.cap[k ^ 1] - self.orig[k ^ 1]
+
+    def min_cost(self, s, t, want, fname):
+        """Successive shortest paths (Bellman-Ford on the residual graph); returns (flow, cost)."""
+        flow, total = 0, 0
+        self.orig = list(self.cap)
+        while want is None or flow < want:
+            dist, prev = {s: 0}, {s: None}
+            for _ in range(self.n):
+                changed = False
+                for u in list(dist):
+                    for k in self.adj[u]:
+                        if self.cap[k] > 0:
+                            v, nd = self.to[k], dist[u] + self.cost[k]
+                            if v not in dist or nd < dist[v]:
+                                dist[v], prev[v] = nd, k
+                                changed = True
+                if not changed:
+                    break
+            if t not in dist:
+                break
+            path, v = [], t
+            while v != s:
+                k = prev[v]
+                path.append(k)
+                v = self.to[k ^ 1]
+            b = min(self.cap[k] for k in path)
+            if want is not None:
+                b = min(b, want - flow)
+            if b == INF:
+                raise ValueError(f"{fname}: the maximum flow is unbounded (a path with infinite capacity)")
+            for k in path:
+                self.cap[k] -= b
+                self.cap[k ^ 1] += b
+            flow += b
+            total += b * dist[t]
+        return flow, total
+
+
+def _edge_flow(gr, caps=None, skip_loops=True):
+    F = _Flow(gr.n)
+    arcs = []
+    for k, (i, j, d) in enumerate(gr.edges):
+        if i == j and skip_loops:
+            continue
+        c = 1 if caps is None else caps[k]
+        arcs.append((k, F.arc(i, j, c), None if d else F.arc(j, i, c)))
+    return F, arcs
+
+
+def _split_flow(gr, inner_cap, edge_cap, s=None, t=None, vcaps=None):
+    """Vertex-split network: v_in = 2v, v_out = 2v + 1."""
+    F = _Flow(2 * gr.n)
+    for v in range(gr.n):
+        c = vcaps[v] if vcaps is not None else (INF if v in (s, t) else inner_cap)
+        F.arc(2 * v, 2 * v + 1, c)
+    arcs = []
+    for k, (i, j, d) in enumerate(gr.edges):
+        if i == j:
+            continue
+        c = edge_cap if edge_cap is not None else 1
+        if callable(edge_cap):
+            c = edge_cap(k)
+        arcs.append((k, F.arc(2 * i + 1, 2 * j, c), None if d else F.arc(2 * j + 1, 2 * i, c)))
+    return F, arcs
+
+
+def _st_edge_cut(gr, a, b):
+    F, arcs = _edge_flow(gr)
+    val = F.run(a, b)
+    rs = F.reach(a)
+    cut = []
+    for k, _, back in arcs:
+        i, j, d = gr.edges[k]
+        if (i in rs and j not in rs) or (back is not None and j in rs and i not in rs):
+            cut.append(k)
+    if len(cut) != val:
+        raise ArithmeticError("FindEdgeCut: internal check failed (cut size differs from the flow value)")
+    return cut
+
+
+@fn("FindEdgeCut", area=AREA, status="added",
+    notes="FindEdgeCut[g]: a smallest set of edges whose removal disconnects g (strongly, for directed graphs; {} when "
+          "g is already disconnected or has fewer than 2 vertices); FindEdgeCut[g, s, t]: a smallest s-t edge cut "
+          "(max-flow min-cut, unit capacities, multi-edges counted). Edges in EdgeList order; EdgeWeight is ignored "
+          "(edges are counted). Check: self-check (cut size equals the max-flow value; tests: removing the cut "
+          "disconnects, sizes equal EdgeConnectivity).")
+def _fecut(g: Expr, s: Expr = None, t: Expr = None) -> ListOf[Expr]:
+    gr = _g(g, "FindEdgeCut")
+    gr.require_pure("FindEdgeCut")
+    if (s is None) != (t is None):
+        raise ValueError("FindEdgeCut: give both s and t, or neither")
+    if s is not None:
+        a, b = gr.vidx(s, "FindEdgeCut"), gr.vidx(t, "FindEdgeCut")
+        if a == b:
+            raise ValueError("FindEdgeCut: s and t must be different vertices")
+        return L(*(gr.edge_exprs[k] for k in sorted(_st_edge_cut(gr, a, b))))
+    if gr.n < 2:
+        return L()
+    comps = _strong_components(gr) if gr.directed else _weak_components(gr)
+    if len(comps) > 1:
+        return L()
+    best = None
+    pairs = [(0, v) for v in range(1, gr.n)] + ([(v, 0) for v in range(1, gr.n)] if gr.directed else [])
+    for a, b in pairs:
+        c = _st_edge_cut(gr, a, b)
+        if best is None or len(c) < len(best):
+            best = c
+    return L(*(gr.edge_exprs[k] for k in sorted(best)))
+
+
+def _st_vertex_cut(gr, a, b, fname):
+    F, _ = _split_flow(gr, 1, INF, a, b)
+    val = F.run(2 * a + 1, 2 * b)
+    rs = F.reach(2 * a + 1)
+    cut = [v for v in range(gr.n) if 2 * v in rs and 2 * v + 1 not in rs]
+    if len(cut) != val:
+        raise ArithmeticError(f"{fname}: internal check failed (cut size differs from the flow value)")
+    return cut
+
+
+@fn("FindVertexCut", area=AREA, status="added",
+    notes="FindVertexCut[g]: a smallest set of vertices whose removal disconnects g (undirected; {} for complete or "
+          "already disconnected graphs, minimum over non-adjacent pairs); FindVertexCut[g, s, t]: a smallest s-t "
+          "vertex separator (directed allowed; s, t adjacent or equal raise ValueError). Vertices in VertexList order. "
+          "Check: self-check (separator size equals the vertex-split max-flow value; tests: removal disconnects, size "
+          "equals VertexConnectivity).")
+def _fvcut(g: Expr, s: Expr = None, t: Expr = None) -> ListOf[Expr]:
+    gr = _g(g, "FindVertexCut")
+    gr.require_pure("FindVertexCut")
+    if (s is None) != (t is None):
+        raise ValueError("FindVertexCut: give both s and t, or neither")
+    if s is not None:
+        a, b = gr.vidx(s, "FindVertexCut"), gr.vidx(t, "FindVertexCut")
+        if a == b:
+            raise ValueError("FindVertexCut: s and t must be different vertices")
+        if any((i, j) == (a, b) or (not d and (j, i) == (a, b)) for i, j, d in gr.edges):
+            raise ValueError("FindVertexCut: s and t are adjacent, so no vertex set separates them")
+        return _verts(gr, _st_vertex_cut(gr, a, b, "FindVertexCut"))
+    _need_undirected(gr, "FindVertexCut")
+    if gr.n < 2 or len(_weak_components(gr)) > 1:
+        return L()
+    nb = _simple_nb(gr)
+    best = None
+    for a in range(gr.n):
+        for b in range(a + 1, gr.n):
+            if b in nb[a]:
+                continue
+            c = _st_vertex_cut(gr, a, b, "FindVertexCut")
+            if best is None or len(c) < len(best):
+                best = c
+    return L() if best is None else _verts(gr, best)
+
+
+def _paths_from_flow(F, s, t, arcs_used, nodes_map):
+    """Decompose unit flow on arcs into s-t paths (cycles removed)."""
+    out_arcs = {}
+    for k in arcs_used:
+        out_arcs.setdefault(F.to[k ^ 1], []).append(k)
+    paths = []
+    while out_arcs.get(s):
+        path, u, seen = [s], s, {s: 0}
+        while u != t:
+            k = out_arcs[u].pop()
+            u = F.to[k]
+            if u in seen:
+                del path[seen[u] + 1:]
+                seen = {x: i for i, x in enumerate(path)}
+            else:
+                seen[u] = len(path)
+                path.append(u)
+        mapped = []
+        for x in path:
+            y = nodes_map(x)
+            if y is not None and (not mapped or mapped[-1] != y):
+                mapped.append(y)
+        paths.append(mapped)
+    paths.sort(key=lambda p: (len(p), p))
+    return paths
+
+
+def _kpaths(k, fname):
+    if isinstance(k, Symbol) and k.name in ("Infinity", "All"):
+        return None
+    return _int(k, fname, 0, "k")
+
+
+@fn("FindEdgeIndependentPaths", area=AREA, status="added",
+    notes="FindEdgeIndependentPaths[g, s, t, k]: at most k pairwise edge-disjoint s-t paths (vertex lists), from a "
+          "unit-capacity maximum flow (k = Infinity for as many as possible); flows on both directions of an "
+          "undirected edge cancel; shortest paths first; s = t raises ValueError. Check: self-check (the number of "
+          "paths equals min(k, max-flow); tests: paths are edge-disjoint, count equals EdgeConnectivity).")
+def _feip(g: Expr, s: Expr, t: Expr, k: NonNegInteger | Expr) -> ListOf[ListOf[Expr]]:
+    gr = _g(g, "FindEdgeIndependentPaths")
+    gr.require_pure("FindEdgeIndependentPaths")
+    a, b = gr.vidx(s, "FindEdgeIndependentPaths"), gr.vidx(t, "FindEdgeIndependentPaths")
+    if a == b:
+        raise ValueError("FindEdgeIndependentPaths: s and t must be different vertices")
+    lim = _kpaths(k, "FindEdgeIndependentPaths")
+    F, arcs = _edge_flow(gr)
+    val = F.run(a, b, lim)
+    used = []
+    for _, fw, bw in arcs:
+        f1 = F.flow_on(fw)
+        f2 = F.flow_on(bw) if bw is not None else 0
+        if f1 > 0 and f2 > 0:
+            continue
+        if f1 > 0:
+            used.append(fw)
+        if f2 > 0:
+            used.append(bw)
+    paths = _paths_from_flow(F, a, b, used, lambda x: x)
+    if len(paths) != val:
+        raise ArithmeticError("FindEdgeIndependentPaths: internal check failed (path count differs from the flow)")
+    return L(*(_verts(gr, p) for p in paths))
+
+
+@fn("FindVertexIndependentPaths", area=AREA, status="added",
+    notes="FindVertexIndependentPaths[g, s, t, k]: at most k s-t paths sharing no vertex other than s and t (vertex "
+          "lists), from a vertex-split unit-capacity maximum flow (k = Infinity for as many as possible); an edge s-t "
+          "gives the path {s, t}; shortest first; s = t raises ValueError. Check: self-check (path count equals the "
+          "flow value; tests: interiors disjoint, Menger count on the Petersen graph is 3).")
+def _fvip(g: Expr, s: Expr, t: Expr, k: NonNegInteger | Expr) -> ListOf[ListOf[Expr]]:
+    gr = _g(g, "FindVertexIndependentPaths")
+    gr.require_pure("FindVertexIndependentPaths")
+    a, b = gr.vidx(s, "FindVertexIndependentPaths"), gr.vidx(t, "FindVertexIndependentPaths")
+    if a == b:
+        raise ValueError("FindVertexIndependentPaths: s and t must be different vertices")
+    lim = _kpaths(k, "FindVertexIndependentPaths")
+    F, arcs = _split_flow(gr, 1, 1, a, b)
+    val = F.run(2 * a + 1, 2 * b, lim)
+    used = [k2 for k2 in range(0, len(F.to), 2) if F.flow_on(k2) > 0]
+    paths = _paths_from_flow(F, 2 * a + 1, 2 * b, used, lambda x: x // 2)
+    if len(paths) != val:
+        raise ArithmeticError("FindVertexIndependentPaths: internal check failed (path count differs from the flow)")
+    return L(*(_verts(gr, p) for p in paths))
+
+
+@fn("FindMaximumCut", area=AREA, status="added",
+    notes="FindMaximumCut[g]: {c, {S, T}} with the largest total weight c of edges between S and T (EdgeWeight, "
+          "default 1; directions ignored; self-loops never cut), S containing the first vertex, both in VertexList "
+          "order; exhaustive over the 2^(n-1) bipartitions, n <= 20 (NotImplementedError beyond). Check: exact "
+          "(tests: bipartite graphs cut every edge, K_n cuts floor(n^2/4), C5 cuts 4).")
+def _fmaxcut(g: Expr) -> ListOf[Expr]:
+    gr = _g(g, "FindMaximumCut")
+    gr.require_pure("FindMaximumCut")
+    n = gr.n
+    if n == 0:
+        return L(0, L(L(), L()))
+    if n > 20:
+        raise NotImplementedError("FindMaximumCut: exhaustive search supports at most 20 vertices")
+    es = [(1 << i, 1 << j, gr.weight(k)) for k, (i, j, _) in enumerate(gr.edges) if i != j]
+    ints = all(isinstance(w, sp.Integer) for _, _, w in es)
+    wv = [(a, b, int(w) if ints else w) for a, b, w in es]
+    best, bm = None, 0
+    for m in range(1 << (n - 1)):
+        mask = m << 1
+        c = sum(w for a, b, w in wv if bool(mask & a) != bool(mask & b))
+        if best is None or c > best:
+            best, bm = c, mask
+    S1 = [v for v in range(n) if not bm >> v & 1]
+    S2 = [v for v in range(n) if bm >> v & 1]
+    return L(R(S(best)), L(_verts(gr, S1), _verts(gr, S2)))
