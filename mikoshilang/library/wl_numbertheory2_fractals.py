@@ -574,3 +574,299 @@ def _n_boettcher(x, prec):
 
 NT.N_PRE["MandelbrotSetBoettcher"] = _n_boettcher
 NT.N_PRE["JuliaSetBoettcher"] = _n_boettcher
+
+
+# ─────────────────────────── AnglePath3D ───────────────────────────
+
+_FORMS3D = ("Position", "FrameMatrix", "EulerMatrix", "EulerAngles")
+
+
+def _scalarq(x):
+    return not is_list(x)
+
+
+def _euler_matrix(a, b, g):
+    """EulerMatrix[{a, b, g}, {3, 2, 1}] = RotationMatrix[a, z].RotationMatrix[b, y].RotationMatrix[g, x]."""
+    rz = sp.Matrix([[sp.cos(a), -sp.sin(a), 0], [sp.sin(a), sp.cos(a), 0], [0, 0, 1]])
+    ry = sp.Matrix([[sp.cos(b), 0, sp.sin(b)], [0, 1, 0], [-sp.sin(b), 0, sp.cos(b)]])
+    rx = sp.Matrix([[1, 0, 0], [0, sp.cos(g), -sp.sin(g)], [0, sp.sin(g), sp.cos(g)]])
+    return rz * ry * rx
+
+
+def _matrixq(x):
+    return is_list(x) and len(x.args) == 3 and all(is_list(r) and len(r.args) == 3 and
+                                                    all(_scalarq(v) for v in r.args) for r in x.args)
+
+
+def _rot3(x, fname):
+    """(3x3 SymPy matrix, Euler angles or None) for a rotation spec: {a, b}, {a, b, g} or a 3x3 matrix."""
+    if _matrixq(x):
+        return sp.Matrix([[_num(v) for v in r.args] for r in x.args]), None
+    if is_list(x) and len(x.args) in (2, 3) and all(_scalarq(v) for v in x.args):
+        angs = [_num(v) for v in x.args] + ([sp.Integer(0)] if len(x.args) == 2 else [])
+        return _euler_matrix(*angs), angs
+    raise ValueError(f"{fname}: a rotation must be {{alpha, beta}}, {{alpha, beta, gamma}} or a 3x3 matrix")
+
+
+def _steps3d(steps, fname):
+    if not is_list(steps):
+        raise ValueError(f"{fname}: the steps must be a list")
+    items = list(steps.args)
+    # {{r1, r2, ...}, {rot1, rot2, ...}}
+    if len(items) == 2 and is_list(items[0]) and is_list(items[1]) and items[0].args and \
+            all(_scalarq(v) for v in items[0].args) and len(items[0].args) == len(items[1].args) and \
+            all(is_list(v) for v in items[1].args):
+        return [(_num(r), _rot3(rot, fname)) for r, rot in zip(items[0].args, items[1].args)]
+    out = []
+    for s in items:
+        if is_list(s) and len(s.args) == 2 and _scalarq(s.args[0]) and is_list(s.args[1]):
+            out.append((_num(s.args[0]), _rot3(s.args[1], fname)))
+        else:
+            out.append((sp.Integer(1), _rot3(s, fname)))
+    return out
+
+
+def _init3d(init, fname):
+    """(position, frame matrix) for the initial specification."""
+    def pos(p):
+        if not (is_list(p) and len(p.args) == 3 and all(_scalarq(v) for v in p.args)):
+            raise ValueError(f"{fname}: the initial position must be {{x, y, z}}")
+        return [_num(v) for v in p.args]
+    if not is_list(init):
+        raise ValueError(f"{fname}: invalid initial specification")
+    if len(init.args) == 3 and all(_scalarq(v) for v in init.args):
+        return pos(init), sp.eye(3)
+    if len(init.args) == 1:
+        return [sp.Integer(0)] * 3, _rot3(init.args[0], fname)[0]
+    if len(init.args) == 2 and is_list(init.args[0]) and len(init.args[0].args) == 3 and \
+            all(_scalarq(v) for v in init.args[0].args):
+        return pos(init.args[0]), _rot3(init.args[1], fname)[0]
+    raise ValueError(f"{fname}: the initial specification must be {{x, y, z}}, {{rot}} or {{{{x, y, z}}, rot}}")
+
+
+@fn("AnglePath3D", **ADDED, notes="AnglePath3D[steps] / AnglePath3D[init, steps] / AnglePath3D[init, steps, "
+    "form]: a 3D turtle path from {0, 0, 0} (or the given point/initial frame); each step rotates the local frame "
+    "by EulerMatrix[{alpha, beta, gamma}, {3, 2, 1}] (gamma = 0 for pairs) or by a 3x3 rotation matrix, then "
+    "advances r (default 1) along the local x axis; steps {{r, rot}, ...} or {{r1, ...}, {rot1, ...}}; forms "
+    "Position, FrameMatrix (relative to the initial frame), EulerMatrix, EulerAngles or a list of them; the "
+    "transformation forms and FrameAngles raise; exact input gives exact coordinates for up to 200 steps, "
+    "machine numbers otherwise or for approximate input")
+def _anglepath3d(*args):
+    fname = "AnglePath3D"
+    args, opts = split_options(args, {"WorkingPrecision"}, fname)
+    args = list(args)
+    form = "Position"
+    if len(args) >= 2 and (isinstance(args[-1], str) or (is_list(args[-1]) and args[-1].args and
+                                                          all(isinstance(f, str) for f in args[-1].args))):
+        form = args.pop()
+    if len(args) == 1:
+        init, steps = None, args[0]
+    elif len(args) == 2:
+        init, steps = args
+    else:
+        raise ValueError("AnglePath3D takes 1 to 3 arguments")
+    forms = list(form.args) if is_list(form) else [form]
+    for f in forms:
+        if f in ("FrameAngles", "Translation", "Rotation", "RotationTranslation"):
+            raise NotImplementedError(f"AnglePath3D: the form {f!r} is not supported")
+        if f not in _FORMS3D:
+            raise ValueError(f"AnglePath3D: unknown form {f!r}")
+    st = _steps3d(steps, fname)
+    p0, f0 = ([sp.Integer(0)] * 3, sp.eye(3)) if init is None else _init3d(init, fname)
+    numeric = has_float(steps) or (init is not None and has_float(init)) or len(st) > 200
+    wp = opts.get("WorkingPrecision")
+    if wp is not None and not is_sym(wp, "Automatic"):
+        if is_sym(wp, "MachinePrecision"):
+            numeric = True
+        elif is_sym(wp, "Infinity"):
+            numeric = False
+        else:
+            raise NotImplementedError("AnglePath3D: only WorkingPrecision -> Automatic, MachinePrecision or "
+                                      "Infinity is supported")
+    if "EulerAngles" in forms and any(a is None for _r, (_m, a) in st):
+        raise ValueError("AnglePath3D: the form \"EulerAngles\" needs the steps given as Euler angles")
+
+    def val(v):
+        if numeric:
+            v = sp.N(v, 15)
+            if v.is_number:
+                c = complex(v)
+                return c.real if c.imag == 0 or abs(c.imag) < 1e-14 * max(1.0, abs(c.real)) else c
+            return R(v)
+        if v.is_number:
+            v = sp.nsimplify(sp.simplify(v)) if v.has(sp.sin, sp.cos) else sp.simplify(v)
+        return R(v)
+
+    if numeric:
+        p0 = [sp.N(v, 20) for v in p0]
+        f0 = f0.evalf(20)
+    pos = [list(p0)]
+    frames = [f0]
+    p, f = list(p0), f0
+    f0inv = f0.T
+    for r, (m, _a) in st:
+        if numeric:
+            m = m.evalf(20)
+            r = sp.N(r, 20)
+        f = f * m
+        d = f[:, 0] * r
+        p = [p[i] + d[i] for i in range(3)]
+        pos.append(p)
+        frames.append(f)
+
+    def mat(M):
+        return L(*(L(*(val(M[i, j]) for j in range(3))) for i in range(3)))
+
+    def one(fm):
+        if fm == "Position":
+            return L(*(L(*(val(v) for v in q)) for q in pos))
+        if fm == "FrameMatrix":
+            return L(*(mat(f0inv * F) for F in frames))
+        if fm == "EulerMatrix":
+            return L(*([mat(sp.eye(3))] + [mat(m) for _r, (m, _a) in st]))
+        return L(*([L(0, 0, 0)] + [L(*(val(x) for x in a)) for _r, (_m, a) in st]))
+    if is_list(form):
+        per = [one(fm) for fm in forms]
+        return L(*(L(*(pf.args[i] for pf in per)) for i in range(len(pos))))
+    return one(form)
+
+
+# ─────────────────────────── JuliaSetPoints ───────────────────────────
+
+def _rational_map(f, z, fname):
+    """(numerator coefficients, denominator coefficients) of the rational function f of z (highest first)."""
+    zs = sp.Symbol("_jz")
+    try:
+        e = sp.together(S(f).subs(S(z), zs))
+    except Exception:
+        raise ValueError(f"{fname}: the first argument must be a rational function of the variable")
+    num, den = sp.fraction(e)
+    if not (num.is_polynomial(zs) and den.is_polynomial(zs)) or (e.free_symbols - {zs}):
+        raise ValueError(f"{fname}: the first argument must be a rational function of the variable with numeric "
+                         f"coefficients")
+    P, Q = sp.Poly(num, zs), sp.Poly(den, zs)
+    g = sp.gcd(P, Q)
+    if g.degree() > 0:
+        P, Q = sp.div(P, g)[0], sp.div(Q, g)[0]
+    if max(P.degree(), Q.degree()) < 2:
+        raise ValueError(f"{fname}: the function must have degree at least 2")
+    pc = [complex(sp.N(c)) for c in P.all_coeffs()]
+    qc = [complex(sp.N(c)) for c in Q.all_coeffs()]
+    return pc, qc
+
+
+def _julia_points(pc, qc, tol, bound, polynomial, limit=400000):
+    import numpy as np
+    deg = max(len(pc), len(qc)) - 1
+    P = np.zeros(deg + 1, dtype=complex)
+    Q = np.zeros(deg + 1, dtype=complex)
+    P[deg + 1 - len(pc):] = pc
+    Q[deg + 1 - len(qc):] = qc
+    dP, dQ = np.polyder(P), np.polyder(Q)
+
+    def preimages(w):
+        return np.roots(P - w * Q) if np.any(P - w * Q) else np.array([], dtype=complex)
+
+    def deriv(z):
+        q = np.polyval(Q, z)
+        return (np.polyval(dP, z) * q - np.polyval(P, z) * np.polyval(dQ, z)) / (q * q)
+    # a repelling fixed point lies on the Julia set; otherwise pull a point back onto it
+    start = None
+    for z in np.roots(np.polysub(P, np.polymul(Q, [1, 0]))):
+        with np.errstate(all="ignore"):
+            q = np.polyval(Q, z)
+            if abs(q) > 1e-12 and abs(deriv(z)) > 1 + 1e-9 and abs(z) <= bound:
+                start = complex(z)
+                break
+    if start is None:
+        rng = np.random.default_rng(12345)
+        w = complex(0.123456 + 0.654321j)
+        for _ in range(200):
+            pre = preimages(w)
+            if not len(pre):
+                break
+            w = complex(pre[rng.integers(len(pre))])
+        start = w
+    cells = {}
+    pts = []
+
+    def near(z):
+        cx, cy = int(math.floor(z.real / tol)), int(math.floor(z.imag / tol))
+        for i in (cx - 1, cx, cx + 1):
+            for j in (cy - 1, cy, cy + 1):
+                for k in cells.get((i, j), ()):
+                    if abs(pts[k] - z) < tol:
+                        return True
+        return False
+
+    def add(z):
+        cells.setdefault((int(math.floor(z.real / tol)), int(math.floor(z.imag / tol))), []).append(len(pts))
+        pts.append(z)
+    add(start)
+    queue = [start]
+    head = 0
+    while head < len(queue):
+        w = queue[head]
+        head += 1
+        for z in preimages(w):
+            z = complex(z)
+            if not (math.isfinite(z.real) and math.isfinite(z.imag)) or abs(z) > bound:
+                continue
+            if not near(z):
+                add(z)
+                queue.append(z)
+                if len(pts) > limit:
+                    raise ValueError("JuliaSetPoints: too many points; increase \"ClosenessTolerance\"")
+    return pts
+
+
+@fn("JuliaSetPoints", **ADDED, notes="JuliaSetPoints[c] (the map z^2 + c) or JuliaSetPoints[f, z] for a rational "
+    "function f of degree >= 2: points {x, y} approximating the Julia set by inverse iteration from a repelling "
+    "fixed point, keeping preimages at least \"ClosenessTolerance\" (default 0.004) apart and within \"Bound\" "
+    "(default 6; unbounded for polynomials) of the origin; the points and their order may differ from the "
+    "Wolfram Language's, every point lies (numerically) on the Julia set")
+def _juliasetpoints(*args):
+    fname = "JuliaSetPoints"
+    pos, opts = [], {}
+    for a in args:
+        if isinstance(a, Expr) and a.head in ("Rule", "RuleDelayed") and isinstance(a.args[0], str):
+            if a.args[0] not in ("ClosenessTolerance", "Bound"):
+                raise ValueError(f"{fname}: unknown option {a.args[0]!r}")
+            opts[a.args[0]] = a.args[1]
+        else:
+            pos.append(a)
+    tol = opts.get("ClosenessTolerance", 0.004)
+    try:
+        tol = float(S(tol))
+    except Exception:
+        raise ValueError(f"{fname}: \"ClosenessTolerance\" must be a positive number")
+    if not tol > 0:
+        raise ValueError(f"{fname}: \"ClosenessTolerance\" must be a positive number")
+    if len(pos) == 1:
+        cv = _complex_value(pos[0], fname)
+        if cv is None:
+            raise Unevaluated()
+        pc, qc = [1, 0, cv], [1]
+    elif len(pos) == 2:
+        if not isinstance(pos[1], Symbol):
+            raise ValueError(f"{fname}: the second argument must be a variable")
+        if (S(pos[0]).free_symbols - {S(pos[1])}):
+            raise Unevaluated()
+        pc, qc = _rational_map(pos[0], pos[1], fname)
+    else:
+        raise ValueError("JuliaSetPoints takes 1 or 2 arguments plus options")
+    polynomial = len(qc) == 1
+    if "Bound" in opts:
+        try:
+            bound = float(S(opts["Bound"]))
+        except Exception:
+            raise ValueError(f"{fname}: \"Bound\" must be a positive number")
+    else:
+        bound = 6.0
+    if polynomial and "Bound" not in opts:
+        # every point of the Julia set of a polynomial lies within its escape radius
+        lead = abs(pc[0] / qc[0])
+        rest = sum(abs(c / qc[0]) for c in pc[1:])
+        bound = max(1.0, (1 + rest) / lead) + 1.0
+    pts = _julia_points(pc, qc, tol, bound, polynomial)
+    return L(*(L(z.real, z.imag) for z in pts))

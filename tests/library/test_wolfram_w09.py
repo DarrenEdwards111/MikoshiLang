@@ -680,8 +680,103 @@ GROUPS = _sporadic_cases() + [
     ("CycleIndexPolynomial[CyclicGroup[4], {x1, x2, x3, x4}] /. {x1 -> 2, x2 -> 2, x3 -> 2, x4 -> 2}", "6"),
 ]
 
+# ─────────────────────────── AnglePath3D and JuliaSetPoints ───────────────────────────
+# Reference: reference.wolfram.com/language/ref/AnglePath3D.html (steps rotate the local frame by
+# EulerMatrix[{a, b, g}, {3, 2, 1}] and advance along the local x axis; the documented equivalences between the
+# step forms, with AnglePath and with FoldList of the frame matrices) and JuliaSetPoints.html (points of the
+# Julia set; JuliaSetPoints[c] === JuliaSetPoints[z^2 + c, z]).  The Julia set of z^2 is the unit circle and that
+# of z^2 - 2 the segment [-2, 2].
+
+ANGLEPATH3D = [
+    ("AnglePath3D[{{Pi/2, 0, 0}, {Pi/2, 0, 0}, {Pi/2, 0, 0}}]", "{{0, 0, 0}, {0, 1, 0}, {-1, 1, 0}, {-1, 0, 0}}"),
+    ("AnglePath3D[{{1, {Pi/2, Pi/2}}, {2, {Pi/2, Pi/2}}, {3, {Pi/2, Pi/2}}}]",
+     "{{0, 0, 0}, {0, 0, -1}, {0, -2, -1}, {3, -2, -1}}"),
+    ("AnglePath3D[{{2, 5, 7}, {{0, Pi/2, -5 Pi/6}, {3 Pi/2, 0, Pi/3}, {0, -Pi/3, 0}}}] === "
+     "AnglePath3D[{{2, {0, Pi/2, -5 Pi/6}}, {5, {3 Pi/2, 0, Pi/3}}, {7, {0, -Pi/3, 0}}}]", "True"),
+    ("AnglePath3D[{{2, 5, 7}, {{0, Pi/2, -5 Pi/6}, {3 Pi/2, 0, Pi/3}, {0, -Pi/3, 0}}}]",
+     "{{0, 0, 0}, {0, 0, -2}, {5/2, 5 Sqrt[3]/2, -2}, {13/8, 41 Sqrt[3]/8, 13/4}}"),
+    ("Last[AnglePath3D[ConstantArray[{0, Pi/3, 0}, 6]]]", "{0, 0, 0}"),             # closed hexagon
+    ("AnglePath3D[ConstantArray[{0, Pi/3, 0}, 6]][[All, 2]]", "{0, 0, 0, 0, 0, 0, 0}"),   # in the x-z plane
+    ("AnglePath3D[{{Pi/2, 0, 0}}, ConstantArray[{0, Pi/4, 0}, 8]][[All, 1]]", "{0, 0, 0, 0, 0, 0, 0, 0, 0}"),
+    ("Last[AnglePath3D[{{Pi/2, 0, 0}}, ConstantArray[{0, Pi/4, 0}, 8]]]", "{0, 0, 0}"),  # closed octagon
+    ("AnglePath3D[{{al1, be1}, {al2, be2}}] === AnglePath3D[{{al1, be1, 0}, {al2, be2, 0}}]", "True"),
+    ("Simplify /@ Flatten[AnglePath3D[{{th1, 0, 0}, {th2, 0, 0}}][[All, {1, 2}]] - AnglePath[{th1, th2}]]",
+     "{0, 0, 0, 0, 0, 0}"),
+    ("AnglePath3D[{{th1, 0, 0}, {th2, 0, 0}}][[All, 3]]", "{0, 0, 0}"),
+    ("AnglePath3D[{1, 3, -2}, {{Pi/2, 0, Pi/6}, {Pi/3, -2 Pi/3, 0}}] - "
+     "AnglePath3D[{{Pi/2, 0, Pi/6}, {Pi/3, -2 Pi/3, 0}}]", "{{1, 3, -2}, {1, 3, -2}, {1, 3, -2}}"),
+    ("AnglePath3D[{{{1/2, -Sqrt[3]/2, 0}, {Sqrt[3]/2, 1/2, 0}, {0, 0, 1}}, "
+     "{{0, -1, 0}, {-1/2, 0, -Sqrt[3]/2}, {Sqrt[3]/2, 0, -1/2}}}]",
+     "{{0, 0, 0}, {1/2, Sqrt[3]/2, 0}, {1/2 + Sqrt[3]/4, -1/4 + Sqrt[3]/2, Sqrt[3]/2}}"),
+    ("AnglePath3D[{{Pi/3, 0}, {Pi/2, -2 Pi/3}}, \"FrameMatrix\"] == "
+     "FoldList[Dot, AnglePath3D[{{Pi/3, 0}, {Pi/2, -2 Pi/3}}, \"EulerMatrix\"]]", "True"),
+    ("First[AnglePath3D[{{Pi/3, 0}, {Pi/2, -2 Pi/3}}, \"FrameMatrix\"]]", "IdentityMatrix[3]"),
+    ("With[{f = AnglePath3D[{{Pi/3, 0}, {Pi/2, -2 Pi/3}}, \"FrameMatrix\"]}, "
+     "AnglePath3D[{{Pi/3, 0}, {Pi/2, -2 Pi/3}}] == FoldList[#1 + #2 . {1, 0, 0} &, {0, 0, 0}, Rest[f]]]", "True"),
+    ("AnglePath3D[{{Pi/2, 0}, {0, -Pi/2}}, {\"EulerAngles\", \"Position\"}]",
+     "{{{0, 0, 0}, {0, 0, 0}}, {{Pi/2, 0, 0}, {0, 1, 0}}, {{0, -Pi/2, 0}, {0, 1, 1}}}"),
+    ("AnglePath3D[{{0.5, 0.2, 0.1}, {0.3, 0.1, 0.2}}]",
+     [[0, 0, 0], [0.8600893382050473, 0.4698689469495153, -0.19866933079506122],
+      [1.5204121720357495, 1.1753492178326606, -0.4561015403501878]], 1e-12),
+    ("Last[AnglePath3D[Table[{Pi/3, 0, 0}, 7]]]", "{1/2, Sqrt[3]/2, 0}"),
+    ("Length[AnglePath3D[Table[{Pi/3, 0, 0}, 300]]]", "301"),
+    ("AnglePath3D[{{1, 2, 3, 4}}]", Raises()),
+    ("AnglePath3D[{{Pi/2, 0}}, \"RotationTranslation\"]", Raises()),
+    ("AnglePath3D[{{Pi/2, 0}}, \"NoSuchForm\"]", Raises()),
+]
+
+def _julia_ok(c, tol, n_min, on=None, steps=8):
+    """Every point has a bounded forward orbit under z^2 + c and (optionally) satisfies on(z)."""
+    def p(r):
+        zs = [complex(float(q.args[0]), float(q.args[1])) for q in r.args]
+        if len(zs) < n_min:
+            return False
+        for z in zs:
+            w = z
+            for _ in range(steps):
+                w = w * w + c
+            if abs(w) > 2 or (on is not None and not on(z)):
+                return False
+        # the points are at least the closeness tolerance apart (checked on a sample)
+        sample = zs[:: max(1, len(zs) // 200)]
+        return all(abs(a - b) >= tol * (1 - 1e-9) for i, a in enumerate(sample) for b in sample[i + 1:])
+    return Pred(p, f"at least {n_min} points on the Julia set of z^2 + {c}")
+
+
+def _rational_julia_ok(f, tol, n_min, bound=6):
+    """f maps the computed points (numerically) onto the computed point set."""
+    def p(r):
+        zs = [complex(float(q.args[0]), float(q.args[1])) for q in r.args]
+        if len(zs) < n_min:
+            return False
+        for z in zs[:: max(1, len(zs) // 300)]:
+            w = f(z)
+            if abs(w) < bound and min(abs(w - y) for y in zs) > 3 * tol:
+                return False
+        return True
+    return Pred(p, f"at least {n_min} points of a forward-invariant set")
+
+
+JULIA = [
+    ("JuliaSetPoints[0]", _julia_ok(0, 0.004, 100, on=lambda z: abs(abs(z) - 1) < 1e-8)),          # unit circle
+    ("JuliaSetPoints[-2]", _julia_ok(-2, 0.004, 100, on=lambda z: abs(z.imag) < 1e-6 and abs(z.real) <= 2 + 1e-6)),
+    ("JuliaSetPoints[-0.77 + 0.22 I]", _julia_ok(-0.77 + 0.22j, 0.004, 1000)),
+    ("JuliaSetPoints[-1, \"ClosenessTolerance\" -> 0.01]", _julia_ok(-1, 0.01, 100)),
+    ("JuliaSetPoints[-0.6 - 0.5 I, \"ClosenessTolerance\" -> 0.02] === "
+     "JuliaSetPoints[z^2 - 0.6 - 0.5 I, z, \"ClosenessTolerance\" -> 0.02]", "True"),
+    ("Length[JuliaSetPoints[0.37 + 0.22 I, \"ClosenessTolerance\" -> 0.05]] < "
+     "Length[JuliaSetPoints[0.37 + 0.22 I, \"ClosenessTolerance\" -> 0.02]]", "True"),
+    ("JuliaSetPoints[(z^2 - 1)/(z^2 + 1), z, \"ClosenessTolerance\" -> 0.02]",
+     _rational_julia_ok(lambda z: (z * z - 1) / (z * z + 1), 0.02, 50)),
+    ("JuliaSetPoints[z^3 - z - 1, z, \"ClosenessTolerance\" -> 0.02]",
+     _rational_julia_ok(lambda z: z ** 3 - z - 1, 0.02, 50, bound=3)),
+    ("JuliaSetPoints[c]", "JuliaSetPoints[c]"),
+    ("JuliaSetPoints[z + 1, z]", Raises()),
+    ("JuliaSetPoints[0, \"ClosenessTolerance\" -> -1]", Raises()),
+]
+
 CASES = (FINITE_FIELDS + FROBENIUS + INDICES + EMBEDDINGS + CURVES + MANDELBROT + NUMBERS + DOMAINS + OPTIONS +
-         SEQUENCES + DIRICHLET + ALGEBRAIC + GROUPS)
+         SEQUENCES + DIRICHLET + ALGEBRAIC + GROUPS + ANGLEPATH3D + JULIA)
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
