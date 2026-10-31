@@ -18,11 +18,12 @@ def _unary(name, f, notes="verified against SymPy/mpmath", status="verified"):
         v = f(sym(z, name))
         if name in _INT_VALUED and isinstance(v, sp.Integer):
             return R(v)          # Floor[2.7] = 2, Sign[-3.5] = -1 (integers, as in Wolfram)
-        return numeric_out(v, z)
+        return numeric_out(v, z, keep_zero=name not in _EXACT_ZERO)
     return impl
 
 
 _INT_VALUED = {"Sign", "Floor", "Ceiling"}
+_EXACT_ZERO = {"ImaginaryPart"}      # Im[2.5] = 0 exactly in Wolfram; Sin[0.] = 0. is inexact
 
 
 for _name, _f in [
@@ -38,7 +39,7 @@ for _name, _f in [
 @fn("ArcTan", area=AREA, status="fixed", listable=True,
     notes="ArcTan[x, y] was atan2(x, y); Wolfram's ArcTan[x, y] is the angle of the point (x, y), atan2(y, x)")
 def _arctan1(z):
-    return numeric_out(sp.atan(sym(z, "ArcTan")), z)
+    return numeric_out(sp.atan(sym(z, "ArcTan")), z, keep_zero=True)
 
 
 @fn("ArcTan", area=AREA, status="fixed")
@@ -58,7 +59,7 @@ def _log(z):
 @fn("Log", area=AREA, status="fixed", listable=True,
     notes="Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b")
 def _log1(z):
-    return numeric_out(_log(sym(z, "Log")), z)
+    return numeric_out(_log(sym(z, "Log")), z, keep_zero=True)
 
 
 @fn("Log", area=AREA, status="fixed")
