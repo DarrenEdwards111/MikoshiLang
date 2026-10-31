@@ -5100,10 +5100,18 @@ def _check_parts(val, parts, fname, extra_syms=()):
         raise NotImplementedError(f"{fname}: the symbolic result could not be verified numerically")
 
 
+def _wlf(v):
+    """SymPy special functions without a MikoshiLang mapping -> the Wolfram heads."""
+    v = sp.sympify(v)
+    if v.has(sp.fresnelc, sp.fresnels):
+        v = v.replace(sp.fresnelc, sp.Function("FresnelC")).replace(sp.fresnels, sp.Function("FresnelS"))
+    return out(v)
+
+
 def _finish(val, parts, fname):
     val = _simp(val)
     _check_parts(val, parts, fname)
-    return out(val)
+    return _wlf(val)
 
 
 def _line_parts(f, spec, fname):
@@ -5309,3 +5317,207 @@ def _ncontourint(f, spec, *rest):
     z, reg = _contour_spec(spec, fname)
     zp, _c, _i = _contour_pieces(reg, fname)
     return _num_result(_num_total(_contour_parts(SX(f, fname), zp, z), fname), fname)
+
+
+# ───────────────────────────── fractional calculus ─────────────────────────────
+
+def _frac_spec(spec, fname):
+    if not is_list(spec) or len(spec.args) != 2:
+        raise ValueError(f"{fname}: the second argument must be {{x, alpha}}")
+    x = _svar(spec.args[0], fname)
+    al = SX(spec.args[1], fname)
+    if not al.free_symbols and not al.is_real:
+        raise ValueError(f"{fname}: the order must be real")
+    return x, al
+
+
+def _power_terms(f, x):
+    """[(c, p)] with f = sum c x^p (c free of x), or None."""
+    terms = []
+    for t in sp.Add.make_args(sp.expand(f)):
+        c, g = t.as_independent(x, as_Add=False)
+        if g == 1:
+            terms.append((c, sp.Integer(0)))
+        elif g == x:
+            terms.append((c, sp.Integer(1)))
+        elif isinstance(g, sp.Pow) and g.base == x and not g.exp.has(x):
+            terms.append((c, g.exp))
+        else:
+            return None
+    return terms
+
+
+def _rl_power(c, p, al, x, fname):
+    if p.is_number and not (p > -1):
+        raise ValueError(f"{fname}: the fractional derivative of x^{p} at the lower terminal 0 does not exist "
+                         "(the exponent must exceed -1)")
+    return c * sp.gamma(p + 1) / sp.gamma(p + 1 - al) * x ** (p - al)
+
+
+def _rl_integral(f, beta, x, fname):
+    """I^beta f (beta > 0, numeric) = 1/Gamma(beta) Integral_0^x (x - s)^(beta - 1) f(s) ds."""
+    s_ = sp.Dummy("s", positive=True)
+    xp = sp.Dummy("x", positive=True)
+    try:
+        v = sp.integrate((xp - s_) ** (beta - 1) * f.subs(x, s_), (s_, 0, xp), conds="none")
+    except Exception:
+        v = None
+    if v is None or v.has(sp.Integral):
+        raise NotImplementedError(f"{fname}: the fractional integral could not be computed in closed form")
+    return (v / sp.gamma(beta)).subs(xp, x)
+
+
+def _frac_check(val, f, al, x, fname, caputo):
+    """Compare with independent quadrature at two points (only when f, alpha are free of parameters)."""
+    if sp.sympify(val).free_symbols - {x} or f.free_symbols - {x} or al.free_symbols:
+        return
+    for x0 in (sp.Rational(3, 10), sp.Rational(7, 10)):
+        with mpmath.workdps(20):
+            want = _nfrac(f, x, al, mpmath.mpf(float(x0)), fname, caputo)
+        got = complex(sp.N(sp.sympify(val).subs(x, x0), 20))
+        if not abs(got - want) <= 1e-7 * max(1.0, abs(want)):
+            raise NotImplementedError(f"{fname}: the symbolic result could not be verified numerically")
+
+
+def _fracd(f, spec, fname, caputo):
+    if is_list(f):
+        return L(*[_fracd(a, spec, fname, caputo) for a in f.args])
+    x, al = _frac_spec(spec, fname)
+    F = SX(f, fname)
+    if al.is_number and al.is_integer:
+        n = int(al)
+        if n >= 0:
+            return out(sp.diff(F, x, n))
+        v = F
+        for _ in range(-n):
+            v = _rl_integral(v, 1, x, fname)
+        return out(_simp(v))
+    terms = _power_terms(F, x)
+    if terms is not None:
+        res = 0
+        for c, p in terms:
+            if caputo:
+                if p.is_Integer and p >= 0:
+                    if al.is_number:
+                        res += 0 if al > p else _rl_power(c, p, al, x, fname)
+                    else:
+                        res += sp.Piecewise((_rl_power(c, p, al, x, fname), al <= p), (0, True))
+                    continue
+                if not al.is_number:
+                    raise NotImplementedError(f"{fname}: symbolic orders are supported only for polynomial terms")
+                if al > p + 1:
+                    raise ValueError(f"{fname}: the Caputo derivative of x^{p} of order {al} does not exist")
+            res += _rl_power(c, p, al, x, fname)
+        return out(_simp(res) if res != 0 else 0)
+    if not al.is_number:
+        raise NotImplementedError(f"{fname}: symbolic orders are supported only for sums of powers of {x}")
+    m = int(sp.ceiling(al)) if al > 0 else 0
+    if caputo and al > 0:
+        val = _rl_integral(sp.diff(F, x, m), m - al, x, fname)
+    elif al > 0:
+        val = sp.diff(_rl_integral(F, m - al, x, fname), x, m)
+    else:
+        val = _rl_integral(F, -al, x, fname)
+    val = _simp(val)
+    _frac_check(val, F, al, x, fname, caputo)
+    return _wlf(val)
+
+
+def _nfrac(F, x, al, x0, fname, caputo):
+    """Numerical Riemann-Liouville / Caputo derivative of order al at x0 > 0 (lower terminal 0)."""
+    al_ = float(sp.N(al))
+    if x0 <= 0:
+        raise ValueError(f"{fname}: the point must be positive (the lower terminal is 0)")
+    f = sp.lambdify(x, F, "mpmath")
+    if float(al_).is_integer():
+        n = int(al_)
+        if n >= 0:
+            return complex(sp.N(sp.diff(F, x, n).subs(x, sp.Float(x0, 20)), 20))
+        return complex(mpmath.quad(lambda s: (x0 - s) ** (-n - 1) * f(s), [0, x0]) / mpmath.gamma(-n))
+    if al_ < 0:
+        return complex(mpmath.quad(lambda s: (x0 - s) ** (-al_ - 1) * f(s), [0, x0]) / mpmath.gamma(-al_))
+    m = int(math.ceil(al_))
+    g = sp.lambdify(x, sp.diff(F, x, m), "mpmath")
+    cap = mpmath.quad(lambda s: (x0 - s) ** (m - al_ - 1) * g(s), [0, x0]) / mpmath.gamma(m - al_)
+    if caputo:
+        return complex(cap)
+    corr = 0
+    for k in range(m):
+        try:
+            v0 = sp.limit(sp.diff(F, x, k), x, 0, "+")
+        except Exception:
+            v0 = sp.nan
+        if not v0.is_finite:
+            # f^(k)(0) is singular: differentiate the fractional integral numerically instead
+            beta = m - al_
+
+            def I(xx):
+                return mpmath.quad(lambda s: (xx - s) ** (beta - 1) * f(s), [0, xx]) / mpmath.gamma(beta)
+            return complex(mpmath.diff(I, x0, m))
+        corr += complex(sp.N(v0)) * x0 ** (k - al_) / mpmath.gamma(k + 1 - al_)
+    return complex(cap + corr)
+
+
+@fn("FractionalD", area=AREA, status="added",
+    notes="FractionalD[f, {x, alpha}]: the Riemann-Liouville differintegral with lower terminal 0; sums of powers "
+          "c x^p (p > -1) in closed form for any (also symbolic) alpha, Gamma(p+1)/Gamma(p+1-alpha) x^(p-alpha); "
+          "integer alpha gives D or repeated integrals; other f with numeric alpha via the defining integral "
+          "(D^m I^(m-alpha) f), checked against quadrature; threads over lists")
+def _fractionald(f, spec, *rest):
+    rest, _o = _opts(rest, {"Assumptions", "GenerateConditions"}, "FractionalD")
+    if rest:
+        raise ValueError(f"FractionalD: unexpected arguments {rest}")
+    return _fracd(f, spec, "FractionalD", False)
+
+
+@fn("CaputoD", area=AREA, status="added",
+    notes="CaputoD[f, {x, alpha}]: the Caputo differintegral I^(m-alpha) D^m f (m = Ceiling[alpha]) with lower "
+          "terminal 0; powers in closed form (constants and x^k with k < alpha give 0; symbolic alpha gives a "
+          "Piecewise for polynomial terms); other f with numeric alpha via the defining integral, checked against "
+          "quadrature; threads over lists")
+def _caputod(f, spec, *rest):
+    rest, _o = _opts(rest, {"Assumptions", "GenerateConditions"}, "CaputoD")
+    if rest:
+        raise ValueError(f"CaputoD: unexpected arguments {rest}")
+    return _fracd(f, spec, "CaputoD", True)
+
+
+def _nfrac_fn(f, spec, x0, rest, fname, caputo):
+    rest, o = _opts(rest, {"Method", "WorkingPrecision", "AccuracyGoal", "PrecisionGoal"}, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    meth = o.get("Method")
+    if meth is not None and not (isinstance(meth, Symbol) and meth.name == "Automatic") \
+            and not (isinstance(meth, str) and meth == "RiemannLiouville"):
+        raise NotImplementedError(f"{fname}: only the Riemann-Liouville method is supported")
+    if is_list(f):
+        return L(*[_nfrac_fn(a, spec, x0, (), fname, caputo) for a in f.args])
+    if is_list(x0):
+        return L(*[_nfrac_fn(f, spec, p, (), fname, caputo) for p in x0.args])
+    x, al = _frac_spec(spec, fname)
+    if al.free_symbols:
+        raise ValueError(f"{fname}: the order must be numeric")
+    F = SX(f, fname)
+    if F.free_symbols - {x}:
+        raise ValueError(f"{fname}: the function has symbolic parameters")
+    p = complex(sp.N(SX(x0, fname)))
+    if p.imag:
+        raise ValueError(f"{fname}: the point must be real")
+    with mpmath.workdps(20):
+        v = _nfrac(F, x, al, mpmath.mpf(p.real), fname, caputo)
+    return _num_result(v, fname)
+
+
+@fn("NFractionalD", area=AREA, status="added",
+    notes="NFractionalD[f, {x, alpha}, x0]: numerical Riemann-Liouville differintegral at x0 > 0 (Caputo integral "
+          "of f^(m) by tanh-sinh quadrature plus the initial-value terms, or numerical differentiation of the "
+          "fractional integral when f^(k)(0) is singular)")
+def _nfractionald(f, spec, x0, *rest):
+    return _nfrac_fn(f, spec, x0, rest, "NFractionalD", False)
+
+
+@fn("NCaputoD", area=AREA, status="added",
+    notes="NCaputoD[f, {x, alpha}, x0]: numerical Caputo differintegral at x0 > 0 (tanh-sinh quadrature of the "
+          "defining integral of f^(m))")
+def _ncaputod(f, spec, x0, *rest):
+    return _nfrac_fn(f, spec, x0, rest, "NCaputoD", True)
