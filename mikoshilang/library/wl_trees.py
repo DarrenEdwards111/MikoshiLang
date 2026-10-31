@@ -1145,3 +1145,212 @@ def _randomtree(spec, shape=None, *opts):
             return L(*(arr(ds[1:]) for _ in range(ds[0])))
         out = arr(dims)
     return out
+
+
+# ─────────────────────────── tree games (extensive-form games) ───────────────────────────
+
+class _GNode:
+    __slots__ = ("player", "infoset", "children", "payoffs", "label", "prob")
+
+    def __init__(self):
+        self.player = self.infoset = self.payoffs = self.label = self.prob = None
+        self.children = []
+
+
+def _is_real_num(x):
+    return K.is_number(x) and not isinstance(x, bool) and (lambda v: v.is_real is not False)(K.to_sp(x))
+
+
+def _edge_annotation(node, ann, fname):
+    if is_list(ann) and len(ann.args) == 2 and _is_real_num(ann.args[1]):
+        node.label, node.prob = ann.args
+    elif _is_real_num(ann):
+        node.prob = ann
+    else:
+        node.label = ann
+
+
+def _game_node(x, fname):
+    node = _GNode()
+    if is_rule(x):
+        child = _game_node(x.args[0], fname)
+        if child.label is not None or child.prob is not None:
+            raise TreeError(f"{fname}: an action has more than one annotation")
+        _edge_annotation(child, x.args[1], fname)
+        return child
+    if isinstance(x, Expr) and x.head == "Tree" and len(x.args) >= 2:
+        d, ch = x.args[0], x.args[1]
+        if not is_assoc(d):
+            raise TreeError(f"{fname}: tree game nodes must have association data <|\"Player\" -> ...|> or "
+                            "<|\"Payoffs\" -> {...}|>")
+        info = {r.args[0]: r.args[1] for r in d.args}
+        bad = set(info) - {"Player", "Payoffs", "Label", "Probability", "InformationSet"}
+        if bad:
+            raise TreeError(f"{fname}: unknown node keys {sorted(map(str, bad))}")
+        node.label, node.prob = info.get("Label"), info.get("Probability")
+        kids = [] if is_sym(ch, "None") else list(ch.args) if is_list(ch) else None
+        if kids is None:
+            raise TreeError(f"{fname}: the children of a tree game node must be a list")
+        if "Payoffs" in info:
+            if "Player" in info or kids:
+                raise TreeError(f"{fname}: an end node has payoffs and no player or children")
+            node.payoffs = _payoff_list(info["Payoffs"], fname)
+            return node
+        if "Player" not in info or not kids:
+            raise TreeError(f"{fname}: an action node needs a \"Player\" and at least one child")
+        node.player, node.infoset = info["Player"], info.get("InformationSet")
+        node.children = [_game_node(k, fname) for k in kids]
+        _check_probs(node, fname)
+        return node
+    if is_list(x) and x.args and all(_is_real_num(v) for v in x.args):
+        node.payoffs = list(x.args)
+        return node
+    if is_list(x) and len(x.args) >= 2:
+        p = x.args[0]
+        if is_rule(p):
+            node.player, node.infoset = p.args
+        else:
+            node.player = p
+        if is_list(node.player) or _is_real_num(node.player):
+            raise TreeError(f"{fname}: {node.player} is not a valid player")
+        node.children = [_game_node(k, fname) for k in x.args[1:]]
+        _check_probs(node, fname)
+        return node
+    raise TreeError(f"{fname}: {x} is neither an action node {{player, action1, ...}} nor an end node "
+                    "{payoff1, ...}")
+
+
+def _payoff_list(p, fname):
+    if is_list(p) and p.args and all(_is_real_num(v) for v in p.args):
+        return list(p.args)
+    raise TreeError(f"{fname}: payoffs must be a non-empty list of real numbers")
+
+
+def _check_probs(node, fname):
+    ps = [c.prob for c in node.children]
+    if all(p is None for p in ps):
+        return
+    if any(p is None for p in ps):
+        raise TreeError(f"{fname}: when one action of a node has a probability, all of them need one")
+    _check_distribution(ps, fname, "action probabilities")
+
+
+def _check_distribution(ps, fname, what):
+    vals = [K.to_sp(p) for p in ps]
+    if any(v.is_real is False or v < 0 for v in vals):
+        raise TreeError(f"{fname}: {what} must be nonnegative reals")
+    tot = sum(vals)
+    if (tot.is_Float and abs(tot - 1) > 1e-8) or (not tot.is_Float and sp.simplify(tot - 1) != 0):
+        raise TreeError(f"{fname}: {what} must sum to 1")
+
+
+def _game_root(g, fname):
+    if not (isinstance(g, Expr) and g.head == "TreeGame" and len(g.args) == 1):
+        if isinstance(g, Symbol):
+            raise Unevaluated()
+        raise TreeError(f"{fname}: {g} is not a TreeGame")
+    root = _game_node(g.args[0], fname)
+    if root.payoffs is not None:
+        raise TreeError(f"{fname}: the root of a tree game must be an action node")
+    counts = set()
+
+    def walk(n):
+        if n.payoffs is not None:
+            counts.add(len(n.payoffs))
+        for c in n.children:
+            walk(c)
+    walk(root)
+    if len(counts) != 1:
+        raise TreeError(f"{fname}: all end nodes must give the same number of payoffs")
+    return root
+
+
+import sympy as sp  # noqa: E402
+
+
+@fn("TreeGame", area=AREA, status="added",
+    notes="TreeGame[{player, action1, ...}] (end nodes {payoff1, ...}; actions annotated action -> label | prob | "
+          "{label, prob}; information sets player -> ilabel) or TreeGame[Tree[<|\"Player\" -> p|>, {...}]] with "
+          "\"Payoffs\", \"Label\", \"Probability\", \"InformationSet\" keys: validated (consistent payoff counts, "
+          "complete probability distributions) and kept as the inert game object TreeGame[spec]")
+def _treegame(spec, *rest):
+    if rest:
+        raise TreeError("TreeGame: options and extra arguments are not supported")
+    _game_root(Expr("TreeGame", spec), "TreeGame")
+    raise Unevaluated()
+
+
+def _strategy_table(strat, fname):
+    """node position tuple -> list of probabilities."""
+    if not is_assoc(strat):
+        raise TreeError(f"{fname}: the strategy must be an association")
+    table = {}
+
+    def add(k, v):
+        if not (is_list(k) and all(is_int(i) and int(i) >= 1 for i in k.args)):
+            raise TreeError(f"{fname}: strategy node {k} must be a list of positive integers")
+        if not is_list(v) or not v.args:
+            raise TreeError(f"{fname}: the strategy at node {k} must be a list of probabilities")
+        _check_distribution(list(v.args), fname, f"strategy probabilities at node {k}")
+        table[tuple(int(i) for i in k.args)] = list(v.args)
+    for r in strat.args:
+        k, v = r.args
+        if is_assoc(v):
+            for r2 in v.args:
+                add(*r2.args)
+        else:
+            add(k, v)
+    return table
+
+
+@fn("TreeGamePayoff", area=AREA, status="added",
+    notes="TreeGamePayoff[tgame, strat] expected payoff list for a strategy profile <|player -> <|node -> {pr, ...}|>, "
+          "...|> or <|node -> {pr, ...}, ...|> (nodes are child-index paths, {} the root); actions with "
+          "probabilities in the game use them unless the strategy overrides them; TreeGamePayoff[tgame, strat, "
+          "\"RandomExpectation\"] averages unspecified nodes uniformly; \"Perfect\", \"PerfectExpectation\" and "
+          "\"Random\" raise; an incomplete strategy without an adversary type raises")
+def _treegamepayoff(game, strat, adv=None):
+    fname = "TreeGamePayoff"
+    root = _game_root(game, fname)
+    table = _strategy_table(strat, fname)
+    if adv is not None and adv != "RandomExpectation":
+        if adv in ("Perfect", "PerfectExpectation", "Random"):
+            raise NotImplementedError(f"{fname}: the adversary type {adv!r} is not supported "
+                                      "(use \"RandomExpectation\")")
+        raise TreeError(f"{fname}: unknown adversary type {adv!r}")
+    used = set()
+
+    def value(n, path):
+        if n.payoffs is not None:
+            return L(*n.payoffs)
+        k = len(n.children)
+        if path in table:
+            ps = table[path]
+            used.add(path)
+            if len(ps) != k:
+                raise TreeError(f"{fname}: the strategy at node {list(path)} has {len(ps)} probabilities for "
+                                f"{k} actions")
+        elif n.children[0].prob is not None:
+            ps = [c.prob for c in n.children]
+        elif adv == "RandomExpectation":
+            ps = [K.from_sp(sp.Rational(1, k))] * k
+        else:
+            raise TreeError(f"{fname}: the strategy does not specify node {list(path)} (player {n.player}); "
+                            "give an adversary type such as \"RandomExpectation\"")
+        terms = [Expr("Times", p, value(c, path + (i + 1,))) for i, (p, c) in enumerate(zip(ps, n.children))
+                 if not (K.is_number(p) and K.to_sp(p) == 0)]
+        return ev(Expr("Plus", *terms)) if terms else None
+    out = value(root, ())
+    extra = set(table) - used
+    if extra:
+        def exists(n, p):
+            for i in p:
+                if n.payoffs is not None or i > len(n.children):
+                    return False
+                n = n.children[i - 1]
+            return n.payoffs is None
+        missing = [p for p in extra if not exists(root, p)]
+        if missing:
+            raise TreeError(f"{fname}: strategy node {list(missing[0])} is not an action node of the game")
+    return out
+
