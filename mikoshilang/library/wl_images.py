@@ -4231,3 +4231,304 @@ def _arraycomponents(arr: ListOf[Expr], level: PosInteger | Expr = None, rules: 
         labels[key] = counter[0]
         return counter[0]
     return _depth_map(arr, lev, label)
+
+
+# ───────────────────────────── colour adjustments ─────────────────────────────
+
+_BRADFORD = np.array([[0.8951, 0.2664, -0.1614], [-0.7502, 1.7135, 0.0367], [0.0389, -0.0685, 1.0296]])
+
+
+def _rgb_of(c, fname):
+    p = parse_color(c)
+    if p is None:
+        if isinstance(c, Symbol):
+            raise Unevaluated()
+        if isinstance(c, str) or is_real_value(c) or (isinstance(c, Expr) and c.head == "List"):
+            raise NotImplementedError(f"{fname}: only explicit colours are supported as references (white points, "
+                                      f"temperatures and positions are not)")
+        raise TypeError(f"{fname}: {_short(c)} is not a colour")
+    return np.array(convert_channels(p[0], p[1], "RGB"), dtype=float)
+
+
+@fn("ColorBalance", area=AREA, status="added",
+    notes="ColorBalance[image, ref] maps the colour ref to white and ColorBalance[image, ref -> target] maps ref to "
+          "target: Method \"LMSScaling\" (default) scales the cone responses (Bradford matrix on XYZ, i.e. a von Kries "
+          "adaptation, the same for D50- or D65-based XYZ) and \"RGBScaling\" scales the R, G, B values; the image is "
+          "processed in RGB and returned in its colour space and type (integer types clipped). ColorBalance[image] "
+          "(automatic balance), white point names, temperatures, positions, marker images, \"GrayScaling\", "
+          "\"ChromaticityScaling\" and grayscale images raise NotImplementedError. Check: verify (the reference colour "
+          "maps to the target) in tests.")
+def _colorbalance(x: Expr, spec: Expr = None, *opts: Option) -> Expr:
+    fname = "ColorBalance"
+    _, o = opts_split(opts, {"Method"}, fname)
+    if _:
+        raise ValueError(f"{fname}: expected ColorBalance[image, ref -> target, options]")
+    im = _img1(x, fname)
+    if spec is None:
+        raise NotImplementedError(f"{fname}: automatic colour balance is not supported (give a reference colour)")
+    method = o.get("Method", "LMSScaling")
+    if _is_sym(method, "Automatic"):
+        method = "LMSScaling"
+    if method not in ("LMSScaling", "RGBScaling"):
+        if isinstance(method, str):
+            raise NotImplementedError(f"{fname}: Method {method!r} is not supported (\"LMSScaling\", \"RGBScaling\")")
+        raise ValueError(f"{fname}: Method must be a method name")
+    if isinstance(spec, Expr) and spec.head == "Rule" and len(spec.args) == 2:
+        ref, tgt = _rgb_of(spec.args[0], fname), _rgb_of(spec.args[1], fname)
+    else:
+        ref, tgt = _rgb_of(spec, fname), np.ones(3)
+    src = source_space(im, fname)
+    if src == "Grayscale":
+        raise NotImplementedError(f"{fname}: grayscale images are not supported")
+    rgb = convert_array(im.color(), src, "RGB")
+    if method == "RGBScaling":
+        if np.any(ref <= 0):
+            raise ValueError(f"{fname}: the reference colour must have positive R, G, B values")
+        out = rgb * (tgt / ref)
+    else:
+        lms = lambda c: np.asarray(convert_array(np.asarray(c, float), "RGB", "XYZ")) @ _BRADFORD.T
+        lr, lt = lms(ref.reshape(1, 3))[0], lms(tgt.reshape(1, 3))[0]
+        if np.any(np.abs(lr) < 1e-12):
+            raise ValueError(f"{fname}: the reference colour has a zero cone response")
+        L_ = lms(rgb) * (lt / lr)
+        out = convert_array(L_ @ np.linalg.inv(_BRADFORD).T, "XYZ", "RGB")
+    col = convert_array(out, "RGB", src)
+    a = np.concatenate([col, im.alpha_array()], axis=-1) if im.alpha else col
+    return image_expr(im.new(quantize(a, im.type)))
+
+
+_RECOLOR_METHODS = {"BrightnessPreserving": (True, True, False), "SaturationPreserving": (True, False, True),
+                    "HuePreserving": (False, True, True), "Brightness": (False, False, True),
+                    "Saturation": (False, True, False), "Hue": (True, False, False)}
+
+
+@fn("ImageRecolor", area=AREA, status="added",
+    notes="ImageRecolor[image, region -> color] and a list of such rules recolour, in HSB, the pixels of the region: "
+          "a colour (pixels within MaxColorDistance, default 0.1, under DistanceFunction, default CIE76 as in "
+          "ColorDistance), ColorsNear[...] or a mask image (its values weight the change). Method "
+          "\"BrightnessPreserving\" (default: hue and saturation replaced), \"SaturationPreserving\", "
+          "\"HuePreserving\", \"Brightness\", \"Saturation\" or \"Hue\" (the named components replaced). Grayscale "
+          "images become RGB; integer types are rounded. Wolfram does not document whether region edges are "
+          "blended, so colour regions are recoloured fully. Marker images and videos raise NotImplementedError. "
+          "Check: verify (recoloured pixels have the target's hue and the original brightness) in tests.")
+def _imagerecolor(x: Expr, rules: Rule | ListOf[Rule], *opts: Option) -> Expr:
+    fname = "ImageRecolor"
+    _, o = opts_split(opts, {"DistanceFunction", "MaxColorDistance", "Method"}, fname)
+    if _:
+        raise ValueError(f"{fname}: expected ImageRecolor[image, region -> color, options]")
+    im = _img1(x, fname)
+    method = o.get("Method", "BrightnessPreserving")
+    if method not in _RECOLOR_METHODS:
+        raise ValueError(f"{fname}: Method must be one of " + ", ".join(f'"{m}"' for m in _RECOLOR_METHODS))
+    which = _RECOLOR_METHODS[method]
+    dmax = real_arg(o.get("MaxColorDistance", 0.1), fname, "MaxColorDistance")
+    dfun = distance_function(o.get("DistanceFunction"), fname)
+    rl = list(rules.args) if K.is_list(rules) else [rules]
+    src = source_space(im, fname)
+    hsb = convert_array(im.color(), src, "HSB")
+    labs = None
+    for r in rl:
+        if not (isinstance(r, Expr) and r.head == "Rule" and len(r.args) == 2):
+            if isinstance(r, Symbol):
+                raise Unevaluated()
+            raise TypeError(f"{fname}: recolouring is given as region -> color")
+        reg, col = r.args
+        pc = parse_color(col)
+        if pc is None:
+            raise TypeError(f"{fname}: {_short(col)} is not a colour")
+        th = np.array(convert_channels(pc[0], pc[1], "HSB"))
+        if isinstance(reg, Expr) and reg.head in IMAGE_HEADS:
+            m = parse_image(reg, fname)
+            if m.dims() != im.dims():
+                raise ValueError(f"{fname}: the mask must have the image's dimensions")
+            wgt = np.clip(m.color().mean(axis=-1), 0, 1)
+        elif isinstance(reg, Expr) and reg.head == "ImageMarker":
+            raise NotImplementedError(f"{fname}: marker regions are not supported")
+        else:
+            if labs is None:
+                labs, _x = pixel_lab(im, fname)
+            if isinstance(reg, Expr) and reg.head == "ColorsNear":
+                tl, d, f = _colorsnear(reg, fname)
+            elif parse_color(reg) is not None:
+                tl, d, f = lab(reg), dmax, dfun
+            else:
+                if isinstance(reg, Symbol):
+                    raise Unevaluated()
+                raise TypeError(f"{fname}: {_short(reg)} is not a colour, ColorsNear or mask image")
+            wgt = (distance_to(labs, tl, f) <= d).astype(float)
+        new = hsb.copy()
+        for k in range(3):
+            if which[k]:
+                new[..., k] = th[k]
+        hsb = hsb + (new - hsb) * wgt[..., None]
+    target = "RGB" if src == "Grayscale" else src
+    col = convert_array(hsb, "HSB", target)
+    a = np.concatenate([col, im.alpha_array()], axis=-1) if im.alpha else col
+    return image_expr(Img(quantize(a, im.type if im.type != "Bit" else "Real32"),
+                          im.type if im.type != "Bit" else "Real32", target, im.d3))
+
+
+_MARKER_SHAPES = ("Arrow", "Circle", "CircleBullet", "Cross", "GrayPoint", "OpenCross", "Point", "Star")
+
+
+def _marker_pos_ok(p):
+    if K.is_list(p) and len(p.args) == 2 and all(is_real_value(v) or _side(v) for v in p.args):
+        return True
+    if isinstance(p, Expr) and p.head in ("Scaled", "ImageScaled", "Offset") and p.args:
+        return True
+    return _side(p) is not None
+
+
+@fn("ImageMarker", area=AREA, status="added",
+    notes="ImageMarker[pos], ImageMarker[pos, marker] and ImageMarker[{pos1, ...}, ...] are inert HighlightImage "
+          "specifications: positions {x, y}, Scaled/ImageScaled/Offset forms or named positions, markers an image, "
+          "graphics, any expression or a named shape (\"Arrow\", \"Circle\", \"CircleBullet\", \"Cross\", "
+          "\"GrayPoint\", \"OpenCross\", \"Point\", \"Star\"); the expression stays unevaluated, unknown shape names "
+          "raise ValueError. (HighlightImage itself is not implemented.) Check: reference (documented forms) in "
+          "tests.")
+def _imagemarker(pos: Expr, marker: Expr = None) -> Expr:
+    if isinstance(marker, str) and marker not in _MARKER_SHAPES:
+        raise ValueError(f"ImageMarker: unknown marker shape {marker!r}")
+    ok = _marker_pos_ok(pos) or (K.is_list(pos) and pos.args and all(_marker_pos_ok(p) for p in pos.args))
+    if not ok and not isinstance(pos, Symbol) and (isinstance(pos, str) or K.is_list(pos)):
+        raise TypeError(f"ImageMarker: {_short(pos)} is not a position or list of positions")
+    raise Unevaluated()
+
+
+# ───────────────────────────── image files (Pillow) ─────────────────────────────
+
+def _pil(fname):
+    try:
+        from PIL import Image as PILImage
+    except ImportError:
+        raise NotImplementedError(f"{fname}: reading and writing image files needs Pillow (pip install pillow)") \
+            from None
+    return PILImage
+
+
+def _path(p, fname, what="file"):
+    if isinstance(p, Expr) and p.head == "File" and len(p.args) == 1 and isinstance(p.args[0], str):
+        return p.args[0]
+    if isinstance(p, str):
+        return p
+    if isinstance(p, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{fname}: the {what} must be a file name or File[...]")
+
+
+_PIL_MODES = {"1": ("Bit", "Automatic"), "L": ("Byte", "Automatic"), "LA": ("Byte", "Grayscale"),
+              "RGB": ("Byte", "RGB"), "RGBA": ("Byte", "RGB"), "CMYK": ("Byte", "CMYK"),
+              "I;16": ("Bit16", "Automatic"), "I;16B": ("Bit16", "Automatic"), "I;16L": ("Bit16", "Automatic")}
+
+
+def read_image_file(path, fname):
+    """(Img, Pillow mode, format) of a PNG/JPEG/TIFF file."""
+    PILImage = _pil(fname)
+    import os
+    if not os.path.isfile(path):
+        raise ValueError(f"{fname}: the file {path!r} does not exist")
+    with PILImage.open(path) as f:
+        fmt = f.format
+        if fmt not in ("PNG", "JPEG", "TIFF", "MPO"):
+            raise NotImplementedError(f"{fname}: {fmt} files are not supported (TIFF, JPEG and PNG)")
+        if getattr(f, "n_frames", 1) > 1:
+            raise NotImplementedError(f"{fname}: multi-frame files are not supported")
+        mode = f.mode
+        if mode == "P":
+            f = f.convert("RGBA" if "transparency" in f.info else "RGB")
+            mode = f.mode
+        if mode not in _PIL_MODES:
+            raise NotImplementedError(f"{fname}: images of Pillow mode {mode!r} are not supported")
+        arr = np.array(f)
+    typ, cs = _PIL_MODES[mode]
+    a = arr.astype(float) / (MAXV[typ] if typ != "Bit" else 1.0)
+    if typ == "Bit":
+        a = (arr != 0).astype(float)
+    return Img(a, typ, cs, False), mode, fmt
+
+
+def write_image_file(img, path, mode, fmt, fname):
+    PILImage = _pil(fname)
+    a = img.a
+    need = {"1": 1, "L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "CMYK": 4}.get(mode, 1)
+    if a.shape[-1] != need:
+        raise ValueError(f"{fname}: the result has {a.shape[-1]} channels but the file format needs {need}")
+    if mode == "1":
+        out = PILImage.fromarray((np.clip(a[..., 0], 0, 1) >= 0.5).astype(np.uint8) * 255).convert("1")
+    elif mode.startswith("I;16"):
+        out = PILImage.fromarray(np.rint(np.clip(a[..., 0], 0, 1) * 65535).astype(np.uint16))
+    else:
+        v = np.rint(np.clip(a, 0, 1) * 255).astype(np.uint8)
+        out = PILImage.fromarray(v[..., 0] if need == 1 else v, mode=mode)
+    out.save(path, format="JPEG" if fmt == "MPO" else fmt)
+
+
+def _file_io(fname, inputfile, outputfile):
+    src = _path(inputfile, fname, "input file")
+    if outputfile is None:
+        raise NotImplementedError(f"{fname}: give the output file ($WolframDocumentsDirectory is not used)")
+    dst = _path(outputfile, fname, "output file")
+    im, mode, fmt = read_image_file(src, fname)
+    return im, mode, fmt, dst
+
+
+def _write_result(res, im, mode, fmt, dst, fname):
+    r = parse_image(res, fname)
+    if r.dims() != im.dims():
+        raise ValueError(f"{fname}: the result must keep the image dimensions")
+    write_image_file(r, dst, mode, fmt, fname)
+
+
+_FILE_NOTE = (" Files are read and written with Pillow (optional: without it NotImplementedError); PNG, JPEG and "
+              "single-frame TIFF in Pillow modes 1, L, LA, RGB, RGBA, CMYK, P and I;16 are supported, the output "
+              "keeping the input's format, type and dimensions. ")
+
+
+@fn("ImageFileApply", area=AREA, status="added",
+    notes="ImageFileApply[f, inputfile, outputfile] applies f to each pixel's channel list (0..1 scale; Interleaving "
+          "-> False: each channel value) as ImageApply does and writes the result to outputfile, returning "
+          "outputfile." + _FILE_NOTE + "Omitting outputfile ($WolframDocumentsDirectory) and Method suboptions raise "
+          "NotImplementedError; results must have the input's channel count. Check: exact (round trip of a PNG "
+          "written and read back) in tests.")
+def _imagefileapply(f: Fn, inputfile: String | Expr, outputfile: String | Expr = None, *opts: Option) -> String | Expr:
+    fname = "ImageFileApply"
+    _, o = opts_split(opts, {"Interleaving"}, fname)
+    if _:
+        raise ValueError(f"{fname}: expected ImageFileApply[f, inputfile, outputfile, options]")
+    im, mode, fmt, dst = _file_io(fname, inputfile, outputfile)
+    res = _imageapply(f, image_expr(im), *[Expr("Rule", Symbol(k), v) for k, v in o.items()])
+    _write_result(res, im, mode, fmt, dst, fname)
+    return outputfile
+
+
+@fn("ImageFileFilter", area=AREA, status="added",
+    notes="ImageFileFilter[f, inputfile, r, outputfile] applies f to the range-r neighbourhood of each pixel in each "
+          "channel (as ImageFilter, Padding \"Fixed\" by default; {r_rows, r_columns}; Interleaving -> True passes "
+          "channel lists) and writes outputfile, returning it." + _FILE_NOTE + "Padding -> None is not supported (as "
+          "in Wolfram). Omitting outputfile raises NotImplementedError. Check: exact (Max filter of a written PNG "
+          "re-read) in tests.")
+def _imagefilefilter(f: Fn, inputfile: String | Expr, r: NonNegInteger | ListOf[NonNegInteger],
+                     outputfile: String | Expr = None, *opts: Option) -> String | Expr:
+    fname = "ImageFileFilter"
+    _, o = opts_split(opts, {"Interleaving", "Padding"}, fname)
+    if _:
+        raise ValueError(f"{fname}: expected ImageFileFilter[f, inputfile, r, outputfile, options]")
+    if _is_sym(o.get("Padding"), "None"):
+        raise ValueError(f"{fname}: Padding -> None is not supported by ImageFileFilter")
+    im, mode, fmt, dst = _file_io(fname, inputfile, outputfile)
+    res = _imagefilter(f, image_expr(im), r, *[Expr("Rule", Symbol(k), v) for k, v in o.items()])
+    _write_result(res, im, mode, fmt, dst, fname)
+    return outputfile
+
+
+@fn("ImageFileScan", area=AREA, status="added",
+    notes="ImageFileScan[f, inputfile] evaluates f on each pixel's channel list (0..1 scale; Interleaving -> False: "
+          "each channel value) row by row from the top left, as ImageScan does, and returns Null." + _FILE_NOTE +
+          "Check: exact (pixel values collected with Sow/Reap match the file) in tests.")
+def _imagefilescan(f: Fn, inputfile: String | Expr, *opts: Option) -> Expr:
+    fname = "ImageFileScan"
+    _, o = opts_split(opts, {"Interleaving"}, fname)
+    if _:
+        raise ValueError(f"{fname}: expected ImageFileScan[f, inputfile, options]")
+    im, _m, _f = read_image_file(_path(inputfile, fname, "input file"), fname)
+    return _imagescan(f, image_expr(im), *[Expr("Rule", Symbol(k), v) for k, v in o.items()])
