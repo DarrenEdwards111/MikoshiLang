@@ -3180,3 +3180,305 @@ for _n, _note in (("DiffGranularity", "Diff3 option: \"Characters\" (strings), \
                   ("DiffAlignmentMethod", "Diff3 option: only Automatic (optimal alignment) is supported; others "
                                           "raise")):
     record(_n, AREA, "added", _note)
+
+
+# ═════════════════════════════════════════════════════════════════ string streams, Find, FindList ══
+STRING_STREAMS = {}           # n -> {"text": str, "pos": int}; InputStream[String, n] (shared with stream code)
+_STREAM_COUNTER = [2]
+
+
+@fn("StringToStream", area=AREA, status="added",
+    notes="InputStream[String, n] reading from the string; Find and FindList read records from it (the "
+          "stream keeps its position); Read/ReadList/Close belong to the stream I/O batch")
+def _stringtostream(s):
+    if not isinstance(s, str):
+        if isinstance(s, Symbol):
+            raise Unevaluated()
+        raise ValueError("StringToStream: the argument must be a string")
+    _STREAM_COUNTER[0] += 1
+    n = _STREAM_COUNTER[0]
+    STRING_STREAMS[n] = {"text": s, "pos": 0}
+    return Expr("InputStream", Symbol("String"), n)
+
+
+_DEFAULT_RS = ("\r\n", "\n", "\r")
+
+
+def _find_opts(o, fname):
+    rs = o.get("RecordSeparators")
+    if rs is None or is_sym(rs, "Automatic"):
+        rs = _DEFAULT_RS
+    elif isinstance(rs, str):
+        rs = (rs,)
+    elif is_list(rs) and all(isinstance(r, str) for r in rs.args):
+        rs = tuple(rs.args)
+    else:
+        raise NotImplementedError(f"{fname}: RecordSeparators must be a string or list of strings")
+    ws = o.get("WordSeparators")
+    if ws is None or is_sym(ws, "Automatic"):
+        ws = (" ", "\t")
+    elif isinstance(ws, str):
+        ws = (ws,)
+    elif is_list(ws) and all(isinstance(r, str) for r in ws.args):
+        ws = tuple(ws.args)
+    else:
+        raise NotImplementedError(f"{fname}: WordSeparators must be a string or list of strings")
+    return (rs, ws, _bool_opt(o, "AnchoredSearch", fname), _bool_opt(o, "IgnoreCase", fname),
+            _bool_opt(o, "WordSearch", fname))
+
+
+def _records(text, start, rs):
+    """Yield (record, end_pos) from position start."""
+    if not rs:
+        if start < len(text):
+            yield text[start:], len(text)
+        return
+    pat = re.compile("|".join(re.escape(r) for r in sorted(rs, key=len, reverse=True) if r))
+    pos = start
+    while pos < len(text):
+        m = pat.search(text, pos)
+        if m is None:
+            yield text[pos:], len(text)
+            return
+        yield text[pos:m.start()], m.end()
+        pos = m.end()
+
+
+def _record_matches(rec, texts, anchored, ic, word, ws):
+    r = rec.lower() if ic else rec
+    for t in texts:
+        tt = t.lower() if ic else t
+        if anchored:
+            if not r.startswith(tt):
+                continue
+            if not word or len(r) == len(tt) or any(r.startswith(s, len(tt)) for s in ws):
+                return True
+            continue
+        k = r.find(tt)
+        while k >= 0:
+            if not word:
+                return True
+            before_ok = k == 0 or any(r[:k].endswith(s) for s in ws)
+            after_ok = k + len(tt) == len(r) or any(r.startswith(s, k + len(tt)) for s in ws)
+            if before_ok and after_ok:
+                return True
+            k = r.find(tt, k + 1)
+    return False
+
+
+def _find_texts(t, fname):
+    if isinstance(t, str):
+        return [t]
+    if is_list(t) and t.args and all(isinstance(x, str) for x in t.args):
+        return list(t.args)
+    raise ValueError(f"{fname}: the text to find must be a string or a list of strings")
+
+
+def _source(src, fname):
+    """('stream', state) or ('text', str)."""
+    if isinstance(src, Expr) and src.head == "InputStream" and len(src.args) == 2:
+        if is_sym(src.args[0], "String"):
+            st = STRING_STREAMS.get(src.args[1])
+            if st is None:
+                raise ValueError(f"{fname}: {src!r} is not an open stream")
+            return "stream", st
+        raise Unevaluated()
+    if isinstance(src, Expr) and src.head == "File" and src.args and isinstance(src.args[0], str):
+        src = src.args[0]
+    if isinstance(src, str):
+        p = os.path.expanduser(src)
+        if not os.path.isfile(p):
+            raise ValueError(f"{fname}: cannot open {src!r}")
+        with open(p, encoding="utf-8", errors="replace", newline="") as fh:
+            return "text", fh.read()
+    if isinstance(src, Symbol):
+        raise Unevaluated()
+    raise ValueError(f"{fname}: {src!r} is not a file or input stream")
+
+
+_FIND_OPTS = {"AnchoredSearch", "IgnoreCase", "RecordSeparators", "WordSearch", "WordSeparators"}
+
+
+@fn("Find", area=AREA, status="added",
+    notes="first record (line) containing the text (or any of a list of texts) in an InputStream[String, n] "
+          "(advancing the stream past it) or a file (searched from its start); EndOfFile if none; "
+          "AnchoredSearch, IgnoreCase, RecordSeparators, WordSearch, WordSeparators")
+def _find(src, text, *rest):
+    args, o = _opts(rest, _FIND_OPTS, "Find")
+    if args:
+        raise ValueError("Find called with too many arguments")
+    rs, ws, anch, ic, word = _find_opts(o, "Find")
+    texts = _find_texts(text, "Find")
+    kind, data = _source(src, "Find")
+    body, start = (data["text"], data["pos"]) if kind == "stream" else (data, 0)
+    for rec, end in _records(body, start, rs):
+        if _record_matches(rec, texts, anch, ic, word, ws):
+            if kind == "stream":
+                data["pos"] = end
+            return rec
+    if kind == "stream":
+        data["pos"] = len(body)
+    return Symbol("EndOfFile")
+
+
+@fn("FindList", area=AREA, status="added",
+    notes="all records (lines) containing the text (or any of several texts) in a file, list of files, "
+          "File[...] or InputStream[String, n]; FindList[src, text, n] keeps the first n; {} if none; options "
+          "as Find")
+def _findlist(src, text, *rest):
+    args, o = _opts(rest, _FIND_OPTS, "FindList")
+    if len(args) > 1:
+        raise ValueError("FindList called with too many arguments")
+    n = None
+    if args:
+        n = None if is_sym(args[0], "All") or is_sym(args[0], "Infinity") else _int(args[0], "FindList", "count", 0)
+    rs, ws, anch, ic, word = _find_opts(o, "FindList")
+    texts = _find_texts(text, "FindList")
+    srcs = list(src.args) if is_list(src) else [src]
+    out = []
+    for s in srcs:
+        kind, data = _source(s, "FindList")
+        body, start = (data["text"], data["pos"]) if kind == "stream" else (data, 0)
+        for rec, end in _records(body, start, rs):
+            if n is not None and len(out) >= n:
+                break
+            if _record_matches(rec, texts, anch, ic, word, ws):
+                out.append(rec)
+                if kind == "stream":
+                    data["pos"] = end
+        else:
+            if kind == "stream":
+                data["pos"] = len(body)
+        if n is not None and len(out) >= n:
+            break
+    return L(*out)
+
+
+for _n, _note in (("AnchoredSearch", "Find/FindList option: the text must start the record"),
+                  ("WordSearch", "Find/FindList option: the text must appear as a whole word"),
+                  ("WordSeparators", "Find/FindList option: strings separating words (default {\" \", \"\\t\"})"),
+                  ("RecordSeparators", "Find/FindList option: strings separating records (default line "
+                                       "breaks)")):
+    record(_n, AREA, "added", _note)
+
+
+# ═════════════════════════════════════════════════════════════════ format detection ══
+_MAGIC = [
+    (b"\x89PNG\r\n\x1a\n", "PNG"), (b"GIF87a", "GIF"), (b"GIF89a", "GIF"), (b"\xff\xd8\xff", "JPEG"),
+    (b"%PDF", "PDF"), (b"PK\x03\x04", "ZIP"), (b"\x1f\x8b", "GZIP"), (b"BZh", "BZIP2"),
+    (b"7z\xbc\xaf\x27\x1c", "7z"), (b"II*\x00", "TIFF"), (b"MM\x00*", "TIFF"), (b"OggS", "OGG"),
+    (b"fLaC", "FLAC"), (b"ID3", "MP3"), (b"%!PS", "PostScript"), (b"{\\rtf", "RTF"), (b"8:", "WXF"),
+    (b"\x00\x00\x01\x00", "ICO"), (b"\x7fELF", "Binary"),
+]
+
+
+def _detect_format(data: bytes):
+    for magic, name in _MAGIC:
+        if data.startswith(magic):
+            return name
+    if data[:4] == b"RIFF" and data[8:12] in (b"WAVE", b"WEBP", b"AVI "):
+        return {b"WAVE": "WAV", b"WEBP": "WebP", b"AVI ": "AVI"}[data[8:12]]
+    if data[:2] == b"BM" and len(data) >= 14 and int.from_bytes(data[2:6], "little") == len(data):
+        return "BMP"
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "Binary"
+    if any(ord(c) < 32 and c not in "\t\n\r\f" for c in text):
+        return "Binary"
+    return _detect_text_format(text)
+
+
+def _detect_text_format(text):
+    s = text.strip()
+    if not s:
+        return "Text"
+    low = s[:200].lower()
+    if low.startswith("<?xml"):
+        return "SVG" if "<svg" in s[:2000].lower() else "XML"
+    if low.startswith("<!doctype html") or low.startswith("<html"):
+        return "HTML"
+    if low.startswith("<svg"):
+        return "SVG"
+    if s[0] in "{[":
+        import json
+        try:
+            json.loads(s)
+            return "JSON"
+        except ValueError:
+            pass
+    lines = [ln for ln in s.splitlines() if ln.strip()]
+    if len(lines) >= 2:
+        for sep, name in (("\t", "TSV"), (",", "CSV")):
+            counts = {len(ln.split(sep)) for ln in lines}
+            if len(counts) == 1 and counts.pop() >= 2:
+                return name
+        num = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$")
+        rows = [ln.split() for ln in lines]
+        if len({len(r) for r in rows}) == 1 and len(rows[0]) >= 2 and all(num.match(t) for r in rows for t in r):
+            return "Table"
+    return "Text"
+
+
+def _string_bytes(s):
+    try:
+        return s.encode("latin-1")
+    except UnicodeEncodeError:
+        return s.encode("utf-8")
+
+
+def _format_q(data, fmt, fname):
+    fmts = fmt.args if is_list(fmt) else [fmt]
+    got = _detect_format(data)
+    for f in fmts:
+        if not isinstance(f, str):
+            raise ValueError(f"{fname}: format names must be strings")
+        fl = f.lower()
+        if fl == "binary":
+            if got not in ("Text", "CSV", "TSV", "Table", "JSON", "XML", "HTML", "SVG"):
+                return True
+        elif fl == "text":
+            if got in ("Text", "CSV", "TSV", "Table", "JSON", "XML", "HTML", "SVG"):
+                return True
+        elif fl == got.lower() or (fl == "jpg" and got == "JPEG") or (fl == "tif" and got == "TIFF"):
+            return True
+    return False
+
+
+@fn("StringFormat", area=AREA, status="added",
+    notes="heuristic import format of a string: magic numbers for binary formats (PNG, GIF, JPEG, PDF, ZIP, "
+          "GZIP, TIFF, WAV, WXF, ...), else JSON, XML, HTML, SVG, TSV, CSV, Table (numeric columns) or Text; "
+          "\"Binary\" for unrecognised binary data")
+def _stringformat(s):
+    if not isinstance(s, str):
+        if isinstance(s, Symbol):
+            raise Unevaluated()
+        raise ValueError("StringFormat: the argument must be a string")
+    return _detect_format(_string_bytes(s))
+
+
+@fn("StringFormatQ", area=AREA, status="added",
+    notes="whether the string is (heuristically) in the format or any of a list of formats; \"Text\" and "
+          "\"Binary\" are the generic text/binary classes")
+def _stringformatq(s, fmt):
+    if not isinstance(s, str):
+        return False
+    return _format_q(_string_bytes(s), fmt, "StringFormatQ")
+
+
+@fn("ByteArrayFormat", area=AREA, status="added",
+    notes="heuristic import format of a ByteArray (as StringFormat)")
+def _bytearrayformat(b):
+    if not is_bytearray(b):
+        if isinstance(b, Symbol):
+            raise Unevaluated()
+        raise ValueError("ByteArrayFormat: the argument must be a ByteArray")
+    return _detect_format(ba_bytes(b))
+
+
+@fn("ByteArrayFormatQ", area=AREA, status="added",
+    notes="whether a ByteArray is (heuristically) in the format or any of a list of formats")
+def _bytearrayformatq(b, fmt):
+    if not is_bytearray(b):
+        return False
+    return _format_q(ba_bytes(b), fmt, "ByteArrayFormatQ")
