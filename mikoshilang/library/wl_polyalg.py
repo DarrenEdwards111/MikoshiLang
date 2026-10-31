@@ -5283,3 +5283,415 @@ _KL.COMPOUND_HEAD_HOOKS["ProofObject"] = _proof_hook
           "not supported and raise)")
 def _proofobj(*args):
     raise Unevaluated()
+
+
+# ───────────────────────────── option names (W05) and the functions that honour them ─────────────────────────────
+#
+# Each option name is an inert symbol (Name -> value is an ordinary rule); calling it as a function raises.  Where a
+# host function did not yet honour the option, it is extended here (the existing implementation is kept for every
+# call that does not use the option, so no other behaviour changes).
+
+def _option_name(name, notes):
+    @fn(name, area=AREA, status="added", notes="Wolfram option name: " + notes)
+    def _call(*a):
+        raise ValueError(f"{name} is an option name (use it as {name} -> value in a function call), not a function")
+    return _call
+
+
+_option_name("Cubics", "Solve[..., Cubics -> False] and Roots[..., Cubics -> False] give Root objects instead of "
+                       "radicals for irreducible cubics (default True)")
+_option_name("Quartics", "Solve/Roots[..., Quartics -> False] give Root objects instead of radicals for irreducible "
+                         "quartics (default True)")
+_option_name("VerifySolutions", "accepted by Solve (default Automatic). MikoshiLang always verifies solutions of "
+                                "equations involving radicals, so VerifySolutions -> False never adds the spurious "
+                                "solutions Wolfram can return (the answer is the verified subset)")
+_option_name("GenerateConditions", "Integrate, Sum, Product, Limit, FourierTransform, LaplaceTransform, "
+                                   "MellinTransform ...: GenerateConditions -> True wraps a result valid only under "
+                                   "conditions in ConditionalExpression")
+_option_name("StrictInequalities", "FunctionSign, FunctionMonotonicity, FunctionConvexity: StrictInequalities -> "
+                                   "True asks for strict sign / monotonicity / convexity (default False)")
+_option_name("FunctionSpace", "option of FindSequenceFunction / FindGeneratingFunction (\"Polynomial\", "
+                              "\"RationalFunction\", ...); those functions belong to batch W06, which decides "
+                              "whether a setting is supported")
+_option_name("BooleanStrings", "TextString[expr, BooleanStrings -> {\"t\", \"f\"}] writes True and False as the given "
+                               "strings (TextString is implemented in batch W04)")
+_option_name("MaxExtraConditions", "Solve[..., MaxExtraConditions -> 0] (the default) gives generic solutions; "
+                                   "other settings (n, All, Automatic) raise a clear error")
+_option_name("ComplexityFunction", "Simplify / FullSimplify[..., ComplexityFunction -> f]: of the equivalent forms "
+                                   "found, the one with the smallest f[form] is returned (default LeafCount-like)")
+_option_name("TransformationFunctions", "Simplify / FullSimplify[..., TransformationFunctions -> {Automatic, f, "
+                                        "...}]: f is applied to the forms found (Automatic = the built-in "
+                                        "transformations) and the simplest result kept")
+_option_name("ExcludedForms", "Simplify / FullSimplify[..., ExcludedForms -> {patt, ...}]: subexpressions matching "
+                              "patt are left untouched (treated as opaque symbols) while the rest is simplified")
+_option_name("Trig", "Expand / Factor[..., Trig -> True] expand multiple angles and treat Sin, Cos, ... as polynomial "
+                     "elements (Expand[Sin[x + y], Trig -> True] -> Cos[y] Sin[x] + Cos[x] Sin[y]); Simplify[..., "
+                     "Trig -> False] simplifies without trigonometric identities")
+_option_name("ZeroTest", "RowReduce, MatrixRank, NullSpace[..., ZeroTest -> f]: f[entry] decides whether a pivot "
+                         "candidate is zero (default Automatic: exact)")
+_option_name("IncludeSingularSolutions", "DSolve[ode, y[x], x, IncludeSingularSolutions -> True] adds the singular "
+                                         "solutions (envelopes) of a first-order nonlinear ODE, each checked by "
+                                         "substitution")
+
+
+def _extend(name, impl, accepts, note):
+    """Send calls accepted by ``accepts`` to ``impl``; every other call keeps the existing implementation."""
+    from .core import REGISTRY
+    e = REGISTRY[name]
+    old = list(e.impls)
+
+    def orig(*args):
+        for g, lo, hi in old:
+            if len(args) >= lo and (hi is None or len(args) <= hi):
+                return g(*args)
+        raise ValueError(f"{name} called with {len(args)} argument(s)")
+
+    def f(*args):
+        if accepts(args):
+            return impl(orig, *args)
+        return orig(*args)
+    e.impls = [(f, 0, None)]
+    st = STATUS_OF(name)
+    record(name, st[0], st[1], (st[2] + "; " if st[2] else "") + "W05: " + note)
+    return f
+
+
+def STATUS_OF(name):
+    from .core import STATUS
+    return STATUS.get(name, (AREA, "fixed", ""))
+
+
+def _opt_split(args, names):
+    """Pull out trailing Name -> value rules with Name in names (anywhere among the trailing rules)."""
+    args = list(args)
+    keep, opts = [], {}
+    while args and _is_head(args[-1], "Rule", "RuleDelayed"):
+        r = args.pop()
+        if isinstance(r.args[0], Symbol) and r.args[0].name in names:
+            opts[r.args[0].name] = r.args[1]
+        else:
+            keep.insert(0, r)
+    return args + keep, opts
+
+
+def _has_opt(names):
+    def acc(args):
+        return any(_is_head(a, "Rule", "RuleDelayed") and isinstance(a.args[0], Symbol) and a.args[0].name in names
+                   for a in args[1:])
+    return acc
+
+
+def _walk_replace(e, f):
+    """Top-down replacement: f(node) returns a replacement or None."""
+    r = f(e)
+    if r is not None:
+        return r
+    if isinstance(e, Expr):
+        h = _walk_replace(e.head, f) if isinstance(e.head, Expr) else e.head
+        return Expr(h, *(_walk_replace(a, f) for a in e.args))
+    return e
+
+
+def _mask(e, is_masked):
+    """Replace maximal subexpressions with is_masked(node) by fresh symbols; return (masked, {symbol: node})."""
+    table = {}
+    back = {}
+
+    def f(node):
+        if isinstance(node, (Expr,)) and is_masked(node):
+            k = repr(node)
+            if k not in table:
+                s = Symbol(f"W05mask{len(table) + 1}z")
+                table[k] = s
+                back[s.name] = node
+            return table[k]
+        return None
+    return _walk_replace(e, f), back
+
+
+def _unmask(e, back):
+    if not back:
+        return e
+    return ev(_walk_replace(e, lambda n: back[n.name] if isinstance(n, Symbol) and n.name in back else None))
+
+
+def _matchq(node, pats):
+    for p in pats:
+        r = ev(Expr("MatchQ", node, p))
+        if _tf(r):
+            return True
+    return False
+
+
+_TRIG_HEADS = ("Sin", "Cos", "Tan", "Cot", "Sec", "Csc", "Sinh", "Cosh", "Tanh", "Coth", "Sech", "Csch")
+
+
+def _leafcount(e):
+    return ev(Expr("LeafCount", e))
+
+
+def _simplify_ext(fname):
+    names = ("ComplexityFunction", "TransformationFunctions", "ExcludedForms", "Trig")
+
+    def impl(orig, *args):
+        rest, opts = _opt_split(args, names)
+        e, extra = rest[0], rest[1:]
+        trig = opts.get("Trig", _sym("True"))
+        if _tf(trig) is None:
+            raise ValueError(f"{fname}: Trig must be True or False")
+        pats = []
+        if "ExcludedForms" in opts:
+            ex = opts["ExcludedForms"]
+            pats = list(ex.args) if is_list(ex) else [ex]
+        masked, back = _mask(e, lambda n: (bool(pats) and _matchq(n, pats))
+                             or (_tf(trig) is False and isinstance(n.head, str) and n.head in _TRIG_HEADS))
+        tfs = opts.get("TransformationFunctions", _sym("Automatic"))
+        tfs = list(tfs.args) if is_list(tfs) else [tfs]
+        cf = opts.get("ComplexityFunction", _sym("Automatic"))
+
+        def score(c):
+            v = _leafcount(c) if _is_sym(cf, "Automatic") else ev(Expr(cf, c))
+            try:
+                sv = sym(v, fname)
+                if not sv.is_number or not sv.is_real:
+                    raise ValueError
+                return float(sv)
+            except Exception:
+                raise ValueError(f"{fname}: the ComplexityFunction must give a real number, not {v!r}")
+        cands = [masked]
+        auto = any(_is_sym(t, "Automatic") for t in tfs)
+        if auto:
+            base = orig(masked, *extra)
+            cands.append(base)
+            # more equivalent forms to choose from (all exact rewrites of the same expression)
+            hs = ("Factor", "Together") if _is_sym(cf, "Automatic") else \
+                ("Expand", "Factor", "Together", "Apart", "ExpandAll", "Cancel")
+            if True:
+                for h in hs:
+                    for c in (masked, base):
+                        try:
+                            cands.append(ev(Expr(h, c)))
+                        except Exception:
+                            pass
+        user = [t for t in tfs if not _is_sym(t, "Automatic")]
+        for _ in range(3):
+            new = []
+            for c in cands:
+                for t in user:
+                    r = ev(Expr(t, c))
+                    if auto:
+                        try:
+                            r2 = orig(r, *extra)
+                            new.append(r2)
+                        except Exception:
+                            pass
+                    new.append(r)
+            seen = {repr(c) for c in cands}
+            new = [c for c in new if repr(c) not in seen]
+            if not new:
+                break
+            cands.extend(new)
+        best, bs = None, None
+        for c in cands:
+            s_ = score(c)
+            if bs is None or s_ < bs:
+                best, bs = c, s_
+        return _unmask(best, back)
+    return impl
+
+
+for _n in ("Simplify", "FullSimplify"):
+    _extend(_n, _simplify_ext(_n), _has_opt(("ComplexityFunction", "TransformationFunctions", "ExcludedForms",
+                                             "Trig")),
+            "options ComplexityFunction, TransformationFunctions, ExcludedForms and Trig -> False")
+
+
+def _trig_ext(fname):
+    def impl(orig, *args):
+        rest, opts = _opt_split(args, ("Trig",))
+        t = _tf(opts["Trig"])
+        if t is None:
+            raise ValueError(f"{fname}: Trig must be True or False")
+        if not t:
+            return orig(*rest)
+        if len(rest) != 1:
+            raise NotImplementedError(f"{fname}: Trig -> True is supported only as {fname}[expr, Trig -> True]")
+        v = sym(rest[0], fname)
+        v = sp.expand_trig(v)
+        return out(sp.expand(v) if fname == "Expand" else sp.factor(v))
+    return impl
+
+
+for _n in ("Expand", "Factor"):
+    _extend(_n, _trig_ext(_n), _has_opt(("Trig",)), "option Trig -> True (expand multiple angles; trigonometric "
+                                                    "functions treated as polynomial elements)")
+
+
+_orig_solve_w05 = K._BUILTINS["Solve"]
+
+
+def _solve_w05(a, ev_, expr):
+    a = list(a)
+    rest, opts = _opt_split(a, ("MaxExtraConditions",))
+    if "MaxExtraConditions" not in opts:
+        return _orig_solve_w05(a, ev_, expr)
+    if opts["MaxExtraConditions"] != 0:
+        raise NotImplementedError("Solve: only MaxExtraConditions -> 0 (generic solutions, the default) is "
+                                  "supported")
+    return _orig_solve_w05(rest, ev_, Expr("Solve", *rest))
+
+
+K._BUILTINS["Solve"] = _solve_w05
+
+
+# ── ZeroTest: Gaussian elimination with a user zero test ──
+
+def _rref_zt(m, zt, fname):
+    if not (is_list(m) and m.args and all(is_list(r) for r in m.args)):
+        raise ValueError(f"{fname}: the first argument must be a matrix")
+    rows = [[sym(x, fname) for x in r.args] for r in m.args]
+    nc = len(rows[0])
+    if any(len(r) != nc for r in rows):
+        raise ValueError(f"{fname}: the first argument must be a rectangular matrix")
+
+    def is_zero(v):
+        if _is_sym(zt, "Automatic"):
+            return sp.simplify(v) == 0
+        r = _tf(ev(Expr(zt, out(v))))
+        if r is None:
+            raise ValueError(f"{fname}: the ZeroTest function must return True or False")
+        return r
+    M = [list(r) for r in rows]
+    nr = len(M)
+    piv = []
+    r0 = 0
+    for c in range(nc):
+        if r0 >= nr:
+            break
+        p = next((i for i in range(r0, nr) if not is_zero(M[i][c])), None)
+        if p is None:
+            for i in range(r0, nr):
+                M[i][c] = sp.Integer(0)
+            continue
+        M[r0], M[p] = M[p], M[r0]
+        pv = M[r0][c]
+        M[r0] = [sp.cancel(x / pv) for x in M[r0]]
+        M[r0][c] = sp.Integer(1)
+        for i in range(nr):
+            if i != r0:
+                f_ = M[i][c]
+                M[i] = [sp.cancel(a - f_ * b) for a, b in zip(M[i], M[r0])]
+                M[i][c] = sp.Integer(0)
+        piv.append(c)
+        r0 += 1
+    for i in range(r0, nr):
+        M[i] = [sp.Integer(0)] * nc
+    return M, piv, nc
+
+
+def _zt_impl(fname):
+    def impl(orig, *args):
+        rest, opts = _opt_split(args, ("ZeroTest",))
+        zt = opts["ZeroTest"]
+        if _is_sym(zt, "Automatic"):
+            return orig(*rest)
+        if len(rest) != 1:
+            raise NotImplementedError(f"{fname}: ZeroTest is supported only as {fname}[m, ZeroTest -> f]")
+        M, piv, nc = _rref_zt(rest[0], zt, fname)
+        if fname == "RowReduce":
+            return out([[x for x in r] for r in M])
+        if fname == "MatrixRank":
+            return len(piv)
+        free = [c for c in range(nc) if c not in piv]
+        vecs = []
+        for j in reversed(free):
+            v = [sp.Integer(0)] * nc
+            v[j] = sp.Integer(1)
+            for i, pc in enumerate(piv):
+                v[pc] = -M[i][j]
+            vecs.append(v)
+        return out(vecs)
+    return impl
+
+
+for _n in ("RowReduce", "MatrixRank", "NullSpace"):
+    _extend(_n, _zt_impl(_n), _has_opt(("ZeroTest",)), "option ZeroTest -> f (f decides which pivot candidates are "
+                                                       "zero)")
+
+
+# ── DSolve: IncludeSingularSolutions ──
+
+_orig_dsolve_w05 = K._BUILTINS["DSolve"]
+
+
+def _is_deriv1(n, y, x):
+    return (isinstance(n, Expr) and isinstance(n.head, Expr) and len(n.args) == 1 and n.args[0] == x
+            and isinstance(n.head.head, Expr) and n.head.head.head == "Derivative" and n.head.head.args == (1,)
+            and n.head.args == (y,))
+
+
+def _singular_solutions(eq, y, x):
+    P, Y = Symbol("W05pz"), Symbol("W05yz")
+
+    def f(n):
+        if _is_deriv1(n, y, x):
+            return P
+        if isinstance(n, Expr) and n.head == y.name and n.args == (x,):
+            return Y
+        if isinstance(n, Expr) and isinstance(n.head, Expr) and n.head.head is not None \
+                and isinstance(n.head.head, Expr) and n.head.head.head == "Derivative":
+            raise NotImplementedError("DSolve: IncludeSingularSolutions -> True is supported only for first-order "
+                                      "ODEs")
+        return None
+    if not _is_head(eq, "Equal") or len(eq.args) != 2:
+        raise NotImplementedError("DSolve: IncludeSingularSolutions -> True needs a single ODE lhs == rhs")
+    F = _walk_replace(Expr("Plus", eq.args[0], Expr("Times", -1, eq.args[1])), f)
+    Fs = sym(F, "DSolve")
+    p, Ys, xs = sp.Symbol("W05pz"), sp.Symbol("W05yz"), sym(x, "DSolve")
+    if not Fs.has(p) or sp.degree(sp.Poly(Fs, p)) < 2 if Fs.is_polynomial(p) else False:
+        return []
+    sols = []
+    try:
+        cands = sp.solve([Fs, sp.diff(Fs, p)], [Ys, p], dict=True)
+    except Exception:
+        raise NotImplementedError("DSolve: could not eliminate y' to find singular solutions")
+    for c in cands:
+        if Ys not in c:
+            continue
+        Yx = sp.simplify(c[Ys])
+        if Yx.has(p) or Yx.free_symbols - {xs} - (Fs.free_symbols - {p, Ys, xs}):
+            continue
+        r = sp.simplify(Fs.subs({p: sp.diff(Yx, xs)}).subs(Ys, Yx))
+        if r == 0 and all(sp.simplify(Yx - s) != 0 for s in sols):
+            sols.append(Yx)
+    return sols
+
+
+def _dsolve_w05(a, ev_, expr):
+    a = list(a)
+    rest, opts = _opt_split(a, ("IncludeSingularSolutions",))
+    if "IncludeSingularSolutions" not in opts:
+        return _orig_dsolve_w05(a, ev_, expr)
+    flag = _tf(opts["IncludeSingularSolutions"])
+    if flag is None:
+        raise ValueError("DSolve: IncludeSingularSolutions must be True or False")
+    sub = Expr("DSolve", *rest)
+    res = _orig_dsolve_w05(rest, ev_, sub)
+    if not flag:
+        return res
+    if len(rest) != 3 or not is_list(res):
+        return res
+    eqs, yx, x = rest
+    if is_list(eqs):
+        if len(eqs.args) != 1:
+            raise NotImplementedError("DSolve: IncludeSingularSolutions -> True is supported for a single ODE "
+                                      "without initial conditions")
+        eqs = eqs.args[0]
+    if not (isinstance(yx, Expr) and isinstance(yx.head, str) and yx.args == (x,)):
+        raise NotImplementedError("DSolve: IncludeSingularSolutions -> True is supported for the y[x] form")
+    y = Symbol(yx.head)
+    extra = [L(rule(yx, out(s))) for s in _singular_solutions(eqs, y, x)]
+    return L(*extra, *res.args)
+
+
+K._BUILTINS["DSolve"] = _dsolve_w05
