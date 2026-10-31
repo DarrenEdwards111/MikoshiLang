@@ -1064,3 +1064,645 @@ def _colorcombine(imgs: ListOf[Expr], cs: String = None) -> Expr:
     else:
         space = "Automatic"
     return image_expr(Img(quantize(a, typ), typ, space, ims[0].d3))
+
+
+# ───────────────────────────── colour matching ─────────────────────────────
+
+def _ev(e):
+    from ..evaluate import evaluate
+    return evaluate(e)
+
+
+def _call(f, *args):
+    return _ev(Expr(f, *args)) if isinstance(f, str) else _ev(K.call(f, *args))
+
+
+def pixel_lab(im, fname):
+    """(LAB array (..., 3), source space) of the colour channels of im."""
+    src = source_space(im, fname)
+    return convert_array(np.clip(im.color(), 0, 1) if src in ("RGB", "Grayscale", "CMYK", "HSB") else im.color(),
+                         src, "LAB"), src
+
+
+def distance_to(labs, target_lab, dfun):
+    """Distances (...,) of an array of LAB colours to one LAB colour with a W14 distance function."""
+    flat = labs.reshape(-1, 3)
+    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
+    d = np.array([dfun(tuple(float(t) for t in u), tuple(target_lab)) for u in uniq], dtype=float)
+    return d[np.asarray(inv).reshape(-1)].reshape(labs.shape[:-1])
+
+
+def _colorsnear(spec, fname):
+    """(LAB of the colour, distance, distance function) of a colour or ColorsNear[color, d, dfun]."""
+    if isinstance(spec, Expr) and spec.head == "ColorsNear" and 1 <= len(spec.args) <= 3:
+        c = spec.args[0]
+        if parse_color(c) is None:
+            raise TypeError(f"{fname}: {_short(c)} is not a colour")
+        d = real_arg(spec.args[1], fname, "distance") if len(spec.args) > 1 else 0.2
+        f = distance_function(spec.args[2], fname) if len(spec.args) > 2 else distance_function("CIE2000", fname)
+        return lab(c), d, f
+    if parse_color(spec) is not None:
+        return lab(spec), 0.2, distance_function("CIE2000", fname)
+    if isinstance(spec, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{fname}: {_short(spec)} is not a colour or a ColorsNear specification")
+
+
+@fn("ColorDetect", area=AREA, status="added",
+    notes="ColorDetect[image, cspec] gives a \"Bit\" mask image that is 1 where the pixel colour lies in cspec: a colour "
+          "(same as ColorsNear[color], i.e. CIEDE2000 distance at most 0.2 as ColorsNear documents), ColorsNear[color, "
+          "d] or ColorsNear[color, d, dfun] (any ColorDistance DistanceFunction), or a list of these (union). Images "
+          "with ColorSpace Automatic and 2 or 4+ channels raise ValueError. Check: reference (ColorDistance of the "
+          "detected pixels, re-measured in tests).")
+def _colordetect(x: Expr, spec: Expr) -> Expr:
+    im = _img1(x, "ColorDetect")
+    labs, _ = pixel_lab(im, "ColorDetect")
+    specs = list(spec.args) if K.is_list(spec) else [spec]
+    mask = np.zeros(labs.shape[:-1], dtype=bool)
+    for s in specs:
+        tl, d, f = _colorsnear(s, "ColorDetect")
+        mask |= distance_to(labs, tl, f) <= d
+    return image_expr(Img(mask[..., None].astype(float), "Bit", "Automatic", im.d3))
+
+
+@fn("ColorReplace", area=AREA, status="added",
+    notes="ColorReplace[image, color] makes pixels within ColorDistance 0.1 of color transparent (adds an alpha "
+          "channel); ColorReplace[image, color -> new], [image, color -> new, d] and [image, {c1 -> n1, ...}, d | {d1, "
+          "...}] replace pixels within distance d (default 0.1) of ci by ni, the first matching rule winning; a "
+          "replacement with opacity adds an alpha channel. Distances are ColorDistance's default (CIE76 on the LAB "
+          "1/100 scale): Wolfram does not document the metric, so borderline pixels may differ. Type and colour "
+          "space are kept. Check: reference (ColorDistance of replaced pixels, re-measured in tests).")
+def _colorreplace(x: Expr, rules: Expr, d: Real | ListOf[Real] = None) -> Expr:
+    fname = "ColorReplace"
+    im = _img1(x, fname)
+    rl = list(rules.args) if K.is_list(rules) else [rules]
+    if not rl:
+        raise ValueError(f"{fname}: no colours given")
+    if d is None:
+        ds = [0.1] * len(rl)
+    elif K.is_list(d):
+        ds = [real_arg(v, fname, "distance") for v in d.args]
+        if len(ds) != len(rl):
+            raise ValueError(f"{fname}: {len(ds)} distances given for {len(rl)} colours")
+    else:
+        ds = [real_arg(d, fname, "distance")] * len(rl)
+    if any(v < 0 for v in ds):
+        raise ValueError(f"{fname}: distances must be non-negative")
+    labs, src = pixel_lab(im, fname)
+    space = im.cs if im.cs != "Automatic" else src
+    dfun = distance_function(None, fname)
+    out = np.array(im.color(), dtype=float)
+    alpha = np.array(im.alpha_array(), dtype=float)
+    need_alpha = im.alpha
+    done = np.zeros(labs.shape[:-1], dtype=bool)
+    for r, dd in zip(rl, ds):
+        if isinstance(r, Expr) and r.head in ("Rule", "RuleDelayed") and len(r.args) == 2:
+            c, new = r.args
+        else:
+            c, new = r, None
+        if parse_color(c) is None:
+            if isinstance(c, Symbol):
+                raise Unevaluated()
+            raise TypeError(f"{fname}: {_short(c)} is not a colour")
+        m = (distance_to(labs, lab(c), dfun) <= dd) & ~done
+        done |= m
+        if new is None:
+            alpha[m] = 0.0
+            need_alpha = True
+            continue
+        p = parse_color(new)
+        if p is None:
+            if isinstance(new, Symbol):
+                raise Unevaluated()
+            raise TypeError(f"{fname}: the replacement {_short(new)} is not a colour")
+        ch = p[1]
+        if p[0] == "HSB" and len(new.args) == 1:
+            ch = (real_value(new.args[0], fname), 1.0, 1.0)
+        out[m] = np.array(convert_channels(p[0], ch, space))
+        if p[2] is not None:
+            alpha[m] = p[2]
+            need_alpha = need_alpha or p[2] != 1
+    a = np.concatenate([out, alpha], axis=-1) if need_alpha else out
+    typ = im.type if im.type != "Bit" or np.all((a == 0) | (a == 1)) else "Real32"
+    return image_expr(Img(quantize(a, typ), typ, space, im.d3))
+
+
+def _median_cut(X, n):
+    boxes = [X]
+    while len(boxes) < n:
+        best, bi, bc = -1.0, None, None
+        for i, b in enumerate(boxes):
+            if len(np.unique(b, axis=0)) < 2:
+                continue
+            rng = b.max(axis=0) - b.min(axis=0)
+            c = int(np.argmax(rng))
+            if rng[c] > best:
+                best, bi, bc = rng[c], i, c
+        if bi is None:
+            break
+        b = boxes.pop(bi)
+        b = b[np.argsort(b[:, bc], kind="stable")]
+        mid = len(b) // 2
+        boxes += [b[:mid], b[mid:]]
+    return np.array([b.mean(axis=0) for b in boxes])
+
+
+def _nearest(X, P):
+    d = ((X[:, None, :] - P[None, :, :]) ** 2).sum(axis=-1)
+    return np.argmin(d, axis=1)
+
+
+def _dither(img2, P):
+    """Floyd-Steinberg error diffusion of an (h, w, n) array onto palette P (raster order)."""
+    a = np.array(img2, dtype=float)
+    h, w, _ = a.shape
+    out = np.zeros_like(a)
+    for y in range(h):
+        for x in range(w):
+            old = a[y, x]
+            k = int(np.argmin(((P - old) ** 2).sum(axis=1)))
+            out[y, x] = P[k]
+            e = old - P[k]
+            if x + 1 < w:
+                a[y, x + 1] += e * 7 / 16
+            if y + 1 < h:
+                if x > 0:
+                    a[y + 1, x - 1] += e * 3 / 16
+                a[y + 1, x] += e * 5 / 16
+                if x + 1 < w:
+                    a[y + 1, x + 1] += e * 1 / 16
+    return out
+
+
+@fn("ColorQuantize", area=AREA, status="added",
+    notes="ColorQuantize[image, n] maps every pixel to the nearest (Euclidean in the image's colour channels) of at most "
+          "n colours chosen by median cut (Method -> Automatic | \"MedianCut\"; \"MinVariance\" and \"Octree\" raise "
+          "NotImplementedError); ColorQuantize[image, {col1, ...}] uses the given colours. Dithering -> True (default) "
+          "is Floyd-Steinberg error diffusion in raster order, Dithering -> False plain nearest-colour mapping (Wolfram "
+          "does not document its dithering, so dithered pixels can differ). ColorSpace Automatic images are "
+          "quantized per channel value set. ColorQuantize[image] without n raises NotImplementedError (undocumented "
+          "default). Alpha, type and colour space are kept. 2D only. Check: self-check (every output pixel is one of "
+          "the palette colours, else ArithmeticError) and reference cases in tests.")
+def _colorquantize(x: Expr, *rest: PosInteger | ListOf[Expr] | Option) -> Expr:
+    fname = "ColorQuantize"
+    pos, o = opts_split(rest, {"Dithering", "Method"}, fname)
+    im = _img1(x, fname, allow3d=False)
+    if not pos:
+        raise NotImplementedError("ColorQuantize: give the number of colours n (the automatic default is not "
+                                  "documented)")
+    if len(pos) > 1:
+        raise ValueError("ColorQuantize: expected ColorQuantize[image, n]")
+    meth = o.get("Method", AUTO)
+    if not (_is_sym(meth, "Automatic") or meth == "MedianCut"):
+        if meth in ("MinVariance", "Octree"):
+            raise NotImplementedError(f"ColorQuantize: Method {meth!r} is not supported")
+        raise ValueError(f"ColorQuantize: unknown Method {_short(meth)}")
+    dith = o.get("Dithering", True)
+    if dith not in (True, False):
+        raise ValueError("ColorQuantize: Dithering must be True or False")
+    col = im.color()
+    X = col.reshape(-1, col.shape[-1])
+    if K.is_list(pos[0]):
+        space = im.cs if im.cs != "Automatic" else source_space(im, fname)
+        P = []
+        for c in pos[0].args:
+            p = parse_color(c)
+            if p is None:
+                if K.is_list(c) or is_real_value(c):
+                    P.append(color_values(c, fname)[0])
+                    continue
+                if isinstance(c, Symbol):
+                    raise Unevaluated()
+                raise TypeError(f"ColorQuantize: {_short(c)} is not a colour")
+            ch = p[1] if not (p[0] == "HSB" and len(c.args) == 1) else (real_value(c.args[0], fname), 1.0, 1.0)
+            P.append(list(convert_channels(p[0], ch, space)))
+        if not P:
+            raise ValueError("ColorQuantize: the list of colours is empty")
+        P = np.array(P, dtype=float)
+        if P.shape[1] != X.shape[1]:
+            raise ValueError("ColorQuantize: the colours do not match the image channels")
+    else:
+        n = int_arg(pos[0], fname, "number of colours", 1)
+        P = _median_cut(X, n)
+    P = quantize(P, im.type)
+    if dith:
+        out = _dither(col, P).reshape(-1, X.shape[1])
+    else:
+        out = P[_nearest(X, P)]
+    if not all(any(np.allclose(r, p) for p in P) for r in np.unique(out, axis=0)):
+        raise ArithmeticError("ColorQuantize: result failed verification")
+    a = out.reshape(col.shape)
+    if im.alpha:
+        a = np.concatenate([a, im.alpha_array()], axis=-1)
+    return image_expr(im.new(quantize(a, im.type)))
+
+
+def _kmeans(X, k, seed=0, iters=100):
+    """Lloyd's k-means with k-means++ seeding from a fixed seed; (labels, centres)."""
+    uniq = np.unique(X, axis=0)
+    if len(uniq) <= k:
+        cents = uniq
+        return _nearest(X, cents), cents
+    rng = np.random.default_rng(seed)
+    cents = [X[rng.integers(len(X))]]
+    for _ in range(1, k):
+        d = np.min(((X[:, None, :] - np.array(cents)[None]) ** 2).sum(-1), axis=1)
+        if d.sum() == 0:
+            break
+        cents.append(X[rng.choice(len(X), p=d / d.sum())])
+    cents = np.array(cents)
+    lab_ = _nearest(X, cents)
+    for _ in range(iters):
+        new = np.array([X[lab_ == j].mean(axis=0) if np.any(lab_ == j) else cents[j] for j in range(len(cents))])
+        nl = _nearest(X, new)
+        cents = new
+        if np.array_equal(nl, lab_):
+            break
+        lab_ = nl
+    return lab_, cents
+
+
+def _hex(rgb):
+    return "#" + "".join(f"{int(round(min(max(v, 0), 1) * 255)):02x}" for v in rgb)
+
+
+_DC_PROPS = ("Color", "LABColor", "HexRGBColor", "Count", "Coverage", "CoverageImage")
+
+
+@fn("DominantColors", area=AREA, status="added",
+    notes="DominantColors[image, n] clusters the pixel colours in LAB (k-means, k-means++ seeded deterministically; "
+          "images with at most n distinct colours give exactly those) and returns the cluster colours (mean colour; "
+          "RGBColor, or GrayLevel for grayscale images) ordered by size; DominantColors[image] is supported only for "
+          "images with at most 12 distinct colours (the automatic cluster count is undocumented, otherwise "
+          "NotImplementedError). Properties \"Color\", \"LABColor\", \"HexRGBColor\", \"Count\", \"Coverage\", "
+          "\"CoverageImage\" (a \"Bit\" mask) or a list of them; MinColorDistance -> d merges clusters closer than d "
+          "(ColorDistance, the larger keeping its colour); DistanceFunction for that merge. Method, ColorCoverage, "
+          "Masking and output formats other than Automatic/\"List\" raise NotImplementedError. On natural images the "
+          "clusters can differ from Wolfram's (undocumented method). Check: reference (images built from known "
+          "colours) in tests.")
+def _dominantcolors(x: Expr, *rest: PosInteger | String | ListOf[String] | Option) -> ListOf[Expr]:
+    fname = "DominantColors"
+    pos, o = opts_split(rest, {"MinColorDistance", "DistanceFunction"}, fname)
+    if K.is_list(x):
+        return L(*[_dominantcolors(v, *rest) for v in x.args])
+    im = _img1(x, fname)
+    labs, src = pixel_lab(im, fname)
+    if len(pos) > 3:
+        raise ValueError("DominantColors: expected DominantColors[image, n, prop, format]")
+    if len(pos) == 3 and not (_is_sym(pos[2], "Automatic") or pos[2] == "List"):
+        raise NotImplementedError(f"DominantColors: output format {_short(pos[2])} is not supported")
+    X = labs.reshape(-1, 3)
+    ncol = len(np.unique(X, axis=0))
+    if not pos or _is_sym(pos[0], "Automatic"):
+        if ncol > 12:
+            raise NotImplementedError("DominantColors: give the number of colours n (the automatic choice is not "
+                                      "documented)")
+        k = ncol
+    else:
+        k = int_arg(pos[0], fname, "number of colours", 1)
+    labels, _ = _kmeans(X, k)
+    colflat = im.color().reshape(-1, im.color().shape[-1])
+    groups = [np.flatnonzero(labels == j) for j in range(labels.max() + 1)]
+    groups = [g for g in groups if len(g)]
+    groups.sort(key=lambda g: (-len(g), tuple(X[g].mean(axis=0))))
+    if "MinColorDistance" in o:
+        dmin = real_arg(o["MinColorDistance"], fname, "MinColorDistance")
+        dfun = distance_function(o.get("DistanceFunction"), fname)
+        kept = []
+        for g in groups:
+            c = X[g].mean(axis=0)
+            for kg in kept:
+                if dfun(tuple(X[kg[1]].mean(axis=0)), tuple(c)) < dmin:
+                    kg[0] = np.concatenate([kg[0], g])
+                    break
+            else:
+                kept.append([g, g])
+        # a merged cluster keeps the colour of its larger part (the one kept first)
+        groups = [kg[0] for kg in kept]
+        first = [kg[1] for kg in kept]
+    else:
+        first = groups
+    prop = pos[1] if len(pos) > 1 else "Color"
+    total = X.shape[0]
+    gray = src == "Grayscale"
+
+    def one(g, g0, p):
+        if p == "Color":
+            c = convert_array(colflat[g0].mean(axis=0)[None], src, "Grayscale" if gray else "RGB")[0] \
+                if src not in ("Grayscale", "RGB") else colflat[g0].mean(axis=0)
+            return Expr("GrayLevel", float(c[0])) if gray else Expr("RGBColor", *[float(v) for v in c[:3]])
+        if p == "LABColor":
+            return Expr("LABColor", *[float(v) for v in X[g0].mean(axis=0)])
+        if p == "HexRGBColor":
+            c = convert_array(colflat[g0].mean(axis=0)[None], src, "RGB")[0]
+            return _hex(c)
+        if p == "Count":
+            return int(len(g))
+        if p == "Coverage":
+            return len(g) / total
+        if p == "CoverageImage":
+            m = np.zeros(total)
+            m[g] = 1.0
+            return image_expr(Img(m.reshape(im.a.shape[:-1] + (1,)), "Bit", "Automatic", im.d3))
+        if isinstance(p, str):
+            raise ValueError(f"DominantColors: unknown property {p!r} (one of {', '.join(_DC_PROPS)})")
+        raise TypeError(f"DominantColors: {_short(p)} is not a property name")
+    if prop == "Properties":
+        return L(*_DC_PROPS)
+    if K.is_list(prop):
+        return L(*[L(*[one(g, g0, p) for p in prop.args]) for g, g0 in zip(groups, first)])
+    return L(*[one(g, g0, prop) for g, g0 in zip(groups, first)])
+
+
+# ───────────────────────────── colour functions, Colorize, gradients ─────────────────────────────
+
+_CDF_TYPES = ("Gradients", "Indexed", "Named", "Physical")
+
+
+def _cdf_parts(e, fname="ColorDataFunction"):
+    if len(e.args) != 4:
+        raise ValueError(f"{fname}: expected ColorDataFunction[name, type, range, f]")
+    name, typ, rng, f = e.args
+    if not isinstance(name, str):
+        raise TypeError(f"{fname}: the scheme name must be a string")
+    if typ not in _CDF_TYPES:
+        raise ValueError(f"{fname}: the scheme type must be one of {', '.join(_CDF_TYPES)}")
+    if not K.is_list(rng) or len(rng.args) not in (2, 3):
+        raise ValueError(f"{fname}: the range must be {{min, max}} or {{min, max, step}}")
+    return name, typ, [real_arg(v, fname, "range") for v in rng.args], f
+
+
+@fn("ColorDataFunction", area=AREA, status="added",
+    notes="ColorDataFunction[name, type, range, f] is the inert colour-scheme object (type \"Gradients\", \"Indexed\", "
+          "\"Named\" or \"Physical\"); ColorDataFunction[...][x] evaluates f[x] with x clipped to the range for "
+          "gradients (as ColorData gradients do) and must be an integer in range for indexed schemes (else ValueError). "
+          "ColorData itself (the curated scheme table) is not available, so schemes are built explicitly, e.g. "
+          "ColorDataFunction[\"RedBlue\", \"Gradients\", {0, 1}, Blend[{Red, Blue}, #] &]. Symbolic x stays "
+          "unevaluated. Check: delegated (the stored function f) in tests.")
+def _colordatafunction(*args: String | ListOf[Real] | Fn) -> Expr:
+    _cdf_parts(Expr("ColorDataFunction", *args))
+    raise Unevaluated()
+
+
+def _cdf_apply(head, args, ev):
+    try:
+        name, typ, rng, f = _cdf_parts(head)
+    except Unevaluated:
+        return K.UNHANDLED
+    if len(args) != 1:
+        raise ValueError("ColorDataFunction: a colour scheme takes one argument")
+    x = args[0]
+    if not is_real_value(x) or isinstance(x, bool):
+        if isinstance(x, (str, bool)) or K.is_list(x):
+            raise TypeError(f"ColorDataFunction: {_short(x)} is not a number")
+        return K.UNHANDLED
+    v = real_value(x, "ColorDataFunction")
+    if typ == "Indexed":
+        if not K.is_int(x) or not (rng[0] <= int(x) <= rng[1]):
+            raise ValueError(f"ColorDataFunction: index {_short(x)} is outside {rng[0]:g}..{rng[1]:g}")
+        return ev(K.call(f, x))
+    if v < rng[0] or v > rng[1]:
+        x = rng[0] if v < rng[0] else rng[1]
+    return ev(K.call(f, x))
+
+
+try:
+    from .. import kernel_lists as _KL
+    _KL.COMPOUND_HEAD_HOOKS["ColorDataFunction"] = _cdf_apply
+except (ImportError, AttributeError):  # pragma: no cover
+    pass
+
+
+def _gradient_colors(cols, fname):
+    """Python function t (ndarray in [0, 1]) -> (..., 3|4) RGB(A) array and the output space, for a colour list."""
+    items = list(cols.args)
+    if len(items) < 1:
+        raise ValueError(f"{fname}: the colour list is empty")
+    pairs = all(K.is_list(i) and len(i.args) == 2 for i in items)
+    if pairs:
+        xs = [real_arg(i.args[0], fname, "position") for i in items]
+        cs = [i.args[1] for i in items]
+    else:
+        cs = items
+        xs = list(np.linspace(0, 1, len(items))) if len(items) > 1 else [0.0]
+    rgba = []
+    for c in cs:
+        v = to_rgba(c)
+        if v is None:
+            if isinstance(c, Symbol):
+                raise Unevaluated()
+            raise TypeError(f"{fname}: {_short(c)} is not a colour")
+        rgba.append(v)
+    gray = all(parse_color(c)[0] == "Grayscale" for c in cs)
+    has_alpha = any(parse_color(c)[2] is not None for c in cs)
+    R = np.array(rgba)
+    order = np.argsort(xs, kind="stable")
+    xs = np.array(xs)[order]
+    R = R[order]
+
+    def f(t):
+        t = np.clip(t, xs[0], xs[-1])
+        chans = [np.interp(t, xs, R[:, i]) for i in range(4)]
+        out = np.stack(chans if has_alpha else chans[:3], axis=-1)
+        if gray:
+            out = np.concatenate([out[..., :1], out[..., 3:]], axis=-1)
+        return out
+    return f, ("Grayscale" if gray else "RGB")
+
+
+def _fn_colors(fspec, fname):
+    """t-array -> colour array via a language function returning colours (evaluated per distinct t)."""
+    def f(t):
+        flat = np.asarray(t, dtype=float).reshape(-1)
+        uniq, inv = np.unique(flat, return_inverse=True)
+        vals = []
+        for u in uniq:
+            c = _ev(K.call(fspec, float(u)))
+            v = to_rgba(c)
+            if v is None:
+                if is_real_value(c):
+                    g = real_value(c, fname)
+                    v = (g, g, g, 1.0)
+                else:
+                    raise TypeError(f"{fname}: the colour function returned {_short(c)}, not a colour")
+            vals.append(v)
+        V = np.array(vals)
+        if np.all(V[:, 3] == 1):
+            V = V[:, :3]
+        return V[np.asarray(inv).reshape(-1)].reshape(np.shape(t) + (V.shape[1],))
+    return f, "RGB"
+
+
+def gradient_fn(gcol, fname):
+    if K.is_list(gcol):
+        return _gradient_colors(gcol, fname)
+    if isinstance(gcol, str):
+        raise NotImplementedError(f"{fname}: named colour schemes (ColorData[\"{gcol}\"]) are not available; give a "
+                                  f"list of colours or a function")
+    if isinstance(gcol, Symbol) and gcol.name in ("GrayLevel", "Hue"):
+        return _fn_colors(gcol, fname)
+    if isinstance(gcol, (Expr, Symbol)) and not is_real_value(gcol):
+        return _fn_colors(gcol, fname)
+    raise TypeError(f"{fname}: {_short(gcol)} is not a colour gradient specification")
+
+
+_SIDE = {"Left": (0.0, None), "Right": (1.0, None), "Bottom": (None, 0.0), "Top": (None, 1.0), "Center": (0.5, 0.5)}
+
+
+def _position(p, w, h, fname):
+    """Image coordinates of a position {x, y} or a named side/corner ({Left, Top}, Center, ...)."""
+    if isinstance(p, Symbol) and p.name in _SIDE:
+        fx, fy = _SIDE[p.name]
+        return np.array([(0.5 if fx is None else fx) * w, (0.5 if fy is None else fy) * h])
+    if K.is_list(p) and len(p.args) == 2:
+        out = []
+        for i, v in enumerate(p.args):
+            if isinstance(v, Symbol) and v.name in _SIDE:
+                f = _SIDE[v.name][0 if v.name in ("Left", "Right") else 1] if v.name != "Center" else 0.5
+                if f is None:
+                    raise ValueError(f"{fname}: {v.name} cannot be used for the {'xy'[i]} coordinate")
+                out.append(f * (w if i == 0 else h))
+            else:
+                out.append(real_arg(v, fname, "position"))
+        return np.array(out)
+    if isinstance(p, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{fname}: {_short(p)} is not a position")
+
+
+def _gradient(args, fname, radial):
+    pos, o = opts_split(args, set(), fname)
+    if len(pos) > 3:
+        raise ValueError(f"{fname}: expected {fname}[gcol, size, type]")
+    spec = pos[0] if pos else L(Expr("GrayLevel", 0), Expr("GrayLevel", 1))
+    dims = size_arg(pos[1] if len(pos) > 1 else None, fname, allow3d=False)
+    typ = type_arg(pos[2], fname) if len(pos) > 2 else None
+    w, h = dims
+    pts = None
+    if isinstance(spec, Expr) and spec.head == "Rule" and len(spec.args) == 2:
+        pts, spec = spec.args
+        if not (K.is_list(pts) and len(pts.args) == 2):
+            raise ValueError(f"{fname}: the positions must be {{pos1, pos2}}")
+    f, space = gradient_fn(spec, fname)
+    if pts is not None:
+        p1, p2 = (_position(p, w, h, fname) for p in pts.args)
+    elif radial:
+        p1, p2 = np.array([w / 2, h / 2]), np.array([float(w), float(h)])
+    else:
+        p1, p2 = np.array([0.0, h / 2]), np.array([float(w), h / 2])
+    xs = np.arange(w) + 0.5
+    ys = h - (np.arange(h) + 0.5)                      # row 0 is the top
+    X, Y = np.meshgrid(xs, ys)
+    v = p2 - p1
+    n2 = float(v @ v)
+    if n2 == 0:
+        raise ValueError(f"{fname}: the two positions must differ")
+    if radial:
+        t = np.hypot(X - p1[0], Y - p1[1]) / math.sqrt(n2)
+    else:
+        t = ((X - p1[0]) * v[0] + (Y - p1[1]) * v[1]) / n2
+    a = f(np.clip(t, 0.0, 1.0))
+    typ = typ or "Real32"
+    return image_expr(Img(quantize(a, typ), typ, space if a.shape[-1] in (1, 2, 3, 4) else "Automatic"))
+
+
+@fn("LinearGradientImage", area=AREA, status="added",
+    notes="LinearGradientImage[gcol, size, type] (default {Black, White}, {150, 150}, \"Real32\") colours each pixel "
+          "centre by t = the normalised distance from the line through pos1 perpendicular to pos2 - pos1 (default "
+          "pos1 = {Left, Center}, pos2 = {Right, Center}), clipped to [0, 1]; LinearGradientImage[{pos1, pos2} -> "
+          "gcol, ...] with positions {x, y} in image coordinates or named sides. gcol: a colour list (piecewise "
+          "linear in RGB, or in gray when all colours are GrayLevel, like Blend), {{x1, c1}, ...}, or a function "
+          "returning colours (GrayLevel, Hue, pure functions, ColorDataFunction). Named ColorData schemes and 3D "
+          "sizes raise NotImplementedError. Pixels are sampled at their centres, so values can differ from "
+          "Wolfram's in the last digits. Check: exact (the formula for t, endpoint colours) in tests.")
+def _lineargradientimage(*args: Expr | ListOf[Expr] | Integer | ListOf[PosInteger] | String) -> Expr:
+    return _gradient(args, "LinearGradientImage", False)
+
+
+@fn("RadialGradientImage", area=AREA, status="added",
+    notes="RadialGradientImage[gcol, size, type] colours each pixel centre by t = |p - pos1| / |pos2 - pos1| (default "
+          "pos1 = Center, pos2 = the top-right corner), clipped to [0, 1]; {pos1, pos2} -> gcol, gcol forms, sizes and "
+          "types as for LinearGradientImage. Check: exact (the formula for t, symmetry) in tests.")
+def _radialgradientimage(*args: Expr | ListOf[Expr] | Integer | ListOf[PosInteger] | String) -> Expr:
+    return _gradient(args, "RadialGradientImage", True)
+
+
+def _palette(k):
+    """Distinct colour for label k >= 1 (golden-ratio hue steps)."""
+    from .wl_graphics_color import _hsb_to_rgb
+    return _hsb_to_rgb((0.13 + 0.618033988749895 * (k - 1)) % 1.0, 0.75, 0.95)
+
+
+@fn("Colorize", area=AREA, status="added",
+    notes="Colorize[m] for an integer matrix (or 3D array) gives a \"Byte\" RGB image with 0 and negative entries black "
+          "and each positive integer a distinct colour (golden-ratio hue steps; Wolfram's own palette is not "
+          "documented, so the colours differ); Colorize[image, ColorFunction -> f] maps intensities (multichannel "
+          "images via Rec. 601 luma, clipped to [0, 1]) through f (GrayLevel, Hue, a pure function or "
+          "ColorDataFunction; with ColorFunctionScaling -> False the raw values); ColorRules -> {v -> col, ...} "
+          "overrides. Colorize[image] without ColorFunction needs ColorData[\"DarkRainbow\"] and raises "
+          "NotImplementedError. Check: exact (distinct labels give distinct colours, rules honoured) in tests.")
+def _colorize(x: Expr, *opts: Option) -> Expr:
+    fname = "Colorize"
+    _, o = opts_split(opts, {"ColorFunction", "ColorFunctionScaling", "ColorRules"}, fname)
+    if _ and len(_) > 0:
+        raise ValueError("Colorize: expected Colorize[m] or Colorize[image] with options")
+    rules = {}
+    if "ColorRules" in o:
+        rl = o["ColorRules"]
+        for r in (rl.args if K.is_list(rl) else [rl]):
+            if not (isinstance(r, Expr) and r.head == "Rule"):
+                raise ValueError("Colorize: ColorRules must be a list of value -> colour rules")
+            c = to_rgba(r.args[1])
+            if c is None:
+                raise TypeError(f"Colorize: {_short(r.args[1])} is not a colour")
+            rules[real_arg(r.args[0], fname, "rule value")] = c
+    scaling = o.get("ColorFunctionScaling", True)
+    if scaling not in (True, False):
+        raise ValueError("Colorize: ColorFunctionScaling must be True or False")
+    if isinstance(x, Expr) and x.head in IMAGE_HEADS:
+        im = _img1(x, fname)
+        g = im.color() if im.color().shape[-1] == 1 else convert_array(im.color(), source_space(im, fname),
+                                                                       "Grayscale")
+        g = g[..., 0]
+        if "ColorFunction" not in o and not rules:
+            raise NotImplementedError("Colorize: the default colour function ColorData[\"DarkRainbow\"] is not "
+                                      "available; give ColorFunction -> f")
+        vals = np.clip(g, 0, 1) if scaling else g
+        d3 = im.d3
+    else:
+        a = _numeric_array(x, fname)
+        if a is None:
+            if isinstance(x, Symbol):
+                raise Unevaluated()
+            raise TypeError(f"Colorize: {_short(x)} is not an integer array or an image")
+        if a.ndim not in (2, 3) or np.any(a != np.rint(a)):
+            raise ValueError("Colorize: expected a matrix (or 3D array) of integers")
+        g = a
+        d3 = a.ndim == 3
+        vals = None
+    shape = g.shape
+    out = np.zeros(shape + (4,))
+    out[..., 3] = 1.0
+    if vals is None:
+        if "ColorFunction" in o:
+            mn, mx = float(g.min()), float(g.max())
+            t = (g - mn) / (mx - mn) if (scaling and mx > mn) else (g * 0.0 if scaling else g)
+            f, _s = gradient_fn(o["ColorFunction"], fname)
+            c = f(t)
+            out[..., :c.shape[-1] if c.shape[-1] >= 3 else 3] = c if c.shape[-1] >= 3 else np.repeat(c, 3, -1)
+        else:
+            for k in np.unique(g):
+                if k > 0:
+                    out[g == k, :3] = _palette(int(k))
+    else:
+        f, _s = gradient_fn(o["ColorFunction"], fname) if "ColorFunction" in o else (None, None)
+        if f is not None:
+            c = f(vals)
+            if c.shape[-1] in (1, 2):
+                c = np.concatenate([np.repeat(c[..., :1], 3, -1), c[..., 1:]], axis=-1)
+            out[..., :c.shape[-1]] = c
+    for v, c in rules.items():
+        out[g == v] = c
+    if np.all(out[..., 3] == 1):
+        out = out[..., :3]
+    return image_expr(Img(quantize(out, "Byte"), "Byte", "RGB", d3))
