@@ -4384,3 +4384,1010 @@ def _bspline_apply(head, args, ev_):
 
 
 _install_hooks()
+
+
+# ───────────────────────────── random geometry ─────────────────────────────
+
+def _np_rng():
+    import numpy as np
+    from .statistics import _RNG
+    return np.random.default_rng(_RNG.getrandbits(64))
+
+
+def _fvec(p):
+    return [num(c) for c in p]
+
+
+def _ball_dirs(rng, n, d):
+    import numpy as np
+    g = rng.standard_normal((n, d))
+    nr = np.linalg.norm(g, axis=1)
+    nr[nr == 0] = 1.0
+    return g / nr[:, None]
+
+
+def _simplex_sampler(P):
+    import numpy as np
+    A = np.array([_fvec(p) for p in P])
+
+    def s(rng, n):
+        w = rng.dirichlet(np.ones(len(P)), size=n)
+        return w @ A
+    return s
+
+
+def _fan_sampler(tris):
+    """Uniform sampler over a union of simplices weighted by their measure."""
+    import numpy as np
+    As = [np.array([_fvec(p) for p in T]) for T in tris]
+    meas = []
+    for A in As:
+        M = (A[1:] - A[0])
+        meas.append(math.sqrt(abs(np.linalg.det(M @ M.T))) if len(M) else 1.0)
+    tot = sum(meas)
+    if tot <= 0:
+        raise ValueError("RandomPoint: the region has zero measure")
+    prob = np.array(meas) / tot
+
+    def s(rng, n):
+        idx = rng.choice(len(As), size=n, p=prob)
+        out_ = np.empty((n, As[0].shape[1]))
+        for k in range(len(As)):
+            sel = idx == k
+            m = int(sel.sum())
+            if m:
+                w = rng.dirichlet(np.ones(len(As[k])), size=m)
+                out_[sel] = w @ As[k]
+        return out_
+    return s
+
+
+def _disk_args(a, f, dflt_dim=2):
+    c = pt(a[0], f, "centre") if a else [sp.Integer(0)] * dflt_dim
+    r = a[1] if len(a) > 1 else sp.Integer(1)
+    return c, r
+
+
+def region_sampler(x, f, bounds=None):
+    """(dim, sample(rng, n) -> float array (n, dim)) for a bounded region; unbounded regions need bounds
+    [(lo, hi), ...] and are sampled by rejection in that box.  Raises NotImplementedError for unsupported regions."""
+    import numpy as np
+    if not isinstance(x, Expr) or not isinstance(x.head, str):
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{f}: {K_input(x)} is not a geometric region")
+    h = x.head
+    if h in _CHECKS:
+        _check_args(h, list(x.args))
+    a, _opts = split_trailing_options(list(x.args))
+    flat = []
+
+    def walk(v):
+        if isinstance(v, (list, tuple)):
+            for y in v:
+                walk(y)
+        else:
+            flat.append(v)
+
+    if h == "Point":
+        P = pts(a[0], f) if _is_coord_list(a[0]) else [pt(a[0], f)]
+        concrete(P)
+        A = np.array([_fvec(p) for p in P])
+        return A.shape[1], lambda rng, n: A[rng.integers(0, len(A), size=n)]
+    if h in ("Line", "Simplex", "Triangle") or (h == "Polygon" and False):
+        if h == "Line":
+            if not a or _is_coord_list(a[0].args[0]) if a and K.is_list(a[0]) and a[0].args else False:
+                raise NotImplementedError(f"{f}: multi-line regions are not supported")
+            P = pts(a[0], f, lo=2)
+            concrete(P)
+            return len(P[0]), _fan_sampler([[P[i], P[i + 1]] for i in range(len(P) - 1)])
+        if h == "Triangle":
+            P = pts(a[0], f, n=3) if a else [[0, 0], [1, 0], [0, 1]]
+        elif a and K.is_int(a[0]):
+            n_ = int(a[0])
+            P = [[sp.Integer(0)] * n_] + [[sp.Integer(int(i == j)) for j in range(n_)] for i in range(n_)]
+        else:
+            P = pts(a[0], f, lo=1)
+        P = [[sp.sympify(c) for c in p] for p in P]
+        concrete(P)
+        return len(P[0]), _fan_sampler([P])
+    if h in ("Polygon", "Rectangle", "RegularPolygon", "Parallelogram") and h != "Rectangle":
+        rings = polygon_data(x, f)
+        concrete(rings)
+        comps = polygon_components(x, f)
+        lo = np.min([_fvec(p) for r in rings for p in r], axis=0)
+        hi = np.max([_fvec(p) for r in rings for p in r], axis=0)
+        fr = [[_fvec(p) for p in r] for r in rings]
+
+        def inside(q):
+            c = 0
+            for r in fr:
+                n_ = len(r)
+                for i in range(n_):
+                    (x1, y1), (x2, y2) = r[i], r[(i + 1) % n_]
+                    if (y1 > q[1]) != (y2 > q[1]) and q[0] < x1 + (q[1] - y1) * (x2 - x1) / (y2 - y1):
+                        c += 1
+            return c % 2 == 1
+        if any(not _simple_ring(o) or any(not _simple_ring(hh) for hh in hs) for o, hs in comps):
+            raise NotImplementedError(f"{f}: self-intersecting polygons are not supported")
+        return 2, _rejection(lambda rng, n: rng.uniform(lo, hi, size=(n, 2)), inside, f)
+    if h in ("Rectangle", "Cuboid"):
+        d = 2 if h == "Rectangle" else 3
+        p = pt(a[0], f, dim=d) if a else [sp.Integer(0)] * d
+        q = pt(a[1], f, dim=d) if len(a) > 1 else [c + 1 for c in p]
+        concrete(p, q)
+        lo_, hi_ = np.array(_fvec(p)), np.array(_fvec(q))
+        return d, lambda rng, n: rng.uniform(lo_, hi_, size=(n, d))
+    if h in ("Parallelogram", "Parallelepiped"):
+        if h == "Parallelogram" and not a:
+            p, V = [0, 0], [[1, 0], [1, 1]]
+        else:
+            p, V = pt(a[0], f), pts(a[1], f)
+        concrete(p, V)
+        P0, M = np.array(_fvec(p)), np.array([_fvec(v) for v in V])
+        return len(p), lambda rng, n: P0 + rng.uniform(0, 1, size=(n, len(V))) @ M
+    if h in ("Disk", "Ball", "Circle", "Sphere"):
+        if h in ("Ball", "Sphere") and a and K.is_int(a[0]) and not isinstance(a[0], bool):
+            c, r = [sp.Integer(0)] * int(a[0]), sp.Integer(1)
+        else:
+            if a and _is_coord_list(a[0]) and len(a[0].args) and _is_coord_list(a[0].args[0]):
+                raise NotImplementedError(f"{f}: collections of {h} objects are not supported")
+            c = pt(a[0], f, "centre") if a else [sp.Integer(0)] * (2 if h in ("Disk", "Circle") else 3)
+            r = a[1] if len(a) > 1 else 1
+        if len(a) > 2:
+            raise NotImplementedError(f"{f}: sectors and arcs are not supported")
+        radii = [sx(t, f, "radius") for t in r.args] if K.is_list(r) else [sx(r, f, "radius")] * len(c)
+        concrete(c, radii)
+        if len(radii) != len(c):
+            raise ValueError(f"{f}: radii and centre dimensions differ")
+        d = len(c)
+        C, Rr = np.array(_fvec(c)), np.array(_fvec(radii))
+        if h in ("Circle", "Sphere"):
+            if len(set(Rr.tolist())) > 1:
+                raise NotImplementedError(f"{f}: ellipse boundaries are not supported")
+            return d, lambda rng, n: C + Rr * _ball_dirs(rng, n, d)
+        return d, lambda rng, n: C + Rr * _ball_dirs(rng, n, d) * (rng.uniform(0, 1, size=(n, 1)) ** (1.0 / d))
+    if h == "Ellipsoid":
+        c = pt(a[0], f, "centre")
+        s = a[1]
+        concrete(c)
+        C = np.array(_fvec(c))
+        d = len(c)
+        if K.is_list(s.args[0]):
+            M = np.array([[num(sx(t, f)) for t in row.args] for row in s.args])
+            Lm = np.linalg.cholesky(M)
+        else:
+            Lm = np.diag([num(sx(t, f)) for t in s.args])
+        return d, lambda rng, n: C + (_ball_dirs(rng, n, d) * (rng.uniform(0, 1, size=(n, 1)) ** (1.0 / d))) @ Lm.T
+    if h in ("Annulus", "SphericalShell"):
+        d = 2 if h == "Annulus" else 3
+        if len(a) == 1 and not (K.is_list(a[0]) and len(a[0].args) == d and h == "SphericalShell" and False):
+            if K.is_list(a[0]):
+                c, (r1, r2) = [0] * d, [sx(t, f) for t in a[0].args]
+            else:
+                r2 = sx(a[0], f)
+                c, r1 = [0] * d, r2 / 2
+        elif not a:
+            c, r1, r2 = [0] * d, sp.Rational(1, 2), sp.Integer(1)
+        else:
+            c = pt(a[0], f, "centre", dim=d)
+            r1, r2 = [sx(t, f) for t in a[1].args]
+        if len(a) > 2:
+            raise NotImplementedError(f"{f}: annulus sectors are not supported")
+        concrete(c, r1, r2)
+        C, r1f, r2f = np.array(_fvec(c)), num(r1), num(r2)
+
+        def s(rng, n):
+            rad = (rng.uniform(r1f ** d, r2f ** d, size=(n, 1))) ** (1.0 / d)
+            return C + rad * _ball_dirs(rng, n, d)
+        return d, s
+    if h in ("Cylinder", "Cone"):
+        if a and K.is_list(a[0]) and len(a[0].args) == 2:
+            p1, p2 = pts(a[0], f, n=2, dim=3)
+        elif not a:
+            p1, p2 = [0, 0, -1], [0, 0, 1]
+        else:
+            raise NotImplementedError(f"{f}: collections of {h} objects are not supported")
+        r = sx(a[1], f, "radius") if len(a) > 1 else sp.Integer(1)
+        concrete(p1, p2, r)
+        P1, P2, rf = np.array(_fvec(p1), dtype=float), np.array(_fvec(p2), dtype=float), num(r)
+        ax = P2 - P1
+        L_ = np.linalg.norm(ax)
+        if L_ == 0:
+            raise ValueError(f"{f}: degenerate {h} (coincident end points)")
+        u = ax / L_
+        e1 = np.cross(u, [1.0, 0, 0] if abs(u[0]) < 0.9 else [0, 1.0, 0])
+        e1 /= np.linalg.norm(e1)
+        e2 = np.cross(u, e1)
+
+        def s(rng, n):
+            if h == "Cylinder":
+                t = rng.uniform(0, 1, size=n)
+                rad = rf * np.sqrt(rng.uniform(0, 1, size=n))
+            else:
+                t = 1 - rng.uniform(0, 1, size=n) ** (1.0 / 3)
+                rad = rf * (1 - t) * np.sqrt(rng.uniform(0, 1, size=n))
+            th = rng.uniform(0, 2 * math.pi, size=n)
+            return P1 + np.outer(t, ax) + np.outer(rad * np.cos(th), e1) + np.outer(rad * np.sin(th), e2)
+        return 3, s
+    if h in _POLYHEDRON_HEADS:
+        V, F = polyhedron_data(x, f, need_orientation=True)
+        concrete(V)
+        if not _convex_polyhedron(V, F, f):
+            raise NotImplementedError(f"{f}: only convex polyhedra are supported")
+        F = _orient(V, F, f)
+        c0 = V[F[0][0]]
+        tets = [[c0, V[fc[0]], V[fc[k]], V[fc[k + 1]]] for fc in F if F[0][0] not in fc
+                for k in range(1, len(fc) - 1)]
+        return 3, _fan_sampler(tets)
+    if h in ("InfiniteLine", "HalfLine", "FullRegion", "HalfPlane", "HalfSpace", "InfinitePlane"):
+        if bounds is None:
+            raise ValueError(f"{f}: {h} is unbounded; give bounds RandomPoint[reg, n, {{{{xmin, xmax}}, ...}}]")
+        B = np.array(bounds, dtype=float)
+        d = len(B)
+        if h == "FullRegion":
+            n_ = _int_arg(a[0], f, "dimension", lo=1)
+            if n_ != d:
+                raise ValueError(f"{f}: the bounds must have {n_} ranges")
+            return d, lambda rng, n: rng.uniform(B[:, 0], B[:, 1], size=(n, d))
+        if h in ("InfiniteLine", "HalfLine"):
+            if len(a) == 1:
+                p, q = pts(a[0], f, n=2)
+                v = _sub(q, p)
+            else:
+                p, v = pt(a[0], f), pt(a[1], f, "direction")
+            concrete(p, v)
+            P, Vv = np.array(_fvec(p)), np.array(_fvec(v))
+            if len(P) != d:
+                raise ValueError(f"{f}: the bounds must have {len(P)} ranges")
+            t0, t1 = (0.0 if h == "HalfLine" else -np.inf), np.inf
+            for k in range(d):
+                if Vv[k] == 0:
+                    if not B[k, 0] <= P[k] <= B[k, 1]:
+                        raise ValueError(f"{f}: the region does not meet the bounds")
+                    continue
+                lo_, hi_ = sorted(((B[k, 0] - P[k]) / Vv[k], (B[k, 1] - P[k]) / Vv[k]))
+                t0, t1 = max(t0, lo_), min(t1, hi_)
+            if not t0 <= t1:
+                raise ValueError(f"{f}: the region does not meet the bounds")
+            return d, lambda rng, n: P + np.outer(rng.uniform(t0, t1, size=n), Vv)
+        if h == "InfinitePlane":
+            raise NotImplementedError(f"{f}: InfinitePlane sampling is not supported")
+        if h == "HalfPlane":
+            if d != 2:
+                raise NotImplementedError(f"{f}: only 2-D HalfPlane regions are supported")
+            if len(a) == 2:
+                (p, q), w = pts(a[0], f, n=2, dim=2), pt(a[1], f, dim=2)
+                v = _sub(q, p)
+            else:
+                p, v, w = pt(a[0], f, dim=2), pt(a[1], f, dim=2), pt(a[2], f, dim=2)
+            concrete(p, v, w)
+            # side of w relative to the line
+            nrm = [-v[1], v[0]]
+            if fsign(_dot(nrm, w)) < 0:
+                nrm = [v[1], -v[0]]
+            N_, P = np.array(_fvec(nrm)), np.array(_fvec(p))
+        else:
+            nrm = pt(a[0], f, "normal")
+            off = a[1]
+            if K.is_list(off):
+                p = pt(off, f)
+                concrete(nrm, p)
+                N_, P = -np.array(_fvec(nrm)), np.array(_fvec(p))
+            else:
+                c = sx(off, f)
+                concrete(nrm, c)
+                N_ = -np.array(_fvec(nrm))
+                P = np.array(_fvec(nrm)) * num(c) / float(np.dot(_fvec(nrm), _fvec(nrm)))
+            if len(P) != d:
+                raise ValueError(f"{f}: the bounds must have {len(P)} ranges")
+        return d, _rejection(lambda rng, n: rng.uniform(B[:, 0], B[:, 1], size=(n, d)),
+                             lambda q: float(np.dot(N_, q - P)) >= 0, f)
+    raise NotImplementedError(f"{f}: random points in {h} regions are not supported")
+
+
+def _rejection(proposal, inside, f):
+    import numpy as np
+
+    def s(rng, n):
+        got = []
+        tries = 0
+        while len(got) < n:
+            cand = proposal(rng, max(64, 2 * (n - len(got))))
+            got += [c for c in cand if inside(c)]
+            tries += 1
+            if tries > 2000:
+                raise ValueError(f"{f}: could not sample the region (empty or nearly empty within the bounds)")
+        return np.array(got[:n])
+    return s
+
+
+def _shape_spec(x, f):
+    if K.is_int(x) and not isinstance(x, bool):
+        n = int(x)
+        if n < 0:
+            raise ValueError(f"{f}: the number of samples must be non-negative")
+        return (n,)
+    if K.is_list(x) and x.args and all(K.is_int(k) and not isinstance(k, bool) and int(k) >= 0 for k in x.args):
+        return tuple(int(k) for k in x.args)
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{f}: the sample count must be a non-negative integer or a list of them, not {K_input(x)}")
+
+
+def _reshape(items, shape):
+    if len(shape) == 1:
+        return L(*items)
+    step = len(items) // shape[0] if shape[0] else 0
+    return L(*[_reshape(items[i * step:(i + 1) * step], shape[1:]) for i in range(shape[0])])
+
+
+def _float_pt(v):
+    return L(*[float(c) for c in v])
+
+
+@fn("RandomPoint", area=AREA, status="added",
+    notes="RandomPoint[reg] gives a pseudorandom point uniformly distributed in reg; RandomPoint[reg, n] a list, "
+          "RandomPoint[reg, {n1, n2, ...}] an array; RandomPoint[reg, n, {{xmin, xmax}, ...}] restricts to a box "
+          "(required for unbounded regions). Supported: Point, Line (by length), Triangle, Simplex, Polygon and "
+          "RegularPolygon/Parallelogram (non-crossing, holes allowed), Rectangle, Cuboid, Parallelepiped, Disk/Ball "
+          "(including axis-aligned ellipses), Circle/Sphere, Ellipsoid, Annulus, SphericalShell, Cylinder, Cone, "
+          "convex polyhedra, and with bounds FullRegion, InfiniteLine, HalfLine, HalfPlane, HalfSpace. Other "
+          "regions, sectors and collections raise NotImplementedError. Repeatable with SeedRandom (draws from the "
+          "statistics RNG). Machine-precision output. Check: tests verify membership of every sample and the "
+          "empirical mean against the region centroid.")
+def _random_point(reg: Expr, *rest: PosInteger | ListOf[PosInteger] | MatrixOf[Real] | Option) -> ListOf[Real]:
+    import numpy as np
+    f = "RandomPoint"
+    args, _opts = split_trailing_options(list(rest))
+    if len(args) > 2:
+        raise ValueError(f"{f}: expected RandomPoint[reg], RandomPoint[reg, n] or RandomPoint[reg, n, bounds]")
+    shape = _shape_spec(args[0], f) if args else None
+    bounds = None
+    if len(args) == 2:
+        b = args[1]
+        if not K.is_list(b) or not all(K.is_list(r) and len(r.args) == 2 for r in b.args):
+            raise TypeError(f"{f}: bounds must be {{{{xmin, xmax}}, ...}}")
+        bounds = [[sx(t, f, "bound") for t in r.args] for r in b.args]
+        concrete(bounds)
+        bounds = [[num(lo), num(hi)] for lo, hi in bounds]
+        if any(lo > hi for lo, hi in bounds):
+            raise ValueError(f"{f}: each bound needs xmin <= xmax")
+    d, samp = region_sampler(reg, f, bounds)
+    if bounds is not None and reg.head not in ("InfiniteLine", "HalfLine", "FullRegion", "HalfPlane", "HalfSpace"):
+        if len(bounds) != d:
+            raise ValueError(f"{f}: the bounds must have {d} ranges")
+        B = np.array(bounds)
+        samp = _rejection(samp, lambda q: bool(np.all(q >= B[:, 0]) and np.all(q <= B[:, 1])), f)
+    rng = _np_rng()
+    total = int(np.prod(shape)) if shape else 1
+    P = samp(rng, total) if total else np.zeros((0, d))
+    items = [_float_pt(p) for p in P]
+    return items[0] if shape is None else _reshape(items, shape)
+
+
+def _data_range(opts, f, d):
+    for r in opts:
+        n = opt_name(r)
+        if n == "DataRange":
+            v = r.args[1]
+            if isinstance(v, Symbol) and v.name == "Automatic":
+                return [(0.0, 1.0)] * d
+            if K.is_list(v) and len(v.args) == d and all(K.is_list(t) and len(t.args) == 2 for t in v.args):
+                rr = [[sx(t, f, "range") for t in row.args] for row in v.args]
+                concrete(rr)
+                rr = [(num(a), num(b)) for a, b in rr]
+                if any(a >= b for a, b in rr):
+                    raise ValueError(f"{f}: each DataRange needs min < max")
+                return rr
+            raise ValueError(f"{f}: DataRange must be Automatic or {{{{xmin, xmax}}, ...}}")
+        if n not in ("WorkingPrecision", "VertexColors", "VertexNormals", "VertexTextureCoordinates"):
+            raise ValueError(f"{f}: {n} is not a known option of {f}")
+    return [(0.0, 1.0)] * d
+
+
+def _scale_to(P, rr):
+    import numpy as np
+    P = np.asarray(P, dtype=float)
+    lo, hi = P.min(axis=0), P.max(axis=0)
+    span = np.where(hi > lo, hi - lo, 1.0)
+    R0 = np.array(rr)
+    return R0[:, 0] + (P - lo) / span * (R0[:, 1] - R0[:, 0])
+
+
+def _cross2(u, v):
+    return float(u[0] * v[1] - u[1] * v[0])
+
+
+def _random_convex(rng, n):
+    """Valtr's algorithm: a uniformly random convex polygon with exactly n vertices (counterclockwise)."""
+    import numpy as np
+
+    def chain(vals):
+        vals = np.sort(vals)
+        lo_, hi_ = vals[0], vals[-1]
+        a_, b_ = [lo_], [lo_]
+        for v in vals[1:-1]:
+            (a_ if rng.random() < 0.5 else b_).append(v)
+        a_.append(hi_)
+        b_.append(hi_)
+        return np.concatenate([np.diff(a_), -np.diff(b_)])
+    while True:
+        xs, ys = chain(rng.random(n)), chain(rng.random(n))
+        rng.shuffle(ys)
+        vecs = np.stack([xs, ys], axis=1)
+        vecs = vecs[np.argsort(np.arctan2(vecs[:, 1], vecs[:, 0]))]
+        P = np.cumsum(vecs, axis=0)
+        # every turn strictly left (reject degenerate collinear draws)
+        ok = all(_cross2(P[(i + 1) % n] - P[i], P[(i + 2) % n] - P[(i + 1) % n]) > 1e-12 for i in range(n))
+        if ok:
+            return P
+
+
+def _random_star(rng, n):
+    import numpy as np
+    while True:
+        th = np.sort(rng.uniform(0, 2 * math.pi, n))
+        if np.min(np.diff(np.concatenate([th, [th[0] + 2 * math.pi]]))) >= math.pi:
+            continue
+        r = rng.uniform(0.2, 1.0, n)
+        P = np.stack([r * np.cos(th), r * np.sin(th)], axis=1)
+        if fsign(_signed_area([list(map(sp.Float, p)) for p in P])) > 0 and \
+                _simple_ring([[sp.Float(c) for c in p] for p in P]):
+            return P
+
+
+def _random_hull_pts(rng, n, d):
+    import numpy as np
+    from scipy.spatial import ConvexHull
+    while True:
+        P = rng.random((n, d))
+        try:
+            return P, ConvexHull(P)
+        except Exception:
+            if n < d + 1:
+                raise ValueError(f"the convex hull needs at least {d + 1} points")
+
+
+def _poly_spec(spec, f, allowed):
+    if spec is None:
+        return "Simple", None
+    if K.is_int(spec) and not isinstance(spec, bool):
+        return "Simple", int(spec)
+    if K.is_list(spec) and spec.args and isinstance(spec.args[0], str):
+        kind = spec.args[0]
+        if kind not in allowed:
+            raise ValueError(f"{f}: unknown specification {K_input(spec)}; expected one of {', '.join(allowed)}")
+        if len(spec.args) == 3:
+            raise NotImplementedError(f"{f}: {{\"ConvexHull\", dist, n}} with an explicit distribution is not "
+                                      "supported; use {\"ConvexHull\", n}")
+        if len(spec.args) != 2:
+            raise ValueError(f"{f}: expected {{\"{kind}\", n}}")
+        return kind, _int_arg(spec.args[1], f, "number of points", lo=1)
+    if isinstance(spec, Expr) and spec.head == "Rule":
+        raise NotImplementedError(f"{f}: dimension specifications d -> spec are not supported")
+    if isinstance(spec, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{f}: invalid specification {K_input(spec)}")
+
+
+@fn("RandomPolygon", area=AREA, status="added",
+    notes="RandomPolygon[spec] / RandomPolygon[spec, n] / RandomPolygon[spec, {k1, ...}]: pseudorandom Polygon[...] "
+          "with machine-number vertices; spec n or {\"Simple\", n} (a simple polygon: random star-shaped vertex "
+          "order, a subset of all simple polygons), {\"StarShaped\", n}, {\"Convex\", n} (Valtr's uniform convex "
+          "polygon), {\"ConvexHull\", n} (hull of n uniform points in the unit square); RandomPolygon[] picks n in "
+          "3..15. Vertices are rescaled to fill DataRange (default {{0, 1}, {0, 1}}), counterclockwise. {\"ConvexHull\", "
+          "dist, n} and d -> spec raise NotImplementedError; n < 3 raises ValueError. Repeatable with SeedRandom. "
+          "Deviation: Wolfram's exact distributions are not documented. Check: tests verify SimplePolygonQ / "
+          "ConvexPolygonQ, vertex counts and the DataRange box.")
+def _random_polygon(*args: PosInteger | ListOf[Expr] | Option) -> Expr | ListOf[Expr]:
+    import numpy as np
+    f = "RandomPolygon"
+    a, opts = split_trailing_options(list(args))
+    if len(a) > 2:
+        raise ValueError(f"{f}: expected RandomPolygon[spec] or RandomPolygon[spec, n]")
+    kind, n = _poly_spec(a[0] if a else None, f, ("Simple", "StarShaped", "Convex", "ConvexHull"))
+    shape = _shape_spec(a[1], f) if len(a) > 1 else None
+    rr = _data_range(opts, f, 2)
+    if n is not None and n < 3 and kind != "ConvexHull":
+        raise ValueError(f"{f}: a polygon needs at least 3 vertices")
+    if kind == "ConvexHull" and n is not None and n < 3:
+        raise ValueError(f"{f}: the convex hull needs at least 3 points")
+    rng = _np_rng()
+
+    def one():
+        k = n if n is not None else int(rng.integers(3, 16))
+        if kind == "Convex":
+            P = _random_convex(rng, k)
+        elif kind == "ConvexHull":
+            Q, hull = _random_hull_pts(rng, k, 2)
+            P = Q[hull.vertices]
+        else:
+            P = _random_star(rng, k)
+        P = _scale_to(P, rr) if kind != "ConvexHull" or opts else P
+        return Expr("Polygon", L(*[_float_pt(p) for p in P]))
+    if shape is None:
+        return one()
+    total = int(np.prod(shape))
+    return _reshape([one() for _ in range(total)], shape)
+
+
+@fn("RandomPolyhedron", area=AREA, status="added",
+    notes="RandomPolyhedron[{\"ConvexHull\", n}] gives Polyhedron[pts, faces], the convex hull of n uniform points in "
+          "the unit cube (outward-oriented triangular faces, only hull vertices kept); RandomPolyhedron[spec, n] / "
+          "[spec, {k1, ...}] give lists/arrays; DataRange rescales. {\"ConvexHull\", dist, n} raises "
+          "NotImplementedError; n < 4 or other specs raise ValueError. Repeatable with SeedRandom. Check: tests "
+          "verify ConvexPolyhedronQ and positive volume of the results.")
+def _random_polyhedron(spec: ListOf[Expr], *rest: PosInteger | ListOf[PosInteger] | Option) -> Expr | ListOf[Expr]:
+    import numpy as np
+    f = "RandomPolyhedron"
+    a, opts = split_trailing_options([spec] + list(rest))
+    if len(a) > 2:
+        raise ValueError(f"{f}: expected RandomPolyhedron[spec] or RandomPolyhedron[spec, n]")
+    if K.is_int(a[0]):
+        raise ValueError(f"{f}: expected a specification {{\"ConvexHull\", n}}")
+    kind, n = _poly_spec(a[0], f, ("ConvexHull",))
+    if n < 4:
+        raise ValueError(f"{f}: the convex hull needs at least 4 points")
+    shape = _shape_spec(a[1], f) if len(a) > 1 else None
+    rr = _data_range(opts, f, 3)
+    rng = _np_rng()
+
+    def one():
+        Q, hull = _random_hull_pts(rng, n, 3)
+        if any(opt_name(r) == "DataRange" for r in opts):
+            Q = _scale_to(Q, rr)
+        keep = sorted(set(int(i) for s_ in hull.simplices for i in s_))
+        idx = {v: k for k, v in enumerate(keep)}
+        faces = []
+        cen = Q[keep].mean(axis=0)
+        for s_ in hull.simplices:
+            i, j, k = (int(t) for t in s_)
+            nrm = np.cross(Q[j] - Q[i], Q[k] - Q[i])
+            if np.dot(nrm, Q[i] - cen) < 0:
+                j, k = k, j
+            faces.append(L(idx[i] + 1, idx[j] + 1, idx[k] + 1))
+        return Expr("Polyhedron", L(*[_float_pt(Q[v]) for v in keep]), L(*faces))
+    if shape is None:
+        return one()
+    return _reshape([one() for _ in range(int(np.prod(shape)))], shape)
+
+
+# ───────────────────────────── geometric tests and assertions ─────────────────────────────
+
+_POLY_PREDS = ("Clockwise", "Convex", "Counterclockwise", "Cyclic", "Equiangular", "Equilateral", "Parallelogram",
+               "Rectangle", "Regular", "Simple")
+_LINE_PREDS = ("Horizontal", "Vertical", "Leftward", "Rightward", "Upward", "Downward")
+_OBJ_PREDS = ("Inside", "Outside")
+_POINT_RELS = ("Clockwise", "Collinear", "Counterclockwise", "CyclicallyOrdered", "Distinct", "EqualAngles")
+_LINE_RELS = ("Antiparallel", "Concurrent", "MatchingParallel", "Nondegenerate", "Parallel", "Perpendicular")
+_OBJ_RELS = ("Congruent", "PairwiseTangent", "SameSide", "Similar", "Tangent", "OppositeSides")
+_ALL_PROPS = set(_POLY_PREDS + _LINE_PREDS + _OBJ_PREDS + _POINT_RELS + _LINE_RELS + _OBJ_RELS)
+_PROP_WITH_ARG = {"Inside", "Outside", "EqualAngles", "Concurrent", "SameSide", "Tangent", "OppositeSides"}
+_PROP_NEEDS_ARG = {"Inside", "Outside", "EqualAngles", "SameSide", "OppositeSides"}
+
+
+def _prop(x, f):
+    """(name, argument or None) of a property specification."""
+    if isinstance(x, str):
+        name, arg = x, None
+    elif K.is_list(x) and len(x.args) == 2 and isinstance(x.args[0], str):
+        name, arg = x.args
+    else:
+        raise TypeError(f"{f}: a property must be a string or {{\"name\", arg}}, not {K_input(x)}")
+    if name not in _ALL_PROPS:
+        raise ValueError(f"{f}: unknown property {K_input(name)}")
+    if arg is not None and name not in _PROP_WITH_ARG:
+        raise ValueError(f"{f}: the property {K_input(name)} takes no argument")
+    if arg is None and name in _PROP_NEEDS_ARG:
+        raise ValueError(f"{f}: the property {K_input(name)} needs an argument {{\"{name}\", ...}}")
+    return name, arg
+
+
+_LINE_HEADS = ("Line", "InfiniteLine", "HalfLine")
+
+
+def _gt_line(x, f):
+    """(p, v, kind) for Line[{p, q}] / InfiniteLine / HalfLine (two-point or point-direction forms)."""
+    a = list(x.args)
+    if len(a) == 1:
+        P = pts(a[0], f, n=2)
+        p, v = P[0], _sub(P[1], P[0])
+    elif len(a) == 2 and x.head != "Line":
+        p, v = pt(a[0], f), pt(a[1], f, "direction")
+    else:
+        raise NotImplementedError(f"{f}: only single two-point lines are supported")
+    concrete(p, v)
+    if _is_zero_vec(v):
+        raise ValueError(f"{f}: degenerate line {K_input(x)}")
+    return p, v, x.head
+
+
+def _gt_circle(x, f):
+    c, r = _center_radius(x, f)
+    concrete(c, r)
+    return c, r
+
+
+def _gt_vertices(x, f):
+    if K.is_list(x) or (isinstance(x, Expr) and x.head == "Point"):
+        return [pt(x, f)]
+    if isinstance(x, Expr) and x.head in _POLYGON_HEADS:
+        comps = polygon_components(x, f)
+        if len(comps) != 1 or comps[0][1]:
+            raise NotImplementedError(f"{f}: polygons with holes or several components are not supported")
+        return comps[0][0]
+    if isinstance(x, Expr) and x.head == "Line":
+        return pts(x.args[0], f, lo=2)
+    raise NotImplementedError(f"{f}: {K_input(x)} is not supported for this property")
+
+
+def _eqz(v, flt):
+    return _zero(sp.simplify(v), flt)
+
+
+def _dist2(p, q):
+    d = _sub(p, q)
+    return _dot(d, d)
+
+
+def _poly_ring(x, f):
+    if not (isinstance(x, Expr) and x.head in _POLYGON_HEADS):
+        raise NotImplementedError(f"{f}: polygon properties need a polygon, not {K_input(x)}")
+    R_ = _gt_vertices(x, f)
+    concrete(R_)
+    if len(R_[0]) != 2:
+        raise NotImplementedError(f"{f}: only 2-D polygons are supported")
+    return R_
+
+
+def _orientation_of(R_, f):
+    if len(R_) == 3:
+        return fsign(_orient2(*R_))
+    if not _simple_ring(R_):
+        raise NotImplementedError(f"{f}: orientation of a self-intersecting vertex sequence is not supported")
+    return fsign(_signed_area(R_))
+
+
+def _concyclic(R_, flt):
+    if len(R_) < 3:
+        return True
+    a, b, c = R_[:3]
+    if _eqz(_orient2(a, b, c), flt):
+        return False
+    ctr = _circumcenter_affine([a, b, c])[0] if not flt else None
+    if ctr is None:
+        D = 2 * _orient2(a, b, c)
+        ux = (_dot(a, a) * (b[1] - c[1]) + _dot(b, b) * (c[1] - a[1]) + _dot(c, c) * (a[1] - b[1])) / D
+        uy = (_dot(a, a) * (c[0] - b[0]) + _dot(b, b) * (a[0] - c[0]) + _dot(c, c) * (b[0] - a[0])) / D
+        ctr = [ux, uy]
+    r2 = _dist2(a, ctr)
+    return all(_eqz(_dist2(p, ctr) - r2, flt) for p in R_[3:])
+
+
+def _side_lengths2(R_):
+    n = len(R_)
+    return [_dist2(R_[i], R_[(i + 1) % n]) for i in range(n)]
+
+
+def _poly_pred(x, name, f, flt):
+    R_ = _poly_ring(x, f)
+    if name == "Simple":
+        return _simple_ring(R_)
+    if name == "Convex":
+        return _convex_ring(R_)
+    if name in ("Clockwise", "Counterclockwise"):
+        s = _orientation_of(R_, f)
+        return s == (1 if name == "Counterclockwise" else -1)
+    if name == "Cyclic":
+        return _concyclic(R_, flt)
+    L2 = _side_lengths2(R_)
+    if name == "Equilateral":
+        return all(_eqz(l2 - L2[0], flt) for l2 in L2)
+    if name == "Equiangular":
+        if not _simple_ring(R_):
+            raise NotImplementedError(f"{f}: angles of self-intersecting polygons are not supported")
+        A = _ring_angles(R_, f)
+        return all(_eqz(t - A[0], flt) for t in A)
+    if name == "Regular":
+        return _convex_ring(R_) and all(_eqz(l2 - L2[0], flt) for l2 in L2) and _concyclic(R_, flt)
+    if name in ("Parallelogram", "Rectangle"):
+        if len(R_) != 4:
+            return False
+        p1, p2, p3, p4 = R_
+        ok = all(_eqz(c, flt) for c in _sub(_add(p1, p3), _add(p2, p4))) and \
+            not _eqz(_orient2(p1, p2, p3), flt)
+        if name == "Rectangle":
+            ok = ok and _eqz(_dot(_sub(p2, p1), _sub(p4, p1)), flt)
+        return ok
+    raise ValueError(f"{f}: {name} is not a polygon property")
+
+
+def _line_pred(x, name, f, flt):
+    if not (isinstance(x, Expr) and x.head in _LINE_HEADS):
+        raise NotImplementedError(f"{f}: {name} needs a line, not {K_input(x)}")
+    _p, v, _k = _gt_line(x, f)
+    if len(v) != 2:
+        raise NotImplementedError(f"{f}: only 2-D lines are supported")
+    dx, dy = v
+    return {"Horizontal": _eqz(dy, flt), "Vertical": _eqz(dx, flt),
+            "Leftward": not _eqz(dx, flt) and fsign(dx) < 0, "Rightward": not _eqz(dx, flt) and fsign(dx) > 0,
+            "Upward": not _eqz(dy, flt) and fsign(dy) > 0, "Downward": not _eqz(dy, flt) and fsign(dy) < 0}[name]
+
+
+def _seg_dist2_point(c, a, b):
+    """Squared distance from c to the segment ab."""
+    ab = _sub(b, a)
+    L2 = _dot(ab, ab)
+    t = _dot(_sub(c, a), ab) / L2
+    if fsign(t) <= 0:
+        return _dist2(c, a)
+    if fsign(t - 1) >= 0:
+        return _dist2(c, b)
+    return _dist2(c, _add(a, _mul(t, ab)))
+
+
+def _inside_outside(x, name, circ, f, flt):
+    if not (isinstance(circ, Expr) and circ.head in ("Circle", "Disk")):
+        raise TypeError(f"{f}: {{\"{name}\", circle}} needs a Circle or Disk")
+    c, r = _gt_circle(circ, f)
+    if isinstance(x, Expr) and x.head in ("Circle", "Disk"):
+        c2, r2 = _gt_circle(x, f)
+        d = sp.sqrt(_dist2(c, c2))
+        return fsign(d + r2 - r) < 0 if name == "Inside" else fsign(d - r - r2) > 0
+    V = _gt_vertices(x, f)
+    concrete(V)
+    if name == "Inside":
+        return all(fsign(_dist2(p, c) - r ** 2) < 0 for p in V)
+    if len(V) == 1:
+        return fsign(_dist2(V[0], c) - r ** 2) > 0
+    n = len(V)
+    closed = isinstance(x, Expr) and x.head in _POLYGON_HEADS
+    segs = [(V[i], V[(i + 1) % n]) for i in range(n if closed else n - 1)]
+    if any(fsign(_seg_dist2_point(c, a, b) - r ** 2) <= 0 for a, b in segs):
+        return False
+    if closed and _point_in_ring(c, V) not in (0,):
+        return False
+    return True
+
+
+def _side_of(p, line, f):
+    q, v, _ = line
+    return fsign(_orient2(q, _add(q, v), p))
+
+
+def _object_side(x, line, f):
+    """+1 / -1 when the whole object is strictly on one side of the line, 0 otherwise."""
+    if isinstance(x, Expr) and x.head in ("Circle", "Disk"):
+        c, r = _gt_circle(x, f)
+        q, v, _ = line
+        dist = _orient2(q, _add(q, v), c) / _norm(v)
+        if fsign(sp.Abs(dist) - r) <= 0:
+            return 0
+        return fsign(dist)
+    V = _gt_vertices(x, f)
+    concrete(V)
+    s = {_side_of(p, line, f) for p in V}
+    return s.pop() if len(s) == 1 and 0 not in s else 0
+
+
+def _lines_meet_at(lines, p, f, flt):
+    for q, v, kind in lines:
+        w = _sub(p, q)
+        if len(v) == 2:
+            if not _eqz(_orient2(q, _add(q, v), p), flt):
+                return False
+        elif _rank([v, w], flt) > 1:
+            return False
+        if kind != "InfiniteLine":
+            t = _dot(w, v) / _dot(v, v)
+            if fsign(t) < 0 or (kind == "Line" and fsign(t - 1) > 0):
+                return False
+    return True
+
+
+def _line_rel(objs, name, arg, f, flt):
+    lines = []
+    for o in objs:
+        if not (isinstance(o, Expr) and o.head in _LINE_HEADS):
+            raise NotImplementedError(f"{f}: {name} needs lines, not {K_input(o)}")
+        lines.append(_gt_line(o, f))
+    if len(lines) < 2:
+        raise ValueError(f"{f}: {name} needs at least two lines")
+    pairs = list(itertools.combinations(lines, 2))
+
+    def par(a, b):
+        return _rank([a[1], b[1]], flt) <= 1
+    if name == "Parallel":
+        return all(par(a, b) for a, b in pairs)
+    if name == "Antiparallel":
+        return all(par(a, b) and fsign(_dot(a[1], b[1])) < 0 for a, b in pairs)
+    if name == "MatchingParallel":
+        return all(par(a, b) and fsign(_dot(a[1], b[1])) > 0 for a, b in pairs)
+    if name == "Perpendicular":
+        return all(_eqz(_dot(a[1], b[1]), flt) for a, b in pairs)
+    if name == "Nondegenerate":
+        return all(not (par(a, b) and _rank([a[1], _sub(b[0], a[0])], flt) <= 1) for a, b in pairs)
+    if name == "Concurrent":
+        if arg is not None:
+            p = pt(arg, f)
+            concrete(p)
+            return _lines_meet_at(lines, p, f, flt)
+        if any(len(l_[1]) != 2 for l_ in lines):
+            raise NotImplementedError(f"{f}: Concurrent is supported for 2-D lines")
+        for a, b in pairs:
+            if not par(a, b):
+                (p, v), (q, w) = a[:2], b[:2]
+                den = v[0] * w[1] - v[1] * w[0]
+                t = ((q[0] - p[0]) * w[1] - (q[1] - p[1]) * w[0]) / den
+                return _lines_meet_at(lines, [sp.simplify(c) for c in _add(p, _mul(t, v))], f, flt)
+        return False
+    raise ValueError(f"{f}: {name} is not a line relation")
+
+
+def _point_rel(P, name, arg, f, flt):
+    concrete(P)
+    if name == "Distinct":
+        return all(not all(_eqz(c, flt) for c in _sub(p, q)) for p, q in itertools.combinations(P, 2))
+    if name == "Collinear":
+        return _rank([_sub(p, P[0]) for p in P[1:]], flt) <= 1
+    if len(P[0]) != 2:
+        raise NotImplementedError(f"{f}: {name} is supported for 2-D points")
+    if name in ("Clockwise", "Counterclockwise", "CyclicallyOrdered"):
+        if len(P) < 3:
+            raise ValueError(f"{f}: {name} needs at least three points")
+        s = _orientation_of(P, f)
+        return s != 0 if name == "CyclicallyOrdered" else s == (1 if name == "Counterclockwise" else -1)
+    if name == "EqualAngles":
+        c = pt(arg, f)
+        concrete(c)
+        angs = []
+        for p, q in zip(P, P[1:]):
+            u, v = _sub(p, c), _sub(q, c)
+            if _is_zero_vec(u) or _is_zero_vec(v):
+                raise ValueError(f"{f}: a point coincides with the vertex of EqualAngles")
+            angs.append(sp.acos(sp.simplify(_dot(u, v) / (_norm(u) * _norm(v)))))
+        return all(_eqz(a - angs[0], flt) for a in angs)
+    raise ValueError(f"{f}: {name} is not a point relation")
+
+
+def _obj_rel(objs, name, arg, f, flt):
+    if name in ("SameSide", "OppositeSides"):
+        if not (isinstance(arg, Expr) and arg.head in _LINE_HEADS):
+            raise TypeError(f"{f}: {{\"{name}\", line}} needs a line")
+        line = _gt_line(arg, f)
+        if len(line[1]) != 2:
+            raise NotImplementedError(f"{f}: {name} is supported in 2-D")
+        if name == "SameSide":
+            s = {_object_side(o, line, f) for o in objs}
+            return len(s) == 1 and 0 not in s
+        if len(objs) != 2:
+            raise ValueError(f"{f}: OppositeSides needs two lists of objects")
+        def group(x):
+            return list(x.args) if K.is_list(x) and not _is_point_obj(x) else [x]
+        s1 = {_object_side(o, line, f) for o in group(objs[0])}
+        s2 = {_object_side(o, line, f) for o in group(objs[1])}
+        return len(s1) == 1 and len(s2) == 1 and 0 not in s1 and s1 != s2
+    if name == "PairwiseTangent":
+        if not all(isinstance(o, Expr) and o.head == "Circle" for o in objs):
+            raise NotImplementedError(f"{f}: PairwiseTangent is supported for circles")
+        C = [_gt_circle(o, f) for o in objs]
+        for (c1, r1), (c2, r2) in itertools.combinations(C, 2):
+            d2 = _dist2(c1, c2)
+            if not (_eqz(d2 - (r1 + r2) ** 2, flt) or (_eqz(d2 - (r1 - r2) ** 2, flt) and not _eqz(d2, flt))):
+                return False
+        return True
+    if name in ("Congruent", "Similar"):
+        kinds = {o.head if isinstance(o, Expr) else None for o in objs}
+        if kinds <= {"Circle", "Disk"} and len(kinds) == 1:
+            if name == "Similar":
+                return True
+            R = [_gt_circle(o, f)[1] for o in objs]
+            return all(_eqz(r - R[0], flt) for r in R)
+        if kinds <= {"Triangle", "Polygon", "Line"}:
+            sides = []
+            for o in objs:
+                V = _gt_vertices(o, f)
+                concrete(V)
+                if o.head == "Line":
+                    if len(V) != 2:
+                        raise NotImplementedError(f"{f}: {name} supports two-point segments")
+                    sides.append(("seg", [_dist2(V[0], V[1])]))
+                elif len(V) == 3:
+                    sides.append(("tri", sorted(_side_lengths2(V), key=num)))
+                else:
+                    raise NotImplementedError(f"{f}: {name} supports triangles, segments and circles")
+            if len({k for k, _ in sides}) != 1:
+                return False
+            base = sides[0][1]
+            for _, s in sides[1:]:
+                if name == "Congruent":
+                    if not all(_eqz(a - b, flt) for a, b in zip(s, base)):
+                        return False
+                elif sides[0][0] == "tri":
+                    k = s[0] / base[0]
+                    if not all(_eqz(a - k * b, flt) for a, b in zip(s, base)):
+                        return False
+            return True
+        raise NotImplementedError(f"{f}: {name} supports triangles, segments and circles")
+    raise NotImplementedError(f"{f}: the relation {name} is not supported")
+
+
+def _is_point_obj(x):
+    return (K.is_list(x) and x.args and all(not K.is_list(c) and not (isinstance(c, Expr) and isinstance(c.head, str)
+                                                                        and c.head in _CHECKS) for c in x.args)) or \
+        (isinstance(x, Expr) and x.head == "Point" and len(x.args) == 1 and K.is_list(x.args[0]) and
+         not _is_coord_list(x.args[0]))
+
+
+def _geometric_test_one(objs, prop, f):
+    name, arg = _prop(prop, f)
+    single = not (K.is_list(objs) and objs.args and not _is_point_obj(objs))
+    items = [objs] if single else list(objs.args)
+    flt = inexact(objs, prop)
+    all_points = not single and all(_is_point_obj(o) for o in items)
+    if all_points and name in _POINT_RELS:
+        return _point_rel([pt(o, f) for o in items], name, arg, f, flt)
+    if name in _LINE_RELS:
+        return _line_rel(items, name, arg, f, flt)
+    if name in _OBJ_RELS:
+        return _obj_rel(items, name, arg, f, flt)
+    if name in _POLY_PREDS:
+        return all(_poly_pred(o, name, f, flt) for o in items)
+    if name in _LINE_PREDS:
+        return all(_line_pred(o, name, f, flt) for o in items)
+    if name in _OBJ_PREDS:
+        return all(_inside_outside(o, name, arg, f, flt) for o in items)
+    if name in _POINT_RELS:
+        raise ValueError(f"{f}: {name} needs a list of points")
+    raise NotImplementedError(f"{f}: the property {name} is not supported")
+
+
+def _has_free_symbols(x):
+    if isinstance(x, Symbol):
+        return x.name not in ("Pi", "E", "Degree", "True", "False", "Automatic", "None", "All")
+    if isinstance(x, Expr):
+        return any(_has_free_symbols(a) for a in x.args)
+    return False
+
+
+@fn("GeometricTest", area=AREA, status="added",
+    notes="GeometricTest[objs, prop1, prop2, ...] evaluates documented geometric predicates and relations on "
+          "explicit objects, combining several properties with And (and predicates over a list of objects with "
+          "And). Supported: polygon predicates (Clockwise, Counterclockwise, Convex, Cyclic, Equiangular, "
+          "Equilateral, Parallelogram, Rectangle, Regular, Simple), 2-D line predicates (Horizontal, Vertical, "
+          "Leftward, Rightward, Upward, Downward), {\"Inside\"|\"Outside\", circle}, point relations (Clockwise, "
+          "Counterclockwise, CyclicallyOrdered, Collinear, Distinct, {\"EqualAngles\", pt}), line relations "
+          "(Parallel, Antiparallel, MatchingParallel, Perpendicular, Nondegenerate, Concurrent, "
+          "{\"Concurrent\", pt}), {\"SameSide\"|\"OppositeSides\", line}, PairwiseTangent for circles, and "
+          "Congruent/Similar for triangles, segments and circles. Deviation: objects with symbolic coordinates stay "
+          "unevaluated (Wolfram returns the algebraic condition). Unknown properties raise ValueError; documented "
+          "but unsupported combinations (\"Tangent\", Congruent polygons, 3-D orientation) raise "
+          "NotImplementedError. Check: exact predicates (exact zero/sign tests; tolerance 1e-10 for machine numbers); "
+          "Wolfram documentation examples in tests.")
+def _geometric_test(objs: Expr | ListOf[Expr], *props: String | ListOf[Expr]) -> Boolean:
+    f = "GeometricTest"
+    if not props:
+        raise ValueError(f"{f}: expected GeometricTest[objs, prop, ...]")
+    for p in props:
+        _prop(p, f)
+    if _has_free_symbols(objs) or any(_has_free_symbols(p) for p in props):
+        raise Unevaluated()
+    return all(_geometric_test_one(objs, p, f) for p in props)
+
+
+@fn("GeometricAssertion", area=AREA, status="added",
+    notes="GeometricAssertion[objs, prop1, ...] is an inert representation of the condition (used as a hypothesis "
+          "in GeometricScene); the property names and argument forms are validated against the documented list "
+          "(unknown names raise ValueError, malformed properties TypeError, a missing argument for "
+          "{\"Inside\", circle}-style properties ValueError). Objects may be symbolic. Use GeometricTest to "
+          "evaluate the condition. Check: reference (Wolfram documentation property list) in tests.")
+def _geometric_assertion(objs: Expr | ListOf[Expr], *props: String | ListOf[Expr]) -> Expr:
+    f = "GeometricAssertion"
+    if not props:
+        raise ValueError(f"{f}: expected GeometricAssertion[objs, prop, ...]")
+    if isinstance(objs, str) or isinstance(objs, bool):
+        raise TypeError(f"{f}: the objects must be geometric objects or points, not {K_input(objs)}")
+    for p in props:
+        _prop(p, f)
+    raise Unevaluated()
