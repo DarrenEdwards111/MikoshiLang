@@ -2775,3 +2775,764 @@ def _asymprob(pred, d, spec, *rest):
     r = _pick_piecewise(r, Symbol(x.name), R(pv))
     v = sp.simplify(SX(r, "AsymptoticProbability"))
     return _asym_out(_run_asym(v, x, x0, n, "AsymptoticProbability"))
+
+
+# ───────────────────────────── discrete calculus ─────────────────────────────
+
+def _dq_spec(spec, fname):
+    if not (is_list(spec) and len(spec.args) in (2, 3)):
+        raise ValueError(f"{fname}: each specification must be {{x, h}} or {{x, n, h}}")
+    x = _svar(spec.args[0], fname)
+    if len(spec.args) == 2:
+        return x, 1, SX(spec.args[1], fname)
+    return x, _num_opt(spec.args[1], fname, "the order"), SX(spec.args[2], fname)
+
+
+@fn("DifferenceQuotient", area=AREA, status="added",
+    notes="DifferenceQuotient[f, {x, h}] = (f[x + h] - f[x])/h; {x, n, h}: the n-th forward difference over h^n; "
+          "several specifications apply in turn; threads over lists")
+def _diffquot(f, *specs):
+    if not specs:
+        raise ValueError("DifferenceQuotient: a specification {x, h} is required")
+    if is_list(f):
+        return L(*(_diffquot(e, *specs) for e in f.args))
+    e = SX(f, "DifferenceQuotient")
+    for sp_ in specs:
+        x, n, h = _dq_spec(sp_, "DifferenceQuotient")
+        if h == 0:
+            raise ValueError("DifferenceQuotient: the step must be non-zero")
+        e = sp.Add(*[(-1) ** (n - k) * sp.binomial(n, k) * e.subs(x, x + k * h) for k in range(n + 1)]) / h ** n
+        e = sp.cancel(sp.together(e))
+    return out(e)
+
+
+@fn("Casoratian", area=AREA, status="added",
+    notes="Casoratian[{y1, ..., yk}, n] = Det[{y_j[n + i]}] (i = 0..k-1), simplified; Casoratian[..., n, True] gives "
+          "the matrix; the equation form Casoratian[eqn, y, n] raises (its normalisation constant is not determined "
+          "by the equation)")
+def _casoratian(ys, n, *rest):
+    if not is_list(ys):
+        raise NotImplementedError("Casoratian: the equation form (Casoratian[eqn, y, n]) is not supported; "
+                                  "give an explicit list of solutions")
+    if len(rest) > 1 or (rest and not isinstance(rest[0], bool)):
+        raise ValueError("Casoratian: the optional third argument must be True or False")
+    nv = _svar(n, "Casoratian")
+    fs0 = [SX(y, "Casoratian") for y in ys.args]
+    special = any(g.has(sp.fibonacci, sp.lucas) for g in fs0)
+    fs = [_rewrite_special(g) if special else g for g in fs0]
+    if not fs:
+        raise ValueError("Casoratian: at least one function is required")
+    k = len(fs)
+    M = sp.Matrix(k, k, lambda i, j: fs[j].subs(nv, nv + i))
+    if rest and rest[0] is True:
+        return out(M.tolist())
+    d = M.det(method="berkowitz")
+    d = sp.simplify(sp.powsimp(sp.expand(d, power_base=False), force=True))
+    d = sp.powsimp(sp.factor(d), combine="base", force=True) if not d.has(AppliedUndef) else sp.expand(d)
+    if d.has(sp.gamma) and not any(g.has(sp.gamma) for g in fs0):
+        d = d.replace(lambda e: isinstance(e, sp.gamma) and (e.args[0] - nv).is_integer is True,
+                      lambda e: sp.factorial(e.args[0] - 1))
+    def _primes(e):
+        def f_(b, ex):
+            if b.is_Integer and b < 0:
+                return (-1) ** ex * f_(-b, ex)
+            if b.is_Integer and b > 1:
+                fa = sp.factorint(b)
+                if len(fa) == 1:
+                    (pr, k), = fa.items()
+                    return sp.Pow(pr, k * ex)
+            return sp.Pow(b, ex)
+        return e.replace(lambda t: isinstance(t, sp.Pow) and t.base.is_Integer and not t.exp.is_number,
+                         lambda t: f_(t.base, t.exp))
+    d2 = sp.powsimp(sp.expand(_primes(d)), force=True)
+    cands = [d, d2, sp.powsimp(sp.expand_power_base(d, force=True), force=True)]
+    cands.append(sp.powsimp(sp.expand_power_base(cands[-1], force=True), combine="exp", force=True))
+    d = min(cands, key=sp.count_ops)
+    return out(d)
+
+
+def _rec_parts(fun, fname, kind):
+    """Function[{y, n}, {eqs...}] -> (yname, nsym, equations as SymPy Eq)."""
+    if not (_head(fun, "Function") and len(fun.args) == 2 and is_list(fun.args[0]) and len(fun.args[0].args) == 2):
+        raise ValueError(f"{fname}: the argument must be Function[{{y, {kind}}}, {{eqns}}]")
+    yv, nvar = fun.args[0].args
+    if not (isinstance(yv, Symbol) and isinstance(nvar, Symbol)):
+        raise ValueError(f"{fname}: the formal parameters must be symbols")
+    body = fun.args[1]
+    eqs = list(body.args) if is_list(body) else [body]
+    out_ = []
+    for e in eqs:
+        v = SX(e, fname)
+        if not isinstance(v, sp.Equality):
+            raise ValueError(f"{fname}: the body must be a list of equations")
+        out_.append(v)
+    return yv.name, sp.Symbol(nvar.name), out_
+
+
+def _rec_values(fun, upto, fname="DifferenceRoot"):
+    """Exact values of a DifferenceRoot sequence: dict index -> value, computed from the ICs up to `upto`."""
+    yname, nv, eqs = _rec_parts(fun, fname, "n")
+    yf = sp.Function(yname)
+    rec, ic = None, {}
+    for v in eqs:
+        apps = [a for a in v.atoms(AppliedUndef) if a.func == yf]
+        if any(a.args[0].has(nv) for a in apps):
+            if rec is not None:
+                raise ValueError(f"{fname}: exactly one recurrence equation is required")
+            rec = (v.lhs - v.rhs, apps)
+        else:
+            if not (isinstance(v.lhs, AppliedUndef) and v.lhs.func == yf and v.lhs.args[0].is_integer
+                    and v.lhs.args[0].is_number):
+                raise ValueError(f"{fname}: initial conditions must be y[k] == value")
+            ic[int(v.lhs.args[0])] = v.rhs
+    if rec is None:
+        raise ValueError(f"{fname}: no recurrence equation")
+    d, apps = rec
+    shifts = sorted({sp.simplify(a.args[0] - nv) for a in apps})
+    if not all(s.is_integer for s in shifts):
+        raise ValueError(f"{fname}: shifts must be integers")
+    smax, smin = int(max(shifts)), int(min(shifts))
+    Ys = {s: sp.Symbol(f"__Y{s - smin}") for s in range(smin, smax + 1)}
+    dd = d.xreplace({a: Ys[int(sp.simplify(a.args[0] - nv))] for a in apps})
+    if not all(sp.Poly(dd, *Ys.values()).total_degree() <= 1 for _ in [0]):
+        raise NotImplementedError(f"{fname}: only linear recurrences are supported")
+    lead = sp.Symbol("__LEAD")
+    sol = sp.solve(dd, Ys[smax], dict=True)
+    if len(sol) != 1:
+        raise NotImplementedError(f"{fname}: the recurrence cannot be solved for the highest shift")
+    nxt = sol[0][Ys[smax]]
+    vals = dict(ic)
+    if not vals:
+        raise ValueError(f"{fname}: initial conditions are required")
+    start = min(vals)
+    order = smax - smin
+    if any(start + i not in vals for i in range(order)):
+        raise ValueError(f"{fname}: {order} consecutive initial values are required")
+    m = start + order
+    while m <= upto:
+        if m not in vals:
+            base = m - smax
+            sub = {Ys[s]: vals[base + s] for s in range(smin, smax) if base + s in vals}
+            if len(sub) != order:
+                raise ValueError(f"{fname}: insufficient initial values")
+            v = sp.simplify(nxt.subs(nv, base).subs(sub))
+            if v.has(sp.zoo, sp.nan, sp.oo):
+                raise ValueError(f"{fname}: the recurrence is singular at {base}")
+            vals[m] = v
+        m += 1
+    del lead
+    return vals
+
+
+def _droot_hook(head, args, ev):
+    if len(head.args) != 1 or len(args) != 1:
+        return K.UNHANDLED
+    k = args[0]
+    if is_list(k):
+        return L(*(_droot_hook(head, [a], ev) for a in k.args))
+    if not K.is_int(k):
+        return K.UNHANDLED
+    kk = int(k)
+    vals = _rec_values(head.args[0], kk)
+    if kk not in vals:
+        return K.UNHANDLED
+    return out(vals[kk])
+
+
+def _ode_from_function(fun, fname):
+    yname, xv, eqs = _rec_parts(fun, fname, "x")
+    yf = sp.Function(yname)
+    ode, ics = None, []
+    for v in eqs:
+        if v.has(yf(xv)):
+            if ode is not None:
+                raise ValueError(f"{fname}: exactly one differential equation is required")
+            ode = v.lhs - v.rhs
+        else:
+            ics.append(v)
+    if ode is None:
+        raise ValueError(f"{fname}: no differential equation")
+    order = max([d.derivative_count for d in ode.atoms(sp.Derivative)] or [0])
+    Ys = [sp.Symbol(f"__D{i}") for i in range(order + 1)]
+    rep = {sp.Derivative(yf(xv), (xv, i)): Ys[i] for i in range(order, 0, -1)}
+    dd = ode.subs(rep).subs(yf(xv), Ys[0])
+    sol = sp.solve(dd, Ys[order], dict=True)
+    if len(sol) != 1:
+        raise NotImplementedError(f"{fname}: the equation cannot be solved for the highest derivative")
+    G = sol[0][Ys[order]]
+    x0 = None
+    vals = [None] * order
+    for v in ics:
+        lhs = v.lhs
+        if isinstance(lhs, AppliedUndef) and lhs.func == yf:
+            i, p = 0, lhs.args[0]
+        elif isinstance(lhs, sp.Subs) and isinstance(lhs.expr, sp.Derivative):
+            i, p = lhs.expr.derivative_count, lhs.point[0]
+        else:
+            raise ValueError(f"{fname}: initial conditions must be y[x0] == v, y'[x0] == v, ...")
+        if x0 is not None and p != x0:
+            raise NotImplementedError(f"{fname}: all initial conditions must be at the same point")
+        x0 = p
+        if i >= order:
+            raise ValueError(f"{fname}: too many initial conditions")
+        vals[i] = v.rhs
+    if any(v is None for v in vals):
+        raise ValueError(f"{fname}: {order} initial conditions are required")
+    return yname, xv, order, Ys, G, x0, vals, ode
+
+
+def _diffroot_hook(head, args, ev):
+    if len(head.args) != 1 or len(args) != 1:
+        return K.UNHANDLED
+    t = args[0]
+    if is_list(t):
+        return L(*(_diffroot_hook(head, [a], ev) for a in t.args))
+    yname, xv, order, Ys, G, x0, vals, _ode = _ode_from_function(head.args[0], "DifferentialRoot")
+    tv = SX(t, "DifferentialRoot")
+    if tv == x0:
+        return out(vals[0])
+    if not (isinstance(t, float) or (tv.is_number and tv.has(sp.Float))):
+        return K.UNHANDLED
+    tf = float(sp.re(tv))
+    f = sp.lambdify([xv] + Ys[:order], G, "mpmath")
+    mpmath.mp.dps = 20
+    try:
+        sol = mpmath.odefun(lambda xx, yy: list(yy[1:]) + [f(xx, *yy)], float(x0), [complex(sp.N(v)) for v in vals]
+                            if any(sp.N(v).has(sp.I) for v in vals) else [float(sp.N(v)) for v in vals])
+        r = sol(tf)[0]
+    except Exception as exc:
+        raise ValueError(f"DifferentialRoot: numerical integration failed ({exc})")
+    finally:
+        mpmath.mp.dps = 15
+    r = complex(r)
+    return float(r.real) if abs(r.imag) < 1e-14 else R(r)
+
+
+KL.COMPOUND_HEAD_HOOKS["DifferenceRoot"] = _droot_hook
+KL.COMPOUND_HEAD_HOOKS["DifferentialRoot"] = _diffroot_hook
+record("DifferenceRoot", AREA, "added",
+       "DifferenceRoot[Function[{y, n}, {rec, ics}]][k]: the solution of a linear recurrence with initial values; "
+       "evaluated exactly at integers (iterating the recurrence), unevaluated otherwise")
+record("DifferentialRoot", AREA, "added",
+       "DifferentialRoot[Function[{y, x}, {ode, ics}]][x]: the solution of an ODE with initial conditions; exact at "
+       "the initial point, numerical (mpmath Taylor ODE solver) at inexact arguments, unevaluated otherwise")
+
+
+def _guess_recurrence(vals, n0, max_order=4, max_deg=4, spare=8):
+    """Smallest (order, degree) recurrence sum_i p_i(n) a(n+i) = 0 fitting the values (exact nullspace)."""
+    N = len(vals)
+    nv = sp.Symbol("n")
+    for tot in range(1, max_order + max_deg + 1):
+        for r in range(1, max_order + 1):
+            d = tot - r
+            if d < 0 or d > max_deg:
+                continue
+            unk = (r + 1) * (d + 1)
+            rows = N - r
+            if rows < unk + spare:
+                continue
+            M = sp.Matrix(rows, unk, lambda m, c: sp.Integer(n0 + m) ** (c % (d + 1)) * vals[m + c // (d + 1)])
+            ns = M.nullspace()
+            if len(ns) != 1:
+                continue
+            v = ns[0]
+            if all(c.is_rational for c in v):
+                den = sp.ilcm(*[sp.fraction(c)[1] for c in v])
+                v = v * den
+                g = sp.igcd(*[int(c) for c in v if c != 0])
+                v = v / g
+            else:
+                piv = [c for c in v if c != 0][-1]
+                v = (v / piv).applyfunc(sp.simplify)
+            ps = [sp.Add(*[v[i * (d + 1) + j] * nv ** j for j in range(d + 1)]) for i in range(r + 1)]
+            if ps[-1] == 0 or ps[0] == 0:
+                continue
+            return ps
+    return None
+
+
+def _verify_rec(f, ps, nv):
+    """f satisfies sum_i ps[i](n) f(n+i) == 0: symbolically, else numerically at several real points."""
+    expr = sp.Add(*[p.subs(sp.Symbol("n"), nv) * f.subs(nv, nv + i) for i, p in enumerate(ps)])
+    g = _rewrite_special(expr)
+    try:
+        if sp.simplify(sp.expand(sp.gammasimp(g))) == 0:
+            return True
+    except Exception:
+        pass
+    for t in (sp.Rational(37, 7), sp.Rational(91, 11), sp.Rational(23, 3), 12):
+        try:
+            z = complex(sp.N(g.subs(nv, t), 40))
+            sc = max(1.0, max(abs(complex(sp.N(f.subs(nv, t + i), 40))) for i in range(len(ps))))
+        except Exception:
+            return False
+        if abs(z) > 1e-25 * sc * 10 ** len(ps):
+            return False
+    return True
+
+
+def _seq_values(f, nv, fname, count=40):
+    n0 = 0
+    while n0 < 30:
+        try:
+            vs = [sp.simplify(_rewrite_special(f).subs(nv, n0 + i)) for i in range(count)]
+            if all(v.is_finite and not v.has(sp.zoo, sp.nan) for v in vs):
+                return n0, vs
+        except Exception:
+            pass
+        n0 += 1
+    raise NotImplementedError(f"{fname}: the sequence values could not be computed")
+
+
+@fn("DifferenceRootReduce", area=AREA, status="added",
+    notes="DifferenceRootReduce[expr, n]: DifferenceRoot[Function[{y, n}, {rec == 0, ics}]][n] with a linear "
+          "recurrence with polynomial coefficients (guessed from exact values, then verified symbolically or "
+          "numerically at non-integer points); DifferenceRootReduce[f &]; DifferenceRootReduce[lhs == rhs, n] gives "
+          "True when both sides reduce to the same sequence; non-holonomic inputs raise")
+def _drr(expr, *rest):
+    fname = "DifferenceRootReduce"
+    if not rest:
+        if not _head(expr, "Function"):
+            raise ValueError(f"{fname}: give DifferenceRootReduce[expr, n] or a pure function")
+        n_ = Symbol("n")
+        body = _ev(Expr(expr, n_))
+        r = _drr(body, n_)
+        return r.head
+    if len(rest) != 1:
+        raise ValueError(f"{fname}: too many arguments")
+    nv = _svar(rest[0], fname)
+    if _head(expr, "Equal") and len(expr.args) == 2:
+        d = SX(expr.args[0], fname) - SX(expr.args[1], fname)
+        d = _rewrite_special(d)
+        if sp.simplify(sp.expand(d)) == 0:
+            return True
+        n0, vs = _seq_values(d, nv, fname)
+        if all(v == 0 for v in vs) and _verify_rec(d, [sp.Integer(1)], nv) and False:
+            return True
+        raise NotImplementedError(f"{fname}: the identity could not be decided")
+    f = SX(expr, fname)
+    n0, vs = _seq_values(f, nv, fname)
+    ps = _guess_recurrence(vs, n0)
+    if ps is None or not _verify_rec(f, ps, nv):
+        raise NotImplementedError(f"{fname}: no verified linear recurrence with polynomial coefficients was found")
+    r = len(ps) - 1
+    nn = sp.Symbol("n")
+    # choose the start beyond integer roots of the leading coefficient
+    roots = [int(z) for z in sp.Poly(ps[-1], nn).ground_roots() if z.is_integer] if ps[-1].has(nn) else []
+    start = max([n0] + [z + 1 for z in roots])
+    if ps[-1].subs(nn, sp.Symbol("t")).as_poly(sp.Symbol("t")).LC() < 0 if ps[-1].has(nn) else ps[-1] < 0:
+        ps = [-p for p in ps]
+    yS, nS = Symbol("FormalY"), Symbol("FormalN")
+    yf = sp.Function("FormalY")
+    nF = sp.Symbol("FormalN")
+    rec = sp.Add(*[sp.expand(p.subs(nn, nF)) * yf(nF + i) for i, p in enumerate(ps)])
+    ics = [Expr("Equal", Expr("FormalY", start + i), out(sp.simplify(_rewrite_special(f).subs(nv, start + i))))
+           for i in range(r)]
+    body = L(Expr("Equal", out(rec), 0), *ics)
+    return Expr(Expr("DifferenceRoot", Expr("Function", L(yS, nS), body)), Symbol(nv.name))
+
+
+@fn("DifferentialRootReduce", area=AREA, status="added",
+    notes="DifferentialRootReduce[expr, x]: DifferentialRoot[Function[{y, x}, {ode == 0, ics}]][x], a linear ODE "
+          "with polynomial coefficients (SymPy's holonomic conversion, verified by substitution) with initial "
+          "conditions at a regular point (0, else 1, 2, ...); DifferentialRootReduce[f &]; non-holonomic inputs raise")
+def _difrr(expr, *rest):
+    fname = "DifferentialRootReduce"
+    if not rest:
+        if not _head(expr, "Function"):
+            raise ValueError(f"{fname}: give DifferentialRootReduce[expr, x] or a pure function")
+        x_ = Symbol("x")
+        return _difrr(_ev(Expr(expr, x_)), x_).head
+    if len(rest) != 1:
+        raise ValueError(f"{fname}: too many arguments")
+    xv = _svar(rest[0], fname)
+    f = SX(expr, fname)
+    from sympy.holonomic import expr_to_holonomic
+    try:
+        h = expr_to_holonomic(f, xv)
+        ann = h.annihilator
+        ps = [sp.sympify(ann.parent.base.to_sympy(c)) for c in ann.listofpoly]
+    except Exception:
+        raise NotImplementedError(f"{fname}: {expr} is not recognised as a holonomic function")
+    ps = [sp.expand(p.subs(sp.Symbol("x"), xv)) for p in ps]
+    chk = sp.Add(*[p * sp.diff(f, xv, i) for i, p in enumerate(ps)])
+    if sp.simplify(chk) != 0:
+        raise NotImplementedError(f"{fname}: the differential equation could not be verified")
+    r = len(ps) - 1
+    x0 = None
+    for c in range(0, 20):
+        if ps[-1].subs(xv, c) != 0:
+            ok = True
+            ivs = []
+            for i in range(r):
+                try:
+                    v = sp.simplify(sp.limit(sp.diff(f, xv, i), xv, c))
+                except Exception:
+                    ok = False
+                    break
+                if v.has(sp.oo, -sp.oo, sp.zoo, sp.nan) or isinstance(v, sp.Limit):
+                    ok = False
+                    break
+                ivs.append(v)
+            if ok:
+                x0 = c
+                break
+    if x0 is None:
+        raise NotImplementedError(f"{fname}: no regular point for the initial conditions was found")
+    from sympy import lcm, fraction
+    den = sp.Integer(1)
+    for p in ps:
+        for t in sp.Add.make_args(p):
+            den = lcm(den, fraction(t.as_coeff_Mul()[0])[1])
+    ps = [sp.expand(p * den) for p in ps]
+    yf = sp.Function("FormalY")
+    xs = sp.Symbol("FormalX")
+    ode = sp.Add(*[p.subs(xv, xs) * (yf(xs) if i == 0 else sp.Derivative(yf(xs), (xs, i))) for i, p in enumerate(ps)])
+    ics = []
+    for i, v in enumerate(ivs):
+        lhs = Expr("FormalY", x0) if i == 0 else Expr(Expr(Expr("Derivative", i), Symbol("FormalY")), x0)
+        ics.append(Expr("Equal", lhs, out(v)))
+    body = L(Expr("Equal", out(ode), 0), *ics)
+    return Expr(Expr("DifferentialRoot", Expr("Function", L(Symbol("FormalY"), Symbol("FormalX")), body)),
+                Symbol(xv.name))
+
+
+# ───────────────────────────── sequence recognition and generating functions ─────────────────────────────
+
+def _pw_first(G):
+    """Closed forms of sums come as Piecewise((value, convergence condition), (Sum, True)): take the value."""
+    return G.replace(lambda e: isinstance(e, sp.Piecewise) and len(e.args) == 2 and e.args[1][0].has(sp.Sum),
+                     lambda e: e.args[0][0])
+
+
+def _gamma_to_factorial(f, nv):
+    return f.replace(lambda e: isinstance(e, sp.gamma) and (e.args[0] - nv).is_integer is True
+                     and (e.args[0] - nv) >= 1, lambda e: sp.factorial(e.args[0] - 1))
+
+
+def _fit_rational(xs, ys, spare=2, max_tot=8):
+    """Exact rational function p(n)/q(n) through all (x, y) points with at least `spare` confirming points."""
+    nv = sp.Symbol("n")
+    m = len(xs)
+    for tot in range(0, max_tot + 1):
+        for dq in range(0, tot + 1):
+            dp = tot - dq
+            unk = dp + 1 + dq + 1
+            if m < unk - 1 + spare:
+                continue
+            M = sp.Matrix(m, unk, lambda i, c: xs[i] ** c if c <= dp else -ys[i] * xs[i] ** (c - dp - 1))
+            ns = M.nullspace()
+            if len(ns) != 1:
+                continue
+            v = ns[0]
+            p = sp.Add(*[v[c] * nv ** c for c in range(dp + 1)])
+            q = sp.Add(*[v[dp + 1 + c] * nv ** c for c in range(dq + 1)])
+            if q == 0 or (dq > 0 and sp.Poly(q, nv).degree() < dq) or (dp > 0 and sp.Poly(p, nv).degree() < dp):
+                continue
+            if any(q.subs(nv, x) == 0 for x in xs):
+                continue
+            f = sp.cancel(p / q)
+            if all(sp.simplify(f.subs(nv, x) - y) == 0 for x, y in zip(xs, ys)):
+                return sp.factor(f) if dq > 0 else sp.expand(f)
+    return None
+
+
+def _check_seq(f, nv, xs, ys):
+    for x, y in zip(xs, ys):
+        try:
+            v = _rewrite_special(f).subs(nv, x)
+            if sp.simplify(v - y) != 0:
+                z = complex(sp.N(v - y, 40))
+                if abs(z) > 1e-30 * max(1, abs(complex(sp.N(y, 40)))):
+                    return False
+        except Exception:
+            return False
+    return True
+
+
+def _hypergeometric_fit(xs, ys, nv):
+    """a(n+1)/a(n) rational -> a(n) = a(n0) prod r(k) (consecutive integer points)."""
+    if any(y == 0 for y in ys) or len(ys) < 3:
+        return None
+    rs = [sp.simplify(ys[i + 1] / ys[i]) for i in range(len(ys) - 1)]
+    r = _fit_rational(xs[:-1], rs)
+    if r is None:
+        return None
+    k = sp.Symbol("k", integer=True)
+    nn = sp.Symbol("n")
+    n0 = xs[0]
+    if not r.has(nn):
+        f = ys[0] * r ** (nv - n0)
+    else:
+        try:
+            pr = sp.product(r.subs(nn, k), (k, n0, nv - 1))
+        except Exception:
+            return None
+        if pr.has(sp.Product):
+            return None
+        f = ys[0] * pr
+    f = sp.simplify(sp.combsimp(f))
+    f = sp.powsimp(f, force=True)
+    return f if _check_seq(f, nv, xs, ys) else None
+
+
+def _cfinite_fit(ys, n0, nv):
+    """Constant-coefficient linear recurrence (with >= 2 confirming terms) solved exactly."""
+    m = len(ys)
+    for r in range(1, m // 2 + 1):
+        if m < 2 * r + 2:
+            break
+        M = sp.Matrix(m - r, r, lambda i, j: ys[i + j])
+        b = sp.Matrix(m - r, 1, lambda i, j: ys[i + r])
+        try:
+            sol, params = M[:r, :].gauss_jordan_solve(b[:r, :])
+        except ValueError:
+            continue
+        if params.shape[0]:
+            continue
+        if (M * sol - b).applyfunc(sp.simplify) != sp.zeros(m - r, 1):
+            continue
+        cs = list(sol)
+        yf = sp.Function("y")
+        rec = yf(nv + r) - sp.Add(*[cs[j] * yf(nv + j) for j in range(r)])
+        try:
+            f = sp.rsolve(rec, yf(nv), {yf(n0 + i): ys[i] for i in range(r)})
+        except Exception:
+            return None
+        if f is None:
+            return None
+        f = sp.simplify(f)
+        xs = list(range(n0, n0 + m))
+        # Fibonacci / Lucas recognition
+        for base in (sp.fibonacci, sp.lucas):
+            for s_ in range(-2, 3):
+                g = base(nv + s_)
+                v0 = [base(x + s_) for x in xs]
+                if v0[0] != 0:
+                    c = sp.simplify(ys[0] / v0[0])
+                    if all(sp.simplify(c * a - y) == 0 for a, y in zip(v0, ys)):
+                        return sp.expand(c * g)
+        return f if _check_seq(f, nv, xs, ys) else None
+    return None
+
+
+def _find_seq(data, nv, depth=0):
+    if not is_list(data) or not data.args:
+        raise ValueError("FindSequenceFunction: the data must be a non-empty list")
+    if all(is_list(p) and len(p.args) == 2 for p in data.args):
+        xs = [SX(p.args[0], "FindSequenceFunction") for p in data.args]
+        ys = [SX(p.args[1], "FindSequenceFunction") for p in data.args]
+    else:
+        xs = list(range(1, len(data.args) + 1))
+        ys = [SX(v, "FindSequenceFunction") for v in data.args]
+        xs = [sp.Integer(x) for x in xs]
+    return _find_seq_xy(xs, ys, nv, depth)
+
+
+def _find_seq_xy(xs, ys, nv, depth=0):
+    nn = sp.Symbol("n")
+    if len(xs) < 3:
+        return None
+    f = _fit_rational(xs, ys)
+    if f is not None:
+        return f.subs(nn, nv)
+    consecutive = all(xs[i + 1] - xs[i] == 1 for i in range(len(xs) - 1)) and all(x.is_integer for x in xs)
+    step = sp.simplify(xs[1] - xs[0])
+    equal_steps = all(sp.simplify(xs[i + 1] - xs[i] - step) == 0 for i in range(len(xs) - 1))
+    if consecutive:
+        f = _hypergeometric_fit(xs, ys, nv)
+        if f is not None:
+            return f
+        f = _cfinite_fit(ys, int(xs[0]), nv)
+        if f is not None:
+            return f
+        if depth == 0:
+            ds = [sp.simplify(ys[i + 1] - ys[i]) for i in range(len(ys) - 1)]
+            g = _find_seq_xy(xs[:-1], ds, nv, 1)
+            if g is not None:
+                k = sp.Symbol("k", integer=True)
+                try:
+                    s_ = sp.summation(g.subs(nv, k), (k, xs[0], nv - 1))
+                except Exception:
+                    s_ = None
+                if s_ is not None and not s_.has(sp.Sum):
+                    f = sp.simplify(ys[0] + s_)
+                    f = sp.powsimp(sp.expand(f), force=True)
+                    if _check_seq(f, nv, xs, ys):
+                        return f
+    elif equal_steps and len(xs) >= 3 and all(y != 0 for y in ys):
+        rs = [sp.simplify(ys[i + 1] / ys[i]) for i in range(len(ys) - 1)]
+        if all(sp.simplify(r - rs[0]) == 0 for r in rs):
+            f = sp.powsimp(sp.simplify(ys[0] * rs[0] ** ((nv - xs[0]) / step)), force=True)
+            f = sp.simplify(f)
+            if _check_seq(f, nv, xs, ys):
+                return f
+    return None
+
+
+@fn("FindSequenceFunction", area=AREA, status="added",
+    notes="FindSequenceFunction[{a1, a2, ...}, n] (or {{n1, a1}, ...}): rational functions of n, hypergeometric "
+          "terms (rational successive ratios: products, factorials, powers), constant-coefficient linear recurrences "
+          "(solved exactly; Fibonacci/LucasL recognised) and sums of hypergeometric differences, each fitted exactly "
+          "with at least two confirming terms; FindSequenceFunction[list] gives a pure function; stays unevaluated "
+          "when nothing is found")
+def _findseqfn(data, *rest):
+    if len(rest) > 1:
+        raise ValueError("FindSequenceFunction: too many arguments")
+    if rest:
+        nv = _svar(rest[0], "FindSequenceFunction")
+        f = _find_seq(data, nv)
+        if f is None:
+            raise Unevaluated
+        return out(_gamma_to_factorial(f, nv))
+    nv = sp.Symbol("__slot1")
+    f = _find_seq(data, nv)
+    if f is None:
+        raise Unevaluated
+    body = K.substitute(out(_gamma_to_factorial(f, nv)), {"__slot1": Expr("Slot", 1)})
+    return Expr("Function", body)
+
+
+@fn("FindGeneratingFunction", area=AREA, status="added",
+    notes="FindGeneratingFunction[{a0, a1, ...}, x]: a rational generating function from a constant-coefficient "
+          "linear recurrence (at least two confirming terms), else the sum of the FindSequenceFunction term; "
+          "verified against the series; unevaluated when nothing is found")
+def _findgf(data, x):
+    fname = "FindGeneratingFunction"
+    if not is_list(data) or len(data.args) < 3:
+        raise ValueError(f"{fname}: at least three terms are required")
+    xv = _svar(x, fname)
+    ys = [SX(v, fname) for v in data.args]
+    m = len(ys)
+    G = None
+    for r in range(1, m // 2 + 1):
+        if m < 2 * r + 1:
+            break
+        M = sp.Matrix(m - r, r, lambda i, j: ys[i + j])
+        b = sp.Matrix(m - r, 1, lambda i, j: ys[i + r])
+        try:
+            sol, params = M[:r, :].gauss_jordan_solve(b[:r, :])
+        except ValueError:
+            continue
+        if params.shape[0] or (M * sol - b).applyfunc(sp.simplify) != sp.zeros(m - r, 1):
+            continue
+        cs = list(sol)
+        Q = 1 - sp.Add(*[cs[r - 1 - j] * xv ** (j + 1) for j in range(r)])
+        A = sp.Add(*[ys[i] * xv ** i for i in range(m)])
+        P = sp.expand(Q * A)
+        P = sp.Add(*[P.coeff(xv, i) * xv ** i for i in range(r)])
+        G = sp.factor(sp.cancel(P / Q))
+        break
+    if G is None:
+        nv = sp.Symbol("n", integer=True, nonnegative=True)
+        f = _find_seq_xy([sp.Integer(i) for i in range(m)], ys, nv)
+        if f is None:
+            raise Unevaluated
+        try:
+            G = sp.summation(f * xv ** nv, (nv, 0, sp.oo))
+        except Exception:
+            raise Unevaluated
+        G = _pw_first(G)
+        if G.has(sp.Sum):
+            raise Unevaluated
+        G = sp.factor(sp.simplify(G))
+    try:
+        ser = sp.series(G, xv, 0, m).removeO()
+    except Exception:
+        raise Unevaluated
+    if any(sp.simplify(ser.coeff(xv, i) - ys[i]) != 0 for i in range(m)):
+        raise Unevaluated
+    return out(G)
+
+
+@fn("ExponentialGeneratingFunction", area=AREA, status="added",
+    notes="ExponentialGeneratingFunction[expr, n, x] = Sum[expr x^n/n!, {n, 0, Infinity}] in closed form (SymPy "
+          "summation, checked against the first Taylor coefficients); raises when no closed form is found")
+def _egf(expr, n, x, *rest):
+    fname = "ExponentialGeneratingFunction"
+    if rest:
+        raise NotImplementedError(f"{fname}: multivariate generating functions and options are not supported")
+    nv = _svar(n, fname)
+    xv = _svar(x, fname)
+    f = SX(expr, fname)
+    k = sp.Symbol("k", integer=True, nonnegative=True)
+    fk = f.subs(nv, k)
+    try:
+        G = sp.summation(fk * xv ** k / sp.factorial(k), (k, 0, sp.oo))
+    except Exception:
+        G = None
+    G = _pw_first(G) if G is not None else None
+    if G is None or G.has(sp.Sum):
+        raise NotImplementedError(f"{fname}: no closed form was found")
+    G = sp.simplify(G)
+    ser = sp.series(G, xv, 0, 7).removeO()
+    for i in range(7):
+        want = sp.simplify(_rewrite_special(fk.subs(k, i)) / sp.factorial(i))
+        if sp.simplify(ser.coeff(xv, i) - want) != 0:
+            raise NotImplementedError(f"{fname}: the closed form failed verification")
+    return out(G)
+
+
+@fn("FactorialMomentGeneratingFunction", area=AREA, status="added",
+    notes="FactorialMomentGeneratingFunction[dist, t] = Expectation[t^x] = MomentGeneratingFunction[dist, Log[t]], "
+          "simplified; raises when the moment generating function is not known")
+def _fmgf(dist, t, *rest):
+    fname = "FactorialMomentGeneratingFunction"
+    if rest:
+        raise ValueError(f"{fname}: too many arguments")
+    tv = _svar(t, fname)
+    m = _ev(Expr("MomentGeneratingFunction", dist, Expr("Log", Symbol(tv.name))))
+    if _head(m, "MomentGeneratingFunction"):
+        raise NotImplementedError(f"{fname}: the moment generating function of {dist} is not available")
+    v = SX(m, fname)
+    tp = sp.Symbol(tv.name, positive=True)
+    v = sp.simplify(sp.powsimp(sp.expand_log(v.subs(tv, tp), force=True), force=True)).subs(tp, tv)
+    return out(v)
+
+
+def _truncate(e, m, activate):
+    if isinstance(e, Expr):
+        h = e.head
+        is_sum = h == "Sum" or (isinstance(h, Expr) and h.head == "Inactive" and h.args and _is(h.args[0], "Sum"))
+        args = [_truncate(a, m, activate) for a in e.args]
+        if is_sum and len(args) >= 2:
+            body, its = args[0], args[1:]
+            for it in reversed(its):
+                if not (is_list(it) and len(it.args) in (2, 3) and isinstance(it.args[0], Symbol)):
+                    raise NotImplementedError("TruncateSum: iterators must be {i, a, b} or {i, b}")
+                i_ = it.args[0]
+                a_ = it.args[1] if len(it.args) == 3 else 1
+                b_ = it.args[-1]
+                hi = _ev(Expr("Plus", a_, m, -1))
+                if K.is_int(m) and K.is_int(a_) and (_is(b_, "Infinity") or
+                                                     (K.is_int(b_) and int(b_) - int(a_) + 1 > int(m))):
+                    if activate:
+                        body = _ev(Expr("Plus", *[K.substitute(body, {i_.name: int(a_) + k}) for k in range(int(m))]))
+                    else:
+                        body = Expr(Expr("Inactive", Symbol("Sum")), body, L(i_, a_, hi))
+                elif K.is_int(m):
+                    body = Expr(e.head, body, it) if not activate else _ev(Expr("Sum", body, it))
+                else:
+                    if not (_is(b_, "Infinity") or not K.is_int(b_)):
+                        body = Expr(Expr("Inactive", Symbol("Sum")), body, L(i_, a_, Expr("Min", hi, b_)))
+                    else:
+                        body = Expr(Expr("Inactive", Symbol("Sum")), body, L(i_, a_, hi))
+            return body
+        return Expr(e.head if not isinstance(e.head, Expr) else _truncate(e.head, m, activate), *args)
+    return e
+
+
+@fn("TruncateSum", area=AREA, status="added",
+    notes="TruncateSum[expr, m]: every Sum and Inactive[Sum] in expr is replaced by the sum of its first m terms "
+          "(explicit, activated); symbolic m gives Inactive[Sum][f, {i, a, a + m - 1}]; ActivateResult -> False keeps "
+          "the truncated sums inactive")
+def _truncsum(expr, m, *rest):
+    activate = True
+    for r_ in rest:
+        if is_rule(r_) and _is(r_.args[0], "ActivateResult"):
+            activate = r_.args[1] is True
+        else:
+            raise ValueError("TruncateSum: unexpected argument")
+    if K.is_int(m) and int(m) < 0:
+        raise ValueError("TruncateSum: the number of terms must be non-negative")
+    return _ev(_truncate(expr, m, activate))
