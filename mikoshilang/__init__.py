@@ -62,3 +62,9 @@ __all__ = [
 
 from .runtime import Session, clear_definitions
 __all__ += ["Session", "clear_definitions"]
+
+# Python interop: ``@mikoshilang.function`` registers a typed Python function as a global library head
+# (``@session.function`` registers it in one session only); see docs/python_interop.md.
+from .interop import library_function as function, unregister, from_python, to_python  # noqa: E402
+from .packed import PackedArray  # noqa: E402
+__all__ += ["function", "unregister", "from_python", "to_python", "PackedArray"]

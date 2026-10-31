@@ -45,6 +45,7 @@ from typing import Any, Callable, Dict, Optional
 import sympy as sp
 
 from .expr import Expr, Symbol
+from .packed import PackedArray, from_array
 
 PYFUNCS_KEY = "\x00python_functions"  # SessionState.ext kind (session-wide) holding registered Python functions
 
@@ -83,6 +84,8 @@ def from_python(obj: Any) -> Any:
         return obj.numerator if obj.denominator == 1 else _from_sympy(sp.Rational(obj.numerator, obj.denominator))
     if isinstance(obj, Symbol):
         return obj
+    if obj.__class__ is PackedArray:
+        return obj
     if isinstance(obj, Expr):
         head = obj.head if isinstance(obj.head, str) else from_python(obj.head)
         args = [from_python(a) for a in obj.args]
@@ -105,6 +108,9 @@ def from_python(obj: Any) -> Any:
         if isinstance(obj, np.complexfloating):
             return from_python(complex(obj))
         if isinstance(obj, np.ndarray):
+            packed = from_array(obj)
+            if packed is not None:
+                return packed                           # machine numbers stay one NumPy array (packed List)
             if obj.dtype.kind in "biufcU":
                 return from_python(obj.tolist())
             if obj.dtype.kind == "O":
@@ -166,7 +172,13 @@ def to_python(e: Any, symbolic: str = "expr", arrays: str = "list") -> Any:
         if e.name == "Infinity":
             return math.inf
         return _symbolic(e, symbolic)
+    if e.__class__ is PackedArray:
+        return e.array.copy() if arrays == "numpy" else e.array.tolist()
     if isinstance(e, Expr):
+        if e.head == "PythonObject":
+            found = _handle_lookup(e)
+            if found is not None:
+                return found[0]
         if e.head == "List":
             if arrays == "numpy":
                 arr = _as_array(e)
@@ -460,7 +472,7 @@ def register(state, fn: Callable, name: Optional[str] = None, listable: bool = F
     if name in getattr(K, "_BUILTINS", {}):
         raise ValueError(f"function: {name} is a kernel built-in and cannot be redefined from Python")
     if not override and name in library.REGISTRY:
-        raise ValueError(f"function: {name} is a library head; pass override=True to shadow it in this session")
+        raise ValueError(f"function: {name} is a library head; pass override=True to shadow it")
     sig = inspect.signature(fn)
     hints = _hints(fn, sig, name)
     params, keywords, var_keyword = [], {}, False
@@ -513,6 +525,61 @@ def _hints(fn, sig, name):
                 raise TypeError(f"function: cannot read the type hint {text!r} of {name}: {exc}") from exc
         out[key] = ann
     return out
+
+
+_GLOBAL_PREVIOUS: Dict[str, Any] = {}
+
+
+def library_function(fn: Optional[Callable] = None, *, name: Optional[str] = None, area: str = "user library",
+                     listable: bool = False, notes: str = "", check: str = "delegated", override: bool = False):
+    """Decorator for library authors: register a typed Python function as a head in every session.
+
+    Same typing, error and listable rules as ``@session.function``; the head is recorded in
+    ``library.STATUS`` with status ``added`` and its ``Check:`` note, like the built-in library. Kernel built-ins
+    are never redefined; an existing library head is replaced only with ``override=True`` (and restored by
+    ``unregister``). Prefer ``@session.function`` in applications: a global head is visible to every session.
+    """
+    def deco(f):
+        from .library import core
+        holder = _Holder()
+        info = register(holder, f, name=name, listable=listable, notes=notes, check=check, override=override)
+
+        def impl(*args):
+            return call_registered(info, list(args))
+        impl.__name__ = info.name
+        if info.name in core.REGISTRY or info.name in core.STATUS:
+            if info.name not in _GLOBAL_PREVIOUS:
+                _GLOBAL_PREVIOUS[info.name] = (core.REGISTRY.pop(info.name, None), core.STATUS.pop(info.name, None))
+            else:
+                core.REGISTRY.pop(info.name, None)
+        core.fn(info.name, area=area, status="added", notes=info.notes)(impl)
+        f.mikoshi = info
+        return f
+    return deco(fn) if fn is not None else deco
+
+
+def unregister(name: str) -> None:
+    """Remove a head registered with ``library_function`` (restoring a library head it overrode)."""
+    from .library import core
+    entry = core.REGISTRY.get(name)
+    if entry is None or not any(getattr(f, "__name__", "") == name and f.__module__ == __name__
+                                for f, _lo, _hi in entry.impls):
+        raise ValueError(f"unregister: {name} was not registered with mikoshilang.function")
+    core.REGISTRY.pop(name, None)
+    core.STATUS.pop(name, None)
+    prev = _GLOBAL_PREVIOUS.pop(name, None)
+    if prev is not None:
+        if prev[0] is not None:
+            core.REGISTRY[name] = prev[0]
+        if prev[1] is not None:
+            core.STATUS[name] = prev[1]
+
+
+class _Holder:
+    """Stand-in session state for library_function (register writes into .ext)."""
+
+    def __init__(self):
+        self.ext = {}
 
 
 def registered(state) -> Dict[str, PythonFunctionInfo]:
@@ -633,60 +700,202 @@ def _allowed(path: str) -> bool:
     return any(".".join(parts[:i]) in perm for i in range(1, len(parts) + 1))
 
 
-def resolve(path: Any):
-    """Import module.attr (longest importable module prefix), subject to Session(allow_python=...)."""
+def _check_path(path: Any, fname: str = "PythonFunction"):
     if not isinstance(path, str):
-        raise TypeError(f"PythonFunction: expected a dotted Python name as a string, not {_show(path)}")
+        raise TypeError(f"{fname}: expected a dotted Python name as a string, not {_show(path)}")
     parts = path.split(".")
     if not path or any(not p.isidentifier() for p in parts):
-        raise ValueError(f"PythonFunction: {path!r} is not a dotted Python name")
+        raise ValueError(f"{fname}: {path!r} is not a dotted Python name")
     if any(p.startswith("_") for p in parts):
-        raise PermissionError(f"PythonFunction: private and dunder names such as {path!r} cannot be called")
+        raise PermissionError(f"{fname}: private and dunder names such as {path!r} cannot be used")
+    return parts
+
+
+def _gate(path: str, fname: str = "PythonFunction"):
     if not _allowed(path):
-        raise PermissionError(f"PythonFunction: calling {path} requires Session(allow_python=True) or an "
-                              f"allow-list containing {parts[0]!r}")
+        raise PermissionError(f"{fname}: using {path} requires Session(allow_python=True) or an allow-list "
+                              f"containing {path.split('.')[0]!r}")
+
+
+def _getattr_path(obj, base: str, attrs, fname):
+    for i, attr in enumerate(attrs):
+        try:
+            obj = getattr(obj, attr)
+        except AttributeError:
+            raise ValueError(f"{fname}: {base} has no attribute {'.'.join(attrs[:i + 1])}") from None
+    return obj
+
+
+def resolve(path: Any):
+    """Import module.attr (longest importable module prefix), subject to Session(allow_python=...)."""
+    parts = _check_path(path)
+    _gate(path)
     for cut in range(len(parts), 0, -1):
         mod_name = ".".join(parts[:cut])
         try:
             obj = importlib.import_module(mod_name)
         except ImportError:
             continue
-        for attr in parts[cut:]:
-            try:
-                obj = getattr(obj, attr)
-            except AttributeError:
-                raise ValueError(f"PythonFunction: {mod_name} has no attribute {path[len(mod_name) + 1:]}") \
-                    from None
+        obj = _getattr_path(obj, mod_name, parts[cut:], "PythonFunction")
         if not callable(obj):
             raise TypeError(f"PythonFunction: {path} is not callable")
         return obj
     raise ValueError(f"PythonFunction: cannot import {path}")
 
 
+# ── PythonObject handles: Python values with no MikoshiLang form, kept in the session ──
+
+PYOBJECTS_KEY = "\x00python_objects"
+
+
+def _objects(state=None):
+    from . import kernel as K
+    st = state if state is not None else K.state()
+    return st.ext.setdefault(PYOBJECTS_KEY, {})
+
+
+def make_handle(obj, origin: str) -> Expr:
+    """Store obj in the current session and return its handle PythonObject[id, "description"]."""
+    table = _objects()
+    hid = len(table) + 1
+    while hid in table:
+        hid += 1
+    table[hid] = (obj, origin)
+    if isinstance(obj, type(importlib)):
+        desc = f"module {obj.__name__}"
+    else:
+        desc = f"{type(obj).__module__}.{type(obj).__qualname__}"
+    return Expr("PythonObject", hid, desc)
+
+
+def is_handle(e) -> bool:
+    return (isinstance(e, Expr) and e.head == "PythonObject" and len(e.args) == 2 and isinstance(e.args[0], int)
+            and not isinstance(e.args[0], bool) and isinstance(e.args[1], str))
+
+
+def _handle_lookup(e):
+    if not is_handle(e):
+        return None
+    try:
+        return _objects().get(e.args[0])
+    except Exception:          # no active session state
+        return None
+
+
+def handle_object(e, fname: str):
+    """(object, origin) for a PythonObject handle of the current session; raises for anything else."""
+    if not is_handle(e):
+        raise TypeError(f"{fname}: expected a PythonObject handle, not {_show(e)}")
+    found = _objects().get(e.args[0])
+    if found is None:
+        raise ValueError(f"{fname}: PythonObject {e.args[0]} does not exist in this session (cleared, or "
+                         f"created in another session)")
+    _gate(found[1], fname)                           # the session must still allow where it came from
+    return found
+
+
+def python_import(name):
+    """PythonImport["module"]: a handle to an allowed module."""
+    _check_path(name, "PythonImport")
+    _gate(name, "PythonImport")
+    try:
+        mod = importlib.import_module(name)
+    except ImportError as exc:
+        raise ValueError(f"PythonImport: cannot import {name}: {exc}") from None
+    return make_handle(mod, name)
+
+
+def python_attribute(handle, path):
+    """PythonAttribute[handle, "a.b"]: an attribute of a handle's object, converted (or a new handle)."""
+    obj, origin = handle_object(handle, "PythonAttribute")
+    parts = _check_path(path, "PythonAttribute")
+    full = f"{origin}.{path}"
+    if isinstance(obj, type(importlib)):
+        _gate(f"{obj.__name__}.{path}", "PythonAttribute")
+        full = f"{obj.__name__}.{path}"
+    value = _getattr_path(obj, origin, parts, "PythonAttribute")
+    return _result(value, full)
+
+
+def _target(head: Expr):
+    """The callable and its origin path for PythonFunction["mod.f"], PythonFunction[handle] or
+    PythonFunction[handle, "attr.path"]."""
+    a = head.args
+    if len(a) == 1 and isinstance(a[0], str):
+        return resolve(a[0]), a[0]
+    if len(a) in (1, 2) and is_handle(a[0]):
+        obj, origin = handle_object(a[0], "PythonFunction")
+        if len(a) == 2:
+            parts = _check_path(a[1])
+            if isinstance(obj, type(importlib)):
+                origin = f"{obj.__name__}.{a[1]}"
+                _gate(origin)
+            else:
+                origin = f"{origin}.{a[1]}"
+            obj = _getattr_path(obj, origin, parts, "PythonFunction")
+        if not callable(obj):
+            raise TypeError(f"PythonFunction: {origin} is not callable")
+        return obj, origin
+    if len(a) == 1 and isinstance(a[0], (Expr, Symbol)) and not is_handle(a[0]):
+        raise TypeError(f"PythonFunction: expected a dotted name or a PythonObject handle, not {_show(a[0])}")
+    raise ValueError('PythonFunction: expected PythonFunction["module.name"], PythonFunction[handle] or '
+                     'PythonFunction[handle, "attribute"]')
+
+
+def _arg(a):
+    if is_handle(a):
+        return handle_object(a, "PythonFunction")[0]
+    if isinstance(a, Expr) and a.head == "List" and a.__class__ is not PackedArray:
+        return [_arg(x) for x in a.args]
+    return to_python(a, symbolic="expr")
+
+
+def _result(value, origin):
+    """A Python result: converted by the table, or kept as a PythonObject handle."""
+    try:
+        return from_python(value)
+    except TypeError:
+        return make_handle(value, origin)
+
+
 def apply_python_function(head: Expr, args):
-    """PythonFunction["mod.f"][args...]: symbolic arguments leave the call unevaluated."""
+    """PythonFunction[...][args...]: symbolic arguments leave the call unevaluated."""
     from .library.core import Unevaluated
-    if len(head.args) != 1:
-        raise ValueError('PythonFunction: expected PythonFunction["module.name"]')
-    fn = resolve(head.args[0])
+    fn, origin = _target(head)
     args, options = _split_options("PythonFunction", args, (), True)
-    pyargs = [to_python(a, symbolic="expr") for a in args]
-    pykw = {k: to_python(v, symbolic="expr") for k, v in options.items()}
+    pyargs = [_arg(a) for a in args]
+    pykw = {k: _arg(v) for k, v in options.items()}
     if any(_is_symbolic(v) for v in pyargs) or any(_is_symbolic(v) for v in pykw.values()):
         raise Unevaluated()
-    return _invoke("PythonFunction", fn, pyargs, pykw)
+    try:
+        result = fn(*pyargs, **pykw)
+    except PermissionError:
+        raise
+    except _ARGERRORS as exc:
+        raise _same_class(exc, f"PythonFunction: {exc or type(exc).__name__}") from exc
+    except Exception as exc:                          # foreign failure: keep the class name, make it catchable
+        raise ValueError(f"PythonFunction: Python raised {type(exc).__name__}: {exc}") from exc
+    try:
+        return _result(result, origin)
+    except ValueError as exc:
+        raise ValueError(f"PythonFunction: the Python result cannot be converted ({exc})") from exc
 
 
-# Heads that would run code strings in an external evaluator. There is no sandbox yet, so they raise instead
-# of staying silently unevaluated.
-UNSUPPORTED_EXTERNAL = frozenset({"ExternalEvaluate", "ExternalFunction", "StartExternalSession"})
+INTEROP_HEADS = frozenset({"PythonImport", "PythonAttribute"})
 
 
-def reject_external(head: str):
-    raise NotImplementedError(
-        f"{head}: running external code strings is not supported (there is no sandbox); call Python through "
-        f'PythonFunction["module.name"] with Session(allow_python=...) or register a function with '
-        f"@session.function")
+def apply_interop_head(head: str, args):
+    """PythonImport["mod"] and PythonAttribute[handle, "attr"]; a symbol argument leaves the call unevaluated."""
+    from .library.core import Unevaluated
+    if any(isinstance(a, Symbol) for a in args):
+        raise Unevaluated()
+    if head == "PythonImport":
+        if len(args) != 1:
+            raise ValueError(f"PythonImport: called with {len(args)} argument(s); expected 1")
+        return python_import(args[0])
+    if len(args) != 2:
+        raise ValueError(f"PythonAttribute: called with {len(args)} argument(s); expected 2")
+    return python_attribute(args[0], args[1])
 
 
 # ─────────────────────────── Pythonic call proxy ───────────────────────────
