@@ -541,6 +541,10 @@ def _applysides(f, r):
 
 # ───────────────────────────── structural polynomial / rational tests ─────────────────────────────
 
+def _isnum(e):
+    return K.is_number(e) or (isinstance(e, Expr) and e.head == "Rational")
+
+
 def _free_of(e, vs):
     if any(K.same(e, v) for v in vs):
         return False
@@ -2131,3 +2135,1122 @@ def _unateq(f, *spec):
             if not p and hi and not lo:
                 return False
     return True
+
+
+# ───────────────────────────── function properties (continuity, analyticity, sign, monotonicity, ...) ────────────
+#
+# Every decision is either proved (a verified witness point, or an empty solution set from SymPy's solveset over an
+# explicit domain) or the function raises a clear error; nothing is guessed.  Only a whitelist of elementary heads
+# is understood; anything else raises NotImplementedError.
+
+_ENTIRE1 = {"Sin", "Cos", "Sinh", "Cosh", "Exp", "Erf", "Erfc", "Erfi"}
+_REAL_SMOOTH1 = _ENTIRE1 | {"Tanh", "ArcTan", "ArcSinh", "Sech"}
+
+
+def _free_of(e, vs):
+    return not any(_contains(e, lambda s, v=v: K.same(s, v)) for v in vs)
+
+
+def _or(*cs):
+    cs = [c for c in cs if c is not False]
+    out_ = []
+    for c in cs:
+        if c is True:
+            return True
+        for d in (c.args if _is_head(c, "Or") else [c]):
+            if not any(K.same(d, o) for o in out_):
+                out_.append(d)
+    if not out_:
+        return False
+    return out_[0] if len(out_) == 1 else Expr("Or", *out_)
+
+
+def _eq0(g):
+    """g == 0, written with the constant moved to the right (x^2 - 1 == 0 -> x^2 == 1, Wolfram style)."""
+    g = ev(g)
+    if _is_head(g, "Plus"):
+        consts = [a for a in g.args if _isnum(a)]
+        if len(consts) == 1 and len(g.args) > 1:
+            rest = [a for a in g.args if a is not consts[0]]
+            lhs = rest[0] if len(rest) == 1 else Expr("Plus", *rest)
+            return Expr("Equal", lhs, ev(Expr("Times", -1, consts[0])))
+    return Expr("Equal", g, 0)
+
+
+def _bad(e, vs, kind, dom, fname, decide=False):
+    """Condition (ML) on the variables where e fails to be continuous ("disc"), analytic ("sing") or meromorphic
+    ("mero") on dom ("Reals"/"Complexes"); False when it never fails.  Raises for unsupported heads."""
+    if _free_of(e, vs):
+        return False
+    if any(K.same(e, v) for v in vs):
+        return False
+    if not isinstance(e, Expr) or not isinstance(e.head, str):
+        raise NotImplementedError(f"{fname}: cannot analyse {e!r}")
+    h, a = e.head, e.args
+    real = dom == "Reals"
+    if h in ("Plus", "Times"):
+        return _or(*(_bad(t, vs, kind, dom, fname, decide) for t in a))
+    if h == "Power" and len(a) == 2:
+        b, n = a
+        if _free_of(b, vs):
+            if K.same(b, Symbol("E")) or (_isnum(b) and ev(Expr("Greater", b, 0)) is True):
+                return _bad(n, vs, kind, dom, fname, decide)
+            raise NotImplementedError(f"{fname}: cannot analyse the power {e!r}")
+        if not _free_of(n, vs):
+            raise NotImplementedError(f"{fname}: cannot analyse the power {e!r}")
+        inner = _bad(b, vs, kind, dom, fname, decide)
+        if K.is_int(n):
+            return _or(inner, _eq0(b)) if int(n) < 0 and kind != "mero" else inner
+        if not _isnum(n):
+            raise NotImplementedError(f"{fname}: symbolic exponent in {e!r}")
+        if kind == "mero":
+            return _or(inner, Expr("And", Expr("Equal", Expr("Im", b), 0), Expr("LessEqual", Expr("Re", b), 0)))
+        if real:
+            pos = ev(Expr("Greater", n, 0)) is True
+            return _or(inner, Expr("Less" if decide and kind == "disc" and pos else "LessEqual", b, 0))
+        op = "Less" if kind == "disc" and ev(Expr("Greater", n, 0)) is True else "LessEqual"
+        cut = Expr("And", Expr("Equal", Expr("Im", b), 0), Expr(op, Expr("Re", b), 0))
+        return _or(inner, cut, _eq0(b)) if ev(Expr("Less", n, 0)) is True else _or(inner, cut)
+    if len(a) != 1:
+        if h == "Log" and len(a) == 2 and _free_of(a[0], vs):
+            return _bad(Expr("Log", a[1]), vs, kind, dom, fname, decide)
+        raise NotImplementedError(f"{fname}: cannot analyse {h} with {len(a)} arguments")
+    u = a[0]
+    inner = _bad(u, vs, kind, dom, fname, decide)
+    if h in _ENTIRE1:
+        return inner
+    if h == "Log":
+        if real and kind != "mero":
+            return _or(inner, Expr("LessEqual", u, 0))
+        return _or(inner, _eq0(u) if kind != "mero" else False,
+                   Expr("And", Expr("Equal", Expr("Im", u), 0), Expr("LessEqual", Expr("Re", u), 0)))
+    trig_poles = {"Tan": "Cos", "Sec": "Cos", "Cot": "Sin", "Csc": "Sin"}
+    if h in trig_poles:
+        return inner if kind == "mero" else _or(inner, _eq0(Expr(trig_poles[h], u)))
+    if h in ("Coth", "Csch"):
+        return inner if kind == "mero" else _or(inner, _eq0(u) if real else _eq0(Expr("Sinh", u)))
+    if h in ("Tanh", "Sech"):
+        return inner if real or kind == "mero" else _or(inner, _eq0(Expr("Cosh", u)))
+    if h == "Gamma":
+        if kind == "mero":
+            return inner
+        return _or(inner, Expr("And", _eq0(Expr("Sin", Expr("Times", Symbol("Pi"), u))),
+                               Expr("LessEqual", u if real else Expr("Re", u), 0)))
+    if not real or kind == "mero":
+        raise NotImplementedError(f"{fname}: {h} is not supported over the complex numbers")
+    if h in ("ArcTan", "ArcSinh"):
+        return inner
+    if h in ("ArcSin", "ArcCos"):
+        op1, op2 = ("Less", "Greater") if kind == "disc" else ("LessEqual", "GreaterEqual")
+        return _or(inner, Expr(op1, u, -1), Expr(op2, u, 1))
+    if h == "Abs":
+        return inner if kind == "disc" else _or(inner, _eq0(u))
+    if h in ("Floor", "Ceiling"):
+        return _or(inner, _eq0(Expr("Sin", Expr("Times", Symbol("Pi"), u))))
+    if h == "Round":
+        return _or(inner, _eq0(Expr("Cos", Expr("Times", Symbol("Pi"), u))))
+    if h in ("Sign", "UnitStep"):
+        return _or(inner, _eq0(u))
+    raise NotImplementedError(f"{fname}: cannot analyse {h}")
+
+
+def _prop_args(args, fname, default_dom="Reals", extra_opts=()):
+    """-> (f, cond, vars, dom, opts) for f / {f, cond} [, vars [, dom]] [, opts]."""
+    args, opts = _opts(args, ("Assumptions", "GenerateConditions", "PerformanceGoal") + tuple(extra_opts), fname)
+    if len(args) not in (2, 3):
+        raise ValueError(f"{fname} expects a function, variables and optionally a domain")
+    f, vs = args[0], _vars(args[1], fname)
+    dom = default_dom
+    if len(args) == 3:
+        if not isinstance(args[2], Symbol) or args[2].name not in ("Reals", "Complexes", "Integers"):
+            raise ValueError(f"{fname}: the domain must be Reals or Complexes")
+        dom = args[2].name
+    if dom == "Integers":
+        raise NotImplementedError(f"{fname}: the Integers domain is not supported")
+    cond = True
+    if is_list(f):
+        if len(f.args) != 2:
+            raise ValueError(f"{fname}: expected {{f, cond}}")
+        f, cond = f.args
+    a = opts.get("Assumptions")
+    if a is not None and a is not True:
+        raise NotImplementedError(f"{fname}: the Assumptions option is not supported")
+    return f, cond, vs, dom, opts
+
+
+def _rx(vs):
+    return {sp.Symbol(v.name): sp.Symbol(v.name, real=True) for v in vs if isinstance(v, Symbol)}
+
+
+def _sp_real(e, vs, fname):
+    if not all(isinstance(v, Symbol) for v in vs):
+        raise NotImplementedError(f"{fname}: the variables must be symbols")
+    s = tosp(e, fname)
+    return s.xreplace(_rx(vs)) if hasattr(s, "xreplace") else s
+
+
+def _real_set(c, x, fname):
+    """Set of real x satisfying the SymPy condition c (raises if SymPy cannot solve it)."""
+    if c is sp.true or c is True:
+        return sp.S.Reals
+    if c is sp.false or c is False:
+        return sp.S.EmptySet
+    if isinstance(c, sp.And):
+        s = sp.S.Reals
+        for t in c.args:
+            s = sp.Intersection(s, _real_set(t, x, fname))
+        return s
+    if isinstance(c, sp.Or):
+        return sp.Union(*(_real_set(t, x, fname) for t in c.args))
+    if isinstance(c, sp.Not):
+        return sp.Complement(sp.S.Reals, _real_set(c.args[0], x, fname))
+    if isinstance(c, sp.Ne):
+        return sp.Complement(sp.S.Reals, sp.solveset(sp.Eq(c.lhs, c.rhs), x, sp.S.Reals))
+    if not c.free_symbols <= {x}:
+        raise NotImplementedError(f"{fname}: the condition {c} involves parameters")
+    s = sp.solveset(c, x, sp.S.Reals)
+    if isinstance(s, sp.ConditionSet) or s.has(sp.ConditionSet):
+        raise NotImplementedError(f"{fname}: cannot solve the condition {c}")
+    return s
+
+
+def _imageset_witness(s):
+    """A verified member of a set built from ImageSets over the integers (intersected with intervals), or None."""
+    parts = []
+
+    def collect(t):
+        if isinstance(t, sp.ImageSet):
+            parts.append(t)
+        elif isinstance(t, (sp.Union, sp.Intersection, sp.Complement)):
+            for a in t.args:
+                collect(a)
+    collect(s)
+    for p in parts:
+        if p.base_sets != (sp.S.Integers,) or len(p.lamda.variables) != 1:
+            continue
+        for k in sorted(range(-300, 301), key=abs):
+            v = p.lamda(sp.Integer(k))
+            c = s.contains(v)
+            if c is sp.true:
+                return v
+    return None
+
+
+def _is_empty(s, fname):
+    if isinstance(s, sp.Complement) and (s.args[0] == sp.S.Reals or (isinstance(s.args[0], sp.Interval) and
+                                                                      s.args[0].measure.is_positive)):
+        ex = s.args[1]
+        if all(isinstance(q, (sp.ImageSet, sp.FiniteSet)) for q in (ex.args if isinstance(ex, sp.Union) else [ex])):
+            return False      # an interval minus countably many points
+    if s.has(sp.ImageSet) and not s.has(sp.ConditionSet):
+        if _imageset_witness(s) is not None:
+            return False
+    if s.has(sp.ConditionSet):
+        raise NotImplementedError(f"{fname}: cannot decide the set {s}")
+    e = s.is_empty
+    if e is None:
+        s2 = sp.simplify(s) if not isinstance(s, sp.Set) else s
+        e = s2.is_empty
+    if e is None:
+        raise NotImplementedError(f"{fname}: cannot decide whether {s} is empty")
+    return e
+
+
+def _sample_points(D, n=48):
+    """Rational sample points in the real set D (interior points of its intervals, plus isolated points)."""
+    pts = []
+    ivs = []
+    if isinstance(D, sp.Interval):
+        ivs = [D]
+    elif isinstance(D, sp.Union):
+        ivs = [s for s in D.args if isinstance(s, sp.Interval)]
+        pts += [p for s in D.args if isinstance(s, sp.FiniteSet) for p in s]
+    elif isinstance(D, sp.FiniteSet):
+        return list(D)
+    elif D == sp.S.Reals:
+        ivs = [sp.Interval(-sp.oo, sp.oo)]
+    else:
+        for k in range(-60, 61):
+            p = sp.Rational(k, 7)
+            if D.contains(p) is sp.true:
+                pts.append(p)
+        return pts
+    for iv in ivs:
+        lo, hi = iv.start, iv.end
+        if lo == -sp.oo and hi == sp.oo:
+            cand = [sp.Rational(k, 4) for k in range(-4 * 12, 4 * 12 + 1)] + [sp.Integer(k) for k in (-1000, -100, -50,
+                                                                                                       50, 100, 1000)]
+        elif lo == -sp.oo:
+            cand = [hi - sp.Rational(k, 8) for k in range(1, n)] + [hi - 10 ** k for k in range(1, 4)]
+        elif hi == sp.oo:
+            cand = [lo + sp.Rational(k, 8) for k in range(1, n)] + [lo + 10 ** k for k in range(1, 4)]
+        else:
+            cand = [lo + (hi - lo) * sp.Rational(k, n) for k in range(1, n)]
+        pts += [p for p in cand if iv.contains(p) is sp.true]
+    return pts
+
+
+def _num(v):
+    """(is_real, sign) of an exact numeric SymPy value, decided at 50 digits; None if undecidable/undefined."""
+    if v.has(sp.zoo, sp.nan, sp.oo, -sp.oo):
+        return None
+    z = sp.N(v, 50)
+    if not z.is_number:
+        return None
+    re_, im_ = z.as_real_imag()
+    if abs(im_) > 1e-40:
+        return (False, 0)
+    if abs(re_) < 1e-40:
+        if sp.simplify(v) == 0:
+            return (True, 0)
+        return None
+    return (True, 1 if re_ > 0 else -1)
+
+
+def _real_setup(f, cond, vs, fname):
+    """Univariate real analysis: -> (x, fs, D, nonreal_witness) where D is the domain set."""
+    if len(vs) != 1:
+        raise NotImplementedError(f"{fname}: only univariate functions are supported over the reals")
+    x = sp.Symbol(vs[0].name, real=True)
+    fs = _sp_real(f, vs, fname)
+    if fs.free_symbols - {x}:
+        raise NotImplementedError(f"{fname}: the function contains parameters {sorted(map(str, fs.free_symbols - {x}))}")
+    D = _real_set(_sp_real(cond, vs, fname), x, fname)
+    return x, fs, D
+
+
+def _disc_set(f, vs, D, x, fname, kind="disc"):
+    c = _bad(ev(f), vs, kind, "Reals", fname, True)
+    if c is False:
+        return sp.S.EmptySet
+    return sp.Intersection(D, _real_set(_sp_real(c, vs, fname), x, fname))
+
+
+def _split_abs(fs, x, D, fname):
+    """Pieces (open intervals and points) of D on which every Abs/Sign argument has constant sign, with fs
+    rewritten without Abs/Sign there.  -> list of (set, expr)."""
+    args = [a.args[0] for a in fs.atoms(sp.Abs, sp.sign)]
+    if not args:
+        return [(D, fs)]
+    cuts = set()
+    for g in args:
+        z = sp.solveset(g, x, sp.S.Reals)
+        if not isinstance(z, sp.FiniteSet):
+            raise NotImplementedError(f"{fname}: cannot split at the zeros of {g}")
+        cuts |= set(z)
+    cuts = sorted(cuts, key=lambda c: float(c))
+    edges = [-sp.oo] + cuts + [sp.oo]
+    pieces = []
+    for lo, hi in zip(edges, edges[1:]):
+        iv = sp.Intersection(D, sp.Interval.open(lo, hi))
+        if _is_empty(iv, fname):
+            continue
+        mid = (lo + hi) / 2 if lo != -sp.oo and hi != sp.oo else (hi - 1 if lo == -sp.oo and hi != sp.oo else
+                                                                     (lo + 1 if lo != -sp.oo else sp.Integer(0)))
+        rep = {}
+        for a in fs.atoms(sp.Abs):
+            s = _num(a.args[0].subs(x, mid))
+            if s is None or s[1] == 0:
+                raise NotImplementedError(f"{fname}: cannot fix the sign of {a.args[0]}")
+            rep[a] = s[1] * a.args[0]
+        for a in fs.atoms(sp.sign):
+            s = _num(a.args[0].subs(x, mid))
+            if s is None or s[1] == 0:
+                raise NotImplementedError(f"{fname}: cannot fix the sign of {a.args[0]}")
+            rep[a] = sp.Integer(s[1])
+        pieces.append((iv, fs.xreplace(rep)))
+    for c in cuts:
+        if D.contains(c) is sp.true:
+            pieces.append((sp.FiniteSet(c), fs))
+    return pieces
+
+
+def _sign_on(fs, x, D, fname, strict=False):
+    """1, -1, 0 (identically zero) or Indeterminate for the sign of the real-valued continuous fs on D."""
+    if _is_empty(D, fname):
+        return 0
+    pos = neg = zero = False
+    for p in _sample_points(D):
+        r = _num(fs.subs(x, p))
+        if r is None:
+            continue
+        if not r[0]:
+            return Symbol("Indeterminate")
+        pos |= r[1] > 0
+        neg |= r[1] < 0
+        zero |= r[1] == 0
+        if pos and neg:
+            return Symbol("Indeterminate")
+    pieces = _split_abs(fs, x, D, fname)
+
+    def empty_where(rel):
+        for S, g in pieces:
+            if isinstance(S, sp.FiniteSet):
+                for p in S:
+                    r = _num(g.subs(x, p))
+                    if r is None:
+                        raise NotImplementedError(f"{fname}: cannot evaluate at {p}")
+                    if (rel == "<" and r[1] < 0) or (rel == ">" and r[1] > 0) or (rel == "=" and r[1] == 0):
+                        return False
+                continue
+            g2 = sp.simplify(g)
+            if rel == "=" and g2 == 0:
+                return False
+            if g2.is_number:
+                r = _num(g2)
+                if r is None:
+                    raise NotImplementedError(f"{fname}: cannot evaluate {g2}")
+                if (rel == "<" and r[1] < 0) or (rel == ">" and r[1] > 0) or (rel == "=" and r[1] == 0):
+                    return False
+                continue
+            relx = {"<": g2 < 0, ">": g2 > 0, "=": sp.Eq(g2, 0)}[rel]
+            s = sp.solveset(relx, x, sp.S.Reals)
+            if isinstance(s, sp.ConditionSet) or s.has(sp.ConditionSet):
+                raise NotImplementedError(f"{fname}: cannot decide the sign of {g2}")
+            if not _is_empty(sp.Intersection(S, s), fname):
+                return False
+        return True
+    if not neg and empty_where("<"):
+        if not pos and empty_where(">"):
+            return 0
+        if strict and (zero or not empty_where("=")):
+            return Symbol("Indeterminate")
+        return 1
+    if not pos and empty_where(">"):
+        if strict and (zero or not empty_where("=")):
+            return Symbol("Indeterminate")
+        return -1
+    if pos and neg:
+        return Symbol("Indeterminate")
+    raise NotImplementedError(f"{fname}: cannot decide the sign of {fs} on {D}")
+
+
+def _require_real_continuous(f, vs, D, x, fs, fname):
+    """None if f is real and continuous on D; Indeterminate if it is provably non-real somewhere in D; raises
+    otherwise (isolated singular points are not handled)."""
+    B = _disc_set(f, vs, D, x, fname)
+    if _is_empty(B, fname):
+        return None
+    for p in _sample_points(sp.Intersection(D, B)) + _sample_points(D):
+        r = _num(fs.subs(x, p))
+        if r is not None and not r[0]:
+            return Symbol("Indeterminate")
+    raise NotImplementedError(f"{fname}: the function is not continuous on the whole domain (at {B}); restrict "
+                              f"the domain with a condition")
+
+
+def _strict_opt(opts, fname):
+    s = opts.get("StrictInequalities", False)
+    if s not in (True, False):
+        raise ValueError(f"{fname}: StrictInequalities must be True or False")
+    return s
+
+
+@fn("FunctionSign", area=AREA, status="added",
+    notes="FunctionSign[f, x] / [{f, cond}, x]: 1 if f >= 0, -1 if f <= 0, 0 if f == 0 on the (real) domain, "
+          "Indeterminate if f takes both signs or is not real somewhere; StrictInequalities -> True asks for f > 0 "
+          "/ f < 0. Univariate elementary functions over Reals; proofs by solveset (Abs split at its zeros) and "
+          "verified sample points; anything undecidable raises")
+def _fsign(*args):
+    f, cond, vs, dom, opts = _prop_args(args, "FunctionSign", extra_opts=("StrictInequalities",))
+    if dom != "Reals":
+        raise NotImplementedError("FunctionSign: only the Reals domain is supported")
+    x, fs, D = _real_setup(f, cond, vs, "FunctionSign")
+    r = _require_real_continuous(f, vs, D, x, fs, "FunctionSign")
+    if r is not None:
+        return r
+    return _sign_on(fs, x, D, "FunctionSign", _strict_opt(opts, "FunctionSign"))
+
+
+def _interval_dom(D, fname):
+    if isinstance(D, sp.Interval) or D == sp.S.Reals:
+        return
+    raise NotImplementedError(f"{fname}: the domain must be a single interval")
+
+
+def _deriv_pieces(fs, x, D, fname):
+    """Derivative of fs on D with Abs split -> sign of the derivative over the open pieces."""
+    return [(S, sp.diff(g, x)) for S, g in _split_abs(fs, x, D, fname) if not isinstance(S, sp.FiniteSet)]
+
+
+def _thin_zeros(d, x, S, fname):
+    """True if the zero set of d in S contains no interval (so a one-signed d gives strict monotonicity)."""
+    if sp.simplify(d) == 0:
+        return False
+    z = sp.solveset(sp.Eq(d, 0), x, sp.S.Reals)
+    if isinstance(z, sp.ConditionSet) or z.has(sp.ConditionSet):
+        raise NotImplementedError(f"{fname}: cannot solve {d} == 0")
+    parts = z.args if isinstance(z, sp.Union) else [z]
+    return not any(isinstance(p, sp.Interval) for p in parts)
+
+
+def _monotonicity(f, cond, vs, opts, fname):
+    x, fs, D = _real_setup(f, cond, vs, fname)
+    r = _require_real_continuous(f, vs, D, x, fs, fname)
+    if r is not None:
+        return r
+    _interval_dom(D, fname)
+    strict = _strict_opt(opts, fname)
+    signs = []
+    for S, d in _deriv_pieces(fs, x, D, fname):
+        sg = _sign_on(d, x, S, fname)
+        if strict and sg in (1, -1) and not _thin_zeros(d, x, S, fname):
+            sg = 0
+        signs.append(sg)
+    if not signs:
+        return 0
+    if all(s == 0 for s in signs):
+        return 0
+    nz = [s for s in signs if s != 0]
+    if any(isinstance(s, Symbol) for s in nz):
+        return Symbol("Indeterminate")
+    if all(s == 1 for s in nz):
+        return Symbol("Indeterminate") if strict and 0 in signs else 1
+    if all(s == -1 for s in nz):
+        return Symbol("Indeterminate") if strict and 0 in signs else -1
+    return Symbol("Indeterminate")
+
+
+@fn("FunctionMonotonicity", area=AREA, status="added",
+    notes="FunctionMonotonicity[f, x] / [{f, cond}, x]: 1 non-decreasing, -1 non-increasing, 0 constant, "
+          "Indeterminate otherwise (or if f is not real on the domain); StrictInequalities -> True for strict "
+          "monotonicity. Univariate elementary functions continuous on an interval domain (derivative sign, with "
+          "Abs split at its zeros); undecidable cases raise")
+def _fmono(*args):
+    f, cond, vs, dom, opts = _prop_args(args, "FunctionMonotonicity", extra_opts=("StrictInequalities",))
+    if dom != "Reals":
+        raise NotImplementedError("FunctionMonotonicity: only the Reals domain is supported")
+    return _monotonicity(f, cond, vs, opts, "FunctionMonotonicity")
+
+
+@fn("FunctionConvexity", area=AREA, status="added",
+    notes="FunctionConvexity[f, x] / [{f, cond}, x]: 1 convex, -1 concave, 0 both (affine), Indeterminate "
+          "otherwise; StrictInequalities -> True for strict convexity. Univariate: sign of f'' on the smooth "
+          "pieces plus the jump of f' at Abs kinks; multivariate: polynomials of degree <= 2 (constant Hessian, "
+          "eigenvalue signs) and f = g(linear form). Undecidable cases raise")
+def _fconv(*args):
+    fname = "FunctionConvexity"
+    f, cond, vs, dom, opts = _prop_args(args, fname, extra_opts=("StrictInequalities",))
+    if dom != "Reals":
+        raise NotImplementedError(f"{fname}: only the Reals domain is supported")
+    strict = _strict_opt(opts, fname)
+    if len(vs) > 1:
+        if cond is not True:
+            raise NotImplementedError(f"{fname}: conditions are only supported for univariate functions")
+        X = [sp.Symbol(v.name, real=True) for v in vs]
+        fs = _sp_real(f, vs, fname)
+        if fs.free_symbols - set(X):
+            raise NotImplementedError(f"{fname}: the function contains parameters")
+        poly = fs.as_poly(*X) if fs.is_polynomial(*X) else None
+        if poly is not None and poly.total_degree() <= 2:
+            H = sp.hessian(fs, X)
+            ev_ = [sp.nsimplify(e) for e in H.eigenvals(multiple=True)]
+            if all(e == 0 for e in ev_):
+                return 0
+            if all(e >= 0 for e in ev_):
+                return Symbol("Indeterminate") if strict and any(e == 0 for e in ev_) else 1
+            if all(e <= 0 for e in ev_):
+                return Symbol("Indeterminate") if strict and any(e == 0 for e in ev_) else -1
+            return Symbol("Indeterminate")
+        # g(linear form): convexity of g along a line, Hessian rank 1 (never strict)
+        t = sp.Dummy("t", real=True)
+        lin = None
+        for node in sp.preorder_traversal(fs):
+            if node.is_Add and node.is_polynomial(*X) and sp.Poly(node, *X).total_degree() == 1:
+                lin = node
+                break
+        if lin is not None:
+            g = sp.simplify(fs.subs(X[0], sp.solve(sp.Eq(lin, t), X[0])[0]))
+            if not g.free_symbols - {t}:
+                r = _monotonicity_conv1(g, t, sp.S.Reals, fname, False)
+                if strict and r != Symbol("Indeterminate"):
+                    return Symbol("Indeterminate")
+                return r
+        raise NotImplementedError(f"{fname}: cannot decide the convexity of this multivariate function")
+    x, fs, D = _real_setup(f, cond, vs, fname)
+    r = _require_real_continuous(f, vs, D, x, fs, fname)
+    if r is not None:
+        return r
+    _interval_dom(D, fname)
+    return _monotonicity_conv1(fs, x, D, fname, strict)
+
+
+def _monotonicity_conv1(fs, x, D, fname, strict):
+    pieces = _split_abs(fs, x, D, fname)
+    signs = []
+    for S, g in pieces:
+        if isinstance(S, sp.FiniteSet):
+            continue
+        d1 = sp.diff(g, x)
+        if not _is_empty(_real_set(sp.Eq(sp.denom(sp.together(d1)), 0), x, fname).intersect(S), fname):
+            raise NotImplementedError(f"{fname}: f' is singular inside the domain")
+        d2 = sp.diff(g, x, 2)
+        sg = _sign_on(d2, x, S, fname)
+        if strict and sg in (1, -1) and not _thin_zeros(d2, x, S, fname):
+            sg = 0
+        signs.append(sg)
+    # kinks: compare one-sided derivatives at the cut points
+    for S, _ in pieces:
+        if isinstance(S, sp.FiniteSet):
+            for c in S:
+                dl = sp.limit(sp.diff(fs, x), x, c, "-")
+                dr = sp.limit(sp.diff(fs, x), x, c, "+")
+                r = _num(dr - dl)
+                if r is None:
+                    raise NotImplementedError(f"{fname}: cannot compare the one-sided derivatives at {c}")
+                if r[1] != 0:
+                    signs.append(r[1])
+    if not signs or all(s == 0 for s in signs):
+        return Symbol("Indeterminate") if strict else 0
+    if any(isinstance(s, Symbol) for s in signs):
+        return Symbol("Indeterminate")
+    nz = {s for s in signs if s != 0}
+    if nz == {1}:
+        return Symbol("Indeterminate") if strict and 0 in signs else 1
+    if nz == {-1}:
+        return Symbol("Indeterminate") if strict and 0 in signs else -1
+    return Symbol("Indeterminate")
+
+
+def _cplx_cond_nonempty(c, x, fname):
+    """Decide whether the complex condition c (SymPy, variable x complex) is satisfiable, for the forms produced
+    by _bad with no extra condition: returns True/False or raises."""
+    if c is sp.false:
+        return False
+    if c is sp.true:
+        return True
+    for clause in (c.args if isinstance(c, sp.Or) else [c]):
+        atoms = list(clause.args) if isinstance(clause, sp.And) else [clause]
+        eqs = [a for a in atoms if isinstance(a, sp.Eq)]
+        # an equation g(x) == 0 with g a nonconstant polynomial, or an entire periodic function, has zeros
+        for e in eqs:
+            g = e.lhs - e.rhs
+            if g.has(sp.im) or g.has(sp.re):
+                continue
+            sols = sp.solveset(g, x, sp.S.Complexes)
+            if isinstance(sols, sp.ConditionSet) or sols.has(sp.ConditionSet):
+                raise NotImplementedError(f"{fname}: cannot solve {g} == 0")
+            cand = list(sols) if isinstance(sols, sp.FiniteSet) else None
+            if cand is None:
+                # periodic families: try the representatives n = -3..3
+                cand = []
+                for part in (sols.args if isinstance(sols, sp.Union) else [sols]):
+                    if isinstance(part, sp.ImageSet):
+                        lam = part.lamda
+                        cand += [lam(k) for k in range(-3, 4)]
+                    elif isinstance(part, sp.FiniteSet):
+                        cand += list(part)
+            for p in cand:
+                ok = True
+                for a in atoms:
+                    val = a.subs(x, p)
+                    val = sp.simplify(val) if val not in (sp.true, sp.false) else val
+                    if val is not sp.true:
+                        ok = False
+                        break
+                if ok:
+                    return True
+        if not eqs or all((e.lhs - e.rhs).has(sp.im, sp.re) for e in eqs):
+            # Im[g] == 0 && Re[g] <= 0 with g nonconstant: g takes negative real values (Picard), so satisfiable
+            gs = {a.args[0] for a in clause.atoms(sp.im, sp.re)}
+            if len(gs) == 1:
+                g = gs.pop()
+                if g.has(x) and (g.is_polynomial(x) or g.func in (sp.exp, sp.sin, sp.cos)):
+                    return True
+    raise NotImplementedError(f"{fname}: cannot decide this over the complex numbers")
+
+
+def _cplx_with_cond(bad, cond, x, fname):
+    """bad && cond satisfiable?  Only for conditions on Re/Im of x and bad parts whose Re/Im arguments are x."""
+    u, v = sp.symbols("u v", real=True)
+    z = u + sp.I * v
+
+    def conv(c):
+        c = c.xreplace({x: z})
+        reps = {}
+        for a in c.atoms(sp.Eq, sp.Ne):
+            d = sp.expand_complex(a.lhs - a.rhs)
+            re_, im_ = d.as_real_imag()
+            if im_ != 0 and re_ != 0:
+                both = sp.And(sp.Eq(re_, 0), sp.Eq(im_, 0))
+                reps[a] = both if isinstance(a, sp.Eq) else sp.Not(both)
+        return sp.simplify(c.xreplace(reps))
+    whole = sp.And(bad, cond)
+    clauses = sp.to_dnf(whole, simplify=False)
+    for clause in (clauses.args if isinstance(clauses, sp.Or) else [clauses]):
+        cz = conv(clause)
+        if cz is sp.false:
+            continue
+        atoms = list(cz.args) if isinstance(cz, sp.And) else [cz]
+        vfix = [a for a in atoms if isinstance(a, sp.Eq) and a.free_symbols == {v} and (a.lhs - a.rhs).is_polynomial(v)]
+        if vfix:
+            vs_ = sp.solve(vfix[0], v)
+            for vv in vs_:
+                rest = sp.And(*[a.subs(v, vv) for a in atoms])
+                if rest is sp.false:
+                    continue
+                if not rest.free_symbols <= {u}:
+                    raise NotImplementedError(f"{fname}: cannot decide this complex condition")
+                if not _is_empty(_real_set(rest, u, fname), fname):
+                    return True
+            continue
+        raise NotImplementedError(f"{fname}: cannot decide this complex condition")
+    return False
+
+
+def _property_decide(f, cond, vs, dom, kind, fname):
+    """True iff f has no 'kind' bad points in the domain."""
+    bad = _bad(ev(f), vs, kind, dom, fname, True)
+    if bad is False:
+        return True
+    if dom == "Reals":
+        if len(vs) != 1:
+            raise NotImplementedError(f"{fname}: multivariate conditions over the reals are not supported")
+        x = sp.Symbol(vs[0].name, real=True)
+        D = _real_set(_sp_real(cond, vs, fname), x, fname)
+        B = sp.Intersection(D, _real_set(_sp_real(bad, vs, fname), x, fname))
+        return _is_empty(B, fname)
+    if len(vs) != 1 or not isinstance(vs[0], Symbol):
+        raise NotImplementedError(f"{fname}: only univariate functions are supported over the complex numbers")
+    x = sp.Symbol(vs[0].name)
+    bs = tosp(bad, fname)
+    if cond is True:
+        return not _cplx_cond_nonempty(bs, x, fname)
+    return not _cplx_with_cond(bs, tosp(cond, fname), x, fname)
+
+
+def _entire_like(e, vs):
+    """Polynomials and compositions of entire functions (continuous and analytic on R^n and C^n)."""
+    if _free_of(e, vs):
+        return True
+    if any(K.same(e, v) for v in vs):
+        return True
+    if not isinstance(e, Expr) or not isinstance(e.head, str):
+        return False
+    if e.head in ("Plus", "Times"):
+        return all(_entire_like(a, vs) for a in e.args)
+    if e.head == "Power" and len(e.args) == 2:
+        b, n = e.args
+        if K.is_int(n) and int(n) >= 0:
+            return _entire_like(b, vs)
+        if K.same(b, Symbol("E")):
+            return _entire_like(n, vs)
+        return False
+    return e.head in _ENTIRE1 and len(e.args) == 1 and _entire_like(e.args[0], vs)
+
+
+def _prop_bool(kind, fname, default_dom):
+    def impl(*args):
+        f, cond, vs, dom, _ = _prop_args(args, fname, default_dom)
+        f = ev(f)
+        if len(vs) > 1:
+            if _entire_like(f, vs):
+                return True
+            raise NotImplementedError(f"{fname}: multivariate functions other than polynomials and compositions of "
+                                      f"entire functions are not supported")
+        return _property_decide(f, cond, vs, dom, kind, fname)
+    return impl
+
+
+fn("FunctionContinuous", area=AREA, status="added",
+   notes="FunctionContinuous[f, x] / [{f, cond}, x] / [f, x, Complexes]: True if f is real-valued (over Reals) and "
+         "continuous on the whole domain, decided from the structural discontinuity condition of whitelisted "
+         "elementary heads (as FunctionDiscontinuities) intersected with the domain; False only when a bad point "
+         "provably exists; multivariate: polynomials / entire compositions. Undecidable cases raise")(
+    _prop_bool("disc", "FunctionContinuous", "Reals"))
+fn("FunctionAnalytic", area=AREA, status="added",
+   notes="FunctionAnalytic[f, x] / [{f, cond}, x] / [f, x, Complexes]: True if f is analytic on the domain (no "
+         "point of FunctionSingularities in it); same decision procedure as FunctionContinuous")(
+    _prop_bool("sing", "FunctionAnalytic", "Reals"))
+fn("FunctionMeromorphic", area=AREA, status="added",
+   notes="FunctionMeromorphic[f, x] / [{f, cond}, x]: True if f is meromorphic on the (complex) domain: poles from "
+         "rational parts, Tan/Sec/Cot/Csc, Gamma are allowed; branch cuts of Log and fractional powers are not; "
+         "Exp/Sin/... of arguments with poles (essential singularities) and unsupported heads raise")(
+    _prop_bool("mero", "FunctionMeromorphic", "Complexes"))
+
+
+def _ess_check(e, vs, fname):
+    """Raise if an entire function is applied to an argument with poles (essential singularity)."""
+    if isinstance(e, Expr) and isinstance(e.head, str):
+        if (e.head in _ENTIRE1 or (e.head == "Power" and K.same(e.args[0], Symbol("E")))) and \
+                not _entire_like(e.args[-1], vs):
+            raise NotImplementedError(f"{fname}: essential singularities are not supported")
+        for a in e.args:
+            _ess_check(a, vs, fname)
+
+
+_orig_mero = None
+
+
+@fn("FunctionDiscontinuities", area=AREA, status="added",
+    notes="FunctionDiscontinuities[f, x] / [{f, cond}, x] / [f, x, Complexes]: a condition describing where f is "
+          "not continuous (over Reals also where it is not real-valued), built structurally from whitelisted "
+          "heads as Wolfram does: Tan[x] -> Cos[x] == 0, Sqrt[x] -> x <= 0, Floor[g] -> Sin[Pi g] == 0, Gamma[x] "
+          "-> Sin[Pi x] == 0 && x <= 0, Log[x] over Complexes -> x == 0 || (Im[x] == 0 && Re[x] <= 0); False if "
+          "there are none; unsupported heads raise")
+def _fdisc(*args):
+    f, cond, vs, dom, _ = _prop_args(args, "FunctionDiscontinuities")
+    c = _bad(ev(f), vs, "disc", dom, "FunctionDiscontinuities")
+    return c if cond is True or c is False else ev(Expr("And", cond, c))
+
+
+@fn("FunctionSingularities", area=AREA, status="added",
+    notes="FunctionSingularities[f, x] / [{f, cond}, x] / [f, x, Complexes]: a condition describing where f is not "
+          "analytic (as FunctionDiscontinuities, plus zeros of Abs arguments, boundary points of Sqrt/ArcSin "
+          "domains: Abs[Tan[2 Sin[x]]] -> Cos[2 Sin[x]] == 0 || Tan[2 Sin[x]] == 0)")
+def _fsing(*args):
+    f, cond, vs, dom, _ = _prop_args(args, "FunctionSingularities")
+    c = _bad(ev(f), vs, "sing", dom, "FunctionSingularities")
+    return c if cond is True or c is False else ev(Expr("And", cond, c))
+
+
+def _natural_domain(f, vs, cond, fname):
+    x, fs, D = _real_setup(f, cond, vs, fname)
+    B = _disc_set(f, vs, D, x, fname)
+    Dn = sp.Complement(D, B) if not _is_empty(B, fname) else D
+    Dn = sp.simplify(Dn) if not isinstance(Dn, sp.Set) else Dn
+    return x, fs, Dn
+
+
+def _split_map_args(args, fname):
+    """{f, xcond, ycond}, x, y [, dom] -> (f, xcond, ycond, vars, yvars, dom)."""
+    args, opts = _opts(args, ("Assumptions", "GenerateConditions", "PerformanceGoal"), fname)
+    if opts.get("Assumptions") not in (None, True):
+        raise NotImplementedError(f"{fname}: the Assumptions option is not supported")
+    if not args:
+        raise ValueError(f"{fname} expects a function and variables")
+    f, rest = args[0], list(args[1:])
+    dom = "Reals"
+    if rest and isinstance(rest[-1], Symbol) and rest[-1].name in ("Reals", "Complexes", "Integers"):
+        dom = rest.pop().name
+    if dom == "Integers":
+        raise NotImplementedError(f"{fname}: the Integers domain is not supported")
+    if len(rest) not in (1, 2):
+        raise ValueError(f"{fname}: expected f, vars [, yvars] [, dom]")
+    vs = _vars(rest[0], fname)
+    ys = _vars(rest[1], fname) if len(rest) == 2 else None
+    xc = yc = True
+    if is_list(f):
+        if len(f.args) == 2 and ys is None:
+            f, xc = f.args
+        elif len(f.args) == 3:
+            f, xc, yc = f.args
+            if ys is None:
+                raise ValueError(f"{fname}: a codomain condition needs the codomain variable")
+        elif len(f.args) == 2 and ys is not None:
+            f, xc = f.args
+        else:
+            raise NotImplementedError(f"{fname}: vector-valued maps are not supported")
+    if len(vs) != 1 or (ys is not None and len(ys) != 1):
+        raise NotImplementedError(f"{fname}: only maps of one variable are supported")
+    return ev(f), xc, yc, vs, ys, dom
+
+
+def _subs1(e, v, val):
+    return ev(Expr("ReplaceAll", e, rule(v, val)))
+
+
+def _cplx_kind(f, x):
+    """Classify a univariate complex function for injectivity/surjectivity: ('poly', degree) / ('exp',) /
+    ('sincos',) / ('log',) / ('tan',) or None.  Arguments must be linear in x."""
+    fs = f
+    if fs.is_polynomial(x):
+        return ("poly", sp.Poly(fs, x).degree())
+    terms = sp.Add.make_args(fs)
+    nonconst = [t for t in terms if t.has(x)]
+    if len(nonconst) != 1:
+        return None
+    c, g = nonconst[0].as_independent(x, as_Add=False)
+    if c == 0:
+        return None
+    kinds = {sp.exp: ("exp",), sp.sin: ("sincos",), sp.cos: ("sincos",), sp.sinh: ("sincos",),
+             sp.cosh: ("sincos",), sp.log: ("log",), sp.tan: ("tan",)}
+    if g.func in kinds and len(g.args) == 1 and g.args[0].is_polynomial(x) and sp.Poly(g.args[0], x).degree() == 1:
+        return kinds[g.func]
+    return None
+
+
+def _injective(f, xc, yc, vs, ys, dom, fname):
+    if dom == "Complexes":
+        if xc is not True or yc is not True:
+            raise NotImplementedError(f"{fname}: conditions are not supported over the complex numbers")
+        x = sp.Symbol(vs[0].name)
+        fs = tosp(f, fname)
+        if fs.free_symbols - {x}:
+            raise NotImplementedError(f"{fname}: the function contains parameters")
+        k = _cplx_kind(fs, x)
+        if k is None:
+            raise NotImplementedError(f"{fname}: cannot decide injectivity of {fs} over the complex numbers")
+        if k[0] == "poly":
+            return k[1] == 1
+        return k[0] == "log"
+    cond = xc
+    if yc is not True:
+        cond = Expr("And", xc, _subs1(yc, ys[0], f))
+    x, fs, Dn = _natural_domain(f, vs, cond, fname)
+    if fs.free_symbols - {x}:
+        raise NotImplementedError(f"{fname}: the function contains parameters")
+    if _is_empty(Dn, fname):
+        return True
+    if not (isinstance(Dn, sp.Interval) or Dn == sp.S.Reals):
+        raise NotImplementedError(f"{fname}: the natural domain {Dn} is not an interval")
+    signs = []
+    for S, d in _deriv_pieces(fs, x, Dn, fname):
+        sg = _sign_on(d, x, S, fname)
+        if sg in (1, -1) and not _thin_zeros(d, x, S, fname):
+            sg = 0
+        signs.append(sg)
+    nz = {s for s in signs if not isinstance(s, Symbol)}
+    if signs and all(not isinstance(s, Symbol) for s in signs) and nz in ({1}, {-1}):
+        return True
+    return False            # continuous on an interval and not strictly monotone -> not injective
+
+
+def _piece_onto(fs, x, Dn):
+    """IVT witness: an open interval (a, b) inside Dn between excluded points on which fs is continuous and tends
+    to -oo and +oo at the two ends (so fs takes every real value)."""
+    if not (isinstance(Dn, sp.Complement) and (Dn.args[0] == sp.S.Reals or isinstance(Dn.args[0], sp.Interval))):
+        return False
+    pts = []
+    excl = Dn.args[1]
+    for q in (excl.args if isinstance(excl, sp.Union) else [excl]):
+        if isinstance(q, sp.FiniteSet):
+            pts += [p for p in q if p.is_real]
+        elif isinstance(q, sp.ImageSet) and q.base_sets == (sp.S.Integers,):
+            n = q.lamda.variables[0]
+            e = sp.expand(q.lamda.expr)
+            c, d = e.coeff(n), e.subs(n, 0)
+            if not (c.is_number and d.is_number and e == c * n + d and c != 0):
+                return False
+            c, d = abs(c), d
+            k0, k1 = int(sp.floor((-20 - d) / c)) - 1, int(sp.ceiling((20 - d) / c)) + 1
+            if k1 - k0 > 400:
+                return False
+            pts += [c * k + d for k in range(k0, k1 + 1)]
+        else:
+            return False
+    pts = sorted({sp.nsimplify(p) for p in pts if abs(float(p)) <= 20}, key=float)
+    for a, b in zip(pts, pts[1:]):
+        if Dn.args[0].contains((a + b) / 2) is not sp.true:
+            continue
+        lo, hi = sp.limit(fs, x, a, "+"), sp.limit(fs, x, b, "-")
+        if {lo, hi} == {sp.oo, -sp.oo}:
+            return True
+    return False
+
+
+def _surjective(f, xc, yc, vs, ys, dom, fname):
+    from sympy.calculus.util import function_range
+    if dom == "Complexes":
+        if xc is not True or yc is not True:
+            raise NotImplementedError(f"{fname}: conditions are not supported over the complex numbers")
+        x = sp.Symbol(vs[0].name)
+        fs = tosp(f, fname)
+        if fs.free_symbols - {x}:
+            raise NotImplementedError(f"{fname}: the function contains parameters")
+        k = _cplx_kind(fs, x)
+        if k is None:
+            raise NotImplementedError(f"{fname}: cannot decide surjectivity of {fs} over the complex numbers")
+        if k[0] == "poly":
+            return k[1] >= 1
+        return k[0] == "sincos"
+    x, fs, Dn = _natural_domain(f, vs, xc, fname)
+    if fs.free_symbols - {x}:
+        raise NotImplementedError(f"{fname}: the function contains parameters")
+    try:
+        rng = function_range(fs, x, Dn)
+    except Exception as exc:  # noqa: BLE001
+        if yc is True and _piece_onto(fs, x, Dn):
+            return True
+        raise NotImplementedError(f"{fname}: cannot compute the range ({exc})")
+    if rng.has(sp.ConditionSet) or not isinstance(rng, (sp.Interval, sp.Union, sp.FiniteSet)) and rng != sp.S.Reals:
+        raise NotImplementedError(f"{fname}: cannot compute the range")
+    if yc is True:
+        Y = sp.S.Reals
+    else:
+        y = sp.Symbol(ys[0].name, real=True)
+        Y = _real_set(_sp_real(yc, ys, fname), y, fname)
+    return _is_empty(sp.Complement(Y, rng), fname)
+
+
+def _map_prop(which):
+    fname = {"inj": "FunctionInjective", "sur": "FunctionSurjective", "bij": "FunctionBijective"}[which]
+
+    def impl(*args):
+        f, xc, yc, vs, ys, dom = _split_map_args(args, fname)
+        if which == "inj":
+            return _injective(f, xc, yc, vs, ys, dom, fname)
+        if which == "sur":
+            return _surjective(f, xc, yc, vs, ys, dom, fname)
+        return _injective(f, xc, yc, vs, ys, dom, fname) and _surjective(f, xc, yc, vs, ys, dom, fname)
+    return impl
+
+
+fn("FunctionInjective", area=AREA, status="added",
+   notes="FunctionInjective[f, x] / [{f, xcond}, x] / [{f, xcond, ycond}, x, y] / [f, x, Complexes]: over Reals "
+         "f is continuous on its natural domain (which must be an interval), so it is injective iff strictly "
+         "monotone (derivative sign proofs); over Complexes polynomials (degree 1), Exp/Sin/Cos/Tan of linear "
+         "arguments (False) and Log (True). Parameters, vector maps and other cases raise")(_map_prop("inj"))
+fn("FunctionSurjective", area=AREA, status="added",
+   notes="FunctionSurjective[f, x] / [{f, xcond}, x] / [{f, xcond, ycond}, x, y] / [f, x, Complexes]: over Reals "
+         "the range on the natural domain (SymPy function_range) must contain the codomain (all reals, or the "
+         "ycond set); over Complexes polynomials of degree >= 1 and Sin/Cos are onto, Exp/Log/Tan are not. "
+         "Parameters and vector maps raise")(_map_prop("sur"))
+fn("FunctionBijective", area=AREA, status="added",
+   notes="FunctionBijective: FunctionInjective && FunctionSurjective with the same arguments")(_map_prop("bij"))
+
+
+def _pole_sources(e, vs, fname):
+    """List of ('pow', g, k) and ('trig', head, g) pole sources; raises for unsupported structure."""
+    out_ = []
+    if _free_of(e, vs) or any(K.same(e, v) for v in vs):
+        return out_
+    if not isinstance(e, Expr) or not isinstance(e.head, str):
+        raise NotImplementedError(f"{fname}: cannot analyse {e!r}")
+    h, a = e.head, e.args
+    if h in ("Plus", "Times"):
+        for t in a:
+            out_ += _pole_sources(t, vs, fname)
+        return out_
+    if h == "Power" and len(a) == 2:
+        b, n = a
+        if K.same(b, Symbol("E")) and _entire_like(n, vs):
+            return out_
+        if K.is_int(n):
+            out_ += _pole_sources(b, vs, fname)
+            if int(n) < 0:
+                if _is_head(b, "Sin", "Cos") and _entire_like(b.args[0], vs):
+                    out_.append(("trig", "Csc" if b.head == "Sin" else "Sec", b.args[0]))
+                else:
+                    out_.append(("pow", b, -int(n)))
+            return out_
+        raise NotImplementedError(f"{fname}: cannot analyse the power {e!r}")
+    if len(a) == 1 and h in _ENTIRE1 and _entire_like(a[0], vs):
+        return out_
+    if len(a) == 1 and h in ("Tan", "Sec", "Cot", "Csc") and _entire_like(a[0], vs):
+        return out_ + [("trig", h, a[0])]
+    raise NotImplementedError(f"{fname}: cannot analyse {h}")
+
+
+@fn("FunctionPoles", area=AREA, status="added",
+    notes="FunctionPoles[f, x] / [{f, cond}, x]: list of {pole, multiplicity} over the complex numbers for "
+          "functions built from polynomials, entire functions and Tan/Sec/Cot/Csc of polynomial arguments: "
+          "explicit poles from denominators (multiplicity from the Laurent leading term, removable points dropped) "
+          "and, without a condition, periodic families {ConditionalExpression[..., C[1] in Integers], k} for "
+          "c Tan[g]^k-type terms; functions with branch points stay unevaluated (as in Wolfram); others raise")
+def _fpoles(*args):
+    fname = "FunctionPoles"
+    f, cond, vs, dom, _ = _prop_args(args, fname, "Complexes")
+    if len(vs) != 1 or not isinstance(vs[0], Symbol):
+        raise NotImplementedError(f"{fname}: only univariate functions are supported")
+    f = ev(f)
+    try:
+        srcs = _pole_sources(f, vs, fname)
+    except NotImplementedError:
+        try:
+            mero = _property_decide(f, cond, vs, "Complexes", "mero", fname)
+        except NotImplementedError:
+            mero = None
+        if mero is False:
+            raise Unevaluated()
+        if mero is True and cond is not True:
+            srcs = None
+        else:
+            raise
+    x = sp.Symbol(vs[0].name)
+    xv = vs[0]
+    if srcs is None:
+        # meromorphic on the restricted domain: strip the branch parts (they are analytic there) and use the rest
+        def strip(e):
+            if _is_head(e, "Plus"):
+                return Expr("Plus", *(t for t in e.args if _try_sources(t, vs) is not None))
+            return e
+        g = ev(strip(f))
+        srcs = _try_sources(g, vs)
+        if srcs is None:
+            raise NotImplementedError(f"{fname}: cannot isolate the poles")
+    fs = tosp(f, fname)
+    if fs.free_symbols - {x}:
+        raise NotImplementedError(f"{fname}: the function contains parameters")
+    t = sp.Dummy("t")
+    res, seen = [], []
+
+    def order_at(p):
+        lt = sp.simplify(fs.subs(x, p + t)).as_leading_term(t)
+        c, e = lt.as_coeff_exponent(t)
+        e = sp.sympify(e)
+        if not e.is_integer:
+            raise NotImplementedError(f"{fname}: non-integer Laurent exponent at {p}")
+        return int(-e)
+    families = []
+    for s in srcs:
+        if s[0] == "pow":
+            sols = ev(Expr("Solve", Expr("Equal", s[1], 0), xv))
+            for r in sols.args:
+                p = r.args[0].args[1]
+                if _is_head(p, "ConditionalExpression"):
+                    raise NotImplementedError(f"{fname}: infinitely many candidate poles from {s[1]!r}")
+                ps = tosp(p, fname)
+                if any(sp.simplify(ps - q) == 0 for q in seen):
+                    continue
+                seen.append(ps)
+                if cond is not True:
+                    cv = ev(_subs1(cond, xv, p))
+                    if cv is not True:
+                        if cv is False:
+                            continue
+                        raise NotImplementedError(f"{fname}: cannot decide the condition at {p!r}")
+                m = order_at(ps)
+                if m > 0:
+                    res.append(L(p, m))
+        else:
+            families.append(s)
+    if families:
+        if cond is not True:
+            raise NotImplementedError(f"{fname}: periodic pole families with a domain condition are not supported")
+        done = []
+        for _, h, g in families:
+            if not _is_poly_deg1(g, xv):
+                raise NotImplementedError(f"{fname}: {h} of a non-linear argument")
+            zero_of = Expr("Cos" if h in ("Tan", "Sec") else "Sin", g)
+            if any(K.same(zero_of, d) for d in done):
+                continue
+            done.append(zero_of)
+            zs = tosp(zero_of, fname)
+            # structural bound: f * zero^k has no remaining poles from this family
+            kmax = None
+            for k in range(0, 9):
+                q = sp.simplify(fs * zs ** k)
+                if q.has(sp.tan, sp.sec, sp.cot, sp.csc) or sp.denom(sp.together(q)).has(x):
+                    continue
+                kmax = k
+                break
+            if kmax is None:
+                raise NotImplementedError(f"{fname}: cannot isolate the poles of {h}")
+            sols = ev(Expr("Solve", Expr("Equal", zero_of, 0), xv))
+            for r in sols.args:
+                p = r.args[0].args[1]
+                if not _is_head(p, "ConditionalExpression"):
+                    raise NotImplementedError(f"{fname}: unexpected solution form")
+                ords = {order_at(tosp(_subs1(p.args[0], Expr("C", 1), c), fname)) for c in (-1, 0, 1)}
+                if len(ords) != 1:
+                    raise NotImplementedError(f"{fname}: pole orders differ along the family")
+                m = ords.pop()
+                if m > kmax:
+                    raise NotImplementedError(f"{fname}: inconsistent pole order")
+                if m > 0:
+                    res.append(L(p, m))
+    return L(*res)
+
+
+def _try_sources(e, vs):
+    try:
+        return _pole_sources(e, vs, "FunctionPoles")
+    except NotImplementedError:
+        return None
+
+
+def _is_poly_deg1(g, x):
+    s = sym(g, "FunctionPoles")
+    xs = sp.Symbol(x.name)
+    return s.is_polynomial(xs) and sp.Poly(s, xs).degree() == 1
