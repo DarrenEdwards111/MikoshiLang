@@ -2311,3 +2311,20 @@ def _columnwisecombine(spec, required="Inner"):
             if r not in used[ti]:
                 emit([r if i == ti else None for i in range(n)])
     return Tab(out_keys, [list(c) for c in zip(*rows)] if rows else [[] for _ in out_keys]).expr()
+
+
+def _options_tab_pre(a):
+    if not a:
+        return _PASS
+    x, names_ = a[0], a[1:]
+    t = parse_tab(x)
+    if t is None:
+        return _PASS
+    rules = list(t.options)
+    if names_:
+        keys = names_[0].args if is_list(names_[0]) else (names_[0],)
+        rules = [r for r in rules if r.args[0] in keys]
+    return L(*rules)
+
+
+wrap_registry("Options", _options_tab_pre)

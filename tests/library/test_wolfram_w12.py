@@ -382,6 +382,473 @@ CAST = [
 ]
 
 
+
+import os as _os
+import sqlite3 as _sqlite3
+import tempfile as _tempfile
+
+_DBDIR = _tempfile.mkdtemp(prefix="w12db")
+DBF = _os.path.join(_DBDIR, "test.sqlite").replace("\\", "/")
+_con = _sqlite3.connect(DBF)
+_con.executescript("""
+create table offices(officeCode text primary key, city text not null, phone text unique);
+create table employees(id integer primary key, name text, officeCode text references offices(officeCode));
+create index emp_name on employees(name);
+insert into offices values ('1', 'San Francisco', '+1 650'), ('2', 'Boston', '+1 215');
+insert into employees values (1, 'Ann', '1'), (2, 'Bob', '2'), (3, 'Cy', NULL);
+""")
+_con.commit()
+_con.close()
+
+# ─── Tabular data ───
+TAB3 = 'Tabular[{{1, 2, 3}, {4, 5, 6}}, {"a", "b", "c"}]'
+TAB2 = 'Tabular[{{1, 2}, {3, 4}, {5, 6}}, {"a", "b"}]'
+TABK = ('Tabular[{{"one", True, "foo"}, {"two", False, "bar"}}, <|"ColumnKeys" -> {"key", "col1", "col2"}, '
+        '"KeyColumns" -> {"key"}|>]')
+TABW = ('Tabular[Association["RawSchema" -> Association["ColumnProperties" -> Association["a" -> '
+        'Association["ElementType" -> "Integer64"], "b" -> Association["ElementType" -> "String"]], "KeyColumns" -> '
+        'None, "Backend" -> "WolframKernel"], "Options" -> {}, "BackendData" -> Association["ColumnData" -> '
+        'DataStructure["ColumnTable", {{TabularColumn[Association["Data" -> {{3, 1, 2}, {}, None}, "ElementType" -> '
+        '"Integer64"]], TabularColumn[Association["Data" -> {{3, {0, 3, 5, 8}, "andorbut"}, {}, None}, '
+        '"ElementType" -> "String"]]}}]]]]')
+TABULAR = [
+    ('Normal[Tabular[{{1, 2, 3}, {4, 5, 6}}]]', "{{1, 2, 3}, {4, 5, 6}}"),
+    ('Normal[Tabular[{<|"a" -> 1, "b" -> 2|>, <|"a" -> 4, "b" -> 5|>}]]', '{<|"a" -> 1, "b" -> 2|>, <|"a" -> 4, "b" -> 5|>}'),
+    (f'Normal[{TAB3}]', '{<|"a" -> 1, "b" -> 2, "c" -> 3|>, <|"a" -> 4, "b" -> 5, "c" -> 6|>}'),
+    (f'Normal[{TABW}]', '{<|"a" -> 3, "b" -> "and"|>, <|"a" -> 1, "b" -> "or"|>, <|"a" -> 2, "b" -> "but"|>}'),
+    ('Tabular[{{1, 2}}][[1, 2]]', "2"),
+    ('Normal[Tabular[{{1, 2}, {3, 4}}][[{1}, {2}]]]', "{{2}}"),
+    ('Normal[Tabular[{{1, 2}, {3, 4}}][[1]]]', "{1, 2}"),
+    ('Normal[Tabular[{{1, 2}, {3, 4}}][[All, 1]]]', "{1, 3}"),
+    (f'Normal[{TABK}[Key["one"]]]', '<|"key" -> "one", "col1" -> True, "col2" -> "foo"|>'),
+    (f'Normal[{TABK}[<|"key" -> "two"|>]]', '<|"key" -> "two", "col1" -> False, "col2" -> "bar"|>'),
+    (f'{{Length[{TAB2}], Dimensions[{TAB2}]}}', "{3, {3, 2}}"),
+    (f'Normal[Select[{TAB2}, #a > 1 &]]', '{<|"a" -> 3, "b" -> 4|>, <|"a" -> 5, "b" -> 6|>}'),
+    (f'Normal[Take[{TAB2}, 2]]', '{<|"a" -> 1, "b" -> 2|>, <|"a" -> 3, "b" -> 4|>}'),
+    (f'Normal[SortBy[{TAB2}, -#a &]][[1]]', '<|"a" -> 5, "b" -> 6|>'),
+    (f'Normal[Join[{TAB2}, {TAB2}]][[4]]', '<|"a" -> 1, "b" -> 2|>'),
+    ('Tabular[{{1, 2}, {3}}]', Raises()),
+    (f'Options[Tabular[{TAB3}, AllowedDimensions -> {{2, Automatic}}]]', '{AllowedDimensions -> {2, Automatic}}'),
+]
+TABULARQ = [
+    T("TabularQ[Tabular[{{1, 2}, {3, 4}}]]"),
+    F("TabularQ[{{1, 2}, {3, 4}}]"),
+    T(f"TabularQ[{TABW}]"),
+]
+TABULARCOLUMN = [
+    ('TabularColumn[{3, 2, -1, 0, 5}]["ElementType"]', '"Integer64"'),
+    ('Normal[TabularColumn[{"earth", "fire", "air", "water"}]]', '{"earth", "fire", "air", "water"}'),
+    ('Normal[TabularColumn[{5, 7.8, -13, 11/3}, "Integer16", <|"ConversionMethod" -> "Round"|>]]', "{5, 8, -13, 4}"),
+    ('TabularColumn[{1.5, 2}]["ElementType"]', '"Real64"'),
+    ('Total[TabularColumn[{1, 2, 3}]]', "6"),
+    ('TabularColumn[{1, 300}, "Integer8"]', Raises()),
+]
+TABULARCOLUMNQ = [
+    T("TabularColumnQ[TabularColumn[{1, 2, 3, 4}]]"),
+    T('TabularColumnQ[TabularColumn[{"a", "b"}], "String"]'),
+    F('TabularColumnQ[TabularColumn[{"a", "b"}], "Integer*"]'),
+    F("TabularColumnQ[{1, 2}]"),
+    T('TabularColumnQ[TabularColumn[{1, 2}], "Integers"]'),
+]
+TABULARROW = [
+    ('Normal[TabularRow[{7, "cat", -3.1}]]', '{7, "cat", -3.1}'),
+    ('ColumnTypes[TabularRow[<|"col1" -> 7, "col2" -> "cat", "col3" -> -3.1|>]]',
+     '<|"col1" -> "Integer64", "col2" -> "String", "col3" -> "Real64"|>'),
+    ('ColumnKeys[TabularRow[{7, "cat", -3.1}]]', "None"),
+    ('Normal[Tabular[{<|"a" -> 1, "b" -> 2, "c" -> 3|>, <|"a" -> 4, "b" -> 5, "c" -> 6|>}][[1]]]',
+     '<|"a" -> 1, "b" -> 2, "c" -> 3|>'),
+    ('TabularRow[{1, 2}, {"x", "y"}]', 'TabularRow[<|"x" -> 1, "y" -> 2|>]'),
+    ('TabularRow[<|"x" -> 1, "y" -> 2|>]["y"]', "2"),
+]
+TABULARROWQ = [
+    T("TabularRowQ[TabularRow[{1, 2, 3, 4}]]"),
+    T('TabularRowQ[TabularRow[<|"a" -> 1|>]]'),
+    F("TabularRowQ[{1, 2}]"),
+]
+COLUMNKEYS = [
+    ('ColumnKeys[Tabular[{<|"a" -> 1, "b" -> 2, "c" -> 3|>, <|"a" -> 4, "b" -> 5, "c" -> 6|>}]]', '{"a", "b", "c"}'),
+    ('ColumnKeys[Tabular[{{1, 2, 3}, {4, 5, 6}}, {"ab", "bb", "ac"}], "a*"]', '{"ab", "ac"}'),
+    ('ColumnKeys[Tabular[{{1, 2, 3}, {4, 5, 6}}, {"ab", "bb", "ac"}], "a" ~~ __]', '{"ab", "ac"}'),
+    ('ColumnKeys[Tabular[{{1, 2, 3}, {4, 5, 6}}, {"ab", "bb", "ac"}], "ab" | "ac"]', '{"ab", "ac"}'),
+    ('ColumnKeys[Tabular[{{"cat", 1, "foo", 3.5}, {"dog", 3, "bar", -1.1}}, {"name1", "num1", "name2", "num2"}], '
+     'StringStartsQ[#ColumnKey, "num"] &]', '{"num1", "num2"}'),
+    ('ColumnKeys[Tabular[{{"cat", 1, "foo", 3.5}, {"dog", 3, "bar", -1.1}}, {"name1", "num1", "name2", "num2"}], '
+     '#ElementType == "String" &]', '{"name1", "name2"}'),
+    ('ColumnKeys[Tabular[{{1, 2}}]]', "None"),
+    ('ColumnKeys[{<|"x" -> 1|>, <|"y" -> 2|>}]', '{"x", "y"}'),
+]
+COLUMNKEYEXISTSQ = [
+    T(f'ColumnKeyExistsQ[{TAB3}, "b"]'),
+    F(f'ColumnKeyExistsQ[{TAB3}, "d"]'),
+    T(f'ColumnKeyExistsQ["c"][{TAB3}]'),
+    T('ColumnKeyExistsQ[Dataset[{<|"u" -> 1|>}], "u"]'),
+]
+COLUMNTYPES = [
+    ('ColumnTypes[Tabular[{{1, "dog", True}, {2, "cat", False}}, {"col1", "col2", "col3"}]]',
+     '<|"col1" -> "Integer64", "col2" -> "String", "col3" -> "Boolean"|>'),
+    ('ColumnTypes[Tabular[{{3.1, 4, False}, {2.5, -3, True}}, {"number", "symbol", "boolean"}], "Real*"]',
+     '<|"number" -> "Real64"|>'),
+    ('ColumnTypes[Tabular[{{1, 2.}, {3, 4.}, {5, 6.}}]]', '{"Integer64", "Real64"}'),
+    ('ColumnTypes[Tabular[{{1, 2}, {3, 4}, {5, 6}}, <|"ElementType" -> {"Integer64", "Integer16"}|>]]',
+     '{"Integer64", "Integer16"}'),
+    ('ColumnTypes[Tabular[{{1, "dog", True}, {2, "cow", False}}, <|"ElementType" -> {"Integer8", "String", '
+     '"Boolean"}|>]]', '{"Integer8", "String", "Boolean"}'),
+]
+CASTCOLUMNS = [
+    ('ColumnTypes[CastColumns[ToTabular[<|"a" -> {1, 2, 3}, "b" -> {1., 4., 8.}|>, "Columns"], "a" -> "Real64"]]',
+     '<|"a" -> "Real64", "b" -> "Real64"|>'),
+    ('Normal[CastColumns[Tabular[{{"1"}, {"22"}}, {"s"}], "s" -> "Integer64"]]', '{<|"s" -> 1|>, <|"s" -> 22|>}'),
+    ('Normal[CastColumns[Tabular[{{1}, {2}}, {"n"}], {"n" -> "String"}]]', '{<|"n" -> "1"|>, <|"n" -> "2"|>}'),
+    ('CastColumns[Tabular[{{"x"}}, {"s"}], "s" -> "Integer64"]', Raises()),
+]
+DELETECOLUMNS = [
+    (f'Normal[DeleteColumns[{TAB3}, "a"]]', '{<|"b" -> 2, "c" -> 3|>, <|"b" -> 5, "c" -> 6|>}'),
+    (f'Normal[DeleteColumns[{TAB3}, {{"a", "c"}}]]', '{<|"b" -> 2|>, <|"b" -> 5|>}'),
+    (f'Normal[DeleteColumns["b"][{TAB3}]]', '{<|"a" -> 1, "c" -> 3|>, <|"a" -> 4, "c" -> 6|>}'),
+    ('DeleteColumns[{<|"a" -> 1, "b" -> 2|>}, "b"]', '{<|"a" -> 1|>}'),
+    (f'DeleteColumns[{TAB3}, "zz"]', Raises()),
+]
+INSERTCOLUMNS = [
+    (f'Normal[InsertColumns[{TAB2}, "aa" -> {{11, 22, 33}}]][[1]]', '<|"a" -> 1, "b" -> 2, "aa" -> 11|>'),
+    (f'Normal[InsertColumns[{TAB2}, {{"a", "aa" -> {{11, 22, 33}}}}]][[2]]', '<|"a" -> 3, "aa" -> 22, "b" -> 4|>'),
+    (f'Normal[InsertColumns[{{"aa" -> {{11, 22, 33}}, "bb" -> 0}}][{TAB2}]][[3]]',
+     '<|"a" -> 5, "b" -> 6, "aa" -> 33, "bb" -> 0|>'),
+    (f'InsertColumns[{TAB2}, "aa" -> {{1, 2}}]', Raises()),
+]
+RENAMECOLUMNS = [
+    (f'ColumnKeys[RenameColumns[{TAB3}, {{"a" -> "first", "c" -> "last"}}]]', '{"first", "b", "last"}'),
+    (f'ColumnKeys[RenameColumns[{TAB3}, {{1 -> "first", -1 -> "last"}}]]', '{"first", "b", "last"}'),
+    ('ColumnKeys[RenameColumns[Tabular[{{"a", 1, True}, {"d", 2, False}}, {"col1", "col2", "col3"}], '
+     '{"first", "second"}]]', '{"first", "second", "col3"}'),
+    ('ColumnKeys[RenameColumns[{1 -> "first", "col3" -> "third"}][Tabular[{{"a", 1, True}}, {"col1", "col2", '
+     '"col3"}]]]', '{"first", "col2", "third"}'),
+]
+TABAB = 'Tabular[{{2, 2.78}, {1, 3.14}, {3, 1.68}}, {"a", "b"}]'
+TRANSFORMCOLUMNS = [
+    (f'Normal[TransformColumns[{TABAB}, "c" -> Function[#b - #a]]][[2, "c"]]', near(2.14)),
+    (f'Normal[TransformColumns[{TABAB}, {{"a" -> (2 #a &), "b" -> (#b/2 &)}}]][[1]]', '<|"a" -> 4, "b" -> 1.39|>'),
+    ('Normal[TransformColumns[Tabular[{{1}, {2}, {3}, {4}}, {"col"}], "acc" -> Function[ColumnwiseThread['
+     'Accumulate[#col]]]]][[All, "acc"]]', "{1, 3, 6, 10}"),
+    ('Normal[TransformColumns[Tabular[{{2004, 4, 1}}, {"a", "b", "c"}], "date" -> Function[DateObject[{#a, #b, #c}, '
+     '"Day"]]]][[1, "date"]]', 'DateObject[{2004, 4, 1}, "Day"]'),
+    (f'TransformColumns[{TABAB}, "c"]', Raises()),
+]
+CONSTRUCTCOLUMNS = [
+    (f'Normal[ConstructColumns[{TABAB}, "c" -> Function[#a - #b]]][[3]]', '<|"c" -> 1.32|>'),
+    (f'Keys[Normal[ConstructColumns[{TABAB}, {{"a", "c" -> (#a - #b &)}}]][[1]]]', '{"a", "c"}'),
+    (f'Keys[Normal[ConstructColumns[{TABAB}, {{"c" -> (#a - #b &), "a"}}]][[1]]]', '{"c", "a"}'),
+    (f'Normal[ConstructColumns[{TAB2}, "b"]]', '{<|"b" -> 2|>, <|"b" -> 4|>, <|"b" -> 6|>}'),
+]
+COLUMNWISETHREAD = [
+    ('Normal[TransformColumns[Tabular[{{1}, {2}, {3}}, {"col"}], "new" -> Function[#col - ColumnwiseThread['
+     'Reverse[#col]]]]][[All, "new"]]', "{-2, 0, 2}"),
+    ('Normal[ConstructColumns[Tabular[{{1}, {2}, {3}}, {"x"}], "r" -> Function[ColumnwiseThread[Ranking[#x]] + 0]]]',
+     Pred(lambda g: True, "any")) if False else
+    ('Normal[ConstructColumns[Tabular[{{1}, {2}, {3}}, {"x"}], "r" -> Function[ColumnwiseThread[Reverse[#x]]]]]',
+     '{<|"r" -> 3|>, <|"r" -> 2|>, <|"r" -> 1|>}'),
+    ('ColumnwiseThread[w12q]', "ColumnwiseThread[w12q]"),
+]
+COLUMNWISEVALUE = [
+    ('Normal[TransformColumns[Tabular[{{1}, {2}, {3}}, {"x"}], "d" -> Function[#x - ColumnwiseValue[Mean[#x]]]]]'
+     '[[All, "d"]]', "{-1, 0, 1}"),
+    ('Normal[TransformColumns[Tabular[{{1}, {3}}, {"x"}], "f" -> Function[#x / ColumnwiseValue[Total[#x]]]]]'
+     '[[All, "f"]]', "{1/4, 3/4}"),
+    ('ColumnwiseValue[w12q]', "ColumnwiseValue[w12q]"),
+]
+TABAGG = 'Tabular[{{"a", 1}, {"b", 2}, {"a", 3}, {"b", 4}}, {"col1", "col2"}]'
+AGGREGATEROWS = [
+    (f'Normal[AggregateRows[{TABAGG}, {{"j" -> (StringJoin[#col1] &), "t" -> (Total[#col2] &)}}]]',
+     '{<|"j" -> "abab", "t" -> 10|>}'),
+    (f'Normal[AggregateRows[{TABAGG}, "total" -> Function[Total[#col2]], "col1"]]',
+     '{<|"col1" -> "a", "total" -> 4|>, <|"col1" -> "b", "total" -> 6|>}'),
+    ('AggregateRows["c" -> Function[w12f[#a]]][{<|"a" -> w12x, "b" -> 1|>, <|"a" -> w12y, "b" -> 2|>, '
+     '<|"a" -> w12x, "b" -> 1|>}]', '{<|"c" -> w12f[{w12x, w12y, w12x}]|>}'),
+    ('AggregateRows["c" -> Function[w12f[#a]], "b"][{<|"a" -> w12x, "b" -> 1|>, <|"a" -> w12y, "b" -> 2|>, '
+     '<|"a" -> w12x, "b" -> 1|>}]', '{<|"b" -> 1, "c" -> w12f[{w12x, w12x}]|>, <|"b" -> 2, "c" -> w12f[{w12y}]|>}'),
+    (f'TabularSchema[AggregateRows[{TABAGG}, "total" -> Function[Total[#col2]], "col1"]]["KeyColumns"]', '{"col1"}'),
+]
+TEMPS = ('Tabular[{{"high", "M", 72}, {"high", "Tu", 81}, {"low", "M", 49}, {"low", "Tu", 55}}, {"extreme", "day", '
+         '"temp"}]')
+WIDE = 'Tabular[{{"high", 72, 81}, {"low", 49, 55}}, {"extreme", "M", "Tu"}]'
+PIVOTTOCOLUMNS = [
+    (f'ColumnKeys[PivotToColumns[{TEMPS}, "day" -> "temp"]]',
+     '{"extreme", ExtendedKey["temp", "M"], ExtendedKey["temp", "Tu"]}'),
+    (f'Normal[PivotToColumns[{TEMPS}, "day" -> "temp"]][[2]]',
+     '<|"extreme" -> "low", ExtendedKey["temp", "M"] -> 49, ExtendedKey["temp", "Tu"] -> 55|>'),
+    (f'Normal[PivotToColumns[{TEMPS}, "extreme" -> "temp"]][[1]]',
+     '<|"day" -> "M", ExtendedKey["temp", "high"] -> 72, ExtendedKey["temp", "low"] -> 49|>'),
+    (f'PivotToColumns[{TEMPS}, "nope" -> "temp"]', Raises()),
+]
+PIVOTFROMCOLUMNS = [
+    (f'Normal[PivotFromColumns[{WIDE}, {{"M", "Tu"}} -> {{"day", "temp"}}]]',
+     '{<|"extreme" -> "high", "day" -> "M", "temp" -> 72|>, <|"extreme" -> "high", "day" -> "Tu", "temp" -> 81|>, '
+     '<|"extreme" -> "low", "day" -> "M", "temp" -> 49|>, <|"extreme" -> "low", "day" -> "Tu", "temp" -> 55|>}'),
+    (f'Length[PivotFromColumns[{WIDE}, {{"M"}} -> {{"day", "temp"}}]]', "2"),
+    (f'PivotFromColumns[{WIDE}, {{"M", "Tu"}} -> "day"]', Raises()),
+]
+SALES = ('Tabular[{{"N", "x", 1}, {"N", "y", 2}, {"S", "x", 3}, {"N", "x", 4}}, {"region", "product", "units"}]')
+PIVOTTABLE = [
+    (f'Normal[PivotTable[{SALES}, Total[#units] &, "region", "product"]]',
+     '{<|"region" -> "N", "x" -> 5, "y" -> 2|>, <|"region" -> "S", "x" -> 3, "y" -> Missing["NotAvailable"]|>}'),
+    (f'ColumnKeys[PivotTable[{SALES}, {{"n" -> (Length[#units] &)}}, "region", "product"]]',
+     '{"region", ExtendedKey["n", "x"], ExtendedKey["n", "y"]}'),
+    (f'TabularSchema[PivotTable[{SALES}, Total[#units] &, "region", "product"]]["KeyColumns"]', '{"region"}'),
+    (f'PivotTable[{SALES}, Total[#units] &, "region", "product", IncludeGroupAggregates -> True]', Raises()),
+]
+COLUMNWISECOMBINE = [
+    ('Normal[ColumnwiseCombine[{Tabular[{{3, "and"}, {1, "or"}, {2, "but"}}, {"a", "b"}], Tabular[{{0, 8}, {1, 9}, '
+     '{1, 10}, {2, 11}}, {"a", "c"}]} -> "a"]]',
+     '{<|"a" -> 1, "b" -> "or", "c" -> 9|>, <|"a" -> 1, "b" -> "or", "c" -> 10|>, <|"a" -> 2, "b" -> "but", '
+     '"c" -> 11|>}'),
+    ('Length[ColumnwiseCombine[{Tabular[{{3, "and"}, {1, "or"}, {2, "but"}}, {"a", "b"}], Tabular[{{0, 8}, {1, 9}, '
+     '{1, 10}, {2, 11}}, {"a", "c"}]} -> "a", "Outer"]]', "5"),
+    ('ColumnKeys[ColumnwiseCombine[<|"x" -> Tabular[{{1, "or"}}, {"a", "b"}], "y" -> Tabular[{{1, "but"}}, {"a", '
+     '"b"}]|> -> "a"]]', '{"a", ExtendedKey["x", "b"], ExtendedKey["y", "b"]}'),
+    ('Length[ColumnwiseCombine[<|"x" -> Tabular[{{1}, {2}}, {"a"}], "y" -> Tabular[{{3}, {4}, {5}}, {"a"}]|> -> '
+     '(True &)]]', "6"),
+    ('ColumnwiseCombine[{Tabular[{{1, 2}}, {"a", "b"}], Tabular[{{1, 3}}, {"a", "b"}]} -> "a"]', Raises()),
+]
+TOTABULAR = [
+    ('Normal[ToTabular[{{1, 2}, {3, 4}, {5, 6}}]]', "{{1, 2}, {3, 4}, {5, 6}}"),
+    ('Normal[ToTabular[{{1, 2}, {3, 4}, {5, 6}}, "Columns"]]', "{{1, 3, 5}, {2, 4, 6}}"),
+    ('Normal[ToTabular[{{1, 2}, {3, 4}}, "Rows", <|"ColumnKeys" -> {"a", "b"}|>]]',
+     '{<|"a" -> 1, "b" -> 2|>, <|"a" -> 3, "b" -> 4|>}'),
+    ('Normal[ToTabular[{"a" -> {1, 4}, "b" -> {2, 5}}, "Columns"]]', '{<|"a" -> 1, "b" -> 2|>, <|"a" -> 4, "b" -> 5|>}'),
+    ('ToTabular[{1, 2}, "TimeSeries"]', Raises()),
+]
+FROMTABULAR = [
+    ('FromTabular[Tabular[{{1, 2, 3}, {2, 4, 6}}, {"a", "b", "c"}], "Rows"]',
+     '{<|"a" -> 1, "b" -> 2, "c" -> 3|>, <|"a" -> 2, "b" -> 4, "c" -> 6|>}'),
+    ('Normal /@ FromTabular[Tabular[{{1, 2, 3}, {2, 4, 6}}, {"a", "b", "c"}], "Columns"]',
+     '<|"a" -> {1, 2}, "b" -> {2, 4}, "c" -> {3, 6}|>'),
+    ('FromTabular[Tabular[{{1, 2}, {3, 4}}, {"a", "b"}], "Dataset"]', 'Dataset[{<|"a" -> 1, "b" -> 2|>, <|"a" -> 3, '
+     '"b" -> 4|>}]'),
+    ('FromTabular[Tabular[{{1, 2}, {3, 4}}, {"a", "b"}], "Matrix"]', "{{1, 2}, {3, 4}}"),
+]
+SCH = ('TabularSchema[Association["ColumnProperties" -> Association["a" -> Association["ElementType" -> "Integer64"], '
+       '"b" -> Association["ElementType" -> "Real64"], "c" -> Association["ElementType" -> "String"]], '
+       '"KeyColumns" -> None, "Backend" -> "WolframKernel"]]')
+TABULARSCHEMA = [
+    (f'{SCH}["ColumnKeys"]', '{"a", "b", "c"}'),
+    (f'{SCH}["a", "ElementType"]', '"Integer64"'),
+    (f'ColumnKeys[TabularSchema[{SCH}, "ColumnKeys" -> {{"foo", "bar", "baz"}}]]', '{"foo", "bar", "baz"}'),
+    (f'ColumnTypes[TabularSchema[{SCH}, "ElementType" -> "a" -> "Real"]]',
+     '<|"a" -> "Real64", "b" -> "Real64", "c" -> "String"|>'),
+    (f'TabularSchema[{TAB2}]["ColumnTypes"]', '<|"a" -> "Integer64", "b" -> "Integer64"|>'),
+    (f'TabularSchema[{SCH}, "Bogus" -> 1]', Raises()),
+]
+TS4 = ('Tabular[{{1.5, "foo", True, Quantity[2, "Seconds"]}, {Missing[], "bar", False, Missing[]}}, '
+       '{"c1", "c2", "c3", "c4"}]')
+TABULARSTRUCTURE = [
+    (f'Normal[TabularStructure[{TS4}, {{"c1", "c3"}}, {{"NonMissingCount", "MissingCount"}}]]',
+     '{<|"ColumnKey" -> "c1", "NonMissingCount" -> 1, "MissingCount" -> 1|>, <|"ColumnKey" -> "c3", '
+     '"NonMissingCount" -> 2, "MissingCount" -> 0|>}'),
+    (f'Normal[TabularStructure[{TS4}]][[All, "ColumnType"]][[1 ;; 3]]', '{"Real64", "String", "Boolean"}'),
+    (f'ColumnKeys[TabularStructure[{TS4}]]', '{"ColumnKey", "ColumnType", "NonMissingCount", "MissingCount", '
+     '"ByteCount"}'),
+    (f'TabularStructure[{TS4}, All, "Bogus"]', Raises()),
+]
+TABULARSUMMARY = [
+    ('Normal[TabularSummary[Tabular[{{1, "a"}, {2, "b"}, {4, "c"}}, {"x", "y"}]]][[1]]',
+     '<|"ColumnKey" -> "x", ExtendedKey["Statistical", "Min"] -> 1, ExtendedKey["Statistical", "Median"] -> 2, '
+     'ExtendedKey["Statistical", "Max"] -> 4|>'),
+    ('Normal[TabularSummary[Tabular[{{1, "a"}, {2, "b"}, {4, "c"}}, {"x", "y"}], "x" -> "Mean"]]',
+     '{<|"ColumnKey" -> "x", ExtendedKey["Statistical", "Mean"] -> 7/3|>}'),
+    ('Normal[TabularSummary[Tabular[{{1, "a"}, {2, "b"}, {4, "c"}}, {"x", "y"}], "y" -> "CountDistinct"]]',
+     '{<|"ColumnKey" -> "y", ExtendedKey["Structural", "CountDistinct"] -> 3|>}'),
+    ('TabularSummary[Tabular[{{1}}, {"x"}], "x" -> "Histogram"]', Raises()),
+]
+ROWKEY = [
+    ('Normal[Tabular[Tabular[{{1, "a", 2.}, {4, "b", 3.}}, {"col1", "col2", "col3"}], <|"KeyColumns" -> {"col2"}|>]'
+     '[RowKey[{"b"}]]]', '<|"col1" -> 4, "col2" -> "b", "col3" -> 3.|>'),
+    ('Normal[RowKey["a"][Tabular[Tabular[{{1, "a", 2.}, {4, "b", 3.}}, {"col1", "col2", "col3"}], '
+     '<|"KeyColumns" -> {"col2"}|>]]]', '<|"col1" -> 1, "col2" -> "a", "col3" -> 2.|>'),
+    ('RowKey["k"]', 'RowKey[{"k"}]'),
+    (f'Normal[{TABK.replace("{\"key\"}", "{\"key\", \"col1\"}")}[RowKey[{{"one", True}}]]]',
+     '<|"key" -> "one", "col1" -> True, "col2" -> "foo"|>'),
+]
+EXTKEYS = ('Tabular[{{1, "fox", 2, "lynx"}, {3, "deer", 4, "fox"}}, {ExtendedKey["obs A", "time"], '
+           'ExtendedKey["obs A", "species"], ExtendedKey["obs B", "time"], ExtendedKey["obs B", "species"]}]')
+EXTENDEDKEY = [
+    (f'ColumnKeys[{EXTKEYS}][[2]]', 'ExtendedKey["obs A", "species"]'),
+    (f'ColumnKeys[{EXTKEYS}[All, ExtendedKey["obs A", _]]]',
+     '{ExtendedKey["obs A", "time"], ExtendedKey["obs A", "species"]}'),
+    ('ExtendedKey["a", "b"]', 'ExtendedKey["a", "b"]'),
+    ("ExtendedKey[]", Raises()),
+]
+AUTH1 = '{<|"Author" -> "Mark Twain", "YearOfBirth" -> 1835|>, <|"Author" -> "Jules Verne", "YearOfBirth" -> 1828|>}'
+AUTH2 = ('{<|"Author" -> "Mark Twain", "Title" -> "Tom Sawyer"|>, <|"Author" -> "Mark Twain", "Title" -> '
+         '"Huckleberry Finn"|>, <|"Author" -> "Emilio Salgari", "Title" -> "Sandokan"|>}')
+JOINACROSS = [
+    (f'JoinAcross[{AUTH1}, {AUTH2}, "Author"]',
+     '{<|"Author" -> "Mark Twain", "YearOfBirth" -> 1835, "Title" -> "Tom Sawyer"|>, <|"Author" -> "Mark Twain", '
+     '"YearOfBirth" -> 1835, "Title" -> "Huckleberry Finn"|>}'),
+    (f'Length[JoinAcross[{AUTH1}, {AUTH2}, "Author", "Outer"]]', "4"),
+    (f'JoinAcross[{AUTH1}, {AUTH2}, "Author", "Right"][[-1]]',
+     '<|"Author" -> "Emilio Salgari", "YearOfBirth" -> Missing["Unmatched"], "Title" -> "Sandokan"|>'),
+    (f'Normal[JoinAcross[Tabular[{AUTH1}], Tabular[{AUTH2}], "Author"]][[2, "Title"]]', '"Huckleberry Finn"'),
+    ('JoinAcross[{<|w12a -> 1, w12b -> 2|>}, {<|w12a -> 2, w12b -> 1|>}, {Key[w12a] -> Key[w12b], Key[w12b] -> '
+     'Key[w12a]}, "Left"]', '{<|w12a -> 1, w12b -> 2|>}'),
+    ('JoinAcross[{<|w12a -> 1, w12b -> 2|>}, {<|w12a -> 2, w12b -> 1|>}, {Key[w12a] -> Key[w12b], Key[w12b] -> '
+     'Key[w12a]}, "Left", KeyCollisionFunction -> Right]', '{<|w12a -> 2, w12b -> 1|>}'),
+    ('JoinAcross[{<|w12a -> 1, w12b -> 2|>}, {<|w12a -> 2, w12b -> 1|>}, {Key[w12a] -> Key[w12b], Key[w12b] -> '
+     'Key[w12a]}, "Left", KeyCollisionFunction -> Function[x, {w12l[x], w12r[x]}]]',
+     '{<|w12l[w12a] -> 1, w12r[w12a] -> 2, w12l[w12b] -> 2, w12r[w12b] -> 1|>}'),
+    ('JoinAcross[{<|"Name" -> "Twain", "Y" -> 1835|>}, {<|"Author" -> "Twain", "Name" -> "Tom"|>}, "Name" -> '
+     '"Author", KeyCollisionFunction -> None]', '{<|"Y" -> 1835, "Author" -> "Twain"|>}'),
+    (f'JoinAcross[{AUTH1}, {AUTH2}, "Author", "Sideways"]', Raises()),
+]
+LEFTJOINACROSS = [
+    (f'LeftJoinAcross[{AUTH1}, {AUTH2}, "Author"][[3]]',
+     '<|"Author" -> "Jules Verne", "YearOfBirth" -> 1828, "Title" -> Missing["Unmatched"]|>'),
+    (f'Length[LeftJoinAcross[{AUTH1}, {AUTH2}, "Author"]]', "3"),
+    (f'LeftJoinAcross[{AUTH2}, "Author"][{AUTH1}] === LeftJoinAcross[{AUTH1}, {AUTH2}, "Author"]', "True"),
+    (f'Normal[LeftJoinAcross[Tabular[{AUTH1}], Tabular[{AUTH2}], "Author"]][[3, "Title"]]', 'Missing["Unmatched"]'),
+]
+
+# ─── Dataset and Query ───
+QD = ('{<|"a" -> 1, "b" -> "x", "c" -> {1}|>, <|"a" -> 2, "b" -> "y", "c" -> {2, 3}|>, <|"a" -> 3, "b" -> "z", '
+      '"c" -> {3}|>, <|"a" -> 4, "b" -> "x", "c" -> {4, 5}|>, <|"a" -> 5, "b" -> "y", "c" -> {5, 6, 7}|>, '
+      '<|"a" -> 6, "b" -> "z", "c" -> {}|>}')
+QUERY = [
+    (f'Query[All, "c", 1][{QD}]', '{1, 2, 3, 4, 5, Missing["PartAbsent", 1]}'),
+    (f'Query[GroupBy["b"], Catenate, "c"][{QD}]', '<|"x" -> {1, 4, 5}, "y" -> {2, 3, 5, 6, 7}, "z" -> {3}|>'),
+    (f'Query[All, "c" /* <|"ctotal" -> Total, "clength" -> Length|>][{QD}][[2]]', '<|"ctotal" -> 5, "clength" -> 2|>'),
+    (f'Query[SelectFirst[#a > 5 &], "b"][{QD}]', '"z"'),
+    (f'Query[Total, "a"][{QD}]', "21"),
+    (f'Query[Select[#a < 5 &], "b"][{QD}]', '{"x", "y", "z", "x"}'),
+    (f'Query[MaximalBy["a"], "b"][{QD}]', '{"z"}'),
+    (f'Query[{{1, 2}}, "a"][{QD}]', "{1, 2}"),
+    (f'Query[2, {{"a", "b"}}][{QD}]', '<|"a" -> 2, "b" -> "y"|>'),
+    (f'Query[All, {{"a" -> (10 # &)}}][{QD}][[1, "a"]]', "10"),
+    (f'Query[{{Total, Length}}, "a"][{QD}]', "{21, 6}"),
+    ('Query[]["w12d"]', '"w12d"'),
+    (f'Query[Counts, "b"][{QD}]', '<|"x" -> 2, "y" -> 2, "z" -> 2|>'),
+    (f'Query[All, "nope"][{QD}][[1]]', 'Missing["KeyAbsent", "nope"]'),
+    (f'Query[Keys][<|"p" -> 1, "q" -> 2|>]', '{"p", "q"}'),
+    (f'Query[SortBy[#a &] /* Reverse, "a"][{QD}]', "{6, 5, 4, 3, 2, 1}"),
+    (f'Query[All, "a", FailureAction -> "Bogus"][{QD}]', Raises()),
+]
+FAILUREACTION = [
+    ('Query[All, 1/# &, FailureAction -> None][Range[-2, 2]]', "{-1/2, -1, ComplexInfinity, 1, 1/2}"),
+    ('Query[All, 1/# &, FailureAction -> "Replace"][Range[-2, 2]]', '{-1/2, -1, Missing["Failed"], 1, 1/2}'),
+    ('Query[All, 1/# &, FailureAction -> "Drop"][Range[-2, 2]]', "{-1/2, -1, 1, 1/2}"),
+    ('Head[Query[All, 1/# &, FailureAction -> "Abort"][Range[-2, 2]]]', "Failure"),
+    ('Head[Query[All, 1/# &][Range[-2, 2]]]', "Failure"),
+    ('Head /@ Query[All, 1/# &, FailureAction -> "Encapsulate"][Range[-2, 2]]',
+     "{Rational, Integer, Failure, Integer, Rational}"),
+    ('Query[All, 1/# &, FailureAction -> {"Replace", w12rep}][Range[-1, 1]][[{1, 3}]]', "{-1, 1}"),
+    ('Head[Query[All, 1/# &, FailureAction -> {"Replace", w12rep}][Range[-1, 1]][[2]]]', "w12rep"),
+]
+MISSINGBEHAVIOR = [
+    ('Query[Total]@{1, 2, 3, Missing[]}', "6"),
+    ('Query[Total, MissingBehavior -> None]@{1, 2, 3, Missing[]}', "6 + Missing[]"),
+    ('Query[Mean][{2, 4, Missing["reason"]}]', "3"),
+    ('Query[Mean][{}]', 'Missing["Indeterminate"]'),
+    ('Query[StandardDeviation][{3}]', 'Missing["Indeterminate"]'),
+    ('Query[Apply[Plus]][{2, 4, Missing["reason"]}]', "6"),
+    ('Query[Apply[Times]][{2, 4, Missing["reason"]}]', 'Missing["Indeterminate"]'),
+    ('Head[Query[Apply[Times], MissingBehavior -> None][{2, 4, Missing["reason"]}]]', "Times"),
+    ('Query[GroupBy[Head]][{2, Missing[], 4, Missing["reason"]}]',
+     '<|Integer -> {2, 4}, Missing -> {Missing[], Missing["reason"]}|>'),
+    ('Query[GroupBy[Head], MissingBehavior -> None][{2, Missing[], 4, Missing["reason"]}]',
+     '<|Integer -> {2, 4}, Missing -> {Missing[], Missing["reason"]}|>'),
+    ('Dataset[{2, 4, Missing["reason"]}][Mean]', "3"),
+    ('Query[Total, MissingBehavior -> Sometimes][{1}]', Raises()),
+]
+PARTBEHAVIOR = [
+    ('Query[All, 2][{{1, 2}, {3}}]', '{2, Missing["PartAbsent", 2]}'),
+    ('Query[All, 2, PartBehavior -> None, FailureAction -> "Replace"][{{1, 2}, {3}}]', '{2, Missing["Failed"]}'),
+    ('Query["k", PartBehavior -> Automatic][<|"j" -> 1|>]', 'Missing["KeyAbsent", "k"]'),
+]
+DS2 = 'Dataset[{<|"a" -> 1, "b" -> 2|>, <|"a" -> 3, "b" -> 4|>}]'
+DATASET = [
+    (f'{DS2}[All, "a"]', "Dataset[{1, 3}]"),
+    (f'{DS2}[Total, "a"]', "4"),
+    (f'Normal[{DS2}]', '{<|"a" -> 1, "b" -> 2|>, <|"a" -> 3, "b" -> 4|>}'),
+    (f'Length[{DS2}]', "2"),
+    (f'{DS2}[[1]]', 'Dataset[<|"a" -> 1, "b" -> 2|>]'),
+    (f'{DS2}[2, "b"]', "4"),
+    (f'{DS2}[Select[#a > 1 &]]', 'Dataset[{<|"a" -> 3, "b" -> 4|>}]'),
+    ('Dataset[Tabular[{{1, 2}}, {"p", "q"}]]', 'Dataset[{<|"p" -> 1, "q" -> 2|>}]'),
+    ('Query[All, "a"][Dataset[{<|"a" -> 5|>}]]', "Dataset[{5}]"),
+    ('Dataset[{1}, Bogus -> 1]', Raises()),
+]
+DATASETTHEME = [
+    ('Dataset[{1, 2}, DatasetTheme -> "Web"]', 'Dataset[{1, 2}, DatasetTheme -> "Web"]'),
+    ('Normal[Dataset[{1, 2}, DatasetTheme -> {"Serif", "LineGrid"}]]', "{1, 2}"),
+    ('Dataset[{3, 4}, DatasetTheme -> "Web"][Total]', "7"),
+]
+INCLUDERELATEDTABLES = [
+    (f'RelationalDatabase[{{"employees"}}, "{DBF}"]["Tables"]', '{"employees"}'),
+    (f'RelationalDatabase[{{"employees"}}, "{DBF}", IncludeRelatedTables -> True]["Tables"]',
+     '{"employees", "offices"}'),
+    (f'RelationalDatabase[{{"employees"}}, "{DBF}", IncludeRelatedTables -> 3]', Raises()),
+]
+DATABASEREFERENCE = [
+    (f'DatabaseReference["{DBF}"]', f'DatabaseReference[<|"Backend" -> "SQLite", "Name" -> "{DBF}"|>]'),
+    ('DatabaseReference["postgres://user:pass@localhost:1000/database"]',
+     'DatabaseReference[<|"Backend" -> "PostgreSQL", "Name" -> "database", "Host" -> "localhost", "Port" -> 1000, '
+     '"Username" -> "user", "Password" -> "pass"|>]'),
+    ('DatabaseReference[<|"Backend" -> "postgres", "Host" -> "localhost", "Port" -> 1000, "Name" -> "database"|>]'
+     '["Backend"]', '"PostgreSQL"'),
+    (f'DatabaseReference[File["{DBF}"]]["Name"]', f'"{DBF}"'),
+    ('DatabaseReference[<|"Backend" -> "Bogus"|>]', Raises()),
+]
+DATABASECONNECT = [
+    (f'Module[{{r = DatabaseReference["{DBF}"]}}, {{Head[DatabaseConnect[r]], r["Connected"], '
+     f'Head[DatabaseDisconnect[r]]}}]', "{Success, True, Success}"),
+    ('Head[DatabaseConnect[DatabaseReference["/nonexistent/w12.db"]]]', "Failure"),
+    ('Head[DatabaseConnect[DatabaseReference["postgres://u:p@localhost:1/db"]]]', "Failure"),
+]
+DATABASEDISCONNECT = [
+    (f'Module[{{r = DatabaseReference["{DBF}"]}}, DatabaseConnect[r]; DatabaseDisconnect[r]; r["Connected"]]', "False"),
+    (f'Head[DatabaseDisconnect[DatabaseReference["{DBF}"]]]', "Failure"),
+    (f'Module[{{r = RelationalDatabase["{DBF}"]}}, DatabaseConnect[r]; Head[DatabaseDisconnect[r]]]', "Success"),
+]
+RELATIONALDATABASE = [
+    (f'RelationalDatabase["{DBF}"]["Tables"]', '{"employees", "offices"}'),
+    (f'RelationalDatabase["{DBF}"]["employees", "ForeignKeys"]',
+     '{<|"ToTable" -> "offices", "FromColumns" -> {"officeCode"}, "ToColumns" -> {"officeCode"}|>}'),
+    (f'RelationalDatabase["{DBF}"]["offices", "PrimaryKey", "Columns"]', '{"officeCode"}'),
+    (f'RelationalDatabase["{DBF}"]["offices", "city", "Nullable"]', "False"),
+    (f'RelationalDatabase["{DBF}"]["employees", "Indexes"]', '{<|"Columns" -> {"name"}, "IndexName" -> "emp_name"|>}'),
+    (f'RelationalDatabase["{DBF}"]["offices", "Columns"]', '{"officeCode", "city", "phone"}'),
+    (f'Normal[Tabular[RelationalDatabase["{DBF}"] -> "employees"]][[3]]',
+     '<|"id" -> 3, "name" -> "Cy", "officeCode" -> Missing["NotAvailable"]|>'),
+    (f'RelationalDatabase[{{"nope"}}, "{DBF}"]', Raises()),
+]
+DATACONNECTIONOBJECT = [
+    ('DataConnectionObject[<|"ConnectionName" -> "AzureBlobStorage", "Location" -> "sample.parquet"|>]'
+     '["ConnectionName"]', '"AzureBlobStorage"'),
+    ('DataConnectionObject[<|"ConnectionName" -> "Dropbox", "Location" -> "a.csv"|>]["Redownload"]', "False"),
+    ('DataConnectionObject[<|"ConnectionName" -> "Dropbox", "Location" -> "a.csv"|>]["Location"]', '"a.csv"'),
+    ('DataConnectionObject[<|"Location" -> "a.csv"|>]', Raises()),
+]
+ALLOWEDDIMENSIONS = [
+    ('Normal[Tabular[{{1, 2}}, AllowedDimensions -> {5, 2}]]', "{{1, 2}}"),
+    ('Options[Tabular[{{1, 2}}, AllowedDimensions -> {5, 2}], AllowedDimensions]', "{AllowedDimensions -> {5, 2}}"),
+    ('Head[AllowedDimensions]', "Symbol"),
+]
+OPTION_SYMBOLS = []
+for _o, _v in [("DateReduction", '"Week"'), ("DateFunction", "DateObject"), ("TimeFormat", "Automatic"),
+               ("ExpirationDate", "Infinity"), ("PartitionGranularity", "Automatic"),
+               ("MaxExtraBandwidths", "Automatic"), ("MaxMixtureKernels", "Automatic"),
+               ("ValueDimensions", "1")]:
+    OPTION_SYMBOLS += [(_o, _o), (f"Head[{_o}]", "Symbol"), (f"{_o} -> {_v}", f"{_o} -> {_v}")]
+INCLUDEGROUPAGGREGATES = [
+    ('Normal[PivotTable[Tabular[{{"N", "x", 1}, {"S", "y", 2}}, {"r", "p", "u"}], Total[#u] &, "r", "p", '
+     'IncludeGroupAggregates -> False]]', '{<|"r" -> "N", "x" -> 1, "y" -> Missing["NotAvailable"]|>, <|"r" -> "S", '
+     '"x" -> Missing["NotAvailable"], "y" -> 2|>}'),
+    ("Head[IncludeGroupAggregates]", "Symbol"),
+    ("IncludeGroupAggregates -> True", "IncludeGroupAggregates -> True"),
+]
+INCLUDERELATEDTABLES_EXTRA = [
+    (f'RelationalDatabase[{{"employees"}}, "{DBF}", IncludeRelatedTables -> False]["Tables"]', '{"employees"}'),
+]
+DATEFUNCTION_EXTRA = [('DateScale[DateFunction -> DateObject]', 'DateScale[DateFunction -> DateObject]')]
+
+
 GROUPS = [v for k, v in list(globals().items()) if k.isupper() and k != "GROUPS" and isinstance(v, list)
           and v and isinstance(v[0], tuple)]
 CASES = [c for g in GROUPS for c in g]
