@@ -22,7 +22,6 @@ approximation.
 """
 from __future__ import annotations
 
-import inspect
 import math
 import mpmath
 
@@ -111,12 +110,12 @@ class UD(D):
             raise Unevaluated()
         if not (_inexact(x) or any(_inexact(v) for v in self.flat())):
             raise NotImplementedError(f"CDF: {self.name} has no closed-form CDF; use a machine-number argument")
-        g = sp.lambdify(X, self.pdf(X), "mpmath")
+        g = self.pdf_mp if hasattr(self, "pdf_mp") else sp.lambdify(X, self.pdf(X), "mpmath")
         a = -mpmath.inf if lo == -sp.oo else _mp(lo)
         pts = [a, _mp(x)]
         if lo == -sp.oo and hi == sp.oo and self.numeric():
             pts = [-mpmath.inf, _mp(self.center()), _mp(x)] if _f(x) > _f(self.center()) else pts
-        return sp.Float(mpmath.quad(g, pts))
+        return sp.Float(mpmath.re(mpmath.quad(g, pts)))
 
     def center(self):
         return sp.Integer(0)
@@ -142,7 +141,6 @@ class UD(D):
 
 def _invert(dd, u):
     """numeric inverse CDF by bracketing and bisection (machine precision)"""
-    import mpmath
     lo, hi = dd.bounds()
 
     def F(x):
@@ -1531,7 +1529,6 @@ class _Noncentral(UD):
     closed_cdf = False
 
     def cdf(self, x):
-        import mpmath
         if not (_num(x) and self.numeric()):
             raise Unevaluated()
         if not (_inexact(x) or any(_inexact(v) for v in self.flat())):
@@ -2416,10 +2413,29 @@ class Voigt(UD):
     def pdf(self, x):
         d, s = self.a
         z = (x + sp.I * d) / (s * sp.sqrt(2))
-        return sp.re(sp.exp(-z ** 2) * sp.erfc(-sp.I * z)) / (s * sp.sqrt(2 * sp.pi))
+        if all(_num(v) for v in (x, d, s)) and any(_inexact(v) for v in (x, d, s)):
+            return sp.Float(self.pdf_mp(_mp(x)))
+        if all(_num(v) for v in (x, d, s)):
+            return sp.re(sp.exp(-z ** 2) * sp.erfc(-sp.I * z)) / (s * sp.sqrt(2 * sp.pi))
+        # real part of the Faddeeva function written out for real x, delta, sigma
+        zb = (x - sp.I * d) / (s * sp.sqrt(2))
+        return (sp.exp(-z ** 2) * sp.erfc(-sp.I * z) + sp.exp(-zb ** 2) * sp.erfc(sp.I * zb)) / (2 * s * sp.sqrt(2 * sp.pi))
+
+    def pdf_mp(self, x):
+        d, s = (_mp(v) for v in self.a)
+        zz = (x + 1j * d) / (s * mpmath.sqrt(2))
+        # erfc(-i z) exp(-z^2) is the Faddeeva function; for Im z > 0 it is bounded, so evaluate it stably
+        return mpmath.re(mpmath.exp(-zz ** 2) * mpmath.erfc(-1j * zz)) / (s * mpmath.sqrt(2 * mpmath.pi))
 
     def cdf(self, x):
-        return self.num_cdf(x)
+        if not (_num(x) and self.numeric()):
+            raise Unevaluated()
+        if not (_inexact(x) or any(_inexact(v) for v in self.a)):
+            raise NotImplementedError(f"CDF: {self.name} has no closed-form CDF; use a machine-number argument")
+        # Voigt = Normal(0, s) + Cauchy(0, d): CDF(x) = Integrate[Phi((x - d Tan[Pi (u - 1/2)])/s), {u, 0, 1}]
+        d, sg, xx = _mp(self.a[0]), _mp(self.a[1]), _mp(x)
+        g = lambda u: mpmath.ncdf((xx - d * mpmath.tan(mpmath.pi * (u - 0.5))) / sg)  # noqa: E731
+        return sp.Float(mpmath.quad(g, [0, 0.5, 1]))
 
     def cf(self, t):
         d, s = self.a
@@ -2976,7 +2992,6 @@ class Beckmann(NumericOnly):
             # E[(X^2 + Y^2)^k] from the bivariate normal moments
             xs, ys = sp.symbols("xs ys")
             k = r // 2
-            mvn = W.MULTI  # noqa: F841  (documented dependency)
             poly = sp.expand((xs ** 2 + ys ** 2) ** k)
             out = 0
             for (i, j), c in sp.Poly(poly, xs, ys).terms():
@@ -3402,7 +3417,6 @@ class Skellam(UDisc):
             raise Unevaluated()
         if p in (0, 1):
             return -sp.oo if p == 0 else sp.oo
-        import mpmath
         m1, m2 = (_mp(v) for v in self.a)
         k = int(math.floor(_f(self.mean())))
         F = lambda kk: float(self.cdf_value(sp.Float(kk)))  # noqa: E731
@@ -3515,45 +3529,8 @@ class Zipf(UDisc):
         return m2 - m1 ** 2
 
 
-class Categorical(UDisc):
-    """CategoricalDistribution[{c1, ...}] (equal weights) or [{c1, ...}, {p1, ...}]: PDF and RandomVariate over
-    arbitrary category values"""
-
-    def __init__(self, name, a, cats=None):
-        cs, ws = cats
-        super().__init__(name, [])
-        self.cats, self.w = cs, ws
-
-    def pdf_value(self, x):
-        for c, w in zip(self.cats, self.w):
-            if c == x:
-                return w
-        if isinstance(x, (Symbol, Expr)) and not any(isinstance(c, type(x)) and c == x for c in self.cats):
-            if isinstance(x, Symbol) and not any(isinstance(c, Symbol) for c in self.cats):
-                raise Unevaluated()
-        return sp.Integer(0)
-
-    def cdf_value(self, x):
-        raise NotImplementedError("CDF: CategoricalDistribution has no order on its categories")
-
-    def mean(self):
-        raise NotImplementedError("Mean: CategoricalDistribution categories are not numbers")
-
-    var = mean
-
-    def numeric(self):
-        return all(_num(w) for w in self.w)
-
-    def sample(self, rng):
-        u, acc = rng.random(), 0.0
-        for c, w in zip(self.cats, self.w):
-            acc += _f(w)
-            if u < acc:
-                return c
-        return self.cats[-1]
-
-
 # ─────────────────────────── registration ───────────────────────────
+
 
 def _ctor(name, notes, defaults=None):
     """register the inert constructor of a distribution head: parameters are validated (raising on invalid
@@ -3976,9 +3953,6 @@ class TruncatedDisc(UDisc):
     def pdf(self, k):
         return self.base.pdf(k) / self.mass()
 
-    def mean(self):
-        return W.raw_moment(self, 1) if self.hi_ != sp.oo else self._sum(1)
-
     def raw(self, r):
         lo, hi = self.bounds()
         if hi != sp.oo and self.numeric():
@@ -3993,7 +3967,7 @@ class TruncatedDisc(UDisc):
             raise NotImplementedError("TruncatedDistribution: no closed form for this moment")
         return sp.simplify(s)
 
-    def mean(self):  # noqa: F811
+    def mean(self):
         return self.raw(1)
 
     def var(self):
@@ -5952,7 +5926,6 @@ class CategoricalD(MultiD):
         return all(_num(w) for w in self.w)
 
     def pdf(self, x):
-        from ..evaluate import evaluate
         for c, w in zip(self.cats, self.w):
             if c == x:
                 return _out(w, self.expr)
@@ -6242,7 +6215,6 @@ class GaussianEnsemble(MatrixD):
         return sp.Matrix(n, n, lambda i, j: self.s ** 2 if i == j else self.s ** 2 / 2)
 
     def sample(self, rng):
-        import numpy as np
         if not self.numeric():
             raise ValueError("RandomVariate: distribution parameters must be numeric")
         g = _rng_np(rng)
@@ -6308,7 +6280,6 @@ class CircularEnsemble(MatrixD):
                                   "matrix entries); use RandomVariate or MatrixPropertyDistribution")
 
     def sample(self, rng):
-        import numpy as np
         if not self.numeric():
             raise ValueError("RandomVariate: n must be a positive integer")
         g = _rng_np(rng)
