@@ -3482,3 +3482,828 @@ def _bytearrayformatq(b, fmt):
     if not is_bytearray(b):
         return False
     return _format_q(ba_bytes(b), fmt, "ByteArrayFormatQ")
+
+
+# ═════════════════════════════════════════════════════════════════ content objects & snippets ══
+def _co_assoc(c):
+    if isinstance(c, Expr) and c.head == "ContentObject" and len(c.args) == 1 and is_assoc(c.args[0]):
+        return c.args[0]
+    return None
+
+
+def _assoc_get(a, key, default=None):
+    for r in a.args:
+        if is_rule(r) and r.args[0] == key:
+            return r.args[1]
+    return default
+
+
+def _file_fields(path):
+    p = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isfile(p):
+        raise ValueError(f"ContentObject: file {path!r} not found")
+    name = os.path.basename(p)
+    stem, ext = os.path.splitext(name)
+    return [("Location", Expr("File", p)), ("FileName", name), ("FileExtension", ext[1:]),
+            ("FileByteCount", os.path.getsize(p)), ("Title", stem), ("Plaintext", Expr("Text", Expr("File", p)))]
+
+
+@fn("ContentObject", area=AREA, status="added",
+    notes="ContentObject[<|field -> value, ...|>] document for search indices; ContentObject[\"text\"] gives "
+          "<|\"Plaintext\" -> text|>, ContentObject[File[f]] gives Location, FileName, FileExtension, "
+          "FileByteCount, Title and Plaintext -> Text[File[f]] (no dates); co[\"field\"], co[\"Snippet\"]")
+def _contentobject(x):
+    if is_assoc(x):
+        raise Unevaluated()
+    if isinstance(x, str):
+        return Expr("ContentObject", Expr("Association", Expr("Rule", "Plaintext", x)))
+    if isinstance(x, Expr) and x.head == "File" and x.args and isinstance(x.args[0], str):
+        return Expr("ContentObject", Expr("Association", *(Expr("Rule", k, v) for k, v in _file_fields(x.args[0]))))
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    raise ValueError("ContentObject: the argument must be an association, a string or File[...]")
+
+
+def _content_text(a):
+    """Plain text of a content association (Plaintext, else Text, else all string fields)."""
+    for key in ("Plaintext", "Text", "Content"):
+        v = _assoc_get(a, key)
+        if v is not None:
+            return _field_text(v)
+    return " ".join(t for r in a.args if is_rule(r) for t in [_field_text(r.args[1])] if t)
+
+
+def _field_text(v):
+    if isinstance(v, str):
+        return v
+    if is_list(v):
+        return " ".join(t for t in (_field_text(x) for x in v.args) if t)
+    if isinstance(v, Expr) and v.head == "Text" and v.args:
+        return _field_text(v.args[0])
+    if isinstance(v, Expr) and v.head == "File" and v.args and isinstance(v.args[0], str):
+        with open(os.path.expanduser(v.args[0]), encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    return ""
+
+
+def _wrap_lines(text, width=80):
+    lines = []
+    for para in text.splitlines():
+        words = para.split()
+        if not words:
+            continue
+        cur = ""
+        for w in words:
+            if cur and len(cur) + 1 + len(w) > width:
+                lines.append(cur)
+                cur = w
+            else:
+                cur = (cur + " " + w) if cur else w
+        lines.append(cur)
+    return lines
+
+
+def _snippet_text(text, n):
+    lines = _wrap_lines(text)
+    if not lines:
+        return ""
+    if n == 1:
+        first = lines[0]
+        k = text.find(first[:20])
+        if len(lines) > 1 and len(first) < 80 and k >= 0 and text[k:k + len(first)] == first \
+                and text[k + len(first):k + len(first) + 1] == " ":
+            return first + " "
+        return first
+    return "\n".join(lines[:n])
+
+
+@fn("Snippet", area=AREA, status="added",
+    notes="Snippet[doc] / Snippet[doc, n]: the first n lines (default 1) of a ContentObject's text or of a "
+          "File, long lines wrapped at 80 characters; a string is its own snippet")
+def _snippet(x, n=1):
+    n = _int(n, "Snippet", "line count", 1)
+    if isinstance(x, str):
+        return x
+    a = _co_assoc(x)
+    if a is not None:
+        return _snippet_text(_content_text(a), n)
+    if isinstance(x, Expr) and x.head == "File" and x.args and isinstance(x.args[0], str):
+        p = os.path.expanduser(x.args[0])
+        if not os.path.isfile(p):
+            raise ValueError(f"Snippet: file {x.args[0]!r} not found")
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            lines = []
+            for line in fh:
+                line = line.rstrip("\r\n")
+                if line.strip():
+                    lines.extend(_wrap_lines(line))
+                if len(lines) >= n:
+                    break
+        return "\n".join(lines[:n])
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    raise NotImplementedError(f"Snippet: unsupported object {x!r}")
+
+
+def _co_hook(head, args, ev_):
+    a = _co_assoc(head)
+    if a is None or len(args) != 1 or not isinstance(args[0], str):
+        return K.UNHANDLED
+    key = args[0]
+    if key == "Snippet":
+        return _snippet(head)
+    if key == "Properties":
+        return L(*[r.args[0] for r in a.args if is_rule(r)], "Snippet")
+    v = _assoc_get(a, key)
+    return v if v is not None else Expr("Missing", "NotAvailable", key)
+
+
+KL.COMPOUND_HEAD_HOOKS["ContentObject"] = _co_hook
+
+
+# ═════════════════════════════════════════════════════════════════ text search ══
+_SEARCH_INDICES = {}          # id -> {"docs": [assoc], "sources": [...], "options": {...}}
+_TOKEN = re.compile(r"[^\W_]+(?:['\u2019][^\W_]+)*")
+
+
+def _minimal_stem(w):
+    """Lucene's EnglishMinimalStemmer (plural s removal)."""
+    n = len(w)
+    if n < 3 or w[-1] != "s":
+        return w
+    c = w[-2]
+    if c in "us":
+        return w
+    if c == "e":
+        if n > 3 and w[-3] == "i" and w[-4] not in "ae":
+            return w[:-3] + "y"
+        if w[-3] in "iaoe":
+            return w
+    return w[:-1]
+
+
+def _analyze(text):
+    return [_minimal_stem(t.lower().replace("\u2019", "'")) for t in _TOKEN.findall(text)]
+
+
+class _Index:
+    def __init__(self, docs):
+        self.docs = []
+        self.fields = []          # per doc: {field: tokens}
+        for d in docs:
+            self.add(d)
+
+    def add(self, d):
+        self.docs.append(d)
+        f = {}
+        for r in d.args:
+            if not is_rule(r) or not isinstance(r.args[0], str):
+                continue
+            txt = _field_text(r.args[1])
+            if txt and r.args[0] not in ("Location", "FileExtension", "ReferenceLocation"):
+                f[r.args[0]] = _analyze(txt)
+        self.fields.append(f)
+
+    def field_stats(self, field):
+        lens = [len(f[field]) for f in self.fields if field in f]
+        return len(lens), (sum(lens) / len(lens) if lens else 0.0)
+
+
+def _doc_from(x):
+    a = _co_assoc(x)
+    if a is not None:
+        return [a]
+    if is_assoc(x):
+        return [x]
+    if isinstance(x, Expr) and x.head == "File" and x.args and isinstance(x.args[0], str):
+        x = x.args[0]
+    if isinstance(x, str):
+        p = os.path.expanduser(x)
+        if os.path.isdir(p):
+            out = []
+            for root, dirs, files in os.walk(p):
+                dirs.sort()
+                for name in sorted(files):
+                    fp = os.path.join(root, name)
+                    if _is_text_file(fp):
+                        out.append(Expr("Association", *(Expr("Rule", k, v) for k, v in _file_fields(fp))))
+            return out
+        if os.path.isfile(p):
+            return [Expr("Association", *(Expr("Rule", k, v) for k, v in _file_fields(p)))]
+        raise ValueError(f"search: {x!r} is not a file or directory")
+    if is_list(x):
+        return [d for y in x.args for d in _doc_from(y)]
+    raise ValueError(f"search: cannot index {x!r}")
+
+
+def _is_text_file(p):
+    try:
+        with open(p, "rb") as fh:
+            head = fh.read(4096)
+    except OSError:
+        return False
+    if b"\x00" in head:
+        return False
+    try:
+        head.decode("utf-8")
+    except UnicodeDecodeError as e:
+        if e.start < len(head) - 4:
+            return False
+    return True
+
+
+def _index_dir():
+    return os.path.join(os.path.expanduser("~"), ".mikoshilang", "SearchIndices")
+
+
+def _index_obj(iid):
+    return Expr("SearchIndexObject", Expr("File", os.path.join(_index_dir(), iid)))
+
+
+def _index_id(obj):
+    if isinstance(obj, Expr) and obj.head == "SearchIndexObject" and len(obj.args) == 1:
+        f = obj.args[0]
+        if isinstance(f, Expr) and f.head == "File" and f.args and isinstance(f.args[0], str):
+            iid = os.path.basename(f.args[0])
+        elif isinstance(f, str):
+            iid = f
+        else:
+            return None
+        return iid
+    return None
+
+
+def _get_index(obj, fname):
+    iid = _index_id(obj)
+    if iid is None:
+        return None
+    if iid not in _SEARCH_INDICES:
+        raise ValueError(f"{fname}: the search index {iid} does not exist (it was deleted or belongs to another "
+                         f"session)")
+    return _SEARCH_INDICES[iid]
+
+
+_SEARCH_OPTS = {"ContentFieldOptions", "DocumentWeightingRules", "MaxItems", "Language", "Method",
+                "ContentLocationFunction", "ValuePreprocessingFunction", "PreprocessingRules", "SpecificityGoal"}
+
+
+def _check_search_opts(o, fname):
+    for k in ("Language", "Method", "ContentLocationFunction", "ValuePreprocessingFunction", "PreprocessingRules",
+              "SpecificityGoal"):
+        v = o.get(k)
+        if v is not None and not is_sym(v, "Automatic") and not is_sym(v, "None") and v != "English":
+            raise NotImplementedError(f"{fname}: only the default {k} is supported")
+
+
+@fn("CreateSearchIndex", area=AREA, status="added",
+    notes="in-memory search index of files, directories (text files, recursively), ContentObjects or "
+          "associations; SearchIndexObject[File[~/.mikoshilang/SearchIndices/id]] (the index lives in the "
+          "session; nothing is written); ContentFieldOptions weights and DocumentWeightingRules are kept as "
+          "defaults for TextSearch")
+def _createsearchindex(*args):
+    pos, o = _opts(args, _SEARCH_OPTS, "CreateSearchIndex")
+    _check_search_opts(o, "CreateSearchIndex")
+    if len(pos) > 1:
+        raise ValueError("CreateSearchIndex called with too many arguments")
+    docs = _doc_from(pos[0]) if pos else []
+    import uuid
+    iid = str(uuid.uuid4())
+    _SEARCH_INDICES[iid] = {"index": _Index(docs), "sources": list(pos), "options": o}
+    return _index_obj(iid)
+
+
+@fn("AddToSearchIndex", area=AREA, status="added",
+    notes="adds files, directories, ContentObjects or associations to an index; returns the index")
+def _addtosearchindex(obj, src):
+    st = _get_index(obj, "AddToSearchIndex")
+    if st is None:
+        raise Unevaluated()
+    for d in _doc_from(src):
+        st["index"].add(d)
+    st["sources"].append(src)
+    return obj
+
+
+@fn("UpdateSearchIndex", area=AREA, status="added",
+    notes="re-reads the files and directories an index was built from (adding new files, dropping deleted "
+          "ones); returns the index")
+def _updatesearchindex(obj):
+    st = _get_index(obj, "UpdateSearchIndex")
+    if st is None:
+        raise Unevaluated()
+    docs = []
+    for s in st["sources"]:
+        try:
+            docs.extend(_doc_from(s))
+        except ValueError:
+            pass
+    st["index"] = _Index(docs)
+    return obj
+
+
+@fn("DeleteSearchIndex", area=AREA, status="added",
+    notes="deletes an index; later searches with it raise")
+def _deletesearchindex(obj):
+    iid = _index_id(obj)
+    if iid is None:
+        raise Unevaluated()
+    if iid not in _SEARCH_INDICES:
+        raise ValueError(f"DeleteSearchIndex: the search index {iid} does not exist")
+    del _SEARCH_INDICES[iid]
+    return Symbol("Null")
+
+
+@fn("SearchIndices", area=AREA, status="added", notes="the SearchIndexObjects that currently exist")
+def _searchindices():
+    return L(*(_index_obj(i) for i in _SEARCH_INDICES))
+
+
+def _si_hook(head, args, ev_):
+    if head.head != "SearchIndexObject" or len(args) != 1 or not isinstance(args[0], str):
+        return K.UNHANDLED
+    st = _get_index(head, "SearchIndexObject")
+    if st is None:
+        return K.UNHANDLED
+    p = args[0]
+    if p == "DocumentCount":
+        return len(st["index"].docs)
+    if p == "Documents":
+        return L(*(Expr("ContentObject", d) for d in st["index"].docs))
+    if p == "Properties":
+        return L("DocumentCount", "Documents", "Properties")
+    raise ValueError(f"SearchIndexObject: unknown property {p!r}")
+
+
+KL.COMPOUND_HEAD_HOOKS["SearchIndexObject"] = _si_hook
+record("SearchIndexObject", AREA, "added",
+       "handle to an index made by CreateSearchIndex; idx[\"DocumentCount\"], idx[\"Documents\"]")
+
+
+# ── queries ──
+_K1, _B = 1.2, 0.75
+
+
+class _Hit:
+    __slots__ = ("score", "tf")
+
+    def __init__(self, score=0.0, tf=None):
+        self.score = score
+        self.tf = tf or {}
+
+
+def _merge(a, b):
+    h = _Hit(a.score + b.score, dict(a.tf))
+    for k, v in b.tf.items():
+        h.tf[k] = h.tf.get(k, 0) + v
+    return h
+
+
+class _Searcher:
+    def __init__(self, ix, weights, maxgap=0):
+        self.ix = ix
+        self.weights = weights
+        self.maxgap = maxgap
+
+    def all_fields(self):
+        seen = []
+        for f in self.ix.fields:
+            for k in f:
+                if k not in seen:
+                    seen.append(k)
+        return seen
+
+    def _bm25(self, field, df, tf, dl):
+        N, avg = self.ix.field_stats(field)
+        idf = math.log(1 + (N - df + 0.5) / (df + 0.5))
+        norm = _K1 * (1 - _B + _B * dl / avg) if avg else _K1
+        return idf, tf / (tf + norm)
+
+    def phrase(self, toks, fields=None, ordered_gap=None):
+        """Docs whose field contains the token sequence (adjacent, or in order within a gap)."""
+        out = {}
+        fields = fields or self.all_fields()
+        for field in fields:
+            matches = {}
+            for d, f in enumerate(self.ix.fields):
+                ft = f.get(field)
+                if not ft:
+                    continue
+                c = _count_seq(ft, toks, self.maxgap if ordered_gap is None else ordered_gap)
+                if c:
+                    matches[d] = c
+            if not matches:
+                continue
+            w = self.weights.get(field, 1.0)
+            for d, c in matches.items():
+                dl = len(self.ix.fields[d][field])
+                score = 0.0
+                for t in toks:
+                    df = sum(1 for f in self.ix.fields if t in f.get(field, ()))
+                    idf, tfn = self._bm25(field, df, c, dl)
+                    score += idf * tfn
+                h = _Hit(score * w, {(field, t): (self.ix.fields[d][field].count(t) if len(toks) > 1 else c)
+                                     for t in toks})
+                out[d] = _merge(out[d], h) if d in out else h
+        return out
+
+    def wildcard(self, pat, fields=None):
+        rx = re.compile("^" + "".join(".*" if c == "*" else "." if c == "?" else re.escape(c) for c in pat) + "$")
+        out = {}
+        for field in fields or self.all_fields():
+            w = self.weights.get(field, 1.0)
+            for d, f in enumerate(self.ix.fields):
+                if any(rx.match(t) for t in f.get(field, ())):
+                    h = _Hit(1.0 * w)
+                    out[d] = _merge(out[d], h) if d in out else h
+        return out
+
+    def everything(self):
+        return {d: _Hit(1.0) for d in range(len(self.ix.docs))}
+
+
+def _count_seq(ft, toks, gap):
+    n = len(toks)
+    if n == 1:
+        return ft.count(toks[0])
+    count = 0
+    for i, t in enumerate(ft):
+        if t != toks[0]:
+            continue
+        pos, ok = i, True
+        for t2 in toks[1:]:
+            nxt = next((j for j in range(pos + 1, min(len(ft), pos + 2 + gap)) if ft[j] == t2), None)
+            if nxt is None:
+                ok = False
+                break
+            pos = nxt
+        if ok:
+            count += 1
+    return count
+
+
+_NEG_TAG = "\0not"
+
+
+def _q_eval(q, S, fields=None):
+    """dict doc -> _Hit, or (_NEG_TAG, dict) for a negated query."""
+    if isinstance(q, str):
+        toks = _analyze(q)
+        if not toks:
+            return {}
+        return S.phrase(toks, fields)
+    if is_sym(q, "All"):
+        return S.everything()
+    if not isinstance(q, Expr):
+        raise ValueError(f"TextSearch: invalid query {q!r}")
+    h, a = q.head, q.args
+    if h in ("List", "ContainsAll", "And") or (h == "List"):
+        items = a[0].args if h == "ContainsAll" and len(a) == 1 and is_list(a[0]) else a
+        return _q_and([_q_eval(x, S, fields) for x in items], S)
+    if h in ("Alternatives", "ContainsAny", "Or"):
+        items = a[0].args if h == "ContainsAny" and len(a) == 1 and is_list(a[0]) else a
+        return _q_or([_q_eval(x, S, fields) for x in items], S)
+    if h in ("Except", "Not") and len(a) == 1:
+        r = _q_eval(a[0], S, fields)
+        return (_NEG_TAG, _positive(r, S))
+    if h == "ContainsNone" and len(a) == 1:
+        items = a[0].args if is_list(a[0]) else [a[0]]
+        return (_NEG_TAG, _q_or([_q_eval(x, S, fields) for x in items], S))
+    if h in ("Rule", "RuleDelayed") and len(a) == 2 and isinstance(a[0], str):
+        return _q_eval(a[1], S, [a[0]])
+    if h == "FixedOrder":
+        toks = [t for x in a for t in (_analyze(x) if isinstance(x, str) else _bad_q(x))]
+        return S.phrase(toks, fields, ordered_gap=10 ** 9)
+    if h == "SearchAdjustment" and a:
+        boost, gap = 1.0, None
+        for x in a[1:]:
+            if is_rule(x) and is_sym(x.args[0], "MaxWordGap"):
+                gap = _int(x.args[1], "SearchAdjustment", "MaxWordGap", 0)
+            elif isinstance(x, (int, float)) and not isinstance(x, bool):
+                boost = float(x)
+            else:
+                raise NotImplementedError(f"SearchAdjustment: unsupported setting {x!r}")
+        old = S.maxgap
+        if gap is not None:
+            S.maxgap = gap
+        try:
+            r = _q_eval(a[0], S, fields)
+        finally:
+            S.maxgap = old
+        if isinstance(r, tuple):
+            return r
+        return {d: _Hit(hh.score * boost, hh.tf) for d, hh in r.items()}
+    if h == "SearchQueryString" and len(a) == 1 and isinstance(a[0], str):
+        return _q_eval(_parse_query_string(a[0]), S, fields)
+    if h == "\0wild":
+        return S.wildcard(a[0], fields)
+    raise NotImplementedError(f"TextSearch: the query form {h} is not supported")
+
+
+def _bad_q(x):
+    raise ValueError(f"TextSearch: FixedOrder takes strings, not {x!r}")
+
+
+def _positive(r, S):
+    if isinstance(r, tuple):
+        neg = r[1]
+        return {d: _Hit(1.0) for d in range(len(S.ix.docs)) if d not in neg}
+    return r
+
+
+def _q_and(rs, S):
+    pos = [r for r in rs if not isinstance(r, tuple)]
+    negs = [r[1] for r in rs if isinstance(r, tuple)]
+    if pos:
+        keys = set(pos[0])
+        for r in pos[1:]:
+            keys &= set(r)
+        out = {}
+        for d in sorted(keys):
+            h = _Hit()
+            for r in pos:
+                h = _merge(h, r[d])
+            out[d] = h
+    else:
+        out = S.everything()
+    for n in negs:
+        out = {d: h for d, h in out.items() if d not in n}
+    return out
+
+
+def _q_or(rs, S):
+    out = {}
+    for r in rs:
+        r = _positive(r, S)
+        for d, h in r.items():
+            out[d] = _merge(out[d], h) if d in out else h
+    return out
+
+
+def _parse_query_string(s):
+    """Lucene-style query syntax: terms, "phrases", +required, -excluded, field:term, AND/OR/NOT, (...), ^boost,
+    ? and * wildcards; the default operator is OR."""
+    toks = re.findall(r'"[^"]*"(?:\^[\d.]+)?|\(|\)|[^\s()"]+', s)
+    pos = [0]
+
+    def peek():
+        return toks[pos[0]] if pos[0] < len(toks) else None
+
+    def atom():
+        t = toks[pos[0]]
+        pos[0] += 1
+        if t == "(":
+            e = expr()
+            if peek() != ")":
+                raise ValueError("SearchQueryString: unbalanced parentheses")
+            pos[0] += 1
+            return e
+        boost = None
+        m = re.match(r"^(.*)\^([\d.]+)$", t)
+        if m and m.group(1):
+            t, boost = m.group(1), float(m.group(2))
+        field = None
+        m = re.match(r"^([A-Za-z_]\w*):(.+)$", t)
+        if m:
+            field, t = m.group(1), m.group(2)
+        if t.startswith('"'):
+            q = t.strip('"')
+        elif "*" in t or "?" in t:
+            q = Expr("\0wild", t.lower())
+        else:
+            q = t
+        if field:
+            q = Expr("Rule", field, q)
+        if boost is not None:
+            q = Expr("SearchAdjustment", q, boost)
+        return q
+
+    def clause():
+        t = peek()
+        if t == "NOT":
+            pos[0] += 1
+            return ("-", atom())
+        if t and t[0] in "+-" and len(t) > 1:
+            toks[pos[0]] = t[1:]
+            return (t[0], atom())
+        return ("", atom())
+
+    def expr():
+        groups = [[]]        # OR of AND-groups
+        while peek() is not None and peek() != ")":
+            t = peek()
+            if t == "OR":
+                pos[0] += 1
+                groups.append([])
+                continue
+            if t == "AND":
+                pos[0] += 1
+                groups[-1].append("AND")
+                continue
+            groups[-1].append(clause())
+        alts = []
+        for g in groups:
+            req, neg, opt = [], [], []
+            i = 0
+            items = [x for x in g]
+            # AND binds its neighbours into required clauses
+            for k, x in enumerate(items):
+                if x == "AND":
+                    continue
+                sign, q = x
+                anded = (k > 0 and items[k - 1] == "AND") or (k + 1 < len(items) and items[k + 1] == "AND")
+                if sign == "-":
+                    neg.append(q)
+                elif sign == "+" or anded:
+                    req.append(q)
+                else:
+                    opt.append(q)
+            parts = list(req)
+            if opt:
+                parts.append(opt[0] if len(opt) == 1 else Expr("Alternatives", *opt)) if not req else None
+            parts += [Expr("Except", q) for q in neg]
+            if req and opt:
+                # optional clauses only add score when required ones match
+                parts.append(Expr("\0optional", *opt))
+            if not parts:
+                continue
+            alts.append(parts[0] if len(parts) == 1 else L(*parts))
+        if not alts:
+            raise ValueError("SearchQueryString: empty query")
+        return alts[0] if len(alts) == 1 else Expr("Alternatives", *alts)
+    return expr()
+
+
+def _q_eval_opt(q, S, fields):
+    return _q_eval(q, S, fields)
+
+
+_orig_q_eval = _q_eval
+
+
+def _q_eval(q, S, fields=None):  # noqa: F811
+    if isinstance(q, Expr) and q.head == "\0optional":
+        # handled inside _q_and: matches everything with extra score where present
+        r = _q_or([_orig_q_eval(x, S, fields) for x in q.args], S)
+        base = S.everything()
+        return {d: (_Hit(h.score - 1.0, h.tf) if d not in r else _Hit(r[d].score, r[d].tf)) for d, h in base.items()}
+    return _orig_q_eval(q, S, fields)
+
+
+def _search_sources(src, fname):
+    """List of (_Index, opts) for a TextSearch source."""
+    if is_list(src) and any(_index_id(x) for x in src.args):
+        out = []
+        for x in src.args:
+            out.extend(_search_sources(x, fname))
+        return out
+    st = _get_index(src, fname)
+    if st is not None:
+        return [(st["index"], st["options"])]
+    return [(_Index(_doc_from(src)), {})]
+
+
+def _field_weights(o):
+    w = {}
+    cfo = o.get("ContentFieldOptions")
+    if cfo is None:
+        return w
+    if not is_assoc(cfo):
+        raise ValueError("TextSearch: ContentFieldOptions must be an association")
+    for r in cfo.args:
+        if is_assoc(r.args[1]):
+            v = _assoc_get(r.args[1], "Weight")
+            if v is not None:
+                w[r.args[0]] = float(ev(Expr("N", v)))
+    return w
+
+
+def _doc_weight(doc, rules):
+    if rules is None or is_sym(rules, "None"):
+        return 1.0
+    if not is_assoc(rules):
+        raise ValueError("TextSearch: DocumentWeightingRules must be an association")
+    w = 1.0
+    for r in rules.args:
+        v = _assoc_get(doc, r.args[0])
+        if v is not None and is_assoc(r.args[1]):
+            for rr in r.args[1].args:
+                if K.tag(rr.args[0]) == K.tag(v):
+                    w *= float(ev(Expr("N", rr.args[1])))
+    return w
+
+
+def _text_search(src, q, o):
+    _check_search_opts(o, "TextSearch")
+    results = []
+    for ix, iopts in _search_sources(src, "TextSearch"):
+        oo = dict(iopts)
+        oo.update(o)
+        S = _Searcher(ix, _field_weights(oo))
+        r = _positive(_q_eval(q, S), S)
+        for d, h in r.items():
+            score = h.score * _doc_weight(ix.docs[d], oo.get("DocumentWeightingRules"))
+            results.append((score, len(results), ix.docs[d], h.tf))
+    results.sort(key=lambda t: (-round(t[0], 9), t[1]))
+    mx = o.get("MaxItems")
+    if mx is not None and not is_sym(mx, "All") and not is_sym(mx, "Infinity"):
+        results = results[:_int(mx, "TextSearch", "MaxItems", 0)]
+    out = []
+    for score, _, doc, tf in results:
+        tfa = Expr("Association", *(Expr("Rule", L(f, t), c) for (f, t), c in tf.items()))
+        out.append(Expr("ContentObject", Expr("Association", *doc.args, Expr("Rule", "Score", float(score)),
+                                              Expr("Rule", "TermFrequencies", tfa))))
+    return out
+
+
+@fn("TextSearch", area=AREA, status="added",
+    notes="searches a SearchIndexObject, a list of them, a file, a directory, or ContentObjects; queries: "
+          "\"phrase\", {all}, any | alternatives, Except/Not, \"field\" -> q, FixedOrder, SearchAdjustment "
+          "(boost, MaxWordGap), And/Or/ContainsAll/ContainsAny/ContainsNone, All, SearchQueryString; words are "
+          "lower-cased with plural stemming; results ranked by BM25 (Lucene's formula, k1 = 1.2, b = 0.75); "
+          "ContentFieldOptions weights, DocumentWeightingRules, MaxItems; third argument a property, \"Count\" "
+          "or \"ContentObject\"; numeric range queries raise")
+def _textsearch(src, q, *rest):
+    pos, o = _opts(rest, _SEARCH_OPTS, "TextSearch")
+    res = _text_search(src, q, o)
+    obj = Expr("SearchResultObject", src, q, L(), Expr("Association", Expr("Rule", "Results", L(*res))))
+    if pos:
+        if len(pos) > 1:
+            raise ValueError("TextSearch called with too many arguments")
+        p = pos[0]
+        if p == "Count":
+            return len(res)
+        if p == "ContentObject":
+            return L(*res)
+        return _sr_access(obj, [Symbol("All"), p])
+    return obj
+
+
+def _sr_results(obj):
+    if isinstance(obj, Expr) and obj.head == "SearchResultObject" and len(obj.args) == 4 and is_assoc(obj.args[3]):
+        r = _assoc_get(obj.args[3], "Results")
+        if is_list(r):
+            return list(r.args)
+    return None
+
+
+def _co_prop(co, p):
+    if is_list(p):
+        return L(*(_co_prop(co, x) for x in p.args))
+    r = _co_hook(co, [p], ev)
+    return r
+
+
+def _sr_access(obj, args):
+    res = _sr_results(obj)
+    if len(args) == 1 and args[0] == "Count":
+        return len(res)
+    if len(args) == 1 and args[0] == "Properties":
+        return L("Count", "ContentObject")
+    sel = args[0]
+    if is_sym(sel, "All"):
+        items = res
+        single = False
+    elif isinstance(sel, int) and not isinstance(sel, bool):
+        if not 1 <= abs(sel) <= len(res):
+            raise ValueError(f"SearchResultObject: there is no result {sel}")
+        items, single = [res[sel - 1 if sel > 0 else sel]], True
+    elif isinstance(sel, Expr) and sel.head == "Span" and len(sel.args) == 2:
+        a, b = sel.args
+        a = 1 if is_sym(a, "All") else a
+        b = len(res) if is_sym(b, "All") else b
+        items, single = res[a - 1:b], False
+    else:
+        raise ValueError(f"SearchResultObject: invalid result specification {sel!r}")
+    if len(args) == 2:
+        vals = [_co_prop(c, args[1]) for c in items]
+    elif len(args) == 1:
+        vals = items
+    else:
+        raise ValueError("SearchResultObject: too many arguments")
+    return vals[0] if single else L(*vals)
+
+
+def _sr_hook(head, args, ev_):
+    if head.head == "SearchResultObject" and _sr_results(head) is not None and 1 <= len(args) <= 2:
+        return _sr_access(head, list(args))
+    return K.UNHANDLED
+
+
+KL.COMPOUND_HEAD_HOOKS["SearchResultObject"] = _sr_hook
+record("SearchResultObject", AREA, "added",
+       "SearchResultObject[src, query, {}, <|\"Results\" -> ranked ContentObjects|>]; res[All], res[n], "
+       "res[m ;; n], res[All, prop or {props}], res[\"Count\"]")
+record("SearchQueryString", AREA, "added",
+       "search-engine query syntax for TextSearch: words (OR by default), \"phrases\", +required, -excluded, "
+       "NOT, AND, OR, (...), field:term, term^boost, ? and * wildcards")
+record("SearchAdjustment", AREA, "added",
+       "SearchAdjustment[q, w] multiplies the score of q by w; SearchAdjustment[q, MaxWordGap -> n] lets "
+       "phrase words be up to n words apart")
+record("MaxWordGap", AREA, "added", "SearchAdjustment option: words of a phrase may be up to n words apart")
+record("DocumentWeightingRules", AREA, "added",
+       "CreateSearchIndex/TextSearch option <|field -> <|value -> weight|>|> multiplying document scores")
+record("FixedOrder", AREA, "added",
+       "TextSearch query: the words must occur in the given order (any distance); also a grammar token "
+       "(GrammarRules is not available)")
+record("Containing", AREA, "added", "inert symbol: Containing[outer, inner] entity/region containment "
+                                    "specification (no evaluation semantics here)")
