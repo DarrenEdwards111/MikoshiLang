@@ -3544,3 +3544,304 @@ def _dual(g: Expr) -> Expr:
         a, b = side[(i, j)], side[(j, i)]
         es.append(UE(a + 1, b + 1))
     return _new(list(range(1, len(faces) + 1)), es)
+
+
+# ═══════════════════════════════════════ ShortestPathFunction ═══════════════════════════════════════
+
+_SPF_TYPES = {"SingleSource": 2, "SingleTarget": 2, "AllPairs": 1}
+
+
+def _is_all(x):
+    return isinstance(x, Symbol) and x.name == "All"
+
+
+def _spf_data(head_args, fname):
+    if len(head_args) != 2 or head_args[0] not in _SPF_TYPES or not is_list(head_args[1]):
+        raise ValueError(f"{fname}: expected ShortestPathFunction[type, {{g, ...}}] with type \"SingleSource\", "
+                         "\"SingleTarget\" or \"AllPairs\"")
+    typ, data = head_args[0], list(head_args[1].args)
+    if len(data) != _SPF_TYPES[typ] or not is_graph_like(data[0]):
+        raise ValueError(f"{fname}: malformed {typ} data")
+    return typ, data
+
+
+@fn("ShortestPathFunction", area=AREA, status="added",
+    notes="ShortestPathFunction[\"SingleSource\", {g, s}], [\"SingleTarget\", {g, t}] and [\"AllPairs\", {g}] are "
+          "the inert results of FindShortestPath[g, s, All], FindShortestPath[g, All, t] and FindShortestPath[g, All, "
+          "All]; applied as spf[t], spf[s] or spf[s, t] they give FindShortestPath's vertex list ({} when "
+          "unreachable). The data layout differs from Wolfram's internal form. Check: exact (tests: agrees with "
+          "FindShortestPath for every target).")
+def _spf(typ: String, data: ListOf[Expr]) -> Expr:
+    t, d = _spf_data((typ, data), "ShortestPathFunction")
+    _g(d[0], "ShortestPathFunction")
+    raise Unevaluated()
+
+
+def _spf_apply(head, args, ev):
+    typ, data = _spf_data(head.args, "ShortestPathFunction")
+    g = data[0]
+    if typ == "SingleSource" and len(args) == 1:
+        return WGM._fsp(g, data[1], args[0])
+    if typ == "SingleTarget" and len(args) == 1:
+        return WGM._fsp(g, args[0], data[1])
+    if typ == "AllPairs" and len(args) == 2:
+        return WGM._fsp(g, args[0], args[1])
+    raise ValueError(f"ShortestPathFunction: a {typ} function takes {1 if typ != 'AllPairs' else 2} argument(s)")
+
+
+KL.COMPOUND_HEAD_HOOKS["ShortestPathFunction"] = _spf_apply
+
+
+def _fsp_all(g, s, t):
+    gr = graph_of(g, "FindShortestPath")
+    if _is_all(s) and _is_all(t):
+        return Expr("ShortestPathFunction", "AllPairs", L(g))
+    if _is_all(t):
+        gr.vidx(s, "FindShortestPath")
+        return Expr("ShortestPathFunction", "SingleSource", L(g, s))
+    gr.vidx(t, "FindShortestPath")
+    return Expr("ShortestPathFunction", "SingleTarget", L(g, t))
+
+
+WGM.extend("FindShortestPath", _fsp_all, lambda a: len(a) == 3 and (_is_all(a[1]) or _is_all(a[2])),
+           "W24: FindShortestPath[g, s, All], [g, All, t] and [g, All, All] return a ShortestPathFunction. Check: exact "
+           "(tests: the function agrees with FindShortestPath[g, s, t])", status="added")
+
+
+# ═══════════════════════════════════════ random graph distributions ═══════════════════════════════════════
+
+def _dist_head(name, check, notes):
+    @fn(name, area=AREA, status="added", notes=notes)
+    def impl(*args: Expr) -> Expr:
+        check(*args)
+        raise Unevaluated()
+    return impl
+
+
+def _prob(p, fname):
+    return _real(p, fname, "the probability", lo=0, hi=1)
+
+
+def _chk_bern(*a):
+    if len(a) != 2:
+        raise ValueError("BernoulliGraphDistribution: expected BernoulliGraphDistribution[n, p]")
+    _int(a[0], "BernoulliGraphDistribution", 0, "n")
+    _prob(a[1], "BernoulliGraphDistribution")
+
+
+def _chk_unif(*a):
+    if len(a) != 2:
+        raise ValueError("UniformGraphDistribution: expected UniformGraphDistribution[n, m]")
+    n = _int(a[0], "UniformGraphDistribution", 0, "n")
+    m = _int(a[1], "UniformGraphDistribution", 0, "m")
+    if m > n * (n - 1) // 2:
+        raise ValueError(f"UniformGraphDistribution: a simple graph on {n} vertices has at most {n * (n - 1) // 2} "
+                         "edges")
+
+
+def _chk_ba(*a):
+    if len(a) != 2:
+        raise ValueError("BarabasiAlbertGraphDistribution: expected BarabasiAlbertGraphDistribution[n, k]")
+    n = _int(a[0], "BarabasiAlbertGraphDistribution", 1, "n")
+    k = _int(a[1], "BarabasiAlbertGraphDistribution", 1, "k")
+    if k >= n:
+        raise ValueError("BarabasiAlbertGraphDistribution: k must be smaller than n")
+
+
+def _chk_ws(*a):
+    if len(a) not in (2, 3):
+        raise ValueError("WattsStrogatzGraphDistribution: expected WattsStrogatzGraphDistribution[n, p] or [n, p, k]")
+    n = _int(a[0], "WattsStrogatzGraphDistribution", 1, "n")
+    _prob(a[1], "WattsStrogatzGraphDistribution")
+    k = _int(a[2], "WattsStrogatzGraphDistribution", 1, "k") if len(a) == 3 else 2
+    if 2 * k >= n:
+        raise ValueError("WattsStrogatzGraphDistribution: 2 k must be smaller than n")
+
+
+def _chk_price(*a):
+    if len(a) != 3:
+        raise ValueError("PriceGraphDistribution: expected PriceGraphDistribution[n, k, a]")
+    n = _int(a[0], "PriceGraphDistribution", 1, "n")
+    _int(a[1], "PriceGraphDistribution", 1, "k")
+    if _real(a[2], "PriceGraphDistribution", "the attractiveness") <= 0:
+        raise ValueError("PriceGraphDistribution: the attractiveness a must be positive")
+    del n
+
+
+def _chk_spatial(*a):
+    if len(a) not in (2, 3):
+        raise ValueError("SpatialGraphDistribution: expected SpatialGraphDistribution[n, r] or [n, r, d]")
+    _int(a[0], "SpatialGraphDistribution", 0, "n")
+    _real(a[1], "SpatialGraphDistribution", "the radius", lo=0)
+    if len(a) == 3:
+        if K.is_int(a[2]):
+            _int(a[2], "SpatialGraphDistribution", 1, "the dimension")
+        elif isinstance(a[2], Symbol):
+            raise Unevaluated()
+        else:
+            raise NotImplementedError("SpatialGraphDistribution: only the uniform unit-cube forms [n, r] and "
+                                      "[n, r, d] are supported (not distributions or regions)")
+
+
+def _graphical(ds):
+    """Erdos-Gallai test."""
+    ds = sorted(ds, reverse=True)
+    if sum(ds) % 2:
+        return False
+    for k in range(1, len(ds) + 1):
+        if sum(ds[:k]) > k * (k - 1) + sum(min(d, k) for d in ds[k:]):
+            return False
+    return True
+
+
+def _chk_deg(*a):
+    if len(a) != 1 or not is_list(a[0]):
+        raise ValueError("DegreeGraphDistribution: expected DegreeGraphDistribution[{d1, d2, ...}]")
+    ds = [_int(d, "DegreeGraphDistribution", 0, "a degree") for d in a[0].args]
+    if not _graphical(ds):
+        raise ValueError(f"DegreeGraphDistribution: {ds} is not the degree sequence of a simple graph")
+
+
+_dist_head("BernoulliGraphDistribution", _chk_bern,
+           "BernoulliGraphDistribution[n, p]: inert distribution (validated: n >= 0, 0 <= p <= 1); RandomGraph "
+           "includes each of the n(n-1)/2 vertex pairs independently with probability p. Check: exact (tests: p = 0 "
+           "and p = 1 give the empty and complete graphs; invalid p raises).")
+_dist_head("UniformGraphDistribution", _chk_unif,
+           "UniformGraphDistribution[n, m]: inert distribution (m <= n(n-1)/2); RandomGraph draws a uniformly random "
+           "simple graph with n vertices and m edges (as RandomGraph[{n, m}]). Check: exact (tests: edge counts; "
+           "too many edges raise).")
+_dist_head("BarabasiAlbertGraphDistribution", _chk_ba,
+           "BarabasiAlbertGraphDistribution[n, k]: inert distribution (1 <= k < n); RandomGraph starts from the "
+           "complete graph on k + 1 vertices and attaches each new vertex to k distinct existing vertices chosen with "
+           "probability proportional to degree (C(k+1, 2) + (n - k - 1) k edges; Wolfram's seed graph is not "
+           "documented). Check: exact (tests: vertex and edge counts, connectivity).")
+_dist_head("WattsStrogatzGraphDistribution", _chk_ws,
+           "WattsStrogatzGraphDistribution[n, p] and [n, p, k] (default k = 2): inert distribution (2k < n); "
+           "RandomGraph starts from the 2k-regular ring lattice and rewires each edge's far end with probability p to "
+           "a uniformly chosen vertex avoiding self-loops and multi-edges (n k edges). Check: exact (tests: p = 0 "
+           "gives the ring lattice, edge count n k).")
+_dist_head("PriceGraphDistribution", _chk_price,
+           "PriceGraphDistribution[n, k, a]: inert distribution (a > 0); RandomGraph adds vertices 1..n in turn, each "
+           "new vertex citing min(k, existing) distinct earlier vertices with probability proportional to in-degree "
+           "+ a (directed edges new -> old). Check: exact (tests: acyclic, out-degrees min(k, i - 1)).")
+_dist_head("SpatialGraphDistribution", _chk_spatial,
+           "SpatialGraphDistribution[n, r] and [n, r, d]: inert distribution; RandomGraph places n points uniformly "
+           "in the unit square/d-cube and joins pairs at Euclidean distance <= r; distribution and region forms raise "
+           "NotImplementedError. Check: exact (tests: r = 0 gives no edges, r >= Sqrt[d] the complete graph).")
+_dist_head("DegreeGraphDistribution", _chk_deg,
+           "DegreeGraphDistribution[{d1, ...}]: inert distribution (the sequence must be graphical, Erdos-Gallai); "
+           "RandomGraph builds a Havel-Hakimi realisation and randomises it with 10 m degree-preserving double-edge "
+           "swaps (simple graphs only). Check: exact (tests: VertexDegree reproduces the sequence; non-graphical "
+           "sequences raise).")
+
+_DISTS = {"BernoulliGraphDistribution", "UniformGraphDistribution", "BarabasiAlbertGraphDistribution",
+          "WattsStrogatzGraphDistribution", "PriceGraphDistribution", "SpatialGraphDistribution",
+          "DegreeGraphDistribution"}
+
+
+def _sample(dist):
+    from .statistics import _RNG as rng
+    name, a = dist.head, dist.args
+    if name == "BernoulliGraphDistribution":
+        n, p = int(a[0]), float(S(a[1]))
+        es = [(i, j) for i in range(1, n + 1) for j in range(i + 1, n + 1) if rng.random() < p]
+        return _new(list(range(1, n + 1)), [UE(i, j) for i, j in es])
+    if name == "UniformGraphDistribution":
+        n, m = int(a[0]), int(a[1])
+        pairs = [(i, j) for i in range(1, n + 1) for j in range(i + 1, n + 1)]
+        return _new(list(range(1, n + 1)), [UE(i, j) for i, j in sorted(rng.sample(pairs, m))])
+    if name == "BarabasiAlbertGraphDistribution":
+        n, k = int(a[0]), int(a[1])
+        es = [(i, j) for i in range(1, k + 2) for j in range(i + 1, k + 2)]
+        ends = [v for e in es for v in e]
+        for v in range(k + 2, n + 1):
+            targets = set()
+            while len(targets) < k:
+                targets.add(rng.choice(ends))
+            for w in sorted(targets):
+                es.append((w, v))
+                ends += [w, v]
+        return _new(list(range(1, n + 1)), [UE(i, j) for i, j in es])
+    if name == "WattsStrogatzGraphDistribution":
+        n, p = int(a[0]), float(S(a[1]))
+        k = int(a[2]) if len(a) == 3 else 2
+        es = [(i, (i + d) % n) for d in range(1, k + 1) for i in range(n)]
+        present = {frozenset(e) for e in es}
+        for t, (u, v) in enumerate(es):
+            if rng.random() < p:
+                choices = [w for w in range(n) if w != u and frozenset((u, w)) not in present]
+                if choices:
+                    w = rng.choice(choices)
+                    present.discard(frozenset((u, v)))
+                    present.add(frozenset((u, w)))
+                    es[t] = (u, w)
+        return _new(list(range(1, n + 1)), [UE(u + 1, v + 1) for u, v in es])
+    if name == "PriceGraphDistribution":
+        n, k, att = int(a[0]), int(a[1]), float(S(a[2]))
+        indeg = [0] * (n + 1)
+        es = []
+        for v in range(2, n + 1):
+            olds = list(range(1, v))
+            chosen = set()
+            while len(chosen) < min(k, len(olds)):
+                cand = [u for u in olds if u not in chosen]
+                w = rng.choices(cand, weights=[indeg[u] + att for u in cand])[0]
+                chosen.add(w)
+            for w in sorted(chosen):
+                es.append((v, w))
+                indeg[w] += 1
+        return _new(list(range(1, n + 1)), [Expr("DirectedEdge", v, w) for v, w in es])
+    if name == "SpatialGraphDistribution":
+        n, r = int(a[0]), float(S(a[1]))
+        d = int(a[2]) if len(a) == 3 else 2
+        pts = [[rng.random() for _ in range(d)] for _ in range(n)]
+        es = [(i + 1, j + 1) for i in range(n) for j in range(i + 1, n) if math.dist(pts[i], pts[j]) <= r]
+        return _new(list(range(1, n + 1)), [UE(i, j) for i, j in es])
+    # DegreeGraphDistribution
+    ds = [int(x) for x in a[0].args]
+    n = len(ds)
+    rem = list(ds)
+    es = set()
+    while True:
+        order = sorted(range(n), key=lambda v: (-rem[v], v))
+        v = order[0]
+        if rem[v] == 0:
+            break
+        for w in order[1:rem[v] + 1]:
+            rem[w] -= 1
+            es.add((min(v, w), max(v, w)))
+        rem[v] = 0
+    es = sorted(es)
+    for _ in range(10 * len(es)):
+        if len(es) < 2:
+            break
+        (a1, b1), (a2, b2) = rng.sample(es, 2)
+        if rng.random() < 0.5:
+            a2, b2 = b2, a2
+        n1, n2 = (min(a1, b2), max(a1, b2)), (min(a2, b1), max(a2, b1))
+        if a1 == b2 or a2 == b1 or n1 in es or n2 in es:
+            continue
+        es.remove((min(a1, b1), max(a1, b1)))
+        es.remove((min(a2, b2), max(a2, b2)))
+        es += [n1, n2]
+    deg = [0] * n
+    for i, j in es:
+        deg[i] += 1
+        deg[j] += 1
+    if deg != ds:
+        raise ArithmeticError("RandomGraph: internal check failed (the degree sequence changed)")
+    return _new(list(range(1, n + 1)), [UE(i + 1, j + 1) for i, j in sorted(es)])
+
+
+def _rgraph_dist(dist, k=None):
+    if k is None:
+        return _sample(dist)
+    k = _int(k, "RandomGraph", 0, "the number of graphs")
+    return L(*(_sample(dist) for _ in range(k)))
+
+
+WGM.extend("RandomGraph", _rgraph_dist,
+           lambda a: 1 <= len(a) <= 2 and isinstance(a[0], Expr) and a[0].head in _DISTS,
+           "W24: RandomGraph[dist] and RandomGraph[dist, k] sample the Bernoulli, Uniform, Barabasi-Albert, "
+           "Watts-Strogatz, Price, Spatial and Degree graph distributions (reproducible with SeedRandom; the random "
+           "stream differs from Wolfram's). Check: exact (tests: structural invariants of each model)", status="added")
