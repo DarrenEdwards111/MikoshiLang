@@ -23,7 +23,12 @@ import sympy as sp
 from ..expr import Expr, Symbol
 from .. import kernel as K
 from .core import fn, record, Unevaluated, R, S, is_list
-from .wl_common import L, ev, apply, is_rule
+from .wl_common import L, apply, is_rule
+
+
+def ev(x):
+    from ..evaluate import evaluate
+    return evaluate(x)
 
 AREA = "signal processing (W23)"
 BIG_N = 4096          # largest axis length for bignum (mpmath, O(n^2)) transforms
@@ -954,3 +959,390 @@ fn("CepstrogramArray", area=AREA, status="added",
          "(other windows/Padding settings raise NotImplementedError); vectors at machine precision. Check: "
          "reference (row-by-row agreement with CepstrumArray, Wolfram's documented partition sizes) in "
          "tests.")(_cepstrogram)
+
+
+# ═════════════════════════════════════════════════ ListConvolve / ListCorrelate ══
+def _gen_array(x, fname, depth=None):
+    """Rectangular array of arbitrary elements (to the given depth, or full depth) -> numpy object array."""
+    if not is_list(x):
+        if isinstance(x, (Symbol, Expr)) and not isinstance(x, str):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: expected a list, not {x!r}")
+    shape = []
+    y = x
+    while is_list(y) and (depth is None or len(shape) < depth):
+        shape.append(len(y.args))
+        if not y.args:
+            raise ValueError(f"{fname}: lists must be nonempty")
+        y = y.args[0]
+    if depth is not None and len(shape) < depth:
+        raise ValueError(f"{fname}: the list must have depth at least {depth}")
+    items = []
+
+    def walk(z, d):
+        if d == len(shape):
+            items.append(z)
+            return
+        if not is_list(z) or len(z.args) != shape[d]:
+            raise ValueError(f"{fname}: the arrays must be rectangular")
+        for a in z.args:
+            walk(a, d + 1)
+    walk(x, 0)
+    if depth is None:
+        # full depth: shrink to the depth at which every branch is rectangular
+        pass
+    arr = np.empty(len(items), dtype=object)
+    arr[:] = items
+    return arr.reshape(shape)
+
+
+def _array_depth(x):
+    d = 0
+    while is_list(x) and x.args:
+        d += 1
+        x = x.args[0]
+    return d
+
+
+def _is_plain_number(v):
+    return (isinstance(v, (int, float)) and not isinstance(v, bool)) or (isinstance(v, sp.Basic) and v.is_number)
+
+
+def _exact_or_num(v, pr):
+    """An exact SymPy result, or its numeric value at precision pr ('m' or bits)."""
+    if pr is None:
+        return R(sp.expand(v) if v.is_Add else v)
+    if pr == "m":
+        c = complex(sp.N(v, 17))
+        return float(c.real) if c.imag == 0 and sp.sympify(v).is_real is not False else R(c)
+    return R(sp.N(v, mpmath.libmp.prec_to_dps(pr)))
+
+
+def _kspec(k, d, m, fname, default):
+    """Alignment spec -> ([kL'_i], [kR'_i]) as 1-based positive kernel positions."""
+    def one(v, mi):
+        if isinstance(v, bool) or not K.is_int(v):
+            if isinstance(v, Symbol):
+                raise Unevaluated()
+            raise TypeError(f"{fname}: alignment positions must be integers, not {v!r}")
+        v = int(v)
+        if v == 0 or abs(v) > mi:
+            raise ValueError(f"{fname}: alignment position {v} is outside the kernel (length {mi})")
+        return v if v > 0 else mi + 1 + v
+    if k is None:
+        kl, kr = default
+        return [one(kl, mi) for mi in m], [one(kr, mi) for mi in m]
+    if is_list(k):
+        if len(k.args) != 2:
+            raise ValueError(f"{fname}: the alignment must be k, {{kL, kR}} or {{{{kL1, ...}}, {{kR1, ...}}}}")
+        kl, kr = k.args
+        if is_list(kl) or is_list(kr):
+            if not (is_list(kl) and is_list(kr) and len(kl.args) == d and len(kr.args) == d):
+                raise ValueError(f"{fname}: per-dimension alignments need {d} entries")
+            return [one(a, mi) for a, mi in zip(kl.args, m)], [one(b, mi) for b, mi in zip(kr.args, m)]
+        return [one(kl, mi) for mi in m], [one(kr, mi) for mi in m]
+    return [one(k, mi) for mi in m], [one(k, mi) for mi in m]
+
+
+def _list_conv(fname, correlate):
+    def impl(ker: ListOf[Expr], lst: ListOf[Expr], *rest: Expr) -> ListOf[Expr]:
+        if len(rest) > 4:
+            raise ValueError(f"{fname}: called with too many arguments")
+        kd = _array_depth(ker)
+        if kd == 0:
+            if isinstance(ker, (Symbol, Expr)) and not is_list(ker):
+                raise Unevaluated()
+            raise TypeError(f"{fname}: the kernel must be a nonempty list")
+        if _array_depth(lst) < kd:
+            if isinstance(lst, Symbol) or (isinstance(lst, Expr) and not is_list(lst)):
+                raise Unevaluated()
+            raise ValueError(f"{fname}: the list must have at least the depth of the kernel")
+        K_ = _gen_array(ker, fname, kd)
+        A = _gen_array(lst, fname, kd)
+        m, n = K_.shape, A.shape
+        default = (1, -1) if correlate else (-1, 1)
+        kl, kr = _kspec(rest[0] if rest else None, kd, m, fname, default)
+        cyclic_default = len(rest) < 2
+        pad = None if cyclic_default else rest[1]
+        g = rest[2] if len(rest) > 2 else None
+        h = rest[3] if len(rest) > 3 else None
+        if pad is not None and is_list(pad) and not pad.args:
+            pad_mode = "none"
+        elif pad is None:
+            pad_mode = "cyclic"
+            P = A
+        elif is_list(pad):
+            pad_mode = "cyclic"
+            pd = _array_depth(pad)
+            if pd < kd:
+                raise NotImplementedError(f"{fname}: a padding list must have the depth of the kernel")
+            P = _gen_array(pad, fname, kd)
+        else:
+            pad_mode = "const"
+        # output ranges (1-based list position aligned with kernel position 1)
+        if correlate:
+            firsts = [2 - kl[i] for i in range(kd)]
+            lasts = [n[i] + 1 - kr[i] for i in range(kd)]
+        else:
+            firsts = [kl[i] for i in range(kd)]
+            lasts = [n[i] + kr[i] - 1 for i in range(kd)]
+        outshape = [lasts[i] - firsts[i] + 1 for i in range(kd)]
+        if any(s <= 0 for s in outshape):
+            raise ValueError(f"{fname}: the kernel is longer than the list for this alignment")
+        numeric = g is None and h is None and pad_mode != "none" and \
+            all(_is_plain_number(S(v)) if not isinstance(v, (str, bool)) and not is_list(v) else False
+                for v in list(K_.reshape(-1)) + list(A.reshape(-1)) +
+                ([pad] if pad_mode == "const" else list(P.reshape(-1))))
+        if numeric:
+            Kn = np.empty(K_.shape, dtype=object)
+            Kn.reshape(-1)[:] = [S(v) if not isinstance(v, (int, float)) else v for v in K_.reshape(-1)]
+            An = np.empty(A.shape, dtype=object)
+            An.reshape(-1)[:] = [S(v) if not isinstance(v, (int, float)) else v for v in A.reshape(-1)]
+            if pad_mode == "cyclic":
+                Pn = np.empty(P.shape, dtype=object)
+                Pn.reshape(-1)[:] = [S(v) if not isinstance(v, (int, float)) else v for v in P.reshape(-1)]
+            else:
+                pval = S(pad) if not isinstance(pad, (int, float)) else pad
+        out = np.empty(outshape, dtype=object)
+        korder = list(np.ndindex(*m))
+        # order terms by increasing list position (Wolfram's order for g/h)
+        if not correlate:
+            korder = sorted(korder, key=lambda t: tuple(-c for c in t))
+        for oidx in np.ndindex(*outshape):
+            p = [firsts[i] + oidx[i] for i in range(kd)]
+            terms = []
+            for kidx in korder:
+                j = [(p[i] + kidx[i]) if correlate else (p[i] - kidx[i]) for i in range(kd)]   # 1-based
+                inside = all(1 <= j[i] <= n[i] for i in range(kd))
+                if inside:
+                    a = (An if numeric else A)[tuple(j[i] - 1 for i in range(kd))]
+                elif pad_mode == "none":
+                    a = None
+                elif pad_mode == "const":
+                    a = pval if numeric else pad
+                else:
+                    src = Pn if numeric else P
+                    a = src[tuple((j[i] - 1) % src.shape[i] for i in range(kd))]
+                kv = (Kn if numeric else K_)[kidx]
+                terms.append((kv, a))
+            if numeric:
+                out[oidx] = sp.Add(*(sp.sympify(kv) * sp.sympify(a) for kv, a in terms))
+                continue
+            gs = "Times" if g is None else (g.name if isinstance(g, Symbol) else g)
+            prods = [Expr(gs, kv) if a is None else Expr(gs, kv, a) for kv, a in terms]
+            hs = "Plus" if h is None else (h.name if isinstance(h, Symbol) else h)
+            if kd == 1:
+                out[oidx] = ev(Expr(hs, *prods))
+            else:
+                # nested h with depth equal to the kernel depth
+                arr = np.empty(len(prods), dtype=object)
+                arr[:] = prods
+                arr = arr.reshape([m[i] for i in range(kd)])
+                if not correlate:
+                    arr = arr[tuple(slice(None, None, -1) for _ in range(kd))]
+
+                def nest(z, d):
+                    if d == kd:
+                        return z
+                    return Expr(hs, *(nest(z[i], d + 1) for i in range(z.shape[0])))
+                out[oidx] = ev(nest(arr, 0))
+        if numeric:
+            pr = _prec([sp.sympify(v) for v in list(Kn.reshape(-1)) + list(An.reshape(-1))] +
+                       ([sp.sympify(pval)] if pad_mode == "const" else
+                        [sp.sympify(v) for v in Pn.reshape(-1)] if pad_mode == "cyclic" else []))
+            return _nest(out, lambda v: _exact_or_num(v, pr))
+        return _nest(out, lambda v: v)
+    return impl
+
+
+fn("ListConvolve", area=AREA, status="added",
+   notes="ListConvolve[ker, list, {kL, kR}, padlist, g, h]: Σ_r K_r a_(s-r) with Wolfram's alignment (kernel "
+         "position kL on the first list element, kR on the last; default {-1, 1}, no overhang; k means {k, k}; "
+         "negative positions count from the end; {{kL1, ...}, {kR1, ...}} per dimension), padding (default cyclic "
+         "list, a constant p, cyclic repetitions of a list, {} for none, where g gets the kernel element alone), "
+         "general g (for Times) and h (for Plus, nested to the kernel depth) and kernels of any rank (lists may be "
+         "deeper; their elements are then combined by ordinary arithmetic); exact and symbolic data allowed. "
+         "Check: exact; reference (the Wolfram documentation examples, symbolic) in tests.")(_list_conv("ListConvolve", False))
+fn("ListCorrelate", area=AREA, status="added",
+   notes="ListCorrelate[ker, list, {kL, kR}, padlist, g, h]: Σ_r K_r a_(s+r) with Wolfram's alignment (default "
+         "{1, -1}, no overhang), padding, g/h and multidimensional kernels as ListConvolve. Check: exact; reference "
+         "(Wolfram documentation examples) and ListCorrelate[ker, list] == ListConvolve[Reverse[ker], list] in "
+         "tests.")(_list_conv("ListCorrelate", True))
+
+
+# ═══════════════════════════════════════════════════════════ moving statistics ══
+def _vec_items(x, fname):
+    if not is_list(x):
+        if isinstance(x, (Symbol, Expr)) and not isinstance(x, str):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: expected a list, not {x!r}")
+    if not x.args:
+        raise ValueError(f"{fname}: the list must be nonempty")
+    return list(x.args)
+
+
+def _arith(head, *args):
+    return ev(Expr(head, *args))
+
+
+def _moving_average(x: ListOf[Expr], r: PosInteger | ListOf[Expr]) -> ListOf[Expr]:
+    fname = "MovingAverage"
+    items = _vec_items(x, fname)
+    if is_list(r):
+        w = list(r.args)
+        if not w:
+            raise ValueError(f"{fname}: the weight list must be nonempty")
+        total = _arith("Plus", *w)
+        if total == 0 or (isinstance(total, (int, float)) and total == 0):
+            raise ValueError(f"{fname}: the weights must not sum to zero")
+        k = len(w)
+        if k > len(items):
+            raise ValueError(f"{fname}: there are more weights ({k}) than list elements ({len(items)})")
+        return L(*(_arith("Times", _arith("Plus", *(_arith("Times", w[j], items[i + j]) for j in range(k))),
+                          _arith("Power", total, -1)) for i in range(len(items) - k + 1)))
+    if isinstance(r, bool) or not K.is_int(r):
+        if isinstance(r, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the span must be a positive integer or a list of weights, not {r!r}")
+    k = int(r)
+    if k < 1:
+        raise ValueError(f"{fname}: the span must be a positive integer")
+    if k > len(items):
+        raise ValueError(f"{fname}: the span {k} exceeds the list length {len(items)}")
+    return L(*(_arith("Times", _arith("Plus", *items[i:i + k]), sp.Rational(1, k)) for i in range(len(items) - k + 1)))
+
+
+fn("MovingAverage", area=AREA, status="added",
+   notes="MovingAverage[list, r]: means of the runs of r consecutive elements (length n - r + 1); "
+         "MovingAverage[list, {w1, ..., wr}]: Σ w_i a_(s+i-1) / Σ w_i; elements may be numbers, symbols or "
+         "equal-length vectors (componentwise); exact arithmetic for exact input; r > n or zero weight sum raise "
+         "ValueError; TimeSeries and SparseArray objects are not supported. Check: exact; reference (Wolfram "
+         "documentation examples) in tests.")(_moving_average)
+
+
+def _median_of(vals, fname):
+    """Median of numeric values (exact or inexact), Wolfram-style: mean of the middle two for even counts."""
+    keyed = []
+    for v in vals:
+        s = S(v) if not isinstance(v, (int, float)) else sp.sympify(v)
+        if not (isinstance(s, sp.Basic) and s.is_number and s.is_real is not False):
+            if isinstance(s, sp.Basic) and s.free_symbols:
+                raise Unevaluated()
+            raise TypeError(f"{fname}: elements must be real numbers, not {v!r}")
+        keyed.append((float(sp.N(s, 30)), v))
+    keyed.sort(key=lambda t: t[0])
+    n = len(keyed)
+    if n % 2:
+        return keyed[n // 2][1]
+    return _arith("Times", _arith("Plus", keyed[n // 2 - 1][1], keyed[n // 2][1]), sp.Rational(1, 2))
+
+
+def _moving_median(x: ListOf[Real], r: PosInteger) -> ListOf[Real]:
+    fname = "MovingMedian"
+    items = _vec_items(x, fname)
+    if isinstance(r, bool) or not K.is_int(r):
+        if isinstance(r, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the span must be a positive integer, not {r!r}")
+    k = int(r)
+    if k < 1:
+        raise ValueError(f"{fname}: the span must be a positive integer")
+    if k > len(items):
+        raise ValueError(f"{fname}: the span {k} exceeds the list length {len(items)}")
+    vec = is_list(items[0])
+    if vec:
+        dim = len(items[0].args)
+        if any(not is_list(v) or len(v.args) != dim for v in items):
+            raise ValueError(f"{fname}: vector elements must all have the same length")
+    out = []
+    for i in range(len(items) - k + 1):
+        win = items[i:i + k]
+        if vec:
+            out.append(L(*(_median_of([w.args[c] for w in win], fname) for c in range(dim))))
+        else:
+            out.append(_median_of(win, fname))
+    return L(*out)
+
+
+fn("MovingMedian", area=AREA, status="added",
+   notes="MovingMedian[list, r]: medians of the spans of r consecutive elements (mean of the two middle values for "
+         "even r), componentwise for lists of equal-length vectors; exact values are ordered numerically and "
+         "returned exactly; symbolic elements stay unevaluated; r > n raises ValueError. Check: exact; reference "
+         "(Wolfram documentation examples) in tests.")(_moving_median)
+
+
+def _ema(x: ListOf[Expr], a: Numeric) -> ListOf[Expr]:
+    fname = "ExponentialMovingAverage"
+    items = _vec_items(x, fname)
+    if isinstance(a, (str, bool)) or is_list(a):
+        raise TypeError(f"{fname}: the smoothing constant must be a number, not {a!r}")
+    sa = S(a) if not isinstance(a, (int, float)) else sp.sympify(a)
+    if isinstance(sa, sp.Basic) and sa.is_number and sa.is_real and not (0 <= sa <= 1):
+        raise ValueError(f"{fname}: the smoothing constant must be between 0 and 1")
+    out = [items[0]]
+    y = items[0]
+    for v in items[1:]:
+        y = _arith("Plus", y, _arith("Times", a, _arith("Plus", v, _arith("Times", -1, y))))
+        out.append(y)
+    return L(*out)
+
+
+fn("ExponentialMovingAverage", area=AREA, status="added",
+   notes="ExponentialMovingAverage[list, α]: y_1 = x_1, y_i = y_(i-1) + α (x_i - y_(i-1)); numbers, symbols or "
+         "vectors; exact for exact input, a numeric α outside [0, 1] raises ValueError, a symbolic α gives the "
+         "symbolic recursion. Check: exact; reference (Wolfram documentation examples) in tests.")(_ema)
+
+
+def _moving_map(f: Fn, x: ListOf[Expr], w: Expr, *rest: Expr) -> ListOf[Expr]:
+    fname = "MovingMap"
+    if rest:
+        raise NotImplementedError(f"{fname}: the padding argument is not supported")
+    items = _vec_items(x, fname)
+    align = "Right"
+    if is_list(w) and len(w.args) == 2 and isinstance(w.args[1], Symbol) and w.args[1].name in ("Left", "Right",
+                                                                                               "Center"):
+        align = w.args[1].name
+        w = w.args[0]
+    events = False
+    if isinstance(w, Expr) and w.head == "Quantity" and len(w.args) == 2 and w.args[1] in ("Events", "Event"):
+        events = True
+        w = w.args[0]
+    if isinstance(w, bool) or not K.is_int(w):
+        if isinstance(w, Symbol):
+            raise Unevaluated()
+        raise NotImplementedError(f"{fname}: window specification {w!r} is not supported (use an integer span or "
+                                  f"Quantity[n, \"Events\"])")
+    r = int(w)
+    if r < (1 if events else 0):
+        raise ValueError(f"{fname}: the window size must be positive")
+    pairs = all(is_list(v) and len(v.args) == 2 and K.is_int(v.args[0]) for v in items) and \
+        all(int(items[i].args[0]) < int(items[i + 1].args[0]) for i in range(len(items) - 1))
+    if pairs and not events:
+        if align != "Right":
+            raise NotImplementedError(f"{fname}: only Right alignment is supported for {{t, v}} data")
+        ts = [int(v.args[0]) for v in items]
+        out = []
+        for i, t in enumerate(ts):
+            if t - r < ts[0]:
+                continue
+            vals = [items[j].args[1] for j in range(len(ts)) if t - r <= ts[j] <= t]
+            out.append(L(t, apply(f, L(*vals))))
+        return L(*out)
+    span = r if events else r + 1
+    if pairs:
+        if span > len(items):
+            raise ValueError(f"{fname}: the window is longer than the data")
+        return L(*(L(items[i + span - 1].args[0], apply(f, L(*(v.args[1] for v in items[i:i + span]))))
+                   for i in range(len(items) - span + 1)))
+    if span > len(items):
+        raise ValueError(f"{fname}: the window is longer than the data")
+    return L(*(apply(f, L(*items[i:i + span])) for i in range(len(items) - span + 1)))
+
+
+fn("MovingMap", area=AREA, status="added",
+   notes="MovingMap[f, list, r] applies f to the windows of r + 1 consecutive elements (a time span r on the "
+         "implicit regular times), MovingMap[f, list, Quantity[n, \"Events\"]] to windows of n elements, and for "
+         "{{t1, v1}, ...} data with integer times to the values with t - r <= t_j <= t (windows starting before the "
+         "first time are dropped; result {t, f[...]}); alignment {r, Left | Right | Center} only affects time "
+         "stamps (Right only for {t, v} data); padding and TimeSeries/TemporalData objects raise "
+         "NotImplementedError. Check: exact; reference (Wolfram documentation examples) in tests.")(_moving_map)
