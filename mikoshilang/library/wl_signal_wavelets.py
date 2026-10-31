@@ -45,8 +45,6 @@ def _family_param(name, args):
     if not args:
         return sp.Integer(default)
     v = args[0]
-    if isinstance(v, Symbol):
-        raise Unevaluated()
     if isinstance(v, (str, bool)) or is_list(v):
         raise TypeError(f"{name}: the parameter must be a number, not {v!r}")
     x = sp.sympify(S(v)) if not isinstance(v, (int, float)) else sp.sympify(v)
@@ -350,8 +348,6 @@ fn("WaveletPhi", area=AREA, status="added",
 
 # ──────────────────────────────────────────── further wavelet families (objects only) ──
 def _posint_arg(v, name, what):
-    if isinstance(v, Symbol):
-        raise Unevaluated()
     if isinstance(v, (str, bool)) or is_list(v):
         raise TypeError(f"{name}: the {what} must be a positive integer, not {v!r}")
     x = sp.sympify(S(v)) if not isinstance(v, (int, float)) else sp.sympify(v)
@@ -363,8 +359,6 @@ def _posint_arg(v, name, what):
 
 
 def _real_arg(v, name, what):
-    if isinstance(v, Symbol):
-        raise Unevaluated()
     if isinstance(v, (str, bool)) or is_list(v):
         raise TypeError(f"{name}: the {what} must be a positive real number, not {v!r}")
     x = sp.sympify(S(v)) if not isinstance(v, (int, float)) else sp.sympify(v)
