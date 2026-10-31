@@ -20,7 +20,7 @@ from .. import kernel as K
 from .. import kernel_lists as KL
 from .core import fn, record, Unevaluated, REGISTRY
 from .wl_common import (L, ev, apply, true, is_sym, is_list, is_int, is_assoc, is_rule, same, items_of,
-                        canonical, tester, split_options, int_value)
+                        canonical, tester, split_options, int_value, real_number)
 from . import wl_lists as WL
 
 AREA = "structural (W03)"
@@ -2021,3 +2021,184 @@ def _wrap_dimensions():
 
 
 _wrap_dimensions()
+
+
+# ─────────────────────────── option symbols of other functions ───────────────────────────
+
+for _n, _note in [
+        ("SortedBy", "option specifying a function by which to sort the results of a computation; an inert option "
+                     "name (functions accepting it validate it)"),
+        ("ComponentKeys", "option naming the data components of a time or event series; an inert option name"),
+        ("DeleteContents", "option for DeleteDirectory (whether to delete the directory contents); an inert option "
+                           "name"),
+        ("KeyCollisionFunction", "option for JoinAcross (how to handle same-key elements not being joined); an inert "
+                                 "option name"),
+        ("PaddingSize", "option of AudioDelay and other functions giving the amount of padding; an inert option name"),
+        ("PartBehavior", "option of Query and related functions for nonexistent parts; an inert option name"),
+        ("WrapAround", "option for NotebookFind (continue past the end of a document); an inert option name"),
+        ("RowsEqual", "option for GridBox (equal row heights); an inert option name"),
+        ("ColumnsEqual", "option for GridBox (equal column widths); an inert option name")]:
+    record(_n, AREA, "added", _note)
+
+
+# ─────────────────────────── interpreter / form element specifications ───────────────────────────
+
+def _count_bound(v, fname):
+    if is_sym(v, "Infinity"):
+        return math.inf
+    return int_value(v, fname, "count", 0)
+
+
+def _check_range(spec, fname):
+    """max | {min, max} | {n, {min, max}} | {{i, n}, {min, max}}"""
+    if is_int(spec) or is_sym(spec, "Infinity"):
+        _count_bound(spec, fname)
+        return
+    if is_list(spec) and len(spec.args) == 2:
+        a, b = spec.args
+        if is_list(b) and len(b.args) == 2:
+            lo, hi = (_count_bound(v, fname) for v in b.args)
+            if lo > hi:
+                raise ValueError(f"{fname}: the minimum count exceeds the maximum")
+            if is_list(a):
+                if len(a.args) != 2 or not isinstance(a.args[0], Symbol):
+                    raise ValueError(f"{fname}: expected {{{{i, n}}, {{min, max}}}}")
+                n = _count_bound(a.args[1], fname)
+            else:
+                n = _count_bound(a, fname)
+            if not lo <= n <= hi:
+                raise ValueError(f"{fname}: the initial count must lie between min and max")
+            return
+        lo, hi = _count_bound(a, fname), _count_bound(b, fname)
+        if lo > hi:
+            raise ValueError(f"{fname}: the minimum count exceeds the maximum")
+        return
+    raise ValueError(f"{fname}: invalid count specification {spec!r}")
+
+
+@fn("RepeatingElement", **ADDED,
+    notes="RepeatingElement[spec], RepeatingElement[spec, max | {min, max} | {n, {min, max}} | {{i, n}, {min, max}}]: "
+          "an inert interpreter/form specification (count specifications are validated; Interpreter and forms are "
+          "not available)")
+def _repeating(spec, rng=None):
+    if rng is not None:
+        _check_range(rng, "RepeatingElement")
+    raise Unevaluated()
+
+
+@fn("AnySubset", **ADDED,
+    notes="AnySubset[{c1, ...} | {lab -> c, ...} | EntityClass[...]], AnySubset[choices, max | {min, max}]: an inert "
+          "interpreter/form specification (arguments are validated)")
+def _anysubset(choices, rng=None):
+    if not (is_list(choices) or (isinstance(choices, Expr) and choices.head == "EntityClass")
+            or isinstance(choices, Symbol)):
+        raise ValueError("AnySubset: the choices must be a list {c1, c2, ...} or {lab1 -> c1, ...}")
+    if rng is not None:
+        if is_int(rng) or is_sym(rng, "Infinity"):
+            _count_bound(rng, "AnySubset")
+        elif is_list(rng) and len(rng.args) == 2 and not any(is_list(v) for v in rng.args):
+            _check_range(rng, "AnySubset")
+        else:
+            raise ValueError(f"AnySubset: invalid count specification {rng!r}")
+    raise Unevaluated()
+
+
+# ─────────────────────────── ArrayResample ───────────────────────────
+
+def _rs_count(spec, m, fname):
+    if is_sym(spec, "All"):
+        return m
+    if isinstance(spec, Expr) and spec.head == "Scaled" and len(spec.args) == 1:
+        s = real_number(spec.args[0], fname, "scale factor")
+        if s <= 0:
+            raise ValueError(f"{fname}: the scale factor must be positive")
+        return int(sp.floor(s * (m - 1) + sp.Rational(1, 2))) + 1 if m > 1 else 1
+    if is_sym(spec, "Automatic"):
+        raise NotImplementedError(f"{fname}: Automatic dimension specifications are not supported; give each "
+                                  "dimension explicitly")
+    return int_value(spec, fname, "dimension", 1)
+
+
+def _rs_line(vals, n, kind, fname):
+    m = len(vals)
+    if n == m:
+        return list(vals)
+    if m == 1 or n == 1:
+        raise NotImplementedError(f"{fname}: resampling to or from a single sample is not supported")
+    out = []
+    for k in range(n):
+        p = sp.Rational(k * (m - 1), n - 1)          # 0-based sample position
+        i = int(sp.floor(p))
+        t = p - i
+        if t == 0:
+            out.append(vals[i])
+            continue
+        a, b = vals[i], vals[i + 1]
+        if kind == "Linear":
+            out.append(ev(Expr("Plus", Expr("Times", K.from_sp(1 - t), a), Expr("Times", K.from_sp(t), b))))
+        elif kind == "Nearest":
+            if t == sp.Rational(1, 2):
+                out.append(ev(Expr("Times", K.from_sp(sp.Rational(1, 2)), Expr("Plus", a, b))))
+            else:
+                out.append(a if t < sp.Rational(1, 2) else b)
+        elif kind == "NearestLeft":
+            out.append(a if t <= sp.Rational(1, 2) else b)
+        else:                                          # NearestRight
+            out.append(a if t < sp.Rational(1, 2) else b)
+    return out
+
+
+def _rs_dim(nested, axis, n, kind, fname, below):
+    if axis == 0:
+        vals = [_from_nested_any(v) for v in nested]
+        return [_to_nested(v, below) for v in _rs_line(vals, n, kind, fname)]
+    return [_rs_dim(sub, axis - 1, n, kind, fname, below) for sub in nested]
+
+
+@fn("ArrayResample", **ADDED,
+    notes="ArrayResample[array, n | Scaled[s] | All | {d1, d2, ...}] and ArrayResample[array, dspec, \"Point\"]: "
+          "point sampling on 1..m (n samples at 1 + (k-1)(m-1)/(n-1); Scaled[s] gives Round[s (m-1)] + 1 samples), "
+          "separably along each dimension, exact for exact data; Resampling -> \"Linear\" (default), \"Nearest\" "
+          "(halfway averages), \"NearestLeft\", \"NearestRight\". \"Bin\" schemes, subranges, Automatic dimensions, "
+          "DataRange, Antialiasing -> True and other kernels raise")
+def _arrayresample(a, dspec, *rest):
+    fname = "ArrayResample"
+    pos, opts = split_options(rest, {"Resampling", "Padding", "DataRange", "Antialiasing"}, fname)
+    if pos:
+        scheme = pos[0]
+        if not (scheme == "Point" or (is_list(scheme) and scheme.args and scheme.args[0] == "Point")):
+            raise NotImplementedError(f"{fname}: only the \"Point\" sampling scheme is supported")
+        if len(pos) > 1:
+            raise NotImplementedError(f"{fname}: resampling a subrange is not supported")
+    kind = opts.get("Resampling", "Linear")
+    if is_sym(kind, "Automatic"):
+        kind = "Linear"
+    if kind not in ("Linear", "Nearest", "NearestLeft", "NearestRight"):
+        raise NotImplementedError(f"{fname}: Resampling -> {kind!r} is not supported (use \"Linear\", \"Nearest\", "
+                                  "\"NearestLeft\" or \"NearestRight\")")
+    if "DataRange" in opts and not is_sym(opts["DataRange"], "Automatic"):
+        raise NotImplementedError(f"{fname}: the DataRange option is not supported")
+    if opts.get("Antialiasing", False) not in (False,):
+        raise NotImplementedError(f"{fname}: Antialiasing -> True is not supported")
+    dims = _full_dims(a)
+    if not dims or 0 in dims:
+        if isinstance(a, Symbol):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: a non-empty full array is expected")
+    if is_list(dspec):
+        specs = list(dspec.args)
+        if len(specs) > len(dims):
+            raise ValueError(f"{fname}: more dimensions specified than the array has")
+        specs += [Symbol("All")] * (len(dims) - len(specs))
+    elif len(dims) == 1 or is_sym(dspec, "All"):
+        specs = [dspec] * len(dims)
+    elif isinstance(dspec, Expr) and dspec.head == "Scaled":
+        specs = [dspec] * len(dims)
+    else:
+        raise NotImplementedError(f"{fname}: for a multidimensional array give {{n1, n2, ...}} (n alone means "
+                                  "{n, Automatic, ...}, which is not supported)")
+    nested = _to_nested(a, len(dims))
+    for axis, (s, m) in enumerate(zip(specs, dims)):
+        n = _rs_count(s, m, fname)
+        nested = _rs_dim(nested, axis, n, kind, fname, len(dims) - axis - 1)
+    return _from_nested_any(nested)
