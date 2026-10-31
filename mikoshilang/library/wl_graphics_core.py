@@ -1164,7 +1164,8 @@ def _v_choice(name, choices, syms=("Automatic",)):
             return
         if isinstance(x, str) and x in choices:
             return
-        raise ValueError(f"{fname}: {name} must be {', '.join(syms)} or one of "
+        pre = f"{', '.join(syms)} or " if syms else ""
+        raise ValueError(f"{fname}: {name} must be {pre}one of "
                          f"{', '.join(repr(c) for c in choices)}, not {K_input(x)}")
     return v
 

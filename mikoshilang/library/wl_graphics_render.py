@@ -148,12 +148,18 @@ def _points(x, fname):
     raise NotImplementedError(f"Rasterize: cannot read the coordinates of {fname}: {K_input(x)}")
 
 
+_ALPHA_ARITY = {"RGBColor": 4, "GrayLevel": 2, "Hue": 4, "CMYKColor": 5, "XYZColor": 4, "LABColor": 4,
+                "LCHColor": 4, "LUVColor": 4}
+
+
 def _apply_directive(ctx, d):
     s = ctx.state
     rgba = to_rgba(d) if isinstance(d, Expr) and d.head != "Opacity" else None
     if rgba is not None:
         s.color = rgba
-        s.opacity = None
+        # a colour with its own opacity channel replaces Opacity[..]; a plain colour keeps it (WL semantics)
+        if len(d.args) == _ALPHA_ARITY.get(d.head, -1):
+            s.opacity = None
         return True
     h = d.head
     a = d.args

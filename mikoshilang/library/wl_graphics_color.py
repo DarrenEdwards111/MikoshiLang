@@ -415,8 +415,10 @@ def _color_head(head):
                 return make_color(target, convert_channels(sp_, ch, target), alpha)
             if K.is_list(a):
                 items = list(a.args)
-                if len(items) not in counts or any(isinstance(i, (str, bool)) or K.is_list(i) for i in items):
+                if len(items) not in counts:
                     raise ValueError(f"{head}: {K_input(a)} must be a list of {_counts_text(counts)} numbers")
+                if any(isinstance(i, (str, bool)) or K.is_list(i) for i in items):
+                    raise TypeError(f"{head}: {K_input(a)} must be a list of numbers")
                 for i in items:
                     real_value(i, head, "component")
                 return Expr(head, *items)
@@ -894,8 +896,12 @@ def _random_model(model, fname):
     from .statistics import _RNG
     if isinstance(model, Symbol) and model.name in SPACES:
         model = Expr(model.name, *([Expr("Blank")] * {"Hue": 3, "GrayLevel": 1, "CMYKColor": 4}.get(model.name, 3)))
-    if not (isinstance(model, Expr) and model.head in SPACES and len(model.args) in _COUNTS[model.head]):
-        raise ValueError(f"{fname}: {K_input(model)} is not a colour model such as RGBColor[_, _, _]")
+    if isinstance(model, Symbol) or (isinstance(model, Expr) and model.head not in SPACES and not K.is_list(model)):
+        raise Unevaluated()                       # symbolic model
+    if not (isinstance(model, Expr) and model.head in SPACES):
+        raise TypeError(f"{fname}: {K_input(model)} is not a colour model such as RGBColor[_, _, _]")
+    if len(model.args) not in _COUNTS[model.head]:
+        raise ValueError(f"{fname}: {K_input(model)} has the wrong number of channels for a colour model")
     space = SPACES[model.head]
     samplers = []
     for a in model.args:
@@ -926,7 +932,8 @@ def _random_model(model, fname):
           "RGBColor[_, _, _, 0.5] whose channels are constants, _ (uniform on [0, 1] for RGB, Grayscale, HSB, CMYK) "
           "or a distribution (sampled with RandomVariate); ColorSpace -> space converts the result. Uniform _ "
           "channels in XYZ/LAB/LCH/LUV raise NotImplementedError (visual-range limits undocumented). Reproducible "
-          "after SeedRandom (the stream differs from Wolfram's). Invalid models or counts raise ValueError. "
+          "after SeedRandom (the stream differs from Wolfram's). Symbolic models or counts stay unevaluated; a "
+          "non-model (string, number) raises TypeError, wrong channel counts or negative counts ValueError. "
           "Check: self-check of channel ranges and ColorQ on results in tests.")
 def _randomcolor(*args: Expr) -> Expr | ListOf[Expr]:
     pos, o = _opts(list(args), {"ColorSpace"}, "RandomColor")
