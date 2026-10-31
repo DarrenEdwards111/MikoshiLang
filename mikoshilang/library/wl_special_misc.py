@@ -1537,3 +1537,383 @@ def _cantor_num(x):
 special("CantorStaircase", 1, _cantor_num, _cantor_exact,
         notes="CantorStaircase[x]: the Cantor function (0 for x <= 0, 1 for x >= 1); exact for rationals via the "
               "ternary expansion (periodic expansions summed exactly), approximate x via its exact binary value")
+
+
+# ───────────────────────────── q-analogues ─────────────────────────────
+
+def _qpoch_finite_exact(a, q, n):
+    if n >= 0:
+        out = sp.Integer(1)
+        for k in range(n):
+            out *= 1 - a * q ** k
+        return sp.nsimplify(sp.expand(out)) if out.is_number else out
+    out = sp.Integer(1)
+    for k in range(1, -n + 1):
+        out *= 1 - a * q ** (-k)
+    return 1 / out
+
+
+def _qpochhammer(*args):
+    name = "QPochhammer"
+    vals = [sym(a, name) for a in args]
+    if len(vals) == 1:
+        return Expr("QPochhammer", args[0], args[0])
+    a, q = vals[0], vals[1]
+    n = vals[2] if len(vals) == 3 else None
+    prec = input_precision(args)
+    if n is not None and n == 0:
+        return 1
+    if n is not None and n.is_Integer and prec is None and a.is_number and q.is_number:
+        v = _qpoch_finite_exact(a, q, int(n))
+        return R(v)
+    if n is None and a == 0:
+        return 1
+    if n is None and q == 0 and a.is_number:
+        return R(1 - a)
+    if not all(v.is_number for v in vals) or prec is None:
+        raise Unevaluated()
+
+    def f(a, q, n=None):
+        if n is None:
+            if abs(q) >= 1:
+                raise ValueError("QPochhammer: the infinite product requires |q| < 1")
+            return mpmath.qp(a, q)
+        return mpmath.qp(a, q, n)
+    return mp_eval(f, vals, prec)
+
+
+_register("QPochhammer", (1, 3), _qpochhammer,
+          "QPochhammer[a, q, n] = Prod[1 - a q^k, {k, 0, n-1}] (exact for integer n, negative n by the inverse "
+          "product), QPochhammer[a, q] the infinite product (|q| < 1), QPochhammer[q] = QPochhammer[q, q]; "
+          "mpmath qp for approximate arguments")
+
+
+def _qfactorial(n, q):
+    name = "QFactorial"
+    nv, qv = sym(n, name), sym(q, name)
+    prec = input_precision([n, q])
+    if nv.is_Integer and nv >= 0 and qv.is_number and prec is None:
+        if qv == 1:
+            return R(sp.factorial(nv))
+        out = sp.Integer(1)
+        for k in range(1, int(nv) + 1):
+            out *= sp.cancel((1 - qv ** k) / (1 - qv))
+        return R(sp.nsimplify(out))
+    if not (nv.is_number and qv.is_number) or prec is None:
+        raise Unevaluated()
+    return mp_eval(lambda n, q: mpmath.qgamma(n + 1, q), [nv, qv], prec)
+
+
+_register("QFactorial", 2, _qfactorial,
+          "QFactorial[n, q] = QPochhammer[q, q, n]/(1 - q)^n = Prod[(1 - q^k)/(1 - q), {k, n}] (exact for "
+          "non-negative integer n; general n via QGamma[n + 1, q])")
+
+
+def _qgamma(z, q):
+    name = "QGamma"
+    zv, qv = sym(z, name), sym(q, name)
+    prec = input_precision([z, q])
+    if zv.is_Integer and zv >= 1 and qv.is_number and prec is None:
+        return _qfactorial(R(zv - 1), q)
+    if not (zv.is_number and qv.is_number) or prec is None:
+        raise Unevaluated()
+    return mp_eval(mpmath.qgamma, [zv, qv], prec)
+
+
+_register("QGamma", 2, _qgamma,
+          "QGamma[z, q] = QPochhammer[q, q]/QPochhammer[q^z, q] (1 - q)^(1 - z) (mpmath qgamma); exact "
+          "QFactorial[z - 1, q] at positive integers z")
+
+
+def _qbinomial(n, k, q):
+    name = "QBinomial"
+    nv, kv, qv = sym(n, name), sym(k, name), sym(q, name)
+    prec = input_precision([n, k, q])
+    if nv.is_Integer and kv.is_Integer and qv.is_number and prec is None:
+        N, K = int(nv), int(kv)
+        if N >= 0:
+            if K < 0 or K > N:
+                return 0
+            out = sp.Integer(1)
+            for i in range(1, K + 1):
+                out *= (1 - qv ** (N - K + i)) / (1 - qv ** i)
+            return R(sp.nsimplify(out))
+        raise Unevaluated()
+    if not all(v.is_number for v in (nv, kv, qv)) or prec is None:
+        raise Unevaluated()
+
+    def f(n, k, q):
+        return mpmath.qgamma(n + 1, q) / (mpmath.qgamma(k + 1, q) * mpmath.qgamma(n - k + 1, q))
+    return mp_eval(f, [nv, kv, qv], prec)
+
+
+_register("QBinomial", 3, _qbinomial,
+          "QBinomial[n, k, q] Gaussian binomial coefficient Prod[(1 - q^(n-k+i))/(1 - q^i), {i, k}] (exact for "
+          "integers, 0 outside 0 <= k <= n); general arguments via QGamma (QBinomial[4, 2, 1/2] = 35/16)")
+
+
+def _qpolygamma_core(n, z, q):
+    if not 0 < abs(q) < 1:
+        raise ValueError("QPolyGamma: only 0 < |q| < 1 is supported")
+    lq = mpmath.log(q)
+    shift_terms = []
+    while abs(mpmath.power(q, z)) > 0.5:
+        shift_terms.append(z)
+        z = z + 1
+    with mpmath.workprec(mpmath.mp.prec + 20):
+        eps = mpmath.mpf(2) ** (-(mpmath.mp.prec + 10))
+        total = mpmath.mpf(0)
+        m = 1
+        qz = mpmath.power(q, z)
+        p = qz
+        while True:
+            term = mpmath.power(m, n) * p / (1 - mpmath.power(q, m))
+            total += term
+            if abs(term) < eps * max(abs(total), 1) and m > 3:
+                break
+            m += 1
+            p *= qz
+        val = mpmath.power(lq, n + 1) * total
+        if n == 0:
+            val += -mpmath.log(1 - q)
+        for w in shift_terms:          # psi(w) = psi(w + 1) + d^n/dw^n [log q q^w/(1 - q^w)]
+            g = lambda t: lq * mpmath.power(q, t) / (1 - mpmath.power(q, t))
+            val += g(w) if n == 0 else mpmath.diff(g, w, n)
+    return val
+
+
+def _qpolygamma(*args):
+    name = "QPolyGamma"
+    vals = [sym(a, name) for a in args]
+    if len(vals) == 2:
+        n, z, q = sp.Integer(0), vals[0], vals[1]
+    else:
+        n, z, q = vals
+    if not all(v.is_number for v in (n, z, q)):
+        raise Unevaluated()
+    if not (n.is_Integer and n >= 0):
+        raise ValueError("QPolyGamma: the order n must be a non-negative integer")
+    prec = input_precision(args)
+    if prec is None:
+        raise Unevaluated()
+    N = int(n)
+    return mp_eval(lambda z, q: _qpolygamma_core(N, z, q), [z, q], prec)
+
+
+_register("QPolyGamma", (2, 3), _qpolygamma,
+          "QPolyGamma[z, q] = D[Log[QGamma[z, q]], z] = -Log[1 - q] + Log[q] Sum[q^(m z)/(1 - q^m), {m, 1, "
+          "Infinity}], QPolyGamma[n, z, q] its n-th derivative (Lambert-series form with the shift recurrence; "
+          "0 < |q| < 1)")
+
+
+def _list_vals(x, name, what):
+    if not is_list(x):
+        raise Unevaluated() if isinstance(x, (Symbol, Expr)) else ValueError(f"{name}: {what} must be a list")
+    return [sym(v, name) for v in x.args]
+
+
+def _qhyper(a, b, q, z):
+    name = "QHypergeometricPFQ"
+    av, bv = _list_vals(a, name, "the first argument"), _list_vals(b, name, "the second argument")
+    qv, zv = sym(q, name), sym(z, name)
+    if zv == 0:
+        return 1
+    allv = av + bv + [qv, zv]
+    if not all(v.is_number for v in allv):
+        raise Unevaluated()
+    prec = input_precision([a, b, q, z])
+    if prec is None:
+        raise Unevaluated()
+    na = len(av)
+    return mp_eval(lambda *v: mpmath.qhyper(list(v[:na]), list(v[na:-2]), v[-2], v[-1]), allv, prec)
+
+
+_register("QHypergeometricPFQ", 4, _qhyper,
+          "QHypergeometricPFQ[{a1, ..., ar}, {b1, ..., bs}, q, z] basic hypergeometric series Sum[(a1;q)_k ... "
+          "/((b1;q)_k ... (q;q)_k) ((-1)^k q^(k(k-1)/2))^(1+s-r) z^k] (mpmath qhyper); value 1 at z = 0",
+          listable=False)
+
+
+def _bihyper(a, b, z):
+    name = "BilateralHypergeometricPFQ"
+    av, bv = _list_vals(a, name, "the first argument"), _list_vals(b, name, "the second argument")
+    zv = sym(z, name)
+    allv = av + bv + [zv]
+    if not all(v.is_number for v in allv):
+        raise Unevaluated()
+    prec = input_precision([a, b, z])
+    if prec is None:
+        raise Unevaluated()
+    na = len(av)
+    return mp_eval(lambda *v: mpmath.bihyper(list(v[:na]), list(v[na:-1]), v[-1]), allv, prec)
+
+
+_register("BilateralHypergeometricPFQ", 3, _bihyper,
+          "BilateralHypergeometricPFQ[{a1, ...}, {b1, ...}, z] = Sum[Pochhammer[a1, n] ... /(Pochhammer[b1, n] "
+          "...) z^n, {n, -Infinity, Infinity}] (mpmath bihyper)", listable=False)
+
+
+# ───────────────────────────── Appell functions ─────────────────────────────
+
+def _appell(name, nparams, mpf, reduce_y0):
+    def impl(*args):
+        vals = [sym(a, name) for a in args]
+        x, y = vals[-2], vals[-1]
+        if x == 0 and y == 0:
+            return 1
+        if y == 0:
+            return reduce_y0(args)
+        if not all(v.is_number for v in vals):
+            raise Unevaluated()
+        prec = input_precision(args)
+        if prec is None:
+            raise Unevaluated()
+        return mp_eval(mpf, vals, prec)
+    _register(name, nparams + 2, impl, APPELL_NOTES[name])
+
+
+APPELL_NOTES = {
+    "AppellF1": "AppellF1[a, b1, b2, c, x, y] = Sum[(a)_(m+n) (b1)_m (b2)_n/((c)_(m+n) m! n!) x^m y^n] and its "
+                "continuation (mpmath appellf1); y = 0 gives Hypergeometric2F1[a, b1, c, x]",
+    "AppellF2": "AppellF2[a, b1, b2, c1, c2, x, y] = Sum[(a)_(m+n) (b1)_m (b2)_n/((c1)_m (c2)_n m! n!) x^m y^n] "
+                "(mpmath appellf2); y = 0 gives Hypergeometric2F1[a, b1, c1, x]",
+    "AppellF3": "AppellF3[a1, a2, b1, b2, c, x, y] = Sum[(a1)_m (a2)_n (b1)_m (b2)_n/((c)_(m+n) m! n!) x^m y^n] "
+                "(mpmath appellf3); y = 0 gives Hypergeometric2F1[a1, b1, c, x]",
+    "AppellF4": "AppellF4[a, b, c1, c2, x, y] = Sum[(a)_(m+n) (b)_(m+n)/((c1)_m (c2)_n m! n!) x^m y^n] (mpmath "
+                "appellf4, |Sqrt[x]| + |Sqrt[y]| < 1); y = 0 gives Hypergeometric2F1[a, b, c1, x]",
+}
+_appell("AppellF1", 4, mpmath.appellf1, lambda a: Expr("Hypergeometric2F1", a[0], a[1], a[3], a[4]))
+_appell("AppellF2", 5, mpmath.appellf2, lambda a: Expr("Hypergeometric2F1", a[0], a[1], a[3], a[5]))
+_appell("AppellF3", 5, mpmath.appellf3, lambda a: Expr("Hypergeometric2F1", a[0], a[2], a[4], a[5]))
+_appell("AppellF4", 4, mpmath.appellf4, lambda a: Expr("Hypergeometric2F1", a[0], a[1], a[2], a[4]))
+
+
+# ───────────────────────────── angular momentum ─────────────────────────────
+
+def _half_int(v, name, what):
+    """Exact integer or half-integer (approximate numbers that are exact halves are accepted)."""
+    if isinstance(v, sp.Float):
+        r = sp.Rational(v)
+        if (2 * r).is_Integer:
+            return r
+        raise ValueError(f"{name}: {what} {v} must be an integer or half-integer")
+    if not v.is_number:
+        raise Unevaluated()
+    if v.is_Rational and (2 * v).is_Integer:
+        return v
+    raise ValueError(f"{name}: {what} {v} must be an integer or half-integer")
+
+
+def _pairs(args, name, size):
+    out = []
+    for a in args:
+        if not (is_list(a) and len(a.args) == size):
+            raise Unevaluated() if isinstance(a, Symbol) else ValueError(f"{name}: malformed argument {a}")
+        out.append([sym(x, name) for x in a.args])
+    if not all(v.is_number for p in out for v in p):
+        raise Unevaluated()
+    return [[_half_int(v, name, "parameter") for v in p] for p in out]
+
+
+def _jm_ok(j, m):
+    return j >= 0 and (j - m).is_Integer and abs(m) <= j
+
+
+def _approx_out(value, args):
+    prec = input_precision(args)
+    if prec is None:
+        return R(value)
+    return R(sp.N(value, 15 if prec == "m" else mpmath.libmp.prec_to_dps(prec)))
+
+
+def _threej(a, b, c):
+    from sympy.physics.wigner import wigner_3j
+    (j1, m1), (j2, m2), (j3, m3) = _pairs((a, b, c), "ThreeJSymbol", 2)
+    if not all(_jm_ok(j, m) for j, m in ((j1, m1), (j2, m2), (j3, m3))):
+        if any(j < 0 or not (j - m).is_Integer for j, m in ((j1, m1), (j2, m2), (j3, m3))):
+            raise ValueError("ThreeJSymbol: each j must be non-negative and j - m an integer")
+        return 0
+    return _approx_out(wigner_3j(j1, j2, j3, m1, m2, m3), (a, b, c))
+
+
+def _clebsch(a, b, c):
+    from sympy.physics.wigner import clebsch_gordan
+    (j1, m1), (j2, m2), (j, m) = _pairs((a, b, c), "ClebschGordan", 2)
+    if not all(_jm_ok(jj, mm) for jj, mm in ((j1, m1), (j2, m2), (j, m))):
+        if any(jj < 0 or not (jj - mm).is_Integer for jj, mm in ((j1, m1), (j2, m2), (j, m))):
+            raise ValueError("ClebschGordan: each j must be non-negative and j - m an integer")
+        return 0
+    return _approx_out(clebsch_gordan(j1, j2, j, m1, m2, m), (a, b, c))
+
+
+def _sixj(a, b):
+    from sympy.physics.wigner import wigner_6j
+    (j1, j2, j3), (j4, j5, j6) = _pairs((a, b), "SixJSymbol", 3)
+    if any(j < 0 for j in (j1, j2, j3, j4, j5, j6)):
+        raise ValueError("SixJSymbol: the j must be non-negative")
+
+    def tri(x, y, z):
+        return (x + y + z).is_Integer and abs(x - y) <= z <= x + y
+    if not (tri(j1, j2, j3) and tri(j1, j5, j6) and tri(j4, j2, j6) and tri(j4, j5, j3)):
+        return 0
+    return _approx_out(wigner_6j(j1, j2, j3, j4, j5, j6), (a, b))
+
+
+_register("ThreeJSymbol", 3, _threej,
+          "ThreeJSymbol[{j1, m1}, {j2, m2}, {j3, m3}] Wigner 3-j symbol (exact, sympy.physics.wigner); 0 unless "
+          "m1 + m2 + m3 = 0, |mi| <= ji and the triangle condition holds; symbolic parameters stay unevaluated",
+          listable=False, numeric=False)
+_register("ClebschGordan", 3, _clebsch,
+          "ClebschGordan[{j1, m1}, {j2, m2}, {j, m}] (Condon-Shortley/Edmonds phase, exact; related to "
+          "ThreeJSymbol by (-1)^(j1 - j2 + m) Sqrt[2 j + 1] ThreeJSymbol[{j1, m1}, {j2, m2}, {j, -m}])",
+          listable=False, numeric=False)
+_register("SixJSymbol", 2, _sixj,
+          "SixJSymbol[{j1, j2, j3}, {j4, j5, j6}] Wigner 6-j symbol (exact, Racah formula via "
+          "sympy.physics.wigner); 0 unless the four triads satisfy the triangle conditions",
+          listable=False, numeric=False)
+
+
+def _wigner_small_d(j, m1, m2, theta):
+    """Wolfram's d^j_{m1 m2}(theta) = standard Wigner d^j_{m1 m2}(-theta) (WignerD[{1/2, 1/2, -1/2}, t] = Sin[t/2])."""
+    c, s = sp.cos(theta / 2), sp.sin(theta / 2)
+    out = sp.Integer(0)
+    smin = max(0, int(m2 - m1))
+    smax = min(int(j + m2), int(j - m1))
+    pre = sp.sqrt(sp.factorial(j + m1) * sp.factorial(j - m1) * sp.factorial(j + m2) * sp.factorial(j - m2))
+    for k in range(smin, smax + 1):
+        out += (-1) ** k * pre / (sp.factorial(j + m2 - k) * sp.factorial(k) * sp.factorial(m1 - m2 + k)
+                                  * sp.factorial(j - m1 - k)) * c ** (2 * j + m2 - m1 - 2 * k) * s ** (m1 - m2 + 2 * k)
+    return out
+
+
+def _wignerd(spec, *angles):
+    name = "WignerD"
+    if not (is_list(spec) and len(spec.args) == 3):
+        raise Unevaluated() if isinstance(spec, Symbol) else ValueError(f"{name}: expected {{j, m1, m2}}")
+    jv = [sym(x, name) for x in spec.args]
+    if not all(v.is_number for v in jv):
+        raise Unevaluated()
+    j, m1, m2 = (_half_int(v, name, "parameter") for v in jv)
+    if not (j >= 0 and (j - m1).is_Integer and (j - m2).is_Integer):
+        raise Unevaluated()
+    if abs(m1) > j or abs(m2) > j:
+        return 0
+    ang = [sym(a, name) for a in angles]
+    if len(ang) == 1:
+        psi, theta, phi = sp.Integer(0), ang[0], sp.Integer(0)
+    elif len(ang) == 2:
+        psi, theta, phi = sp.Integer(0), ang[0], ang[1]
+    else:
+        psi, theta, phi = ang
+    val = sp.exp(sp.I * m1 * psi + sp.I * m2 * phi) * _wigner_small_d(j, m1, m2, theta)
+    prec = input_precision(list(angles) + list(spec.args))
+    if prec is not None and val.is_number:
+        return R(sp.N(val, 15 if prec == "m" else mpmath.libmp.prec_to_dps(prec)))
+    return R(val)
+
+
+_register("WignerD", (2, 4), _wignerd,
+          "WignerD[{j, m1, m2}, psi, theta, phi] = Exp[I m1 psi + I m2 phi] WignerD[{j, m1, m2}, 0, theta, 0] with "
+          "Wolfram's phase convention (WignerD[{1/2, 1/2, -1/2}, t] = Sin[t/2]); WignerD[{j, m1, m2}, theta, phi] "
+          "and WignerD[{j, m1, m2}, theta] set the leading angles to 0; physical (half-)integer parameters only",
+          listable=False, numeric=False)
