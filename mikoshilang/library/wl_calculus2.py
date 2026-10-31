@@ -4300,3 +4300,424 @@ def _green(op, u, rng, y, *rest):
     if isinstance(u, Symbol):
         return Expr("Function", L(Symbol(x.name), Symbol(yv.name)), G)
     return G
+
+
+# ───────────────────────────── interpolation ─────────────────────────────
+
+def _ip_data(data, fname):
+    """[(node, [f, f', f'', ...]), ...] from the 1-D data forms of InterpolatingPolynomial."""
+    if not is_list(data) or not data.args:
+        raise ValueError(f"{fname}: the data must be a non-empty list")
+    rows = []
+    if not any(is_list(r) for r in data.args):
+        for i, v in enumerate(data.args):
+            rows.append((sp.Integer(i + 1), [SX(v, fname)]))
+        return rows
+    for r in data.args:
+        if not is_list(r) or len(r.args) < 2:
+            raise ValueError(f"{fname}: each data point must be {{x, f}} or {{x, f, df, ...}}")
+        if is_list(r.args[0]):
+            raise NotImplementedError(f"{fname}: multidimensional interpolation is not supported")
+        node = SX(r.args[0], fname)
+        if len(r.args) == 2 and is_list(r.args[1]):
+            vals = [SX(v, fname) for v in r.args[1].args]
+        else:
+            vals = [SX(v, fname) for v in r.args[1:]]
+        if not vals or any(isinstance(v, list) for v in vals):
+            raise ValueError(f"{fname}: invalid derivative data at {r!r}")
+        rows.append((node, vals))
+    nodes = [n for n, _v in rows]
+    for i in range(len(nodes)):
+        for j in range(i):
+            if sp.simplify(nodes[i] - nodes[j]) == 0:
+                raise ValueError(f"{fname}: the abscissae must be distinct")
+    return rows
+
+
+def _hermite_newton(rows):
+    """Nodes z_0..z_{n-1} (with repeats) and the Newton coefficients by confluent divided differences."""
+    z, fv = [], []
+    for node, vals in rows:
+        for _k in range(len(vals)):
+            z.append(node)
+            fv.append(vals)
+    n = len(z)
+    table = [[None] * n for _ in range(n)]
+    for i in range(n):
+        table[i][i] = fv[i][0]
+    for d in range(1, n):
+        for i in range(n - d):
+            j = i + d
+            if z[i] is z[j] or (sp.simplify(z[j] - z[i]) == 0):
+                table[i][j] = fv[i][d] / sp.factorial(d)
+            else:
+                table[i][j] = sp.simplify((table[i + 1][j] - table[i][j - 1]) / (z[j] - z[i]))
+    return z, [table[0][j] for j in range(n)]
+
+
+@fn("InterpolatingPolynomial", area=AREA, status="added",
+    notes="InterpolatingPolynomial[{f1, f2, ...}, x] (nodes 1, 2, ...), [{{x1, f1}, ...}, x] and Hermite data "
+          "{{x1, f1, df1, ...}, ...} or {{x1, {f1, df1, ...}}, ...}: the lowest-degree interpolating polynomial in "
+          "Newton/Horner form by (confluent) divided differences; symbolic nodes and values allowed; "
+          "multidimensional data and the Modulus option raise")
+def _interppoly(data, x, *rest):
+    fname = "InterpolatingPolynomial"
+    rest, _o = _opts(rest, set(), fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    if is_list(x):
+        if len(x.args) != 1:
+            raise NotImplementedError(f"{fname}: multidimensional interpolation is not supported")
+        x = x.args[0]
+    rows = _ip_data(data, fname)
+    z, c = _hermite_newton(rows)
+    xs = x if not isinstance(x, Symbol) else x
+    # Horner form c0 + (x - z0) (c1 + (x - z1) (c2 + ...))
+    acc = out(c[-1])
+    for k in range(len(c) - 2, -1, -1):
+        acc = Expr("Plus", out(c[k]), Expr("Times", Expr("Plus", xs, out(-z[k])), acc))
+    return _ev(acc) if not isinstance(xs, Symbol) or True else acc
+
+
+def _fi_eval(expr, xname, fname):
+    """A float -> complex evaluator for expr in the variable xname."""
+    xs = sp.Symbol(xname)
+    try:
+        e = SX(expr, fname)
+        if e.free_symbols - {xs}:
+            raise ValueError(f"{fname}: the expression has symbolic parameters {sorted(map(str, e.free_symbols - {xs}))}")
+        f = sp.lambdify(xs, e, "mpmath")
+        f(mpmath.mpf("0.123456"))
+        return lambda t: complex(f(mpmath.mpf(t)))
+    except ValueError:
+        raise
+    except Exception:
+        pass
+
+    def g(t):
+        v = _ev(Expr("N", Expr("ReplaceAll", expr, R(Expr("Rule", Symbol(xname), float(t))))))
+        try:
+            return complex(sp.N(K.to_sp(v)))
+        except Exception:
+            raise ValueError(f"{fname}: the expression does not evaluate to a number at {xname} = {t}")
+    return g
+
+
+@fn("FunctionInterpolation", area=AREA, status="added",
+    notes="FunctionInterpolation[expr, {x, xmin, xmax}]: samples expr on a uniform grid (31 points, doubled until "
+          "the piecewise interpolant of InterpolationOrder (default 3) agrees with expr at every midpoint to 1e-7 "
+          "relative, at most 8193 points) and returns an InterpolatingFunction; several variables and region "
+          "specifications raise")
+def _funcinterp(expr, rng, *rest):
+    from .wl_interp import _make, _Piecewise
+    fname = "FunctionInterpolation"
+    rest, o = _opts(rest, {"InterpolationOrder", "InterpolationPoints"}, fname)
+    if rest:
+        raise NotImplementedError(f"{fname}: multivariate interpolation is not supported")
+    if not is_list(rng) or len(rng.args) != 3 or not isinstance(rng.args[0], Symbol):
+        raise ValueError(f"{fname}: the range must be {{x, xmin, xmax}}")
+    a = complex(sp.N(SX(rng.args[1], fname)))
+    b = complex(sp.N(SX(rng.args[2], fname)))
+    if a.imag or b.imag or not (a.real < b.real) or not all(map(math.isfinite, (a.real, b.real))):
+        raise ValueError(f"{fname}: the range must be finite real numbers with xmin < xmax")
+    a, b = a.real, b.real
+    order = _num_opt(o.get("InterpolationOrder", 3), fname, "InterpolationOrder")
+    n = _num_opt(o.get("InterpolationPoints", 31), fname, "InterpolationPoints")
+    if n < 2:
+        raise ValueError(f"{fname}: at least 2 interpolation points are needed")
+    f = _fi_eval(expr, rng.args[0].name, fname)
+    while True:
+        xs = [a + (b - a) * i / (n - 1) for i in range(n)]
+        ys = [f(t) for t in xs]
+        if not all(math.isfinite(abs(y)) for y in ys):
+            raise ValueError(f"{fname}: the expression is not finite on the interval")
+        real = all(abs(y.imag) <= 1e-14 * max(1.0, abs(y)) for y in ys)
+        ys_ = [y.real for y in ys] if real else ys
+        pw = _Piecewise(xs, ys_, order)
+        mids = [(xs[i] + xs[i + 1]) / 2 for i in range(n - 1)]
+        scale = max(1.0, max(abs(y) for y in ys))
+        if all(abs(complex(pw(m)) - f(m)) <= 1e-7 * scale for m in mids):
+            return _make(pw, a, b)
+        if n > 8193:
+            raise NotImplementedError(f"{fname}: the interpolation did not converge (the function is not smooth "
+                                      "enough on the interval)")
+        n = 2 * n - 1
+
+
+# ───────────────────────────── residues ─────────────────────────────
+
+_NONMERO = (sp.log, sp.Abs, sp.re, sp.im, sp.conjugate, sp.arg, sp.asin, sp.acos, sp.atan, sp.acot, sp.asinh,
+            sp.acosh, sp.atanh, sp.LambertW, sp.floor, sp.ceiling, sp.sign, sp.Heaviside, sp.erf, sp.zeta,
+            sp.polylog, sp.loggamma, sp.besselj, sp.bessely, sp.uppergamma, sp.lowergamma, sp.Ei, sp.Si, sp.Ci,
+            sp.li, sp.expint)
+_ENTIRE = (sp.exp, sp.sin, sp.cos, sp.sinh, sp.cosh)
+
+
+def _mero_kind(f, z):
+    """'entire', 'mero' (built from rational operations, entire functions, tan/cot/sec/csc/tanh/.. and Gamma)
+    or None (possibly non-meromorphic: branch points, essential singularities hidden in non-elementary heads)."""
+    entire = True
+    for a in sp.preorder_traversal(f):
+        if not getattr(a, "has", None) or not a.has(z):
+            continue
+        if isinstance(a, sp.Pow):
+            if not (a.exp.is_Integer):
+                if a.exp.has(z) and not a.base.has(z) and a.base.is_positive:
+                    continue     # b^g(z) = exp(g log b)
+                return None
+            if a.exp < 0:
+                entire = False
+        elif isinstance(a, (sp.Add, sp.Mul, sp.Symbol)) or isinstance(a, _ENTIRE):
+            continue
+        elif isinstance(a, (sp.tan, sp.cot, sp.sec, sp.csc, sp.tanh, sp.coth, sp.sech, sp.csch, sp.gamma)):
+            entire = False
+        else:
+            return None
+    if entire:
+        return "entire"
+    return "mero"
+
+
+def _poly_bound(g, z, bound):
+    P = sp.Poly(g, z)
+    return sum(abs(complex(sp.N(c))) * bound ** k for (k,), c in P.terms())
+
+
+def _zero_families(fac, z, bound, fname):
+    """Exact zeros with |z| <= bound of one multiplicative factor of a denominator."""
+    if not fac.has(z):
+        return []
+    if fac.is_polynomial(z):
+        P = sp.Poly(fac, z)
+        sols = sp.roots(P, z)
+        if sum(sols.values()) != P.degree():
+            if P.free_symbols - {z}:
+                raise NotImplementedError(f"{fname}: the poles could not be found exactly")
+            return list(P.all_roots()) if P.is_irreducible else [r for q, _m in sp.factor_list(P)[1]
+                                                                  for r in sp.Poly(q, z).all_roots()]
+        return list(sols)
+    if isinstance(fac, sp.Pow) and fac.exp.is_Integer and fac.exp > 0:
+        return _zero_families(fac.base, z, bound, fname)
+    if isinstance(fac, sp.exp):
+        return []
+    zeros = {sp.sin: (0, sp.pi), sp.cos: (sp.pi / 2, sp.pi), sp.sinh: (0, sp.I * sp.pi),
+             sp.cosh: (sp.I * sp.pi / 2, sp.I * sp.pi)}
+    for h, (off, per) in zeros.items():
+        if isinstance(fac, h):
+            g = fac.args[0]
+            if not g.is_polynomial(z):
+                raise NotImplementedError(f"{fname}: the poles could not be enumerated")
+            if bound == float("inf"):
+                raise NotImplementedError(f"{fname}: the function has infinitely many poles")
+            M = _poly_bound(g, z, bound)
+            kmax = int(math.ceil(M / abs(complex(sp.N(per))))) + 1
+            res = []
+            for k in range(-kmax, kmax + 1):
+                res.extend(_zero_families(sp.expand(g - off - k * per), z, bound, fname))
+            return res
+    if isinstance(fac, sp.Add) and fac.is_polynomial(z) is False:
+        try:
+            ss = sp.solveset(fac, z, sp.S.Complexes)
+        except Exception:
+            ss = None
+        if isinstance(ss, sp.FiniteSet):
+            return list(ss.args)
+    raise NotImplementedError(f"{fname}: the poles could not be found")
+
+
+def _poles_in(f, z, inside, bound, fname):
+    """Poles of a meromorphic f with |z| <= bound for which inside(complex) is True (exact values)."""
+    g = f.rewrite(sp.sin) if f.has(sp.tan, sp.cot, sp.sec, sp.csc) else f
+    if g.has(sp.tanh, sp.coth, sp.sech, sp.csch):
+        g = g.rewrite(sp.sinh)
+    g = sp.together(g)
+    num, den = sp.fraction(g)
+    cands = []
+    for a in f.atoms(sp.gamma):
+        if not a.has(z):
+            continue
+        arg = a.args[0]
+        if not arg.is_polynomial(z):
+            raise NotImplementedError(f"{fname}: Gamma of a non-polynomial argument is not supported")
+        if bound == float("inf"):
+            raise NotImplementedError(f"{fname}: the function has infinitely many poles")
+        M = _poly_bound(arg, z, bound)
+        for n in range(0, int(math.ceil(M)) + 2):
+            cands.extend(_zero_families(sp.expand(arg + n), z, bound, fname))
+    for fac in sp.Mul.make_args(sp.factor_terms(den)):
+        cands.extend(_zero_families(fac, z, bound, fname))
+    res = []
+    for c in cands:
+        if c.free_symbols:
+            raise NotImplementedError(f"{fname}: the location of the poles depends on symbolic parameters")
+        cv = complex(sp.N(c, 30))
+        if abs(cv) > bound + 1e-9:
+            continue
+        flag = inside(cv)
+        if flag is None and getattr(inside, "exact", None):
+            flag = inside.exact(c)
+        if flag is None:
+            if sp.limit(f * (z - c), z, c) == 0 if False else _is_pole(f, z, c):
+                raise NotImplementedError(f"{fname}: a pole lies on the contour")
+            continue
+        if flag and not any(abs(complex(sp.N(c - r, 30))) < 1e-20 for r in res):
+            res.append(c)
+    return res
+
+
+def _is_pole(f, z, c):
+    try:
+        v = sp.limit(f, z, c)
+        return not v.is_finite
+    except Exception:
+        return True
+
+
+def _residue(f, z, p, fname):
+    try:
+        r = sp.residue(f, z, p)
+    except Exception:
+        r = None
+    if r is None or r.has(sp.O) or r.has(sp.nan) or r.has(sp.zoo):
+        raise NotImplementedError(f"{fname}: the residue at {p} could not be computed")
+    return r
+
+
+def _residue_sum_all(f, z, fname):
+    kind = _mero_kind(f, z)
+    if kind is None:
+        raise NotImplementedError(f"{fname}: the function is not known to be meromorphic in the plane")
+    if kind == "entire":
+        return sp.Integer(0)
+    num, den = sp.fraction(sp.together(f))
+    if num.is_polynomial(z) and den.is_polynomial(z):
+        # sum of finite residues = -Res_{z=oo} f = Res_{w=0} f(1/w)/w^2
+        w = sp.Dummy("w")
+        r = sp.residue(sp.together(f.subs(z, 1 / w) / w ** 2), w, 0)
+        return sp.simplify(r)
+    if den.is_polynomial(z) and _mero_kind(num, z) == "entire":
+        poles = _poles_in(f, z, lambda v: True, float("inf"), fname)
+        return sp.simplify(sp.Add(*[_residue(f, z, p, fname) for p in poles]))
+    raise NotImplementedError(f"{fname}: the function may have infinitely many poles; give a bounded constraint "
+                              "such as Abs[z] < r")
+
+
+def _log_cuts_avoid(f, z, pred, bound, fname):
+    """Replace Log[g] (g polynomial) by placeholders when the branch cut {g <= 0} misses the region; else raise."""
+    reps = {}
+    for a in sorted(f.atoms(sp.log), key=sp.default_sort_key):
+        if not a.has(z):
+            continue
+        g = a.args[0]
+        if not g.is_polynomial(z) or (g.free_symbols - {z}):
+            raise NotImplementedError(f"{fname}: the function is not known to be meromorphic in the region")
+        P = sp.Poly(g, z)
+        coeffs = [complex(sp.N(c)) for c in P.all_coeffs()]
+        smax = (_poly_bound(g, z, bound) if bound not in (None, float("inf")) else 1e6) * 2 + 10
+        import numpy as _np
+        for s_ in _np.concatenate([_np.linspace(0, 1, 201), _np.geomspace(1, smax, 400)]):
+            cc = list(coeffs)
+            cc[-1] += s_
+            for r in _np.roots(cc) if len(cc) > 1 else []:
+                if pred(complex(r)) is True:
+                    raise NotImplementedError(f"{fname}: the branch cut of {a} meets the region")
+        reps[a] = sp.Dummy("L")
+    return reps
+
+
+_RELS = {"Less": sp.Lt, "LessEqual": sp.Le, "Greater": sp.Gt, "GreaterEqual": sp.Ge, "Equal": sp.Eq,
+         "Unequal": sp.Ne}
+
+
+def _rel_sp(c, fname):
+    """A MikoshiLang constraint (relations, And, Or, Not, chained inequalities) as a SymPy boolean."""
+    if _head(c) and c.head in _RELS:
+        xs = [SX(a, fname) for a in c.args]
+        if len(xs) < 2:
+            raise ValueError(f"{fname}: invalid constraint {c!r}")
+        return sp.And(*[_RELS[c.head](xs[i], xs[i + 1]) for i in range(len(xs) - 1)])
+    if _head(c, "And"):
+        return sp.And(*[_rel_sp(a, fname) for a in c.args])
+    if _head(c, "Or"):
+        return sp.Or(*[_rel_sp(a, fname) for a in c.args])
+    if _head(c, "Not"):
+        return sp.Not(_rel_sp(c.args[0], fname))
+    if _head(c, "Inequality"):
+        a = c.args
+        parts = []
+        for i in range(0, len(a) - 2, 2):
+            parts.append(_RELS[a[i + 1].name](SX(a[i], fname), SX(a[i + 2], fname)))
+        return sp.And(*parts)
+    raise ValueError(f"{fname}: {c!r} is not a constraint")
+
+
+def _cons_pred(cons, z, fname):
+    """(predicate on complex -> True/False/None (boundary), bound on |z| or None) for a constraint."""
+    zr = sp.Symbol(z.name + "__re", real=True)
+    zi = sp.Symbol(z.name + "__im", real=True)
+    c = _rel_sp(cons, fname).subs(z, zr + sp.I * zi)
+    c = sp.simplify(c.replace(sp.Abs, lambda a: sp.sqrt(sp.re(a) ** 2 + sp.im(a) ** 2)))
+    if c.free_symbols - {zr, zi}:
+        raise NotImplementedError(f"{fname}: constraints with symbolic parameters are not supported")
+    f = sp.lambdify((zr, zi), c, "math")
+    rels = [a for a in sp.preorder_traversal(c) if isinstance(a, sp.core.relational.Relational)]
+    lhs = [sp.lambdify((zr, zi), r.lhs - r.rhs, "math") for r in rels]
+
+    def pred(v):
+        try:
+            for g in lhs:
+                if abs(g(v.real, v.imag)) < 1e-12:
+                    return None
+            return bool(f(v.real, v.imag))
+        except Exception:
+            return None
+    def exact(pt):
+        try:
+            v = sp.simplify(c.subs({zr: sp.re(pt), zi: sp.im(pt)}))
+        except Exception:
+            return None
+        return True if v is sp.true else (False if v is sp.false else None)
+    pred.exact = exact
+    bound = None
+    if isinstance(cons, Expr) and cons.head in ("Less", "LessEqual") and _head(cons.args[0], "Abs"):
+        try:
+            bound = float(sp.N(SX(cons.args[1], fname)))
+        except Exception:
+            bound = None
+    return pred, bound
+
+
+@fn("ResidueSum", area=AREA, status="added",
+    notes="ResidueSum[f, z]: the sum of the residues at all finite poles (rational f: -Res at infinity; entire f: "
+          "0; other functions with infinitely many poles raise); ResidueSum[{f, cons}, z]: the residues at the "
+          "poles satisfying cons (bounded constraints Abs[z - c] < r, or any constraint for rational f), with "
+          "poles found exactly (polynomial roots, periodic families enumerated, Gamma poles); non-meromorphic "
+          "functions, poles on the constraint boundary and symbolic pole locations raise")
+def _residuesum(fc, z, *rest):
+    fname = "ResidueSum"
+    rest, _o = _opts(rest, {"GenerateConditions", "PerformanceGoal"}, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    zv = _svar(z, fname)
+    if is_list(fc):
+        if len(fc.args) != 2:
+            raise ValueError(f"{fname}: expected {{f, cons}}")
+        f = SX(fc.args[0], fname)
+        pred, bound = _cons_pred(fc.args[1], zv, fname)
+        reps = _log_cuts_avoid(f, zv, pred, bound, fname)
+        fm = f.xreplace(reps)
+        kind = _mero_kind(fm, zv)
+        if kind is None:
+            raise NotImplementedError(f"{fname}: the function is not known to be meromorphic in the region")
+        if kind == "entire":
+            return 0
+        num, den = sp.fraction(sp.together(fm))
+        finite = den.is_polynomial(zv) and _mero_kind(num, zv) == "entire" and not fm.has(sp.gamma)
+        if bound is None and not finite:
+            raise NotImplementedError(f"{fname}: the function has infinitely many poles; the constraint must bound "
+                                      "the region (Abs[z] < r)")
+        poles = _poles_in(fm, zv, pred, bound if bound is not None else float("inf"), fname)
+        tot = sp.Add(*[_residue(f, zv, p, fname) for p in poles])
+        return out(sp.simplify(tot))
+    f = SX(fc, fname)
+    return out(_residue_sum_all(f, zv, fname))
