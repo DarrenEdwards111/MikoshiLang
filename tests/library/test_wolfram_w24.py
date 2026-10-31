@@ -895,12 +895,195 @@ RANDOM = [
     ("RandomGraph[BernoulliGraphDistribution[3, 1], -1]", Raises(ValueError)),
 ]
 
-NX_HEADS = ("FindIndependentEdgeSet", "FindEdgeCover", "IsomorphicSubgraphQ", "FindSubgraphIsomorphism",
+# ── W24 resume: radiality, degree connectivity, link rank, k-components, face colouring, cycle matrix ──
+_DG = "{1 -> 3, 2 -> 1, 3 -> 6, 4 -> 6, 1 -> 5, 5 -> 4, 6 -> 1}"   # Wolfram doc example graph (VertexList 1,3,2,6,4,5)
+
+
+def _setlist(want):
+    """Components compared as a set of vertex sets (Wolfram's component order is not documented)."""
+    w = sorted(sorted(c) for c in want)
+    return Pred(lambda g: sorted(sorted(py(c)) for c in g.args) == w, f"components {w}")
+
+
+def _proper_faces(src, k):
+    """Face colouring with exactly k colours, proper on the faces of PlanarFaceList (edge-sharing faces differ)."""
+    def ok(g):
+        cols = py(g)
+        faces = py(ev(f"PlanarFaceList[{src}]"))
+        if len(cols) != len(faces) or len(set(cols)) != k:
+            return False
+        sides = {}
+        for fi, f in enumerate(faces):
+            for t in range(len(f)):
+                sides.setdefault(frozenset((f[t], f[(t + 1) % len(f)])), []).append(fi)
+        return all(cols[a] != cols[b] for fs in sides.values() for a in fs for b in fs if a != b)
+    return Pred(ok, f"proper face colouring with {k} colours")
+
+
+def _cycle_basis(src, rows):
+    """EdgeCycleMatrix rows: the right count, each a closed cycle (+-1 net balance for directed edges), full rank."""
+    def ok(g):
+        m = py(g)
+        el = py(ev(f"EdgeList[{src}]"))
+        if len(m) != rows or any(len(r) != len(el) for r in m):
+            return False
+        for r in m:
+            bal = {}
+            for x, (kind, a, b) in zip(r, el):
+                if x == 0:
+                    continue
+                if kind == "D":
+                    bal[a] = bal.get(a, 0) + x
+                    bal[b] = bal.get(b, 0) - x
+                else:
+                    bal[a] = bal.get(a, 0) + 1
+                    bal[b] = bal.get(b, 0) + 1
+            if any(v % 2 for v in bal.values()):
+                return False
+        return not m or sp.Matrix(m).rank() == rows
+    return Pred(ok, f"cycle basis with {rows} rows")
+
+
+W24B = [
+    # RadialityCentrality: Wolfram documentation values for the rules example (Out is the default) and "In"
+    (f"RadialityCentrality[{_DG}]", NearList([0.7, 0.5, 0.7, 0.6, 0.55, 0.5])),
+    (f"RadialityCentrality[{_DG}, \"Out\"]", NearList([0.7, 0.5, 0.7, 0.6, 0.55, 0.5])),
+    (f"RadialityCentrality[{_DG}, \"In\"]", NearList([0.8, 0.65, 0.0, 0.8, 0.6, 0.7])),
+    # doc identity: Mean[Drop[(diam + 1 - GraphDistanceMatrix)[[i]], {i}]]/diam; star K_{1,3}: {1, 2/3, 2/3, 2/3}
+    ("RadialityCentrality[StarGraph[4]]", NearList([1, 2 / 3, 2 / 3, 2 / 3])),
+    ("RadialityCentrality[CycleGraph[6]]", NearList([11 / 15] * 6)),   # (3 + 3 + 2 + 2 + 1)/(3 * 5), diameter 3
+    ("With[{w = PetersenGraph[]}, RadialityCentrality[w] == Table[Mean[Drop[(GraphDiameter[w] + 1 - "
+     "GraphDistanceMatrix[w])[[i]], {i}]]/GraphDiameter[w], {i, 10}]]", True),   # Check: documented identity
+    ("RadialityCentrality[Graph[{1}, {}]]", NearList([0])),                         # isolated vertex: 0
+    ("RadialityCentrality[Graph[{1 <-> 2, 3 <-> 4, 4 <-> 5}]]", Raises(NotImplementedError)),  # diameters differ
+    ("RadialityCentrality[CycleGraph[4], \"Up\"]", Raises(ValueError)),
+    ("RadialityCentrality[7]", Raises(TypeError)),
+    ("RadialityCentrality[rgw24]", "RadialityCentrality[rgw24]"),
+    # MeanDegreeConnectivity: Wolfram documentation (MeanNeighborDegree and MeanDegreeConnectivity pages)
+    ("MeanDegreeConnectivity[GridGraph[{3, 4, 5}]]", "{0, 0, 0, 4, 17/4, 262/55, 97/18}"),
+    ("MeanDegreeConnectivity[CompleteGraph[{2, 4, 3}]][[8]]", "38/7"),
+    ("MeanDegreeConnectivity[CycleGraph[5]]", "{0, 0, 2}"),
+    ("MeanDegreeConnectivity[StarGraph[4]]", "{0, 3, 0, 1}"),
+    ("MeanDegreeConnectivity[Graph[{1, 2, 3}, {1 <-> 2}]]", "{0, 1}"),
+    ("With[{w = PetersenGraph[]}, Last[MeanDegreeConnectivity[w]] == Mean[MeanNeighborDegree[w]]]", True),  # Check
+    ("MeanDegreeConnectivity[Graph[{1 -> 2, 2 -> 3}]]", Raises(NotImplementedError)),
+    ("MeanDegreeConnectivity[CycleGraph[4], \"In\"]", Raises(NotImplementedError)),
+    ("MeanDegreeConnectivity[CycleGraph[4], \"Up\"]", Raises(ValueError)),
+    ("MeanDegreeConnectivity[{1, 2}]", Raises(TypeError)),
+    ("MeanDegreeConnectivity[mdw24]", "MeanDegreeConnectivity[mdw24]"),
+    # LinkRankCentrality: Wolfram documentation values (rules example, alpha = 0.5)
+    (f"LinkRankCentrality[{_DG}, 0.5]", NearList([0.12069, 0.0833333, 0.143678, 0.155172, 0.12069, 0.143678,
+                                                  0.232759], 1e-5)),
+    (f"LinkRankCentrality[{_DG}, 0.5, 2]", NearList([0.12069, 0.0833333, 0.143678, 0.155172, 0.12069, 0.143678,
+                                                     0.232759], 1e-5)),   # scalar beta = uniform beta
+    ("LinkRankCentrality[CycleGraph[8, DirectedEdges -> True], 1/2, WorkingPrecision -> Infinity]",
+     "{1/8, 1/8, 1/8, 1/8, 1/8, 1/8, 1/8, 1/8}"),   # symmetric: equal ranks
+    ("Total[LinkRankCentrality[Graph[{1 -> 2, 2 -> 1, 2 -> 3, 3 -> 1}], 1/3, WorkingPrecision -> Infinity]]", 1),
+    # alpha = 0: c = beta normalised, link rank of u -> v is beta(u)/(Total[beta] outdeg(u))
+    ("LinkRankCentrality[Graph[{1 -> 2, 1 -> 3, 2 -> 1, 3 -> 1}], 0, {1, 1, 2}, WorkingPrecision -> Infinity]",
+     "{1/8, 1/8, 1/4, 1/2}"),
+    ("LinkRankCentrality[CycleGraph[4], 0.5]", Raises(NotImplementedError)),          # undirected
+    ("LinkRankCentrality[Graph[{1 -> 2}], 0.5]", Raises(NotImplementedError)),        # dangling vertex
+    ("LinkRankCentrality[Graph[{1 -> 2, 2 -> 1}], 1.5]", Raises(ValueError)),
+    ("LinkRankCentrality[Graph[{1 -> 2, 2 -> 1}], 0.5, WorkingPrecision -> 30]", Raises(NotImplementedError)),
+    ("LinkRankCentrality[\"g\", 0.5]", Raises(TypeError)),
+    ("LinkRankCentrality[Graph[{1 -> 2, 2 -> 1}], alw24]", "LinkRankCentrality[Graph[{1, 2}, {1 -> 2, 2 -> 1}], alw24]"),
+    # KEdgeConnectedComponents: Wolfram documentation (rules example, k = 1); bridges split 2-edge components
+    ("KEdgeConnectedComponents[{1 -> 2, 1 -> 5, 2 -> 3, 3 -> 4, 4 -> 5, 6 -> 3, 4 -> 6}, 1]",
+     _setlist([[5], [3, 4, 6], [2], [1]])),
+    ("KEdgeConnectedComponents[Graph[{1 <-> 2, 2 <-> 3, 3 <-> 1, 3 <-> 4, 4 <-> 5, 5 <-> 6, 6 <-> 4}], 2]",
+     _setlist([[1, 2, 3], [4, 5, 6]])),
+    ("KEdgeConnectedComponents[Graph[{1 <-> 2, 2 <-> 3, 3 <-> 1, 3 <-> 4, 4 <-> 5, 5 <-> 6, 6 <-> 4}], 2, {5}]",
+     _setlist([[4, 5, 6]])),
+    ("KEdgeConnectedComponents[HypercubeGraph[3], 3]", _setlist([list(range(1, 9))])),   # Q3 is 3-edge-connected
+    ("KEdgeConnectedComponents[HypercubeGraph[3], 4]", "{}"),
+    ("KEdgeConnectedComponents[GraphUnion[CompleteGraph[4], Graph[{4 <-> 5}]], 3]", _setlist([[1, 2, 3, 4]])),
+    ("KEdgeConnectedComponents[Graph[{1 -> 2, 2 -> 1, 2 -> 3}], 1]", _setlist([[1, 2], [3]])),
+    # the two documented definitions disagree (a, b joined by three 2-paths): raise rather than guess
+    ("KEdgeConnectedComponents[Graph[{a <-> x, x <-> b, a <-> y, y <-> b, a <-> z, z <-> b}], 3]",
+     Raises(NotImplementedError)),
+    ("KEdgeConnectedComponents[CycleGraph[4], 0]", Raises(ValueError)),
+    ("KEdgeConnectedComponents[CycleGraph[4], 1, _?OddQ]", Raises(NotImplementedError)),
+    ("KEdgeConnectedComponents[3, 1]", Raises(TypeError)),
+    ("KEdgeConnectedComponents[CycleGraph[4], kw24]", "KEdgeConnectedComponents[CycleGraph[4], kw24]"),
+    # KVertexConnectedComponents: blocks (a bridge is a 2-vertex block, as in Wolfram's {{...}, {6, 7}} example)
+    ("KVertexConnectedComponents[Graph[{1 <-> 2, 2 <-> 3, 3 <-> 1, 3 <-> 4, 4 <-> 5, 5 <-> 3, 5 <-> 6}], 2]",
+     _setlist([[1, 2, 3], [3, 4, 5], [5, 6]])),
+    ("KVertexConnectedComponents[PathGraph[{1, 2, 3, 4}], 2]", _setlist([[1, 2], [2, 3], [3, 4]])),
+    ("KVertexConnectedComponents[PetersenGraph[], 2]", _setlist([list(range(1, 11))])),
+    ("KVertexConnectedComponents[PathGraph[{1, 2, 3, 4}], 2, {1}]", _setlist([[1, 2]])),
+    ("KVertexConnectedComponents[Graph[{1 <-> 2, 3 <-> 4}], 1]", _setlist([[1, 2], [3, 4]])),
+    ("KVertexConnectedComponents[CycleGraph[5], 3]", Raises(NotImplementedError)),
+    ("KVertexConnectedComponents[Graph[{1 -> 2, 2 -> 1}], 2]", Raises(NotImplementedError)),
+    ("KVertexConnectedComponents[CycleGraph[5], -1]", Raises(ValueError)),
+    ("KVertexConnectedComponents[\"g\", 2]", Raises(TypeError)),
+    # FindPlanarColoring: faces of a wheel need 4 colours (wheels are self-dual), the cube's faces 3 (octahedron)
+    ("FindPlanarColoring[WheelGraph[6]]", _proper_faces("WheelGraph[6]", 4)),
+    ("FindPlanarColoring[{1 -> 2, 1 -> 3, 1 -> 4, 2 -> 3, 2 -> 4}]", "{1, 2, 3}"),   # Wolfram doc: 3 faces, 3 colours
+    ("FindPlanarColoring[HypercubeGraph[3]]", _proper_faces("HypercubeGraph[3]", 3)),
+    ("FindPlanarColoring[CycleGraph[5]]", "{1, 2}"),                                # inside and outside
+    ("FindPlanarColoring[CycleGraph[5], {Red, Blue}]", "{Red, Blue}"),
+    ("FindPlanarColoring[CycleGraph[5], 3]", "{1, 2}"),
+    ("FindPlanarColoring[WheelGraph[6], {a, b, c}]", Raises(ValueError)),             # 4 colours needed
+    ("FindPlanarColoring[CompleteGraph[5]]", Raises(ValueError)),                     # not planar
+    ("FindPlanarColoring[PathGraph[{1, 2, 3}]]", Raises(NotImplementedError)),        # bridge
+    ("FindPlanarColoring[5]", Raises(TypeError)),
+    # EdgeCycleMatrix: rank m - n + c rows of closed cycles (Wolfram doc: WheelGraph[4] has 3 rows, GridGraph[{3, 3}] 4)
+    ("EdgeCycleMatrix[WheelGraph[4]]", _cycle_basis("WheelGraph[4]", 3)),
+    ("EdgeCycleMatrix[GridGraph[{3, 3}]]", _cycle_basis("GridGraph[{3, 3}]", 4)),
+    ("EdgeCycleMatrix[PetersenGraph[]]", _cycle_basis("PetersenGraph[]", 6)),
+    ("EdgeCycleMatrix[CycleGraph[4]]", "{{1, 1, 1, 1}}"),
+    ("EdgeCycleMatrix[Graph[{1 -> 2, 2 -> 3, 3 -> 1}]]", "{{1, 1, 1}}"),
+    ("EdgeCycleMatrix[Graph[{1 -> 2, 2 -> 3, 1 -> 3}]]", "{{1, 1, -1}}"),             # 1 -> 3 traversed backwards
+    ("EdgeCycleMatrix[Graph[{1 <-> 2, 1 <-> 2, 2 <-> 2}]]", _cycle_basis("Graph[{1 <-> 2, 1 <-> 2, 2 <-> 2}]", 2)),
+    ("EdgeCycleMatrix[PathGraph[{1, 2, 3}]]", "{}"),
+    ("EdgeCycleMatrix[{1, 2}]", Raises(TypeError)),
+    ("EdgeCycleMatrix[ecw24]", "EdgeCycleMatrix[ecw24]"),
+    # GraphEmbedding: stored VertexCoordinates (list and rule forms); layouts are the graphics batch
+    ("GraphEmbedding[Graph[{1 <-> 2, 2 <-> 3}, VertexCoordinates -> {{0, 0}, {1, 0}, {1, 1}}]]",
+     "{{0, 0}, {1, 0}, {1, 1}}"),
+    ("GraphEmbedding[Graph[{1 <-> 2}, VertexCoordinates -> {2 -> {5, 6}, 1 -> {3, 4}}]]", "{{3, 4}, {5, 6}}"),
+    ("GraphEmbedding[Graph[{a <-> b}, VertexCoordinates -> {{0, 1/2}, {Sqrt[2], 0}}]]", "{{0, 1/2}, {Sqrt[2], 0}}"),
+    ("GraphEmbedding[CycleGraph[3]]", Raises(NotImplementedError)),
+    ("GraphEmbedding[Graph[{1 <-> 2}, VertexCoordinates -> {{0, 0}, {1, 0}}], \"SpringEmbedding\"]",
+     Raises(NotImplementedError)),
+    ("GraphEmbedding[Graph[{1 <-> 2}, VertexCoordinates -> {{0, 0}, {1, x}}]]", Raises(ValueError)),
+    ("GraphEmbedding[1]", Raises(TypeError)),
+    # TaggedEdgeStyle: inert presentation option kept on the graph
+    ("AnnotationValue[Graph[{1 <-> 2}, TaggedEdgeStyle -> Red], TaggedEdgeStyle]", "Red"),
+    ("MemberQ[AnnotationKeys[Graph[{1 <-> 2}, TaggedEdgeStyle -> Red]], TaggedEdgeStyle]", True),
+    ("EdgeList[Graph[{1 <-> 2}, TaggedEdgeStyle -> {1 -> Blue}]]", "{UndirectedEdge[1, 2]}"),
+]
+
+if HAVE_NX:
+    import networkx as _nxw
+
+    def _nx_graph(edges, n):
+        G = _nxw.Graph()
+        G.add_nodes_from(range(1, n + 1))
+        G.add_edges_from(edges)
+        return G
+
+    _pet = _nxw.petersen_graph()
+    _grid = _nxw.grid_2d_graph(3, 4)
+    W24B += [
+        # networkx references (independent of MikoshiLang)
+        ("MeanDegreeConnectivity[GridGraph[{3, 4}]]",
+         NearList([0] + [_nxw.average_degree_connectivity(_grid).get(k, 0) for k in range(1, 5)])),
+        ("KVertexConnectedComponents[Graph[{1 <-> 2, 2 <-> 3, 3 <-> 1, 3 <-> 4, 4 <-> 5, 5 <-> 6, 6 <-> 4, 6 <-> 7}], 2]",
+         _setlist([sorted(c) for c in _nxw.biconnected_components(_nx_graph(
+             [(1, 2), (2, 3), (3, 1), (3, 4), (4, 5), (5, 6), (6, 4), (6, 7)], 7))])),
+        ("KEdgeConnectedComponents[Graph[{1 <-> 2, 2 <-> 3, 3 <-> 1, 3 <-> 4, 4 <-> 5, 5 <-> 6, 6 <-> 4, 6 <-> 7}], 2]",
+         _setlist([sorted(c) for c in _nxw.k_edge_subgraphs(_nx_graph(
+             [(1, 2), (2, 3), (3, 1), (3, 4), (4, 5), (5, 6), (6, 4), (6, 7)], 7), 2) if len(c) > 1])),
+    ]
+
+NX_HEADS = ("FindPlanarColoring", "FindIndependentEdgeSet", "FindEdgeCover", "IsomorphicSubgraphQ", "FindSubgraphIsomorphism",
             "FindIsomorphicSubgraph", "GraphAutomorphismGroup", "VertexTransitiveGraphQ", "EdgeTransitiveGraphQ",
             "PlanarFaceList", "DualPlanarGraph", "PlanarGraph", "IsomorphicGraphQ")
 
 CASES = (ANNOTATIONS + OPTIONS + CONSTRUCTIONS + EDITING + COMPONENTS + MEASURES + MEASURES_NX + COLOURING + KSETS
-         + FLOWS + SYMMETRY + POLYS + PLANAR + SPF + RANDOM)
+         + FLOWS + SYMMETRY + POLYS + PLANAR + SPF + RANDOM + W24B)
 if not HAVE_NX:
     # NetworkX-backed heads (and iso() predicates, which use IsomorphicGraphQ) need the optional dependency
     CASES = [c for c in CASES if not any(h in c[0] for h in NX_HEADS)
