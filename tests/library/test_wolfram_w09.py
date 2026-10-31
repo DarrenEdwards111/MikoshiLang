@@ -56,7 +56,7 @@ FINITE_FIELDS = [
     ("FiniteField[19, 3][1] == 1", "True"),
     ("FiniteField[19, 3][2] != 3", "True"),
     ("FiniteField[389, 2][123] - FiniteField[389, 4][123]", Raises()),
-    ("With[{F = FiniteField[11, 3]}, {a, b} = {F[123], F[456]}; (a + b)^11 == a^11 + b^11]", "True"),
+    ("With[{F = FiniteField[11, 3]}, Module[{a, b}, {a, b} = {F[123], F[456]}; (a + b)^11 == a^11 + b^11]]", "True"),
     ("With[{F = FiniteField[11, 3]}, F[{123, 234, 345}] == 123 + 234 F[{0, 1}] + 345 F[{0, 1}]^2]", "True"),
     ("With[{F = FiniteField[109, 5]}, Information[F, \"FieldIrreducible\"][F[{0, 1}]]]", FFE(109, 5, [])),
     ("With[{F = FiniteField[7, 3, \"Exponential\"]}, And @@ Table[F[i] == F[2]^(i - 1), {i, 342}]]", "True"),
