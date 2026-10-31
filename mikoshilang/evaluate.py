@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Any, Dict, Set
 from .expr import Expr, Symbol
 from .rules import SIMPLIFICATION_RULES, replace
+from .symbol_values import SYMBOL_VALUES
+from .interop import PYFUNCS_KEY, UNSUPPORTED_EXTERNAL
 
 # The reviewed function library (mikoshilang.library) replaces the legacy
 # extended/extended2/extended3/visualization rule tables, which are no longer
@@ -220,6 +222,9 @@ def _evaluate_body(expr, depth: int) -> Any:
         own = st.own
         if expr.name in own:
             return evaluate(own[expr.name], depth + 1)
+        sv = SYMBOL_VALUES.get(expr.name)
+        if sv is not None:                                   # built-in symbol values (Red -> RGBColor[1, 0, 0])
+            return sv
         if expr.name == "Null":
             return None
         if st.ext and STUB_HOOK is not None and expr.name in st.ext.get("Stub", ()):
@@ -408,12 +413,38 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
 
     if not isinstance(head, str):
         # 8b. Associations as functions, Key[k][assoc], compositions and operator forms (Select[crit][list])
+        if isinstance(head, Expr) and head.head == "PythonFunction":
+            from .interop import apply_python_function
+            from .library.core import Unevaluated as _Uneval
+            try:
+                return apply_python_function(head, new_args)
+            except _Uneval:
+                return new_expr
         if isinstance(head, Expr):
             from .kernel_lists import apply_compound_head
             r = apply_compound_head(head, new_args, ev)
             if r is not kernel.UNHANDLED:
                 return r
         return new_expr
+
+    # 9a. Session-local typed Python functions (Session.function); external code strings raise
+    st = kernel.state()
+    if st.ext.get(PYFUNCS_KEY):
+        from .interop import lookup, call_registered
+        info = lookup(st, head)
+        if info is not None:
+            from .library.core import Unevaluated as _Uneval
+            try:
+                result = call_registered(info, new_expr.args)
+            except _Uneval:
+                return new_expr
+            if isinstance(result, Expr) and result != new_expr:
+                _supersede(chain)
+                result = evaluate(result, depth + 1)
+            return result
+    if head in UNSUPPORTED_EXTERNAL:
+        from .interop import reject_external
+        reject_external(head)
 
     # 9. Reviewed function library
     result = replace(new_expr, SIMPLIFICATION_RULES)
