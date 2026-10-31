@@ -230,6 +230,7 @@ def conway(p, n):
 class Field:
     def __init__(self, p, d, f, rep, expr):
         self.p, self.d, self._f, self.rep, self.expr = p, d, f, rep, expr
+        self.default = f is None
         self.q = p ** d
         self._logs = None
 
@@ -248,7 +249,7 @@ class Field:
         return [(c * inv) % self.p for c in f]
 
     def key(self):
-        if self._f is None and self.d == 1:
+        if self.default and self.d == 1:
             return (self.p, 1)
         return (self.p, tuple(self.m))
 
@@ -463,14 +464,19 @@ def data(x):
 
 def _coerce_rational(v, p):
     """Integer/rational v modulo p, or None for non-rationals; raises for denominators divisible by p."""
+    if isinstance(v, bool):
+        return None
     if _intq(v):
         return int(v) % p
-    if isinstance(v, Expr) and v.head == "Rational" and len(v.args) == 2:
-        n, dd = int(v.args[0]), int(v.args[1])
-        if dd % p == 0:
-            raise ValueError(f"FiniteFieldElement: the rational number {n}/{dd} is not valid modulo {p}")
-        return n * pow(dd, -1, p) % p
-    return None
+    if not isinstance(v, Expr) or v.head not in ("Rational", "Times", "Power"):
+        return None
+    n = NT.number_of(v)
+    if not isinstance(n, sp.Rational):
+        return None
+    num, den = int(n.p), int(n.q)
+    if den % p == 0:
+        raise ValueError(f"FiniteFieldElement: the rational number {num}/{den} is not valid modulo {p}")
+    return num * pow(den, -1, p) % p
 
 
 def _element_from(F, spec):
@@ -508,6 +514,8 @@ def _ffe(ff, spec):
         if K.same(new, Expr(FFE, ff, spec)):
             raise Unevaluated()
         return new
+    if not _intq(spec):
+        raise Unevaluated()
     return _element_from(F, spec)
 
 
@@ -548,6 +556,8 @@ def _ff_call(head, args, ev_):
     a = args[0]
     if isinstance(a, str) or (is_list(a) and a.args and all(isinstance(s, str) for s in a.args)):
         return _props(F, a)
+    if not (_intq(a) or is_list(a)):
+        return UNH
     return _element_from(F, a)
 
 
@@ -647,6 +657,8 @@ def _ff_arith(expr, ev_):
     h = expr.head
     args = list(expr.args)
     ffs = [x for x in args if is_ffe(x)]
+    if not ffs and h == "Plus":
+        ffs = [f for t in args if isinstance(t, Expr) and t.head == "Times" for f in t.args if is_ffe(f)]
     if not ffs:
         return UNH
     F = field_of(ffs[0].args[0])
@@ -660,8 +672,9 @@ def _ff_arith(expr, ev_):
         e = args[1]
         if _intq(e):
             return make(F, F.pow(cs, int(e)))
-        if isinstance(e, Expr) and e.head == "Rational":
-            r = _rat_power(F, cs, int(e.args[0]), int(e.args[1]))
+        en = NT.number_of(e) if isinstance(e, Expr) else (e if isinstance(e, sp.Rational) else None)
+        if isinstance(en, sp.Rational):
+            r = _rat_power(F, cs, int(en.p), int(en.q))
             return UNH if r is None else make(F, r)
         return UNH
     if h == "Sqrt":
@@ -669,6 +682,10 @@ def _ff_arith(expr, ev_):
             return UNH
         r = _sqrt(F, data(args[0])[1])
         return UNH if r is None else make(F, r)
+    if h == "Plus":
+        r = _plus_terms(F, args)
+        if r is not UNH:
+            return r
     if h in ("Plus", "Times"):
         acc = [] if h == "Plus" else [1]
         rest, used = [], 0
@@ -683,12 +700,8 @@ def _ff_arith(expr, ev_):
                 cs = _trim([v])
             used += 1
             acc = _padd(acc, cs, F.p) if h == "Plus" else F.mul(acc, cs)
-        if used < 2 and len(rest) == len(args) - 1 and not (h == "Times" and rest and False):
-            if used == 1 and all(not is_ffe(r) for r in rest):
-                # a single element with symbolic terms: nothing to combine
-                if h == "Times" and len(args) == 2:
-                    return UNH
-                return UNH
+        if used < 2:
+            return UNH
         el = make(F, acc)
         if not rest:
             return el
@@ -716,9 +729,187 @@ def _ff_arith(expr, ev_):
     return UNH
 
 
+def _split_term(F, t):
+    """(coefficient list, rest factors tuple) of a Plus term, or None when it has no field coefficient form."""
+    if is_ffe(t):
+        return data(t)[1], ()
+    v = _coerce_rational(t, F.p)
+    if v is not None:
+        return _trim([v]), ()
+    if isinstance(t, Expr) and t.head == "Times":
+        coef, rest = [1], []
+        for f in t.args:
+            if is_ffe(f):
+                coef = F.mul(coef, data(f)[1])
+            else:
+                v = _coerce_rational(f, F.p)
+                if v is not None:
+                    coef = F.mul(coef, _trim([v]))
+                else:
+                    rest.append(f)
+        return coef, tuple(rest)
+    return [1], (t,)
+
+
+def _plus_terms(F, args):
+    """Collect like terms c1 m + c2 m (field coefficients) in a sum; UNH when nothing combines."""
+    groups, order = {}, []
+    for t in args:
+        c, rest = _split_term(F, t)
+        k = tuple(rest)
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(c)
+    if len(order) == len(args) and not any(isinstance(t, Expr) and t.head == "Times" and
+                                           sum(1 for f in t.args if is_ffe(f) or _coerce_rational(f, F.p) is not None)
+                                           > 1 for t in args):
+        return UNH
+    terms = []
+    for k in order:
+        acc = []
+        for c in groups[k]:
+            acc = _padd(acc, c, F.p)
+        if not k:
+            if acc or len(order) == 1:
+                terms.append(make(F, acc))
+            continue
+        if not acc:
+            continue
+        rest = list(k)
+        terms.append(Expr("Times", make(F, acc), *rest))
+    if not terms:
+        return make(F, [])
+    return terms[0] if len(terms) == 1 else Expr("Plus", *terms)
+
+
 NT.ARITH_HANDLERS.append(_ff_arith)
 
-_GUARDED = ["Factor", "FactorList", "PolynomialGCD", "PolynomialLCM", "PolynomialQuotient", "PolynomialRemainder",
+
+def _power_builtin(a, ev_, expr):
+    if len(a) == 2 and is_ffe(a[0]):
+        return Expr("Power", *a)        # a power the field arithmetic cannot do stays unevaluated
+    raise NT.NOT_MINE()
+
+
+NT.wrap_builtin("Power", _power_builtin)
+
+
+def _sqrt_pre(args):
+    if len(args) == 1 and is_ffe(args[0]):
+        F, cs = data(args[0])
+        r = _sqrt(F, cs)
+        if r is None:
+            raise Unevaluated()
+        return make(F, r)
+    raise NT.NOT_MINE()
+
+
+NT.wrap_registry("Sqrt", _sqrt_pre)
+
+
+# ─────────────────────────── Expand over a finite field ───────────────────────────
+
+def _poly_of(F, e):
+    """Polynomial as {monomial: coeffs}, monomial a sorted tuple of (factor, exponent)."""
+    if is_ffe(e):
+        c = data(e)[1]
+        return {(): c} if c else {}
+    v = _coerce_rational(e, F.p)
+    if v is not None:
+        return {(): [v]} if v else {}
+    if isinstance(e, Expr) and e.head == "Plus":
+        r = {}
+        for t in e.args:
+            r = _poly_add(F, r, _poly_of(F, t))
+        return r
+    if isinstance(e, Expr) and e.head == "Times":
+        r = {(): [1]}
+        for t in e.args:
+            r = _poly_mul(F, r, _poly_of(F, t))
+        return r
+    if isinstance(e, Expr) and e.head == "Power" and len(e.args) == 2 and _intq(e.args[1]) and int(e.args[1]) > 0 \
+            and _contains_ffe(e.args[0]) or (isinstance(e, Expr) and e.head == "Power" and len(e.args) == 2 and
+                                             _intq(e.args[1]) and int(e.args[1]) > 0 and
+                                             isinstance(e.args[0], Expr) and e.args[0].head == "Plus"):
+        b = _poly_of(F, e.args[0])
+        r = {(): [1]}
+        for _ in range(int(e.args[1])):
+            r = _poly_mul(F, r, b)
+        return r
+    if isinstance(e, Expr) and e.head == "Power" and len(e.args) == 2 and _intq(e.args[1]):
+        return {((e.args[0], int(e.args[1])),): [1]}
+    if _contains_ffe(e):
+        raise NotImplementedError("Expand: only polynomials with finite field coefficients can be expanded")
+    return {((e, 1),): [1]}
+
+
+def _mono_mul(m1, m2):
+    d = {}
+    keys = []
+    for b, k in m1 + m2:
+        for kk in keys:
+            if K.same(kk, b):
+                d[id(kk)] = (kk, d[id(kk)][1] + k)
+                break
+        else:
+            keys.append(b)
+            d[id(b)] = (b, k)
+    out = [v for v in d.values() if v[1] != 0]
+    out.sort(key=lambda v: (K.order_key(v[0]), v[1]))
+    return tuple(out)
+
+
+def _poly_add(F, a, b):
+    r = dict(a)
+    for m, c in b.items():
+        k = next((x for x in r if _mono_eq(x, m)), m)
+        r[k] = _padd(r.get(k, []), c, F.p)
+        if not r[k]:
+            del r[k]
+    return r
+
+
+def _mono_eq(a, b):
+    return len(a) == len(b) and all(K.same(x[0], y[0]) and x[1] == y[1] for x, y in zip(a, b))
+
+
+def _poly_mul(F, a, b):
+    r = {}
+    for m1, c1 in a.items():
+        for m2, c2 in b.items():
+            r = _poly_add(F, r, {_mono_mul(m1, m2): F.mul(c1, c2)})
+    return r
+
+
+def _first_field(e, depth=0):
+    if is_ffe(e):
+        return field_of(e.args[0])
+    if isinstance(e, Expr) and depth < 60:
+        for a in e.args:
+            F = _first_field(a, depth + 1)
+            if F is not None:
+                return F
+    return None
+
+
+def _expand_pre(args):
+    if len(args) != 1 or not _contains_ffe(args[0]):
+        raise NT.NOT_MINE()
+    F = _first_field(args[0])
+    P = _poly_of(F, args[0])
+    terms = []
+    for m, c in P.items():
+        fs = [b if k == 1 else Expr("Power", b, k) for b, k in m]
+        terms.append(Expr("Times", make(F, c), *fs) if fs else make(F, c))
+    if not terms:
+        return make(F, [])
+    return ev(Expr("Plus", *terms))
+
+
+NT.wrap_registry("Expand", _expand_pre)
+
+_GUARDED = ["Factor", "ExpandAll", "FactorList", "PolynomialGCD", "PolynomialLCM", "PolynomialQuotient", "PolynomialRemainder",
             "PolynomialQuotientRemainder", "PolynomialMod", "Cancel", "Together", "Apart", "Resultant",
             "Discriminant", "Det", "Inverse", "RowReduce", "NullSpace", "MatrixRank", "LinearSolve", "MatrixPower",
             "LUDecomposition", "CharacteristicPolynomial", "Eigenvalues", "Eigenvectors", "Solve", "NSolve",
@@ -985,10 +1176,10 @@ class Embedding:
     def _default_image(self, e1):
         F1, F2 = self.F1, self.F2
         mp = _minpoly(F1, e1)
-        if F2._f is None and (F1._f is None or F1.d == 1) and F1.d > 1:
-            # Conway compatibility: theta2^((q2-1)/(q1-1)) is the root of C(p, d1)
+        if F1.default and F2.default:
+            # Conway compatibility: theta2^((q2-1)/(q1-1)) is a root of C(p, d1), the minimal polynomial of theta1
             g = F2.pow(F2.gen(), (F2.q - 1) // (F1.q - 1))
-            if not _peval(mp, g, F2.m, F2.p) if F2.d > 1 else True:
+            if not _peval(mp, g, F2.m, F2.p):
                 return g
         # the root of the minimal polynomial with the smallest index
         roots = _roots(F2, mp)
@@ -1192,3 +1383,7 @@ def _emb_hook(head, args, ev_):
 
 
 KL.COMPOUND_HEAD_HOOKS["FiniteFieldEmbedding"] = _emb_hook
+
+
+from .. import math_ops as _MO                      # noqa: E402
+_MO.NON_ALGEBRAIC_HEADS = frozenset(_MO.NON_ALGEBRAIC_HEADS | {FFE, "FiniteField", "FiniteFieldEmbedding"})
