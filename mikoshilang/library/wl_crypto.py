@@ -473,3 +473,554 @@ def sym_decrypt(cipher, key, data, mode, iv, padding):
             reg = (blk + ks[len(blk):]) if mode == "CFB" else ks
         return b"".join(out)
     return sym_encrypt(cipher, key, data, mode, iv, False)     # CTR is symmetric
+
+
+# ═══════════════════════════════════════ RSA ═══════════════════════════════════════
+
+_SMALL_PRIMES = [p for p in range(3, 2000, 2) if all(p % q for q in range(3, int(p ** 0.5) + 1, 2))]
+
+
+def _probable_prime(n, rounds=40):
+    if n < 2:
+        return False
+    for p in _SMALL_PRIMES:
+        if n % p == 0:
+            return n == p
+    d, s = n - 1, 0
+    while d % 2 == 0:
+        d //= 2
+        s += 1
+    for _ in range(rounds):
+        a = secrets.randbelow(n - 3) + 2
+        x = pow(a, d, n)
+        if x in (1, n - 1):
+            continue
+        for _ in range(s - 1):
+            x = pow(x, 2, n)
+            if x == n - 1:
+                break
+        else:
+            return False
+    return True
+
+
+def _random_prime(bits, e):
+    while True:
+        c = secrets.randbits(bits) | (1 << (bits - 1)) | (1 << (bits - 2)) | 1
+        if _probable_prime(c) and (c - 1) % e != 0 and __import__("math").gcd(e, c - 1) == 1:
+            return c
+
+
+def rsa_generate(bits, e):
+    import math
+    if bits < 512:
+        raise ValueError("GenerateAsymmetricKeyPair: RSA keys must have at least 512 bits")
+    if e < 3 or e % 2 == 0:
+        raise ValueError("GenerateAsymmetricKeyPair: the RSA public exponent must be an odd integer >= 3")
+    while True:
+        p = _random_prime(bits // 2, e)
+        q = _random_prime(bits - bits // 2, e)
+        n = p * q
+        if p != q and n.bit_length() == bits:
+            phi = (p - 1) * (q - 1)
+            if math.gcd(e, phi) == 1:
+                d = pow(e, -1, (p - 1) * (q - 1) // math.gcd(p - 1, q - 1))
+                return n, e, d
+
+
+def _i2osp(x, k):
+    if x >= 1 << (8 * k):
+        raise ValueError("integer too large")
+    return x.to_bytes(k, "big")
+
+
+def _modlen(n):
+    return (n.bit_length() + 7) // 8
+
+
+def _mgf1(seed, length, h=hashlib.sha1):
+    out, c = b"", 0
+    while len(out) < length:
+        out += h(seed + c.to_bytes(4, "big")).digest()
+        c += 1
+    return out[:length]
+
+
+def rsa_pad(data, k, padding, block_type, fname):
+    if padding == "PKCS1":
+        if len(data) > k - 11:
+            raise ValueError(f"{fname}: the data is too long for RSA with PKCS1 padding (at most {k - 11} bytes)")
+        if block_type == 2:
+            ps = b""
+            while len(ps) < k - 3 - len(data):
+                b = secrets.token_bytes(1)
+                if b != b"\x00":
+                    ps += b
+        else:
+            ps = b"\xff" * (k - 3 - len(data))
+        return b"\x00" + bytes([block_type]) + ps + b"\x00" + data
+    if padding == "OAEP":
+        hl = 20
+        if len(data) > k - 2 * hl - 2:
+            raise ValueError(f"{fname}: the data is too long for RSA with OAEP padding (at most {k - 2 * hl - 2} "
+                             f"bytes)")
+        lh = hashlib.sha1(b"").digest()
+        db = lh + b"\x00" * (k - len(data) - 2 * hl - 2) + b"\x01" + data
+        seed = secrets.token_bytes(hl)
+        mdb = _xor(db, _mgf1(seed, k - hl - 1))
+        ms = _xor(seed, _mgf1(mdb, hl))
+        return b"\x00" + ms + mdb
+    if padding is None:
+        if len(data) != k:
+            raise ValueError(f"{fname}: with \"Padding\" -> None the data must be exactly {k} bytes")
+        return data
+    raise ValueError(f"{fname}: unknown padding {padding!r}")
+
+
+def rsa_unpad(em, k, padding, block_type, fname):
+    bad = ValueError(f"{fname}::failed: the data could not be decrypted (wrong key or corrupt data)")
+    if padding == "PKCS1":
+        if len(em) != k or em[0] != 0 or em[1] != block_type:
+            raise bad
+        i = em.find(b"\x00", 2)
+        if i < 10:
+            raise bad
+        return em[i + 1:]
+    if padding == "OAEP":
+        hl = 20
+        if em[0] != 0:
+            raise bad
+        ms, mdb = em[1:1 + hl], em[1 + hl:]
+        seed = _xor(ms, _mgf1(mdb, hl))
+        db = _xor(mdb, _mgf1(seed, k - hl - 1))
+        if db[:hl] != hashlib.sha1(b"").digest():
+            raise bad
+        rest = db[hl:].lstrip(b"\x00")
+        if not rest or rest[0] != 1:
+            raise bad
+        return rest[1:]
+    return em
+
+
+_DIGEST_INFO = {"MD5": "3020300c06082a864886f70d020505000410", "SHA1": "3021300906052b0e03021a05000414",
+                "SHA224": "302d300d06096086480165030402040500041c", "SHA256": "3031300d060960864801650304020105000420",
+                "SHA384": "3041300d060960864801650304020205000430", "SHA512": "3051300d060960864801650304020305000440",
+                "SHA3-224": "302d300d06096086480165030402070500041c",
+                "SHA3-256": "3031300d060960864801650304020805000420",
+                "SHA3-384": "3041300d060960864801650304020905000430",
+                "SHA3-512": "3051300d060960864801650304020a05000440",
+                "RIPEMD160": "3021300906052b2403020105000414"}
+
+
+def rsa_sign(n, d, h, hashname, fname):
+    if hashname not in _DIGEST_INFO:
+        raise ValueError(f"{fname}: {hashname} is not supported for RSA signatures")
+    k = _modlen(n)
+    t = bytes.fromhex(_DIGEST_INFO[hashname]) + h
+    if k < len(t) + 11:
+        raise ValueError(f"{fname}: the RSA key is too small for this hash")
+    em = b"\x00\x01" + b"\xff" * (k - len(t) - 3) + b"\x00" + t
+    return _i2osp(pow(int.from_bytes(em, "big"), d, n), k)
+
+
+def rsa_verify(n, e, h, hashname, sig):
+    k = _modlen(n)
+    if len(sig) != k or hashname not in _DIGEST_INFO:
+        return False
+    s = int.from_bytes(sig, "big")
+    if s >= n:
+        return False
+    em = _i2osp(pow(s, e, n), k)
+    t = bytes.fromhex(_DIGEST_INFO[hashname]) + h
+    return hmac.compare_digest(em, b"\x00\x01" + b"\xff" * (k - len(t) - 3) + b"\x00" + t)
+
+
+# ═══════════════════════════════════════ elliptic curves ═══════════════════════════════════════
+
+class Curve:
+    def __init__(self, name, p, a, b, gx, gy, n, oid):
+        self.name, self.p, self.a, self.b, self.G, self.n, self.oid = name, p, a, b, (gx, gy), n, oid
+        self.size = (p.bit_length() + 7) // 8
+
+    def on_curve(self, P):
+        if P is None:
+            return True
+        x, y = P
+        return 0 <= x < self.p and 0 <= y < self.p and (y * y - x * x * x - self.a * x - self.b) % self.p == 0
+
+    # Jacobian coordinates
+    def _dbl(self, P):
+        X, Y, Z = P
+        if Y == 0:
+            return (0, 1, 0)
+        p = self.p
+        S = 4 * X * Y * Y % p
+        M = (3 * X * X + self.a * pow(Z, 4, p)) % p
+        X2 = (M * M - 2 * S) % p
+        return (X2, (M * (S - X2) - 8 * pow(Y, 4, p)) % p, 2 * Y * Z % p)
+
+    def _add(self, P, Q):
+        if P[2] == 0:
+            return Q
+        if Q[2] == 0:
+            return P
+        p = self.p
+        Z1Z1, Z2Z2 = P[2] * P[2] % p, Q[2] * Q[2] % p
+        U1, U2 = P[0] * Z2Z2 % p, Q[0] * Z1Z1 % p
+        S1, S2 = P[1] * Q[2] * Z2Z2 % p, Q[1] * P[2] * Z1Z1 % p
+        if U1 == U2:
+            return self._dbl(P) if S1 == S2 else (0, 1, 0)
+        H, R = (U2 - U1) % p, (S2 - S1) % p
+        H2 = H * H % p
+        H3 = H * H2 % p
+        X3 = (R * R - H3 - 2 * U1 * H2) % p
+        return (X3, (R * (U1 * H2 - X3) - S1 * H3) % p, H * P[2] * Q[2] % p)
+
+    def mul(self, k, P=None):
+        P = self.G if P is None else P
+        if P is None or k % self.n == 0:
+            return None
+        R, Q = (0, 1, 0), (P[0], P[1], 1)
+        for bit in bin(k)[2:]:
+            R = self._dbl(R)
+            if bit == "1":
+                R = self._add(R, Q)
+        return self._affine(R)
+
+    def add(self, P, Q):
+        if P is None:
+            return Q
+        if Q is None:
+            return P
+        return self._affine(self._add((P[0], P[1], 1), (Q[0], Q[1], 1)))
+
+    def _affine(self, R):
+        if R[2] == 0:
+            return None
+        zi = pow(R[2], -1, self.p)
+        return (R[0] * zi * zi % self.p, R[1] * zi * zi * zi % self.p)
+
+    def lift_x(self, x, odd):
+        p = self.p
+        y2 = (x * x * x + self.a * x + self.b) % p
+        if p % 4 == 3:
+            y = pow(y2, (p + 1) // 4, p)
+        else:
+            y = _tonelli(y2, p)
+        if y is None or y * y % p != y2:
+            raise ValueError("the point is not on the curve")
+        return (x, y if (y & 1) == odd else p - y)
+
+    def encode(self, P, compressed):
+        x, y = P
+        if compressed:
+            return bytes([2 + (y & 1)]) + x.to_bytes(self.size, "big")
+        return b"\x04" + x.to_bytes(self.size, "big") + y.to_bytes(self.size, "big")
+
+    def decode(self, b):
+        if len(b) == 1 + 2 * self.size and b[0] == 4:
+            P = (int.from_bytes(b[1:1 + self.size], "big"), int.from_bytes(b[1 + self.size:], "big"))
+        elif len(b) == 1 + self.size and b[0] in (2, 3):
+            P = self.lift_x(int.from_bytes(b[1:], "big"), b[0] - 2)
+        else:
+            raise ValueError("invalid encoded curve point")
+        if not self.on_curve(P):
+            raise ValueError("the point is not on the curve")
+        return P
+
+
+def _tonelli(n, p):
+    if pow(n, (p - 1) // 2, p) != 1:
+        return None if n % p else 0
+    q, s = p - 1, 0
+    while q % 2 == 0:
+        q //= 2
+        s += 1
+    z = 2
+    while pow(z, (p - 1) // 2, p) != p - 1:
+        z += 1
+    m, c, t, r = s, pow(z, q, p), pow(n, q, p), pow(n, (q + 1) // 2, p)
+    while t != 1:
+        i, t2 = 0, t
+        while t2 != 1:
+            t2 = t2 * t2 % p
+            i += 1
+        b = pow(c, 1 << (m - i - 1), p)
+        m, c, t, r = i, b * b % p, t * b * b % p, r * b % p
+    return r
+
+
+def _h(s):
+    return int(s.replace(" ", ""), 16)
+
+
+_P256 = _h("FFFFFFFF 00000001 00000000 00000000 00000000 FFFFFFFF FFFFFFFF FFFFFFFF")
+_P384 = 2 ** 384 - 2 ** 128 - 2 ** 96 + 2 ** 32 - 1
+_P521 = 2 ** 521 - 1
+_P224 = 2 ** 224 - 2 ** 96 + 1
+_P192 = 2 ** 192 - 2 ** 64 - 1
+CURVES = {
+    "secp256k1": Curve("secp256k1", _h("FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE FFFFFC2F"), 0, 7,
+                       _h("79BE667E F9DCBBAC 55A06295 CE870B07 029BFCDB 2DCE28D9 59F2815B 16F81798"),
+                       _h("483ADA77 26A3C465 5DA4FBFC 0E1108A8 FD17B448 A6855419 9C47D08F FB10D4B8"),
+                       _h("FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE BAAEDCE6 AF48A03B BFD25E8C D0364141"),
+                       "1.3.132.0.10"),
+    "secp256r1": Curve("secp256r1", _P256, _P256 - 3,
+                       _h("5AC635D8 AA3A93E7 B3EBBD55 769886BC 651D06B0 CC53B0F6 3BCE3C3E 27D2604B"),
+                       _h("6B17D1F2 E12C4247 F8BCE6E5 63A440F2 77037D81 2DEB33A0 F4A13945 D898C296"),
+                       _h("4FE342E2 FE1A7F9B 8EE7EB4A 7C0F9E16 2BCE3357 6B315ECE CBB64068 37BF51F5"),
+                       _h("FFFFFFFF 00000000 FFFFFFFF FFFFFFFF BCE6FAAD A7179E84 F3B9CAC2 FC632551"),
+                       "1.2.840.10045.3.1.7"),
+    "secp384r1": Curve("secp384r1", _P384, _P384 - 3,
+                       _h("B3312FA7 E23EE7E4 988E056B E3F82D19 181D9C6E FE814112 0314088F 5013875A C656398D 8A2ED19D "
+                          "2A85C8ED D3EC2AEF"),
+                       _h("AA87CA22 BE8B0537 8EB1C71E F320AD74 6E1D3B62 8BA79B98 59F741E0 82542A38 5502F25D BF55296C "
+                          "3A545E38 72760AB7"),
+                       _h("3617DE4A 96262C6F 5D9E98BF 9292DC29 F8F41DBD 289A147C E9DA3113 B5F0B8C0 0A60B1CE 1D7E819D "
+                          "7A431D7C 90EA0E5F"),
+                       _h("FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF C7634D81 F4372DDF 581A0DB2 48B0A77A "
+                          "ECEC196A CCC52973"), "1.3.132.0.34"),
+    "secp521r1": Curve("secp521r1", _P521, _P521 - 3,
+                       _h("0051 953EB961 8E1C9A1F 929A21A0 B68540EE A2DA725B 99B315F3 B8B48991 8EF109E1 56193951 "
+                          "EC7E937B 1652C0BD 3BB1BF07 3573DF88 3D2C34F1 EF451FD4 6B503F00"),
+                       _h("00C6 858E06B7 0404E9CD 9E3ECB66 2395B442 9C648139 053FB521 F828AF60 6B4D3DBA A14B5E77 "
+                          "EFE75928 FE1DC127 A2FFA8DE 3348B3C1 856A429B F97E7E31 C2E5BD66"),
+                       _h("0118 39296A78 9A3BC004 5C8A5FB4 2C7D1BD9 98F54449 579B4468 17AFBD17 273E662C 97EE7299 "
+                          "5EF42640 C550B901 3FAD0761 353C7086 A272C240 88BE9476 9FD16650"),
+                       _h("01FF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFA 51868783 "
+                          "BF2F966B 7FCC0148 F709A5D0 3BB5C9B8 899C47AE BB6FB71E 91386409"), "1.3.132.0.35"),
+    "secp224r1": Curve("secp224r1", _P224, _P224 - 3,
+                       _h("B4050A85 0C04B3AB F5413256 5044B0B7 D7BFD8BA 270B3943 2355FFB4"),
+                       _h("B70E0CBD 6BB4BF7F 321390B9 4A03C1D3 56C21122 343280D6 115C1D21"),
+                       _h("BD376388 B5F723FB 4C22DFE6 CD4375A0 5A074764 44D58199 85007E34"),
+                       _h("FFFFFFFF FFFFFFFF FFFFFFFF FFFF16A2 E0B8F03E 13DD2945 5C5C2A3D"), "1.3.132.0.33"),
+    "secp192r1": Curve("secp192r1", _P192, _P192 - 3,
+                       _h("64210519 E59C80E7 0FA7E9AB 72243049 FEB8DEEC C146B9B1"),
+                       _h("188DA80E B03090F6 7CBF20EB 43A18800 F4FF0AFD 82FF1012"),
+                       _h("07192B95 FFC8DA78 631011ED 6B24CDD5 73F977A1 1E794811"),
+                       _h("FFFFFFFF FFFFFFFF FFFFFFFF 99DEF836 146BC9B1 B4D22831"), "1.2.840.10045.3.1.1"),
+}
+CURVE_ALIASES = {"prime256v1": "secp256r1", "P-256": "secp256r1", "prime192v1": "secp192r1", "P-192": "secp192r1",
+                 "P-224": "secp224r1", "P-384": "secp384r1", "P-521": "secp521r1", "Bitcoin": "secp256k1",
+                 "Ethereum": "secp256k1"}
+EDWARDS_CURVES = ("ed25519",)
+
+
+def curve_of(name, fname):
+    if not isinstance(name, str):
+        raise ValueError(f"{fname}: {F.input_form(name)} is not an elliptic curve name")
+    n = CURVE_ALIASES.get(name, name)
+    if n not in CURVES:
+        if name in ("ed448",):
+            raise NotImplementedError(f"{fname}: the Edwards curve ed448 is not available")
+        raise ValueError(f"{fname}: {name} is not a supported elliptic curve (see "
+                         f"$CryptographicEllipticCurveNames)")
+    return CURVES[n]
+
+
+def _bits2int(b, n):
+    v = int.from_bytes(b, "big")
+    blen = len(b) * 8
+    qlen = n.bit_length()
+    return v >> (blen - qlen) if blen > qlen else v
+
+
+def rfc6979_k(x, h1, curve, hashname):
+    """Deterministic ECDSA nonce (RFC 6979, section 3.2) with HMAC over the given hash (SHA-256 fallback)."""
+    hn = _HASHLIB.get(hashname, "sha256") if hashname in _HASHLIB else "sha256"
+    n = curve.n
+    qlen = (n.bit_length() + 7) // 8
+    z = _bits2int(h1, n) % n
+    bx = x.to_bytes(qlen, "big") + z.to_bytes(qlen, "big")
+    hl = hashlib.new(hn).digest_size
+    V, Kk = b"\x01" * hl, b"\x00" * hl
+    Kk = hmac.new(Kk, V + b"\x00" + bx, hn).digest()
+    V = hmac.new(Kk, V, hn).digest()
+    Kk = hmac.new(Kk, V + b"\x01" + bx, hn).digest()
+    V = hmac.new(Kk, V, hn).digest()
+    while True:
+        T = b""
+        while len(T) < qlen:
+            V = hmac.new(Kk, V, hn).digest()
+            T += V
+        k = _bits2int(T[:qlen], n)
+        if 1 <= k < n:
+            return k
+        Kk = hmac.new(Kk, V + b"\x00", hn).digest()
+        V = hmac.new(Kk, V, hn).digest()
+
+
+def ecdsa_sign(curve, x, h, k, low_s=False):
+    n = curve.n
+    z = _bits2int(h, n)
+    while True:
+        R = curve.mul(k)
+        r = R[0] % n
+        if r == 0:
+            k = secrets.randbelow(n - 1) + 1
+            continue
+        s = pow(k, -1, n) * (z + r * x) % n
+        if s == 0:
+            k = secrets.randbelow(n - 1) + 1
+            continue
+        rec = (R[1] & 1) | (2 if R[0] >= n else 0)
+        if low_s and s > n // 2:
+            s = n - s
+            rec ^= 1
+        return r, s, rec
+
+
+def ecdsa_verify(curve, Q, h, r, s):
+    n = curve.n
+    if not (1 <= r < n and 1 <= s < n) or Q is None or not curve.on_curve(Q):
+        return False
+    z = _bits2int(h, n)
+    w = pow(s, -1, n)
+    P = curve.add(curve.mul(z * w % n), curve.mul(r * w % n, Q))
+    return P is not None and P[0] % n == r
+
+
+def _tagged(tag, data):
+    t = hashlib.sha256(tag.encode()).digest()
+    return hashlib.sha256(t + t + data).digest()
+
+
+def schnorr_sign(x, msg, aux):
+    """BIP-340 Schnorr signature over secp256k1 (32-byte message)."""
+    c = CURVES["secp256k1"]
+    n = c.n
+    P = c.mul(x)
+    d = x if P[1] % 2 == 0 else n - x
+    t = (d ^ int.from_bytes(_tagged("BIP0340/aux", aux), "big")).to_bytes(32, "big")
+    px = P[0].to_bytes(32, "big")
+    k0 = int.from_bytes(_tagged("BIP0340/nonce", t + px + msg), "big") % n
+    if k0 == 0:
+        raise ValueError("GenerateDigitalSignature: Schnorr nonce failure")
+    R = c.mul(k0)
+    k = k0 if R[1] % 2 == 0 else n - k0
+    rx = R[0].to_bytes(32, "big")
+    e = int.from_bytes(_tagged("BIP0340/challenge", rx + px + msg), "big") % n
+    return rx, ((k + e * d) % n).to_bytes(32, "big")
+
+
+def schnorr_verify(px, msg, rx, s):
+    c = CURVES["secp256k1"]
+    try:
+        P = c.lift_x(px, 0)
+    except ValueError:
+        return False
+    r = int.from_bytes(rx, "big")
+    sv = int.from_bytes(s, "big")
+    if r >= c.p or sv >= c.n:
+        return False
+    e = int.from_bytes(_tagged("BIP0340/challenge", rx + px.to_bytes(32, "big") + msg), "big") % c.n
+    R = c.add(c.mul(sv), c.mul(c.n - e, P))
+    return R is not None and R[1] % 2 == 0 and R[0] == r
+
+
+# ── Ed25519 (RFC 8032) ──
+
+_ED_P = 2 ** 255 - 19
+_ED_L = 2 ** 252 + 27742317777372353535851937790883648493
+_ED_D = -121665 * pow(121666, -1, _ED_P) % _ED_P
+_ED_I = pow(2, (_ED_P - 1) // 4, _ED_P)
+
+
+def _ed_add(P, Q):
+    X1, Y1, Z1, T1 = P
+    X2, Y2, Z2, T2 = Q
+    p = _ED_P
+    A_ = (Y1 - X1) * (Y2 - X2) % p
+    B_ = (Y1 + X1) * (Y2 + X2) % p
+    C_ = 2 * T1 * T2 * _ED_D % p
+    D_ = 2 * Z1 * Z2 % p
+    E_, F_, G_, H_ = B_ - A_, D_ - C_, D_ + C_, B_ + A_
+    return (E_ * F_ % p, G_ * H_ % p, F_ * G_ % p, E_ * H_ % p)
+
+
+def _ed_mul(s, P):
+    Q = (0, 1, 1, 0)
+    while s > 0:
+        if s & 1:
+            Q = _ed_add(Q, P)
+        P = _ed_add(P, P)
+        s >>= 1
+    return Q
+
+
+def _ed_recover_x(y, sign):
+    p = _ED_P
+    if y >= p:
+        return None
+    x2 = (y * y - 1) * pow(_ED_D * y * y + 1, -1, p) % p
+    if x2 == 0:
+        return None if sign else 0
+    x = pow(x2, (p + 3) // 8, p)
+    if (x * x - x2) % p != 0:
+        x = x * _ED_I % p
+    if (x * x - x2) % p != 0:
+        return None
+    if (x & 1) != sign:
+        x = p - x
+    return x
+
+
+_ED_GY = 4 * pow(5, -1, _ED_P) % _ED_P
+_ED_GX = _ed_recover_x(_ED_GY, 0)
+_ED_G = (_ED_GX, _ED_GY, 1, _ED_GX * _ED_GY % _ED_P)
+
+
+def _ed_compress(P):
+    zi = pow(P[2], -1, _ED_P)
+    x, y = P[0] * zi % _ED_P, P[1] * zi % _ED_P
+    return int.to_bytes(y | ((x & 1) << 255), 32, "little")
+
+
+def _ed_decompress(s):
+    if len(s) != 32:
+        return None
+    y = int.from_bytes(s, "little")
+    sign = y >> 255
+    y &= (1 << 255) - 1
+    x = _ed_recover_x(y, sign)
+    if x is None:
+        return None
+    return (x, y, 1, x * y % _ED_P)
+
+
+def _ed_secret(seed):
+    h = hashlib.sha512(seed).digest()
+    a = int.from_bytes(h[:32], "little")
+    a &= (1 << 254) - 8
+    a |= 1 << 254
+    return a, h[32:]
+
+
+def ed25519_public(seed):
+    a, _ = _ed_secret(seed)
+    return _ed_compress(_ed_mul(a, _ED_G))
+
+
+def ed25519_sign(seed, msg):
+    a, prefix = _ed_secret(seed)
+    A_ = _ed_compress(_ed_mul(a, _ED_G))
+    r = int.from_bytes(hashlib.sha512(prefix + msg).digest(), "little") % _ED_L
+    Rs = _ed_compress(_ed_mul(r, _ED_G))
+    h = int.from_bytes(hashlib.sha512(Rs + A_ + msg).digest(), "little") % _ED_L
+    return Rs, int.to_bytes((r + h * a) % _ED_L, 32, "little")
+
+
+def ed25519_verify(pub, msg, Rs, Ss):
+    A_ = _ed_decompress(pub)
+    R = _ed_decompress(Rs)
+    if A_ is None or R is None or len(Ss) != 32:
+        return False
+    s = int.from_bytes(Ss, "little")
+    if s >= _ED_L:
+        return False
+    h = int.from_bytes(hashlib.sha512(Rs + pub + msg).digest(), "little") % _ED_L
+    sB = _ed_mul(s, _ED_G)
+    hA = _ed_mul(h, A_)
+    lhs, rhs = sB, _ed_add(R, hA)
+    p = _ED_P
+    return (lhs[0] * rhs[2] - rhs[0] * lhs[2]) % p == 0 and (lhs[1] * rhs[2] - rhs[1] * lhs[2]) % p == 0
