@@ -1282,3 +1282,498 @@ def scaling_function(spec):
         return table[spec]
     OPTION_VALIDATORS["ScalingFunctions"](spec, "ScalingFunctions")
     raise NotImplementedError(f"ScalingFunctions: the scale {K_input(spec)} is not supported yet")
+
+
+# ───────────────────────────── rendering hooks for Rasterize ─────────────────────────────
+
+_GRID_GRAY = (0.75, 0.75, 0.75, 1.0)
+_AXIS_GRAY = (0.4, 0.4, 0.4, 1.0)
+_TEXT_FONT = 9.0
+
+
+def _R():
+    from . import wl_graphics_render as R
+    return R
+
+
+def _unsupported(name, v):
+    raise NotImplementedError(f"Rasterize: rendering the option {name} -> {K_input(v)} is not supported yet")
+
+
+def _line_props(ctx, spec, name, default=(0.0, 0.0, 0.0, 1.0), lw=None):
+    """(rgba, linewidth in points, dashes or None) of a style setting, starting from a default colour."""
+    R = _R()
+    saved = ctx.state
+    st = saved.copy()
+    st.color, st.opacity, st.dashing = default, None, None
+    st.thickness = ("abs", lw if lw is not None else 0.8)
+    ctx.state = st
+    try:
+        def walk(x):
+            if K.is_list(x):
+                for a in x.args:
+                    walk(a)
+                return
+            if x is None or is_sym(x, "None", "Automatic", "Inherited", "Bold", "Italic", "Plain"):
+                return
+            if isinstance(x, str):
+                raise NotImplementedError(f"Rasterize: named styles such as {x!r} in {name} are not supported yet")
+            if is_rule(x) or _is_number_like(x):
+                return          # text-only settings (FontSize -> n, n)
+            if isinstance(x, Expr) and x.head == "Directive":
+                for a in x.args:
+                    walk(a)
+                return
+            R._apply_style(ctx, x)
+        walk(spec)
+        dash = st.dashing[1] if st.dashing else None
+        return R._rgba_of(st), R._lw(ctx, st.thickness), dash
+    finally:
+        ctx.state = saved
+
+
+_FONT_RULES = ("FontSize", "FontColor", "FontWeight", "FontSlant")
+
+
+def _text_props(spec, name, base=None):
+    """matplotlib text keywords (color, fontsize, fontweight, fontstyle) of a style setting."""
+    from .wl_graphics_color import to_rgba
+    out = dict(base or {})
+
+    def walk(x):
+        if K.is_list(x):
+            for a in x.args:
+                walk(a)
+            return
+        if x is None or is_sym(x, "None", "Automatic", "Inherited"):
+            return
+        if is_sym(x, "Bold"):
+            out["fontweight"] = "bold"
+            return
+        if is_sym(x, "Italic"):
+            out["fontstyle"] = "italic"
+            return
+        if is_sym(x, "Plain"):
+            out["fontweight"], out["fontstyle"] = "normal", "normal"
+            return
+        if isinstance(x, str):
+            raise NotImplementedError(f"Rasterize: named styles such as {x!r} in {name} are not supported yet")
+        if _is_number_like(x):
+            out["fontsize"] = float(_num(x))
+            return
+        if is_rule(x):
+            k = opt_name(x)
+            v = x.args[1]
+            if k == "FontSize" and _num(v) is not None:
+                out["fontsize"] = float(_num(v))
+            elif k == "FontColor" and to_rgba(v) is not None:
+                out["color"] = to_rgba(v)
+            elif k == "FontWeight" and v in ("Bold", "Plain") or is_sym(v, "Bold", "Plain"):
+                out["fontweight"] = "bold" if (v == "Bold" or is_sym(v, "Bold")) else "normal"
+            elif k == "FontSlant" and v in ("Italic", "Plain") or is_sym(v, "Italic", "Plain"):
+                out["fontstyle"] = "italic" if (v == "Italic" or is_sym(v, "Italic")) else "normal"
+            else:
+                raise NotImplementedError(f"Rasterize: the style setting {K_input(x)} in {name} is not supported "
+                                          f"yet (supported: {', '.join(_FONT_RULES)})")
+            return
+        c = to_rgba(x)
+        if c is not None:
+            out["color"] = c
+            return
+        if isinstance(x, Expr) and x.head == "Directive":
+            for a in x.args:
+                walk(a)
+            return
+        if isinstance(x, Expr) and x.head in ("Thickness", "AbsoluteThickness", "Dashing", "AbsoluteDashing",
+                                              "PointSize", "AbsolutePointSize", "Opacity", "CapForm", "JoinForm",
+                                              "EdgeForm", "FaceForm", "Arrowheads"):
+            return              # line-only directives do not affect text
+        raise NotImplementedError(f"Rasterize: the style {K_input(x)} in {name} is not supported yet")
+    walk(spec)
+    return out
+
+
+def _fmt_number(v):
+    if abs(v - round(v)) < 1e-9 * max(1.0, abs(v)):
+        return str(int(round(v)))
+    return ("%.6g" % v)
+
+
+def _ticks_of(spec, lo, hi, name, default_labels):
+    """[(position, label or None)] for one axis/edge; None for no ticks."""
+    if spec is None or is_sym(spec, "None") or spec is False:
+        return None
+    if is_sym(spec, "Automatic", "All") or spec is True:
+        lab = default_labels or is_sym(spec, "All")
+        return [(t, _fmt_number(t) if lab else None) for t in tick_positions(lo, hi, 6)]
+    if K.is_list(spec):
+        out = []
+        for t in spec.args:
+            if K.is_list(t):
+                if len(t.args) > 2:
+                    raise NotImplementedError(f"Rasterize: tick lengths and styles in {name} are not supported yet")
+                x = float(real_value(t.args[0], "Rasterize", "tick position"))
+                lab = None
+                if len(t.args) == 2:
+                    lab = _R()._text_of(t.args[1]) if not is_sym(t.args[1], "None") else None
+                out.append((x, lab))
+            else:
+                x = float(real_value(t, "Rasterize", "tick position"))
+                out.append((x, _fmt_number(x)))
+        return [p for p in out if lo - 1e-12 <= p[0] <= hi + 1e-12]
+    raise NotImplementedError(f"Rasterize: the tick specification {K_input(spec)} in {name} is not supported yet")
+
+
+def _frame_sides(v):
+    """(left, right, bottom, top) booleans of a Frame setting."""
+    if v is True or is_sym(v, "All"):
+        return (True, True, True, True)
+    if v is False or v is None or is_sym(v, "None", "Automatic"):
+        return (False, False, False, False)
+    b = lambda x: x is True or is_sym(x, "All")
+    if K.is_list(v) and len(v.args) == 2 and all(K.is_list(p) and len(p.args) == 2 for p in v.args) and \
+            all(_is_bool(x) or is_sym(x, "None", "All") for p in v.args for x in p.args):
+        (l, r), (bo, t) = (p.args for p in v.args)
+        return (b(l), b(r), b(bo), b(t))
+    if K.is_list(v) and len(v.args) == 4 and all(_is_bool(x) or is_sym(x, "None", "All") for x in v.args):
+        bo, l, t, r = v.args
+        return (b(l), b(r), b(bo), b(t))
+    _unsupported("Frame", v)
+
+
+def _frame_ticks(v):
+    """{edge: (spec, default_labels)} for left/right/bottom/top."""
+    if v is None or is_sym(v, "Automatic") or v is True:
+        return {"left": (Symbol("Automatic"), True), "bottom": (Symbol("Automatic"), True),
+                "right": (Symbol("Automatic"), False), "top": (Symbol("Automatic"), False)}
+    if is_sym(v, "All"):
+        return {e: (Symbol("All"), True) for e in ("left", "right", "bottom", "top")}
+    if v is False or is_sym(v, "None"):
+        return {e: (None, False) for e in ("left", "right", "bottom", "top")}
+    if K.is_list(v) and len(v.args) == 2 and all(K.is_list(p) and len(p.args) == 2 for p in v.args):
+        (l, r), (bo, t) = (p.args for p in v.args)
+        return {"left": (l, True), "right": (r, False), "bottom": (bo, True), "top": (t, False)}
+    if K.is_list(v) and len(v.args) == 4:
+        bo, l, t, r = v.args
+        return {"left": (l, True), "right": (r, False), "bottom": (bo, True), "top": (t, False)}
+    _unsupported("FrameTicks", v)
+
+
+def _frame_labels(v):
+    if v is None or is_sym(v, "None"):
+        return {}
+    if not K.is_list(v):
+        return {"bottom": v}
+    a = v.args
+    if len(a) == 2 and all(K.is_list(p) and len(p.args) == 2 for p in a):
+        (l, r), (bo, t) = (p.args for p in a)
+        return {"left": l, "right": r, "bottom": bo, "top": t}
+    if len(a) == 1:
+        return {"bottom": a[0]}
+    if len(a) == 2:
+        return {"bottom": a[0], "left": a[1]}
+    if len(a) == 4:
+        return {"bottom": a[0], "left": a[1], "top": a[2], "right": a[3]}
+    _unsupported("FrameLabel", v)
+
+
+def _per_axis(v, name, n=2):
+    """Split a per-axis setting {x, y} (a list whose entries are tick/grid specs) or broadcast one setting."""
+    if K.is_list(v) and len(v.args) == n and not all(_num(a) is not None for a in v.args):
+        return list(v.args)
+    if K.is_list(v) and len(v.args) == n and all(_num(a) is not None for a in v.args):
+        raise NotImplementedError(f"Rasterize: the {name} setting {K_input(v)} is ambiguous; give "
+                                  f"{{xspec, yspec}} with list entries")
+    return [v] * n
+
+
+def _draw_text(ax, x, y, txt, props, **kw):
+    if txt is None or txt == "":
+        return
+    p = dict(color=(0, 0, 0, 1), fontsize=_TEXT_FONT)
+    p.update(props)
+    p.update(kw)
+    ax.annotate(txt, (x, y), **p)
+
+
+def _label_text(x):
+    return None if x is None or is_sym(x, "None") else _R()._text_of(x)
+
+
+def _finish(ctx):
+    st = ctx._w15
+    ax = ctx.ax
+    fig = ax.figure
+    from matplotlib.transforms import blended_transform_factory
+    W, H = (float(t) * 72.0 for t in fig.get_size_inches())
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    label_props = _text_props(st.get("LabelStyle"), "LabelStyle")
+
+    # what is drawn
+    frame = _frame_sides(st.get("Frame", False))
+    axes_v = st.get("Axes", False)
+    if _is_bool(axes_v):
+        axes = (axes_v, axes_v)
+    elif K.is_list(axes_v) and len(axes_v.args) == 2 and all(_is_bool(a) for a in axes_v.args):
+        axes = tuple(axes_v.args)
+    else:
+        _unsupported("Axes", axes_v)
+    fticks = _frame_ticks(st.get("FrameTicks"))
+    flabels = _frame_labels(st.get("FrameLabel"))
+    rot = st.get("RotateLabel", True)
+    if not _is_bool(rot):
+        _unsupported("RotateLabel", rot)
+    plot_label = _label_text(st.get("PlotLabel"))
+    alabel_v = st.get("AxesLabel")
+    if alabel_v is None or is_sym(alabel_v, "None"):
+        alabels = (None, None)
+    elif K.is_list(alabel_v) and len(alabel_v.args) == 2:
+        alabels = tuple(_label_text(a) for a in alabel_v.args)
+    elif not K.is_list(alabel_v) and not is_sym(alabel_v, "Automatic"):
+        alabels = (None, _label_text(alabel_v))
+    else:
+        _unsupported("AxesLabel", alabel_v)
+
+    # frame tick lists (needed for the margins)
+    edge_ticks = {}
+    for e, (lo, hi) in (("left", ylim), ("right", ylim), ("bottom", xlim), ("top", xlim)):
+        spec, deflab = fticks[e]
+        drawn = frame[("left", "right", "bottom", "top").index(e)]
+        edge_ticks[e] = _ticks_of(spec, lo, hi, "FrameTicks", deflab) if drawn else None
+
+    # axes tick lists
+    tspec = st.get("Ticks", Symbol("Automatic"))
+    if _func(tspec) and not isinstance(tspec, Symbol):
+        _unsupported("Ticks", tspec)
+    tx, ty = _per_axis(tspec, "Ticks")
+    axis_ticks = (_ticks_of(tx, xlim[0], xlim[1], "Ticks", True) if axes[0] else None,
+                  _ticks_of(ty, ylim[0], ylim[1], "Ticks", True) if axes[1] else None)
+
+    # margins (printer's points) for frame/axes decorations and labels
+    has_lab = lambda e: bool(edge_ticks.get(e)) and any(l for _, l in edge_ticks[e])
+    left = (36.0 if has_lab("left") else 6.0) if frame[0] else 0.0
+    right = (36.0 if has_lab("right") else 6.0) if frame[1] else 0.0
+    bottom = (18.0 if has_lab("bottom") else 6.0) if frame[2] else 0.0
+    top = (18.0 if has_lab("top") else 6.0) if frame[3] else 0.0
+    if axes[1]:
+        left = max(left, 30.0 if axis_ticks[1] else 6.0)
+        top = max(top, 14.0 if alabels[1] else 6.0)
+    if axes[0]:
+        bottom = max(bottom, 16.0 if axis_ticks[0] else 6.0)
+        right = max(right, 26.0 if alabels[0] else 8.0)
+    for e, pad in (("left", 16.0), ("right", 16.0), ("bottom", 14.0), ("top", 14.0)):
+        if _label_text(flabels.get(e)) is not None:
+            if e == "left":
+                left += pad
+            elif e == "right":
+                right += pad
+            elif e == "bottom":
+                bottom += pad
+            else:
+                top += pad
+    if plot_label is not None:
+        top += 18.0 + (12.0 if axes[1] and alabels[1] else 0.0)
+    if left + right + top + bottom > 0:
+        if left + right >= 0.8 * W or top + bottom >= 0.8 * H:
+            raise NotImplementedError("Rasterize: the image is too small for the requested axes, frame and labels")
+        ax.set_position([left / W, bottom / H, 1.0 - (left + right) / W, 1.0 - (top + bottom) / H])
+        ax.set_box_aspect(H / W)
+        ax.set_anchor("C")
+
+    # grid lines (behind everything)
+    gl = st.get("GridLines")
+    if gl is not None and not is_sym(gl, "None"):
+        gcol, glw, gdash = _line_props(ctx, st.get("GridLinesStyle"), "GridLinesStyle", _GRID_GRAY, 0.5)
+        if _func(gl) and not isinstance(gl, Symbol):
+            _unsupported("GridLines", gl)
+        gx, gy = _per_axis(gl, "GridLines")
+        for spec, lo, hi, vertical in ((gx, xlim[0], xlim[1], True), (gy, ylim[0], ylim[1], False)):
+            if spec is None or is_sym(spec, "None"):
+                continue
+            if is_sym(spec, "Automatic"):
+                items = [(t, None) for t in tick_positions(lo, hi, 6)]
+            elif K.is_list(spec):
+                items = []
+                for g in spec.args:
+                    if K.is_list(g):
+                        items.append((float(real_value(g.args[0], "Rasterize", "grid line")), g.args[1]))
+                    else:
+                        items.append((float(real_value(g, "Rasterize", "grid line")), None))
+            else:
+                _unsupported("GridLines", gl)
+            for pos, sty in items:
+                c, w, d = (gcol, glw, gdash) if sty is None else _line_props(ctx, sty, "GridLines", gcol, glw)
+                ln = ax.axvline(pos, color=c, linewidth=w, zorder=-10) if vertical else \
+                    ax.axhline(pos, color=c, linewidth=w, zorder=-10)
+                if d:
+                    ln.set_dashes([max(v, 0.01) for v in d])
+
+    # frame
+    if any(frame):
+        ax.set_axis_on()
+        ax.patch.set_visible(False)
+        fcol, flw, fdash = _line_props(ctx, st.get("FrameStyle"), "FrameStyle", (0.0, 0.0, 0.0, 1.0), 0.8)
+        ftext = _text_props(st.get("FrameTicksStyle"), "FrameTicksStyle", dict(label_props, color=fcol))
+        tcol = ftext.get("color", fcol)
+        for e, on in zip(("left", "right", "bottom", "top"), frame):
+            sp_ = ax.spines[e]
+            sp_.set_visible(on)
+            sp_.set_color(fcol)
+            sp_.set_linewidth(flw)
+            if fdash:
+                sp_.set_linestyle((0, fdash))
+        for axis_obj, (a, b) in ((ax.xaxis, ("bottom", "top")), (ax.yaxis, ("left", "right"))):
+            ta, tb = edge_ticks[a], edge_ticks[b]
+            pos_a = [p for p, _ in ta] if ta else None
+            pos_b = [p for p, _ in tb] if tb else None
+            if pos_a is not None and pos_b is not None and \
+                    (len(pos_a) != len(pos_b) or any(abs(p - q) > 1e-12 for p, q in zip(pos_a, pos_b))):
+                raise NotImplementedError("Rasterize: different tick positions on opposite frame edges are not "
+                                          "supported yet")
+            items = ta or tb or []
+            axis_obj.set_ticks([p for p, _ in items])
+            axis_obj.set_ticklabels([l or "" for _, l in items])
+            kw = {a: bool(ta), b: bool(tb), "label" + a: bool(ta) and any(l for _, l in ta),
+                  "label" + b: bool(tb) and any(l for _, l in tb)}
+            if tb and ta:
+                axis_obj.set_ticklabels([l or "" for _, l in ta])
+            ax.tick_params(axis="x" if axis_obj is ax.xaxis else "y", which="both", direction="in", length=4,
+                           width=flw, color=tcol, labelcolor=ftext.get("color", (0, 0, 0, 1)),
+                           labelsize=ftext.get("fontsize", _TEXT_FONT), **kw)
+            for t in axis_obj.get_ticklabels():
+                if "fontweight" in ftext:
+                    t.set_fontweight(ftext["fontweight"])
+                if "fontstyle" in ftext:
+                    t.set_fontstyle(ftext["fontstyle"])
+        ax.set_xlim(*xlim)
+        ax.set_ylim(*ylim)
+    # frame labels (drawn even without a frame edge, as in Wolfram)
+    lp = dict(dict(color=(0, 0, 0, 1), fontsize=_TEXT_FONT), **label_props)
+    for e, lab in flabels.items():
+        txt = _label_text(lab)
+        if txt is None:
+            continue
+        if e == "bottom":
+            ax.set_xlabel(txt, **lp)
+        elif e == "left":
+            ax.set_ylabel(txt, rotation=90 if rot else 0, **lp)
+        elif e == "top":
+            ax.annotate(txt, (0.5, 1.0), xycoords="axes fraction", xytext=(0, 4), textcoords="offset points",
+                        ha="center", va="bottom", **lp)
+        else:
+            ax.annotate(txt, (1.0, 0.5), xycoords="axes fraction", xytext=(4 if not has_lab("right") else 30, 0),
+                        textcoords="offset points", ha="left", va="center", rotation=-90 if rot else 0, **lp)
+
+    # axes (drawn in front of the content, as Wolfram's default)
+    if any(axes):
+        ao = st.get("AxesOrigin")
+        if ao is None or is_sym(ao, "Automatic"):
+            ox = 0.0 if xlim[0] <= 0.0 <= xlim[1] else xlim[0]
+            oy = 0.0 if ylim[0] <= 0.0 <= ylim[1] else ylim[0]
+        elif K.is_list(ao) and len(ao.args) == 2 and all(_num(a) is not None for a in ao.args):
+            ox, oy = (float(_num(a)) for a in ao.args)
+        else:
+            _unsupported("AxesOrigin", ao)
+        astyle = st.get("AxesStyle")
+        sx, sy = _per_axis(astyle, "AxesStyle") if K.is_list(astyle) and len(astyle.args) == 2 and \
+            all(not is_rule(a) for a in astyle.args) else (astyle, astyle)
+        tstyle = st.get("TicksStyle")
+        tsx, tsy = _per_axis(tstyle, "TicksStyle") if K.is_list(tstyle) and len(tstyle.args) == 2 and \
+            all(not is_rule(a) for a in tstyle.args) else (tstyle, tstyle)
+        for k, (on, sty, tsty) in enumerate(((axes[0], sx, tsx), (axes[1], sy, tsy))):
+            if not on:
+                continue
+            col, lw, dash = _line_props(ctx, sty, "AxesStyle", _AXIS_GRAY, 0.8)
+            tp = _text_props(sty, "AxesStyle", dict(label_props))
+            tcol, tlw, _ = _line_props(ctx, tsty, "TicksStyle", col, lw)
+            ttp = _text_props(tsty, "TicksStyle", tp)
+            if k == 0:
+                ln = ax.axhline(oy, color=col, linewidth=lw, zorder=3.5)
+                trans = None
+                ticks = axis_ticks[0] or []
+                if ticks:
+                    ax.plot([p for p, _ in ticks], [oy] * len(ticks), linestyle="none", marker=2, markersize=4,
+                            color=tcol, markeredgewidth=tlw, zorder=3.5)
+                for p, lab in ticks:
+                    if lab and not (axes[1] and abs(p - ox) < 1e-12 * max(1.0, abs(p))):
+                        _draw_text(ax, p, oy, lab, ttp, xytext=(0, -3), textcoords="offset points", ha="center",
+                                   va="top", zorder=3.5)
+                if alabels[0]:
+                    trans = blended_transform_factory(ax.transAxes, ax.transData)
+                    _draw_text(ax, 1.0, oy, alabels[0], tp, xycoords=trans, xytext=(4, 0),
+                               textcoords="offset points", ha="left", va="center")
+            else:
+                ln = ax.axvline(ox, color=col, linewidth=lw, zorder=3.5)
+                ticks = axis_ticks[1] or []
+                if ticks:
+                    ax.plot([ox] * len(ticks), [p for p, _ in ticks], linestyle="none", marker=0, markersize=4,
+                            color=tcol, markeredgewidth=tlw, zorder=3.5)
+                for p, lab in ticks:
+                    if lab and not (axes[0] and abs(p - oy) < 1e-12 * max(1.0, abs(p))):
+                        _draw_text(ax, ox, p, lab, ttp, xytext=(-3, 0), textcoords="offset points", ha="right",
+                                   va="center", zorder=3.5)
+                if alabels[1]:
+                    trans = blended_transform_factory(ax.transData, ax.transAxes)
+                    _draw_text(ax, ox, 1.0, alabels[1], tp, xycoords=trans, xytext=(0, 4),
+                               textcoords="offset points", ha="center", va="bottom")
+            if dash:
+                ln.set_dashes([max(v, 0.01) for v in dash])
+
+    if plot_label is not None:
+        ax.set_title(plot_label, pad=18.0 if (axes[1] and alabels[1]) else 6.0,
+                     **dict(dict(fontsize=_TEXT_FONT + 1, color=(0, 0, 0, 1)), **label_props))
+
+    ep = st.get("Epilog")
+    if ep is not None:
+        n = len(ctx.draw)
+        _draw_extra(ctx, ep)
+        ctx.draw[n:] = [_zwrap(ctx, f, 10.0) for f in ctx.draw[n:]]
+
+
+def _draw_extra(ctx, content):
+    R = _R()
+    saved_state, saved_T = ctx.state, ctx.T
+    ctx.state = R.State()
+    try:
+        R._draw(ctx, content)
+    finally:
+        ctx.state, ctx.T = saved_state, saved_T
+
+
+def _zwrap(ctx, f, dz):
+    def g():
+        before = set(map(id, ctx.ax.get_children()))
+        f()
+        for a in ctx.ax.get_children():
+            if id(a) not in before:
+                a.set_zorder(a.get_zorder() + dz)
+    return g
+
+
+def _hook(name):
+    def h(ctx, v):
+        if getattr(ctx, "_w15", None) is None:
+            ctx._w15 = {}
+            ctx.draw.append(lambda: _finish(ctx))
+        ctx._w15[name] = v
+        if name == "Prolog":
+            n = len(ctx.draw)
+            _draw_extra(ctx, v)
+            new = [_zwrap(ctx, f, -20.0) for f in ctx.draw[n:]]
+            del ctx.draw[n:]
+            ctx.draw[0:0] = new
+    return h
+
+
+RENDERED_OPTIONS = ("Axes", "AxesOrigin", "AxesLabel", "AxesStyle", "Ticks", "TicksStyle", "Frame", "FrameLabel",
+                    "FrameStyle", "FrameTicks", "FrameTicksStyle", "GridLines", "GridLinesStyle", "PlotLabel",
+                    "RotateLabel", "LabelStyle", "Epilog", "Prolog")
+
+
+def _install_render_hooks():
+    R = _R()
+    for _n in RENDERED_OPTIONS:
+        R.RENDER_OPTIONS[_n] = _hook(_n)
+
+
+_install_render_hooks()
