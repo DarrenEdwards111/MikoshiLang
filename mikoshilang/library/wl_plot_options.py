@@ -473,6 +473,10 @@ _SPECS = [
      "{{x1, label1(, len1(, style1))}, ...}/function."),
     ("TicksStyle", "a graphics directive, a list per axis, or a style name", [TEXT_STYLE], None,
      "option of graphics: style of tick marks and tick labels."),
+    ("DateTicksFormat", "Automatic, a date format string or a list of date elements and separators",
+     [AUTO, _string(), _list(_any_of(_string(), _list(_anything)), minlen=1)], None,
+     "option of date plots: format of date tick labels, e.g. {\"MonthNameShort\", \" \", \"Year\"} (DateString "
+     "elements)."),
     ("TickDirection", "Automatic, \"Inward\", \"Outward\", Left, Right, Up, Down or a list of these",
      [_TICKDIR, _list(_TICKDIR)], None,
      "option of AxisObject: on which side of the axis ticks are drawn (one setting or one per tick collection)."),
