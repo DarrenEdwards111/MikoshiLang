@@ -25,7 +25,12 @@ def _flat(x, name):
     """MikoshiLang argument -> SymPy value, or nested Python list of SymPy values for List arguments."""
     if is_list(x):
         return [_flat(a, name) for a in x.args]
-    return sym(x, name)
+    try:
+        return sym(x, name)
+    except (AttributeError, TypeError):
+        # a symbolic call with List arguments (e.g. WeierstrassHalfPeriodW1[{g2, g3}]) has no SymPy form: the
+        # result stays unevaluated
+        raise Unevaluated()
 
 
 def _all_numbers(v):
