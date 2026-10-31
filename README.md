@@ -88,6 +88,16 @@ s.evaluate("TypeSignature[area, {Real, Real} -> Real]; area[w_, h_] := w h")
 s.evaluate("TypeSignature[BitLength]")      # {{Integer} -> Expr}
 s.evaluate('area[2, "3"]')                  # TypeError: area: argument 2 '3' is not of type Real (type check)
 s.evaluate("area[2, h]")                    # 2 h: symbolic arguments are never type errors
+## Verification
+
+`Verify[expr]` checks a result independently and labels it `Certified` (an exact certificate was checked),
+`Checked` (symbolic or numerical evidence) or `Unchecked`; a failed check raises. Each reviewed head's `Check:`
+note is executable: `python scripts/verify_library.py`. Guide: [docs/verification.md](docs/verification.md).
+
+```wolfram
+Verify[FactorInteger[2^64 + 1]]   (* Certified[{{274177, 1}, {67280421310721, 1}}, <|... primality proofs ...|>] *)
+Verify[Solve[x^2 == 2, x]]        (* Certified[..., <|"Method" -> "Substitution of every solution", ..., "Completeness" -> "not checked"|>] *)
+Verify[Integrate[Sin[x]^2, x]]    (* Checked[x/2 - Cos[x] Sin[x]/2, <|"Method" -> "Differentiation", ...|>] *)
 ```
 
 ## Language contract

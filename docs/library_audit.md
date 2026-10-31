@@ -111,15 +111,15 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 | verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
 | fixed | 502 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
 | promoted | 24 | was quarantined; now properly implemented and tested |
-| added | 2168 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| added | 2169 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 4 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **2842** | 620 pre-audit inventory heads, all with a status, plus 2222 promoted/aliased heads |
+| **total reviewed** | **2843** | 620 pre-audit inventory heads, all with a status, plus 2223 promoted/aliased heads |
 
 Remaining unreviewed quarantined names: **5261** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **13510**.
+Differential test cases in tests/library: **13548**.
 
 
 ## By area
@@ -187,6 +187,7 @@ Differential test cases in tests/library: **13510**.
 | transforms | 4 | 15 | 0 | 6 | 0 | 0 | 0 |
 | trees (W03) | 0 | 0 | 0 | 54 | 0 | 0 | 0 |
 | types (T1) | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
+| verification (V1) | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
 
 ## Every function
 
@@ -216,7 +217,7 @@ Cases = number of differential test cases in which the head occurs.
 | `RationalizeDenominator` | fixed | 3 | legacy multiplied by conj(d)/conj(d) (a no-op) and only simplified; now SymPy radsimp, e.g. 1/(1 + Sqrt[2]) -> -1 + Sqrt[2] |
 | `Refine` | fixed | 23 | Refine[expr, assum] / Refine[expr] (uses $Assumptions) / Refine[expr, Assumptions -> a]: SymPy refine with assumption-carrying symbols and Q-propositions (Refine[Sqrt[x^2], x > 0] -> x, Refine[Abs[x], x < 0] -> -x, Refine[Sin[n Pi], Element[n, Integers]] -> 0, Refine[x > 0, x > 1] -> True); relations that do not follow stay as they are. Legacy raised |
 | `Resultant` | verified | 3 | Sylvester resultant (SymPy) |
-| `Simplify` | fixed | 30 | SymPy simplify; Simplify[e, assum] and Simplify[e, Assumptions -> a] (default $Assumptions) refine with the assumptions before and after simplifying (Simplify[Sqrt[x^2], x > 0] -> x); legacy rejected assumptions; W05: options ComplexityFunction, TransformationFunctions, ExcludedForms and Trig -> False |
+| `Simplify` | fixed | 31 | SymPy simplify; Simplify[e, assum] and Simplify[e, Assumptions -> a] (default $Assumptions) refine with the assumptions before and after simplifying (Simplify[Sqrt[x^2], x > 0] -> x); legacy rejected assumptions; W05: options ComplexityFunction, TransformationFunctions, ExcludedForms and Trig -> False |
 | `TrigExpand` | verified | 3 | SymPy expand_trig followed by Expand |
 | `TrigReduce` | verified | 3 | products and powers of trig functions to multiple angles (SymPy fu TR8) |
 | `TrigToExp` | verified | 3 | rewrite trig/hyperbolic functions as exponentials |
@@ -326,12 +327,12 @@ Cases = number of differential test cases in which the head occurs.
 | `Decompose` | added | 3 | Decompose[p, x] -> {p1, ..., pn} with p = p1[p2[...pn[x]]] (functional decomposition, SymPy); indecomposable p gives {p}; checked by composing back |
 | `Element` | added | 123 | Element[x, dom] for dom in Reals, Integers, Rationals, Algebraics, Complexes, Primes, Booleans: True or False when decidable for explicit numbers (Element[Sqrt[2], Rationals] -> False, Element[Pi, Algebraics] -> False), unevaluated for symbols (used in assumptions); Element[{x1, ...}, dom] tests every element (False if any is False) |
 | `Eliminate` | added | 4 | Eliminate[eqns, vars]: polynomial equations with vars eliminated (lexicographic Gröbner basis elimination), returned as p == 0 relations joined with And (Wolfram may arrange the two sides differently); True when nothing remains |
-| `Expand` | fixed | 35 | Wolfram Expand: products and positive integer powers are distributed through nested sums and products ((x + 1)^2 (y + 1) -> 1 + 2 x + x^2 + y + 2 x y + x^2 y; legacy left (1 + x)^2 unexpanded inside products), not inside function arguments or denominators; Expand[e, x] expands only the parts containing x; threads over lists and equations; Modulus/Trig options raise; W05: option Trig -> True (expand multiple angles; trigonometric functions treated as polynomial elements) |
+| `Expand` | fixed | 36 | Wolfram Expand: products and positive integer powers are distributed through nested sums and products ((x + 1)^2 (y + 1) -> 1 + 2 x + x^2 + y + 2 x y + x^2 y; legacy left (1 + x)^2 unexpanded inside products), not inside function arguments or denominators; Expand[e, x] expands only the parts containing x; threads over lists and equations; Modulus/Trig options raise; W05: option Trig -> True (expand multiple angles; trigonometric functions treated as polynomial elements) |
 | `ExpandAll` | added | 3 | ExpandAll[e]: Expand applied to every subexpression, including function arguments and denominators (ExpandAll[Sin[(x + 1)^2]] -> Sin[1 + 2 x + x^2]); ExpandAll[e, x] only parts containing x |
 | `ExpandDenominator` | added | 3 | expands the denominator of a rational expression (ExpandDenominator[1/((x + 1) (x - 1))] -> 1/(-1 + x^2)), numerator kept |
 | `ExpandNumerator` | added | 3 | expands the numerator of a rational expression (Numerator/Denominator as Wolfram), denominator kept |
 | `Exponent` | fixed | 8 | Exponent[p, x]: highest power of x (Exponent[0, x] = -Infinity), also for sums of non-integer powers; batch 4: Exponent[p, x, h] applies h to the list of distinct exponents (in increasing order, 0 for a constant term): Exponent[x^3 + x, x, Min] -> 1, Exponent[1 + x^2, x, List] -> {0, 2}; threads over lists |
-| `Factor` | fixed | 20 | factors over the rationals (SymPy factor); batch 4: Extension -> a or {a, ...} (algebraic extension), GaussianIntegers -> True, Modulus -> p (prime; coefficients shown in 0..p-1 as Wolfram); threads over lists and equations; note the kernel distributes a numeric content over a single sum (2 (x^2 - 2) displays expanded); W05: option Trig -> True (expand multiple angles; trigonometric functions treated as polynomial elements) |
+| `Factor` | fixed | 21 | factors over the rationals (SymPy factor); batch 4: Extension -> a or {a, ...} (algebraic extension), GaussianIntegers -> True, Modulus -> p (prime; coefficients shown in 0..p-1 as Wolfram); threads over lists and equations; note the kernel distributes a numeric content over a single sum (2 (x^2 - 2) displays expanded); W05: option Trig -> True (expand multiple angles; trigonometric functions treated as polynomial elements) |
 | `FactorList` | added | 4 | FactorList[p] -> {{c, 1}, {f1, e1}, ...}: the numeric content first (always present, 1 when trivial), then the irreducible factors over the rationals with exponents; Extension, GaussianIntegers, Modulus |
 | `FactorSquareFree` | added | 3 | square-free factorisation (SymPy sqf): FactorSquareFree[x^3 - x^2 - x + 1] -> (-1 + x)^2 (1 + x) |
 | `FactorSquareFreeList` | added | 3 | FactorSquareFreeList[p] -> {{c, 1}, {f1, 1}, {f2, 2}, ...} (numeric content first, then square-free factors with their multiplicities) |
@@ -360,7 +361,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PossibleZeroQ` | added | 4 | PossibleZeroQ[e]: True if e simplifies to 0 or is numerically 0 (40 digits) at several sample points of its variables, False otherwise (a heuristic, as in Wolfram) |
 | `Reduce` | added | 16 | Reduce[cond, x] / Reduce[cond, x, dom] in one variable: polynomial equations over the complexes (x == r1 \|\| ..., distinct roots), periodic equations (C[1] ∈ Integers && (x == ...)), polynomial, rational and Abs inequalities with And/Or over the reals (inequalities imply real x, as Wolfram) as interval conditions, and over the integers (finite ranges listed, else x ∈ Integers with bounds); linear equations with symbolic coefficients split into cases ((b == 0 && a == 0) \|\| (a != 0 && x == -b/a)); polynomial equation systems in several variables (Or of And of equations). Results of inequalities are checked by sampling; quantifiers and multivariate inequalities raise |
 | `Roots` | added | 6 | Roots[lhs == rhs, x] -> x == r1 \|\| x == r2 \|\| ... for polynomial equations (repeated roots repeated, as Wolfram; radicals up to degree 4 unless Cubics/Quartics -> False, Root objects beyond); a single root gives x == r; no roots gives False |
-| `Solve` | fixed | 30 | Solve[eqns, vars], Solve[eqns, vars, dom] (Reals, Integers, Complexes): polynomial roots with multiplicity in Wolfram order (real ascending, then complex), radicals up to degree 4 (Cubics/Quartics -> False give Root objects) and Root[...] for higher degree (legacy returned {} for x^5 - x + 1 == 0), periodic families as ConditionalExpression[..., C[1] ∈ Integers] (legacy returned only {0, Pi} for Sin[x] == 0), denominators' zeros excluded, polynomial/rational systems (underdetermined systems solved for the later variables, as Wolfram), linear and finite quadratic Diophantine equations over the Integers; every solution is substituted back; inequalities raise (use Reduce); transcendental equations SymPy cannot solve completely raise instead of returning a partial list |
+| `Solve` | fixed | 35 | Solve[eqns, vars], Solve[eqns, vars, dom] (Reals, Integers, Complexes): polynomial roots with multiplicity in Wolfram order (real ascending, then complex), radicals up to degree 4 (Cubics/Quartics -> False give Root objects) and Root[...] for higher degree (legacy returned {} for x^5 - x + 1 == 0), periodic families as ConditionalExpression[..., C[1] ∈ Integers] (legacy returned only {0, Pi} for Sin[x] == 0), denominators' zeros excluded, polynomial/rational systems (underdetermined systems solved for the later variables, as Wolfram), linear and finite quadratic Diophantine equations over the Integers; every solution is substituted back; inequalities raise (use Reduce); transcendental equations SymPy cannot solve completely raise instead of returning a partial list |
 | `SolveValues` | added | 3 | SolveValues[eqns, x] -> {v1, v2, ...}; SolveValues[eqns, {x, y}] -> {{x1, y1}, ...}; same solver and checks as Solve (domains, multiplicity, periodic families) |
 | `SymmetricPolynomial` | added | 3 | SymmetricPolynomial[k, {x1, ..., xn}]: the k-th elementary symmetric polynomial (0 for k > n, 1 for k = 0) |
 | `SymmetricReduction` | added | 3 | SymmetricReduction[f, {x1, ..., xn}] -> {p, q}: p the symmetric part written in the elementary symmetric polynomials of the xi, q the remainder, f = p + q; SymmetricReduction[f, xs, {s1, ..., sn}] writes p in the si; checked by expansion |
@@ -467,8 +468,8 @@ Cases = number of differential test cases in which the head occurs.
 |---|---|---|---|
 | `ComposeSeries` | added | 3 | ComposeSeries[s1, s2, ...] = s1(s2(...)) for power series about 0 where the inner series vanish at 0; the order is the one the truncations allow (ComposeSeries[Series[Exp[x], {x, 0, 5}], Series[Sin[x], {x, 0, 5}]] -> 1 + x + x^2/2 - x^4/8 - x^5/15 + O[x]^6) |
 | `ConditionalExpression` | added | 9 | ConditionalExpression[expr, cond]: expr when cond is True, Undefined when cond is False, nested conditions combine with And (ConditionalExpression[ConditionalExpression[x, a], b] = ConditionalExpression[x, a && b]), otherwise unevaluated (returned by Integrate, Sum, Solve and the Fourier coefficient functions for parameter conditions; arithmetic on ConditionalExpression objects is not propagated).  Single implementation shared by batches 4 and 6. |
-| `D` | fixed | 34 | batch 4: D[f, x, y, ...], D[f, {x, n}], D[f, {{x1, x2, ...}}] (gradient) and {{...}, n} (arrays of higher derivatives), threads over lists and equations (implicit differentiation D[x^2 + y[x]^2 == 1, x]), NonConstants -> {y}, derivatives with respect to f[x]; chain rule results are Wolfram Derivative forms (D[f[g[x]], x] -> f'[g[x]] g'[x]; previously D[f[g[x]], g[x]] g'[x]); symbolic orders stay unevaluated; D[f] with no variable returns f |
-| `DSolve` | fixed | 24 | batch 4: every solution returned by DSolve (ODEs and ODE systems in one variable, initial conditions, y[x] or y forms) is now substituted back into the equations and checked (symbolically, else numerically at sample points); PDEs raise. Free constants may be numbered differently from Wolfram (the solution family is the same) |
+| `D` | fixed | 35 | batch 4: D[f, x, y, ...], D[f, {x, n}], D[f, {{x1, x2, ...}}] (gradient) and {{...}, n} (arrays of higher derivatives), threads over lists and equations (implicit differentiation D[x^2 + y[x]^2 == 1, x]), NonConstants -> {y}, derivatives with respect to f[x]; chain rule results are Wolfram Derivative forms (D[f[g[x]], x] -> f'[g[x]] g'[x]; previously D[f[g[x]], g[x]] g'[x]); symbolic orders stay unevaluated; D[f] with no variable returns f |
+| `DSolve` | fixed | 26 | batch 4: every solution returned by DSolve (ODEs and ODE systems in one variable, initial conditions, y[x] or y forms) is now substituted back into the equations and checked (symbolically, else numerically at sample points); PDEs raise. Free constants may be numbered differently from Wolfram (the solution family is the same) |
 | `DSolveValue` | added | 4 | DSolveValue[eqns, y[x], x] gives the solution value, DSolveValue[eqns, y, x] a pure function, DSolveValue[eqns, expr, x] the value of expr; several solutions give a list; checked like DSolve |
 | `Derivative` | added | 4 | Derivative[n1, n2, ...][f] for pure functions and built-in mathematical functions gives a pure function (Derivative[1][Sin] -> Cos[#1] &, Derivative[2][#^3 &] -> 6 #1 &); Derivative[n...][f][x...] evaluates for known f (Sin'[x] -> Cos[x], previously unevaluated) and stays symbolic for undefined f (f'[x], Derivative[1, 0][f][x, y]); Derivative[0][f] -> f |
 | `DiracDelta` | added | 6 | Wolfram DiracDelta[x1, ...]: 0 when any argument is a nonzero real number, unevaluated otherwise (DiracDelta[0] stays); complex numeric arguments raise; integrates and transforms through SymPy (Integrate[f[x] DiracDelta[x - a], {x, -Infinity, Infinity}] -> f[a]); D[HeavisideTheta[x], x] -> DiracDelta[x] |
@@ -482,9 +483,9 @@ Cases = number of differential test cases in which the head occurs.
 | `FourierTrigSeries` | added | 3 | FourierTrigSeries[f, t, k] = a0 + Σ_{n=1}^{k} (a_n Cos[n t] + b_n Sin[n t]) with a0 = 1/(2π)∫f, a_n = 1/π ∫_{-π}^{π} f cos(nt), b_n = 1/π ∫_{-π}^{π} f sin(nt) (Wolfram default parameters) |
 | `HeavisideTheta` | added | 8 | Wolfram HeavisideTheta[x1, ...]: 1 when every argument is positive, 0 when any is negative, unevaluated at 0 (unlike UnitStep[0] = 1 and SymPy's Heaviside(0) = 1/2); D gives DiracDelta |
 | `ImplicitD` | added | 5 | ImplicitD[f == g, y, x] = dy/dx for y defined implicitly (ImplicitD[x^2 + y^2 == 1, y, x] -> -x/y), ImplicitD[eqn, y, {x, n}] higher derivatives (expressed in x and y), ImplicitD[{eqns}, {y1, y2}, x] for systems |
-| `Integrate` | fixed | 54 | batch 4: indefinite integrals (verified by differentiating back), definite, improper and multiple integrals (the last specification is innermost); options Assumptions, GenerateConditions (Automatic/True give ConditionalExpression[value, cond] when the result needs a parameter condition, e.g. Integrate[x^a, {x, 0, 1}] -> ConditionalExpression[1/(1 + a), Re[a] > -1]; False gives the generic value) and PrincipalValue -> True (Cauchy principal value, Integrate[1/x, {x, -1, 2}, PrincipalValue -> True] -> Log[2]); SymPy convergence conditions are rewritten in Wolfram form (Abs[Arg[a]] < Pi/2 -> Re[a] > 0); integrals that diverge to +-Infinity give that limit, indeterminate (oscillating/cancelling) ones raise; HeavisideTheta and DiracDelta integrands are supported; integrals SymPy cannot do stay unevaluated |
+| `Integrate` | fixed | 59 | batch 4: indefinite integrals (verified by differentiating back), definite, improper and multiple integrals (the last specification is innermost); options Assumptions, GenerateConditions (Automatic/True give ConditionalExpression[value, cond] when the result needs a parameter condition, e.g. Integrate[x^a, {x, 0, 1}] -> ConditionalExpression[1/(1 + a), Re[a] > -1]; False gives the generic value) and PrincipalValue -> True (Cauchy principal value, Integrate[1/x, {x, -1, 2}, PrincipalValue -> True] -> Log[2]); SymPy convergence conditions are rewritten in Wolfram form (Abs[Arg[a]] < Pi/2 -> Re[a] > 0); integrals that diverge to +-Infinity give that limit, indeterminate (oscillating/cancelling) ones raise; HeavisideTheta and DiracDelta integrands are supported; integrals SymPy cannot do stay unevaluated |
 | `InverseSeries` | added | 3 | InverseSeries[s] / InverseSeries[s, y] for a power series s = a1 x + a2 x^2 + ... + O[x]^n about 0 with a1 != 0: the series of the inverse function to the same order (InverseSeries[Series[Sin[x], {x, 0, 5}]] -> x + x^3/6 + 3 x^5/40 + O[x]^6); the result is checked by composing back |
-| `Limit` | fixed | 15 | batch 4: Limit[f, x -> a] (two-sided: Indeterminate when the one-sided limits differ), Direction -> "FromAbove" / "FromBelow" / -1 / 1 / "TwoSided", Assumptions, limits at +-Infinity, lists of functions, and multivariate limits Limit[f, {x, y} -> {a, b}] (continuity after cancellation, Indeterminate when two paths disagree, otherwise a clear error); oscillating limits raise (use MaxLimit/MinLimit); legacy rejected every option |
+| `Limit` | fixed | 17 | batch 4: Limit[f, x -> a] (two-sided: Indeterminate when the one-sided limits differ), Direction -> "FromAbove" / "FromBelow" / -1 / 1 / "TwoSided", Assumptions, limits at +-Infinity, lists of functions, and multivariate limits Limit[f, {x, y} -> {a, b}] (continuity after cancellation, Indeterminate when two paths disagree, otherwise a clear error); oscillating limits raise (use MaxLimit/MinLimit); legacy rejected every option |
 | `MaxLimit` | added | 4 | upper limit (limsup) MaxLimit[f, x -> a] with Direction and Assumptions: the larger one-sided limit, or A + \|B\| for f = A + B Sin[g] / A + B Cos[g] with g -> +-Infinity (MaxLimit[Sin[1/x], x -> 0] -> 1); other oscillating functions raise |
 | `MinLimit` | added | 3 | lower limit (liminf) MinLimit[f, x -> a]; see MaxLimit (MinLimit[Sign[x], x -> 0] -> -1) |
 | `Normal` | fixed | 138 | batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate series) and evaluates the remaining polynomial; associations and other heads as before (batch 1) |
@@ -492,7 +493,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Product` | fixed | 7 | batch 4: as Sum (finite, symbolic and infinite products via SymPy; parametric products give the generic value, ConditionalExpression with GenerateConditions -> True) |
 | `RSolve` | fixed | 10 | batch 4: RSolve[eqns, a[n], n] -> {{a[n] -> ...}} and RSolve[eqns, a, n] -> {{a -> Function[{n}, ...]}}; linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every solution is substituted back into the recurrence and the initial conditions; free constants are C[1], C[2], ...; systems raise |
 | `RSolveValue` | added | 4 | RSolveValue[eqns, a[n], n] gives the solution value, RSolveValue[eqns, a, n] a pure function, RSolveValue[eqns, expr, n] the value of expr (e.g. a[10]); checked like RSolve |
-| `Series` | fixed | 27 | batch 4: Series[f, {x, x0, n}] with Laurent and Puiseux terms, expansions at +-Infinity in powers of 1/x (O[1/x]^(n+1)), the O term always present (Series[1/x, {x, 0, 2}] -> 1/x + O[x]^3; previously dropped), expansions about x0 grouped in powers of (x - x0) (O[x - x0]^k); several variables Series[f, {x, x0, nx}, {y, y0, ny}] expand in x with coefficients that are series in y; threads over lists; functions SymPy cannot expand raise |
+| `Series` | fixed | 28 | batch 4: Series[f, {x, x0, n}] with Laurent and Puiseux terms, expansions at +-Infinity in powers of 1/x (O[1/x]^(n+1)), the O term always present (Series[1/x, {x, 0, 2}] -> 1/x + O[x]^3; previously dropped), expansions about x0 grouped in powers of (x - x0) (O[x - x0]^k); several variables Series[f, {x, x0, nx}, {y, y0, ny}] expand in x with coefficients that are series in y; threads over lists; functions SymPy cannot expand raise |
 | `SeriesCoefficient` | added | 9 | SeriesCoefficient[f, {x, x0, n}] (negative n for Laurent series, x0 may be Infinity: coefficient of (1/x)^n), several variables {x, x0, nx}, {y, y0, ny}, and SeriesCoefficient[series, n]; a symbolic n gives Piecewise[{{general term, n >= 0}}, 0] when SymPy finds a formal power series (checked against 10 Taylor coefficients); a coefficient beyond a given series' order is Indeterminate |
 | `Sum` | fixed | 21 | batch 4: as before ({i, n}, {i, a, b}, {i, a, b, di}, {i, {values}}, several iterators, first outermost; divergent sums to +-Infinity give that limit, other non-convergent sums stay unevaluated), plus parametric series that SymPy sums under a convergence condition: Wolfram's generic value by default (Sum[x^k, {k, 0, Infinity}] -> 1/(1 - x); previously a recursion error) and ConditionalExpression[value, cond] with GenerateConditions -> True |
 | `SumConvergence` | added | 7 | SumConvergence[f, n]: True/False for the convergence of Sum[f, {n, k, Infinity}] (SymPy's ratio, root, integral, comparison, alternating-series tests); the p-series family 1/n^p and n^p r^n with a parameter gives the Wolfram condition (Re[p] > 1, Abs[r] < 1); undecided cases stay unevaluated |
@@ -899,14 +900,14 @@ Cases = number of differential test cases in which the head occurs.
 | `ArcTanh` | verified | 3 | verified against SymPy/mpmath |
 | `Ceiling` | fixed | 8 | Ceiling[x] and Ceiling[x, a] (a Ceiling[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `Conjugate` | verified | 5 | verified against SymPy/mpmath |
-| `Cos` | verified | 74 | verified against SymPy/mpmath |
+| `Cos` | verified | 75 | verified against SymPy/mpmath |
 | `Cosh` | verified | 5 | verified against SymPy/mpmath |
 | `Cot` | verified | 3 | verified against SymPy/mpmath |
 | `Coth` | verified | 3 | verified against SymPy/mpmath |
 | `Csc` | verified | 3 | verified against SymPy/mpmath |
 | `Csch` | verified | 3 | verified against SymPy/mpmath |
 | `CubeRoot` | fixed | 3 | returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2) |
-| `Exp` | verified | 129 | verified against SymPy/mpmath |
+| `Exp` | verified | 131 | verified against SymPy/mpmath |
 | `Floor` | fixed | 18 | Floor[x] and Floor[x, a] (a Floor[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `ImaginaryPart` | verified | 3 | verified against SymPy/mpmath |
 | `Log` | fixed | 34 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
@@ -923,7 +924,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Sec` | verified | 3 | verified against SymPy/mpmath |
 | `Sech` | verified | 3 | verified against SymPy/mpmath |
 | `Sign` | fixed | 12 | Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals |
-| `Sin` | verified | 170 | verified against SymPy/mpmath |
+| `Sin` | verified | 175 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
 | `Sqrt` | verified | 165 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
@@ -1530,7 +1531,7 @@ Cases = number of differential test cases in which the head occurs.
 | `ExportByteArray` | added | 7 | ExportByteArray[expr, fmt] gives a ByteArray with the bytes of expr exported in the format, e.g. ExportByteArray[-1, "Integer8"] == ByteArray[{255}], ExportByteArray[4., "Real64"]. Check: reference (explicit byte layouts) and ImportByteArray round trips in tests. |
 | `ExportString` | added | 14 | ExportString[expr, fmt] gives the text of expr in the format (binary formats as a string of characters with codes 0..255, as Wolfram does); CSV/TSV quote fields only when needed, JSON is tab-indented unless "Compact" -> True. Check: reference (documented ExportString text) and ImportString round trips in tests. |
 | `ExtractArchive` | added | 5 | ExtractArchive["file.zip"] extracts a zip/tar/tar.gz/tar.bz2/gz archive into the current directory; ExtractArchive[src, dir] into dir; ExtractArchive[src, dir, patt] only members matching a string or "*" wildcard pattern; returns the list of extracted files (full paths); members with absolute or .. paths are refused; OverwriteTarget -> False (default) refuses to replace existing files. Check: exact (zipfile/tarfile); round trips with CreateArchive in tests. |
-| `FileConvert` | added | 4 | FileConvert["src" -> "fmt"] converts a file to the format, writing src with the format's extension; FileConvert["src" -> "dest"] infers the format from dest; returns the new file name. Check: self-check by construction (Import then Export); tests re-import the converted file. |
+| `FileConvert` | added | 4 | FileConvert["src" -> "fmt"] converts a file to the format, writing src with the format's extension; FileConvert["src" -> "dest"] infers the format from dest; returns the new file name. Check: exact by construction (Import then Export); reference: tests re-import the converted file. |
 | `FileFormat` | added | 4 | FileFormat["file"] gives the Import format of a file: from its extension when known, otherwise from its content (GZIP, BZIP2, ZIP, TAR, WXF, MX, PEM, XML, JSON, Text); a missing file without a known extension raises FileFormat::nffil. Check: exact (extension, then content sniffing); reference files in tests. |
 | `FileFormatProperties` | added | 7 | FileFormatProperties[fmt] gives <\|"FileNamePatterns", "MIMETypes", "ImportElements", "DefaultImportElement"\|>; FileFormatProperties[fmt, prop \| {props}]; lists of formats and All give associations keyed by format; FileFormatProperties[] gives every format. Check: exact (registry lookup); reference values in tests. |
 | `FileFormatQ` | added | 4 | FileFormatQ[file, fmt] is True when the file has format fmt (its FileFormat, or content that parses as fmt for JSON/XML/WXF/archives), False otherwise; an unknown format name raises. Check: exact; reference files in tests. |
@@ -1613,13 +1614,13 @@ Cases = number of differential test cases in which the head occurs.
 | `Positive` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Power` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Prepend` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule; any head |
-| `PrimeQ` | kernel | 11 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `PrimeQ` | kernel | 14 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Range` | fixed | 110 | kernel builtin extended in batch 1: rational, real and symbolic steps |
 | `ReplaceAll` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Rest` | fixed | 6 | kernel builtin extended in batch 1: any head; empty expressions raise |
 | `Reverse` | fixed | 16 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
 | `Select` | fixed | 18 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
-| `Sort` | fixed | 25 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
+| `Sort` | fixed | 26 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
 | `StringJoin` | kernel | 14 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `StringLength` | kernel | 9 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `StringQ` | kernel | 14 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
@@ -1669,7 +1670,7 @@ Cases = number of differential test cases in which the head occurs.
 | `CrossProduct` | fixed | 3 | alias of Cross (exact) |
 | `DiagonalMatrix` | fixed | 4 | DiagonalMatrix[list] and DiagonalMatrix[list, k] (k-th diagonal) |
 | `DiagonalMatrixQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
-| `Eigenvalues` | fixed | 13 | eigenvalues with multiplicity in Wolfram order (decreasing absolute value; legacy returned SymPy's dict order). Eigenvalues[m, k] gives the k largest in absolute value (k < 0: the \|k\| smallest, i.e. Take[Eigenvalues[m], k]); Eigenvalues[m, UpTo[k]]; generalized {m, a} raises |
+| `Eigenvalues` | fixed | 14 | eigenvalues with multiplicity in Wolfram order (decreasing absolute value; legacy returned SymPy's dict order). Eigenvalues[m, k] gives the k largest in absolute value (k < 0: the \|k\| smallest, i.e. Take[Eigenvalues[m], k]); Eigenvalues[m, UpTo[k]]; generalized {m, a} raises |
 | `Eigenvectors` | fixed | 6 | ordered like Eigenvalues, exact vectors scaled so the last non-zero entry is 1, zero vectors pad defective matrices (Wolfram); machine matrices give unit vectors; Eigenvectors[m, k] and UpTo[k] as for Eigenvalues |
 | `FrobeniusNorm` | fixed | 3 | exact Frobenius norm (legacy returned floats) |
 | `HermitianQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
@@ -1678,7 +1679,7 @@ Cases = number of differential test cases in which the head occurs.
 | `JordanForm` | verified | 3 | {s, j} with m = s.j.Inverse[s] (Wolfram JordanDecomposition convention) |
 | `KroneckerProduct` | fixed | 4 | variadic Kronecker product of matrices and/or vectors (vectors give vectors, as Wolfram) |
 | `LUDecomposition` | fixed | 3 | legacy ignored the row permutation (L.U != m whenever pivoting occurs); now Wolfram's {lu, p, c}: lu holds L (unit lower, below the diagonal) and U, m[[p]] == L.U, c = 0 for exact matrices and the infinity-norm condition number for machine matrices |
-| `LinearSolve` | fixed | 11 | solves m.x == b for a vector or matrix b; underdetermined systems give one particular solution (free parameters 0, as Wolfram); inconsistent systems raise |
+| `LinearSolve` | fixed | 12 | solves m.x == b for a vector or matrix b; underdetermined systems give one particular solution (free parameters 0, as Wolfram); inconsistent systems raise |
 | `LowerTriangularMatrixQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
 | `MatrixCos` | fixed | 3 | exact (legacy summed a truncated Taylor series) |
 | `MatrixExp` | fixed | 5 | exact via the Jordan form (SymPy); machine matrices via SciPy expm |
@@ -1830,7 +1831,7 @@ Cases = number of differential test cases in which the head occurs.
 | `CauchyMatrix` | added | 4 | entries 1/(x_i + y_j) (CauchyMatrix[x] = CauchyMatrix[x, x]), returned as the dense matrix; a zero denominator raises |
 | `ConjugateTranspose` | added | 12 | Conjugate[Transpose[m]] (and ConjugateTranspose[m, perm]); a vector or non-array raises like Transpose |
 | `CrossMatrix` | added | 3 | 1s on the central row and column (central lines in higher dimensions) extending r positions: CrossMatrix[r] is (2r+1) x (2r+1), CrossMatrix[r, w], CrossMatrix[{r1, ...}]; integer radii only |
-| `Det` | fixed | 46 | kernel builtin replaced in batch 3: non-square input raises a clear error (legacy raised SymPy's NonSquareMatrixError), a symbol leaves Det unevaluated (legacy raised TypeError), machine matrices use LAPACK, arbitrary-precision matrices keep their precision, symbolic determinants are expanded |
+| `Det` | fixed | 48 | kernel builtin replaced in batch 3: non-square input raises a clear error (legacy raised SymPy's NonSquareMatrixError), a symbol leaves Det unevaluated (legacy raised TypeError), machine matrices use LAPACK, arbitrary-precision matrices keep their precision, symbolic determinants are expanded |
 | `Diagonal` | added | 11 | Diagonal[m] = {m[[1,1]], m[[2,2]], ...} (rectangular matrices too); Diagonal[m, k] is the k-th superdiagonal (k < 0: subdiagonal); entries are returned unevaluated-as-given |
 | `DiagonalizableMatrixQ` | added | 5 | m == s.d.Inverse[s] for a diagonal d (over the complex numbers): exact via SymPy; machine matrices test that the eigenvector matrix is well-conditioned (condition number < 10^8) |
 | `DiamondMatrix` | added | 4 | 1s where the Manhattan distance from the centre is at most r: DiamondMatrix[r] is (2r+1) x (2r+1), DiamondMatrix[r, w]; integer radii only, equal radii per dimension |
@@ -1842,7 +1843,7 @@ Cases = number of differential test cases in which the head occurs.
 | `HermitianMatrixQ` | added | 6 | m == ConjugateTranspose[m] (exact zero test; Tolerance -> t for approximate matrices, default 1e-12 at machine precision; SameTest -> f); False for non-matrices |
 | `HilbertMatrix` | added | 15 | entries 1/(i + j - 1); HilbertMatrix[n] and HilbertMatrix[{m, n}]; exact (use N for machine numbers) |
 | `IndefiniteMatrixQ` | added | 5 | the quadratic form takes both signs (neither positive nor negative semidefinite); the quadratic form is Re[Conjugate[x].m.x], so only the Hermitian part (m + ConjugateTranspose[m])/2 matters (Wolfram); exact matrices use principal minors, machine matrices the eigenvalues of the Hermitian part with a tolerance of n*$MachineEpsilon*max\|eigenvalue\|; False for symbolic matrices unless every sign can be proved, and for non-matrices |
-| `Inverse` | fixed | 25 | kernel builtin replaced in batch 3: a symbol leaves Inverse unevaluated (legacy raised), non-square and singular matrices raise clear errors, machine matrices use LAPACK, symbolic entries are cancelled |
+| `Inverse` | fixed | 27 | kernel builtin replaced in batch 3: a symbol leaves Inverse unevaluated (legacy raised), non-square and singular matrices raise clear errors, machine matrices use LAPACK, symbolic entries are cancelled |
 | `JordanDecomposition` | added | 6 | {s, j} with m == s.j.Inverse[s] and j in Jordan normal form (exact, SymPy); a machine matrix must be numerically diagonalizable (eigenvector matrix condition number < 10^8) and gives {eigenvectors as columns, diagonal eigenvalues}; otherwise it raises. The order of the Jordan blocks and the scaling of s can differ from Wolfram's (the decomposition is not unique) |
 | `LeastSquares` | added | 6 | the x minimising Norm[m.x - b] (minimum-norm solution when several exist, = PseudoInverse[m].b); b a vector or matrix; exact for exact input, LAPACK lstsq for machine input |
 | `LeviCivitaTensor` | added | 11 | the rank-d totally antisymmetric tensor (Signature of the index list), as a dense array: LeviCivitaTensor[d] (Wolfram returns the equivalent SparseArray; Normal gives this array) and LeviCivitaTensor[d, List] |
@@ -2179,11 +2180,11 @@ Cases = number of differential test cases in which the head occurs.
 | `EulerNumber` | verified | 3 | Euler numbers E_n (E_1 = 0, E_4 = 5) |
 | `EulerPhi` | fixed | 4 | EulerPhi[0] = 0 and EulerPhi[-n] = EulerPhi[n] (legacy raised / gave wrong values) |
 | `ExtendedGCD` | fixed | 3 | returned {x, y, g}; Wolfram order is {g, {x, y}} with g = a x + b y |
-| `FactorInteger` | fixed | 5 | FactorInteger[1] returned {} (Wolfram {{1,1}}), 0 and rationals failed; now {{-1,1},...} for negatives, negative exponents for rationals |
+| `FactorInteger` | fixed | 8 | FactorInteger[1] returned {} (Wolfram {{1,1}}), 0 and rationals failed; now {{-1,1},...} for negatives, negative exponents for rationals |
 | `Fibonacci` | fixed | 9 | symbolic n raised TypeError (now unevaluated); negative n, real n and Fibonacci[n, x] added |
 | `FibonacciNumber` | fixed | 3 | MikoshiLang alias of Fibonacci |
 | `FromDigits` | fixed | 12 | now accepts digit strings (letters a-z = 10-35), symbolic digits and digits >= base as Wolfram; legacy silently used base 10 for invalid bases |
-| `GCD` | fixed | 4 | now variadic, exact for rationals, GCD[] = 0; legacy truncated reals (GCD[2.5, 5] = 1) |
+| `GCD` | fixed | 7 | now variadic, exact for rationals, GCD[] = 0; legacy truncated reals (GCD[2.5, 5] = 1) |
 | `HarmonicNumber` | fixed | 10 | HarmonicNumber[n] for rational n in closed form (HarmonicNumber[1/2] = 2 - 2 Log[2], legacy left it unevaluated); HarmonicNumber[n, r] |
 | `IntegerDigits` | fixed | 8 | legacy silently used base 10 for a non-integer base; now IntegerDigits[n], [n, b], [n, b, len] (digits of \|n\|, padded/truncated on the left) |
 | `IsPrime` | verified | 4 | MikoshiLang alias of PrimeQ (same kernel implementation) |
@@ -2325,7 +2326,7 @@ Cases = number of differential test cases in which the head occurs.
 | `NMinimize` | added | 5 | NMinimize[f, vars] / NMinimize[{f, cons}, vars] -> {fmin, {x -> x*, ...}}: global numeric search (differential evolution when every variable is bounded, plus 40 seeded multi-start SLSQP/BFGS local searches; constraints: <, <=, >, >=, ==, Inequality, And); like Wolfram's it is a heuristic global method; integer domains raise |
 | `NProduct` | added | 4 | NProduct[f, {n, nmin, nmax}] (also infinite products, mpmath nprod); WorkingPrecision -> p |
 | `NRoots` | added | 4 | NRoots[poly == 0, x] gives x == r1 \|\| x == r2 \|\| ... with roots repeated by multiplicity (machine precision, or the precision of approximate coefficients); non-polynomials raise |
-| `NSolve` | added | 9 | NSolve[eqns, vars] numerical solutions of polynomial (and rational) equations and systems as {{x -> x1}, ...} with every complex root repeated by multiplicity; NSolve[eqns, vars, Reals] keeps real solutions; WorkingPrecision -> p; transcendental equations raise (use FindRoot) |
+| `NSolve` | added | 10 | NSolve[eqns, vars] numerical solutions of polynomial (and rational) equations and systems as {{x -> x1}, ...} with every complex root repeated by multiplicity; NSolve[eqns, vars, Reals] keeps real solutions; WorkingPrecision -> p; transcendental equations raise (use FindRoot) |
 | `NSum` | added | 7 | NSum[f, {n, nmin, nmax}] and {n, nmin, nmax, dn}, multiple iterators, nmax = Infinity (mpmath nsum: Richardson/Shanks/Euler-Maclaurin acceleration, alternating series); WorkingPrecision -> p; finite short ranges are summed directly; divergent sums raise |
 | `Numerator` | added | 5 | numerator of a rational number or of a product with negative exponents (Numerator[x^2 y^-3] = x^2); sums are not combined over a common denominator (Numerator[a/b + c/d] is the whole sum) |
 | `Precision` | added | 18 | Precision[x]: Infinity for exact numbers and symbolic expressions without approximate numbers, MachinePrecision for machine numbers, the decimal precision of a bignum; the minimum over an expression (a machine number makes the whole expression MachinePrecision). An arbitrary-precision zero has Precision 0. |
@@ -3339,6 +3340,12 @@ Cases = number of differential test cases in which the head occurs.
 | `TypeCheck` | added | 8 | TypeCheck[expr] evaluates expr with type checking in report mode and gives <\|"Result" -> value, "Mismatches" -> {<\|"Function" -> f, "Position" -> i, "Value" -> v, "Expected" -> type\|>, ...}\|>. A mismatch is a concrete argument (or result) of the wrong kind; symbolic arguments never are. Position is the argument number, "Result" or "Count" (wrong number of arguments for a declared function). MikoshiLang extension. Check: exact; seeded mismatches in tests. |
 | `TypeMatchQ` | added | 27 | TypeMatchQ[value, type] is True when value is known to have the type (Integer, Real, ListOf[t], t1 \| t2, ...) and False otherwise, including for symbolic values whose type is not known yet (x is not an Integer). An unknown type raises ValueError. MikoshiLang extension. Check: exact; reference values for every type in tests. |
 | `TypeSignature` | added | 15 | TypeSignature[f] gives the signatures of f as {{t1, t2, ...} -> result, ...}: user declarations in this session first, otherwise the library signature read from the Python annotations of each implementation (RepeatedNull[t] stands for any number of further arguments); {} if none is known. TypeSignature[f, {t1, ...} -> r] declares a signature for a user function (repeat it for overloads) and returns it; RepeatedNull[t] is allowed last. The declaration is checked only when checking is on (Session(check_types=...) or TypeCheck). A non-symbol f raises TypeError; an unknown type raises ValueError. MikoshiLang extension. Check: exact; the signatures of library heads are compared with their annotations in tests. |
+
+### verification (V1)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `Verify` | added | 38 | Verify[expr] evaluates expr and checks the result independently: Integrate by differentiation (or mpmath quadrature for definite integrals), Solve/NSolve by substituting every solution (completeness is not checked), DSolve by substitution, D by numerical differentiation, Limit and Series numerically, FactorInteger and PrimeQ with primality proofs (deterministic Miller-Rabin below 3.3*10^24, Pratt certificates above) or compositeness witnesses, GCD by a Bezout identity, Factor by expansion, Simplify/FullSimplify/Expand/Together/Apart/TrigExpand by equivalence with the input, Inverse and LinearSolve by multiplying back, Det by a second algorithm and Eigenvalues through the characteristic polynomial. It gives Certified[value, info] when an exact certificate was checked, Checked[value, info] when the evidence is symbolic simplification or numerical sampling, and Unchecked[value, reason] when no checker applies; a failed check raises ArithmeticError. MikoshiLang extension. Check: self-check; seeded wrong results are caught in tests. |
 
 ## Quarantine decision for the remaining names
 
