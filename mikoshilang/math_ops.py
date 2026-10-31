@@ -36,7 +36,7 @@ _INV_FUNCS = {
     sp.beta: "Beta", sp.zeta: "Zeta", sp.conjugate: "Conjugate", sp.re: "Re", sp.im: "Im",
     sp.binomial: "Binomial", sp.erf: "Erf", sp.Max: "Max", sp.Min: "Min", sp.Mod: "Mod",
     sp.besselj: "BesselJ", sp.bessely: "BesselY", sp.loggamma: "LogGamma",
-    sp.polygamma: "PolyGamma", sp.fibonacci: "Fibonacci",
+    sp.polygamma: "PolyGamma", sp.fibonacci: "Fibonacci", sp.polylog: "PolyLog",
 }
 
 

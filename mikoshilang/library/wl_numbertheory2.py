@@ -964,3 +964,1077 @@ def _inverse_pre(a, ev_, expr):
 
 wrap_builtin("Det", _det_pre)
 wrap_builtin("Inverse", _inverse_pre)
+
+
+# ─────────────────────────── polynomials over the integers and Z/p ───────────────────────────
+
+def _poly_var(poly, fname, var=None):
+    if var is not None:
+        return S(var)
+    fs = sorted(S(poly).free_symbols, key=str)
+    if len(fs) != 1:
+        raise ValueError(f"{fname}: the polynomial must be univariate")
+    return fs[0]
+
+
+@fn("Cyclotomic", **ADDED, notes="Cyclotomic[n, x] is the n-th cyclotomic polynomial (product of x - zeta over "
+    "the primitive n-th roots of unity); Cyclotomic[0, x] = 1; any x, including numbers and matrices of "
+    "symbols, is substituted")
+def _cyclotomic(n, x):
+    if not _intq(n):
+        raise Unevaluated()
+    k = int(n)
+    if k < 0:
+        raise ValueError("Cyclotomic: n must be a non-negative integer")
+    t = sp.Symbol("_w09t")
+    p = sp.Integer(1) if k == 0 else sp.cyclotomic_poly(k, t)
+    if isinstance(x, (Symbol, Expr)) and not is_list(x) or isinstance(x, (int, float, complex)):
+        return R(sp.expand(p.subs(t, S(x))) if not isinstance(x, Symbol) else p.subs(t, S(x)))
+    raise Unevaluated()
+
+
+def _gf_poly_coeffs(poly, p, fname, var=None):
+    """Coefficient list (high to low) of poly modulo p, made monic; None if not a polynomial."""
+    x = _poly_var(poly, fname, var)
+    e = sp.together(S(poly))
+    num, den = sp.fraction(e)
+    P = sp.Poly(num, x)
+    D = sp.Poly(den, x)
+    if D.degree() > 0:
+        raise ValueError(f"{fname}: {poly} is not a polynomial")
+    d = int(D.LC()) % p
+    if d == 0:
+        raise ValueError(f"{fname}: the denominator vanishes modulo {p}")
+    cs = [(int(sp.Rational(c).p) * pow(int(sp.Rational(c).q) * d, -1, p)) % p for c in P.all_coeffs()]
+    while cs and cs[0] == 0:
+        cs.pop(0)
+    if not cs:
+        raise ValueError(f"{fname}: the polynomial vanishes modulo {p}")
+    inv = pow(cs[0], -1, p)
+    return [c * inv % p for c in cs]
+
+
+def _gf_mulmod(a, b, m, p):
+    """a*b mod m over GF(p); polynomials as low-to-high lists, m monic."""
+    n = len(m) - 1
+    r = [0] * (len(a) + len(b) - 1)
+    for i, x in enumerate(a):
+        if x:
+            for j, y in enumerate(b):
+                r[i + j] = (r[i + j] + x * y) % p
+    for k in range(len(r) - 1, n - 1, -1):
+        c = r[k]
+        if c:
+            for t in range(n + 1):
+                r[k - n + t] = (r[k - n + t] - c * m[t]) % p
+    r = r[:n] + [0] * max(0, n - len(r))
+    return r
+
+
+def _gf_powmod(base, e, m, p):
+    n = len(m) - 1
+    result = [1] + [0] * (n - 1)
+    b = (list(base) + [0] * n)[:max(n, len(base))]
+    while e:
+        if e & 1:
+            result = _gf_mulmod(result, b, m, p)
+        b = _gf_mulmod(b, b, m, p)
+        e >>= 1
+    return result
+
+
+def gf_primitive(cs_high, p):
+    """Is the monic polynomial (coefficients high to low) primitive over GF(p)?"""
+    m = list(reversed(cs_high))
+    n = len(m) - 1
+    if n < 1 or m[0] % p == 0:
+        return False
+    N = p ** n - 1
+    one = [1] + [0] * (n - 1)
+    x = [0, 1] if n > 1 else [(-m[0]) % p]
+    if _gf_powmod(x, N, m, p) != one:
+        return False
+    for q in sp.factorint(N):
+        if _gf_powmod(x, N // q, m, p) == one:
+            return False
+    return True
+
+
+@fn("PrimitivePolynomialQ", **ADDED, notes="PrimitivePolynomialQ[poly, p]: True if the univariate poly, reduced "
+    "modulo the prime p and made monic, is primitive over GF(p) (irreducible with x of order p^n - 1)")
+def _primpolyq(poly, p):
+    if not _intq(p) or not sp.isprime(int(p)):
+        raise ValueError("PrimitivePolynomialQ: the modulus must be a prime")
+    if not isinstance(poly, (Expr, Symbol)) or isinstance(poly, bool):
+        return False
+    try:
+        cs = _gf_poly_coeffs(poly, int(p), "PrimitivePolynomialQ")
+    except (ValueError, sp.PolynomialError, sp.GeneratorsNeeded):
+        return False
+    return gf_primitive(cs, int(p))
+
+
+# ─────────────────────────── continued fractions ───────────────────────────
+
+K.BUILTIN_ATTRIBUTES["ContinuedFractionK"] = {"HoldAll", "Protected"}
+
+
+def _iter_spec(spec, fname):
+    if not is_list(spec) or not (1 <= len(spec.args) <= 3) or not isinstance(spec.args[0], Symbol):
+        raise ValueError(f"{fname}: the iterator must be {{i, imax}} or {{i, imin, imax}}")
+    i = spec.args[0]
+    if len(spec.args) == 2:
+        lo, hi = 1, ev(spec.args[1])
+    else:
+        lo, hi = ev(spec.args[1]), ev(spec.args[2])
+    return i, lo, hi
+
+
+def _at(f, i, v):
+    return ev(K.substitute(f, {i.name: v}))
+
+
+def _free_of(f, i):
+    if isinstance(f, Symbol):
+        return f.name != i.name
+    if isinstance(f, Expr):
+        return _free_of(f.head, i) if not isinstance(f.head, str) else True and all(_free_of(a, i) for a in f.args)
+    return True
+
+
+@fn("ContinuedFractionK", **ADDED, hold=True, notes="ContinuedFractionK[g, {i, imin, imax}] = 1/(g_imin + "
+    "1/(g_imin+1 + ...)) and ContinuedFractionK[f, g, {i, imin, imax}] = f_imin/(g_imin + f_imin+1/(g_imin+1 + "
+    "...)); finite numeric limits are evaluated exactly; infinite fractions with constant terms give the closed "
+    "form 2 f/(g + Sqrt[g^2 + 4 f]) (for numeric terms the attracting fixed point, unevaluated when the fraction "
+    "oscillates); other infinite or symbolic-length fractions stay unevaluated")
+def _cfk(*args):
+    pos, opts = split_options(args, ("Assumptions", "GenerateConditions", "Method", "VerifyConvergence"),
+                              "ContinuedFractionK")
+    gc = opts.get("GenerateConditions")
+    if gc is not None and ev(gc) is True:
+        raise NotImplementedError("ContinuedFractionK: GenerateConditions -> True is not supported")
+    if len(pos) == 2:
+        f, g, spec = 1, pos[0], pos[1]
+    elif len(pos) == 3:
+        f, g, spec = pos
+    else:
+        raise ValueError("ContinuedFractionK takes 2 or 3 arguments")
+    if is_list(spec) and len(spec.args) and is_list(spec.args[0]):
+        raise NotImplementedError("ContinuedFractionK: only one iterator is supported")
+    i, lo, hi = _iter_spec(spec, "ContinuedFractionK")
+    inf = isinstance(hi, Symbol) and hi.name == "Infinity"
+    if inf:
+        if not (_free_of(f, i) and _free_of(g, i)):
+            raise Unevaluated()
+        fv, gv = ev(f), ev(g)
+        a, b = S(fv), S(gv)
+        if a.is_number and b.is_number:
+            disc = sp.nsimplify(b ** 2 + 4 * a) if not has_float(fv) and not has_float(gv) else b ** 2 + 4 * a
+            r1 = 2 * a / (b + sp.sqrt(disc))
+            r2 = 2 * a / (b - sp.sqrt(disc)) if disc != 0 else r1
+            m1 = abs(complex(sp.N(b + a / (b + r1) if b + r1 != 0 else sp.oo))) if False else None
+            # attracting fixed point of x -> a/(b + x): |b + x| is the larger one
+            v1, v2 = complex(sp.N(b + r1)), complex(sp.N(b - sp.sqrt(disc)) if disc != 0 else sp.N(b + r1))
+            if abs(abs(v1) - abs(v2)) < 1e-12 * max(1.0, abs(v1)) and disc != 0:
+                raise Unevaluated()
+            res = r1 if abs(v1) >= abs(v2) else r2
+            out = R(sp.radsimp(res) if not res.has(sp.Float) else res)
+            return ev(out) if not has_float(fv) and not has_float(gv) else ev(Expr("N", out))
+        return ev(Expr("Times", 2, fv, Expr("Power", Expr("Plus", gv, Expr("Power", Expr(
+            "Plus", Expr("Power", gv, 2), Expr("Times", 4, fv)), Expr("Rational", 1, 2) if False else
+            Expr("Times", 1, Expr("Power", 2, -1)))), -1)))
+    if not (_intq(lo) and _intq(hi)):
+        if is_numeric_value(lo) and is_numeric_value(hi):
+            lo_i, hi_i = int(sp.floor(S(lo))), int(sp.floor(S(hi)))
+        else:
+            raise Unevaluated()
+    else:
+        lo_i, hi_i = int(lo), int(hi)
+    if hi_i - lo_i > 100000:
+        raise ValueError("ContinuedFractionK: too many terms")
+    v = 0
+    for k in range(hi_i, lo_i - 1, -1):
+        fk = _at(f, i, k) if not isinstance(f, int) else f
+        gk = _at(g, i, k)
+        v = ev(Expr("Times", fk, Expr("Power", Expr("Plus", gk, v), -1)))
+    return ev(Expr("Together", v)) if not has_float(v) and isinstance(v, Expr) and not is_numeric_value(v) else v
+
+
+# ─────────────────────────── sequences ───────────────────────────
+
+def _fkm(k, n):
+    """Lexicographically least de Bruijn sequence B(k, n) (Fredricksen-Kessler-Maiorana)."""
+    a = [0] * (k * n)
+    seq = []
+
+    def db(t, p):
+        if t > n:
+            if n % p == 0:
+                seq.extend(a[1:p + 1])
+        else:
+            a[t] = a[t - p]
+            db(t + 1, p)
+            for j in range(a[t - p] + 1, k):
+                a[t] = j
+                db(t + 1, t)
+    db(1, 1)
+    return seq
+
+
+@fn("DeBruijnSequence", **ADDED, notes="DeBruijnSequence[list, n]: the lexicographically first de Bruijn "
+    "sequence (FKM algorithm) in the order of the elements of list (duplicates removed, first occurrence kept); "
+    "DeBruijnSequence[k, n] uses Range[0, k - 1]; a string gives a string. The positions-based form "
+    "DeBruijnSequence[list, n, positions] is not supported")
+def _debruijn(lst, n):
+    if not _intq(n) or int(n) < 0:
+        raise ValueError("DeBruijnSequence: n must be a non-negative integer")
+    n = int(n)
+    if isinstance(lst, str):
+        alph = list(dict.fromkeys(lst))
+        if n == 0:
+            return ""
+        return "".join(alph[i] for i in _fkm(len(alph), n))
+    if _intq(lst):
+        if int(lst) < 1:
+            raise ValueError("DeBruijnSequence: k must be a positive integer")
+        alph = list(range(int(lst)))
+    elif is_list(lst):
+        alph = []
+        for x in lst.args:
+            if not any(K.same(x, y) for y in alph):
+                alph.append(x)
+    else:
+        raise ValueError("DeBruijnSequence: the first argument must be a list, a string or a positive integer")
+    if n == 0 or not alph:
+        return L()
+    if len(alph) ** n > 10 ** 7:
+        raise ValueError("DeBruijnSequence: the sequence is too long")
+    return L(*[alph[i] for i in _fkm(len(alph), n)])
+
+
+def _default_lfsr_poly(n):
+    """Exponents (descending, without n and 0) of the feedback polynomial used by ShiftRegisterSequence[n]:
+    the primitive trinomial x^n + x^k + 1 with the least k, else the primitive pentanomial x^n + x^a + x^b +
+    x^c + 1 with the lexicographically least (c, b, a)."""
+    for k in range(1, n):
+        cs = [0] * (n + 1)
+        cs[0] = cs[n] = 1
+        cs[k] = 1
+        if gf_primitive(list(reversed(cs)), 2):
+            return [k]
+    import itertools
+    for c in range(1, n):
+        for b in range(c + 1, n):
+            for a in range(b + 1, n):
+                cs = [0] * (n + 1)
+                cs[0] = cs[n] = cs[a] = cs[b] = cs[c] = 1
+                if gf_primitive(list(reversed(cs)), 2):
+                    return [a, b, c]
+    raise ValueError(f"ShiftRegisterSequence: no primitive polynomial of degree {n} with at most 5 terms")
+
+
+def _poly_lowhigh(poly, p, fname):
+    x = _poly_var(poly, fname)
+    P = sp.Poly(S(poly), x)
+    cs = list(reversed([int(c) % p for c in P.all_coeffs()]))
+    if any(not sp.sympify(c).is_Integer for c in P.all_coeffs()):
+        raise ValueError(f"{fname}: the polynomial must have integer coefficients")
+    if cs[-1] % p != 1:
+        raise ValueError(f"{fname}: the polynomial must be monic")
+    return cs, x
+
+
+def _srs_run(step, state, length):
+    out = []
+    s = list(state)
+    if length > 10 ** 7:
+        raise ValueError("ShiftRegisterSequence: the sequence is too long")
+    for _ in range(length):
+        out.append(s[-1])
+        s = step(s)
+    return out
+
+
+@fn("ShiftRegisterSequence", **ADDED, notes="linear-feedback shift register sequences: ShiftRegisterSequence[n] "
+    "(maximal length over GF(2), feedback polynomial x^n + x^k + 1 with least k or else the lexicographically "
+    "first primitive pentanomial), [{n, {t1, ...}}] (Fibonacci register: the new bit is the sum mod 2 of the "
+    "bits at the tap positions), [{n, taps, f}] (feedback function f), [poly] (Galois register), with optional "
+    "initial state (list, or polynomial for the Galois form) and length (an integer or All, default one full "
+    "period p^n - 1, or 2^n terms with a feedback function); options Method -> \"Fibonacci\"|\"Galois\" and Modulus -> p (Galois form)")
+def _srs(*args):
+    pos, opts = split_options(args, ("Method", "Modulus"), "ShiftRegisterSequence")
+    if not pos or len(pos) > 3:
+        raise ValueError("ShiftRegisterSequence takes 1 to 3 arguments")
+    spec = pos[0]
+    p = opts.get("Modulus", 2)
+    if not _intq(p) or not sp.isprime(int(p)):
+        raise ValueError("ShiftRegisterSequence: Modulus must be a prime")
+    p = int(p)
+    method = opts.get("Method")
+    method = method if isinstance(method, str) or method is None else _opt_name(method)
+    init = pos[1] if len(pos) == 3 else None
+    length = pos[2] if len(pos) == 3 else (pos[1] if len(pos) == 2 else None)
+    if len(pos) == 2 and is_list(pos[1]):
+        init, length = pos[1], None
+    if length is not None:
+        if isinstance(length, Symbol) and length.name == "All":
+            length = None
+        elif _intq(length) and int(length) >= 0:
+            length = int(length)
+        else:
+            raise ValueError("ShiftRegisterSequence: the length must be a non-negative integer or All")
+    feedback = None
+    if _intq(spec):
+        n = int(spec)
+        if n < 1:
+            raise ValueError("ShiftRegisterSequence: the register length must be positive")
+        if p != 2:
+            raise NotImplementedError("ShiftRegisterSequence[n, Modulus -> p] (p > 2) is not supported; give the "
+                                      "polynomial")
+        cs = [0] * (n + 1)
+        cs[0] = cs[n] = 1
+        for e in _default_lfsr_poly(n):
+            cs[e] = 1
+        form, taps = "Galois", None
+    elif is_list(spec):
+        if len(spec.args) not in (2, 3) or not _intq(spec.args[0]) or not is_list(spec.args[1]):
+            raise ValueError("ShiftRegisterSequence: the register specification must be {n, {taps...}} or "
+                             "{n, taps, f}")
+        n = int(spec.args[0])
+        taps = [int(t) for t in spec.args[1].args if _intq(t)]
+        if len(taps) != len(spec.args[1].args) or any(not 1 <= t <= n for t in taps):
+            raise ValueError("ShiftRegisterSequence: taps must be integers between 1 and n")
+        feedback = spec.args[2] if len(spec.args) == 3 else None
+        form = "Fibonacci"
+        cs = [0] * (n + 1)
+        cs[n] = 1
+        for t in taps:
+            cs[t - 1] = (cs[t - 1] + 1) % 2
+    else:
+        if p == 2 and isinstance(spec, (Expr, Symbol)):
+            pass
+        cs, _x = _poly_lowhigh(spec, p, "ShiftRegisterSequence")
+        n = len(cs) - 1
+        form, taps = "Galois", None
+        if n < 1:
+            raise ValueError("ShiftRegisterSequence: the polynomial must have positive degree")
+    if method is not None:
+        if method not in ("Fibonacci", "Galois"):
+            raise ValueError("ShiftRegisterSequence: Method must be \"Fibonacci\" or \"Galois\"")
+        if method != form:
+            if feedback is not None:
+                raise ValueError("ShiftRegisterSequence: a feedback function requires the Fibonacci method")
+            if method == "Fibonacci":
+                taps = [e + 1 for e in range(n) if cs[e] % p]
+            form = method
+    if form == "Fibonacci" and p != 2:
+        raise NotImplementedError("ShiftRegisterSequence: the Fibonacci form is supported only modulo 2")
+    # initial state
+    if init is None:
+        state = [1] + [0] * (n - 1)
+    elif is_list(init):
+        state = [int(v) % p if _intq(v) else None for v in init.args]
+        if len(state) != n or None in state:
+            raise ValueError(f"ShiftRegisterSequence: the initial state must be a list of {n} integers")
+    else:
+        x = _poly_var(init, "ShiftRegisterSequence") if not _intq(init) else sp.Symbol("x")
+        P = sp.Poly(S(init), x)
+        icoef = list(reversed([int(c) % p for c in P.all_coeffs()]))
+        if len(icoef) > n:
+            raise ValueError("ShiftRegisterSequence: the initial-state polynomial has too high a degree")
+        state = icoef + [0] * (n - len(icoef))
+    if form == "Fibonacci":
+        if feedback is None:
+            def step(s):
+                return s[1:] + [sum(s[t - 1] for t in taps) % 2]
+        else:
+            def step(s):
+                v = ev(Expr(feedback, L(*[s[t - 1] for t in taps])))
+                if not _intq(v):
+                    raise ValueError(f"ShiftRegisterSequence: the feedback function returned {v}, not an integer")
+                return s[1:] + [int(v)]
+    else:
+        def step(s):
+            o = s[-1]
+            s = [0] + s[:-1]
+            if o:
+                for t in range(n):
+                    if cs[t]:
+                        s[t] = (s[t] - o * cs[t]) % p
+            return s
+    if length is None:          # one full period of a maximal-length register (p^n - 1; 2^n with a feedback function)
+        length = p ** n - 1 if feedback is None else 2 ** n
+    return L(*_srs_run(step, state, length))
+
+
+# ─────────────────────────── counting groups ───────────────────────────
+
+def _holder_squarefree(n):
+    ps = sp.primefactors(n)
+    total = 0
+    for k in range(len(ps) + 1):
+        import itertools
+        for d_primes in itertools.combinations(ps, k):
+            d = math.prod(d_primes)
+            m = n // d
+            mprimes = [q for q in ps if m % q == 0]
+            prod = 1
+            for p in d_primes:
+                c = sum(1 for q in mprimes if q % p == 1)
+                prod *= (p ** c - 1) // (p - 1)
+            total += prod
+    return total
+
+
+@fn("FiniteGroupCount", **ADDED, listable=True, notes="number of non-isomorphic groups of order n: tabulated "
+    "for n <= 2047 (SmallGroups library, OEIS A000001); beyond the table exact formulas for cyclic numbers "
+    "(gcd(n, EulerPhi[n]) = 1 gives 1), square-free n (Hoelder), p, p^2, p^3, p^4 and p^5 (p >= 5); other orders "
+    "raise")
+def _fgc(n):
+    if not _intq(n):
+        if is_numeric_value(n):
+            raise ValueError("FiniteGroupCount: the argument must be a positive integer")
+        raise Unevaluated()
+    n = int(n)
+    if n < 1:
+        raise ValueError("FiniteGroupCount: the argument must be a positive integer")
+    from ._w09_groupcounts import GROUP_COUNTS
+    if n <= len(GROUP_COUNTS):
+        return GROUP_COUNTS[n - 1]
+    if math.gcd(n, int(sp.totient(n))) == 1:
+        return 1
+    f = sp.factorint(n)
+    if all(e == 1 for e in f.values()):
+        return _holder_squarefree(n)
+    if len(f) == 1:
+        (p, e), = f.items()
+        if e <= 3:
+            return [1, 2, 5][e - 1]
+        if e == 4:
+            return 14 if p == 2 else 15
+        if e == 5 and p >= 5:
+            return 61 + 2 * p + 2 * math.gcd(p - 1, 3) + math.gcd(p - 1, 4)
+    raise NotImplementedError(f"FiniteGroupCount: the number of groups of order {n} is not available")
+
+
+@fn("FiniteAbelianGroupCount", **ADDED, listable=True, notes="number of abelian groups of order n: the product "
+    "of PartitionsP[e] over the prime-power exponents e of n")
+def _fagc(n):
+    if not _intq(n):
+        if is_numeric_value(n):
+            raise ValueError("FiniteAbelianGroupCount: the argument must be a positive integer")
+        raise Unevaluated()
+    n = int(n)
+    if n < 1:
+        raise ValueError("FiniteAbelianGroupCount: the argument must be a positive integer")
+    return math.prod(int(sp.partition(e)) for e in sp.factorint(n).values())
+
+
+# ─────────────────────────── Groupings ───────────────────────────
+
+def _compositions(n, k, ok):
+    """Compositions of n into k parts with every part satisfying ok, lexicographically descending."""
+    if k == 1:
+        if ok(n):
+            yield (n,)
+        return
+    for first in range(n - (k - 1), 0, -1):
+        if ok(first):
+            for rest in _compositions(n - first, k - 1, ok):
+                yield (first,) + rest
+
+
+def _groupings(leaves, k, head, limit):
+    n = len(leaves)
+    if n == 1:
+        return [leaves[0]]
+    ok = lambda m: (m - 1) % (k - 1) == 0    # noqa: E731
+    out = []
+    for comp in _compositions(n, k, ok):
+        parts, i = [], 0
+        for c in comp:
+            parts.append(leaves[i:i + c])
+            i += c
+        subs = [_groupings(p, k, head, limit) for p in parts]
+        import itertools
+        for combo in itertools.product(*subs):
+            out.append(Expr(head, *combo))
+            if len(out) > limit:
+                raise ValueError("Groupings: too many groupings")
+    return out
+
+
+@fn("Groupings", **ADDED, notes="Groupings[list, k] (or Groupings[n, k] for Range[n]): all trees of k-ary "
+    "List nodes with the given leaves in order (compositions of the leaves lexicographically descending); "
+    "Groupings[list, h -> k] uses head h; Groupings[{list1, list2, ...}, spec] gives the groupings of every "
+    "list, grouping structure outermost; a third argument wraps each result (e.g. HoldForm). Several heads or "
+    "arities, arity 1 and Orderless/Flat specifications are not supported (raise)")
+def _groupings_fn(lst, spec, wrapper=None):
+    if _intq(lst):
+        if int(lst) < 0:
+            raise ValueError("Groupings: n must be non-negative")
+        lists = [list(range(1, int(lst) + 1))]
+    elif is_list(lst):
+        if lst.args and all(is_list(a) for a in lst.args):
+            lists = [list(a.args) for a in lst.args]
+            if len({len(x) for x in lists}) != 1:
+                raise ValueError("Groupings: the lists must have the same length")
+        else:
+            lists = [list(lst.args)]
+    else:
+        raise ValueError("Groupings: the first argument must be a list or a non-negative integer")
+    head, k = "List", None
+    if _intq(spec):
+        k = int(spec)
+    elif isinstance(spec, Expr) and spec.head in ("Rule", "RuleDelayed") and _intq(spec.args[1]) and \
+            not is_list(spec.args[0]):
+        head, k = spec.args[0], int(spec.args[1])
+    else:
+        raise NotImplementedError("Groupings: only a single arity k or a single head h -> k is supported")
+    if k == 1:
+        raise NotImplementedError("Groupings: arity 1 is not supported")
+    if k < 1:
+        raise ValueError("Groupings: the arity must be a positive integer")
+    n = len(lists[0])
+    if n == 0:
+        return L()
+    if (n - 1) % (k - 1):
+        return L()
+    shapes = _groupings(list(range(n)), k, "_shape", 10 ** 6)
+
+    def build(shape, leaves):
+        if isinstance(shape, int):
+            return leaves[shape]
+        return Expr(head, *[build(s, leaves) for s in shape.args])
+    out = []
+    for sh in shapes:
+        for lv in lists:
+            e = build(sh, lv)
+            out.append(Expr(wrapper, e) if wrapper is not None else e)
+    return L(*out)
+
+
+# ─────────────────────────── RandomComplex ───────────────────────────
+
+def _complex_bounds(spec, fname):
+    if is_list(spec):
+        if len(spec.args) != 2:
+            raise ValueError(f"{fname}: the range must be {{zmin, zmax}}")
+        lo, hi = (complex(sp.N(S(v))) for v in spec.args)
+    else:
+        lo, hi = 0j, complex(sp.N(S(spec)))
+    return lo, hi
+
+
+@fn("RandomComplex", **ADDED, notes="RandomComplex[] in the unit square, RandomComplex[zmax] in the rectangle "
+    "0..zmax, RandomComplex[{zmin, zmax}], with a count or dimension list; uniform real and imaginary parts "
+    "from the session generator (SeedRandom reproducible); WorkingPrecision -> p gives p-digit numbers")
+def _randcomplex(*args):
+    pos, opts = split_options(args, ("WorkingPrecision",), "RandomComplex")
+    if len(pos) > 2:
+        raise ValueError("RandomComplex takes at most 2 arguments")
+    spec = pos[0] if pos else L(0, Expr("Plus", 1, Symbol("I")))
+    if not pos:
+        lo, hi = 0j, 1 + 1j
+    else:
+        if not is_numeric_value(spec) and not is_list(spec):
+            raise ValueError("RandomComplex: the range must be numeric")
+        lo, hi = _complex_bounds(spec, "RandomComplex")
+    wp = opts.get("WorkingPrecision")
+    prec = None
+    if wp is not None and not (isinstance(wp, Symbol) and wp.name == "MachinePrecision"):
+        if not is_numeric_value(wp):
+            raise ValueError("RandomComplex: WorkingPrecision must be a positive number")
+        prec = int(sp.ceiling(S(wp)))
+    from .statistics import _RNG as rng
+
+    def one():
+        a, b = rng.random(), rng.random()
+        if prec is None:
+            return complex(lo.real + a * (hi.real - lo.real), lo.imag + b * (hi.imag - lo.imag))
+        z = (sp.Float(lo.real, prec + 5) + sp.Float(a, prec + 5) * sp.Float(hi.real - lo.real, prec + 5)) + \
+            sp.I * (sp.Float(lo.imag, prec + 5) + sp.Float(b, prec + 5) * sp.Float(hi.imag - lo.imag, prec + 5))
+        return R(sp.N(z, prec))
+    if len(pos) < 2:
+        return one()
+    dims = pos[1]
+    if _intq(dims):
+        dims = [int(dims)]
+    elif is_list(dims) and all(_intq(d) for d in dims.args):
+        dims = [int(d) for d in dims.args]
+    else:
+        raise ValueError("RandomComplex: the count must be a non-negative integer or a list of them")
+    if any(d < 0 for d in dims):
+        raise ValueError("RandomComplex: dimensions must be non-negative")
+
+    def build(ds):
+        if not ds:
+            return one()
+        return L(*[build(ds[1:]) for _ in range(ds[0])])
+    return build(dims)
+
+
+# ─────────────────────────── Dirichlet characters and series ───────────────────────────
+
+def _char_table(k, j):
+    """{residue: exponent r} with chi(n) = Exp[2 Pi I r] for n coprime to k (r a Rational in [0, 1))."""
+    if k == 1:
+        if j != 1:
+            raise ValueError("DirichletCharacter: the index must be 1 for modulus 1")
+        return {0: sp.Integer(0)}
+    if k == 2:
+        if j != 1:
+            raise ValueError("DirichletCharacter: the index must be 1 for modulus 2")
+        return {1: sp.Integer(0)}
+    if k == 4:
+        if j not in (1, 2):
+            raise ValueError("DirichletCharacter: the index must be 1 or 2 for modulus 4")
+        return {1: sp.Integer(0), 3: sp.Integer(0) if j == 1 else sp.Rational(1, 2)}
+    if sp.isprime(k):
+        if not 1 <= j <= k - 1:
+            raise ValueError(f"DirichletCharacter: the index must be between 1 and {k - 1}")
+        g = int(sp.primitive_root(k))
+        tab, x = {}, 1
+        for a in range(k - 1):
+            tab[x] = sp.Rational((j - 1) * a, k - 1) % 1
+            x = x * g % k
+        return tab
+    raise NotImplementedError(f"DirichletCharacter: modulus {k} is not supported (only 1, 2, 4 and primes; the "
+                              "Wolfram Language's ordering of characters for other moduli is not documented)")
+
+
+def _char_value(r):
+    if r == 0:
+        return 1
+    if r == sp.Rational(1, 2):
+        return -1
+    return R(sp.exp(2 * sp.pi * sp.I * r))
+
+
+def _kj(k, j, fname):
+    if not (_intq(k) and _intq(j)):
+        raise Unevaluated()
+    k, j = int(k), int(j)
+    if k < 1:
+        raise ValueError(f"{fname}: the modulus must be a positive integer")
+    return k, j
+
+
+@fn("DirichletCharacter", **ADDED, notes="DirichletCharacter[k, j, n]: the j-th Dirichlet character modulo k "
+    "(j = 1 is the principal character); for a prime modulus chi_j(g^a) = Exp[2 Pi I (j - 1) a/(k - 1)] with g "
+    "the least primitive root (the Wolfram ordering); moduli 1, 2, 4 and primes are supported, other moduli "
+    "raise; zero when n is not coprime to k; listable in n")
+def _dirichletchar(k, j, n):
+    k, j = _kj(k, j, "DirichletCharacter")
+    if is_list(n):
+        return L(*[_dirichletchar(k, j, x) for x in n.args])
+    tab = _char_table(k, j)
+    if not _intq(n):
+        if is_numeric_value(n):
+            raise ValueError("DirichletCharacter: n must be an integer")
+        raise Unevaluated()
+    m = int(n) % k
+    if math.gcd(m, k) != 1 and k > 1:
+        return 0
+    return _char_value(tab[m % k if k > 1 else 0])
+
+
+def _gen_bernoulli(k, tab, m):
+    """B_{m, chi} = k^(m-1) Sum[chi(a) B_m(a/k), {a, 1, k}]."""
+    x = sp.Symbol("x")
+    bm = sp.bernoulli(m, x)
+    tot = 0
+    for a in range(1, k + 1):
+        if a % k in tab or (k == 1):
+            r = tab[a % k] if k > 1 else 0
+            tot += sp.exp(2 * sp.pi * sp.I * r) * bm.subs(x, sp.Rational(a, k))
+    return sp.nsimplify(sp.expand(k ** (m - 1) * tot)) if False else sp.expand(k ** (m - 1) * tot)
+
+
+def _dirichlet_numeric(k, j, s, prec):
+    import mpmath
+    tab = _char_table(k, j)
+    with mpmath.workdps(prec + 10):
+        chi = []
+        for a in range(k):
+            if k == 1:
+                chi.append(1)
+            elif a in tab:
+                chi.append(mpmath.expjpi(2 * mpmath.mpf(tab[a].p) / tab[a].q))
+            else:
+                chi.append(0)
+        return mpmath.dirichlet(s, chi)
+
+
+@fn("DirichletL", **ADDED, listable=True, notes="DirichletL[k, j, s]: the Dirichlet L-function of "
+    "DirichletCharacter[k, j, n]; DirichletL[1, 1, s] = Zeta[s]; the principal character gives Zeta[s] "
+    "Product[1 - p^-s, {p | k}]; non-positive integers s give -B[1 - s, chi]/(1 - s) (generalized Bernoulli "
+    "numbers); inexact s is evaluated with mpmath; other exact arguments stay unevaluated (N evaluates them)")
+def _dirichletl(k, j, s):
+    k, j = _kj(k, j, "DirichletL")
+    tab = _char_table(k, j)
+    if k == 1:
+        return ev(Expr("Zeta", s))
+    if is_numeric_value(s) and has_float(s):
+        return numeric_eval(lambda mp_s, dps: _dirichlet_numeric(k, j, mp_s, dps), s)
+    principal = all(r == 0 for r in tab.values())
+    if principal:
+        fac = Expr("Times", *[Expr("Plus", 1, Expr("Times", -1, Expr("Power", int(p), Expr("Times", -1, s))))
+                              for p in sp.primefactors(k)])
+        return ev(Expr("Times", Expr("Zeta", s), fac))
+    if _intq(s) and int(s) <= 0:
+        m = 1 - int(s)
+        return R(sp.simplify(-_gen_bernoulli(k, tab, m) / m))
+    raise Unevaluated()
+
+
+def mp_to_value(v, dps):
+    """mpmath number -> Mikoshi number (machine for dps <= 15, else a SymPy Float of dps digits)."""
+    import mpmath
+    if isinstance(v, mpmath.mpc):
+        if v.imag == 0:
+            v = v.real
+        else:
+            if dps <= 15:
+                return complex(v)
+            return R(sp.Float(v.real, dps) + sp.I * sp.Float(v.imag, dps))
+    if dps <= 15:
+        return float(v)
+    return sp.Float(v, dps)
+
+
+def numeric_eval(f, *xs):
+    """Evaluate f(*mp_args, dps) at the precision of the inexact inputs xs and convert back."""
+    import mpmath
+    from ..precision import input_precision
+    pin = input_precision(list(xs))
+    dps = 15 if pin in (None, "m") else int(mpmath.libmp.prec_to_dps(pin))
+    with mpmath.workdps(dps + 10):
+        args = []
+        for x in xs:
+            v = S(x)
+            args.append(mpmath.mpmathify(complex(v)) if dps <= 15 else
+                        mpmath.mpc(*[mpmath.mpf(str(sp.N(t, dps + 5))) for t in v.as_real_imag()]))
+        args = [a.real if isinstance(a, mpmath.mpc) and a.imag == 0 else a for a in args]
+        out = f(*args, dps)
+    return mp_to_value(out, dps)
+
+
+def _mp_dirichletl(k, j, s):
+    import mpmath
+    k, j = int(round(float(k))), int(round(float(j)))
+    prec = mpmath.mp.dps
+    v = _dirichlet_numeric(k, j, mpmath.mpmathify(s), prec)
+    if isinstance(v, mpmath.mpc) and v.imag == 0:
+        return sp.Float(v.real, prec)
+    if isinstance(v, mpmath.mpc):
+        return sp.Float(v.real, prec) + sp.I * sp.Float(v.imag, prec)
+    return sp.Float(v, prec)
+
+
+def _register_numeric():
+    from .wl_special import MP_NUMERIC
+    MP_NUMERIC["DirichletL"] = _mp_dirichletl
+
+
+_register_numeric()
+
+
+def _sigma(k, m):
+    return Expr("DivisorSigma", k, m)
+
+
+def _poly_terms(f, n):
+    """[(coeff, exponent)] when f = Sum c n^a with c free of n, else None."""
+    e = sp.expand(S(f))
+    nn = S(n)
+    out = []
+    for t in sp.Add.make_args(e):
+        c, a = sp.S(1), sp.S(0)
+        for fac in sp.Mul.make_args(t):
+            if fac == nn:
+                a += 1
+            elif fac.is_Pow and fac.base == nn and not fac.exp.has(nn):
+                a += fac.exp
+            elif fac.has(nn):
+                return None
+            else:
+                c *= fac
+        out.append((c, a))
+    return out
+
+
+def _is_delta1(f, n):
+    """Is f KroneckerDelta[n - 1] (in any of its evaluated forms)?"""
+    if not (isinstance(f, Expr) and f.head == "KroneckerDelta" and len(f.args) in (1, 2)):
+        return False
+    d = S(f.args[0]) if len(f.args) == 1 else S(f.args[1]) - S(f.args[0])
+    return sp.expand(d - (S(n) - 1)) == 0 or sp.expand(d + (S(n) - 1)) == 0
+
+
+@fn("DirichletConvolve", **ADDED, notes="DirichletConvolve[f, g, n, m] = Sum[f(d) g(m/d), {d | m}]: explicit for "
+    "a positive integer m; for symbolic m, sums of powers of n give DivisorSigma closed forms (n^a * n^b -> "
+    "m^Min[a,b] DivisorSigma[|a - b|, m]), KroneckerDelta[n - 1] is the identity, and other inputs stay "
+    "unevaluated")
+def _dirconv(f, g, n, m):
+    if not isinstance(n, Symbol):
+        raise ValueError("DirichletConvolve: the variable must be a symbol")
+    if _intq(m):
+        mm = int(m)
+        if mm < 1:
+            raise ValueError("DirichletConvolve: m must be a positive integer")
+        terms = [Expr("Times", K.substitute(f, {n.name: d}), K.substitute(g, {n.name: mm // d}))
+                 for d in sp.divisors(mm)]
+        return ev(Expr("Plus", *terms))
+    if is_numeric_value(m):
+        raise ValueError("DirichletConvolve: m must be a positive integer")
+    if _is_delta1(f, n):
+        return ev(K.substitute(g, {n.name: m}))
+    if _is_delta1(g, n):
+        return ev(K.substitute(f, {n.name: m}))
+    try:
+        pf, pg = _poly_terms(f, n), _poly_terms(g, n)
+    except Exception:
+        pf = pg = None
+    if pf is None or pg is None:
+        raise Unevaluated()
+    mm = S(m)
+    tot = 0
+    for c1, a in pf:
+        for c2, b in pg:
+            if not (a - b).is_number:
+                raise Unevaluated()
+            lo, d = (b, a - b) if a >= b else (a, b - a)
+            tot += c1 * c2 * mm ** lo * sp.Function("DivisorSigma")(d, mm)
+    return ev(R(sp.expand(tot)))
+
+
+_PL = sp.Function("PolyLog")
+
+
+def _dt_term(t, n, s):
+    """Transform of one product term (no sums), or None."""
+    nn = S(n)
+    if not t.has(nn):
+        return t * sp.zeta(s)
+    c = sp.S(1)
+    rest = []
+    a = sp.S(0)
+    for fac in sp.Mul.make_args(t):
+        if not fac.has(nn):
+            c *= fac
+        elif fac == nn:
+            a += 1
+        elif fac.is_Pow and fac.base == nn and not fac.exp.has(nn):
+            a += fac.exp
+        else:
+            rest.append(fac)
+    ss = s - a
+    if not rest:
+        return c * sp.zeta(ss)
+    if len(rest) != 1:
+        return None
+    r = rest[0]
+    if r.is_Pow and not r.base.has(nn) and r.exp == nn:
+        return c * _PL(ss, r.base)
+    if r.is_Pow and not r.base.has(nn) and r.exp == -nn:
+        return c * _PL(ss, 1 / r.base)
+    if isinstance(r, sp.exp) and (r.args[0] / nn).is_number is False and False:
+        return None
+    if isinstance(r, sp.exp):
+        q = sp.simplify(r.args[0] / nn)
+        if not q.has(nn):
+            return c * _PL(ss, sp.exp(q))
+    if isinstance(r, sp.cos):
+        q = sp.simplify(r.args[0] / nn)
+        if not q.has(nn):
+            return c * (_PL(ss, sp.exp(-sp.I * q)) + _PL(ss, sp.exp(sp.I * q))) / 2
+    if isinstance(r, sp.sin):
+        q = sp.simplify(r.args[0] / nn)
+        if not q.has(nn):
+            return c * sp.I * (_PL(ss, sp.exp(-sp.I * q)) - _PL(ss, sp.exp(sp.I * q))) / 2
+    if isinstance(r, sp.Mod) and r.args[0] == nn and r.args[1].is_Integer and r.args[1] > 0:
+        k = int(r.args[1])
+        return c * k ** (-ss) * sp.Add(*[rr * sp.zeta(ss, sp.Rational(rr, k)) for rr in range(1, k)])
+    return None
+
+
+_DT_HEADS = {
+    "MoebiusMu": lambda s: Expr("Power", Expr("Zeta", s), -1),
+    "EulerPhi": lambda s: Expr("Times", Expr("Zeta", Expr("Plus", s, -1)), Expr("Power", Expr("Zeta", s), -1)),
+    "LiouvilleLambda": lambda s: Expr("Times", Expr("Zeta", Expr("Times", 2, s)), Expr("Power", Expr("Zeta", s),
+                                                                                        -1)),
+}
+
+
+def _dt(f, n, s):
+    """DirichletTransform of f (Mikoshi expr) or None."""
+    if isinstance(f, Expr) and f.head == "Plus":
+        parts = [_dt(a, n, s) for a in f.args]
+        return None if any(p is None for p in parts) else Expr("Plus", *parts)
+    if isinstance(f, Expr) and f.head == "Times":
+        consts = [a for a in f.args if _free_of(a, n)]
+        others = [a for a in f.args if not _free_of(a, n)]
+        if consts and len(others) == 1:
+            r = _dt(others[0], n, s)
+            return None if r is None else Expr("Times", *consts, r)
+    if isinstance(f, Expr) and isinstance(f.head, str):
+        h = f.head
+        if h in _DT_HEADS and len(f.args) == 1 and K.same(f.args[0], n):
+            return _DT_HEADS[h](s)
+        if h == "DivisorSigma" and len(f.args) == 2 and K.same(f.args[1], n) and _free_of(f.args[0], n):
+            return Expr("Times", Expr("Zeta", s), Expr("Zeta", Expr("Plus", s, Expr("Times", -1, f.args[0]))))
+        if h == "DirichletCharacter" and len(f.args) == 3 and K.same(f.args[2], n):
+            return Expr("DirichletL", f.args[0], f.args[1], s)
+        if h == "KroneckerDelta" and _is_delta1(f, n):
+            return 1
+        if h == "DivisorSum" and len(f.args) == 2 and K.same(f.args[0], n):
+            inner = ev(Expr(f.args[1], n))
+            r = _dt(inner, n, s)
+            if r is None:
+                r = Expr("DirichletTransform", inner, n, s)
+            return Expr("Times", Expr("Zeta", s), r)
+    try:
+        e = S(f)
+    except Exception:
+        return None
+    if any(isinstance(a, sp.core.function.AppliedUndef) for a in sp.preorder_traversal(e)):
+        return None
+    out = 0
+    for t in sp.Add.make_args(sp.expand(e)):
+        r = _dt_term(t, n, S(s))
+        if r is None:
+            return None
+        out += r
+    return R(out)
+
+
+@fn("DirichletTransform", **ADDED, notes="DirichletTransform[f, n, s] = Sum[f(n)/n^s, {n, 1, Infinity}] in "
+    "closed form for linear combinations of powers of n, a^n (PolyLog), Cos/Sin/Exp of multiples of n, Mod[n, "
+    "k] (Hurwitz zeta), MoebiusMu, EulerPhi, LiouvilleLambda, DivisorSigma, DirichletCharacter (DirichletL), "
+    "KroneckerDelta[n - 1] and DivisorSum[n, f] (Zeta[s] times the transform of f); other functions stay "
+    "unevaluated")
+def _dirtransform(f, n, s, *opts):
+    if not isinstance(n, Symbol):
+        raise ValueError("DirichletTransform: the variable must be a symbol")
+    r = _dt(f, n, s)
+    if r is None:
+        raise Unevaluated()
+    return ev(r)
+
+
+# ─────────────────────────── integer relations and lattices ───────────────────────────
+
+def _is_exact_vec(items):
+    return not any(has_float(v) for v in items)
+
+
+@fn("FindIntegerNullVector", **ADDED, notes="FindIntegerNullVector[{x1, ..., xn}] finds integers ai, not all "
+    "zero, with a1 x1 + ... + an xn == 0 (PSLQ at the input precision, or at 3 n + 30 digits for exact input); "
+    "FindIntegerNullVector[x, d] restricts to vectors of norm <= d and raises when none exists; for exact input "
+    "the relation is verified to 60 more digits")
+def _findintnull(xs, d=None, *opts):
+    import mpmath
+    if not is_list(xs) or len(xs.args) < 2:
+        raise ValueError("FindIntegerNullVector: the argument must be a list of at least two numbers")
+    pos, o = split_options((d,) + opts if d is not None else opts, ("WorkingPrecision", "ZeroTest"),
+                           "FindIntegerNullVector")
+    d = pos[0] if pos else None
+    items = list(xs.args)
+    for v in items:
+        if not is_numeric_value(v):
+            raise ValueError("FindIntegerNullVector: the elements must be numbers")
+    vals = [S(v) for v in items]
+    exact = _is_exact_vec(items)
+    wp = o.get("WorkingPrecision")
+    if exact:
+        dps = int(S(wp)) if wp is not None else 3 * len(items) + 40
+    else:
+        precs = [x._prec for v in vals for x in sp.preorder_traversal(v) if isinstance(x, sp.Float)]
+        dps = int(mpmath.libmp.prec_to_dps(min(precs))) if precs else 15
+        if all(not isinstance(v, sp.Float) or v._prec <= 53 for v in vals):
+            dps = 15
+    maxcoeff = int(sp.floor(S(d))) if d is not None else 10 ** max(3, dps // len(items))
+    has_complex = any(complex(sp.N(v)).imag != 0 for v in vals)
+    with mpmath.workdps(dps):
+        if has_complex:
+            rows = [mpmath.mpmathify(complex(sp.N(v, dps))) if dps <= 15 else mpmath.mpc(
+                *[mpmath.mpf(str(sp.N(p, dps))) for p in v.as_real_imag()]) for v in vals]
+            rel = _pslq_complex(rows, maxcoeff, dps)
+        else:
+            rows = [mpmath.mpf(str(sp.N(v, dps + 5))) for v in vals]
+            tol = mpmath.mpf(10) ** (-(dps - max(3, dps // 5)))
+            rel = mpmath.pslq(rows, tol=tol, maxcoeff=maxcoeff, maxsteps=10 ** 5)
+    if rel is None:
+        raise ValueError("FindIntegerNullVector: no integer null vector found" +
+                         (f" with norm <= {d}" if d is not None else ""))
+    if d is not None and math.sqrt(sum(r * r for r in rel)) > float(S(d)):
+        raise ValueError(f"FindIntegerNullVector: no integer null vector with norm <= {d}")
+    if exact:
+        tot = sum(r * v for r, v in zip(rel, vals))
+        z = sp.N(tot, dps + 60)
+        if abs(z) > sp.Float(10) ** (-(dps + 30)) and not sp.simplify(tot) == 0:
+            raise ValueError("FindIntegerNullVector: no exact integer relation found (the candidate fails a "
+                             "high-precision check)")
+    return L(*[int(r) for r in rel])
+
+
+def _pslq_complex(zs, maxcoeff, dps):
+    import mpmath
+    # real relation on (Re, Im) stacked with a large weight
+    n = len(zs)
+    w = mpmath.mpf(10) ** (dps // 2)
+    rows = [[mpmath.mpf(1) if i == j else mpmath.mpf(0) for j in range(n)] + [w * mpmath.re(zs[i]),
+                                                                                w * mpmath.im(zs[i])]
+            for i in range(n)]
+    M = sp.Matrix([[int(mpmath.nint(x)) for x in r] for r in rows])
+    red = M.lll() if hasattr(M, "lll") else None
+    if red is None:
+        from sympy.polys.matrices import DomainMatrix
+        red = DomainMatrix.from_Matrix(M).convert_to(sp.ZZ).lll().to_Matrix()
+    for i in range(red.rows):
+        v = [int(red[i, j]) for j in range(n)]
+        if any(v) and red[i, n] == 0 and red[i, n + 1] == 0 and max(abs(x) for x in v) <= maxcoeff:
+            return v
+    return None
+
+
+@fn("LatticeReduce", **ADDED, notes="LatticeReduce[{v1, v2, ...}] gives an LLL-reduced basis (delta = 3/4) of "
+    "the lattice spanned by the integer (or rational) vectors vi; linearly dependent inputs drop to the rank; "
+    "approximate vectors raise")
+def _latticereduce(m):
+    if not is_list(m) or not m.args or not all(is_list(r) for r in m.args):
+        raise ValueError("LatticeReduce: the argument must be a list of vectors")
+    rows = []
+    for r in m.args:
+        row = []
+        for v in r.args:
+            sv = S(v) if not isinstance(v, (int, float)) else v
+            if isinstance(v, float) or (isinstance(sv, sp.Basic) and not sv.is_Rational):
+                raise ValueError("LatticeReduce: the vectors must have integer or rational entries")
+            row.append(sp.Rational(sv))
+        rows.append(row)
+    if len({len(r) for r in rows}) != 1:
+        raise ValueError("LatticeReduce: the vectors must have the same length")
+    den = sp.ilcm(*[x.q for r in rows for x in r])
+    from sympy.polys.matrices import DomainMatrix
+    M = sp.Matrix([[int(x * den) for x in r] for r in rows])
+    # remove dependencies with an HNF-free approach: LLL on full-rank input; for dependent rows use the
+    # rational row space basis first
+    rank = M.rank()
+    if rank < M.rows:
+        M = _integer_row_basis(M)
+    red = DomainMatrix.from_Matrix(M).convert_to(sp.ZZ).lll().to_Matrix()
+    return L(*[L(*[R(sp.Rational(int(red[i, j]), den)) for j in range(red.cols)]) for i in range(red.rows)])
+
+
+def _integer_row_basis(M):
+    """A basis of the integer row lattice of M (via the Hermite normal form)."""
+    from sympy.matrices.normalforms import hermite_normal_form
+    H = hermite_normal_form(M.T).T
+    rows = [H.row(i) for i in range(H.rows) if any(H.row(i))]
+    rows = [r for r in (H.col(j).T for j in range(H.cols)) if any(r)]
+    B = sp.Matrix.vstack(*rows) if rows else sp.zeros(0, M.cols)
+    if B.rank() != M.rank():
+        raise ValueError("LatticeReduce: could not compute a basis of the lattice")
+    return B
