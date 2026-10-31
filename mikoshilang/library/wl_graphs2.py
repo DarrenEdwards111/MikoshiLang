@@ -3846,3 +3846,501 @@ WGM.extend("RandomGraph", _rgraph_dist,
            "W24: RandomGraph[dist] and RandomGraph[dist, k] sample the Bernoulli, Uniform, Barabasi-Albert, "
            "Watts-Strogatz, Price, Spatial and Degree graph distributions (reproducible with SeedRandom; the random "
            "stream differs from Wolfram's). Check: exact (tests: structural invariants of each model)", status="added")
+
+
+# ═══════════════════════════════════════ W24 resume: remaining measures and components ═══════════════════════════════
+
+_option_symbol("TaggedEdgeStyle", "Graph option and annotation: style for tagged edges (Automatic, a style, or "
+                                  "{tag -> style, ...}); drawing is the graphics batch, so computations ignore it")
+
+
+def _restricted_sssp(adj, s, allowed):
+    """Shortest distances from s using only vertices in ``allowed`` (Dijkstra; exact SymPy weights)."""
+    import heapq
+    dist = {s: sp.Integer(0)}
+    pq = [(0.0, s)]
+    done = set()
+    while pq:
+        _, u = heapq.heappop(pq)
+        if u in done:
+            continue
+        done.add(u)
+        for v, w, _k in adj[u]:
+            if v not in allowed:
+                continue
+            nd = dist[u] + w
+            if v not in dist or nd < dist[v]:
+                dist[v] = nd
+                heapq.heappush(pq, (float(nd), v))
+    return dist
+
+
+def _in_out(rest, fname):
+    if not rest:
+        return "Out"
+    if len(rest) == 1 and rest[0] in ("In", "Out"):
+        return rest[0]
+    if len(rest) == 1 and isinstance(rest[0], Symbol) and rest[0].name in ("In", "Out"):
+        return rest[0].name
+    if len(rest) == 1 and isinstance(rest[0], (str, Symbol)):
+        raise ValueError(f"{fname}: the second argument must be \"In\" or \"Out\" (got {rest[0]})")
+    raise TypeError(f"{fname}: expected {fname}[g] or {fname}[g, \"In\" | \"Out\"]")
+
+
+@fn("RadialityCentrality", area=AREA, status="added",
+    notes="RadialityCentrality[g], [g, \"Out\"] (the default) and [g, \"In\"]: for vertex i, Sum over the vertices j "
+          "reachable from i (or reaching i) of (d + 1 - d_ij) / (d (n - 1)) as documented by Wolfram, with d the "
+          "diameter of i's out (in) component and n = VertexCount[g]; isolated vertices give 0; undirected, "
+          "directed, mixed, multigraphs and EdgeWeight distances; machine reals. When the components' diameters "
+          "differ (so the documented d is ambiguous) NotImplementedError is raised. Check: reference (Wolfram "
+          "documentation values for {1 -> 3, 2 -> 1, 3 -> 6, 4 -> 6, 1 -> 5, 5 -> 4, 6 -> 1}, In and Out) and the "
+          "GraphDistanceMatrix identity in tests.")
+def _radiality(g: Expr, *rest: String) -> ListOf[Real]:
+    fname = "RadialityCentrality"
+    gr = _g(g, fname)
+    way = _in_out(rest, fname)
+    n = gr.n
+    if n == 0:
+        return L()
+    adj = gr.out_adj() if way == "Out" else gr.in_adj()
+    every = set(range(n))
+    reach = [_restricted_sssp(adj, i, every) for i in range(n)]
+    diams = []
+    for i in range(n):
+        comp = set(reach[i])
+        if len(comp) == 1:
+            diams.append(None)
+            continue
+        dm = 0
+        for u in comp:
+            du = _restricted_sssp(adj, u, comp)
+            dm = max([dm] + [v for v in du.values()])
+        diams.append(dm)
+    ds = {d for d in diams if d is not None}
+    if len(ds) > 1:
+        raise NotImplementedError(f"{fname}: the reachable components have different diameters, so Wolfram's "
+                                  "normalising diameter is ambiguous; not supported")
+    out = []
+    for i in range(n):
+        d = diams[i]
+        if d is None or d == 0:
+            out.append(0.0)
+            continue
+        tot = sum(d + 1 - v for j, v in reach[i].items() if j != i)
+        out.append(float(tot / (d * (n - 1))))
+    return L(*out)
+
+
+@fn("MeanDegreeConnectivity", area=AREA, status="added",
+    notes="MeanDegreeConnectivity[g]: {m0, m1, ..., md} where mk is the mean of MeanNeighborDegree over the vertices "
+          "of degree k (0 when there are none; isolated vertices count 0) and d the maximum degree; exact rationals "
+          "for undirected simple unweighted graphs. Directed, mixed, weighted and multigraphs and the \"In\"/\"Out\" "
+          "forms raise NotImplementedError. Check: reference (Wolfram documentation: GridGraph[{3, 4, 5}] gives "
+          "{0, 0, 0, 4, 17/4, 262/55, 97/18}; CompleteGraph[{2, 4, 3}] part 8 is 38/7) and networkx "
+          "average_degree_connectivity in tests.")
+def _mdc(g: Expr, *rest: String) -> ListOf[Rational]:
+    fname = "MeanDegreeConnectivity"
+    if rest:
+        _in_out(rest, fname)
+        raise NotImplementedError(f"{fname}: the \"In\" and \"Out\" forms are not supported")
+    gr = _g(g, fname)
+    _need_simple_undirected(gr, fname)
+    if gr.weights is not None:
+        raise NotImplementedError(f"{fname}: weighted graphs are not supported")
+    nb = _simple_nb(gr)
+    if gr.n == 0:
+        return L()
+    deg = [len(s) for s in nb]
+    buckets = {}
+    for v in range(gr.n):
+        mnd = sp.Rational(sum(deg[w] for w in nb[v]), deg[v]) if deg[v] else sp.Integer(0)
+        buckets.setdefault(deg[v], []).append(mnd)
+    out = []
+    for k in range(max(deg) + 1):
+        b = buckets.get(k)
+        out.append(sp.Rational(0) if not b or k == 0 else sum(b) / len(b))
+    return L(*(R(x) for x in out))
+
+
+def _component_filter(comps, gr, rest, fname):
+    if not rest:
+        return comps
+    if len(rest) > 1:
+        raise TypeError(f"{fname}: too many arguments")
+    vs = rest[0]
+    if not is_list(vs):
+        raise NotImplementedError(f"{fname}: only an explicit vertex list is supported as the third argument")
+    want = {gr.vidx(v, fname) for v in vs.args}
+    return [c for c in comps if want & set(c)]
+
+
+def _sorted_comps(comps):
+    comps = [sorted(c) for c in comps]
+    comps.sort(key=lambda c: (-len(c), c[0]))
+    return comps
+
+
+def _sub_wg(gr, keep):
+    keep = sorted(keep)
+    pos = {v: t for t, v in enumerate(keep)}
+    es = [e for (i, j, _), e in zip(gr.edges, gr.edge_exprs) if i in pos and j in pos]
+    return WG([gr.vertices[v] for v in keep], es, {}, gr.fname), keep
+
+
+def _lambda_classes(gr, k):
+    """Classes of the relation 'at least k edge-disjoint paths both ways' (an equivalence relation)."""
+    ones = [sp.Integer(1)] * len(gr.edges)
+    reps = []
+    cls = []
+    for v in range(gr.n):
+        for t, r in enumerate(reps):
+            if _maxflow(gr, r, v, ones)[0] >= k and (not gr.directed and not gr.mixed or
+                                                    _maxflow(gr, v, r, ones)[0] >= k):
+                cls[t].append(v)
+                break
+        else:
+            reps.append(v)
+            cls.append([v])
+    return cls
+
+
+def _k_edge_subgraphs(gr, k):
+    """Maximal k-edge-connected induced subgraphs (vertex index sets of size >= 2) by repeated refinement."""
+    todo, done = [list(range(gr.n))], []
+    while todo:
+        part = todo.pop()
+        if len(part) < 2:
+            continue
+        sub, keep = _sub_wg(gr, part)
+        cls = _lambda_classes(sub, k)
+        if len(cls) == 1:
+            done.append(part)
+        else:
+            todo.extend([keep[t] for t in c] for c in cls)
+    return done
+
+
+@fn("KEdgeConnectedComponents", area=AREA, status="added",
+    notes="KEdgeConnectedComponents[g, k] and [g, k, {v1, ...}]: the vertex sets of the maximal k-edge-connected "
+          "subgraphs. k = 1 gives the connected (strongly connected for directed and mixed graphs) components "
+          "including single vertices; for k >= 2 single vertices are omitted. For k >= 2 the result is computed both "
+          "as maximal k-edge-connected induced subgraphs and as classes of 'k edge-disjoint paths in g'; Wolfram's "
+          "documentation states both, so when the two differ NotImplementedError is raised. Components are listed "
+          "largest first (ties by VertexList position), vertices in VertexList order; Wolfram's own ordering is not "
+          "documented and may differ. Pattern selectors raise NotImplementedError; k < 1 raises ValueError. "
+          "Check: self-check (both definitions must agree) and reference (Wolfram documentation example "
+          "{1 -> 2, 1 -> 5, 2 -> 3, 3 -> 4, 4 -> 5, 6 -> 3, 4 -> 6} with k = 1; networkx k_edge_subgraphs in tests).")
+def _kecc(g: Expr, k: PosInteger, *rest: ListOf[Expr]) -> ListOf[ListOf[Expr]]:
+    fname = "KEdgeConnectedComponents"
+    gr = _g(g, fname)
+    k = _int(k, fname, 1, "k")
+    if k == 1:
+        comps = _strong_components(gr) if (gr.directed or gr.mixed) else _components(gr)
+        comps = [list(c) for c in comps]
+    else:
+        a = _k_edge_subgraphs(gr, k)
+        b = [c for c in _lambda_classes(gr, k) if len(c) >= 2]
+        if sorted(map(sorted, a)) != sorted(map(sorted, b)):
+            raise NotImplementedError(f"{fname}: the maximal {k}-edge-connected subgraphs differ from the classes of "
+                                      f"{k} edge-disjoint paths in this graph; Wolfram's choice is not documented")
+        comps = a
+    comps = _component_filter(_sorted_comps(comps), gr, rest, fname)
+    return L(*(_verts(gr, c) for c in comps))
+
+
+def _blocks(nb, n):
+    """Biconnected components (vertex sets, bridges included as 2-sets) by Hopcroft-Tarjan, iterative."""
+    disc, low = [None] * n, [0] * n
+    out, t = [], 0
+    for r in range(n):
+        if disc[r] is not None or not nb[r]:
+            continue
+        disc[r] = low[r] = t
+        t += 1
+        stack = [(r, None, iter(sorted(nb[r])))]
+        estack = []
+        while stack:
+            u, p, it = stack[-1]
+            adv = False
+            for w in it:
+                if disc[w] is None:
+                    estack.append((u, w))
+                    disc[w] = low[w] = t
+                    t += 1
+                    stack.append((w, u, iter(sorted(nb[w]))))
+                    adv = True
+                    break
+                if w != p and disc[w] < disc[u]:
+                    estack.append((u, w))
+                    low[u] = min(low[u], disc[w])
+            if adv:
+                continue
+            stack.pop()
+            if p is not None:
+                low[p] = min(low[p], low[u])
+                if low[u] >= disc[p]:
+                    blk = set()
+                    while True:
+                        e = estack.pop()
+                        blk.update(e)
+                        if e == (p, u):
+                            break
+                    out.append(blk)
+    return out
+
+
+@fn("KVertexConnectedComponents", area=AREA, status="added",
+    notes="KVertexConnectedComponents[g, k] and [g, k, {v1, ...}] for undirected graphs: k = 1 gives the connected "
+          "components (graphs with isolated vertices raise NotImplementedError, as Wolfram's convention for them is "
+          "not documented), k = 2 the biconnected components (blocks; a bridge is a 2-vertex block, as in Wolfram's "
+          "documentation example). Components are listed largest first (ties by VertexList position), vertices in "
+          "VertexList order; Wolfram's ordering may differ. k >= 3, directed and mixed graphs and pattern selectors "
+          "raise NotImplementedError; k < 1 raises ValueError. Check: self-check (each block is verified "
+          "2-connected or a single edge) and reference (networkx biconnected_components in tests).")
+def _kvcc(g: Expr, k: PosInteger, *rest: ListOf[Expr]) -> ListOf[ListOf[Expr]]:
+    fname = "KVertexConnectedComponents"
+    gr = _g(g, fname)
+    k = _int(k, fname, 1, "k")
+    if gr.directed or gr.mixed:
+        raise NotImplementedError(f"{fname}: directed and mixed graphs are not supported")
+    nb = _simple_nb(gr)
+    if k == 1:
+        if any(not s for s in nb):
+            raise NotImplementedError(f"{fname}: graphs with isolated vertices are not supported for k = 1")
+        comps = [list(c) for c in _components(gr)]
+    elif k == 2:
+        comps = _blocks(nb, gr.n)
+        for c in comps:
+            if len(c) > 2:
+                sub, _keep = _sub_wg(gr, c)
+                if _vconn(sub, fname) < 2:
+                    raise ArithmeticError(f"{fname}: internal check failed (a block is not 2-connected)")
+    else:
+        raise NotImplementedError(f"{fname}: k >= 3 is not supported")
+    comps = _component_filter(_sorted_comps(comps), gr, rest, fname)
+    return L(*(_verts(gr, c) for c in comps))
+
+
+@fn("FindPlanarColoring", area=AREA, status="added",
+    notes="FindPlanarColoring[g], [g, {c1, c2, ...}] and [g, l]: a colouring of the faces of PlanarFaceList[g] (same "
+          "order) with the minimum number of colours, adjacent faces (sharing an edge) coloured differently, as "
+          "colours 1, 2, ... numbered by first use (or the given colours; [g, l] uses 1..l); edge directions are "
+          "ignored. Same embedding caveats as PlanarFaceList; a valid optimal colouring may differ from Wolfram's. "
+          "Graphs with a bridge (a face adjacent to itself) and multigraphs raise NotImplementedError; non-planar "
+          "graphs raise ValueError; too few colours raise ValueError. Check: self-check (the face colouring is "
+          "verified proper) and reference (wheels need 4 colours, the cube 3, by duality with known chromatic "
+          "numbers).")
+def _fpcol(g: Expr, colors: ListOf[Expr] | PosInteger = None) -> ListOf[Expr]:
+    fname = "FindPlanarColoring"
+    gr = _g(g, fname)
+    if gr.loops() or WG(gr.vertices, [UE(gr.vertices[i], gr.vertices[j]) for i, j, _ in gr.edges]).multi():
+        raise NotImplementedError(f"{fname}: multigraphs and self-loops are not supported")
+    ug = WG(gr.vertices, [UE(gr.vertices[i], gr.vertices[j]) for i, j, _ in gr.edges], {}, fname)
+    faces = _faces(ug, fname)
+    side = {}
+    for fi, f in enumerate(faces):
+        for t in range(len(f)):
+            side.setdefault((f[t], f[(t + 1) % len(f)]), fi)
+    nb = [set() for _ in faces]
+    for i, j, _ in ug.edges:
+        a, b = side[(i, j)], side[(j, i)]
+        if a == b:
+            raise NotImplementedError(f"{fname}: graphs with a bridge (a face bordering itself) are not supported")
+        nb[a].add(b)
+        nb[b].add(a)
+    cols = _min_coloring(nb, len(faces), fname)
+    if any(cols[a] == cols[b] for a in range(len(faces)) for b in nb[a]):
+        raise ArithmeticError(f"{fname}: internal check failed (the face colouring is not proper)")
+    if colors is not None and not is_list(colors):
+        m = _int(colors, fname, 1, "the number of colours")
+        colors = L(*range(1, m + 1))
+    return _apply_colors(cols, colors, fname)
+
+
+@fn("EdgeCycleMatrix", area=AREA, status="added",
+    notes="EdgeCycleMatrix[g]: one row per cycle of a cycle basis (the fundamental cycles of the breadth-first "
+          "spanning forest, ignoring directions, one per non-tree edge in EdgeList order) and one column per edge "
+          "in EdgeList order: 1 when the edge lies on the cycle (traversed along its direction for directed edges), "
+          "-1 for a directed edge traversed against its direction, 0 otherwise; self-loops and parallel edges give "
+          "cycles of length 1 and 2; an acyclic graph gives {}. A valid cycle basis may differ from Wolfram's "
+          "rows. Check: self-check (every row is a closed cycle and the rows have rank m - n + c).")
+def _ecm(g: Expr) -> MatrixOf[Integer]:
+    fname = "EdgeCycleMatrix"
+    gr = _g(g, fname)
+    n, m = gr.n, len(gr.edges)
+    adj = gr.out_adj(undirected=True)
+    parent, pedge, depth = [None] * n, [None] * n, [None] * n
+    tree = set()
+    for r in range(n):
+        if depth[r] is not None:
+            continue
+        depth[r] = 0
+        q = deque([r])
+        while q:
+            u = q.popleft()
+            for w, _, k in sorted(adj[u], key=lambda t: (t[0], t[2])):
+                if depth[w] is None:
+                    depth[w], parent[w], pedge[w] = depth[u] + 1, u, k
+                    tree.add(k)
+                    q.append(w)
+
+    def coef(k, a, b):
+        i, j, d = gr.edges[k]
+        if not d:
+            return 1
+        return 1 if (i, j) == (a, b) else -1
+
+    rows = []
+    for k, (i, j, _) in enumerate(gr.edges):
+        if k in tree:
+            continue
+        row = [0] * m
+        row[k] = coef(k, i, j)
+        if i != j:
+            # walk the tree path j -> i, closing the cycle i -> j -> ... -> i
+            a, b = j, i
+            up_a, up_b = [], []
+            while a != b:
+                if depth[a] >= depth[b]:
+                    up_a.append((pedge[a], a, parent[a]))
+                    a = parent[a]
+                else:
+                    up_b.append((pedge[b], parent[b], b))
+                    b = parent[b]
+            for kk, x, y in up_a + list(reversed(up_b)):
+                row[kk] = coef(kk, x, y)
+        rows.append(row)
+    c = len(_weak_components(gr)) if n else 0
+    # self-check: each row is a closed walk (net +-1 balance zero at every vertex) and the rows are independent
+    for row in rows:
+        bal = [0] * n
+        for kk, x in enumerate(row):
+            if x:
+                i, j, d = gr.edges[kk]
+                a, b = (i, j) if (not d or x == 1) else (j, i)
+                if not d:
+                    # undirected edges: orientation fixed by the traversal; parity check suffices
+                    bal[a] += 1
+                    bal[b] += 1
+                else:
+                    bal[a] += 1
+                    bal[b] -= 1
+        if any(v % 2 for v in bal):
+            raise ArithmeticError(f"{fname}: internal check failed (a row is not a cycle)")
+    if len(rows) != m - n + c or (rows and sp.Matrix(rows).rank() != len(rows)):
+        raise ArithmeticError(f"{fname}: internal check failed (the rows are not a cycle basis)")
+    return L(*(L(*r) for r in rows))
+
+
+@fn("GraphEmbedding", area=AREA, status="added",
+    notes="GraphEmbedding[g]: the vertex coordinates stored in the graph's VertexCoordinates option ({{x, y}, ...} in "
+          "VertexList order or {v -> {x, y}, ...} covering every vertex), in VertexList order. Computing a layout "
+          "(no VertexCoordinates, or GraphEmbedding[g, \"emb\"] / [g, \"emb\", dim]) belongs to the graphics batch "
+          "(W14) and raises NotImplementedError. Check: exact (tests read back the stored coordinates).")
+def _gemb(g: Expr, *rest: String | PosInteger) -> MatrixOf[Real]:
+    fname = "GraphEmbedding"
+    gr = _g(g, fname)
+    if rest:
+        raise NotImplementedError(f"{fname}: computing a named embedding is not supported (graphics batch W14)")
+    vc = gr.opts.get("VertexCoordinates")
+    if vc is None or (isinstance(vc, Symbol) and vc.name == "Automatic"):
+        raise NotImplementedError(f"{fname}: the graph has no VertexCoordinates; computing a layout is not "
+                                  "supported (graphics batch W14)")
+    if not is_list(vc):
+        raise ValueError(f"{fname}: VertexCoordinates must be a list")
+    if vc.args and all(_is_rule(r) for r in vc.args):
+        got = {K.tag(r.args[0]): r.args[1] for r in vc.args}
+        pts = []
+        for v in gr.vertices:
+            if K.tag(v) not in got:
+                raise NotImplementedError(f"{fname}: VertexCoordinates gives no position for {v}; computing the "
+                                          "missing positions is not supported")
+            pts.append(got[K.tag(v)])
+    else:
+        pts = list(vc.args)
+        if len(pts) != gr.n:
+            raise ValueError(f"{fname}: VertexCoordinates must give one point per vertex")
+    for p in pts:
+        if not (is_list(p) and p.args and all(is_numeric_value(x) for x in p.args)):
+            raise ValueError(f"{fname}: VertexCoordinates entries must be lists of numbers (got {p})")
+    return L(*pts)
+
+
+@fn("LinkRankCentrality", area=AREA, status="added",
+    notes="LinkRankCentrality[g, alpha] and [g, alpha, beta] for directed graphs (multigraphs and self-loops "
+          "allowed): for each edge u -> v in EdgeList order, the PageRank c(u) divided by the out-degree of u, where "
+          "c solves c = alpha A^T D^-1 c + beta (beta = 1/n by default; a scalar beta means {beta, ...}) and is "
+          "normalised to total 1, so the link ranks also total 1. Machine reals; WorkingPrecision -> Infinity gives "
+          "exact values. Undirected and mixed graphs (whose edge convention Wolfram does not document) and graphs "
+          "with a vertex of out-degree 0 raise NotImplementedError; alpha outside [0, 1) raises ValueError. "
+          "Check: self-check (the PageRank equation is verified and the link ranks total 1) and reference (Wolfram "
+          "documentation values for {1 -> 3, 2 -> 1, 3 -> 6, 4 -> 6, 1 -> 5, 5 -> 4, 6 -> 1} with alpha = 0.5).")
+def _linkrank(g: Expr, alpha: Real, *rest: Real | ListOf[Real] | Option) -> ListOf[Real]:
+    fname = "LinkRankCentrality"
+    rest = list(rest)
+    exact = False
+    while rest and _is_rule(rest[-1]):
+        r = rest.pop()
+        nm = r.args[0].name if isinstance(r.args[0], Symbol) else None
+        if nm != "WorkingPrecision":
+            raise ValueError(f"{fname}: unknown option {r.args[0]}")
+        val = r.args[1]
+        if S(val) == sp.oo:
+            exact = True
+        elif isinstance(val, Symbol) and val.name == "MachinePrecision":
+            exact = False
+        else:
+            raise NotImplementedError(f"{fname}: WorkingPrecision -> {val} is not supported (use MachinePrecision "
+                                      "or Infinity)")
+    if len(rest) > 1:
+        raise TypeError(f"{fname}: too many arguments")
+    gr = _g(g, fname)
+    a = _real(alpha, fname, "the weight alpha")
+    if not (0 <= a < 1):
+        raise ValueError(f"{fname}: alpha must lie in [0, 1) (got {alpha})")
+    if not gr.edges or not gr.directed:
+        raise NotImplementedError(f"{fname}: only directed graphs are supported (Wolfram's convention for "
+                                  "undirected edges is not documented)")
+    n = gr.n
+    if rest:
+        b = rest[0]
+        if is_list(b):
+            if len(b.args) != n:
+                raise ValueError(f"{fname}: beta must have one value per vertex")
+            beta = [_real(x, fname, "beta") for x in b.args]
+        else:
+            beta = [_real(b, fname, "beta")] * n
+    else:
+        beta = [sp.Rational(1, n)] * n
+    if not exact:
+        a = sp.Float(a)
+        beta = [sp.Float(x) for x in beta]
+    out = [0] * n
+    for i, j, _ in gr.edges:
+        out[i] += 1
+    if any(o == 0 for o in out):
+        raise NotImplementedError(f"{fname}: graphs with a vertex of out-degree 0 are not supported")
+    M = sp.zeros(n, n)
+    for i, j, _ in gr.edges:
+        M[j, i] += sp.Rational(1, out[i])
+    lhs = sp.eye(n) - a * M
+    if exact:
+        c = lhs.LUsolve(sp.Matrix(beta))
+    else:
+        import numpy as np
+        c = sp.Matrix(np.linalg.solve(np.array(lhs.tolist(), dtype=float), np.array(beta, dtype=float)).tolist())
+    resid = lhs * c - sp.Matrix(beta)
+    if exact and any(sp.simplify(x) != 0 for x in resid) or not exact and any(abs(float(x)) > 1e-9 for x in resid):
+        raise ArithmeticError(f"{fname}: result failed verification (PageRank equation)")
+    tot = sum(c)
+    if tot == 0:
+        raise ValueError(f"{fname}: the PageRank vector is zero (beta = 0)")
+    c = [x / tot for x in c]
+    lr = [c[i] / out[i] for i, j, _ in gr.edges]
+    if exact:
+        if sp.simplify(sum(lr) - 1) != 0:
+            raise ArithmeticError(f"{fname}: result failed verification (link ranks do not total 1)")
+        return L(*(R(sp.nsimplify(x)) for x in lr))
+    if abs(float(sum(lr)) - 1) > 1e-9:
+        raise ArithmeticError(f"{fname}: result failed verification (link ranks do not total 1)")
+    return L(*(float(x) for x in lr))

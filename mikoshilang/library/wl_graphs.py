@@ -46,7 +46,7 @@ _PRESENTATION = {"VertexLabels", "EdgeLabels", "VertexStyle", "EdgeStyle", "Grap
                  "VertexSize", "VertexShapeFunction", "EdgeShapeFunction", "VertexCoordinates", "PlotTheme",
                  "VertexLabelStyle", "EdgeLabelStyle", "GraphHighlight", "GraphHighlightStyle", "VertexShape",
                  "ImagePadding", "Background", "BaseStyle", "AspectRatio", "GraphStyle", "Frame", "FrameStyle",
-                 "MultiedgeStyle", "SelfLoopStyle"}
+                 "MultiedgeStyle", "SelfLoopStyle", "TaggedEdgeStyle"}
 _DATA = {"EdgeWeight", "EdgeCapacity", "VertexWeight", "EdgeCost", "VertexCapacity", "AnnotationRules"}
 _GRAPH_OPTS = _PRESENTATION | _DATA
 
