@@ -613,3 +613,443 @@ fn("RationalExpressionQ", area=AREA, status="added",
    notes="RationalExpressionQ[e, x | {x, ...}] / [e, vars, test]: True if e is built from the variables and "
          "coefficients free of them with Plus, Times and integer Power (structural, as Wolfram: Sqrt[x] is not)"
          )(_structq("RationalExpressionQ", True))
+
+
+# ───────────────────────────── polynomial helpers ─────────────────────────────
+
+def _var1(x, fname):
+    if not isinstance(x, Symbol):
+        raise ValueError(f"{fname}: {x!r} is not a valid variable")
+    return sp.Symbol(x.name)
+
+
+def _modulus(opts, fname):
+    m = opts.get("Modulus", 0)
+    if m == 0:
+        return None
+    if not (K.is_int(m) and int(m) > 1 and sp.isprime(int(m))):
+        raise ValueError(f"{fname}: Modulus must be a prime (or 0)")
+    return int(m)
+
+
+def _poly(e, x, fname, modulus=None, params_field=True):
+    """SymPy Poly in x over QQ, QQ(params) or GF(p)."""
+    v = sp.together(_S(e, fname)) if not isinstance(e, sp.Basic) else sp.together(e)
+    n, d = sp.fraction(v)
+    if d.has(x):
+        raise ValueError(f"{fname}: {e!r} is not a polynomial in {x}")
+    v = sp.expand(n) / d
+    if not sp.expand(n).is_polynomial(x):
+        raise ValueError(f"{fname}: {e!r} is not a polynomial in {x}")
+    if modulus:
+        return sp.Poly(sp.expand(v), x, modulus=modulus)
+    params = sorted(v.free_symbols - {x}, key=str)
+    if any(isinstance(a, sp.Float) for a in sp.preorder_traversal(v)):
+        dom = "RR" if not params else None
+    else:
+        dom = sp.QQ.frac_field(*params) if params and params_field else (sp.QQ if not params else None)
+    try:
+        return sp.Poly(sp.expand(v), x, domain=dom) if dom is not None else sp.Poly(sp.expand(v), x)
+    except sp.PolynomialError as exc:
+        raise ValueError(f"{fname}: {e!r} is not a polynomial in {x} ({exc})")
+
+
+def _pexpr(p):
+    return sp.expand(p.as_expr()) if isinstance(p, sp.Poly) else p
+
+
+# ───────────────────────────── ApartSquareFree / PartialFractionElements ─────────────────────────────
+
+def _apart_sqf(f, x):
+    """Polynomial part + Σ_i Σ_{j<=i} a_ij / s_i^j with s_i the square-free factors of the denominator
+    (deg a_ij < deg s_i); exact over QQ(params)."""
+    f = sp.together(f)
+    n, d = sp.fraction(f)
+    params = sorted((n.free_symbols | d.free_symbols) - {x}, key=str)
+    dom = sp.QQ.frac_field(*params) if params else sp.QQ
+    N = sp.Poly(sp.expand(n), x, domain=dom)
+    D = sp.Poly(sp.expand(d), x, domain=dom)
+    g = N.gcd(D)
+    N, D = N.quo(g), D.quo(g)
+    q, r = N.div(D)
+    lc, facs = D.sqf_list()
+    terms = [q.as_expr()]
+    if r.is_zero:
+        return sp.Add(*terms), q, []
+    # split r/D over the coprime powers s_i^i, then s_i-adic expansion
+    parts = [(s, k) for s, k in facs]
+    rem = r * D.LC() ** 0
+    elements = []
+    Dn = D.monic() if False else D
+    # r/D = Σ c_i / s_i^k_i with c_i = r * (D/s_i^k_i)^{-1} mod s_i^k_i  (D = lc * Π s_i^k_i)
+    for s, k in parts:
+        P = s ** k
+        other = D.quo(P)
+        inv = other.invert(P)
+        c = (r * inv).rem(P)
+        # s-adic digits: c = Σ_{j=0}^{k-1} a_j s^j
+        digits = []
+        cc = c
+        for _ in range(k):
+            qq, rr = cc.div(s)
+            digits.append(rr)
+            cc = qq
+        for j, a in enumerate(digits):       # a / s^(k - j)
+            if not a.is_zero:
+                elements.append((a, s, k - j))
+    total = sp.Add(*terms, *(a.as_expr() / s.as_expr() ** e for a, s, e in elements))
+    return total, q, elements
+
+
+def _pick_var(e, x, fname):
+    if x is not None:
+        return _var1(x, fname)
+    v = _S(e, fname)
+    fs = sorted(v.free_symbols, key=str)
+    if len(fs) != 1:
+        raise ValueError(f"{fname}: give the variable explicitly ({fname}[expr, x])")
+    return fs[0]
+
+
+@fn("ApartSquareFree", area=AREA, status="added",
+    notes="ApartSquareFree[expr, x] / ApartSquareFree[expr] (one variable): polynomial part plus fractions over "
+          "the powers of the square-free factors of the denominator (ApartSquareFree[(x^2 - 2)/(x^4 - 2 x^2 + 1)] "
+          "-> -1/(-1 + x^2)^2 + 1/(-1 + x^2)), exact over the rationals and rational functions of other symbols; "
+          "threads over lists, equations and inequalities; the result is checked to equal the input; the Modulus "
+          "and Trig options raise")
+def _apartsqf(e, *rest):
+    rest, opts = _opts(rest, {"Modulus", "Trig"}, "ApartSquareFree")
+    if opts.get("Modulus", 0) not in (0,) or (opts.get("Trig") is not None and not is_false(opts.get("Trig"))):
+        raise NotImplementedError("ApartSquareFree: the Modulus and Trig options are not supported")
+    if len(rest) > 1:
+        raise ValueError("ApartSquareFree called with too many arguments")
+    if is_list(e) or _is_head(e, *_ALL_REL):
+        return ev(Expr(e.head, *(_apartsqf(a, *rest) for a in e.args)))
+    x = _pick_var(e, rest[0] if rest else None, "ApartSquareFree")
+    f = _S(e, "ApartSquareFree")
+    n, d = sp.fraction(sp.together(f))
+    if not (sp.expand(n).is_polynomial(x) and sp.expand(d).is_polynomial(x)):
+        raise ValueError(f"ApartSquareFree: {e!r} is not a rational function of {x}")
+    res, _, _ = _apart_sqf(f, x)
+    if sp.simplify(sp.together(res - f)) != 0:
+        raise ArithmeticError("ApartSquareFree: decomposition failed verification")
+    return out(res)
+
+
+def _pfe_full(f, x):
+    """Complete partial fractions over the algebraic closure: (polynomial part, [(pole, k, coefficient)])."""
+    f = sp.together(f)
+    n, d = sp.fraction(f)
+    N = sp.Poly(sp.expand(n), x)
+    D = sp.Poly(sp.expand(d), x)
+    g = N.gcd(D)
+    N, D = N.quo(g), D.quo(g)
+    q, r = N.div(D)
+    roots = sp.roots(D, x)
+    if sum(roots.values()) != D.degree():
+        raise NotImplementedError("PartialFractionElements: the denominator's roots cannot be found in radicals")
+    elems = []
+    fr = r.as_expr() / D.as_expr()
+    for p, m in roots.items():
+        g_ = sp.cancel(fr * (x - p) ** m)
+        coeffs = []
+        for k in range(m, 0, -1):        # coefficient of 1/(x - p)^k
+            j = m - k
+            c = sp.diff(g_, x, j).subs(x, p) / sp.factorial(j) if j else g_.subs(x, p)
+            if c.has(sp.nan, sp.zoo):
+                c = sp.limit(sp.diff(g_, x, j) / sp.factorial(j), x, p)
+            coeffs.append(sp.radsimp(sp.simplify(c)))
+        elems.append((p, m, coeffs))
+    return q, elems
+
+
+@fn("PartialFractionElements", area=AREA, status="added",
+    notes="PartialFractionElements[f, x] -> <|\"Decomposition\", \"PolynomialPart\", \"FractionalPart\", "
+          "\"PolynomialCoefficients\", \"FractionalCoefficients\" ({{pole, multiplicity, {c_m, ..., c_1}}, ...} with "
+          "c_k the coefficient of 1/(x - pole)^k), \"Poles\", \"PoleMultiplicities\"|>, the complete decomposition "
+          "over the algebraic numbers (poles in radicals); PartialFractionElements[f, x, prop] gives one property; "
+          "poles are sorted as Wolfram (real ascending, then complex); the decomposition is checked to equal f")
+def _pfe(e, x, *prop):
+    xs = _var1(x, "PartialFractionElements")
+    f = _S(e, "PartialFractionElements")
+    n, d = sp.fraction(sp.together(f))
+    if not (sp.expand(n).is_polynomial(xs) and sp.expand(d).is_polynomial(xs)):
+        raise ValueError(f"PartialFractionElements: {e!r} is not a rational function of {x}")
+    q, elems = _pfe_full(f, xs)
+    from .wl_algebra import _wl_order_key
+    elems.sort(key=lambda t: _wl_order_key(t[0]))
+    frac = sp.Add(*(c / (xs - p) ** (m - i) for p, m, cs in elems for i, c in enumerate(cs)))
+    if sp.simplify(sp.together(q.as_expr() + frac - f)) != 0:
+        raise ArithmeticError("PartialFractionElements: decomposition failed verification")
+    poly_coeffs = list(reversed(q.all_coeffs())) if not q.is_zero else []
+    props = {
+        "Decomposition": out(q.as_expr()) if not elems else ev(Expr("Plus", out(q.as_expr()), out(frac))),
+        "PolynomialPart": out(q.as_expr()),
+        "FractionalPart": out(frac),
+        "PolynomialCoefficients": L(*(out(c) for c in poly_coeffs)),
+        "FractionalCoefficients": L(*(L(out(p), m, L(*(out(c) for c in cs))) for p, m, cs in elems)),
+        "Poles": L(*(out(p) for p, _, _ in elems)),
+        "PoleMultiplicities": L(*(m for _, m, _ in elems)),
+    }
+    if prop:
+        if len(prop) > 1 or not isinstance(prop[0], str) or prop[0] not in props:
+            raise ValueError(f"PartialFractionElements: unknown property {prop[0]!r}; known: {sorted(props)}")
+        return props[prop[0]]
+    return Expr("Association", *(rule(k, v) for k, v in props.items()))
+
+
+# ───────────────────────────── GCD, reduction, subresultants ─────────────────────────────
+
+@fn("PolynomialExtendedGCD", area=AREA, status="added",
+    notes="PolynomialExtendedGCD[p, q, x] -> {g, {r, s}} with r p + s q == g, g the monic GCD and deg r < deg q - "
+          "deg g, deg s < deg p - deg g (unique cofactors; coefficients may be rational functions of other "
+          "symbols, as Wolfram); Modulus -> prime works over GF(p) with representatives 0..p-1; checked")
+def _pegcd(p, q, x, *rest):
+    rest, opts = _opts(rest, {"Modulus"}, "PolynomialExtendedGCD")
+    if rest:
+        raise ValueError("PolynomialExtendedGCD called with too many arguments")
+    xs = _var1(x, "PolynomialExtendedGCD")
+    m = _modulus(opts, "PolynomialExtendedGCD")
+    P = _poly(p, xs, "PolynomialExtendedGCD", m)
+    Q = _poly(q, xs, "PolynomialExtendedGCD", m)
+    if P.is_zero and Q.is_zero:
+        return L(0, L(0, 0))
+    if Q.is_zero:
+        lc = P.LC()
+        return L(out(_pmod_expr(P.monic(), m)), L(out(_pmod_expr(sp.Poly(1 / lc, xs, domain=P.domain), m)), 0))
+    if P.is_zero:
+        lc = Q.LC()
+        return L(out(_pmod_expr(Q.monic(), m)), L(0, out(_pmod_expr(sp.Poly(1 / lc, xs, domain=Q.domain), m))))
+    s, t, h = P.gcdex(Q)
+    if not (s * P + t * Q - h).is_zero:
+        raise ArithmeticError("PolynomialExtendedGCD: result failed verification")
+    return L(out(_pmod_expr(h, m)), L(out(_pmod_expr(s, m)), out(_pmod_expr(t, m))))
+
+
+def _pmod_expr(P, m):
+    if m is None:
+        return sp.factor_terms(P.as_expr()) if False else P.as_expr()
+    return sp.Add(*(sp.Integer(int(c) % m) * sp.Mul(*(g ** e for g, e in zip(P.gens, mon)))
+                    for mon, c in P.terms()))
+
+
+_ORDERS = {"Lexicographic": "lex", "DegreeLexicographic": "grlex", "DegreeReverseLexicographic": "grevlex"}
+
+
+@fn("PolynomialReduction", area=AREA, status="added",
+    notes="PolynomialReduction[p, {p1, ...}, {x1, ...}]: the remainder of p on division by the pi (fully reduced "
+          "with respect to their leading terms; unique when the pi are a Gröbner basis), coefficients in the field "
+          "of rational functions of the other symbols; MonomialOrder -> Lexicographic | DegreeLexicographic | "
+          "DegreeReverseLexicographic, Modulus -> prime; the identity p == Σ ai pi + r is checked")
+def _preduction(p, ps, vs, *rest):
+    rest, opts = _opts(rest, {"MonomialOrder", "Modulus", "CoefficientDomain"}, "PolynomialReduction")
+    if rest:
+        raise ValueError("PolynomialReduction called with too many arguments")
+    q, r = _reduce_poly(p, ps, vs, opts, "PolynomialReduction")
+    return out(r)
+
+
+def _reduce_poly(p, ps, vs, opts, fname):
+    X = [_var1(v, fname) for v in (vs.args if is_list(vs) else [vs])]
+    polys = list(ps.args) if is_list(ps) else [ps]
+    order = opts.get("MonomialOrder", _sym("Lexicographic"))
+    if not (isinstance(order, Symbol) and order.name in _ORDERS):
+        raise NotImplementedError(f"{fname}: MonomialOrder {order!r} is not supported")
+    cd = opts.get("CoefficientDomain")
+    if cd is not None and not (isinstance(cd, Symbol) and cd.name in ("RationalFunctions", "Rationals",
+                                                                        "Automatic")):
+        raise NotImplementedError(f"{fname}: CoefficientDomain {cd!r} is not supported")
+    m = _modulus(opts, fname)
+    f = sp.expand(_S(p, fname))
+    G = [sp.expand(_S(g, fname)) for g in polys]
+    allv = set(f.free_symbols).union(*(g.free_symbols for g in G))
+    params = sorted(allv - set(X), key=str)
+    if m:
+        dom = sp.GF(m)
+        if params:
+            raise NotImplementedError(f"{fname}: symbolic coefficients with Modulus are not supported")
+    else:
+        dom = sp.QQ.frac_field(*params) if params else sp.QQ
+    for g in [f] + G:
+        if not g.is_polynomial(*X):
+            raise ValueError(f"{fname}: {out(g)!r} is not a polynomial in {[str(v) for v in X]}")
+    G = [g for g in G if g != 0]
+    if not G:
+        return [], f
+    Q, r = sp.reduced(f, G, *X, order=_ORDERS[order.name], domain=dom)
+    chk = sp.expand(sp.together(f - sum(a * g for a, g in zip(Q, G)) - r))
+    if m:
+        chk = sp.Poly(chk, *X, modulus=m) if chk != 0 else sp.Integer(0)
+        chk = 0 if chk == 0 or chk.is_zero else chk
+    if chk != 0 and sp.simplify(chk) != 0:
+        raise ArithmeticError(f"{fname}: reduction failed verification")
+    if m:
+        r = _pmod_expr(sp.Poly(r, *X, modulus=m), m) if r != 0 else sp.Integer(0)
+    return Q, sp.expand(r) if not params else sp.collect(sp.expand(r), X)
+
+
+def _sres_setup(p, q, x, fname):
+    xs = _var1(x, fname)
+    P = sp.Poly(sp.expand(_S(p, fname)), xs)
+    Q = sp.Poly(sp.expand(_S(q, fname)), xs)
+    if P.is_zero or Q.is_zero:
+        raise ValueError(f"{fname}: the polynomials must be nonzero")
+    return xs, P, Q
+
+
+def _subres_matrix_poly(P, Q, j, xs):
+    """j-th subresultant polynomial S_j (0 <= j < min(m, n)) from the Sylvester submatrices."""
+    m, n = P.degree(), Q.degree()
+    a = P.all_coeffs()
+    b = Q.all_coeffs()
+    cols = m + n - j
+    rows = []
+    for i in range(n - j):
+        rows.append([0] * i + a + [0] * (cols - m - 1 - i))
+    for i in range(m - j):
+        rows.append([0] * i + b + [0] * (cols - n - 1 - i))
+    M = sp.Matrix(rows)
+    k = m + n - 2 * j
+    res = sp.Integer(0)
+    for l in range(j + 1):          # coefficient of x^l: replace last column by column of x^l
+        cols_idx = list(range(k - 1)) + [cols - 1 - l]
+        res += M.extract(list(range(k)), cols_idx).det(method="bareiss") * xs ** l
+    return sp.expand(res)
+
+
+def _subresultants_all(P, Q, xs):
+    """[S_0, ..., S_n] for deg P = m >= deg Q = n (S_n = lc(Q)^(m - n - 1) Q)."""
+    m, n = P.degree(), Q.degree()
+    S = [_subres_matrix_poly(P, Q, j, xs) for j in range(n)]
+    S.append(sp.expand(Q.LC() ** (m - n - 1) * Q.as_expr()))
+    return S
+
+
+def _order_pq(P, Q, fname):
+    if P.degree() < Q.degree():
+        raise NotImplementedError(f"{fname}: the first polynomial must have degree at least that of the second")
+    return P, Q
+
+
+@fn("Subresultants", area=AREA, status="added",
+    notes="Subresultants[p, q, x]: the principal subresultant coefficients {psc_0, ..., psc_n} (n = deg q <= deg "
+          "p): psc_j is the leading coefficient of the j-th subresultant (determinant of the Sylvester submatrix), "
+          "psc_0 = Resultant and psc_n = lc(q)^(deg p - deg q); the first k vanish exactly when p and q have k "
+          "common roots; deg p < deg q and Modulus raise")
+def _subresultants(p, q, x, *rest):
+    if rest:
+        raise NotImplementedError("Subresultants: options (Modulus) are not supported")
+    xs, P, Q = _sres_setup(p, q, x, "Subresultants")
+    P, Q = _order_pq(P, Q, "Subresultants")
+    S = _subresultants_all(P, Q, xs)
+    n = Q.degree()
+    return L(*(out(sp.Poly(s, xs).coeff_monomial(xs ** j) if s != 0 else sp.Integer(0)) if j < n
+               else out(Q.LC() ** (P.degree() - n)) for j, s in enumerate(S)))
+
+
+@fn("SubresultantPolynomials", area=AREA, status="added",
+    notes="SubresultantPolynomials[p, q, x]: the subresultant polynomials {S_0, ..., S_n} (n = deg q <= deg p) "
+          "from the Sylvester submatrices, S_0 = Resultant[p, q, x] and S_n = lc(q)^(deg p - deg q - 1) q; deg p < "
+          "deg q and Modulus raise")
+def _subrespolys(p, q, x, *rest):
+    if rest:
+        raise NotImplementedError("SubresultantPolynomials: options (Modulus) are not supported")
+    xs, P, Q = _sres_setup(p, q, x, "SubresultantPolynomials")
+    P, Q = _order_pq(P, Q, "SubresultantPolynomials")
+    return L(*(out(s) for s in _subresultants_all(P, Q, xs)))
+
+
+@fn("SubresultantPolynomialRemainders", area=AREA, status="added",
+    notes="SubresultantPolynomialRemainders[p, q, x]: the subresultant polynomial remainder sequence {p, q, ...} "
+          "(each term a multiple of the corresponding Euclidean remainder; the last is a multiple of the GCD), "
+          "computed with SymPy's determinant-based subresultant PRS; Modulus raises")
+def _subresprs(p, q, x, *rest):
+    if rest:
+        raise NotImplementedError("SubresultantPolynomialRemainders: options (Modulus) are not supported")
+    xs, P, Q = _sres_setup(p, q, x, "SubresultantPolynomialRemainders")
+    seq = sp.subresultants(P.as_expr(), Q.as_expr(), xs)
+    # check each element is a constant multiple of the Euclidean remainder of the previous two
+    for i in range(2, len(seq)):
+        r = sp.rem(seq[i - 2], seq[i - 1], xs)
+        if sp.simplify(sp.cancel(seq[i] / r)).has(xs):
+            raise ArithmeticError("SubresultantPolynomialRemainders: sequence failed verification")
+    return L(*(out(sp.expand(s)) for s in seq))
+
+
+@fn("FromCoefficientRules", area=AREA, status="added",
+    notes="FromCoefficientRules[{{e1, e2, ...} -> c, ...}, {x1, x2, ...}] -> Σ c x1^e1 x2^e2 ... (inverse of "
+          "CoefficientRules); a single variable may be given without a list")
+def _fromcr(rules, vs):
+    V = list(vs.args) if is_list(vs) else [vs]
+    rs = list(rules.args) if is_list(rules) else [rules]
+    terms = []
+    for r in rs:
+        if not _is_head(r, "Rule", "RuleDelayed"):
+            raise ValueError("FromCoefficientRules: expected rules {e1, ...} -> c")
+        ex = r.args[0]
+        exps = list(ex.args) if is_list(ex) else [ex]
+        if len(exps) != len(V) or not all(K.is_int(e) and int(e) >= 0 for e in exps):
+            raise ValueError("FromCoefficientRules: each exponent vector must have one non-negative integer per "
+                             "variable")
+        terms.append(Expr("Times", r.args[1], *(Expr("Power", v, e) for v, e in zip(V, exps))))
+    return ev(Expr("Plus", *terms)) if terms else 0
+
+
+@fn("CoefficientArrays", area=AREA, status="added",
+    notes="CoefficientArrays[polys, {x1, ...}] -> {c0, c1, c2, ...} with polys == c0 + c1.x + c2.x.x + ...: c_k has "
+          "the coefficient of x_i1 ... x_ik at i1 <= ... <= ik and 0 elsewhere (Wolfram's default), or spread "
+          "equally over all orderings with \"Symmetric\" -> True; equations are taken as lhs - rhs; a single "
+          "polynomial gives a scalar c0. MikoshiLang has no sparse storage, so the arrays are dense (Wolfram returns "
+          "SparseArray objects; Normal gives these arrays)")
+def _coefarrays(polys, vs, *rest):
+    sym_ = False
+    rest = list(rest)
+    while rest and _is_head(rest[-1], "Rule") and rest[-1].args[0] == "Symmetric":
+        sym_ = _tf(rest.pop().args[1]) is True
+    if rest:
+        raise ValueError("CoefficientArrays: unknown extra arguments")
+    V = list(vs.args) if is_list(vs) else [vs]
+    X = [_S(v, "CoefficientArrays") for v in V]
+    single = not is_list(polys)
+    ps = [polys] if single else list(polys.args)
+    exprs = []
+    for p in ps:
+        if _is_head(p, "Equal") and len(p.args) == 2:
+            p = Expr("Plus", p.args[0], Expr("Times", -1, p.args[1]))
+        f = sp.expand(_S(p, "CoefficientArrays"))
+        gens = [sp.Dummy(f"g{i}") for i in range(len(X))]
+        f = f.subs(dict(zip(X, gens)), simultaneous=True)
+        if not f.is_polynomial(*gens):
+            raise ValueError(f"CoefficientArrays: {p!r} is not a polynomial in the variables")
+        exprs.append(sp.Poly(f, *gens) if gens else sp.Poly(f))
+    nv = len(X)
+    deg = max((P.total_degree() for P in exprs), default=0)
+
+    def arr(k, P):
+        if k == 0:
+            return P.coeff_monomial(1) if nv else P.as_expr()
+        shape = [nv] * k
+
+        def build(prefix):
+            if len(prefix) == k:
+                idx = tuple(prefix)
+                mono = [0] * nv
+                for i in idx:
+                    mono[i] += 1
+                c = P.coeff_monomial(tuple(mono))
+                if c == 0:
+                    return sp.Integer(0)
+                if sym_:
+                    nperm = math.factorial(k)
+                    for cnt in mono:
+                        nperm //= math.factorial(cnt)
+                    return c / nperm
+                return c if list(idx) == sorted(idx) else sp.Integer(0)
+            return [build(prefix + [i]) for i in range(nv)]
+        return build([]) if shape else None
+
+    res = []
+    for k in range(deg + 1):
+        a = [arr(k, P) for P in exprs]
+        res.append(out(a[0]) if single else out(a))
+    return L(*res)
