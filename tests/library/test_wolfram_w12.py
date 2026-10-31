@@ -854,6 +854,7 @@ GROUPS = [v for k, v in list(globals().items()) if k.isupper() and k != "GROUPS"
 CASES = [c for g in GROUPS for c in g]
 
 
-@pytest.mark.parametrize("case", CASES, ids=ids(CASES))
+# The temp DB path varies per process; keep it out of test IDs so pytest-xdist workers collect identical tests.
+@pytest.mark.parametrize("case", CASES, ids=[c[0].replace(DBF, "<DBF>")[:80] for c in CASES])
 def test_wolfram_w12(case):
     check(case)
