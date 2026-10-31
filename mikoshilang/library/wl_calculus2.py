@@ -1364,10 +1364,15 @@ def _split_osc(t, x):
 
 
 def _log_expand(t, x, order):
-    """Asymptotic representation c * exp(P) * (1 + Q) of a single positive-for-large-x term at +oo."""
+    c, P, corr = _log_parts(t, x, order)
+    return c * sp.powsimp(sp.exp(P), force=True) * sp.expand(corr)
+
+
+def _log_parts(t, x, order):
+    """(c, P, corr): t ~ c * exp(P) * corr with corr = 1 + O(1/x) for a single positive-for-large-x term."""
     c, rest = t.as_independent(x, as_Add=False)
     if rest == 1:
-        return c
+        return c, sp.Integer(0), sp.Integer(1)
     lg = sp.expand_log(sp.log(rest.rewrite(sp.gamma).xreplace(
         {g: sp.exp(sp.loggamma(g.args[0])) for g in rest.rewrite(sp.gamma).atoms(sp.gamma)})), force=True)
     try:
@@ -1390,8 +1395,7 @@ def _log_expand(t, x, order):
             corr = sp.series(sp.exp(Q.subs(x, 1 / w)), w, 0, order + 1).removeO().subs(w, 1 / x)
         except Exception as exc:
             raise _AsymFail(str(exc))
-    pref = sp.powsimp(sp.exp(P), force=True)
-    return c * pref * sp.expand(corr)
+    return c, P, corr
 
 
 def _dominant(terms, x, x0):
@@ -1456,7 +1460,34 @@ def asym(f, x, x0, order=None, discrete=False):
     return res.xreplace({xp: x})
 
 
+def _special_inf(f, x, order):
+    """Replace erfc/erf/E_nu of arguments -> +Infinity by their (exact) asymptotic series."""
+    J = (order if order is not None else 1) + 3
+
+    def to_inf(g):
+        r = _limit(g, x, sp.oo)
+        return r == sp.oo
+
+    def erfc_s(z):
+        return sp.exp(-z ** 2) / (z * sp.sqrt(sp.pi)) * sum(
+            (-1) ** k * sp.factorial2(2 * k - 1) / (2 * z ** 2) ** k for k in range(J))
+
+    def expint_s(nu, z):
+        return sp.exp(-z) / z * sum((-1) ** k * sp.rf(nu, k) / z ** k for k in range(J))
+    f = f.replace(lambda e: isinstance(e, sp.erfc) and e.args[0].has(x) and to_inf(e.args[0]),
+                  lambda e: erfc_s(e.args[0]))
+    f = f.replace(lambda e: isinstance(e, sp.erf) and e.args[0].has(x) and to_inf(e.args[0]),
+                  lambda e: 1 - erfc_s(e.args[0]))
+    f = f.replace(lambda e: isinstance(e, sp.expint) and e.args[1].has(x) and not e.args[0].has(x)
+                  and to_inf(e.args[1]), lambda e: expint_s(e.args[0], e.args[1]))
+    return f
+
+
 def _asym_inf(f, x, order):
+    if f.has(sp.erfc, sp.erf, sp.expint):
+        g = _special_inf(f, x, order)
+        if g != f:
+            return _asym_inf(sp.expand(g) if order is not None else g, x, order)
     # 1. SymPy's own expansion when it is informative
     direct = None
     if not any(isinstance(b, sp.Pow) and b.exp.has(x) and b.base.is_number and b.base.is_negative
@@ -1487,6 +1518,8 @@ def _asym_inf(f, x, order):
             return ld
     # 2. term-wise: oscillating factors kept, log-exp expansion of each term, dominance
     terms = list(sp.Add.make_args(sp.expand(f, power_exp=False, log=False, mul=True, multinomial=False)))
+    if order is not None and len(terms) > 1:
+        return _grouped_expansion(terms, x, order)
     reps = []
     for t in terms:
         osc, rest = _split_osc(t, x)
@@ -1499,6 +1532,45 @@ def _asym_inf(f, x, order):
         if not _verify_lead(sp.Add(*[terms[i] for i in idx]), chk, x, sp.oo):
             raise _AsymFail("leading term could not be verified")
     return res
+
+
+def _grouped_expansion(terms, x, order):
+    """Expansion to relative order: terms grouped by their exponential scale exp(Q) (Q the part of the log not
+    of the form a Log[x] + b); within a group the power corrections are summed and truncated at x^-order relative to
+    the group's leading power; dominated (exponentially smaller) groups are dropped."""
+    groups = {}
+    keys = []
+    for t in terms:
+        osc, rest = _split_osc(t, x)
+        c, P, corr = _log_parts(rest, x, order)
+        Q, Rr = sp.Integer(0), sp.Integer(0)
+        for term in sp.Add.make_args(sp.expand(P)):
+            cc, pw = term.as_independent(x, as_Add=False)
+            if pw == 1 or (isinstance(pw, sp.log) and pw.args[0] == x):
+                Rr += term
+            else:
+                Q += term
+        key = (sp.srepr(sp.simplify(Q)), sp.srepr(osc))
+        if key not in groups:
+            groups[key] = [Q, osc, sp.Integer(0)]
+            keys.append(key)
+        groups[key][2] += c * sp.powsimp(sp.exp(Rr), force=True) * sp.expand(corr)
+    reps = []
+    for k in keys:
+        Q, osc, S = groups[k]
+        S = sp.expand(S)
+        ts = list(sp.Add.make_args(S))
+        if not ts or S == 0:
+            continue
+        # leading power within the group
+        lead = ts[_dominant(ts, x, sp.oo)[0]] if len(ts) > 1 else ts[0]
+        kept = [u for u in ts if _limit(sp.simplify(u / lead) * x ** order, x, sp.oo) not in (0,)]
+        reps.append((osc, sp.exp(Q), sp.Add(*kept)))
+    if not reps:
+        return sp.Integer(0)
+    mags = [e * sp.Add.make_args(S_)[0] for _o, e, S_ in reps]
+    idx = _dominant(mags, x, sp.oo) if len(mags) > 1 else [0]
+    return sp.Add(*[reps[i][0] * reps[i][1] * reps[i][2] for i in idx])
 
 
 def _exp_to_pow(v):
@@ -2297,3 +2369,409 @@ def _asymsolve(eqn, ys, spec, *rest):
     if dom == "Reals":
         brs = [b for b in brs if not b.has(sp.I)]
     return L(*(L(rule(Symbol(y.name), _asym_out(b))) for b in brs))
+
+
+def _flat_eqs(e):
+    if is_list(e):
+        r = []
+        for a in e.args:
+            r.extend(_flat_eqs(a))
+        return r
+    if _head(e, "And"):
+        r = []
+        for a in e.args:
+            r.extend(_flat_eqs(a))
+        return r
+    return [e]
+
+
+def _fname_of(t):
+    """'y' from y, y[x] or y[n]."""
+    if isinstance(t, Symbol):
+        return t.name
+    if _head(t) and len(t.args) == 1:
+        return t.head
+    raise ValueError(f"{t!r} is not an unknown function")
+
+
+def _ode_parts(eqs, yname, x, fname):
+    """(ODE as SymPy expression == 0, order, {k: value} initial conditions at points) for one unknown."""
+    yf = sp.Function(yname)
+    odes, ics = [], []
+    for e in eqs:
+        v = SX(e, fname)
+        if not isinstance(v, sp.Equality):
+            raise ValueError(f"{fname}: {e!r} is not an equation")
+        d = v.lhs - v.rhs
+        if d.has(yf(x)):
+            odes.append(d)
+        else:
+            ics.append(v)
+    if len(odes) != 1:
+        raise NotImplementedError(f"{fname}: exactly one differential equation in {yname} is supported")
+    ode = odes[0]
+    order = 0
+    for dv in ode.atoms(sp.Derivative):
+        if dv.expr == yf(x):
+            order = max(order, dv.derivative_count)
+    if order == 0:
+        raise ValueError(f"{fname}: the equation is not a differential equation")
+    icd = {}
+    for v in ics:
+        lhs, rhs = v.lhs, v.rhs
+        if rhs.has(yf) and not lhs.has(yf):
+            lhs, rhs = rhs, lhs
+        if isinstance(lhs, AppliedUndef) and lhs.func == yf:
+            icd[(0, lhs.args[0])] = rhs
+            continue
+        if isinstance(lhs, sp.Subs) and isinstance(lhs.expr, sp.Derivative):
+            icd[(lhs.expr.derivative_count, lhs.point[0])] = rhs
+            continue
+        if isinstance(lhs, sp.Derivative) and isinstance(lhs.expr, AppliedUndef):
+            icd[(lhs.derivative_count, lhs.expr.args[0])] = rhs
+            continue
+        raise ValueError(f"{fname}: cannot interpret the condition {v}")
+    return ode, order, icd
+
+
+def _taylor_ode(ode, yname, x, order, x0, vals, N, fname):
+    yf = sp.Function(yname)
+    Ys = [sp.Symbol(f"__Y{i}") for i in range(order + 1)]
+    e = ode
+    for i in range(order, 0, -1):
+        e = e.subs(sp.Derivative(yf(x), (x, i)), Ys[i])
+    e = e.subs(yf(x), Ys[0])
+    if e.has(yf):
+        raise NotImplementedError(f"{fname}: delay or non-local terms are not supported")
+    sol = sp.solve(e, Ys[order], dict=True)
+    if len(sol) != 1:
+        raise NotImplementedError(f"{fname}: the equation must determine the highest derivative uniquely")
+    G = sp.cancel(sol[0][Ys[order]])
+    point = {x: x0, **{Ys[i]: vals[i] for i in range(order)}}
+    den = sp.fraction(sp.together(G))[1]
+    g0 = sp.simplify(G.subs(point))
+    if sp.simplify(den.subs(point)) == 0 or g0.has(sp.zoo, sp.oo, sp.nan) or not g0.is_finite:
+        raise NotImplementedError(f"{fname}: {x0} is a singular point of the equation")
+    derivs = list(vals)
+    cur = G
+    for k in range(order, N + 1):
+        derivs.append(sp.simplify(cur.subs(point)))
+        nxt = sp.diff(cur, x) + sum(Ys[i + 1] * sp.diff(cur, Ys[i]) for i in range(order - 1)) + \
+            G * sp.diff(cur, Ys[order - 1])
+        cur = sp.cancel(nxt) if k < N else cur
+    return sum(derivs[k] / sp.factorial(k) * (x - x0) ** k for k in range(N + 1))
+
+
+def _perturb_ode(ode, yname, x, order, icd, eps, e0, n, fname):
+    if e0 != 0:
+        raise NotImplementedError(f"{fname}: perturbation expansions are supported about 0 only")
+    yf = sp.Function(yname)
+    lead = [d for d in ode.atoms(sp.Derivative) if d.expr == yf(x) and d.derivative_count == order]
+    hc = sp.diff(ode.subs(lead[0], sp.Symbol("__H")), sp.Symbol("__H")).subs(sp.Symbol("__H"), 0)
+    if sp.simplify(hc.subs(eps, 0)) == 0:
+        raise NotImplementedError(f"{fname}: singular perturbation (the small parameter multiplies the highest "
+                                  "derivative); boundary-layer expansions are not supported")
+    Yk = [sp.Function(f"__y{k}") for k in range(n + 1)]
+    Ysum = sum(eps ** k * Yk[k](x) for k in range(n + 1))
+    full = sp.expand(ode.subs(yf(x), Ysum).doit())
+    ser = sp.series(full, eps, 0, n + 1).removeO()
+    sols = {}
+    for k in range(n + 1):
+        eqk = sp.expand(ser).coeff(eps, k)
+        for j in range(k):
+            eqk = eqk.subs(Yk[j](x), sols[j]).doit()
+        conds = {}
+        for (d, pt), v in icd.items():
+            vk = sp.series(v, eps, 0, n + 1).removeO()
+            vk = sp.expand(vk).coeff(eps, k)
+            if d == 0:
+                conds[Yk[k](pt)] = vk
+            else:
+                conds[Yk[k](x).diff(x, d).subs(x, pt)] = vk
+        try:
+            s_ = sp.dsolve(sp.Eq(sp.simplify(eqk), 0), Yk[k](x), ics=conds)
+        except Exception as exc:
+            raise NotImplementedError(f"{fname}: could not solve the order-{k} problem ({exc})")
+        if isinstance(s_, list):
+            if len(s_) != 1:
+                raise NotImplementedError(f"{fname}: the order-{k} problem has several solutions")
+            s_ = s_[0]
+        sols[k] = sp.simplify(s_.rhs)
+        if sols[k].free_symbols & {sp.Symbol(f"C{i}") for i in range(1, 6)}:
+            raise NotImplementedError(f"{fname}: give enough initial/boundary conditions to fix the solution")
+    res = sum(eps ** k * sols[k] for k in range(n + 1))
+    chk = sp.series(sp.expand(ode.subs(yf(x), res).doit()), eps, 0, n + 1).removeO()
+    if sp.simplify(chk) != 0:
+        raise NotImplementedError(f"{fname}: the perturbation series failed the residual check")
+    return res
+
+
+@fn("AsymptoticDSolveValue", area=AREA, status="added",
+    notes="AsymptoticDSolveValue[{ode, ics}, y[x], {x, x0, n} | x -> x0]: the power-series solution of a (linear or "
+          "nonlinear) ODE at an ordinary point x0 (Taylor coefficients by repeated differentiation of the solved "
+          "equation; missing initial values become C[1], C[2], ...); AsymptoticDSolveValue[{ode, ics}, y[x], x, "
+          "{e, 0, n}]: regular perturbation expansion in a parameter (each order solved with DSolve, residual "
+          "checked); singular points, singular perturbations and systems raise")
+def _asymdsolve(eqs, target, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticDSolveValue")
+    fname = "AsymptoticDSolveValue"
+    yname = _fname_of(target)
+    eqlist = _flat_eqs(eqs)
+    if pos:
+        if len(pos) != 1:
+            raise ValueError(f"{fname}: too many arguments")
+        x = _svar(spec, fname)
+        eps, e0, n = _parse_point_spec(pos[0], o, fname)
+        ode, order, icd = _ode_parts(eqlist, yname, x, fname)
+        res = _perturb_ode(ode, yname, x, order, icd, eps, e0, n if n is not None else 1, fname)
+        return _asym_out(res)
+    x, x0, n = _parse_point_spec(spec, o, fname)
+    if _is_inf(x0):
+        raise NotImplementedError(f"{fname}: expansions at Infinity are not supported")
+    ode, order, icd = _ode_parts(eqlist, yname, x, fname)
+    vals = []
+    cno = 0
+    for k in range(order):
+        key = next((kk for kk in icd if kk[0] == k), None)
+        if key is not None and sp.simplify(key[1] - x0) != 0:
+            raise NotImplementedError(f"{fname}: initial conditions must be given at the expansion point")
+        if key is None:
+            cno += 1
+            vals.append(sp.Symbol(f"__C_{cno}"))
+        else:
+            vals.append(icd[key])
+    if any(k[0] >= order for k in icd):
+        raise NotImplementedError(f"{fname}: boundary-value problems are not supported for series solutions")
+    N = n if n is not None else 12
+    ser = _taylor_ode(ode, yname, x, order, x0, vals, N, fname)
+    if n is None:
+        if ser == 0:
+            return 0
+        ser = _lead_finite(sp.expand(ser), x, x0) if not _csyms(ser) else sp.expand(ser)
+    return _sym_to_c(_asym_out(sp.expand(ser)))
+
+
+def _first_order_linear(eq, yname, nv):
+    """y[n+1] == r(n) y[n] -> C[1] Product[r(k), {k, 1, n - 1}] in closed form (verified), else None."""
+    yf = sp.Function(yname)
+    d = eq.lhs - eq.rhs
+    terms = {a for a in d.atoms(AppliedUndef) if a.func == yf}
+    if len(terms) != 2:
+        return None
+    shifts = sorted(terms, key=lambda a: sp.simplify(a.args[0] - nv))
+    lo, hi = shifts
+    s0 = sp.simplify(lo.args[0] - nv)
+    if sp.simplify(hi.args[0] - lo.args[0]) != 1 or not s0.is_Integer:
+        return None
+    A, B = sp.Symbol("__A"), sp.Symbol("__B")
+    lin = d.subs({hi: B, lo: A})
+    if sp.diff(lin, A, 2) != 0 or sp.diff(lin, B, 2) != 0 or sp.diff(lin, A, B) != 0 or lin.subs({A: 0, B: 0}) != 0:
+        return None
+    cA, cB = sp.diff(lin, A), sp.diff(lin, B)
+    r = sp.cancel(-cA / cB).subs(nv, nv - s0)       # y(m + 1) = r(m) y(m)
+    k = sp.Dummy("k", integer=True, positive=True)
+    P = sp.product(r.subs(nv, k), (k, 1, nv - 1))
+    if P.has(sp.Product) or P == 0:
+        return None
+    C1 = sp.Symbol("__C_1")
+    P = _rewrite_special(P)
+    sol = C1 * P
+    try:
+        chk = sp.simplify(sp.gammasimp(d.subs({hi: sol.subs(nv, hi.args[0]), lo: sol.subs(nv, lo.args[0])})))
+    except Exception:
+        chk = None
+    if chk != 0:
+        for m in (3, 5, 8):
+            try:
+                if abs(complex(sp.N(d.subs({hi: sol.subs(nv, hi.args[0]), lo: sol.subs(nv, lo.args[0])})
+                                    .subs({nv: m, C1: 1}), 30))) > 1e-20:
+                    return None
+            except Exception:
+                return None
+    return sol
+
+
+@fn("AsymptoticRSolveValue", area=AREA, status="added",
+    notes="AsymptoticRSolveValue[{eqn, ics}, y[n], n -> Infinity | {n, Infinity, m}]: asymptotics of the solution "
+          "of a recurrence: first-order linear homogeneous recurrences are solved as C[1] times a closed-form "
+          "product (Gamma functions, verified); others via RSolveValue (verified by substitution); each free "
+          "constant's part is expanded separately (Stirling / exponential scales; Fibonacci -> GoldenRatio^n/Sqrt[5]); "
+          "parameter (perturbation) forms and recurrences without a verified closed form raise")
+def _asymrsolve(eqs, target, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticRSolveValue")
+    fname = "AsymptoticRSolveValue"
+    if pos:
+        raise NotImplementedError(f"{fname}: perturbation expansions in a parameter are not supported")
+    x, x0, n = _parse_point_spec(spec, o, fname)
+    if x0 != sp.oo:
+        raise ValueError(f"{fname}: the expansion point must be Infinity")
+    yname = _fname_of(target)
+    eqlist = _flat_eqs(eqs)
+    sol = None
+    if len(eqlist) == 1:
+        v = SX(eqlist[0], fname)
+        if isinstance(v, sp.Equality):
+            sol = _first_order_linear(v, yname, x)
+    if sol is None:
+        r = _ev(Expr("RSolveValue", L(*eqlist), Expr(yname, Symbol(x.name)), Symbol(x.name)))
+        if _head(r, "RSolveValue"):
+            raise NotImplementedError(f"{fname}: the recurrence could not be solved")
+        if K.contains(r, lambda e: _head(e, "Pochhammer") and e.args and e.args[0] == 0):
+            raise NotImplementedError(f"{fname}: the recurrence could not be solved")
+        sol = SX(_c_to_sym(r), fname)
+        if sol == 0 and len(eqlist) == 1:
+            raise NotImplementedError(f"{fname}: only the trivial solution was found")
+        _check_rsol(sol, eqlist, yname, x, fname)
+    res = _asym_with_constants(sol, x, x0, n, fname, discrete=True)
+    return _sym_to_c(_asym_out(res))
+
+
+def _check_rsol(sol, eqlist, yname, x, fname):
+    """The solution must satisfy the recurrence (numerically, at several n) and carry order - #ics free constants."""
+    yf = sp.Function(yname)
+    rec, ics = [], []
+    for e in eqlist:
+        v = SX(e, fname)
+        if not isinstance(v, sp.Equality):
+            raise ValueError(f"{fname}: equations expected")
+        apps = [a for a in v.atoms(sp.Function) if a.func == yf]
+        if any(a.args[0].has(x) for a in apps):
+            rec.append((v, apps))
+        else:
+            ics.append(v)
+    if len(rec) != 1:
+        raise NotImplementedError(f"{fname}: exactly one recurrence equation is supported")
+    v, apps = rec[0]
+    shifts = [sp.simplify(a.args[0] - x) for a in apps]
+    if not all(sh.is_integer for sh in shifts):
+        raise NotImplementedError(f"{fname}: only shifts by integers are supported")
+    order = int(max(shifts) - min(shifts))
+    consts = [c for c in sol.free_symbols if c.name.startswith("__C_")]
+    if len(consts) != order - len(ics):
+        raise NotImplementedError(f"{fname}: the solver did not return the general solution "
+                                  f"({len(consts)} of {order - len(ics)} free constants)")
+    d = v.lhs - v.rhs
+    cvals = {c: sp.Rational(k + 2, 3) for k, c in enumerate(consts)}
+    for nv in (7, 11, 16):
+        val = d.subs({a: sol.subs(x, a.args[0]) for a in apps}).subs(x, nv).subs(cvals)
+        try:
+            z = complex(sp.N(val, 30))
+            sc = max(1.0, abs(complex(sp.N(sol.subs(x, nv).subs(cvals), 30))))
+        except Exception:
+            raise NotImplementedError(f"{fname}: the solution could not be verified")
+        if abs(z) > 1e-12 * sc * 10 ** order:
+            raise NotImplementedError(f"{fname}: the solver's solution failed verification")
+
+
+def _pick_piecewise(r, xs, pv):
+    """Replace Piecewise[...] sub-expressions by the branch whose condition holds at xs = pv (near the point)."""
+    def walk(e):
+        if _head(e, "Piecewise"):
+            for br in e.args[0].args:
+                c = _ev(K.substitute(br.args[1], {xs.name: pv}))
+                if c is True:
+                    return walk(br.args[0])
+            return walk(e.args[1]) if len(e.args) > 1 else Symbol("Indeterminate")
+        if _head(e):
+            return Expr(e.head, *(walk(a) for a in e.args))
+        return e
+    return _ev(walk(r))
+
+
+def _dist_arg(d, fname):
+    if not (_head(d, "Distributed") and len(d.args) == 2):
+        raise ValueError(f"{fname}: the second argument must be x \\[Distributed] dist")
+    return d
+
+
+@fn("AsymptoticExpectation", area=AREA, status="added",
+    notes="AsymptoticExpectation[expr, x \\[Distributed] dist, a -> a0 | {a, a0, n}]: the asymptotic expansion in a "
+          "parameter of the exact Expectation (computed by Expectation, then expanded); raises when the "
+          "expectation has no closed form")
+def _asymexp(expr, d, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "AsymptoticExpectation")
+    if pos:
+        raise ValueError("AsymptoticExpectation: too many arguments")
+    _dist_arg(d, "AsymptoticExpectation")
+    x, x0, n = _parse_point_spec(spec, o, "AsymptoticExpectation")
+    r = _ev(Expr("Expectation", expr, d))
+    if _head(r, "Expectation") or K.contains(r, lambda e: _head(e, "Integrate") or _head(e, "Sum")):
+        raise NotImplementedError("AsymptoticExpectation: the expectation has no closed form")
+    R_ = SX(r, "AsymptoticExpectation")
+    try:
+        return _asym_out(asym(R_, x, x0, n))
+    except _AsymFail:
+        pass
+    # term-wise: expand the integrand in the parameter, take expectations of the coefficients (moments)
+    m = n if n is not None else 2
+    E_ = SX(expr, "AsymptoticExpectation")
+    try:
+        if _is_inf(x0):
+            w = sp.Dummy("w", positive=True)
+            ser = sp.series(E_.subs(x, 1 / w), w, 0, m + 1).removeO()
+        else:
+            w = sp.Dummy("w")
+            ser = sp.series(E_.subs(x, x0 + w), w, 0, m + 1).removeO()
+    except Exception as exc:
+        raise NotImplementedError(f"AsymptoticExpectation: cannot expand the expression ({exc})")
+    tot = 0
+    ser = sp.expand(ser)
+    for p in range(m + 1):
+        c = ser.coeff(w, p)
+        if c == 0:
+            continue
+        mv = _ev(Expr("Expectation", out(c), d))
+        if _head(mv, "Expectation"):
+            raise NotImplementedError("AsymptoticExpectation: a term-wise expectation has no closed form")
+        tot += SX(mv, "AsymptoticExpectation") * w ** p
+    approx = tot.subs(w, 1 / x if _is_inf(x0) else x - x0)
+    pv = sp.Integer(1000) if x0 == sp.oo else (sp.Integer(-1000) if x0 == -sp.oo else x0 + sp.Rational(1, 1000))
+    try:
+        err = abs(complex(sp.N(R_.subs(x, pv), 30)) - complex(sp.N(approx.subs(x, pv), 30)))
+    except Exception:
+        raise NotImplementedError("AsymptoticExpectation: the term-wise expansion could not be checked")
+    if err > 1e-3 ** (m + 0.5) * 1e3 * max(1, abs(complex(sp.N(R_.subs(x, pv), 20)))):
+        raise NotImplementedError("AsymptoticExpectation: the term-wise expansion failed a numerical check")
+    return _asym_out(approx)
+
+
+def _prob_closed(pred, d, fname):
+    r = _ev(Expr("Probability", pred, d))
+    if not _head(r, "Probability"):
+        return r
+    xv, dist = d.args
+    if not (_head(pred) and pred.head in ("Greater", "Less", "GreaterEqual", "LessEqual") and len(pred.args) == 2):
+        raise NotImplementedError(f"{fname}: only predicates x > c, x < c, x >= c, x <= c are supported")
+    lhs, rhs = pred.args
+    h = pred.head
+    if rhs == xv:
+        lhs, rhs = rhs, lhs
+        h = {"Greater": "Less", "Less": "Greater", "GreaterEqual": "LessEqual", "LessEqual": "GreaterEqual"}[h]
+    if lhs != xv:
+        raise NotImplementedError(f"{fname}: the predicate must compare the random variable with a bound")
+    cdf = _ev(Expr("CDF", dist, rhs))
+    if _head(cdf, "CDF"):
+        raise NotImplementedError(f"{fname}: the CDF has no closed form")
+    pdfp = _ev(Expr("PDF", dist, rhs))
+    if h in ("Less", "LessEqual"):
+        return cdf
+    return _ev(Expr("Plus", 1, Expr("Times", -1, cdf))) if not _head(pdfp, "PDF") else \
+        _ev(Expr("Plus", 1, Expr("Times", -1, cdf)))
+
+
+@fn("AsymptoticProbability", area=AREA, status="added",
+    notes="AsymptoticProbability[pred, x \\[Distributed] dist, a -> a0 | {a, a0, n}]: the asymptotic expansion in a "
+          "parameter of the exact probability (Probability, or 1 - CDF / CDF for one-sided bounds of continuous "
+          "distributions); e.g. the Gaussian tail Erfc[a/Sqrt[2]]/2 ~ E^(-a^2/2)/(a Sqrt[2 Pi]); no closed form -> "
+          "error")
+def _asymprob(pred, d, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "AsymptoticProbability")
+    if pos:
+        raise ValueError("AsymptoticProbability: too many arguments")
+    _dist_arg(d, "AsymptoticProbability")
+    x, x0, n = _parse_point_spec(spec, o, "AsymptoticProbability")
+    r = _prob_closed(pred, d, "AsymptoticProbability")
+    pv = (x0 + sp.Rational(1, 7)) if not _is_inf(x0) else (sp.Integer(10) if x0 == sp.oo else sp.Integer(-10))
+    r = _pick_piecewise(r, Symbol(x.name), R(pv))
+    v = sp.simplify(SX(r, "AsymptoticProbability"))
+    return _asym_out(_run_asym(v, x, x0, n, "AsymptoticProbability"))
