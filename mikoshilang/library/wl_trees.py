@@ -1211,7 +1211,7 @@ def _game_node(x, fname):
             node.player, node.infoset = p.args
         else:
             node.player = p
-        if is_list(node.player) or _is_real_num(node.player):
+        if is_list(node.player) or (_is_real_num(node.player) and not isinstance(node.player, int)):
             raise TreeError(f"{fname}: {node.player} is not a valid player")
         node.children = [_game_node(k, fname) for k in x.args[1:]]
         _check_probs(node, fname)
