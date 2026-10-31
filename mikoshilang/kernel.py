@@ -338,7 +338,8 @@ def contains(expr, pred) -> bool:
 
 
 _PATTERN_HEADS = {"Pattern", "Blank", "BlankSequence", "BlankNullSequence", "Condition", "PatternTest",
-                  "Alternatives", "Optional", "HoldPattern"}
+                  "Alternatives", "Optional", "HoldPattern",
+                  "PatternSequence", "OrderlessPatternSequence", "KeyValuePattern", "Verbatim"}
 
 
 def has_pattern(e) -> bool:
@@ -670,6 +671,18 @@ def match(pat, expr, b: Dict[str, Any], ev) -> Iterator[Dict[str, Any]]:
         if h == "HoldPattern" and len(pat.args) == 1:
             yield from match(pat.args[0], expr, b, ev)
             return
+        if h == "Verbatim" and len(pat.args) == 1:
+            if same(pat.args[0], expr):
+                yield b
+            return
+        if h in ("PatternSequence", "OrderlessPatternSequence"):
+            # outside an argument sequence only a one-element pattern sequence can match (one expression)
+            if len(pat.args) == 1:
+                yield from match(pat.args[0], expr, b, ev)
+            return
+        if h == "KeyValuePattern" and len(pat.args) == 1:
+            yield from _match_key_value(pat.args[0], expr, b, ev)
+            return
         if h == "Optional" and len(pat.args) in (1, 2):
             # outside an argument sequence an optional pattern matches like its pattern
             yield from match(pat.args[0], expr, b, ev)
@@ -767,6 +780,99 @@ def _match_omitted_optionals(pat, expr, b, ev):
     yield from match(rest[0], expr, b2, ev)
 
 
+def _match_key_value(spec, expr, b, ev):
+    """KeyValuePattern[{p1, p2, ...}]: an association or list of rules with a different element matching each pi
+    (the pi are matched in order, elements in any order)."""
+    pats = spec.args if isinstance(spec, Expr) and spec.head == "List" else (spec,)
+    if isinstance(expr, Expr) and expr.head == "Association":
+        elems = list(expr.args)
+    elif isinstance(expr, Expr) and expr.head == "List" and all(
+            isinstance(r, Expr) and r.head in ("Rule", "RuleDelayed") and len(r.args) == 2 for r in expr.args):
+        elems = list(expr.args)
+    else:
+        return
+
+    def go(i, used, b1):
+        if i == len(pats):
+            yield b1
+            return
+        for k, e in enumerate(elems):
+            if k in used:
+                continue
+            for b2 in match(pats[i], e, b1, ev):
+                yield from go(i + 1, used | {k}, b2)
+    yield from go(0, frozenset(), b)
+
+
+_SEQ_HEADS = ("PatternSequence", "OrderlessPatternSequence")
+
+
+def _seq_like(p) -> bool:
+    """A pattern element that can match a sequence of other than exactly one argument."""
+    while isinstance(p, Expr) and p.head in ("Condition", "PatternTest") and len(p.args) == 2:
+        p = p.args[0]
+    if isinstance(p, Expr) and p.head == "Pattern" and len(p.args) == 2:
+        p = p.args[1]
+    if not isinstance(p, Expr):
+        return False
+    if p.head in _SEQ_HEADS or p.head in ("BlankSequence", "BlankNullSequence", "Repeated", "RepeatedNull"):
+        return True
+    if p.head == "Alternatives":
+        return any(_seq_like(a) for a in p.args)
+    return p.head == "Optional"
+
+
+def _match_seq_element(core, args, j, b, ev, head, flat):
+    """(bindings, length) for a sequence pattern element (PatternSequence, OrderlessPatternSequence or an
+    Alternatives with sequence alternatives) matched against a run of args starting at j."""
+    if core.head == "PatternSequence":
+        orders = [core.args]
+    elif core.head == "OrderlessPatternSequence":
+        if len(core.args) > 8:
+            raise NotImplementedError("OrderlessPatternSequence is limited to 8 patterns")
+        seen, orders = set(), []
+        for perm in itertools.permutations(core.args):
+            key = tuple(tag(q) for q in perm)
+            if key not in seen:
+                seen.add(key)
+                orders.append(perm)
+    else:                                   # Alternatives
+        for alt in core.args:
+            for end in range(j, len(args) + 1):
+                for b2 in _match_seq((alt,), 0, tuple(args[j:end]), 0, b, ev, head, flat):
+                    yield b2, end - j
+        return
+    for end in range(j, len(args) + 1):
+        for ps in orders:
+            for b2 in _match_seq(tuple(ps), 0, tuple(args[j:end]), 0, b, ev, head, flat):
+                yield b2, end - j
+
+
+def _bind_chunk(b, pname, chunk):
+    if pname is None:
+        return b
+    if pname in b:
+        v = b[pname]
+        if isinstance(v, tuple) and len(v) == len(chunk) and all(same(x, y) for x, y in zip(v, chunk)):
+            return b
+        return None
+    b2 = dict(b)
+    b2[pname] = chunk
+    return b2
+
+
+def _match_repeated_seq(p, args, j, lo, hi, b, ev, head, flat, count=0):
+    """Repetitions of a sequence pattern p (PatternSequence[...].. and the like): yields (bindings, end)."""
+    if count >= lo:
+        yield b, j
+    if count >= hi:
+        return
+    for b2, k in _match_seq_element(p, args, j, b, ev, head, flat):
+        if k == 0:
+            continue                        # an empty repetition would repeat forever
+        yield from _match_repeated_seq(p, args, j + k, lo, hi, b2, ev, head, flat, count + 1)
+
+
 def _match_each(p, chunk, b, ev):
     if not chunk:
         yield b
@@ -788,6 +894,21 @@ def _match_seq(pats, i, args, j, b, ev, head, flat):
     if isinstance(inner, Expr) and inner.head == "Pattern" and len(inner.args) == 2 and \
             isinstance(inner.args[0], Symbol):
         pname, inner = inner.args[0].name, inner.args[1]
+    if isinstance(inner, Expr) and (inner.head in _SEQ_HEADS or (
+            inner.head == "Alternatives" and any(_seq_like(a) for a in inner.args))):
+        for b2, k in _match_seq_element(inner, args, j, b, ev, head, flat):
+            b3 = _bind_chunk(b2, pname, tuple(args[j:j + k]))
+            if b3 is not None:
+                yield from _match_seq(pats, i + 1, args, j + k, b3, ev, head, flat)
+        return
+    if isinstance(inner, Expr) and inner.head in ("Repeated", "RepeatedNull") and len(inner.args) in (1, 2) and \
+            isinstance(inner.args[0], Expr) and inner.args[0].head in _SEQ_HEADS:
+        lo, hi = _repeat_bounds(inner)
+        for b2, end in _match_repeated_seq(inner.args[0], args, j, lo, hi, b, ev, head, flat):
+            b3 = _bind_chunk(b2, pname, tuple(args[j:end]))
+            if b3 is not None:
+                yield from _match_seq(pats, i + 1, args, end, b3, ev, head, flat)
+        return
     if isinstance(inner, Expr) and inner.head in ("Repeated", "RepeatedNull") and len(inner.args) in (1, 2):
         lo, hi = _repeat_bounds(inner)
         for k in range(max(lo, 0), min(hi, len(args) - j) + 1):
