@@ -3418,3 +3418,274 @@ def _atoms_sym(e):
         for a in e.args:
             out_ += _atoms_sym(a)
     return out_
+
+
+# ───────────────────────────── FindInstance ─────────────────────────────
+
+def _cands(kind):
+    """Candidate values for free variables, simplest first."""
+    base = [0, 1, -1, 2, -2, 3, -3, Expr("Rational", 1, 2), Expr("Rational", -1, 2), 4, -4, 5, -5, 7, 10]
+    return base
+
+
+def _holds(expr, assign):
+    """True / False / None: does expr hold at the assignment (exact evaluation, then 50-digit numerics)?"""
+    sub = ev(Expr("ReplaceAll", expr, L(*(rule(v, val) for v, val in assign))))
+    if sub is True or sub is False:
+        return sub
+    num = ev(Expr("N", sub, 50))
+    if num is True or num is False:
+        return num
+    return None
+
+
+def _is_real_val(v):
+    r = ev(Expr("Element", v, Symbol("Reals")))
+    if r is True or r is False:
+        return r
+    n = ev(Expr("N", Expr("Im", v), 50))
+    if K.is_number(n):
+        return abs(complex(sp.N(sym(n, "FindInstance")))) < 1e-40
+    return None
+
+
+def _in_dom(v, dom):
+    if dom == "Complexes":
+        return True
+    if dom == "Reals":
+        return _is_real_val(v) is True
+    if dom == "Integers":
+        return K.is_int(v)
+    return True
+
+
+@fn("FindInstance", area=AREA, status="added",
+    notes="FindInstance[expr, vars] / [expr, vars, dom] / [expr, vars, dom, n] / [expr, vars, n]: up to n "
+          "instances {{x -> v, ...}} satisfying expr, every one verified by substitution (exactly or at 50 digits). "
+          "Equations are solved with Solve after giving simple values (0, 1, -1, 2, ...) to the surplus variables; "
+          "pure inequalities use SymPy solveset (univariate) or a search over simple points; Integers uses a bounded "
+          "search (equations solved for the last variable); Booleans uses SatisfiabilityInstances. Without "
+          "domain, variables are real when the condition has inequalities (as Wolfram). {} is returned only when "
+          "the system is proved to have no solution (0-dimensional Solve or an empty solveset); otherwise a search "
+          "that finds nothing raises")
+def _findinstance(expr, vars_, *rest):
+    fname = "FindInstance"
+    rest, opts = _opts(rest, ("WorkingPrecision", "RandomSeeding"), fname)
+    vs = _vars(vars_, fname)
+    dom, n = None, 1
+    for r in rest:
+        if isinstance(r, Symbol) and r.name in ("Reals", "Complexes", "Integers", "Booleans", "Rationals"):
+            dom = r.name
+        elif K.is_int(r) and int(r) >= 1:
+            n = int(r)
+        else:
+            raise ValueError(f"{fname}: invalid argument {r!r}")
+    if dom == "Rationals":
+        raise NotImplementedError(f"{fname}: the Rationals domain is not supported")
+    expr = ev(expr)
+    if expr is False:
+        return L()
+    if dom == "Booleans":
+        inst = ev(Expr("SatisfiabilityInstances", expr, L(*vs), n))
+        return L(*(L(*(rule(v, b) for v, b in zip(vs, row.args))) for row in inst.args))
+    has_ineq = _contains(expr, lambda s: _is_head(s, "Less", "Greater", "LessEqual", "GreaterEqual"))
+    if dom is None:
+        dom = "Reals" if has_ineq else "Complexes"
+    if expr is True:
+        val = 0
+        return L(*[L(*(rule(v, val) for v in vs))] * 1) if n == 1 else L(*(L(*(rule(v, k) for v in vs))
+                                                                        for k in range(n)))
+    if dom == "Integers":
+        return _fi_integers(expr, vs, n, fname)
+    found = []
+
+    def add(assign):
+        key = tuple(str(a[1]) for a in assign)
+        if key in [k for k, _ in found]:
+            return
+        if not all(_in_dom(val, dom) for _, val in assign):
+            return
+        if _holds(expr, assign) is True:
+            found.append((key, assign))
+
+    # DNF over the logical structure
+    s = tosp(expr, fname)
+    clauses = sp.to_dnf(s, simplify=False) if len(s.atoms(sp.core.relational.Relational)) <= 12 else s
+    clauses = list(clauses.args) if isinstance(clauses, sp.Or) else [clauses]
+    proved_empty = True
+    for cl in clauses:
+        atoms = list(cl.args) if isinstance(cl, sp.And) else [cl]
+        eqs = [a for a in atoms if isinstance(a, sp.Eq)]
+        others = [a for a in atoms if not isinstance(a, sp.Eq)]
+        if eqs:
+            eq_ml = [fromsp(a) for a in eqs]
+            nfree = max(0, len(vs) - len(eqs))
+            r_ok = _fi_solve(eq_ml, vs, nfree, dom, add, n, found)
+            if not r_ok or others or nfree:
+                proved_empty = proved_empty and r_ok and not others and not nfree
+        else:
+            proved_empty = proved_empty and _fi_ineq(others, vs, dom, add, n, found, fname)
+        if len(found) >= n:
+            break
+    if found:
+        return L(*(L(*(rule(v, val) for v, val in a)) for _, a in found[:n]))
+    if proved_empty:
+        return L()
+    raise NotImplementedError(f"{fname}: no instance found and the system was not proved inconsistent")
+
+
+def _fi_solve(eqs, vs, nfree, dom, add, n, found):
+    """Solve the equations after fixing nfree variables to simple values; True if the search was exhaustive
+    (no surplus variables and Solve succeeded)."""
+    sdom = Symbol("Reals") if dom == "Reals" else None
+    for k in range(nfree, len(vs) + 1):
+        for fixed in itertools.combinations(list(reversed(vs)), k):
+            free = [v for v in vs if not any(K.same(v, f) for f in fixed)]
+            for combo in itertools.product(_cands(None)[:7 if k else 1], repeat=k):
+                sub = list(zip(fixed, combo))
+                es = [ev(Expr("ReplaceAll", e, L(*(rule(a, b) for a, b in sub)))) for e in eqs]
+                if any(e is False for e in es):
+                    continue
+                es = [e for e in es if e is not True]
+                if not free:
+                    if not es:
+                        add([(v, dict((id(a), b) for a, b in sub).get(id(v))) for v in vs])
+                    continue
+                try:
+                    sol = ev(Expr("Solve", Expr("And", *es) if len(es) > 1 else (es[0] if es else True),
+                                  L(*free), *([sdom] if sdom is not None else [])))
+                except Exception:  # noqa: BLE001
+                    continue
+                if not is_list(sol):
+                    continue
+                for srow in sol.args:
+                    m = {}
+                    for rr in srow.args:
+                        m[str(rr.args[0])] = rr.args[1]
+                    vals = []
+                    ok = True
+                    for v in vs:
+                        if str(v) in m:
+                            val = m[str(v)]
+                            if _contains(val, lambda q: isinstance(q, Symbol) and any(K.same(q, w) for w in vs)) \
+                                    or _is_head(val, "ConditionalExpression"):
+                                ok = False
+                                break
+                            vals.append((v, val))
+                        else:
+                            fx = [b for a, b in sub if K.same(a, v)]
+                            vals.append((v, fx[0] if fx else 0))
+                    if ok:
+                        add(vals)
+                    if len(found) >= n:
+                        return True
+                if k == 0:
+                    if len(sol.args) == 0 or all(len(r.args) == len(vs) for r in sol.args):
+                        return True       # complete 0-dimensional solve
+            if len(found) >= n:
+                return True
+        if len(found) >= n:
+            return True
+    return False
+
+
+def _fi_ineq(atoms, vs, dom, add, n, found, fname):
+    """Pure inequalities: univariate -> solveset; multivariate -> search.  True iff proved empty."""
+    if dom == "Complexes":
+        dom = "Reals"
+    if len(vs) == 1:
+        x = sp.Symbol(vs[0].name, real=True)
+        c = sp.And(*atoms).xreplace({sp.Symbol(vs[0].name): x})
+        S = _real_set(c, x, fname)
+        if _is_empty(S, fname):
+            return True
+        for p in _nice_points(S):
+            add([(vs[0], fromsp(p))])
+            if len(found) >= n:
+                break
+        return False
+    grid = [sp.Integer(0), sp.Integer(1), sp.Integer(-1), sp.Rational(1, 2), sp.Rational(-1, 2), sp.Integer(2),
+            sp.Integer(-2), sp.Rational(1, 4), sp.Rational(-1, 4), sp.Integer(3), sp.Integer(-3), sp.Integer(10),
+            sp.Integer(-10)]
+    if len(vs) <= 4:
+        for combo in itertools.product(grid, repeat=len(vs)):
+            add([(v, fromsp(c)) for v, c in zip(vs, combo)])
+            if len(found) >= n:
+                break
+    return False
+
+
+def _nice_points(S):
+    """Simple members of a real set: integers, then halves, interval midpoints, finite points."""
+    out_ = []
+    for k in sorted(range(-60, 61), key=lambda t: (abs(t), -t)):
+        for d in (1, 2, 4, 10):
+            p = sp.Rational(k, d)
+            if S.contains(p) is sp.true and p not in out_:
+                out_.append(p)
+        if len(out_) >= 20:
+            return out_
+    parts = S.args if isinstance(S, sp.Union) else [S]
+    for part in parts:
+        if isinstance(part, sp.FiniteSet):
+            out_ += [p for p in part if p not in out_]
+        elif isinstance(part, sp.Interval):
+            a, b = part.start, part.end
+            if a.is_finite and b.is_finite:
+                for t in (sp.Rational(1, 2), sp.Rational(1, 3), sp.Rational(2, 3)):
+                    out_.append(a + (b - a) * t)
+            elif a.is_finite:
+                out_ += [a + 1, a + 2]
+            elif b.is_finite:
+                out_ += [b - 1, b - 2]
+    return out_
+
+
+def _fi_integers(expr, vs, n, fname):
+    found = []
+    seen = set()
+    s = tosp(expr, fname)
+    eqs = [a for a in (s.args if isinstance(s, sp.And) else [s]) if isinstance(a, sp.Eq)]
+    X = [sp.Symbol(v.name) for v in vs]
+    limit_ = 2000 if len(vs) <= 2 else (60 if len(vs) == 3 else 12)
+    order = sorted(range(-limit_, limit_ + 1), key=lambda t: (abs(t), -t))
+    if eqs and len(vs) >= 1:
+        last = X[-1]
+        poly_eq = eqs[0].lhs - eqs[0].rhs
+        if not poly_eq.has(last):
+            last = None
+        for combo in itertools.product(order, repeat=len(vs) - 1) if len(vs) > 1 else [()]:
+            if len(found) >= n:
+                break
+            base = dict(zip(X[:-1], combo))
+            if last is not None:
+                try:
+                    roots = sp.solve(poly_eq.subs(base), last)
+                except Exception:  # noqa: BLE001
+                    roots = []
+                vals = [r for r in roots if r.is_integer]
+            else:
+                vals = order[:41]
+            for r in sorted(vals, key=lambda t: (abs(int(t)), -int(t))):
+                assign = [(v, int(c)) for v, c in zip(vs[:-1], combo)] + [(vs[-1], int(r))]
+                key = tuple(c for _, c in assign)
+                if key in seen:
+                    continue
+                if _holds(expr, assign) is True:
+                    seen.add(key)
+                    found.append(assign)
+                    if len(found) >= n:
+                        break
+    else:
+        cnt = 0
+        for combo in itertools.product(order[:min(len(order), 201 if len(vs) <= 2 else 21)], repeat=len(vs)):
+            cnt += 1
+            assign = list(zip(vs, combo))
+            if _holds(expr, assign) is True:
+                found.append(assign)
+                if len(found) >= n:
+                    break
+    if found:
+        return L(*(L(*(rule(v, c) for v, c in a)) for a in found[:n]))
+    raise NotImplementedError(f"{fname}: no integer instance found in the searched range (this does not prove "
+                              f"that none exists)")
