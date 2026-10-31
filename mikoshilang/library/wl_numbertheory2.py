@@ -1720,16 +1720,19 @@ def numeric_eval(f, *xs):
     return mp_to_value(out, dps)
 
 
+def _as_int(x):
+    v = S(x)
+    r = int(round(float(v))) if v.is_number and v.is_real else None
+    if r is None or abs(v - r) > 1e-9:
+        raise Unevaluated()
+    return r
+
+
 def _mp_dirichletl(k, j, s):
-    import mpmath
-    k, j = int(round(float(k))), int(round(float(j)))
-    prec = mpmath.mp.dps
-    v = _dirichlet_numeric(k, j, mpmath.mpmathify(s), prec)
-    if isinstance(v, mpmath.mpc) and v.imag == 0:
-        return sp.Float(v.real, prec)
-    if isinstance(v, mpmath.mpc):
-        return sp.Float(v.real, prec) + sp.I * sp.Float(v.imag, prec)
-    return sp.Float(v, prec)
+    k, j = _as_int(k), _as_int(j)
+    sv = s if not isinstance(s, (int, sp.Integer)) else sp.Float(s)
+    return S(numeric_eval(lambda mp_s, dps: _dirichlet_numeric(k, j, mp_s, dps), R(sv) if isinstance(sv, sp.Basic)
+                          else sv))
 
 
 def _register_numeric():
