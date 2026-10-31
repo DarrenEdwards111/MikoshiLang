@@ -1860,3 +1860,274 @@ def _polysmithdecomp(*args):
 def _polysmithreduce(*args):
     U, S, V, R_ = _psd(*args, fname="PolynomialSmithReduce")
     return _pm_out(S, R_)
+
+
+# ───────────────────────────── Boolean minterms, maxterms, consecutive functions, unateness ─────────────────────
+
+def _bool_vectors(spec, n, fname):
+    """Minterm/maxterm specification -> list of integer indices (a = most significant bit)."""
+    if not is_list(spec):
+        raise ValueError(f"{fname}: the terms must be given as a list")
+    idx = []
+    for t in spec.args:
+        if K.is_int(t):
+            v = int(t)
+            if n is not None and not (0 <= v < 2 ** n):
+                raise ValueError(f"{fname}: index {v} is out of range for {n} variables")
+            idx.append(v)
+        elif is_list(t):
+            bits = []
+            for b in t.args:
+                tb = _tf(b)
+                if tb is None and K.is_int(b) and int(b) in (0, 1):
+                    tb = int(b) == 1
+                if tb is None:
+                    raise ValueError(f"{fname}: vector entries must be True/False or 1/0")
+                bits.append(tb)
+            if n is not None and len(bits) != n:
+                raise ValueError(f"{fname}: vector {t!r} must have {n} entries")
+            n = len(bits) if n is None else n
+            v = 0
+            for b in bits:
+                v = 2 * v + int(b)
+            idx.append(v)
+        else:
+            raise ValueError(f"{fname}: terms must be integers or 0/1 vectors")
+    return idx, n
+
+
+def _terms_fn(fname, maxterms):
+    def impl(spec, *rest):
+        if len(rest) > 2:
+            raise ValueError(f"{fname} called with too many arguments")
+        vars_ = rest[0] if rest else None
+        form = rest[1] if len(rest) == 2 else None
+        if vars_ is None:
+            n = None
+        elif K.is_int(vars_):
+            n = int(vars_)
+        elif is_list(vars_):
+            n = len(vars_.args)
+        else:
+            raise ValueError(f"{fname}: the second argument must be a variable list or a number of variables")
+        idx, n = _bool_vectors(spec, n, fname)
+        if n is None:
+            raise ValueError(f"{fname}: give the number of variables")
+        if maxterms:       # maxterm i is False exactly at the input 2^n - 1 - i (Wolfram's convention)
+            false_at = {2 ** n - 1 - i for i in idx}
+            k = sum(2 ** v for v in range(2 ** n) if v not in false_at)
+        else:
+            k = sum(2 ** v for v in set(idx))
+        if not is_list(vars_):
+            if form is not None:
+                raise ValueError(f"{fname}: a form needs a variable list")
+            return Expr("BooleanFunction", k, n)
+        f = ev(Expr("BooleanFunction", k, vars_))
+        want = form if form is not None else ("CNF" if maxterms else "DNF")
+        if not isinstance(want, str):
+            raise ValueError(f"{fname}: the form must be a string such as \"DNF\", \"CNF\" or \"ANF\"")
+        if maxterms or form is not None:
+            f = ev(Expr("BooleanConvert", f, want))
+        return f
+    return impl
+
+
+fn("BooleanMinterms", area=AREA, status="added",
+   notes="BooleanMinterms[{i1, ...}, {a, b, ...}]: the Boolean function True exactly at the minterms ik (k's binary "
+         "digits give the inputs, first variable most significant; 0/1 or True/False vectors also accepted) as a "
+         "minimal DNF (BooleanMinterms[{1, 3, 5}, {a, b, c}] -> (!a && c) || (!b && c)); BooleanMinterms[spec, n] "
+         "and BooleanMinterms[{vectors}] give BooleanFunction[k, n]; a third argument \"DNF\"/\"CNF\"/\"ANF\"/... "
+         "converts with BooleanConvert")(_terms_fn("BooleanMinterms", False))
+fn("BooleanMaxterms", area=AREA, status="added",
+   notes="BooleanMaxterms[{i1, ...}, {a, b, ...}]: the conjunction of the maxterms ik (maxterm i has the variable "
+         "where the bit of i is 1 and its negation where it is 0, Wolfram's convention, so it is False exactly at "
+         "the input 2^n - 1 - i) as a minimal CNF (BooleanMaxterms[{1, 3, 5}, {a, b, c}] -> (!a || c) && (!b || "
+         "c)); BooleanMaxterms[spec, n] -> BooleanFunction[k, n]; optional form argument")(
+    _terms_fn("BooleanMaxterms", True))
+
+
+def _consec_cells(spec, dims, fname):
+    """All windows of k consecutive cells (product over dimensions); circular per dimension."""
+    if K.is_int(spec):
+        ks, circ = [int(spec)], [False]
+    elif is_list(spec) and len(spec.args) == 2 and (_tf(spec.args[1]) is not None or is_list(spec.args[1])) \
+            and not (is_list(spec.args[0]) is False and is_list(spec.args[1])):
+        a, b = spec.args
+        ks = [int(v) for v in (a.args if is_list(a) else [a])]
+        cs = [_tf(v) for v in (b.args if is_list(b) else [b] * len(ks))]
+        if None in cs:
+            raise ValueError(f"{fname}: circularity must be True or False")
+        circ = cs
+    elif is_list(spec) and all(K.is_int(v) for v in spec.args):
+        ks, circ = [int(v) for v in spec.args], [False] * len(spec.args)
+    else:
+        raise ValueError(f"{fname}: expected k, {{k, circular}}, {{k1, k2, ...}} or {{{{k1, ...}}, {{c1, ...}}}}")
+    if len(ks) != len(dims):
+        raise ValueError(f"{fname}: the window specification and the dimensions must have the same length")
+    if any(k < 1 or k > d for k, d in zip(ks, dims)):
+        raise ValueError(f"{fname}: each k must be between 1 and the corresponding dimension")
+    starts = [range(d) if c and k < d else range(d - k + 1) for k, d, c in zip(ks, dims, circ)]
+    wins = []
+    for st in itertools.product(*starts):
+        cells = list(itertools.product(*[[(s + j) % d for j in range(k)] for s, k, d in zip(st, ks, dims)]))
+        if cells not in wins:
+            wins.append(cells)
+    return wins
+
+
+def _consec_expr(spec, dims, items, fname):
+    import numpy as _np  # noqa: F401
+    total = 1
+    for d in dims:
+        total *= d
+    if len(items) != total:
+        raise ValueError(f"{fname}: expected {total} arguments")
+
+    def flat(cell):
+        i = 0
+        for c, d in zip(cell, dims):
+            i = i * d + c
+        return i
+    wins = _consec_cells(spec, dims, fname)
+    terms = [Expr("And", *(items[flat(c)] for c in w)) if len(w) > 1 else items[flat(w[0])] for w in wins]
+    return ev(Expr("Or", *terms)) if len(terms) > 1 else ev(terms[0])
+
+
+def _flatten_items(x):
+    if is_list(x):
+        return [y for a in x.args for y in _flatten_items(a)]
+    return [x]
+
+
+@fn("BooleanConsecutiveFunction", area=AREA, status="added",
+    notes="BooleanConsecutiveFunction[k, n][x1, ..., xn]: True when k consecutive arguments are True (linear "
+          "system); {k, True} makes it circular; {{k1, k2}, {n1, n2}} (with optional circularity {{k1, k2}, {c1, "
+          "c2}}) uses k1 x k2 windows in an n1 x n2 array (arguments flattened row by row or given as an array). "
+          "Applied to arguments it gives the equivalent DNF Or of window conjunctions (Wolfram keeps the operator "
+          "unevaluated; BooleanConvert of it gives the same DNF); BooleanConsecutiveFunction[spec, {vars}] / "
+          "[spec, {vars}, form] give the formula directly")
+def _bcfn(spec, n, *form):
+    if len(form) > 1:
+        raise ValueError("BooleanConsecutiveFunction called with too many arguments")
+    if K.is_int(n) or (is_list(n) and all(K.is_int(v) for v in n.args)):
+        if form:
+            raise ValueError("BooleanConsecutiveFunction: a form needs explicit variables")
+        dims = [int(n)] if K.is_int(n) else [int(v) for v in n.args]
+        _consec_cells(spec, dims, "BooleanConsecutiveFunction")       # validate
+        raise Unevaluated()
+    if not is_list(n):
+        raise ValueError("BooleanConsecutiveFunction: the second argument must be n, {n1, ...} or a variable list")
+    dims, depth = [], n
+    while is_list(depth):
+        dims.append(len(depth.args))
+        depth = depth.args[0] if depth.args else None
+    items = _flatten_items(n)
+    if K.is_int(spec) or (is_list(spec) and len(spec.args) == 2 and _tf(spec.args[1]) is not None):
+        dims = [len(items)]
+    f = _consec_expr(spec, dims, items, "BooleanConsecutiveFunction")
+    if form:
+        f = ev(Expr("BooleanConvert", f, form[0]))
+    return f
+
+
+def _bcf_hook(head, args, ev_):
+    if len(head.args) != 2:
+        return K.UNHANDLED
+    spec, n = head.args
+    if K.is_int(n):
+        dims = [int(n)]
+    elif is_list(n) and all(K.is_int(v) for v in n.args):
+        dims = [int(v) for v in n.args]
+    else:
+        return K.UNHANDLED
+    items = [y for a in args for y in _flatten_items(a)]
+    return _consec_expr(spec, dims, items, "BooleanConsecutiveFunction")
+
+
+from .. import kernel_lists as _KL   # noqa: E402
+_KL.COMPOUND_HEAD_HOOKS["BooleanConsecutiveFunction"] = _bcf_hook
+
+
+def _truth(f, vals, vars_):
+    """Value of the Boolean expression / pure function f at an assignment."""
+    if vars_ is None:
+        r = ev(K.call(f, *vals))
+    else:
+        r = ev(Expr("ReplaceAll", f, L(*(rule(v, b) for v, b in zip(vars_, vals)))))
+    t = _tf(r)
+    if t is None:
+        raise ValueError(f"UnateQ: the function does not evaluate to True or False ({r!r})")
+    return t
+
+
+@fn("UnateQ", area=AREA, status="added",
+    notes="UnateQ[f]: True if the Boolean function f is positive unate (monotone non-decreasing) in all its "
+          "variables; UnateQ[f, {x, !y, ...}] checks positive unateness in x and negative unateness in y (only the "
+          "listed variables); pure functions and BooleanFunction take a list of True (positive), False (negative) "
+          "or _ (ignore) per argument; decided from the complete truth table")
+def _unateq(f, *spec):
+    if len(spec) > 1:
+        raise ValueError("UnateQ called with too many arguments")
+    pure = _is_head(f, "Function") or _is_head(f, "BooleanFunction")
+    if pure:
+        if _is_head(f, "BooleanFunction"):
+            if len(f.args) != 2 or not K.is_int(f.args[1]):
+                raise ValueError("UnateQ: expected BooleanFunction[k, n]")
+            n = int(f.args[1])
+        else:
+            slots = []
+
+            def walk(e):
+                if _is_head(e, "Slot") and e.args and K.is_int(e.args[0]):
+                    slots.append(int(e.args[0]))
+                elif isinstance(e, Expr):
+                    for a in e.args:
+                        walk(a)
+            walk(f.args[-1])
+            n = max(slots) if slots else 0
+        if spec:
+            if not (is_list(spec[0]) and len(spec[0].args) == n):
+                raise ValueError(f"UnateQ: give one True/False/_ per argument ({n})")
+            pol = []
+            for s in spec[0].args:
+                t = _tf(s)
+                pol.append(t if t is not None else None)
+        else:
+            pol = [True] * n
+        vars_ = None
+    else:
+        vs = ev(Expr("BooleanVariables", f))
+        vars_ = list(vs.args)
+        n = len(vars_)
+        pol = [True] * n
+        if spec:
+            pol = [None] * n
+            sl = list(spec[0].args) if is_list(spec[0]) else [spec[0]]
+            for s in sl:
+                neg = _is_head(s, "Not")
+                v = s.args[0] if neg else s
+                hits = [i for i, w in enumerate(vars_) if K.same(w, v)]
+                if not hits:
+                    vars_.append(v)
+                    pol.append(not neg)
+                    n += 1
+                else:
+                    pol[hits[0]] = not neg
+    if n > 16:
+        raise NotImplementedError("UnateQ: more than 16 variables are not supported")
+    table = {}
+    for vals in itertools.product([False, True], repeat=n):
+        table[vals] = _truth(f, list(vals), vars_)
+    for i, p in enumerate(pol):
+        if p is None:
+            continue
+        for vals in itertools.product([False, True], repeat=n):
+            if vals[i]:
+                continue
+            lo = table[vals]
+            hi = table[vals[:i] + (True,) + vals[i + 1:]]
+            if p and lo and not hi:
+                return False
+            if not p and hi and not lo:
+                return False
+    return True
