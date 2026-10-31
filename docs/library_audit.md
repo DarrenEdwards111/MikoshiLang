@@ -111,15 +111,15 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 | verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
 | fixed | 502 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
 | promoted | 24 | was quarantined; now properly implemented and tested |
-| added | 1998 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| added | 2001 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 4 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **2672** | 620 pre-audit inventory heads, all with a status, plus 2052 promoted/aliased heads |
+| **total reviewed** | **2675** | 620 pre-audit inventory heads, all with a status, plus 2055 promoted/aliased heads |
 
 Remaining unreviewed quarantined names: **5263** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **12622**.
+Differential test cases in tests/library: **12668**.
 
 
 ## By area
@@ -183,6 +183,7 @@ Differential test cases in tests/library: **12622**.
 | structural (W03) | 0 | 0 | 0 | 63 | 0 | 0 | 0 |
 | transforms | 4 | 15 | 0 | 6 | 0 | 0 | 0 |
 | trees (W03) | 0 | 0 | 0 | 54 | 0 | 0 | 0 |
+| types (T1) | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
 
 ## Every function
 
@@ -452,7 +453,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PhasePlane` | fixed | 3 | equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped tuple-form solutions |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Table` | kernel | 57 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 58 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
@@ -657,7 +658,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PermutationReplace` | added | 5 | replaces each positive integer in expr (at any depth in lists) by its image; Cycles objects in expr are relabelled (conjugated); a group gives the list of images under GroupElements |
 | `PermutationSupport` | added | 3 | sorted list of the points moved |
 | `Permute` | added | 7 | Permute[expr, perm] moves part i to position perm(i) (Permute[{a, b, c}, {2, 3, 1}] = {c, a, b}); a group gives the list over GroupElements |
-| `PolygonalNumber` | added | 5 | PolygonalNumber[n] = n (n + 1)/2 (triangular); PolygonalNumber[r, n] = n ((r - 2) n - (r - 4))/2; exact numeric arguments of any kind; symbolic arguments stay unevaluated |
+| `PolygonalNumber` | added | 6 | PolygonalNumber[n] = n (n + 1)/2 (triangular); PolygonalNumber[r, n] = n ((r - 2) n - (r - 4))/2; exact numeric arguments of any kind; symbolic arguments stay unevaluated |
 | `RandomPermutation` | added | 5 | RandomPermutation[n] (uniform on Range[n], a Cycles object), [n, k] k of them, [group], [group, k]; reproducible after SeedRandom (the stream differs from Wolfram's generator) |
 | `Signature` | added | 8 | sign (+1/-1) of the permutation that sorts the list into canonical order; 0 if any element is repeated |
 | `SymmetricGroup` | added | 35 | SymmetricGroup[n] inert group object (permutation representation on 1..n) for GroupOrder, GroupElements, GroupMultiplicationTable, GroupOrbits, Permute, ... |
@@ -834,7 +835,7 @@ Cases = number of differential test cases in which the head occurs.
 | `BitClear` | added | 3 |  |
 | `BitFlip` | added | 3 |  |
 | `BitGet` | added | 3 |  |
-| `BitLength` | added | 5 | for negative n, the length of BitNot[n] (two's complement without the sign) |
+| `BitLength` | added | 10 | for negative n, the length of BitNot[n] (two's complement without the sign) |
 | `BitNot` | added | 3 |  |
 | `BitOr` | added | 4 |  |
 | `BitSet` | added | 3 |  |
@@ -921,7 +922,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Sign` | fixed | 12 | Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals |
 | `Sin` | verified | 170 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
-| `Sqrt` | verified | 164 | verified against SymPy/mpmath |
+| `Sqrt` | verified | 165 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
 | `Tan` | verified | 16 | verified against SymPy/mpmath |
 | `Tanh` | verified | 3 | verified against SymPy/mpmath |
@@ -996,7 +997,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LocalSymbol` | added | 6 | LocalSymbol["name"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol["name"] = val or := val; unevaluated when never assigned; LocalSymbol["name", "dir"] uses another base; =. deletes it |
 | `Locked` | added | 5 | attribute: the attributes of the symbol can no longer be changed (Protect/Unprotect, SetAttributes, ClearAttributes, Attributes[f] = ... raise) |
 | `Manual` | added | 3 | inert option value: selected manually |
-| `Method` | added | 86 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
+| `Method` | added | 87 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
 | `NHoldAll` | added | 3 | attribute: N does not affect any argument of f |
 | `NHoldFirst` | added | 3 | attribute: N does not affect the first argument of f |
 | `NHoldRest` | added | 3 | attribute: N affects only the first argument of f |
@@ -1462,7 +1463,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Nothing` | added | 6 | removed from lists |
 | `Optional` | added | 3 | x_:d and x_. (Plus/Times/Power defaults) |
 | `Repeated` | added | 3 | p.. and Repeated[p, n \| {m, n}] in sequences |
-| `RepeatedNull` | added | 3 | p... in sequences |
+| `RepeatedNull` | added | 5 | p... in sequences |
 | `RightComposition` | added | 3 | f /* g; RightComposition[f, g][x] = g[f[x]] |
 | `SameAs` | added | 3 | operator x === y |
 | `Span` | added | 3 | i ;; j ;; k in Part, Take and Drop |
@@ -2931,7 +2932,7 @@ Cases = number of differential test cases in which the head occurs.
 | `StringReplace` | fixed | 24 | StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts substitute into the right-hand side; RegularExpression rules accept "$1" group references; non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises |
 | `StringReplaceList` | added | 3 | every string obtained by replacing a single match of the rules (one result per match position and rule, left to right); StringReplaceList[s, rules, n] keeps at most n |
 | `StringReplacePart` | added | 3 | StringReplacePart[s, new, {m, n}], a list of ranges with one new string, or a list of new strings matched to the ranges; negative positions count from the end |
-| `StringRiffle` | added | 8 | StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per level above), StringRiffle[list, sep], StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings are converted with ToString |
+| `StringRiffle` | added | 9 | StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per level above), StringRiffle[list, sep], StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings are converted with ToString |
 | `StringRotateLeft` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringRotateRight` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringSplit` | added | 15 | splits at whitespace or at matches of a string pattern; empty pieces at the ends are dropped (kept with StringSplit[s, p, All]), interior ones kept; p -> r inserts r at each split; StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists |
@@ -3145,6 +3146,14 @@ Cases = number of differential test cases in which the head occurs.
 | `TreeSize` | added | 24 | number of subtrees (nodes) |
 | `TreeTraversalOrder` | added | 6 | option of TreeMap, TreeScan, TreeLevel, TreeCases, TreePosition, TreeSelect: Automatic/"DepthFirst"/"PostOrder"/"BottomUp" (children before parents, default), "PreOrder"/"TopDown", "BreadthFirst"/"LevelOrder" (top-down); other orders raise |
 | `UnlabeledTree` | added | 3 | a tree of the same shape with Null as every node's data |
+
+### types (T1)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `TypeCheck` | added | 8 | TypeCheck[expr] evaluates expr with type checking in report mode and gives <\|"Result" -> value, "Mismatches" -> {<\|"Function" -> f, "Position" -> i, "Value" -> v, "Expected" -> type\|>, ...}\|>. A mismatch is a concrete argument (or result) of the wrong kind; symbolic arguments never are. Position is the argument number, "Result" or "Count" (wrong number of arguments for a declared function). MikoshiLang extension. Check: exact; seeded mismatches in tests. |
+| `TypeMatchQ` | added | 27 | TypeMatchQ[value, type] is True when value is known to have the type (Integer, Real, ListOf[t], t1 \| t2, ...) and False otherwise, including for symbolic values whose type is not known yet (x is not an Integer). An unknown type raises ValueError. MikoshiLang extension. Check: exact; reference values for every type in tests. |
+| `TypeSignature` | added | 15 | TypeSignature[f] gives the signatures of f as {{t1, t2, ...} -> result, ...}: user declarations in this session first, otherwise the library signature read from the Python annotations of each implementation (RepeatedNull[t] stands for any number of further arguments); {} if none is known. TypeSignature[f, {t1, ...} -> r] declares a signature for a user function (repeat it for overloads) and returns it; RepeatedNull[t] is allowed last. The declaration is checked only when checking is on (Session(check_types=...) or TypeCheck). A non-symbol f raises TypeError; an unknown type raises ValueError. MikoshiLang extension. Check: exact; the signatures of library heads are compared with their annotations in tests. |
 
 ## Quarantine decision for the remaining names
 

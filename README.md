@@ -76,6 +76,20 @@ authors can register global heads with `@mikoshilang.function`. Machine-number a
 NumPy (a 200×200 `Dot` takes milliseconds instead of tens of seconds). `ExternalEvaluate` and other
 code-string evaluation raise `NotImplementedError`: there is no `eval`/`exec`.
 
+## Types (opt-in)
+
+Library heads carry signatures read from their Python annotations; user functions can declare one. Checking is
+off by default and costs nothing measurable when off. Guide: [docs/types.md](docs/types.md).
+
+```python
+from mikoshilang import Session
+s = Session(check_types=True)
+s.evaluate("TypeSignature[area, {Real, Real} -> Real]; area[w_, h_] := w h")
+s.evaluate("TypeSignature[BitLength]")      # {{Integer} -> Expr}
+s.evaluate('area[2, "3"]')                  # TypeError: area: argument 2 '3' is not of type Real (type check)
+s.evaluate("area[2, h]")                    # 2 h: symbolic arguments are never type errors
+```
+
 ## Language contract
 
 What is implemented, and checked by value-level tests (see `tests/`):
