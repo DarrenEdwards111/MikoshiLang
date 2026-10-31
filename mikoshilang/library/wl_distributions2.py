@@ -6576,3 +6576,161 @@ _uni("HotellingTSquareDistribution", HotellingTSquare,
      "HotellingTSquareDistribution[p, m] (m > p - 1) = (p m/(m - p + 1)) FRatioDistribution[p, m - p + 1]: PDF, CDF "
      "(BetaRegularized), Mean p m/(m - p - 1), Variance, moments, RandomVariate. Check: exact; the scaled-F identity "
      "and SciPy f reference values in tests.")
+
+
+# ── TracyWidomDistribution ──
+
+def _airy_np(z):
+    """Ai and Ai' at the points of a NumPy array (SciPy when installed, otherwise mpmath's fp context)"""
+    import numpy as np
+    try:
+        from scipy.special import airy
+        a, ap, _, _ = airy(z)
+        return a, ap
+    except ImportError:
+        import mpmath
+        f = np.vectorize(lambda t: float(mpmath.fp.airyai(t)))
+        g = np.vectorize(lambda t: float(mpmath.fp.airyai(t, derivative=1)))
+        return f(z), g(z)
+
+
+def _fredholm(s, kind, sign, m):
+    """det(I + sign K_s) on L^2(0, oo) and its s-derivative, by Gauss-Legendre (Nystrom, Bornemann 2010).
+    kind "airy": K_s(x, y) = K_Ai(x + s, y + s); kind "b": K_s(x, y) = Ai(x + y + s)."""
+    import numpy as np
+    L = 16.0 + max(0.0, -s)
+    t, w = np.polynomial.legendre.leggauss(m)
+    x = (t + 1) * L / 2
+    w = w * L / 2
+    if kind == "airy":
+        X = x + s
+        a, ap = _airy_np(X)
+        D = X[:, None] - X[None, :]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            K = (a[:, None] * ap[None, :] - ap[:, None] * a[None, :]) / D
+        idx = np.arange(m)
+        K[idx, idx] = ap ** 2 - X * a ** 2
+        dK = -a[:, None] * a[None, :]
+    else:
+        S = x[:, None] + x[None, :] + s
+        K, dK = _airy_np(S)
+    r = np.sqrt(w)
+    A = np.eye(m) + sign * r[:, None] * K * r[None, :]
+    dA = sign * r[:, None] * dK * r[None, :]
+    det = float(np.linalg.det(A))
+    ddet = det * float(np.trace(np.linalg.solve(A, dA)))
+    return det, ddet
+
+
+class TracyWidom(NumericOnly):
+    """TracyWidomDistribution[beta], beta = 1, 2, 4 (Bornemann's Fredholm determinant formulas)"""
+    # mean, variance (Bornemann 2010, Table 1; reproduced to 12+ digits by _fredholm in tests)
+    MOMENTS = {1: ("-1.2065335745820", "1.6077810345810"), 2: ("-1.7710868074116", "0.8131947928329"),
+               4: ("-2.3068848932410", "0.5177237207726")}
+    XMIN = {1: -9.0, 2: -7.0, 4: -7.0}
+
+    def __init__(self, name, a):
+        _nargs(a, (1,), name, "TracyWidomDistribution[beta]")
+        b = a[0]
+        if _num(b) and b not in (1, 2, 4):
+            raise ValueError(f"{name}: the Dyson index beta must be 1, 2 or 4")
+        super().__init__(name, a)
+
+    def beta(self):
+        b = self.a[0]
+        if not _num(b):
+            raise Unevaluated()
+        return int(b)
+
+    def _eval(self, x):
+        b = self.beta()
+        s = float(x)
+        if s < self.XMIN[b]:
+            raise NotImplementedError(f"TracyWidomDistribution: x = {s} is too far in the left tail for machine-"
+                                      f"precision Fredholm determinants (supported for x >= {self.XMIN[b]})")
+        if s > 12:
+            return 1.0, 0.0
+        out = []
+        for m in (60 + int(4 * max(0.0, -s)), 80 + int(4 * max(0.0, -s))):
+            if b == 2:
+                F, dF = _fredholm(s, "airy", -1, m)
+            elif b == 1:
+                F, dF = _fredholm(s, "b", -1, m)
+            else:
+                t = math.sqrt(2) * s
+                d1, e1 = _fredholm(t, "b", -1, m)
+                d2, e2 = _fredholm(t, "b", 1, m)
+                F, dF = (d1 + d2) / 2, math.sqrt(2) * (e1 + e2) / 2
+            out.append((F, dF))
+        (F1, d1), (F2, d2) = out
+        if abs(F1 - F2) > 1e-11 or abs(d1 - d2) > 1e-9:
+            raise ArithmeticError("TracyWidomDistribution: quadrature failed verification (two orders disagree)")
+        return min(max(F2, 0.0), 1.0), max(d2, 0.0)
+
+    def npdf(self, x):
+        return self._eval(x)[1]
+
+    def ncdf(self, x):
+        return self._eval(x)[0]
+
+    def mean(self):
+        return sp.Float(self.MOMENTS[self.beta()][0], 14)
+
+    def var(self):
+        return sp.Float(self.MOMENTS[self.beta()][1], 13)
+
+    def quantile_value(self, p, inputs, fname):
+        if not (_num(p) and self.numeric()):
+            raise Unevaluated()
+        u = _f(p)  # no closed form: exact p (Median, Quartiles) also gives a machine number
+        if u <= 0 or u >= 1:
+            return -sp.oo if u <= 0 else sp.oo
+        return sp.Float(self._root(u))
+
+    def _root(self, u):
+        a, b = self.XMIN[self.beta()], 12.0
+        if self.ncdf(a) > u:
+            raise NotImplementedError("TracyWidomDistribution: quantile in the far left tail is not supported")
+        for _ in range(100):
+            m = (a + b) / 2
+            if self.ncdf(m) < u:
+                a = m
+            else:
+                b = m
+            if b - a < 1e-13:
+                break
+        return (a + b) / 2
+
+    def expect(self, f, v, numeric):
+        """NExpectation by Gauss-Legendre on [XMIN, 12] (the mass outside is below 1e-12)"""
+        import numpy as np
+        if not self.numeric():
+            raise Unevaluated()
+        if not numeric:
+            raise NotImplementedError("Expectation: TracyWidomDistribution has no closed-form density; use NExpectation")
+        g = sp.lambdify(v, f, "math")
+        t, w = np.polynomial.legendre.leggauss(40)
+        edges = np.linspace(self.XMIN[self.beta()], 12.0, 11)
+        total = 0.0
+        for a, b in zip(edges[:-1], edges[1:]):
+            xs = (t + 1) * (b - a) / 2 + a
+            total += sum(wi * (b - a) / 2 * g(float(xi)) * self.npdf(float(xi)) for xi, wi in zip(xs, w))
+        return sp.Float(total)
+
+    def sample(self, rng):
+        u = rng.random()
+        while u < 1e-12:
+            u = rng.random()
+        return self._root(u)
+
+
+_uni("TracyWidomDistribution", TracyWidom,
+     "TracyWidomDistribution[beta] for beta = 1, 2, 4 (largest eigenvalue of the GOE, GUE, GSE at the edge): CDF and "
+     "PDF in machine precision from Bornemann's Fredholm determinants (F2 = det(I - K_Airy), F1 = det(I - B), F4 = "
+     "(det(I - B) + det(I + B))/2 at Sqrt[2] x, B(x, y) = AiryAi[x + y + s]) and their exact derivatives, for "
+     "machine-number x >= -9, -7, -7 (beta = 1, 2, 4; deeper left-tail values lose relative accuracy and raise "
+     "NotImplementedError); exact x raises NotImplementedError (no closed form); Mean and Variance as 13-digit "
+     "machine numbers (Bornemann 2010); InverseCDF, Median and RandomVariate by bisection (machine numbers, also "
+     "for exact probabilities); NExpectation by Gauss-Legendre quadrature; other beta raise ValueError. "
+     "Check: self-check (two quadrature orders must agree, else ArithmeticError); reference values (Bornemann's "
+     "moments recomputed from the CDF, Monte Carlo GUE/GOE/GSE edge statistics) in tests.")
