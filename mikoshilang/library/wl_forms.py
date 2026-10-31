@@ -2056,7 +2056,8 @@ record("ListFormat", AREA, "added", "option of TextString: {\"left\", \"sep\", \
                                     "{\"{\", \", \", \"}\"})")
 record("AssociationFormat", AREA, "added", "option of TextString: Automatic ({\"<|\", \", \", \"|>\", \" -> \"}), "
                                           "a separator string or {\"left\", \"sep\", \"right\"[, \"arrow\"]} "
-                                          "for associations")
+                                          "for associations; other values raise ValueError. Check: exact; "
+                                          "reference strings in tests.")
 record("MissingString", AREA, "added", "option of TextString: the string for Missing[...] (default \"\"; Automatic: "
                                        "the reason; None: unchanged)")
 

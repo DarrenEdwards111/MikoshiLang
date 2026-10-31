@@ -717,15 +717,18 @@ class Curve:
             return bytes([2 + (y & 1)]) + x.to_bytes(self.size, "big")
         return b"\x04" + x.to_bytes(self.size, "big") + y.to_bytes(self.size, "big")
 
-    def decode(self, b):
+    def decode(self, b, fname="PublicKey"):
         if len(b) == 1 + 2 * self.size and b[0] == 4:
             P = (int.from_bytes(b[1:1 + self.size], "big"), int.from_bytes(b[1 + self.size:], "big"))
         elif len(b) == 1 + self.size and b[0] in (2, 3):
-            P = self.lift_x(int.from_bytes(b[1:], "big"), b[0] - 2)
+            try:
+                P = self.lift_x(int.from_bytes(b[1:], "big"), b[0] - 2)
+            except ValueError:
+                raise ValueError(f"{fname}: the encoded point is not on {self.name}")
         else:
-            raise ValueError("invalid encoded curve point")
+            raise ValueError(f"{fname}: invalid encoded {self.name} curve point")
         if not self.on_curve(P):
-            raise ValueError("the point is not on the curve")
+            raise ValueError(f"{fname}: the encoded point is not on {self.name}")
         return P
 
 
@@ -808,7 +811,7 @@ EDWARDS_CURVES = ("ed25519",)
 
 def curve_of(name, fname):
     if not isinstance(name, str):
-        raise ValueError(f"{fname}: {F.input_form(name)} is not an elliptic curve name")
+        raise TypeError(f"{fname}: {F.input_form(name)} is not an elliptic curve name")
     n = CURVE_ALIASES.get(name, name)
     if n not in CURVES:
         if name in ("ed448",):
@@ -1041,7 +1044,7 @@ def _secret_bytes(x, fname, what="password"):
         return x.encode("utf-8")
     if is_byte_array(x):
         return ba_bytes(x, fname)
-    raise ValueError(f"{fname}: the {what} must be a string or a ByteArray")
+    raise TypeError(f"{fname}: the {what} must be a string or a ByteArray")
 
 
 def scrypt(pw, salt, n, r, p, size, fname):
@@ -1055,9 +1058,18 @@ def scrypt(pw, salt, n, r, p, size, fname):
         raise ValueError(f"{fname}: scrypt failed ({e})")
 
 
+def _symbolic(v):
+    return isinstance(v, (Symbol, Expr)) and not isinstance(v, bool) and not K.is_number(v) \
+        and not (isinstance(v, Expr) and v.head in ("List", "Association", "Rule", "ByteArray"))
+
+
 def _pint(v, fname, what):
     if K.is_int(v) and not isinstance(v, bool) and v > 0:
         return int(v)
+    if _symbolic(v):
+        raise Unevaluated()
+    if isinstance(v, (str, bool)) or not K.is_number(v):
+        raise TypeError(f"{fname}: {what} must be a positive integer, not {F.input_form(v)}")
     raise ValueError(f"{fname}: {what} must be a positive integer, not {F.input_form(v)}")
 
 
@@ -1091,7 +1103,7 @@ def derived_key(pw, salt, method, fname):
 
 def _dk_parts(dk, fname):
     if not (isinstance(dk, Expr) and dk.head == "DerivedKey" and len(dk.args) == 1 and KL.is_assoc(dk.args[0])):
-        raise ValueError(f"{fname}: {F.input_form(dk)} is not a DerivedKey")
+        raise TypeError(f"{fname}: {F.input_form(dk)} is not a DerivedKey")
     a = IE.assoc_dict(dk.args[0], fname)
     fp = IE.assoc_dict(a["FunctionParameters"], fname)
     return a["Function"], ba_bytes(a["DerivedKey"], fname), ba_bytes(a["Salt"], fname), fp
@@ -1110,11 +1122,11 @@ _PHC_RE = re.compile(r"\$scrypt\$ln=(\d+),r=(\d+),p=(\d+)\$([A-Za-z0-9+/]*)\$([A
     notes="GenerateDerivedKey[password] / [password, salt] derives a key with scrypt (RFC 7914; defaults KeySize 64, "
           "N 2^15, r 8, p 1, random 16-byte salt) giving DerivedKey[<|\"Function\", \"DerivedKey\", \"Salt\", "
           "\"FunctionParameters\"|>]; Method -> <|\"Function\" -> \"scrypt\", \"KeySize\", \"N\", \"r\", \"p\"|>. "
-          "Argon2 functions raise a clear error")
-def _generatederivedkey(pw, *rest):
+          "Argon2 functions raise a clear error. Check: reference (RFC 7914 scrypt vector) and VerifyDerivedKey in tests.")
+def _generatederivedkey(pw: String | Expr, *rest: String | Expr | Option) -> Expr:
     rest, o = split_opts(rest, ("Method",), "GenerateDerivedKey")
     if len(rest) > 1:
-        raise ValueError("GenerateDerivedKey called with too many arguments")
+        raise ValueError("GenerateDerivedKey: called with too many arguments")
     pwb = _secret_bytes(pw, "GenerateDerivedKey")
     salt = _secret_bytes(rest[0], "GenerateDerivedKey", "salt") if rest else secrets.token_bytes(16)
     return derived_key(pwb, salt, o.get("Method"), "GenerateDerivedKey")
@@ -1123,8 +1135,8 @@ def _generatederivedkey(pw, *rest):
 @fn("DerivedKey", area=AREA, status="added",
     notes="DerivedKey[<|...|>] is the result of GenerateDerivedKey (properties \"Function\", \"DerivedKey\", "
           "\"Salt\", \"FunctionParameters\", \"PHCString\", \"Properties\"); DerivedKey[\"$scrypt$ln=..$salt$hash\"] "
-          "rebuilds one from its PHC string")
-def _derivedkey(x):
+          "rebuilds one from its PHC string. Check: exact; PHC string round trips in tests.")
+def _derivedkey(x: Assoc | String) -> Expr:
     if isinstance(x, str):
         m = _PHC_RE.fullmatch(x.strip())
         if not m:
@@ -1139,13 +1151,13 @@ def _derivedkey(x):
     if KL.is_assoc(x):
         _dk_parts(Expr("DerivedKey", x), "DerivedKey")
         raise Unevaluated
-    raise ValueError(f"DerivedKey: {F.input_form(x)} is not an association or a PHC string")
+    raise TypeError(f"DerivedKey: {F.input_form(x)} is not an association or a PHC string")
 
 
 @fn("VerifyDerivedKey", area=AREA, status="added",
     notes="VerifyDerivedKey[key, password] gives True when password derives the DerivedKey key (same function, "
-          "salt and parameters; constant-time comparison), False otherwise")
-def _verifyderivedkey(dk, pw):
+          "salt and parameters; constant-time comparison), False otherwise. Check: delegated (hashlib.scrypt); RFC 7914 reference in tests.")
+def _verifyderivedkey(dk: Expr, pw: String | Expr) -> Boolean:
     func, key, salt, fp = _dk_parts(dk, "VerifyDerivedKey")
     got = scrypt(_secret_bytes(pw, "VerifyDerivedKey"), salt, int(fp["N"]), int(fp["r"]), int(fp["p"]), len(key),
                  "VerifyDerivedKey")
@@ -1231,11 +1243,11 @@ def password_key(pw, size):
     notes="GenerateSymmetricKey[] (random AES256/CBC key), [\"password\"] (deterministic scrypt derivation), "
           "[ByteArray] (the given key bytes), [DerivedKey[...]]; Method -> cipher | <|\"Cipher\", \"BlockMode\", "
           "\"KeySize\", \"InitializationVector\"|>; ciphers AES128/192/256, Blowfish, RC4 (DES, CAST5, IDEA give a "
-          "clear error); gives SymmetricKey[<|\"Cipher\", \"BlockMode\", \"Key\", \"InitializationVector\"|>]")
-def _generatesymmetrickey(*args):
+          "clear error); gives SymmetricKey[<|\"Cipher\", \"BlockMode\", \"Key\", \"InitializationVector\"|>]. Check: exact; Encrypt/Decrypt round trips and published cipher vectors in tests.")
+def _generatesymmetrickey(*args: String | Expr | Option) -> Expr:
     rest, o = split_opts(args, ("Method",), "GenerateSymmetricKey")
     if len(rest) > 1:
-        raise ValueError("GenerateSymmetricKey called with too many arguments")
+        raise ValueError("GenerateSymmetricKey: called with too many arguments")
     cipher, ksize, mode, iv = _cipher_spec(o.get("Method"), "GenerateSymmetricKey")
     if not rest:
         key = secrets.token_bytes(ksize)
@@ -1273,10 +1285,10 @@ def sym_key_parts(k, fname):
 
 @fn("SymmetricKey", area=AREA, status="added",
     notes="SymmetricKey[<|\"Cipher\", \"BlockMode\", \"Key\", \"InitializationVector\"|>] represents a symmetric "
-          "key (properties by name and \"Properties\"); validated, otherwise inert")
-def _symmetrickey(a):
+          "key (properties by name and \"Properties\"); validated, otherwise inert. Check: exact (validated wrapper).")
+def _symmetrickey(a: Assoc) -> Expr:
     if not KL.is_assoc(a):
-        raise ValueError(f"SymmetricKey: {F.input_form(a)} is not an association")
+        raise TypeError(f"SymmetricKey: {F.input_form(a)} is not an association")
     sym_key_parts(Expr("SymmetricKey", a), "SymmetricKey")
     raise Unevaluated
 
@@ -1376,13 +1388,13 @@ def encrypt(key, x, o, fname="Encrypt"):
         if pad != "PKCS1":
             items.append(("Padding", pad))
         return Expr("EncryptedObject", A(items))
-    raise ValueError(f"{fname}: {F.input_form(key)} is not a SymmetricKey, a PrivateKey, a PublicKey or a "
+    raise TypeError(f"{fname}: {F.input_form(key)} is not a SymmetricKey, a PrivateKey, a PublicKey or a "
                      f"password string")
 
 
 def decrypt(key, obj, o, fname="Decrypt"):
     if not _is_obj(obj, "EncryptedObject"):
-        raise ValueError(f"{fname}: {F.input_form(obj)} is not an EncryptedObject")
+        raise TypeError(f"{fname}: {F.input_form(obj)} is not an EncryptedObject")
     a = IE.assoc_dict(obj.args[0], fname)
     if "Data" not in a:
         raise ValueError(f"{fname}: the EncryptedObject has no \"Data\"")
@@ -1421,7 +1433,7 @@ def decrypt(key, obj, o, fname="Decrypt"):
             raise ValueError(f"{fname}::failed: the data could not be decrypted (wrong key or corrupt data)")
         em = _i2osp(pow(c, kd["PrivateExponent"] if private else kd["PublicExponent"], n), k)
         return _unpayload(rsa_unpad(em, k, pad, 2 if private else 1, fname), form, fname)
-    raise ValueError(f"{fname}: {F.input_form(key)} is not a SymmetricKey, a PrivateKey, a PublicKey or a "
+    raise TypeError(f"{fname}: {F.input_form(key)} is not a SymmetricKey, a PrivateKey, a PublicKey or a "
                      f"password string")
 
 
@@ -1431,15 +1443,15 @@ def decrypt(key, obj, o, fname="Decrypt"):
           "decrypted with the public key); strings as UTF-8, ByteArrays literally, other expressions via Compress; "
           "Method -> <|\"Padding\", \"InitializationVector\", \"BlockMode\"|>; operator form Encrypt[key]; gives "
           "EncryptedObject[<|\"Data\", \"InitializationVector\", \"OriginalForm\"|>]. Elliptic-curve keys give a "
-          "clear error")
-def _encrypt(key, *rest):
+          "clear error. Check: reference (FIPS-197, SP 800-38A, Blowfish and RC4 vectors) and Decrypt round trips in tests.")
+def _encrypt(key: Expr | String, *rest: Expr | Option) -> Expr:
     rest, o = split_opts(rest, ("Method",), "Encrypt")
     if not rest:
         if o:
             raise ValueError("Encrypt: the operator form takes no options")
         raise Unevaluated
     if len(rest) != 1:
-        raise ValueError("Encrypt called with too many arguments")
+        raise ValueError("Encrypt: called with too many arguments")
     return encrypt(key, rest[0], o)
 
 
@@ -1447,13 +1459,13 @@ def _encrypt(key, *rest):
     notes="Decrypt[key, EncryptedObject[...]] recovers the original string, ByteArray or expression; key is the "
           "SymmetricKey or password used, the RSA PrivateKey for public-key encryption or the PublicKey for "
           "private-key encryption; a wrong key raises Decrypt::failed rather than giving garbage when padding or "
-          "decoding detects it; operator form Decrypt[key]")
-def _decrypt(key, *rest):
+          "decoding detects it; operator form Decrypt[key]. Check: exact (padding validation detects most wrong keys); Encrypt round trips in tests.")
+def _decrypt(key: Expr | String, *rest: Expr | Option) -> Expr:
     rest, o = split_opts(rest, ("Method",), "Decrypt")
     if not rest:
         raise Unevaluated
     if len(rest) != 1:
-        raise ValueError("Decrypt called with too many arguments")
+        raise ValueError("Decrypt: called with too many arguments")
     return decrypt(key, rest[0], o)
 
 
@@ -1478,13 +1490,17 @@ def _quantity_bits(n):
 def _int_of(v, fname, what):
     if K.is_int(v) and not isinstance(v, bool) and v >= 0:
         return int(v)
+    if _symbolic(v):
+        raise Unevaluated()
+    if isinstance(v, (str, bool)) or not K.is_number(v):
+        raise TypeError(f"{fname}: {what} must be a non-negative integer, not {F.input_form(v)}")
     raise ValueError(f"{fname}: {what} must be a non-negative integer, not {F.input_form(v)}")
 
 
 def _hex_bytes(v, fname, what):
     if isinstance(v, str) and re.fullmatch(r"(?:[0-9A-Fa-f]{2})+", v):
         return bytes.fromhex(v)
-    raise ValueError(f"{fname}: {what} must be a hexadecimal string")
+    raise TypeError(f"{fname}: {what} must be a hexadecimal string")
 
 
 _COMMON_E = (65537, 3, 5, 17, 257, 37, 7, 11, 13)
@@ -1571,7 +1587,7 @@ def asym_parts(key, fname):
         curve = curve_of(a.get("CurveName", "secp256k1"), fname)
         comp = a.get("Compressed", False)
         if not isinstance(comp, bool):
-            raise ValueError(f"{fname}: \"Compressed\" must be True or False")
+            raise TypeError(f"{fname}: \"Compressed\" must be True or False")
         out.update(Curve=curve, CurveName=curve.name, Compressed=comp)
         x = None
         if private:
@@ -1593,9 +1609,9 @@ def asym_parts(key, fname):
         elif "PublicCurvePoint" in a:
             P = _point_of(a["PublicCurvePoint"], curve, fname)
         elif "PublicByteArray" in a:
-            P = curve.decode(ba_bytes(a["PublicByteArray"], fname))
+            P = curve.decode(ba_bytes(a["PublicByteArray"], fname), fname)
         elif "PublicHexString" in a:
-            P = curve.decode(_hex_bytes(a["PublicHexString"], fname, "PublicHexString"))
+            P = curve.decode(_hex_bytes(a["PublicHexString"], fname, "PublicHexString"), fname)
         else:
             raise ValueError(f"{fname}: an elliptic-curve public key needs a \"PublicCurvePoint\", "
                              f"\"PublicByteArray\" or \"PublicHexString\"")
@@ -1641,7 +1657,7 @@ def _point_of(v, curve, fname):
         if curve.on_curve(P):
             return P
         raise ValueError(f"{fname}: the public curve point is not on {curve.name}")
-    raise ValueError(f"{fname}: \"PublicCurvePoint\" must be a pair of integers")
+    raise TypeError(f"{fname}: \"PublicCurvePoint\" must be a pair of integers")
 
 
 def key_expr(d, private):
@@ -1689,10 +1705,10 @@ def _key_props(d):
 
 
 def _key_ctor(head):
-    def f(a):
+    def f(a: Assoc) -> Expr:
         fname = head
         if not KL.is_assoc(a):
-            raise ValueError(f"{fname}: {F.input_form(a)} is not an association")
+            raise TypeError(f"{fname}: {F.input_form(a)} is not an association")
         key = Expr(head, a)
         canon = key_expr(asym_parts(key, fname), head == "PrivateKey")
         if K.same(canon, key):
@@ -1706,12 +1722,13 @@ fn("PrivateKey", area=AREA, status="added",
          "CurveName and PrivateMultiplier | PrivateHexString | PrivateByteArray; EdwardsCurve ed25519: "
          "PrivateByteArray | PrivateHexString); partial specifications are completed (public point, public key, "
          "RSA exponent); properties: stored fields plus PrivateByteArray, PublicByteArray, Private/PublicHexString, "
-         "Private/PublicKeySize, \"Properties\"")(_key_ctor("PrivateKey"))
+         "Private/PublicKeySize, \"Properties\". Check: exact (curve membership and private/public consistency are "
+         "validated); RFC 6979 and RFC 8032 keys in tests.")(_key_ctor("PrivateKey"))
 fn("PublicKey", area=AREA, status="added",
    notes="PublicKey[<|...|>] is a public key (RSA: PublicModulus, PublicExponent; EllipticCurve: CurveName and "
          "PublicCurvePoint | PublicByteArray | PublicHexString (compressed or not); EdwardsCurve: PublicByteArray | "
          "PublicHexString); validated (points must lie on the curve) and normalised; properties as for "
-         "PrivateKey")(_key_ctor("PublicKey"))
+         "PrivateKey. Check: exact (points are validated on the curve); reference keys in tests.")(_key_ctor("PublicKey"))
 
 
 def public_of(key, fname):
@@ -1720,18 +1737,18 @@ def public_of(key, fname):
         key = assoc_get(key.args[0], "PublicKey")
     if _is_obj(key, "PrivateKey") or _is_obj(key, "PublicKey"):
         return asym_parts(key, fname)
-    raise ValueError(f"{fname}: {F.input_form(key)} is not a PublicKey, a PrivateKey or a SecurityCertificate")
+    raise TypeError(f"{fname}: {F.input_form(key)} is not a PublicKey, a PrivateKey or a SecurityCertificate")
 
 
 @fn("GenerateAsymmetricKeyPair", area=AREA, status="added",
     notes="GenerateAsymmetricKeyPair[] (RSA 2048, exponent 65537), [type] or Method -> type | <|\"Type\", "
           "\"KeySize\", \"PublicExponent\", \"CurveName\", \"Compressed\"|> with types \"RSA\", \"EllipticCurve\" "
           "(default secp256k1), \"EdwardsCurve\" (ed25519), \"Bitcoin\" (secp256k1, compressed) and \"Ethereum\" "
-          "(secp256k1); gives <|\"PrivateKey\" -> ..., \"PublicKey\" -> ...|>")
-def _generateasymmetrickeypair(*args):
+          "(secp256k1); gives <|\"PrivateKey\" -> ..., \"PublicKey\" -> ...|>. Check: exact; sign/verify and encrypt/decrypt round trips in tests.")
+def _generateasymmetrickeypair(*args: String | Assoc | Option) -> Assoc:
     rest, o = split_opts(args, ("Method",), "GenerateAsymmetricKeyPair")
     if len(rest) > 1:
-        raise ValueError("GenerateAsymmetricKeyPair called with too many arguments")
+        raise ValueError("GenerateAsymmetricKeyPair: called with too many arguments")
     spec = rest[0] if rest else o.get("Method", Symbol("Automatic"))
     fname = "GenerateAsymmetricKeyPair"
     m = {}
@@ -1780,7 +1797,7 @@ def _generateasymmetrickeypair(*args):
         curve = curve_of(m.get("CurveName", "secp256k1"), fname)
         comp = m.get("Compressed", t == "Bitcoin")
         if not isinstance(comp, bool):
-            raise ValueError(f"{fname}: \"Compressed\" must be True or False")
+            raise TypeError(f"{fname}: \"Compressed\" must be True or False")
         x = secrets.randbelow(curve.n - 1) + 1
         priv, pub = ec_private_expr(curve, x, comp), ec_public_expr(curve, curve.mul(x), comp)
     return A([("PrivateKey", priv), ("PublicKey", pub)])
@@ -1818,7 +1835,7 @@ def _sig_method(o, kd, fname):
 
 def sign(x, key, o, fname):
     if not _is_obj(key, "PrivateKey"):
-        raise ValueError(f"{fname}: {F.input_form(key)} is not a PrivateKey")
+        raise TypeError(f"{fname}: {F.input_form(key)} is not a PrivateKey")
     kd = asym_parts(key, fname)
     md, hm = _sig_method(o, kd, fname)
     t = kd["Type"]
@@ -1876,7 +1893,7 @@ def sign(x, key, o, fname):
 
 def _sig_dict(sig, fname):
     if not _is_obj(sig, "DigitalSignature"):
-        raise ValueError(f"{fname}: {F.input_form(sig)} is not a DigitalSignature")
+        raise TypeError(f"{fname}: {F.input_form(sig)} is not a DigitalSignature")
     a = IE.assoc_dict(sig.args[0], fname)
     for k in a:
         if k not in _SIG_KEYS:
@@ -1911,25 +1928,25 @@ def verify(x, sig, key, fname):
           "expressions as their FullForm text): RSA PKCS#1 v1.5, ECDSA with RFC 6979 deterministic nonces (or "
           "\"NonDeterministic\"; low-s on secp256k1) or BIP-340 \"Schnorr\", ed25519 (RFC 8032); Method -> "
           "<|\"HashingMethod\" (default SHA256; None for a precomputed ByteArray/hex digest), \"SignatureType\", "
-          "\"Padding\" (PKCS1; X931 gives a clear error)|>; operator form GenerateDigitalSignature[key]")
-def _generatedigitalsignature(*args):
+          "\"Padding\" (PKCS1; X931 gives a clear error)|>; operator form GenerateDigitalSignature[key]. Check: reference (RFC 6979, RFC 8032, BIP-340 vectors) and VerifyDigitalSignature in tests.")
+def _generatedigitalsignature(*args: Expr | Option) -> Expr:
     rest, o = split_opts(args, ("Method",), "GenerateDigitalSignature")
     if len(rest) == 1:
         if o:
             raise ValueError("GenerateDigitalSignature: the operator form takes no options")
         raise Unevaluated
     if len(rest) != 2:
-        raise ValueError("GenerateDigitalSignature called with the wrong number of arguments")
+        raise ValueError("GenerateDigitalSignature: called with the wrong number of arguments")
     return sign(rest[0], rest[1], o, "GenerateDigitalSignature")
 
 
 @fn("DigitalSignature", area=AREA, status="added",
     notes="DigitalSignature[<|...|>] is a signature from GenerateDigitalSignature (RSA: Type, HashingMethod, "
           "Padding, Signature; elliptic/Edwards curves: Type, CurveName, HashingMethod, SignatureType, R, S and "
-          "RecoveryParameter on secp256k1); properties by name plus \"DER\" (ECDSA) and \"Properties\"")
-def _digitalsignature(a):
+          "RecoveryParameter on secp256k1); properties by name plus \"DER\" (ECDSA) and \"Properties\". Check: exact (validated wrapper).")
+def _digitalsignature(a: Assoc) -> Expr:
     if not KL.is_assoc(a):
-        raise ValueError(f"DigitalSignature: {F.input_form(a)} is not an association")
+        raise TypeError(f"DigitalSignature: {F.input_form(a)} is not an association")
     _sig_dict(Expr("DigitalSignature", a), "DigitalSignature")
     raise Unevaluated
 
@@ -1945,12 +1962,12 @@ def _pairs(spec, fname):
 @fn("VerifyDigitalSignature", area=AREA, status="added",
     notes="VerifyDigitalSignature[{expr, sig}, key] gives True when sig is a valid signature of expr for the "
           "public key (a PrivateKey or a SecurityCertificate also supplies it), False otherwise; a list of pairs "
-          "gives a list; operator form VerifyDigitalSignature[key]")
-def _verifydigitalsignature(*args):
+          "gives a list; operator form VerifyDigitalSignature[key]. Check: reference (OpenSSL signatures and certificates) in tests.")
+def _verifydigitalsignature(*args: Expr) -> Boolean | ListOf[Boolean]:
     if len(args) == 1:
         raise Unevaluated
     if len(args) != 2:
-        raise ValueError("VerifyDigitalSignature called with the wrong number of arguments")
+        raise ValueError("VerifyDigitalSignature: called with the wrong number of arguments")
     pairs, many = _pairs(args[0], "VerifyDigitalSignature")
     res = [verify(x, s, args[1], "VerifyDigitalSignature") for x, s in pairs]
     return L(*res) if many else res[0]
@@ -1966,24 +1983,24 @@ def _file_bytes(f, fname):
 
 @fn("GenerateFileSignature", area=AREA, status="added",
     notes="GenerateFileSignature[file, privatekey] gives the DigitalSignature of the bytes of file (same methods "
-          "and Method option as GenerateDigitalSignature); operator form GenerateFileSignature[key]")
-def _generatefilesignature(*args):
+          "and Method option as GenerateDigitalSignature); operator form GenerateFileSignature[key]. Check: reference; verified by VerifyFileSignature and an OpenSSL signature in tests.")
+def _generatefilesignature(*args: String | Expr | Option) -> Expr:
     rest, o = split_opts(args, ("Method",), "GenerateFileSignature")
     if len(rest) == 1:
         raise Unevaluated
     if len(rest) != 2:
-        raise ValueError("GenerateFileSignature called with the wrong number of arguments")
+        raise ValueError("GenerateFileSignature: called with the wrong number of arguments")
     return sign(_ba(_file_bytes(rest[0], "GenerateFileSignature")), rest[1], o, "GenerateFileSignature")
 
 
 @fn("VerifyFileSignature", area=AREA, status="added",
     notes="VerifyFileSignature[{file, sig}, key] verifies a GenerateFileSignature signature against the current "
-          "bytes of file; a list of pairs gives a list; operator form VerifyFileSignature[key]")
-def _verifyfilesignature(*args):
+          "bytes of file; a list of pairs gives a list; operator form VerifyFileSignature[key]. Check: reference (an OpenSSL ECDSA file signature) in tests.")
+def _verifyfilesignature(*args: Expr) -> Boolean | ListOf[Boolean]:
     if len(args) == 1:
         raise Unevaluated
     if len(args) != 2:
-        raise ValueError("VerifyFileSignature called with the wrong number of arguments")
+        raise ValueError("VerifyFileSignature: called with the wrong number of arguments")
     spec = args[0]
     if is_list(spec) and len(spec.args) == 2 and _is_obj(spec.args[1], "DigitalSignature"):
         pairs, many = [spec.args], False
@@ -2191,7 +2208,7 @@ def _spki_to_key(der, fname):
         return rsa_public_expr(n, e)
     if oid == OID_EC:
         c = _curve_from_oid(oid_text(algi[1][1]), fname)
-        return ec_public_expr(c, c.decode(pub), pub[0] in (2, 3))
+        return ec_public_expr(c, c.decode(pub, fname), pub[0] in (2, 3))
     if oid == OID_ED25519:
         return ed_public_expr(pub)
     raise ValueError(f"{fname}: unsupported public key algorithm (OID {oid})")
@@ -2412,8 +2429,8 @@ IE.register_format(IE.Format("PEM", ["pem", "cer", "crt", "key"], ["application/
           "SerialNumber, SignatureAlgorithm, Issuer, ValidityStartDate, ValidityEndDate, Subject, PublicKey, "
           "Extensions, DigitalSignature, SignedData, Certificate, Properties); SecurityCertificate[\"PEM text\"] "
           "or SecurityCertificate[ByteArray (DER)] parses one; VerifyDigitalSignature[{cert[\"SignedData\"], "
-          "cert[\"DigitalSignature\"]}, issuerKey] checks its signature")
-def _securitycertificate(x):
+          "cert[\"DigitalSignature\"]}, issuerKey] checks its signature. Check: reference (OpenSSL certificates; their signatures verify) in tests.")
+def _securitycertificate(x: String | Expr | Assoc) -> Expr:
     if isinstance(x, str):
         certs = [e for e in pem_entries(x.encode("latin-1", "replace"), "SecurityCertificate")
                  if e.head == "SecurityCertificate"]
@@ -2424,7 +2441,7 @@ def _securitycertificate(x):
         return certificate_from_der(ba_bytes(x), "SecurityCertificate")
     if KL.is_assoc(x):
         raise Unevaluated
-    raise ValueError(f"SecurityCertificate: {F.input_form(x)} is not a PEM string, a DER ByteArray or an "
+    raise TypeError(f"SecurityCertificate: {F.input_form(x)} is not a PEM string, a DER ByteArray or an "
                      f"association")
 
 
@@ -2432,8 +2449,8 @@ def _securitycertificate(x):
 
 @fn("EncryptedObject", area=AREA, status="added",
     notes="EncryptedObject[<|\"Data\", \"InitializationVector\", \"OriginalForm\", ...|>] is the result of "
-          "Encrypt (properties by name and \"Properties\"); validated, otherwise inert")
-def _encryptedobject(a):
+          "Encrypt (properties by name and \"Properties\"); validated, otherwise inert. Check: exact (validated wrapper).")
+def _encryptedobject(a: Assoc) -> Expr:
     if not KL.is_assoc(a) or assoc_get(a, "Data") is None or not is_byte_array(assoc_get(a, "Data")):
         raise ValueError("EncryptedObject: expected an association with a ByteArray \"Data\"")
     raise Unevaluated
@@ -2450,18 +2467,18 @@ def _write_new(path, data, overwrite, fname):
 def _overwrite(o, fname):
     v = o.get("OverwriteTarget", False)
     if not isinstance(v, bool):
-        raise ValueError(f"{fname}: OverwriteTarget must be True or False")
+        raise TypeError(f"{fname}: OverwriteTarget must be True or False")
     return v
 
 
 @fn("EncryptFile", area=AREA, status="added",
     notes="EncryptFile[key, file] encrypts the bytes of file into file.mx (Import gives the EncryptedObject) and "
           "EncryptFile[key, source, target] into target; key as for Encrypt; OverwriteTarget (default False); "
-          "returns the absolute output path")
-def _encryptfile(key, src, *rest):
+          "returns the absolute output path. Check: exact; DecryptFile round trips in tests.")
+def _encryptfile(key: Expr | String, src: String | Expr, *rest: String | Option) -> String:
     rest, o = split_opts(rest, ("OverwriteTarget", "Method"), "EncryptFile")
     if len(rest) > 1:
-        raise ValueError("EncryptFile called with too many arguments")
+        raise ValueError("EncryptFile: called with too many arguments")
     path = file_arg(src, "EncryptFile")
     obj = encrypt(key, _ba(_file_bytes(path, "EncryptFile")), o, "EncryptFile")
     target = file_arg(rest[0], "EncryptFile") if rest else path + ".mx"
@@ -2470,11 +2487,11 @@ def _encryptfile(key, src, *rest):
 
 @fn("DecryptFile", area=AREA, status="added",
     notes="DecryptFile[key, \"file.mx\"] decrypts an EncryptFile result into file and DecryptFile[key, source, "
-          "target] into target; OverwriteTarget (default False); returns the absolute output path")
-def _decryptfile(key, src, *rest):
+          "target] into target; OverwriteTarget (default False); returns the absolute output path. Check: exact; EncryptFile round trips in tests.")
+def _decryptfile(key: Expr | String, src: String | Expr, *rest: String | Option) -> String:
     rest, o = split_opts(rest, ("OverwriteTarget", "Method"), "DecryptFile")
     if len(rest) > 1:
-        raise ValueError("DecryptFile called with too many arguments")
+        raise ValueError("DecryptFile: called with too many arguments")
     path = file_arg(src, "DecryptFile")
     data = _file_bytes(path, "DecryptFile")
     if not data.startswith(IE.MX_HEADER):
@@ -2501,7 +2518,7 @@ def _props_hook(computed=None):
         if computed is not None:
             try:
                 extra = computed(head)
-            except (ValueError, NotImplementedError):
+            except (ValueError, TypeError, NotImplementedError):
                 extra = {}
         stored = [r.args[0] for r in a.args]
         if args[0] == "Properties":
@@ -2538,4 +2555,5 @@ for _h, _c in (("PrivateKey", _key_computed), ("PublicKey", _key_computed), ("Di
 CURVE_NAMES = sorted(set(CURVES) | {"prime256v1", "prime192v1"} | set(EDWARDS_CURVES))
 IE._sysvar("$CryptographicEllipticCurveNames", lambda: L(*CURVE_NAMES))
 record("$CryptographicEllipticCurveNames", AREA, "added",
-       "list of the elliptic and Edwards curves the cryptographic functions support")
+       "list of the elliptic and Edwards curves the cryptographic functions support. Check: exact; "
+       "tests verify each curve's parameters (G on the curve, n*G = O, n and p prime).")

@@ -104,12 +104,12 @@ def assoc_get(a, key, default=None):
 
 def assoc_dict(a, fname):
     if not KL.is_assoc(a):
-        raise ValueError(f"{fname}: {F.input_form(a)} is not an association")
+        raise TypeError(f"{fname}: {F.input_form(a)} is not an association")
     out = {}
     for r in a.args:
         k = r.args[0]
         if not isinstance(k, str):
-            raise ValueError(f"{fname}: association keys must be strings")
+            raise TypeError(f"{fname}: association keys must be strings")
         out[k] = r.args[1]
     return out
 
@@ -138,7 +138,7 @@ def is_byte_array(x):
 
 def ba_bytes(x, fname="ByteArray"):
     if not is_byte_array(x):
-        raise ValueError(f"{fname}: {F.input_form(x)} is not a ByteArray")
+        raise TypeError(f"{fname}: {F.input_form(x)} is not a ByteArray")
     a = x.args[0]
     if isinstance(a, str):
         try:
@@ -154,7 +154,7 @@ def bytes_arg(x, fname, what="data"):
         return ba_bytes(x, fname)
     if is_list(x) and all(K.is_int(b) and not isinstance(b, bool) and 0 <= b <= 255 for b in x.args):
         return bytes(x.args)
-    raise ValueError(f"{fname}: {F.input_form(x)} is not a ByteArray or a list of bytes ({what})")
+    raise TypeError(f"{fname}: {F.input_form(x)} is not a ByteArray or a list of bytes ({what})")
 
 
 # ═══════════════════════════════════════ canonical atoms ═══════════════════════════════════════
@@ -771,11 +771,11 @@ def uncompress_string(s, fname="Uncompress"):
 @fn("BinarySerialize", area=AREA, status="added",
     notes="BinarySerialize[expr] gives a ByteArray with the WXF serialisation of expr (header 8:, documented "
           "tokens and varint lengths; System` symbols unqualified, others with their context); "
-          "PerformanceGoal -> \"Size\" zlib-compresses (header 8C:); \"Speed\"/Automatic do not")
-def _binaryserialize(x, *opts):
+          "PerformanceGoal -> \"Size\" zlib-compresses (header 8C:); \"Speed\"/Automatic do not. Check: reference (documented WXF bytes) and the round trip BinaryDeserialize[BinarySerialize[e]] === e in tests.")
+def _binaryserialize(x: Expr, *opts: Option) -> Expr:
     rest, o = split_opts(opts, ("PerformanceGoal", "Method"), "BinarySerialize")
     if rest:
-        raise ValueError("BinarySerialize called with too many arguments")
+        raise ValueError("BinarySerialize: called with too many arguments")
     pg = o.get("PerformanceGoal", _sym("Automatic"))
     if is_sym(pg, "Automatic") or pg == "Speed":
         comp = False
@@ -791,8 +791,8 @@ def _binaryserialize(x, *opts):
 @fn("BinaryDeserialize", area=AREA, status="added",
     notes="BinaryDeserialize[ba] reads WXF data (compressed or not, including packed and numeric arrays) and "
           "evaluates the result; BinaryDeserialize[ba, h] wraps it in h before evaluation; data that is not WXF "
-          "raises an error")
-def _binarydeserialize(b, h=None):
+          "raises an error. Check: reference (documented WXF bytes) and serialise/deserialise round trips in tests.")
+def _binarydeserialize(b: Expr, h: Fn = None) -> Expr:
     data = bytes_arg(b, "BinaryDeserialize")
     x = binary_deserialize(data)
     if h is not None:
@@ -803,8 +803,8 @@ def _binarydeserialize(b, h=None):
 @fn("Compress", area=AREA, status="added",
     notes="Compress[expr] gives Wolfram's compressed string: \"1:\" <> Base64 of the zlib deflation of the "
           "!boR serialisation of expr (i/I integers, r/R reals, S strings with \\ooo and \\:xxxx escapes, "
-          "s symbols, f expressions); Uncompress inverts it")
-def _compress(x, *opts):
+          "s symbols, f expressions); Uncompress inverts it. Check: exact; the round trip Uncompress[Compress[e]] === e in tests.")
+def _compress(x: Expr, *opts: Option) -> String:
     if opts:
         raise NotImplementedError("Compress: options (Method) are not supported")
     return compress_string(x)
@@ -812,8 +812,8 @@ def _compress(x, *opts):
 
 @fn("Uncompress", area=AREA, status="added",
     notes="Uncompress[\"1:...\"] recovers and evaluates the expression from a Compress string (also reads "
-          "packed real arrays 'e'); Uncompress[c, h] wraps it in h before evaluation; invalid data raises")
-def _uncompress(s, h=None):
+          "packed real arrays 'e'); Uncompress[c, h] wraps it in h before evaluation; invalid data raises. Check: exact; Compress round trips in tests.")
+def _uncompress(s: String, h: Fn = None) -> Expr:
     x = uncompress_string(s)
     if isinstance(x, Symbol):
         x = ev(x)
@@ -968,7 +968,7 @@ def register_format(f):
 
 def format_of(name, fname):
     if not isinstance(name, str):
-        raise ValueError(f"{fname}: {F.input_form(name)} is not a format name")
+        raise TypeError(f"{fname}: {F.input_form(name)} is not a format name")
     if name in FORMATS:
         return FORMATS[name]
     for k in FORMATS:
@@ -1072,7 +1072,7 @@ def _rows_of(x, fname):
 def _exp_table(x, opts):
     sep = opts.get("FieldSeparators", "\t")
     if not isinstance(sep, str):
-        raise ValueError("Export: FieldSeparators must be a string")
+        raise TypeError("Export: FieldSeparators must be a string")
     return encode_text("\n".join(sep.join(field_text(v) for v in r) for r in _rows_of(x, "Export")), opts,
                        "Export")
 
@@ -1305,7 +1305,7 @@ def _to_json(x, fname):
                 if isinstance(k, Symbol):
                     k = k.name
                 else:
-                    raise ValueError(f"{fname}::jsonstrictencoding: the key {F.input_form(k)} is not a string")
+                    raise TypeError(f"{fname}::jsonstrictencoding: the key {F.input_form(k)} is not a string")
             d[k] = _to_json(r.args[1], fname)
         return d
     if is_list(x):
@@ -1362,7 +1362,7 @@ def _ejson_to_expr(v):
         if v in ("True", "False", "Null"):
             return {"True": True, "False": False, "Null": None}[v]
         if not re.fullmatch(r"[A-Za-z$][A-Za-z0-9$`]*", v):
-            raise ValueError(f"Import: {v!r} is not a symbol name or a quoted string")
+            raise TypeError(f"Import: {v!r} is not a symbol name or a quoted string")
         return Symbol(internal_symbol(v))
     if isinstance(v, list):
         if not v:
@@ -1820,14 +1820,18 @@ def _binfmt(name):
                 if not (isinstance(v, (int, float, sp.Float, sp.Integer)) and not isinstance(v, bool)):
                     q = F.rational_value(v) if isinstance(v, Expr) else None
                     if q is None:
-                        raise ValueError(f"Export: {F.input_form(v)} is not a real number ({name})")
+                        if isinstance(v, (Symbol, Expr)) and not K.is_number(v):
+                            raise Unevaluated()
+                        raise TypeError(f"Export: {F.input_form(v)} is not a real number ({name})")
                     v = q.numerator / q.denominator
                 v = float(v)
                 if code == "f" and math.isfinite(v) and abs(v) > 3.4028234663852886e38:
                     raise ValueError(f"Export: {v} is out of range for {name}")
             else:
                 if not K.is_int(v) or isinstance(v, bool):
-                    raise ValueError(f"Export: {F.input_form(v)} is not an integer ({name})")
+                    if isinstance(v, (Symbol, Expr)) and not K.is_number(v):
+                        raise Unevaluated()
+                    raise TypeError(f"Export: {F.input_form(v)} is not an integer ({name})")
                 v = int(v)
             try:
                 out.append(struct.pack(bo + code, v))
@@ -1999,7 +2003,7 @@ def _is_format_name(x):
     try:
         format_of(x, "Import")
         return True
-    except ValueError:
+    except (ValueError, TypeError):
         return False
 
 
@@ -2056,12 +2060,12 @@ def do_import(data, fmt, elem, subs, inner, opts, fname="Import"):
     notes="Import[src], Import[src, fmt], Import[src, elem], Import[src, {fmt, elem, sub...}] for files, File[], "
           "URL[], RemoteFile[] and http(s)/file URLs; format from the extension or the content; elements "
           "\"Elements\", \"Rules\" and each format's elements with row/column subelements; formats as in "
-          "$ImportFormats (Package files are evaluated, as Get does)")
-def _import(src, *rest):
+          "$ImportFormats (Package files are evaluated, as Get does). Check: reference (documented results per format) and Export/Import round trips in tests.")
+def _import(src: String | Expr, *rest: Expr | Option) -> Expr:
     rest, opts = split_opts(rest, set().union(*(f.opts for f in FORMATS.values())) | set(GENERAL_IMPORT_OPTS),
                             "Import")
     if len(rest) > 1:
-        raise ValueError("Import called with too many arguments")
+        raise ValueError("Import: called with too many arguments")
     data, name = read_source(src, "Import")
     fmt, elem, subs, inner = parse_import_spec(rest[0] if rest else None, name, data)
     return do_import(data, fmt, elem, subs, inner, opts)
@@ -2072,21 +2076,21 @@ def _string_bytes(s, fmt, fname):
         try:
             return s.encode("latin-1")
         except UnicodeEncodeError:
-            raise ValueError(f"{fname}: binary data must be a string of characters with codes 0..255")
+            raise TypeError(f"{fname}: binary data must be a string of characters with codes 0..255")
     return s.encode("utf-8")
 
 
 @fn("ImportString", area=AREA, status="added",
     notes="ImportString[\"data\", fmt or {fmt, elem, ...}] imports from a string (binary formats read the "
           "characters as bytes 0..255); without a format the content is sniffed (WXF, JSON, XML, compressed "
-          "data, else CSV/TSV when every line has commas/tabs, else Text)")
-def _importstring(s, *rest):
+          "data, else CSV/TSV when every line has commas/tabs, else Text). Check: reference (documented ImportString results) and ExportString round trips in tests.")
+def _importstring(s: String, *rest: Expr | Option) -> Expr:
     if not isinstance(s, str):
-        raise ValueError("ImportString: the first argument must be a string")
+        raise TypeError("ImportString: the first argument must be a string")
     rest, opts = split_opts(rest, set().union(*(f.opts for f in FORMATS.values())) | set(GENERAL_IMPORT_OPTS),
                             "ImportString")
     if len(rest) > 1:
-        raise ValueError("ImportString called with too many arguments")
+        raise ValueError("ImportString: called with too many arguments")
     spec = rest[0] if rest else None
     first = (spec.args[0] if is_list(spec) and spec.args else spec)
     fmt0 = format_of(first, "ImportString") if _is_format_name(first) else None
@@ -2109,13 +2113,13 @@ def _importstring(s, *rest):
 
 @fn("ImportByteArray", area=AREA, status="added",
     notes="ImportByteArray[ba, fmt or {fmt, elem, ...}] imports the bytes of a ByteArray in the given format "
-          "(format sniffed from the content when omitted)")
-def _importbytearray(b, *rest):
+          "(format sniffed from the content when omitted). Check: reference and ExportByteArray round trips in tests.")
+def _importbytearray(b: Expr, *rest: Expr | Option) -> Expr:
     data = bytes_arg(b, "ImportByteArray")
     rest, opts = split_opts(rest, set().union(*(f.opts for f in FORMATS.values())) | set(GENERAL_IMPORT_OPTS),
                             "ImportByteArray")
     if len(rest) > 1:
-        raise ValueError("ImportByteArray called with too many arguments")
+        raise ValueError("ImportByteArray: called with too many arguments")
     spec = rest[0] if rest else None
     first = (spec.args[0] if is_list(spec) and spec.args else spec)
     if not _is_format_name(first):
@@ -2178,11 +2182,11 @@ def _all_opts():
 @fn("Export", area=AREA, status="added",
     notes="Export[\"file\", expr], Export[\"file\", expr, fmt], Export[\"file\", expr, {fmt, elem}] writes expr "
           "in the format given or implied by the extension (file.csv.gz: GZIP of CSV) and returns the file name; "
-          "an unknown extension raises Export::infer")
-def _export(dest, x, *rest):
+          "an unknown extension raises Export::infer. Check: reference (documented text per format) and Import round trips in tests.")
+def _export(dest: String | Expr, x: Expr, *rest: Expr | Option) -> String:
     rest, opts = split_opts(rest, _all_opts(), "Export")
     if len(rest) > 1:
-        raise ValueError("Export called with too many arguments")
+        raise ValueError("Export: called with too many arguments")
     path = file_arg(dest, "Export")
     fmt, inner = parse_export_spec(rest[0] if rest else None, path, "Export")
     data = do_export(x, fmt, inner, opts, "Export")
@@ -2197,11 +2201,11 @@ def _export(dest, x, *rest):
 @fn("ExportString", area=AREA, status="added",
     notes="ExportString[expr, fmt] gives the text of expr in the format (binary formats as a string of "
           "characters with codes 0..255, as Wolfram does); CSV/TSV quote fields only when needed, JSON is "
-          "tab-indented unless \"Compact\" -> True")
-def _exportstring(x, spec, *rest):
+          "tab-indented unless \"Compact\" -> True. Check: reference (documented ExportString text) and ImportString round trips in tests.")
+def _exportstring(x: Expr, spec: String | ListOf[String], *rest: Option) -> String:
     rest, opts = split_opts(rest, _all_opts(), "ExportString")
     if rest:
-        raise ValueError("ExportString called with too many arguments")
+        raise ValueError("ExportString: called with too many arguments")
     fmt, inner = parse_export_spec(spec, None, "ExportString")
     data = do_export(x, fmt, inner, opts, "ExportString")
     if fmt.binary or fmt.name in ("Base64",):
@@ -2211,11 +2215,11 @@ def _exportstring(x, spec, *rest):
 
 @fn("ExportByteArray", area=AREA, status="added",
     notes="ExportByteArray[expr, fmt] gives a ByteArray with the bytes of expr exported in the format, e.g. "
-          "ExportByteArray[-1, \"Integer8\"] == ByteArray[{255}], ExportByteArray[4., \"Real64\"]")
-def _exportbytearray(x, spec, *rest):
+          "ExportByteArray[-1, \"Integer8\"] == ByteArray[{255}], ExportByteArray[4., \"Real64\"]. Check: reference (explicit byte layouts) and ImportByteArray round trips in tests.")
+def _exportbytearray(x: Expr, spec: String | ListOf[String], *rest: Option) -> Expr:
     rest, opts = split_opts(rest, _all_opts(), "ExportByteArray")
     if rest:
-        raise ValueError("ExportByteArray called with too many arguments")
+        raise ValueError("ExportByteArray: called with too many arguments")
     fmt, inner = parse_export_spec(spec, None, "ExportByteArray")
     return byte_array(do_export(x, fmt, inner, opts, "ExportByteArray"))
 
@@ -2231,8 +2235,8 @@ def _sysvar(name, getter):
 
 _sysvar("$ImportFormats", lambda: L(*sorted(n for n, f in FORMATS.items() if f.imp is not None)))
 _sysvar("$ExportFormats", lambda: L(*sorted(n for n, f in FORMATS.items() if f.exp is not None)))
-record("$ImportFormats", AREA, "added", "list of the formats Import supports")
-record("$ExportFormats", AREA, "added", "list of the formats Export supports")
+record("$ImportFormats", AREA, "added", "list of the formats Import supports. Check: exact (registry contents).")
+record("$ExportFormats", AREA, "added", "list of the formats Export supports. Check: exact (registry contents).")
 
 
 def _fmt_props(f):
@@ -2253,8 +2257,8 @@ _PROP_NAMES = ("FileNamePatterns", "MIMETypes", "ImportElements", "DefaultImport
 @fn("FileFormatProperties", area=AREA, status="added",
     notes="FileFormatProperties[fmt] gives <|\"FileNamePatterns\", \"MIMETypes\", \"ImportElements\", "
           "\"DefaultImportElement\"|>; FileFormatProperties[fmt, prop | {props}]; lists of formats and All give "
-          "associations keyed by format; FileFormatProperties[] gives every format")
-def _fileformatproperties(f=None, props=None):
+          "associations keyed by format; FileFormatProperties[] gives every format. Check: exact (registry lookup); reference values in tests.")
+def _fileformatproperties(f: String = None, props: String | ListOf[String] = None) -> Assoc | Expr:
     if f is None or is_sym(f, "All"):
         names = sorted(FORMATS)
     elif is_list(f):
@@ -2274,7 +2278,7 @@ def _fileformatproperties(f=None, props=None):
                 if p not in pr:
                     raise ValueError(f"FileFormatProperties: unknown property {F.input_form(p)}")
             return _assoc([(p, pr[p]) for p in props.args])
-        raise ValueError("FileFormatProperties: the property must be a string or a list of strings")
+        raise TypeError("FileFormatProperties: the property must be a string or a list of strings")
     if names is None:
         return one(format_of(f, "FileFormatProperties").name)
     return _assoc([(n, one(n)) for n in names])
@@ -2283,8 +2287,8 @@ def _fileformatproperties(f=None, props=None):
 @fn("SetFileFormatProperties", area=AREA, status="added",
     notes="SetFileFormatProperties[fmt, prop -> val] or {rules} (or an association) changes \"FileNamePatterns\", "
           "\"MIMETypes\" or \"DefaultImportElement\" (which must be an import element) for the session; Import "
-          "then uses the new default element")
-def _setfileformatproperties(f, spec):
+          "then uses the new default element. Check: exact; the change is read back with FileFormatProperties in tests.")
+def _setfileformatproperties(f: String, spec: Rule | ListOf[Rule] | Assoc) -> Expr:
     fmt = format_of(f, "SetFileFormatProperties")
     rules = list(spec.args) if (is_list(spec) or KL.is_assoc(spec)) else [spec]
     o = PROPS_OVERRIDE.setdefault(fmt.name, {})
@@ -2299,7 +2303,7 @@ def _setfileformatproperties(f, spec):
                                  f"{fmt.name}")
         elif k in ("FileNamePatterns", "MIMETypes"):
             if not (is_list(v) and all(isinstance(t, str) for t in v.args)):
-                raise ValueError(f"SetFileFormatProperties: {k} must be a list of strings")
+                raise TypeError(f"SetFileFormatProperties: {k} must be a list of strings")
         elif k == "ImportElements":
             raise ValueError("SetFileFormatProperties: \"ImportElements\" cannot be set")
         else:
@@ -2323,17 +2327,17 @@ def _pattern_formats(fname_):
 
 @fn("FileNameToFormatList", area=AREA, status="added",
     notes="FileNameToFormatList[\"name.ext\"] gives the formats whose file name patterns match (e.g. "
-          "{\"CSV\"} for *.csv); {} when none does")
-def _filenametoformatlist(name):
+          "{\"CSV\"} for *.csv); {} when none does. Check: exact (registry lookup); reference values in tests.")
+def _filenametoformatlist(name: String) -> ListOf[String]:
     return L(*_pattern_formats(file_arg(name, "FileNameToFormatList")))
 
 
 @fn("MIMETypeToFormatList", area=AREA, status="added",
     notes="MIMETypeToFormatList[\"type/subtype\"] gives the formats with that MIME type (case-insensitive, "
-          "parameters such as ;charset= ignored); {} when none")
-def _mimetypetoformatlist(m):
+          "parameters such as ;charset= ignored); {} when none. Check: exact (registry lookup); reference values in tests.")
+def _mimetypetoformatlist(m: String) -> ListOf[String]:
     if not isinstance(m, str):
-        raise ValueError("MIMETypeToFormatList: the MIME type must be a string")
+        raise TypeError("MIMETypeToFormatList: the MIME type must be a string")
     m = m.split(";")[0].strip().lower()
     out = []
     for n in sorted(FORMATS):
@@ -2347,8 +2351,8 @@ def _mimetypetoformatlist(m):
 @fn("FileFormat", area=AREA, status="added",
     notes="FileFormat[\"file\"] gives the Import format of a file: from its extension when known, otherwise "
           "from its content (GZIP, BZIP2, ZIP, TAR, WXF, MX, PEM, XML, JSON, Text); a missing file without a "
-          "known extension raises FileFormat::nffil")
-def _fileformat(f):
+          "known extension raises FileFormat::nffil. Check: exact (extension, then content sniffing); reference files in tests.")
+def _fileformat(f: String | Expr) -> String:
     u = _url_string(f)
     if u is not None:
         exts = _split_ext(u.split("?")[0])
@@ -2361,8 +2365,8 @@ def _fileformat(f):
 
 @fn("FileFormatQ", area=AREA, status="added",
     notes="FileFormatQ[file, fmt] is True when the file has format fmt (its FileFormat, or content that parses "
-          "as fmt for JSON/XML/WXF/archives), False otherwise; an unknown format name raises")
-def _fileformatq(f, fmt):
+          "as fmt for JSON/XML/WXF/archives), False otherwise; an unknown format name raises. Check: exact; reference files in tests.")
+def _fileformatq(f: String | Expr, fmt: String) -> Boolean:
     target = format_of(fmt, "FileFormatQ").name
     path = file_arg(f, "FileFormatQ")
     if not os.path.isfile(path):
@@ -2370,7 +2374,7 @@ def _fileformatq(f, fmt):
     try:
         if file_format_name(path) == target:
             return True
-    except ValueError:
+    except (ValueError, TypeError):
         pass
     with open(path, "rb") as fh:
         data = fh.read()
@@ -2390,8 +2394,8 @@ def _fileformatq(f, fmt):
 
 @fn("FileConvert", area=AREA, status="added",
     notes="FileConvert[\"src\" -> \"fmt\"] converts a file to the format, writing src with the format's "
-          "extension; FileConvert[\"src\" -> \"dest\"] infers the format from dest; returns the new file name")
-def _fileconvert(spec, *opts):
+          "extension; FileConvert[\"src\" -> \"dest\"] infers the format from dest; returns the new file name. Check: self-check by construction (Import then Export); tests re-import the converted file.")
+def _fileconvert(spec: Rule, *opts: Option) -> String:
     if not _is_rule(spec):
         raise ValueError("FileConvert: FileConvert[source -> format] or FileConvert[source -> destination] "
                          "expected")
@@ -2435,14 +2439,14 @@ def _write_exprs(args, mode, fname):
 @fn("Put", area=AREA, status="added",
     notes="Put[e1, e2, ..., \"file\"] (expr >> file) writes each expression in InputForm on its own line, "
           "replacing the file (arbitrary-precision numbers keep their precision); Put[\"file\"] empties it; "
-          "Get reads the file back")
-def _put(*args):
+          "Get reads the file back. Check: exact; Put/Get round trips in tests.")
+def _put(*args: Expr) -> Expr:
     return _write_exprs(args, "w", "Put")
 
 
 @fn("PutAppend", area=AREA, status="added",
-    notes="PutAppend[e1, ..., \"file\"] (expr >>> file) appends the expressions in InputForm, one per line")
-def _putappend(*args):
+    notes="PutAppend[e1, ..., \"file\"] (expr >>> file) appends the expressions in InputForm, one per line. Check: exact; PutAppend/Get round trips in tests.")
+def _putappend(*args: Expr) -> Expr:
     return _write_exprs(args, "a", "PutAppend")
 
 
@@ -2473,7 +2477,7 @@ def _symbols_spec(spec, fname):
                 if n not in out:
                     out.append(n)
         return out
-    raise ValueError(f"{fname}: {F.input_form(spec)} is not a symbol, a name, a pattern or a list of these")
+    raise TypeError(f"{fname}: {F.input_form(spec)} is not a symbol, a name, a pattern or a list of these")
 
 
 def _definition_text(names, full=True):
@@ -2494,8 +2498,8 @@ K.BUILTIN_ATTRIBUTES["DumpSave"] = {"HoldRest", "Protected"}
 @fn("Save", area=AREA, status="added",
     notes="Save[\"file\", s] appends the full definitions of s and the symbols it depends on (FullDefinition: "
           "values, attributes, options, messages) in InputForm; s may be a name, a \"pattern*\", a context "
-          "\"ctx`\" or a list; Get restores them; HoldRest")
-def _save(dest, spec):
+          "\"ctx`\" or a list; Get restores them; HoldRest. Check: exact; definitions restored with Get after Clear in tests.")
+def _save(dest: String, spec: Held) -> Expr:
     path = file_arg(dest, "Save")
     names = _symbols_spec(spec, "Save")
     text = _definition_text(names)
@@ -2519,8 +2523,8 @@ def restore_dump(x):
 @fn("DumpSave", area=AREA, status="added",
     notes="DumpSave[\"file.mx\", s] writes the full definitions of s (a symbol, name, context \"ctx`\" or list) "
           "to a binary MikoshiLang MX file and returns the list of symbols saved; Get[\"file.mx\"] restores them "
-          "(like Wolfram MX files, the dump is specific to the system that wrote it); HoldRest")
-def _dumpsave(dest, spec):
+          "(like Wolfram MX files, the dump is specific to the system that wrote it); HoldRest. Check: exact; definitions restored with Get after Clear in tests.")
+def _dumpsave(dest: String, spec: Held) -> ListOf[Expr]:
     path = file_arg(dest, "DumpSave")
     names = _symbols_spec(spec, "DumpSave")
     text = _definition_text(names)
@@ -2582,18 +2586,18 @@ def _archive_kind(path):
 def _truthy_opt(opts, name, default, fname):
     v = opts.get(name, default)
     if v not in (True, False):
-        raise ValueError(f"{fname}: {name} must be True or False")
+        raise TypeError(f"{fname}: {name} must be True or False")
     return v
 
 
 @fn("CreateArchive", area=AREA, status="added",
     notes="CreateArchive[src] compresses a file or directory (or a list of them) into src.zip; "
           "CreateArchive[src, dest] writes dest (.zip, .tar, .tar.gz/.tgz, .tar.bz2, or a directory to put "
-          "src.zip in); returns the full archive path; OverwriteTarget -> False (default) refuses to replace")
-def _createarchive(src, *rest):
+          "src.zip in); returns the full archive path; OverwriteTarget -> False (default) refuses to replace. Check: exact (zipfile/tarfile); CreateArchive/ExtractArchive round trips in tests.")
+def _createarchive(src: String | ListOf[String], *rest: String | Option) -> String:
     rest, opts = split_opts(rest, ("OverwriteTarget", "CreateIntermediateDirectories"), "CreateArchive")
     if len(rest) > 1:
-        raise ValueError("CreateArchive called with too many arguments")
+        raise ValueError("CreateArchive: called with too many arguments")
     sources = [file_arg(s, "CreateArchive") for s in (src.args if is_list(src) else [src])]
     if not sources:
         raise ValueError("CreateArchive: nothing to archive")
@@ -2662,11 +2666,11 @@ def _safe_member(name):
     notes="ExtractArchive[\"file.zip\"] extracts a zip/tar/tar.gz/tar.bz2/gz archive into the current directory; "
           "ExtractArchive[src, dir] into dir; ExtractArchive[src, dir, patt] only members matching a string or "
           "\"*\" wildcard pattern; returns the list of extracted files (full paths); members with absolute or .. "
-          "paths are refused; OverwriteTarget -> False (default) refuses to replace existing files")
-def _extractarchive(src, *rest):
+          "paths are refused; OverwriteTarget -> False (default) refuses to replace existing files. Check: exact (zipfile/tarfile); round trips with CreateArchive in tests.")
+def _extractarchive(src: String, *rest: String | ListOf[String] | Option) -> ListOf[String]:
     rest, opts = split_opts(rest, ("OverwriteTarget", "CreateIntermediateDirectories"), "ExtractArchive")
     if len(rest) > 2:
-        raise ValueError("ExtractArchive called with too many arguments")
+        raise ValueError("ExtractArchive: called with too many arguments")
     path = file_arg(src, "ExtractArchive")
     if not os.path.isfile(path):
         raise ValueError(f"ExtractArchive::nffil: {path} does not exist")
@@ -2680,7 +2684,7 @@ def _extractarchive(src, *rest):
         ps = patt.args if is_list(patt) else [patt]
         for p in ps:
             if not isinstance(p, str):
-                raise ValueError("ExtractArchive: the pattern must be a string or a list of strings")
+                raise TypeError("ExtractArchive: the pattern must be a string or a list of strings")
             if fnmatch.fnmatchcase(n, p) or fnmatch.fnmatchcase(os.path.basename(n.rstrip("/")), p):
                 return True
         return False
@@ -2738,36 +2742,36 @@ def _extractarchive(src, *rest):
 
 @fn("CreateUUID", area=AREA, status="added",
     notes="CreateUUID[] gives a new random (version 4) UUID string xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx; "
-          "CreateUUID[\"base\"] prefixes it with base")
-def _createuuid(base=None):
+          "CreateUUID[\"base\"] prefixes it with base. Check: exact (uuid4); format and uniqueness in tests.")
+def _createuuid(base: String = None) -> String:
     u = str(uuid.uuid4())
     if base is None:
         return u
     if not isinstance(base, str):
-        raise ValueError("CreateUUID: the base must be a string")
+        raise TypeError("CreateUUID: the base must be a string")
     return base + u
 
 
 @fn("URL", area=AREA, status="added",
     notes="URL[\"url\"] is an inert symbolic URL accepted by Import, FileFormat and LocalCache (file:// URLs "
-          "read local files); URL[URL[u]] is URL[u]; a non-string argument raises")
-def _url(u):
+          "read local files); URL[URL[u]] is URL[u]; a non-string argument raises. Check: exact (inert wrapper with validation).")
+def _url(u: String) -> Expr:
     if isinstance(u, Expr) and u.head == "URL" and len(u.args) == 1:
         return u
     if not isinstance(u, str):
-        raise ValueError(f"URL: {F.input_form(u)} is not a URL string")
+        raise TypeError(f"URL: {F.input_form(u)} is not a URL string")
     raise Unevaluated()
 
 
 @fn("RemoteFile", area=AREA, status="added",
     notes="RemoteFile[URL[\"url\"]] (or RemoteFile[\"url\"], normalised to URL form) is an inert reference to a "
-          "remote file that Import reads")
-def _remotefile(u, *opts):
+          "remote file that Import reads. Check: exact (inert wrapper); Import through it in tests.")
+def _remotefile(u: String | Expr, *opts: Option) -> Expr:
     if isinstance(u, str):
         return Expr("RemoteFile", Expr("URL", u), *opts)
     if isinstance(u, Expr) and u.head == "URL" and len(u.args) == 1 and isinstance(u.args[0], str):
         raise Unevaluated()
-    raise ValueError(f"RemoteFile: {F.input_form(u)} is not a URL")
+    raise TypeError(f"RemoteFile: {F.input_form(u)} is not a URL")
 
 
 def _home_base():
@@ -2794,13 +2798,13 @@ def _localsymbol_base():
 
 _sysvar("$LocalSymbolBase", _localsymbol_base)
 record("$CacheBaseDirectory", AREA, "added",
-       "directory where LocalCache stores cached copies (~/.mikoshilang/Caches or $MIKOSHILANG_CACHE_BASE)")
+       "directory where LocalCache stores cached copies (~/.mikoshilang/Caches or $MIKOSHILANG_CACHE_BASE). Check: exact (environment/home lookup).")
 record("$DefaultLocalBase", AREA, "added",
-       "default base directory for local object storage (~/.mikoshilang/Objects or $MIKOSHILANG_LOCAL_BASE)")
-record("$LocalBase", AREA, "added", "base directory for local objects; initially $DefaultLocalBase")
+       "default base directory for local object storage (~/.mikoshilang/Objects or $MIKOSHILANG_LOCAL_BASE). Check: exact (environment/home lookup).")
+record("$LocalBase", AREA, "added", "base directory for local objects; initially $DefaultLocalBase. Check: exact.")
 record("$LocalSymbolBase", AREA, "added",
        "directory where LocalSymbol values are stored (~/.mikoshilang/LocalSymbols or "
-       "$MIKOSHILANG_LOCALSYMBOL_BASE)")
+       "$MIKOSHILANG_LOCALSYMBOL_BASE). Check: exact (shared with LocalSymbol).")
 
 
 def _file_url(path):
@@ -2812,13 +2816,13 @@ def _file_url(path):
     notes="LocalCache[URL[url]] downloads url (file:// or http(s)) into $CacheBaseDirectory and returns "
           "LocalObject[\"file:///...\"], which Import and Get read; LocalCache[obj, LocalObject[\"name\" or "
           "\"file:///path\"]] chooses the cache; re-evaluation refreshes the copy; CloudObject caches are not "
-          "available (no Wolfram Cloud)")
-def _localcache(obj, loc=None, *opts):
+          "available (no Wolfram Cloud). Check: exact; the cached copy is re-imported in tests.")
+def _localcache(obj: Expr, loc: Expr = None, *opts: Option) -> Expr:
     if isinstance(obj, Expr) and obj.head == "CloudObject":
         raise NotImplementedError("LocalCache: Wolfram Cloud objects are not available in MikoshiLang")
     u = _url_string(obj)
     if u is None:
-        raise ValueError(f"LocalCache: {F.input_form(obj)} is not a URL[...] to cache")
+        raise TypeError(f"LocalCache: {F.input_form(obj)} is not a URL[...] to cache")
     import hashlib
     if loc is None:
         tail = os.path.basename(u.split("?")[0]) or "index"
@@ -2849,8 +2853,8 @@ _PERSIST_TYPES = ("KernelSession", "FrontEndSession", "Notebook", "Local", "Loca
     notes="PersistenceLocation[\"type\"] for the documented types (KernelSession, FrontEndSession, Notebook, Local, "
           "LocalShared, Cloud, Installation); \"Local\" gets its default base LocalObject[file URL of "
           "$DefaultLocalBase/Persistence]; PersistenceLocation[\"type\" -> base] is PersistenceLocation[\"type\", "
-          "base]; unknown types raise")
-def _persistencelocation(t, base=None):
+          "base]; unknown types raise. Check: exact (inert wrapper with validation).")
+def _persistencelocation(t: String, base: Expr = None) -> Expr:
     if _is_rule(t) and base is None:
         return Expr("PersistenceLocation", t.args[0], t.args[1])
     if not isinstance(t, str) or t not in _PERSIST_TYPES:
@@ -2868,15 +2872,16 @@ def _persistencelocation(t, base=None):
 
 @fn("ToMemory", area=AREA, status="added",
     notes="ToMemory[obj] gives the in-memory version of an out-of-core object; MikoshiLang keeps every object "
-          "in memory, so it returns obj unchanged")
-def _tomemory(x):
+          "in memory, so it returns obj unchanged. Check: exact (identity).")
+def _tomemory(x: Expr) -> Expr:
     return x
 
 
 def _option_symbol(name, notes):
     from .wl_evaluation import INERT
     INERT[name] = notes
-    record(name, AREA, "added", notes)
+    record(name, AREA, "added", notes.rstrip(". ") + ". Check: exact (inert symbol; tests check it stays "
+                                                       "unevaluated and is used as documented).")
 
 
 _option_symbol("CachePersistence", "option for URL fetching functions: how long downloaded content may be cached "
