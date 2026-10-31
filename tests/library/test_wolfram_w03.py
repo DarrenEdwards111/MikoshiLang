@@ -462,8 +462,161 @@ for _o in _OPTION_NAMES:
         (f"TreeMap[f, Tree[a, None, {_o} -> v]]", f"Tree[f[a], None, {_o} -> v]"),
     ]
 
+def _lerp_ref(vals, n):
+    """Independent point-sampling reference: n samples at 1 + k (m - 1)/(n - 1), linear interpolation."""
+    from fractions import Fraction
+    m, out = len(vals), []
+    for k in range(n):
+        p = Fraction(k * (m - 1), n - 1)
+        i = int(p)
+        t = p - i
+        v = vals[i] if t == 0 else vals[i] + t * (vals[i + 1] - vals[i])
+        out.append(v.numerator if isinstance(v, Fraction) and v.denominator == 1 else v)
+    return out
+
+
+_OPTION_SYMBOLS = ["SortedBy", "ComponentKeys", "DeleteContents", "KeyCollisionFunction", "PaddingSize", "PartBehavior",
+                   "WrapAround", "RowsEqual", "ColumnsEqual"]
+OPTION_SYMBOLS = []
+for _o in _OPTION_SYMBOLS:
+    OPTION_SYMBOLS += [
+        (_o, _o),
+        (f"Head[{_o}]", "Symbol"),
+        (f"f[x, {_o} -> v]", f"f[x, {_o} -> v]"),
+    ]
+
+FORM_SPECS = [
+    ("RepeatingElement[\"Integer\"]", "RepeatingElement[\"Integer\"]"),
+    ("RepeatingElement[\"String\", {2, 5}]", "RepeatingElement[\"String\", {2, 5}]"),
+    ("RepeatingElement[\"String\", {3, {1, Infinity}}]", "RepeatingElement[\"String\", {3, {1, Infinity}}]"),
+    ("RepeatingElement[\"String\", {5, 2}]", Raises()),
+    ("RepeatingElement[\"String\", {7, {1, 3}}]", Raises()),
+    ("AnySubset[{1, 2, 3}]", "AnySubset[{1, 2, 3}]"),
+    ("AnySubset[{\"a\" -> 1, \"b\" -> 2}, 1]", "AnySubset[{\"a\" -> 1, \"b\" -> 2}, 1]"),
+    ("AnySubset[{1, 2, 3}, {2, Infinity}]", "AnySubset[{1, 2, 3}, {2, Infinity}]"),
+    ("AnySubset[5]", Raises()),
+    ("AnySubset[{1, 2}, {3, 1}]", Raises()),
+]
+
+RESAMPLE = [
+    # reference examples (Resampling option section) and the point-sampling positions 1 + (k-1)(m-1)/(n-1)
+    ("ArrayResample[{1, 2, 3}, 6]", "{1, 7/5, 9/5, 11/5, 13/5, 3}"),
+    ("ArrayResample[{1, 2, 3}, 6, Resampling -> \"Nearest\"]", "{1, 1, 2, 2, 3, 3}"),
+    ("ArrayResample[{1, 2, 3}, 5, Resampling -> \"Nearest\"]", "{1, 3/2, 2, 5/2, 3}"),
+    ("ArrayResample[{1, 2, 3}, 5, Resampling -> \"NearestLeft\"]", "{1, 1, 2, 2, 3}"),
+    ("ArrayResample[{1, 2, 3}, 5, Resampling -> \"NearestRight\"]", "{1, 2, 2, 3, 3}"),
+    ("ArrayResample[Range[9], Scaled[1/2]]", "{1, 3, 5, 7, 9}"),
+    ("Length[ArrayResample[{2, 1, 3, 4, 2, 5}, Scaled[3]]]", "16"),
+    ("ArrayResample[{2, 1, 3, 4, 2, 5}, Scaled[3]]", Pred(lambda r: [str(v) for v in r.args] == [str(v) for v in _lerp_ref([2, 1, 3, 4, 2, 5], 16)], "piecewise-linear reference")),
+    ("ArrayResample[{1, 2, 3}, 6, \"Point\"]", "{1, 7/5, 9/5, 11/5, 13/5, 3}"),
+    ("ArrayResample[{1, 2, 3}, All]", "{1, 2, 3}"),
+    ("ArrayResample[{{1, 2}, {3, 4}}, {3, 3}]", "{{1, 3/2, 2}, {2, 5/2, 3}, {3, 7/2, 4}}"),
+    ("ArrayResample[{{1, 2}, {3, 4}}, {3}]", "{{1, 2}, {2, 3}, {3, 4}}"),
+    ("ArrayResample[{1., 2.}, 3]", "{1., 1.5, 2.}"),
+    ("ArrayResample[{a, b}, 3]", "{a, a/2 + b/2, b}"),
+    ("ArrayResample[{1, 2, 3}, 9, \"Bin\"]", Raises()),
+    ("ArrayResample[{{1, 2}, {3, 4}}, 3]", Raises()),
+    ("ArrayResample[{1, 2, 3}, 6, Resampling -> \"Cubic\"]", Raises()),
+    ("ArrayResample[{1, 2, 3}, 6, DataRange -> {0, 1}]", Raises()),
+]
+
+INCREMENTAL = [
+    # IncrementalFunction reference examples (without the FunctionCompile step)
+    ("Module[{ds = IncrementalFunction[Function[{arg}, IncrementalYield[arg + 1];]][10]}, ds[\"Next\"]]", "11"),
+    ("Module[{ds = IncrementalFunction[Function[{arg}, IncrementalYield[arg + 1];]][10]}, ds[\"Next\"]; "
+     "First[ds[\"Next\"]]]", "\"IncrementalFunctionTerminated\""),
+    ("Module[{ds = IncrementalFunction[Function[{arg}, IncrementalYield[arg + 1];]][10]}, ds[\"Next\"]; "
+     "Head[ds[\"Next\"]]]", "Failure"),
+    ("Module[{ds = IncrementalFunction[Function[{num}, Module[{mul = num}, While[True, IncrementalYield[mul += num]]]]][7]}, "
+     "Table[ds[\"Next\"], 5]]", "{14, 21, 28, 35, 42}"),
+    ("Module[{f = IncrementalFunction[Function[{num}, Module[{mul = num}, While[True, IncrementalYield[mul += num]]]]], a, b}, "
+     "a = f[7]; b = f[17]; {a[\"Next\"], b[\"Next\"], a[\"Next\"], b[\"Next\"]}]", "{14, 34, 21, 51}"),
+    ("IncrementalFunction[Function[{x}, x]]", "IncrementalFunction[Function[{x}, x]]"),
+    ("DataStructureQ[IncrementalFunction[Function[{}, 1]][], \"IncrementalFunction\"]", "True"),
+    ("IncrementalYield[1]", Raises()),
+    ("Module[{ds = IncrementalFunction[Function[{}, IncrementalYield[IncrementalReceive[0] + 1]]][]}, "
+     "{ds[\"Next\"], ds[\"Send\", 5]}]", "{Null, 6}"),
+    ("Module[{ds = IncrementalFunction[Function[{}, IncrementalYield[IncrementalReceive[0] + 1]]][]}, "
+     "{ds[\"Next\"], ds[\"Next\"]}]", "{Null, 1}"),
+    ("Module[{ds = IncrementalFunction[Function[{}, While[True, IncrementalYield[{IncrementalReceive[none]}]]]][]}, "
+     "{ds[\"Next\"], ds[\"Send\", x], ds[\"Next\"], ds[\"Next\"]}]", "{Null, {x}, Null, {none}}"),
+    ("Module[{ds = IncrementalFunction[Function[{}, IncrementalReceive[0]]][]}, ds[\"Next\"]; "
+     "First[ds[\"Send\", 101]]]", "\"IncrementalFunctionTerminated\""),
+    ("IncrementalReceive[0]", Raises()),
+    ("Module[{ds = IncrementalFunction[Function[{}, IncrementalReceive[0]]][]}, ds[\"Send\", 1]]", Raises()),
+    # IncrementalObject reference examples
+    ("Module[{obj = IncrementalObject[\"Identity\"][{1, 2}]}, {NextValue[obj], NextValue[obj], First[NextValue[obj]]}]",
+     "{1, 2, \"IncrementalObjectTerminated\"}"),
+    ("Module[{obj = IncrementalObject[\"Permutations\"][{1, 2, 3}]}, Table[NextValue[obj], 6]]",
+     "Permutations[{1, 2, 3}]"),
+    ("Module[{obj = IncrementalObject[\"Permutations\"][{2, 1, 2}]}, Table[NextValue[obj], 3]]",
+     "Permutations[{2, 1, 2}]"),
+    ("Module[{obj = IncrementalObject[\"Permutations\"][Range[100]]}, Do[NextValue[obj], {5}]; NextValue[obj]]",
+     "Join[Range[97], {100, 99, 98}]"),
+    ("Module[{obj = IncrementalObject[\"FoldList\"][Plus, 0, Range[10]]}, Table[NextValue[obj], 11]]",
+     "FoldList[Plus, 0, Range[10]]"),
+    ("Module[{obj = IncrementalObject[\"FoldList\"][Plus, 0, IncrementalObject[\"Range\"][2^50]]}, Table[NextValue[obj], 6]]",
+     "{0, 1, 3, 6, 10, 15}"),
+    ("Module[{obj = IncrementalObject[\"Range\"][2^20], obj1}, NextValue[obj]; obj1 = IncrementalObject[\"Select\"][obj, PrimeQ]; "
+     "{Table[NextValue[obj1], 10], NextValue[obj]}]", "{{2, 3, 5, 7, 11, 13, 17, 19, 23, 29}, 30}"),
+    ("Module[{fib = IncrementalFunction[Function[{}, Module[{a = 0, b = 1}, While[True, IncrementalYield[a]; {a, b} = {b, a + b}]]]]}, "
+     "Table[NextValue[IncrementalObject[\"Select\"][fib[], EvenQ]], 1]]", "{0}"),
+    ("Module[{fib = IncrementalFunction[Function[{}, Module[{a = 0, b = 1}, While[True, IncrementalYield[a]; {a, b} = {b, a + b}]]]], o}, "
+     "o = IncrementalObject[\"Select\"][fib[], EvenQ]; Table[NextValue[o], 8]]",
+     "Select[Fibonacci[Range[0, 30]], EvenQ][[;; 8]]"),
+    ("Module[{fib = IncrementalFunction[Function[{}, Module[{a = 0, b = 1}, While[True, IncrementalYield[a]; {a, b} = {b, a + b}]]]], ds}, "
+     "ds = fib[]; Table[NextValue[ds], 10]]", "Fibonacci[Range[0, 9]]"),
+    ("Module[{obj = IncrementalObject[\"Map\"][First, IncrementalObject[\"FoldList\"][Function[{p}, {p[[2]], p[[1]] + p[[2]]}], "
+     "{0, 1}, IncrementalObject[\"Range\"][10^6]]]}, Do[NextValue[obj], {1000}]; NextValue[obj]]", "Fibonacci[1000]"),
+    ("Module[{obj = IncrementalObject[\"Subsets\"][{a, b, c}]}, Table[NextValue[obj], 8]]", "Subsets[{a, b, c}]"),
+    ("Module[{obj = IncrementalObject[\"Tuples\"][{0, 1}, 3]}, Table[NextValue[obj], 8]]", "Tuples[{0, 1}, 3]"),
+    ("Module[{obj = IncrementalObject[\"Tuples\"][{{a, b}, {1, 2, 3}}]}, Table[NextValue[obj], 6]]", "Tuples[{{a, b}, {1, 2, 3}}]"),
+    ("Module[{obj = IncrementalObject[\"Take\"][{a, b, c}, 2]}, {NextValue[obj], NextValue[obj], Head[NextValue[obj]]}]",
+     "{a, b, Failure}"),
+    ("Module[{obj = IncrementalObject[\"Map\"][f, {1, 2}]}, {NextValue[obj], NextValue[obj]}]", "{f[1], f[2]}"),
+    ("Module[{obj = IncrementalObject[\"Range\"][1, 2, 1/2]}, Table[NextValue[obj], 3]]", "{1, 3/2, 2}"),
+    ("Module[{obj = IncrementalObject[\"Identity\"][f[x, y]]}, {NextValue[obj], NextValue[obj]}]", "{x, y}"),
+    ("IncrementalObject[\"Identity\"]", "IncrementalObject[\"Identity\"]"),
+    ("IncrementalObject[\"NoSuchName\"]", Raises()),
+    ("IncrementalObject[\"Take\"][{1, 2}]", Raises()),
+    ("NextValue[{1, 2}]", Raises()),
+    ("NextValue[x]", "NextValue[x]"),
+]
+
+_G1 = ("TreeGame[{\"A\", {\"B\", {\"C\", {1, 2, 3} -> \"C1\", {5, 5, 1} -> \"C2\"} -> \"B1\", {1, 3, 2} -> \"B2\"} -> \"A1\", "
+       "{2, 5, 5} -> \"A2\"}]")
+_G2 = "TreeGame[{\"A\", {\"B\", {1, 1}, {2, 2}}, {\"B\", {3, 3}, {4, 4}}}]"
+_G3 = "TreeGame[{\"A\", {\"B\", {0, 1}, {1, 2}} -> 0.3, {\"B\", {3, 4}, {5, 4}} -> 0.7}]"
+TREE_GAMES = [
+    # TreeGamePayoff reference examples
+    (f"TreeGamePayoff[{_G1}, <|\"A\" -> <|{{}} -> {{1/2, 1/2}}|>, \"B\" -> <|{{1}} -> {{0, 1}}|>, \"C\" -> <|{{1, 1}} -> {{1, 0}}|>|>]",
+     "{3/2, 4, 7/2}"),
+    (f"TreeGamePayoff[{_G2}, <|\"A\" -> <|{{}} -> {{1, 0}}|>, \"B\" -> <|{{1}} -> {{0, 1}}, {{2}} -> {{0, 1}}|>|>]", "{2, 2}"),
+    (f"TreeGamePayoff[{_G3}, <|\"A\" -> <||>, \"B\" -> <|{{1}} -> {{0, 1}}, {{2}} -> {{0, 1}}|>|>]", "{3.8, 3.4}"),
+    # derived: uniform random play; node-keyed strategies; Tree notation
+    (f"TreeGamePayoff[{_G2}, <||>, \"RandomExpectation\"]", "{5/2, 5/2}"),
+    (f"TreeGamePayoff[{_G2}, <|{{}} -> {{0, 1}}|>, \"RandomExpectation\"]", "{7/2, 7/2}"),
+    (f"Max[Abs[TreeGamePayoff[{_G3}, <||>, \"RandomExpectation\"] - {{2.95, 3.25}}]] < 10^-12", "True"),
+    (f"TreeGamePayoff[{_G1}, <|{{}} -> {{0, 1}}|>]", "{2, 5, 5}"),
+    ("TreeGamePayoff[TreeGame[Tree[<|\"Player\" -> \"A\"|>, {Tree[<|\"Payoffs\" -> {1, 0}, \"Label\" -> \"L\"|>, {}], "
+     "Tree[<|\"Payoffs\" -> {0, 1}|>, {}]}]], <|{} -> {1/4, 3/4}|>]", "{1/4, 3/4}"),
+    ("TreeGamePayoff[TreeGame[{\"A\" -> \"i1\", {\"B\" -> \"j\", {1, 0}, {0, 1}}, {\"B\" -> \"j\", {2, 2}, {0, 0}}}], "
+     "<|{} -> {1/2, 1/2}, {1} -> {1, 0}, {2} -> {1, 0}|>]", "{3/2, 1}"),
+    (_G2, _G2),
+    (f"Head[{_G1}]", "TreeGame"),
+    ("TreeGame[{\"A\", {1, 1}, {2}}]", Raises()),
+    ("TreeGame[{\"A\", {1, 1} -> 0.5, {2, 2}}]", Raises()),
+    ("TreeGame[{\"A\", {1, 1} -> 1/2, {2, 2} -> 1/3}]", Raises()),
+    ("TreeGame[{1, 2, 3}]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <||>]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <|{{}} -> {{1, 0, 0}}|>, \"RandomExpectation\"]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <|{{}} -> {{1, 1}}|>, \"RandomExpectation\"]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <|{{5}} -> {{1, 0}}|>, \"RandomExpectation\"]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <||>, \"Perfect\"]", Raises()),
+]
+
 CASES = (PATTERNS + ORDER + FUNCTIONAL + SUBSETS + ARRAYS + NEAREST + NUMERIC_ARRAY + SYMMETRIZED + DATA_STRUCTURES
-         + TREES + TREE_OPTIONS)
+         + TREES + TREE_OPTIONS + OPTION_SYMBOLS + FORM_SPECS + RESAMPLE + INCREMENTAL + TREE_GAMES)
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
