@@ -2306,23 +2306,53 @@ fn("UnilateralConvolve", area=AREA, status="added",
          "tests.")(_unilateral_conv)
 
 
-def _mellin_conv(f: Expr, g: Expr, x: Symbol, y: Symbol) -> Expr:
+def _mellin_conv(f: Expr, g: Expr, x: Var, y: Var | Real) -> Expr:
     fname = "MellinConvolve"
-    xn, yn = _sym_var(x, fname), _sym_var(y, fname)
+    if not isinstance(y, Symbol) and not is_list(y):
+        # numeric y (Wolfram: MellinConvolve[f, g, x, 1]): the closed form at that point
+        yv = _sym_expr(y, fname)
+        if _is_symbolic(yv):
+            raise Unevaluated()
+        if not (yv.is_real and yv > 0):
+            raise ValueError(f"{fname}: the parameter y must be positive, not {y!r}")
+        yy = sp.Dummy("mellin_y", positive=True)
+        r = _mellin_closed(f, g, x, yy, fname)
+        out = r.subs(yy, yv)
+        return R(sp.N(out, 15) if yv.has(sp.Float) else sp.simplify(out))
+    yn = _sym_var(y, fname)
+    ys = sp.Symbol(yn, positive=True)
+    return R(_back_steps(_mellin_closed(f, g, x, ys, fname)).subs(ys, sp.Symbol(yn)))
+
+
+def _mellin_closed(f, g, x, ys, fname):
+    """Closed form (SymPy, in the positive symbol ys) of the Mellin convolution, verified numerically; the
+    convolution is commutative, so the swapped integral is tried when SymPy finds no closed form."""
+    try:
+        return _mellin_closed1(f, g, x, ys, fname)
+    except Unevaluated:
+        return _mellin_closed1(g, f, x, ys, fname)
+
+
+def _mellin_closed1(f, g, x, ys, fname):
+    xn = _sym_var(x, fname)
     fe, ge = _sym_expr(f, fname), _sym_expr(g, fname)
     u = sp.Dummy("u", positive=True)
-    ys = sp.Symbol(yn, positive=True)
     X = sp.Symbol(xn)
-    integrand = _cont_steps(fe.subs(X, u) * ge.subs(X, ys / u).subs(sp.Symbol(yn), ys) / u)
+    integrand = _cont_steps(fe.subs(X, u) * ge.subs(X, ys / u).subs(sp.Symbol(ys.name), ys) / u)
     if integrand.has(sp.DiracDelta):
         raise NotImplementedError(f"{fname}: DiracDelta inputs are not supported")
+    def _bad(v):
+        return v is None or v.has(sp.meijerg) or v.has(sp.Integral) or v.has(sp.oo) or v.has(sp.nan) or v.has(sp.zoo)
+    # step functions: integrate the Piecewise form, where SymPy handles the moving bounds (the Heaviside form
+    # can make SymPy's integrator run indefinitely)
+    target = sp.piecewise_fold(integrand.rewrite(sp.Piecewise)) if integrand.has(sp.Heaviside) else integrand
     try:
-        r = _strip_conds(sp.integrate(integrand, (u, 0, sp.oo)))
+        r = _strip_conds(sp.integrate(target, (u, 0, sp.oo)))
     except Exception:
-        raise Unevaluated() from None
-    if r.has(sp.meijerg) or r.has(sp.Integral) or r.has(sp.oo) or r.has(sp.nan) or r.has(sp.zoo):
+        r = None
+    if _bad(r):
         raise Unevaluated()
-    r = sp.simplify(r)
+    r = sp.simplify(r.replace(sp.exp_polar, sp.exp))  # principal branch; the numeric check below guards it
     if not (integrand.free_symbols - {u, ys}) and not _has_unknown(integrand):
         for yv in (0.3, 1.7):
             ex = complex(sp.N(r.subs(ys, yv)))
@@ -2330,7 +2360,7 @@ def _mellin_conv(f: Expr, g: Expr, x: Symbol, y: Symbol) -> Expr:
             pts = [p for p in _breaks(_back_steps(e_), u) if p > 0]
             _check_quad(fname, sp.lambdify([u], _piecewise_steps(_back_steps(e_)), modules="mpmath"),
                         0, mpmath.inf, ex, pts)
-    return R(_back_steps(r).subs(ys, sp.Symbol(yn)))
+    return r
 
 
 fn("MellinConvolve", area=AREA, status="added",
