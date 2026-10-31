@@ -1741,7 +1741,7 @@ def _period(f, n):
             p = sp.ilcm(p, 2 * sp.Rational(c).q)
     for a in f.atoms(sp.sin, sp.cos, sp.tan, sp.exp):
         arg = a.args[0] if not isinstance(a, sp.exp) else a.args[0] / sp.I
-        if not arg.has(n):
+        if not arg.has(n) or _arg_settles(arg, n):
             continue
         if not arg.is_polynomial(n) or sp.degree(arg, n) != 1:
             return None
@@ -1766,10 +1766,21 @@ def _osc_atom(a, n):
     if isinstance(a, sp.Pow):
         return a.base == -1 and a.exp.has(n)
     if isinstance(a, (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)):
-        return a.args[0].has(n)
+        return a.args[0].has(n) and not _arg_settles(a.args[0], n)
     if isinstance(a, sp.exp):
-        return a.args[0].has(n) and (a.args[0] / sp.I).is_real is True
+        return a.args[0].has(n) and (a.args[0] / sp.I).is_real is True and not _arg_settles(a.args[0] / sp.I, n)
     return False
+
+
+def _arg_settles(e, n):
+    """True when e(n) tends to a finite limit (so a trig function of it does not oscillate), e.g. 1/n."""
+    if e.is_polynomial(n):
+        return False
+    try:
+        v = sp.limit(e, n, sp.oo)
+    except Exception:
+        return False
+    return v.is_finite is True
 
 
 def _disc_limits(f, n):
