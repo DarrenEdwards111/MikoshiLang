@@ -4511,7 +4511,7 @@ def _nc_interreduce(ctx, G):
     return sorted(G, key=lambda p: ctx.key(ctx.lead(p)[0]))
 
 
-def _nc_setup(args, fname, need_vars=False):
+def _nc_setup(args, fname, need_vars=False, var_pos=1):
     """-> (exprs, ctx, extra args) for f[expr(s), vars?, alg?, ...]."""
     args = list(args)
     alg_e = None
@@ -4523,8 +4523,8 @@ def _nc_setup(args, fname, need_vars=False):
     blocks_ml = None
     if alg.gens is not None:
         blocks_ml = alg.gens
-    if len(args) >= 2 and is_list(args[1]):
-        v = args[1]
+    if len(args) >= var_pos + 1 and is_list(args[var_pos]):
+        v = args[var_pos]
         if all(is_list(b) for b in v.args):
             blocks_ml = [list(b.args) for b in v.args]
         else:
@@ -4738,8 +4738,8 @@ def _ncml(*args):
     return L(*(ev(ctx.term(w, p[w])) for w in ws))
 
 
-def _nc_basis_args(args, fname):
-    args, alg, ctx, blocks = _nc_setup(args, fname)
+def _nc_basis_args(args, fname, var_pos=1):
+    args, alg, ctx, blocks = _nc_setup(args, fname, var_pos=var_pos)
     side = None
     if args and isinstance(args[-1], Symbol) and args[-1].name in ("Left", "Right"):
         side = args.pop().name
@@ -4770,7 +4770,7 @@ def _ncgb(*args):
 
 
 def _nc_reduce_main(args, fname):
-    args, alg, ctx, blocks, side = _nc_basis_args(args, fname)
+    args, alg, ctx, blocks, side = _nc_basis_args(args, fname, var_pos=2)
     if side is not None:
         raise NotImplementedError(f"{fname}: one-sided reduction is not supported")
     if len(args) < 2 or not is_list(args[1]):
