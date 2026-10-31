@@ -4618,6 +4618,8 @@ def _clifford(spec, *rest):
     for b, val in zip(spec.args, (1, -1, 0)):
         sq += [(g, val) for g in b.args]
     gens = [g for g, _ in sq]
+    if any(K.is_number(g) or isinstance(g, (str, bool)) for g in gens) or len({repr(g) for g in gens}) < len(gens):
+        raise ValueError(f"{fname}: the generators must be distinct symbols or expressions, not numbers")
     rels = [ev(Expr("Plus", _m(mult, g, g), -v)) if v else _m(mult, g, g) for g, v in sq]
     for i, j in itertools.combinations(range(len(gens)), 2):
         rels.append(Expr("Plus", _m(mult, gens[j], gens[i]), _m(mult, gens[i], gens[j])))
@@ -4632,7 +4634,8 @@ def _grassmann(gens, *rest):
     if not is_list(gens):
         raise ValueError(f"{fname}: expected a list of generators")
     mult, extra = _alg_opts(rest, fname)
-    if not any(_is_head(r, "Rule") and r.args[0] == "Multiplication" for r in rest):
+    if not any(k == "Multiplication" for r in rest
+               for k, _ in (_assoc_items(r) or ([(r.args[0], r.args[1])] if _is_head(r, "Rule") else []))):
         mult = Symbol("Wedge")
     g = list(gens.args)
     rels = [_m(mult, a, a) for a in g]
