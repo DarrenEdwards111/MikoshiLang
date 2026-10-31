@@ -17,7 +17,7 @@ MODULES = ["test_elementary", "test_special", "test_numbertheory", "test_combina
            "test_calculus", "test_linalg", "test_lists_strings", "test_statistics", "test_applied",
            "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes",
            "test_wolfram_batch1", "test_wolfram_batch2", "test_wolfram_batch3", "test_wolfram_batch4", "test_wolfram_batch5", "test_wolfram_batch6", "test_wolfram_w01", "test_wolfram_w02", "test_wolfram_w03", "test_wolfram_w04",
-           "test_wolfram_w05", "test_wolfram_w06"]
+           "test_wolfram_w05", "test_wolfram_w06", "test_wolfram_w08"]
 IDENT = re.compile(r"(?<![A-Za-z0-9\"$])(\$?[A-Z][A-Za-z0-9]*)")
 
 used = collections.Counter()

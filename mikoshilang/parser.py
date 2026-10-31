@@ -55,6 +55,7 @@ _TOKEN_SPEC = [
     ("APPLY", r'@@'),
     ("AT",        r'@'),
     ("TWOWAYRULE", r'<->'),
+    ("VECTOROP",  r'\\\[Vector(?:LessEqual|GreaterEqual|Less|Greater)\]'),
     ("NAMEDOP",   r'\\\[(?:DirectedEdge|UndirectedEdge|Distributed|TwoWayRule)\]'),
     ("RULE",      r'->'),
     ("REPLACEREPEATED", r'//\.'),
@@ -454,8 +455,19 @@ class Parser:
     def parse_comparison(self) -> Any:
         expr = self.parse_span()
         comparisons = []
-        while self.peek() is not None and self.peek().type in self._COMP_OPS:
-            op = self._COMP_OPS[self.advance().type]
+        while self.peek() is not None and (self.peek().type in self._COMP_OPS or self.peek().type == "VECTOROP"):
+            tok = self.advance()
+            if tok.type == "VECTOROP":                    # x \[VectorLess] y  ->  VectorLess[{x, y}]
+                op = tok.value[2:-1]
+                rhs = self.parse_span()
+                last = comparisons[-1] if comparisons else None
+                if last is not None and last.head == op and last.args[0].args[-1] is expr:
+                    comparisons[-1] = Expr(op, Expr("List", *last.args[0].args, rhs))
+                else:
+                    comparisons.append(Expr(op, Expr("List", expr, rhs)))
+                expr = rhs
+                continue
+            op = self._COMP_OPS[tok.type]
             rhs = self.parse_span()
             comparisons.append(Expr(op, expr, rhs))
             expr = rhs
