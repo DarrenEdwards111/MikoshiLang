@@ -1597,3 +1597,704 @@ for _name, _kind, _resp, _norm in (
         ("DifferentiatorFilter", "Differentiator", "differentiator (iω for |ω| < ωc)", ""),
         ("HilbertFilter", "Hilbert", "Hilbert (-i sgn ω for |ω| < ωc)", "")):
     fn(_name, area=AREA, status="added", notes=_FILTER_NOTE.format(kind=_resp, norm=_norm))(_filter_impl(_name, _kind))
+
+
+# ═══════════════════════════════════════════════════════════════ peaks ══
+def _find_peaks(x: ListOf[Real], *rest: Expr) -> MatrixOf[Real]:
+    fname = "FindPeaks"
+    pos, opts = _opts(rest, {"InterpolationOrder", "Padding"}, fname)
+    if not is_list(x):
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of real numbers, not {x!r}")
+    items = list(x.args)
+    if any(is_list(v) for v in items):
+        raise NotImplementedError(f"{fname}: lists of {{x, y}} pairs and arrays are not supported")
+    if len(pos) > 3:
+        raise TypeError(f"{fname}: called with {len(pos) + 1} positional arguments; 1 to 4 are expected")
+    sigma = pos[0] if pos else Symbol("Automatic")
+    sharp = pos[1] if len(pos) > 1 else Symbol("Automatic")
+    thr = pos[2] if len(pos) > 2 else Symbol("Automatic")
+    auto = lambda v: isinstance(v, Symbol) and v.name == "Automatic"
+    if auto(sigma) or not (K.is_int(sigma) or isinstance(sigma, float)) or sigma != 0:
+        if isinstance(sigma, Symbol) and not auto(sigma):
+            raise Unevaluated()
+        raise NotImplementedError(f"{fname}: only the blur scale σ = 0 (plain local maxima) is supported; the "
+                                  "automatic and positive-σ Gaussian-blur peak criteria are not documented")
+    if not (auto(sharp) or ((K.is_int(sharp) or isinstance(sharp, float)) and sharp == 0)):
+        raise NotImplementedError(f"{fname}: only sharpness s = 0 is supported (the sharpness measure for "
+                                  "plateaus is not documented)")
+    t = None
+    if not auto(thr):
+        if is_list(thr):
+            raise NotImplementedError(f"{fname}: the threshold form {{t, ...}} is not supported")
+        if isinstance(thr, (str, bool)):
+            raise TypeError(f"{fname}: the threshold must be a real number, not {thr!r}")
+        t = S(thr) if not isinstance(thr, (int, float)) else sp.sympify(thr)
+        if _is_symbolic(t):
+            raise Unevaluated()
+        if not (t.is_number and t.is_real):
+            raise TypeError(f"{fname}: the threshold must be a real number, not {thr!r}")
+    io = opts.get("InterpolationOrder")
+    if io is not None and not (auto(io) or (K.is_int(io) and io == 0)):
+        raise NotImplementedError(f"{fname}: InterpolationOrder other than 0 (refined peak positions) is not "
+                                  "supported")
+    pad = opts.get("Padding", "Reflected")
+    vals = []
+    for v in items:
+        s = _elem(v, fname)
+        if not s.is_real:
+            raise TypeError(f"{fname}: elements must be real numbers, not {v!r}")
+        vals.append(s)
+    n = len(vals)
+    if n == 0:
+        return L()
+    if isinstance(pad, str) and pad == "Reflected":
+        left = vals[1] if n > 1 else None
+        right = vals[-2] if n > 1 else None
+    elif isinstance(pad, (int, float)) and not isinstance(pad, bool) or (
+            isinstance(pad, Expr) and not is_list(pad) and isinstance(S(pad), sp.Basic) and S(pad).is_real):
+        left = right = S(pad) if not isinstance(pad, (int, float)) else sp.sympify(pad)
+    else:
+        raise NotImplementedError(f"{fname}: Padding {pad!r} is not supported (use \"Reflected\" or a number)")
+    peaks = []
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and vals[j + 1] == vals[i]:
+            j += 1
+        lv = vals[i - 1] if i > 0 else left
+        rv = vals[j + 1] if j + 1 < n else right
+        is_peak = (lv is None or lv < vals[i]) and (rv is None or rv < vals[i])
+        if is_peak and t is not None and vals[i] < t:
+            is_peak = False
+        if is_peak:
+            if i == 0 or j == n - 1:
+                raise NotImplementedError(f"{fname}: a peak at the end of the list is not supported (Wolfram's "
+                                          "position convention for boundary peaks is not documented)")
+            if t is not None and vals[i] == t:
+                raise NotImplementedError(f"{fname}: a peak value equal to the threshold is ambiguous")
+            if t is None or vals[i] > t:
+                peaks.append(L(sp.Rational(i + j + 2, 2) if (i + j) % 2 else (i + j) // 2 + 1, items[i]))
+        i = j + 1
+    return L(*[L(R(p.args[0]) if isinstance(p.args[0], sp.Basic) else p.args[0], p.args[1]) for p in peaks])
+
+
+fn("FindPeaks", area=AREA, status="added",
+   notes="FindPeaks[list, 0], FindPeaks[list, 0, 0, t]: interior local maxima {position, value} of a real list "
+         "(a plateau gives its centre position, possibly a half-integer), Reflected or constant Padding, "
+         "threshold t keeps peaks above t; automatic/positive blur σ, sharpness s > 0, InterpolationOrder and "
+         "peaks at the list ends raise NotImplementedError (undocumented criteria/conventions). Check: exact "
+         "comparison; reference (Wolfram documentation examples) in tests.")(_find_peaks)
+
+
+# ═══════════════════════════════════════════════ symbolic transforms and convolutions ══
+from sympy.core.function import AppliedUndef as _AppliedUndef  # noqa: E402
+
+_US, _UB, _DD, _UT = (sp.Function(_n) for _n in ("UnitStep", "UnitBox", "DiscreteDelta", "UnitTriangle"))
+_STEPS = (_US, _UB, _DD, _UT)
+
+
+class _Fail(Exception):
+    """Internal: the closed form could not be found (the call stays unevaluated)."""
+
+
+def _sym_var(v, fname, what="variable"):
+    if isinstance(v, Symbol):
+        return v.name
+    if is_list(v):
+        raise NotImplementedError(f"{fname}: multivariate transforms are not supported")
+    raise TypeError(f"{fname}: the {what} must be a symbol, not {v!r}")
+
+
+def _sym_expr(e, fname):
+    if isinstance(e, (str, bool)) or is_list(e):
+        raise TypeError(f"{fname}: the function must be a mathematical expression, not {e!r}")
+    try:
+        return sp.sympify(S(e))
+    except Exception:
+        raise TypeError(f"{fname}: cannot interpret {e!r} as a mathematical expression") from None
+
+
+def _is_step(f):
+    return isinstance(f, sp.KroneckerDelta) or (isinstance(f, _AppliedUndef) and f.func in _STEPS)
+
+
+def _lin(e, k):
+    """(a, b) with e == a k + b, a rational and b free of k; None otherwise."""
+    e = sp.expand(e)
+    if not e.has(k):
+        return sp.Integer(0), e
+    a = e.coeff(k, 1)
+    b = sp.expand(e - a * k)
+    if b.has(k) or a.has(k) or not a.is_Rational:
+        return None
+    return a, b
+
+
+def _piecewise_steps(e):
+    """Replace UnitStep/UnitBox/DiscreteDelta/UnitTriangle/KroneckerDelta by Piecewise (for numerics)."""
+    e = e.replace(_US, lambda x: sp.Piecewise((1, x >= 0), (0, True)))
+    e = e.replace(_UB, lambda x: sp.Piecewise((1, sp.Abs(x) <= sp.Rational(1, 2)), (0, True)))
+    e = e.replace(_DD, lambda x: sp.Piecewise((1, sp.Eq(x, 0)), (0, True)))
+    e = e.replace(_UT, lambda x: sp.Piecewise((1 - sp.Abs(x), sp.Abs(x) <= 1), (0, True)))
+    e = e.replace(sp.KroneckerDelta, lambda a, b: sp.Piecewise((1, sp.Eq(a, b)), (0, True)))
+    return e
+
+
+def _geometric(expr, k, lo, hi, conds):
+    """Closed form of a geometric series Σ_{k=lo}^{hi} expr (ratio free of k); None if not geometric."""
+    if not expr.has(k):
+        return None
+    q = sp.simplify(sp.powsimp(sp.expand_power_exp(expr.subs(k, k + 1) / expr), force=True))
+    if q.has(k) or q == 1 or q == 0:
+        return None
+    if lo is -sp.oo and hi is sp.oo:
+        return None
+    if hi is sp.oo:
+        conds.append(sp.Abs(q) < 1)
+        return expr.subs(k, lo) / (1 - q)
+    if lo is -sp.oo:
+        conds.append(sp.Abs(1 / q) < 1)
+        return expr.subs(k, hi) / (1 - 1 / q)
+    return expr.subs(k, lo) * (1 - q ** (hi - lo + 1)) / (1 - q)
+
+
+def _sum1(expr, k, lo, hi, conds):
+    g = _geometric(expr, k, lo, hi, conds)
+    if g is not None:
+        return g
+    r = sp.piecewise_fold(sp.summation(sp.powsimp(expr, force=True), (k, lo, hi)))
+    if isinstance(r, sp.Piecewise):
+        branches = [(v, c) for v, c in r.args if not v.has(sp.Sum)]
+        if len(branches) == 1 and len(r.args) == 2 and r.args[-1][0].has(sp.Sum):
+            r = branches[0][0]
+            conds.append(branches[0][1])
+    if r.has(sp.Sum) or r.has(sp.zoo) or r.has(sp.nan) or r.has(sp.oo) or r.has(-sp.oo) or r.has(sp.lerchphi):
+        raise _Fail()
+    return r
+
+
+def _term_sum(term, k, conds):
+    """Σ_k term over all integers, for a product term whose step factors are linear in k."""
+    lowers, uppers, rest, delta = [], [], [], None
+    for f in sp.Mul.make_args(term):
+        base, ex = f.as_base_exp()
+        if _is_step(base) and base.has(k):
+            if not (ex.is_Integer and ex > 0):
+                raise _Fail()
+            if isinstance(base, sp.KroneckerDelta):
+                arg, fn_ = base.args[1] - base.args[0], _DD
+            else:
+                arg, fn_ = base.args[0], base.func
+            lab = _lin(arg, k)
+            if lab is None or lab[0] == 0:
+                raise _Fail()
+            a, b = lab
+            if fn_ is _US:
+                (lowers if a > 0 else uppers).append(sp.ceiling(-b / a) if a > 0 else sp.floor(-b / a))
+            elif fn_ is _UB:
+                lo_, hi_ = (-sp.Rational(1, 2) - b) / a, (sp.Rational(1, 2) - b) / a
+                if a < 0:
+                    lo_, hi_ = hi_, lo_
+                lowers.append(sp.ceiling(lo_))
+                uppers.append(sp.floor(hi_))
+            elif fn_ is _DD:
+                if abs(a) != 1 or delta is not None:
+                    raise _Fail()
+                delta = -b / a
+            else:
+                raise _Fail()
+        elif f.has(k) and any(f.has(s) for s in _STEPS + (sp.KroneckerDelta,)):
+            raise _Fail()
+        else:
+            rest.append(f)
+    rest = sp.Mul(*rest)
+    if delta is not None:
+        others = sp.Mul(*[f for f in sp.Mul.make_args(term) if not (_is_step(f.as_base_exp()[0])
+                                                                    and f.as_base_exp()[0].has(k)
+                                                                    and (isinstance(f.as_base_exp()[0],
+                                                                                    sp.KroneckerDelta)
+                                                                         or f.as_base_exp()[0].func is _DD))])
+        return others.subs(k, delta)
+    bsyms = set()
+    for b in lowers + uppers:
+        bsyms |= b.free_symbols
+    if not bsyms:
+        lo = max(lowers) if lowers else -sp.oo
+        hi = min(uppers) if uppers else sp.oo
+        if lo > hi:
+            return sp.Integer(0)
+        return _sum1(rest, k, lo, hi, conds)
+    if len(bsyms) == 1:
+        p = next(iter(bsyms))
+        lin = [_lin(b, p) for b in lowers + uppers]
+        if p.is_integer and all(l is not None and l[0].is_Integer and not l[1].free_symbols for l in lin):
+            return _regions(rest, k, p, lowers, uppers, conds)
+    if len(lowers) <= 1 and len(uppers) <= 1:
+        lo = lowers[0] if lowers else -sp.oo
+        hi = uppers[0] if uppers else sp.oo
+        v = _sum1(rest, k, lo, hi, conds)
+        if lowers and uppers:
+            return sp.Piecewise((v, sp.Ge(hi - lo, 0)), (0, True))
+        return v
+    raise _Fail()
+
+
+def _regions(rest, k, p, lowers, uppers, conds):
+    """Piecewise in the integer parameter p of Σ_{k = max(lowers)}^{min(uppers)} rest."""
+    bounds = lowers + uppers
+    cuts = set()
+    for i in range(len(bounds)):
+        for j in range(i + 1, len(bounds)):
+            (a1, b1), (a2, b2) = _lin(bounds[i], p), _lin(bounds[j], p)
+            if a1 != a2:
+                x = (b2 - b1) / (a1 - a2)
+                cuts |= {int(sp.floor(x)), int(sp.ceiling(x))}
+    cuts = sorted(cuts)
+    if not cuts:
+        regions = [(None, None, 0)]
+    else:
+        regions = [(None, cuts[0] - 1, cuts[0] - 1)]
+        for i, c in enumerate(cuts):
+            regions.append((c, c, c))
+            if i + 1 < len(cuts) and cuts[i + 1] - c > 1:
+                regions.append((c + 1, cuts[i + 1] - 1, c + 1))
+        regions.append((cuts[-1] + 1, None, cuts[-1] + 1))
+    cache = {}
+    vals = []
+    for a, b, rep in regions:
+        lo = max(lowers, key=lambda e: e.subs(p, rep)) if lowers else -sp.oo
+        hi = min(uppers, key=lambda e: e.subs(p, rep)) if uppers else sp.oo
+        if lowers and uppers and (hi - lo).subs(p, rep) < 0:
+            v = sp.Integer(0)
+        else:
+            if (lo, hi) not in cache:
+                cache[(lo, hi)] = _sum1(rest, k, lo, hi, conds)
+            v = cache[(lo, hi)]
+        if vals and sp.simplify(vals[-1][2] - v) == 0 and vals[-1][1] is not None and a is not None \
+                and vals[-1][1] + 1 == a:
+            vals[-1] = (vals[-1][0], b, vals[-1][2])
+        else:
+            vals.append((a, b, v))
+    pieces = []
+    for a, b, v in vals:
+        if v == 0:
+            continue
+        c = sp.true
+        if a is not None and b is not None and a == b:
+            c = sp.Eq(p, a)
+        else:
+            if a is not None:
+                c = c & sp.Ge(p, a)
+            if b is not None:
+                c = c & sp.Le(p, b)
+        pieces.append((sp.simplify(v), c))
+    if not pieces:
+        return sp.Integer(0)
+    if len(pieces) == 1 and pieces[0][1] is sp.true:
+        return pieces[0][0]
+    return sp.Piecewise(*pieces, (0, True))
+
+
+def _dsum(expr, k):
+    """Σ_{k ∈ ℤ} expr in closed form, with the convergence conditions sympy reported; raises _Fail."""
+    conds = []
+    expr = expr.replace(lambda e: isinstance(e, (sp.sin, sp.cos, sp.sinh, sp.cosh)) and e.has(k),
+                        lambda e: e.rewrite(sp.exp))
+    expr = sp.expand(expr, power_base=False, power_exp=False, log=False, multinomial=False)
+    total = sp.piecewise_fold(sp.Add(*[_term_sum(t, k, conds) for t in sp.Add.make_args(expr)]))
+    if isinstance(total, sp.Piecewise):
+        total = sp.Piecewise(*[(_tidy(v), c) for v, c in total.args])
+    else:
+        total = _tidy(total)
+    return total, conds
+
+
+def _has_unknown(e):
+    return any(isinstance(f, _AppliedUndef) and f.func not in _STEPS for f in sp.preorder_traversal(e))
+
+
+def _tidy(v):
+    """Simplify a closed form; complex exponentials from trig rewriting go back to real form when possible."""
+    if v.has(sp.I):
+        w = sp.simplify(sp.expand_complex(v)) if not v.free_symbols - {s for s in v.free_symbols if s.is_real} else None
+        if w is not None and not w.has(sp.I) and sp.count_ops(w) <= 2 * sp.count_ops(v) + 10:
+            return sp.simplify(w)
+    return sp.simplify(v)
+
+
+def _series_value(term, lo=None, hi=None):
+    """Σ term(k) for k in [lo, hi] (None = infinite side) by direct truncated summation; None if the
+    truncation has not converged (|S_800 - S_400| too large) or a term is not finite."""
+    def side(start, step):
+        acc, s400 = mpmath.mpc(0), None
+        for i in range(800):
+            acc += term(start + step * i)
+            if i == 399:
+                s400 = acc
+        return acc, s400
+    with mpmath.workdps(25):
+        total = mpmath.mpc(0)
+        if lo is not None and hi is not None:
+            for kk in range(int(lo), int(hi) + 1):
+                total += term(kk)
+            return complex(total)
+        ok = True
+        if hi is None:
+            a, a4 = side(int(lo) if lo is not None else 0, 1)
+            total += a
+            ok = ok and abs(a - a4) <= 1e-10 * (1 + abs(a))
+        if lo is None:
+            b, b4 = side(int(hi) if hi is not None else -1, -1)
+            total += b
+            ok = ok and abs(b - b4) <= 1e-10 * (1 + abs(b))
+        v = complex(total)
+        if not ok or not math.isfinite(abs(v)):
+            return None
+        return v
+
+
+def _nsum_check(fname, integrand, k, p, result, samples):
+    """Numerical cross-check of a discrete convolution at integer values of p (inconclusive sums skipped)."""
+    f = sp.lambdify([k, p], _piecewise_steps(integrand), modules="mpmath")
+    rf = sp.lambdify([p], _piecewise_steps(result), modules="mpmath")
+    for pv in samples:
+        try:
+            exact = complex(rf(pv))
+            direct = _series_value(lambda kk: f(kk, pv))
+        except (ZeroDivisionError, ValueError, TypeError, OverflowError):
+            continue
+        if direct is None or not math.isfinite(abs(exact)):
+            continue
+        if abs(direct - exact) > 1e-6 * (1 + abs(direct)):
+            raise ArithmeticError(f"{fname}: result failed verification")
+
+
+def _discrete_conv(fname, unilateral):
+    def impl(f: Expr, g: Expr, n: Symbol, m: Symbol) -> Expr:
+        nn, mm = _sym_var(n, fname), _sym_var(m, fname)
+        fe, ge = _sym_expr(f, fname), _sym_expr(g, fname)
+        ni, mi, k = sp.Symbol(nn, integer=True), sp.Symbol(mm, integer=True), sp.Dummy("k", integer=True)
+        fe = fe.subs(sp.Symbol(nn), ni)
+        ge = ge.subs(sp.Symbol(nn), ni)
+        integrand = fe.subs(ni, k) * ge.subs(ni, mi - k).subs(sp.Symbol(mm), mi)
+        integrand = integrand.subs(sp.Symbol(mm), mi)
+        if unilateral:
+            integrand = integrand * _US(k) * _US(mi - k)
+        try:
+            res, conds = _dsum(integrand, k)
+        except _Fail:
+            raise Unevaluated() from None
+        if any(c is not sp.true for c in conds):
+            raise Unevaluated()
+        others = integrand.free_symbols - {k, mi}
+        if not others and not _has_unknown(integrand):
+            _nsum_check(fname, integrand, k, mi, res, (0, 1, 2, 3, -1, -4, 5)[:5 if unilateral else 7])
+        res = res.subs(mi, sp.Symbol(mm)).subs(ni, sp.Symbol(nn))
+        return R(res)
+    return impl
+
+
+fn("DiscreteConvolve", area=AREA, status="added",
+   notes="DiscreteConvolve[f, g, n, m] = Σ_(k ∈ ℤ) f(k) g(m - k) in closed form: UnitStep/UnitBox/DiscreteDelta/"
+         "KroneckerDelta factors linear in k become summation bounds, giving a Piecewise in m (Piecewise "
+         "regions may be split differently from Wolfram's but agree at every integer m); stays unevaluated when "
+         "no closed form is found; multivariate forms raise NotImplementedError. Check: numeric cross-check "
+         "(the closed form is compared with the truncated defining series at sample integers m, raising "
+         "ArithmeticError on mismatch); reference (Wolfram documentation examples) in tests.")(
+    _discrete_conv("DiscreteConvolve", False))
+fn("UnilateralDiscreteConvolve", area=AREA, status="added",
+   notes="UnilateralDiscreteConvolve[f, g, n, m] = Σ_(k=0)^m f(k) g(m - k) in closed form, as a Piecewise in m "
+         "that is 0 for m < 0 (Wolfram returns the m ≥ 0 formula); stays unevaluated when no closed form is "
+         "found; multivariate forms raise NotImplementedError. Check: numeric cross-check (compared with the "
+         "direct sum at sample m, ArithmeticError on mismatch); reference (Wolfram documentation examples) in "
+         "tests.")(_discrete_conv("UnilateralDiscreteConvolve", True))
+
+
+def _abs_interval(cond, z, fname):
+    """Turn sympy convergence conditions in z into an interval (r1, r2) for |z|; None if not of that kind."""
+    rho = sp.Symbol("rho", positive=True)
+    c = cond.subs(z, rho)
+    try:
+        sol = sp.solve_univariate_inequality(c, rho, relational=False, domain=sp.Interval.open(0, sp.oo))
+    except Exception:
+        return None
+    if not isinstance(sol, sp.Interval):
+        return None
+    return sol
+
+
+def _unity(v):
+    """Rewrite roots of unity (-1)^(p/q) in a rational function into radicals and re-factor."""
+    if not v.has(sp.Pow) or not any(e.is_Pow and e.base == -1 and e.exp.is_Rational and not e.exp.is_Integer
+                                    for e in sp.preorder_traversal(v)):
+        return v
+    w = v.replace(lambda e: e.is_Pow and e.base == -1 and e.exp.is_Rational, lambda e: sp.expand_complex(e))
+    try:
+        w = sp.factor(sp.cancel(sp.expand(sp.together(w))))
+    except Exception:
+        return v
+    return w if sp.count_ops(w) <= sp.count_ops(v) + 10 else v
+
+
+def _ztransform_core(fname, fe, ni, zs):
+    """Bilateral Z transform Σ f(n) z^-n with its region of convergence as a |z| interval."""
+    k = sp.Dummy("k", integer=True)
+    term = fe.subs(ni, k)
+    region = sp.Interval.open(0, sp.oo)
+    total = sp.Integer(0)
+    for side, factor in ((1, _US(k)), (-1, _US(-k - 1))):
+        try:
+            v, conds = _dsum(term * factor * zs ** (-k), k)
+        except _Fail:
+            raise Unevaluated() from None
+        for c in conds:
+            if c is sp.true:
+                continue
+            iv = _abs_interval(c, zs, fname)
+            if iv is None:
+                raise Unevaluated()
+            region = region.intersect(iv)
+        total += v
+    if region is sp.S.EmptySet or region.measure == 0:
+        raise Unevaluated()
+    return _unity(sp.simplify(total)), region
+
+
+def _z_check(fname, fe, ni, zs, val, region):
+    lo = float(region.inf)
+    hi = float(region.sup) if region.sup is not sp.oo else lo * 4 + 4
+    r = (lo + hi) / 2 if region.sup is not sp.oo else max(2 * lo, lo + 1, 1.5)
+    zv = r * cmath.exp(0.37j)
+    k = sp.Symbol("k_", integer=True)
+    f = sp.lambdify([k], _piecewise_steps(fe.subs(ni, k)), modules="mpmath")
+    try:
+        zz = mpmath.mpc(zv)
+        direct = _series_value(lambda kk: f(kk) * zz ** (-kk))
+        exact = complex(sp.N(val.subs(zs, zv), 20))
+    except (ZeroDivisionError, ValueError, TypeError, OverflowError):
+        return
+    if direct is not None and math.isfinite(abs(exact)) and abs(direct - exact) > 1e-6 * (1 + abs(direct)):
+        raise ArithmeticError(f"{fname}: result failed verification")
+
+
+def _bilateral_z(f: Expr, n: Symbol, z: Expr) -> Expr:
+    fname = "BilateralZTransform"
+    nn = _sym_var(n, fname)
+    fe = _sym_expr(f, fname)
+    ni = sp.Symbol(nn, integer=True)
+    fe = fe.subs(sp.Symbol(nn), ni)
+    if isinstance(z, Symbol):
+        zs = sp.Symbol(z.name)
+        val, region = _ztransform_core(fname, fe, ni, zs)
+        if not (fe.free_symbols - {ni}) and not _has_unknown(fe):
+            _z_check(fname, fe, ni, zs, val, region)
+        if region.inf == 0 and region.sup is sp.oo:
+            return R(val)
+        cond = []
+        if region.inf != 0:
+            cond.append(sp.Abs(zs) > region.inf)
+        if region.sup is not sp.oo:
+            cond.append(sp.Abs(zs) < region.sup)
+        return Expr("ConditionalExpression", R(val), R(sp.And(*cond)))
+    zv = _sym_expr(z, fname)
+    if _is_symbolic(zv) or not zv.is_number:
+        raise Unevaluated()
+    zs = sp.Dummy("z")
+    val, region = _ztransform_core(fname, fe, ni, zs)
+    if not region.contains(sp.Abs(zv)):
+        raise ValueError(f"{fname}: the series does not converge at z = {z!r}")
+    out = val.subs(zs, zv)
+    if any(isinstance(a, sp.Float) for a in sp.preorder_traversal(zv)):
+        return R(sp.N(out))
+    return R(sp.simplify(out))
+
+
+fn("BilateralZTransform", area=AREA, status="added",
+   notes="BilateralZTransform[f, n, z] = Σ_(n ∈ ℤ) f(n) z^-n in closed form, returned as ConditionalExpression"
+         "[F, r1 < Abs[z] < r2] (no condition when it converges for all z ≠ 0); step/delta factors become "
+         "summation bounds; a numeric z evaluates inside the region (outside raises ValueError); stays "
+         "unevaluated when no closed form is found; multivariate forms raise NotImplementedError. Check: "
+         "numeric cross-check (the truncated series at a point of the region, ArithmeticError on "
+         "mismatch); reference (Wolfram documentation examples) in tests.")(_bilateral_z)
+
+
+def _fparams(opts, fname, default=(1, 1)):
+    v = opts.get("FourierParameters")
+    if v is None:
+        return sp.Integer(default[0]), sp.Integer(default[1])
+    if not (is_list(v) and len(v.args) == 2):
+        raise ValueError(f"{fname}: FourierParameters must be a list {{a, b}}")
+    a, b = (_sym_expr(x, fname) for x in v.args)
+    if not (a.is_number and b.is_number and a.is_real and b.is_real and b != 0):
+        raise ValueError(f"{fname}: FourierParameters must be real numbers {{a, b}} with b ≠ 0")
+    return a, b
+
+
+def _fst(f: Expr, n: Symbol, w: Expr, *rest: Option) -> Expr:
+    fname = "FourierSequenceTransform"
+    _, opts = _opts(rest, {"FourierParameters"}, fname)
+    if _:
+        raise TypeError(f"{fname}: unexpected arguments {_!r}")
+    a, b = _fparams(opts, fname)
+    nn = _sym_var(n, fname)
+    fe = _sym_expr(f, fname)
+    ni = sp.Symbol(nn, integer=True)
+    fe = fe.subs(sp.Symbol(nn), ni)
+    zs = sp.Dummy("z")
+    val, region = _ztransform_core(fname, fe, ni, zs)
+    if not region.contains(1):
+        raise Unevaluated()   # not absolutely summable: the transform is a distribution (DiracComb), not handled
+    if not (fe.free_symbols - {ni}) and not _has_unknown(fe):
+        _z_check(fname, fe, ni, zs, val, region)
+    wv = sp.Symbol(w.name, real=True) if isinstance(w, Symbol) else _sym_expr(w, fname)
+    out = sp.Abs(b / (2 * sp.pi)) ** ((1 - a) / 2) * val.subs(zs, sp.exp(sp.I * b * wv))
+    out = sp.simplify(out)
+    if isinstance(w, Symbol):
+        out = out.subs(wv, sp.Symbol(w.name))
+    elif any(isinstance(x, sp.Float) for x in sp.preorder_traversal(wv)):
+        out = sp.N(out)
+    return R(out)
+
+
+fn("FourierSequenceTransform", area=AREA, status="added",
+   notes="FourierSequenceTransform[f, n, ω] = |b/2π|^((1-a)/2) Σ_n f(n) e^(-i b n ω) (FourierParameters {a, b}, "
+         "default {1, 1}) for absolutely summable sequences, via the bilateral Z transform at z = e^(i b ω); "
+         "sequences whose Z transform region excludes |z| = 1 (transform is a DiracComb distribution) or with "
+         "no closed form stay unevaluated. Check: numeric cross-check (series vs closed form, ArithmeticError on "
+         "mismatch); reference (Wolfram documentation examples) in tests.")(_fst)
+
+
+def _num_close(a, b):
+    return math.isfinite(abs(b)) and abs(a - b) <= 1e-6 * (1 + abs(b))
+
+
+def _strip_conds(r):
+    """Drop sympy's convergence Piecewise around an integral, keeping the closed-form branch."""
+    if isinstance(r, sp.Piecewise) and len(r.args) == 2 and r.args[-1][0].has(sp.Integral) \
+            and not r.args[0][0].has(sp.Integral):
+        return r.args[0][0]
+    return r
+
+
+def _cont_steps(e):
+    """UnitStep/UnitBox/UnitTriangle -> Heaviside forms for integration (values at jumps are irrelevant)."""
+    e = e.replace(_US, lambda x: sp.Heaviside(x))
+    e = e.replace(_UB, lambda x: sp.Heaviside(x + sp.Rational(1, 2)) - sp.Heaviside(x - sp.Rational(1, 2)))
+    e = e.replace(_UT, lambda x: (1 - sp.Abs(x)) * (sp.Heaviside(x + 1) - sp.Heaviside(x - 1)))
+    return e
+
+
+def _back_steps(e):
+    return e.replace(sp.Heaviside, lambda *a: _US(a[0]))
+
+
+def _check_quad(fname, g, lo, hi, exact, points=None):
+    """Compare a closed form with mpmath.quad; inconclusive quadratures (large error estimate) are skipped."""
+    try:
+        with mpmath.workdps(20):
+            iv = [lo] + sorted(points or []) + [hi]
+            direct, err = mpmath.quad(g, iv, error=True)
+            direct, err = complex(direct), float(err)
+    except (ZeroDivisionError, ValueError, TypeError, OverflowError):
+        return
+    if not (math.isfinite(abs(direct)) and math.isfinite(abs(exact))) or err > 1e-9 * (1 + abs(direct)):
+        return
+    if not _num_close(direct, exact):
+        raise ArithmeticError(f"{fname}: result failed verification")
+
+
+def _breaks(e, x):
+    """Real points where step/abs/piecewise arguments change (for splitting numeric quadrature)."""
+    pts = set()
+    for f in sp.preorder_traversal(e):
+        if isinstance(f, sp.Piecewise):
+            args = [c.lhs - c.rhs for _, c in f.args if isinstance(c, sp.core.relational.Relational)]
+        elif _is_step(f) or isinstance(f, (sp.Heaviside, sp.Abs)):
+            a = f.args[0]
+            offs = (0,) if f.func not in (_UB, _UT) else ((-sp.Rational(1, 2), sp.Rational(1, 2))
+                                                         if f.func is _UB else (-1, 0, 1))
+            args = [a - o for o in offs]
+        else:
+            continue
+        for a in args:
+            if not a.has(x):
+                continue
+            try:
+                for r in sp.solve(sp.Eq(a, 0), x):
+                    if r.is_real and r.is_number:
+                        pts.add(float(r))
+            except Exception:
+                continue
+    return sorted(pts)
+
+
+def _unilateral_conv(f: Expr, g: Expr, t: Symbol, y: Symbol) -> Expr:
+    fname = "UnilateralConvolve"
+    tn, yn = _sym_var(t, fname), _sym_var(y, fname)
+    fe, ge = _sym_expr(f, fname), _sym_expr(g, fname)
+    tau = sp.Dummy("tau", real=True)
+    ys = sp.Symbol(yn, positive=True)
+    T = sp.Symbol(tn)
+    integrand = _cont_steps(fe.subs(T, tau) * ge.subs(T, ys - tau).subs(sp.Symbol(yn), ys))
+    if integrand.has(sp.DiracDelta):
+        raise NotImplementedError(f"{fname}: DiracDelta inputs are not supported")
+    try:
+        r = _strip_conds(sp.integrate(integrand, (tau, 0, ys)))
+    except Exception:
+        raise Unevaluated() from None
+    if r.has(sp.meijerg) or r.has(sp.Integral):
+        raise Unevaluated()
+    r = sp.simplify(r)
+    if not (integrand.free_symbols - {tau, ys}) and not _has_unknown(integrand):
+        for yv in (0.7, 1.9, 3.3):
+            ex = complex(sp.N(r.subs(ys, yv)))
+            e_ = _back_steps(integrand.subs(ys, yv))
+            pts = [p for p in _breaks(e_, tau) if 0 < p < yv]
+            _check_quad(fname, sp.lambdify([tau], _piecewise_steps(e_), modules="mpmath"), 0, yv, ex, pts)
+    return R(_back_steps(r).subs(ys, sp.Symbol(yn)))
+
+
+fn("UnilateralConvolve", area=AREA, status="added",
+   notes="UnilateralConvolve[f, g, t, y] = ∫_0^y f(t) g(y - t) dt for y > 0 in closed form (SymPy integrate; "
+         "UnitStep/UnitBox/UnitTriangle handled through Heaviside forms, results may use UnitStep instead of "
+         "Wolfram's Piecewise); DiracDelta inputs and multivariate forms raise NotImplementedError; stays "
+         "unevaluated when no closed form is found. Check: numeric cross-check (mpmath.quad of the defining "
+         "integral at sample y, ArithmeticError on mismatch); reference (Wolfram documentation examples) in "
+         "tests.")(_unilateral_conv)
+
+
+def _mellin_conv(f: Expr, g: Expr, x: Symbol, y: Symbol) -> Expr:
+    fname = "MellinConvolve"
+    xn, yn = _sym_var(x, fname), _sym_var(y, fname)
+    fe, ge = _sym_expr(f, fname), _sym_expr(g, fname)
+    u = sp.Dummy("u", positive=True)
+    ys = sp.Symbol(yn, positive=True)
+    X = sp.Symbol(xn)
+    integrand = _cont_steps(fe.subs(X, u) * ge.subs(X, ys / u).subs(sp.Symbol(yn), ys) / u)
+    if integrand.has(sp.DiracDelta):
+        raise NotImplementedError(f"{fname}: DiracDelta inputs are not supported")
+    try:
+        r = _strip_conds(sp.integrate(integrand, (u, 0, sp.oo)))
+    except Exception:
+        raise Unevaluated() from None
+    if r.has(sp.meijerg) or r.has(sp.Integral) or r.has(sp.oo) or r.has(sp.nan) or r.has(sp.zoo):
+        raise Unevaluated()
+    r = sp.simplify(r)
+    if not (integrand.free_symbols - {u, ys}) and not _has_unknown(integrand):
+        for yv in (0.3, 1.7):
+            ex = complex(sp.N(r.subs(ys, yv)))
+            e_ = integrand.subs(ys, yv)
+            pts = [p for p in _breaks(_back_steps(e_), u) if p > 0]
+            _check_quad(fname, sp.lambdify([u], _piecewise_steps(_back_steps(e_)), modules="mpmath"),
+                        0, mpmath.inf, ex, pts)
+    return R(_back_steps(r).subs(ys, sp.Symbol(yn)))
+
+
+fn("MellinConvolve", area=AREA, status="added",
+   notes="MellinConvolve[f, g, x, y] = ∫_0^∞ f(x) g(y/x) dx/x for y > 0 in closed form (SymPy integrate; step "
+         "functions through Heaviside forms); DiracDelta inputs and multivariate forms raise "
+         "NotImplementedError; stays unevaluated when no closed form is found. Check: numeric cross-check "
+         "(mpmath.quad at sample y, ArithmeticError on mismatch); reference (Wolfram documentation examples) in "
+         "tests.")(_mellin_conv)
