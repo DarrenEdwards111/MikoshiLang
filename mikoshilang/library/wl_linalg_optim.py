@@ -3442,3 +3442,639 @@ fn("GeometricOptimization", **ADDED,
    notes="GeometricOptimization[f, cons, vars] for a posynomial objective with posynomial <= monomial and monomial "
          "== monomial constraints in positive variables: solved as the convex problem in u = Log[x] (SciPy SLSQP); "
          "matrix forms are not supported" + _FAMILY_NOTE)(_family("GeometricOptimization", "geometric"))
+
+
+# ── parametric and robust convex optimisation ──
+
+@fn("ParametricConvexOptimization", **ADDED,
+    notes="ParametricConvexOptimization[f, cons, vars, pars] gives ParametricFunction[...]; applying it to "
+          "parameter values solves ConvexOptimization[f, cons, vars] with the parameters substituted (each call "
+          "re-solves the problem; Wolfram's precompiled solver data are not reproduced)" + _FAMILY_NOTE)
+def _parametricconvex(f, cons, vars_, pars, *rest):
+    args, opts = split_options(rest, _OPT_OPTS, "ParametricConvexOptimization")
+    props = args[0] if args else None
+    ps = list(pars.args) if is_list(pars) else [pars]
+    for p in ps:
+        if not isinstance(p, Symbol):
+            raise ValueError(f"ParametricConvexOptimization: {p} is not a valid parameter")
+    return Expr("ParametricFunction", "ConvexOptimization", f, cons, vars_, L(*ps),
+                props if props is not None else Symbol("Automatic"))
+
+
+_PREV_PF_HOOK = KL.COMPOUND_HEAD_HOOKS.get("ParametricFunction")
+
+
+def _parametric_call(head, args, ev_):
+    if len(head.args) == 6 and head.args[0] == "ConvexOptimization":
+        _, f, cons, vars_, pars, props = head.args
+        if len(args) != len(pars.args):
+            raise ValueError(f"ParametricFunction: expected {len(pars.args)} parameter value(s)")
+        mapping = {p: a for p, a in zip(pars.args, args)}
+        call = [_subst(f, mapping), _subst(cons, mapping), vars_]
+        if not is_sym(props, "Automatic"):
+            call.append(props)
+        return ev_(Expr("ConvexOptimization", *call))
+    if _PREV_PF_HOOK is not None:
+        return _PREV_PF_HOOK(head, args, ev_)
+    return K.UNHANDLED
+
+
+KL.COMPOUND_HEAD_HOOKS["ParametricFunction"] = _parametric_call
+
+
+def _param_box(cond, pars, fname):
+    """{par: (lo, hi)} from a conjunction of bounds on single parameters (or Interval memberships)."""
+    box = {}
+    names = {p.name for p in pars}
+
+    def walk(c):
+        if c is True:
+            return
+        if is_list(c) or (isinstance(c, Expr) and c.head == "And"):
+            for a in c.args:
+                walk(a)
+            return
+        if isinstance(c, Expr) and c.head == "Element" and isinstance(c.args[0], Symbol) and \
+                isinstance(c.args[1], Expr) and c.args[1].head == "Interval":
+            lo, hi = c.args[1].args[0].args
+            box[c.args[0].name] = (S(lo), S(hi))
+            return
+        if isinstance(c, Expr) and c.head in ("LessEqual", "Less", "GreaterEqual", "Greater") and len(c.args) == 2:
+            a, b = c.args
+            lt = c.head in ("LessEqual", "Less")
+            if isinstance(a, Symbol) and a.name in names and not (isinstance(b, Symbol) and b.name in names):
+                lo, hi = box.get(a.name, (None, None))
+                box[a.name] = (lo, S(b)) if lt else (S(b), hi)
+                return
+            if isinstance(b, Symbol) and b.name in names:
+                lo, hi = box.get(b.name, (None, None))
+                box[b.name] = (S(a), hi) if lt else (lo, S(a))
+                return
+        raise NotImplementedError(f"{fname}: only box (interval) uncertainty sets are supported, not {c}")
+    walk(cond)
+    for p in pars:
+        lo, hi = box.get(p.name, (None, None))
+        if lo is None or hi is None or not (_is_num(lo) and _is_num(hi)):
+            raise NotImplementedError(f"{fname}: the parameter {p} needs finite numeric bounds")
+    return box
+
+
+def _multiaffine(e, pars):
+    """Affine in each parameter, or (sampled) convex in the parameters jointly: either way the maximum over a box
+    is attained at a vertex."""
+    real = {s_: sp.Symbol(s_.name, real=True) for s_ in e.free_symbols}
+    e = sp.expand(e.xreplace(real))
+    pars = [real.get(p, sp.Symbol(p.name, real=True)) for p in pars]
+    try:
+        if all(sp.degree(e, p) <= 1 if e.has(p) else True for p in pars):
+            return True
+    except sp.PolynomialError:
+        pass
+    np = _np()
+    others = sorted(e.free_symbols - set(pars), key=str)
+    try:
+        H = sp.lambdify(others + list(pars), sp.hessian(e, pars), modules=["numpy"])
+    except Exception:
+        return False
+    rng = np.random.default_rng(3)
+    for _ in range(20):
+        pt = rng.normal(0, 1.5, len(others) + len(pars))
+        try:
+            with np.errstate(all="ignore"):
+                Hn = np.array(H(*pt), dtype=float)
+        except Exception:
+            continue
+        if np.all(np.isfinite(Hn)) and np.linalg.eigvalsh((Hn + Hn.T) / 2)[0] < -1e-9:
+            return False
+    return True
+
+
+@fn("RobustConvexOptimization", **ADDED, hold=True,
+    notes="RobustConvexOptimization[f, ForAll[pars, cond, cons], vars] and [f, cons, vars, pars] (parameter bounds "
+          "among cons): the constraints (and objective, through an epigraph variable) must hold for every "
+          "parameter value in a box given by bounds or Interval memberships; when the objective and constraint "
+          "functions are affine in each parameter or convex in the parameters (sampled Hessian check) the worst case "
+          "is attained at the box vertices, which are all enforced; other uncertainty sets or parameter dependence "
+          "raise" + _FAMILY_NOTE)
+def _robustconvex(f, spec, vars_, *rest):
+    fname = "RobustConvexOptimization"
+    f, spec, vars_ = ev(f), spec, ev(vars_)
+    rest = [ev(r) for r in rest]
+    args, opts = split_options(rest, _OPT_OPTS, fname)
+    if isinstance(spec, Expr) and spec.head == "ForAll" and len(spec.args) == 3:
+        pv, cond, cons = spec.args
+        pars = list(pv.args) if is_list(pv) else [pv]
+        cons = ev(cons)
+        cond = ev(cond)
+        props = args[0] if args else None
+    else:
+        cons = ev(spec)
+        if not args:
+            raise ValueError(f"{fname}: expected ForAll[pars, cond, cons] or a parameter list")
+        pv = args[0]
+        pars = list(pv.args) if is_list(pv) else [pv]
+        props = args[1] if len(args) > 1 else None
+        cond_parts, keep = [], []
+        names = {p.name for p in pars}
+        for c in (cons.args if is_list(cons) or (isinstance(cons, Expr) and cons.head == "And") else [cons]):
+            syms = {s for s in _symbols_in(c)}
+            (cond_parts if syms and syms <= names else keep).append(c)
+        cond, cons = L(*cond_parts), L(*keep)
+    box = _param_box(cond, pars, fname)
+    psyms = [sp.Symbol(p.name) for p in pars]
+    t = Symbol("t$robust")
+    obj_has = bool(_symbols_in(f) & {p.name for p in pars})
+    vertices = list(itertools.product(*[box[p.name] for p in pars]))
+    all_cons = []
+    for vert in vertices:
+        mapping = {p: R(v) for p, v in zip(pars, vert)}
+        all_cons.append(_subst(cons, mapping))
+        if obj_has:
+            all_cons.append(Expr("LessEqual", _subst(f, mapping), t))
+    # affine-in-parameter check on the constraint and objective expressions
+    for e in [f] + _flat_cons(cons):
+        if isinstance(e, Expr) and e.head in _REL:
+            pairs = list(zip(e.args, e.args[1:]))
+        else:
+            pairs = [(e, 0)]
+        for a_, b_ in pairs:
+            try:
+                x_ = S(b_) - S(a_) if isinstance(e, Expr) and e.head in ("GreaterEqual", "Greater") else \
+                    S(a_) - S(b_)
+            except Exception:
+                continue
+            if isinstance(x_, sp.Expr) and not _multiaffine(x_, psyms):
+                raise NotImplementedError(f"{fname}: the problem must depend affinely on each parameter")
+    vlist = list(vars_.args) if is_list(vars_) else [vars_]
+    if obj_has:
+        prob = _build(t, L(*all_cons), L(*vlist, t), fname)
+        x, v, _ = _solve(prob, fname, convex=True)
+        prob.template = prob.template[:-1]
+    else:
+        prob = _build(f, L(*all_cons), vars_, fname)
+        x, v, _ = _solve(prob, fname, convex=True)
+    return _opt_props(prob, x, v, False, props, True, fname)
+
+
+def _symbols_in(e):
+    out = set()
+    if isinstance(e, Symbol):
+        out.add(e.name)
+    elif isinstance(e, Expr):
+        for a in e.args:
+            out |= _symbols_in(a)
+    return out
+
+
+def _flat_cons(c):
+    if is_list(c) or (isinstance(c, Expr) and c.head == "And"):
+        out = []
+        for a in c.args:
+            out.extend(_flat_cons(a))
+        return out
+    return [c]
+
+
+# ── KnapsackSolve ──
+
+def _knap_item(it, fname):
+    """(payoff, cost, maxcount or None) of one item specification."""
+    if is_assoc(it) or (is_list(it) and it.args and all(is_rule(r) for r in it.args)):
+        rules = {}
+        items = it.args if is_list(it) else ev(Expr("Normal", it)).args
+        for r in items:
+            rules[r.args[0]] = r.args[1]
+        if "Cost" not in rules:
+            raise ValueError(f"{fname}: an item must specify a \"Cost\"")
+        return (rules.get("Payoff", 1), rules["Cost"], rules.get("MaxCount"))
+    if is_list(it):
+        a = it.args
+        if len(a) == 2:
+            return (a[0], a[1], None)
+        if len(a) == 3:
+            return (a[0], a[1], a[2])
+        raise ValueError(f"{fname}: invalid item {it}")
+    return (1, it, None)
+
+
+@fn("KnapsackSolve", **ADDED,
+    notes="KnapsackSolve[{cost1, ...}, capacity] maximises the number of items, KnapsackSolve[{{payoff, cost}, "
+          "...}, capacity] and {payoff, cost, maxcount} items (or \"Payoff\"/\"Cost\"/\"MaxCount\" rules or "
+          "associations) maximise the total payoff with total cost <= capacity, giving the item counts (an "
+          "association of items gives an association); exact integer programming (branch and bound on the exact "
+          "simplex), ties broken by the smaller total cost; several capacities (vector costs) raise")
+def _knapsack(items, capacity, *rest):
+    fname = "KnapsackSolve"
+    if rest:
+        raise ValueError(f"{fname} called with too many arguments")
+    keys = None
+    if is_assoc(items):
+        norm = ev(Expr("Normal", items))
+        keys = [r.args[0] for r in norm.args]
+        specs = [r.args[1] for r in norm.args]
+    elif is_list(items) and items.args and all(is_rule(r) for r in items.args) and \
+            not all(isinstance(r.args[0], str) and r.args[0] in ("Payoff", "Cost", "MaxCount") for r in items.args):
+        keys = [r.args[0] for r in items.args]
+        specs = [r.args[1] for r in items.args]
+    else:
+        specs = _items(items, fname, "item list")
+    if is_list(capacity):
+        raise NotImplementedError(f"{fname}: several capacities (vector costs) are not supported")
+    data = [_knap_item(it, fname) for it in specs]
+    n = len(data)
+    names = [Symbol(f"k$${i + 1}") for i in range(n)]
+    pay = Expr("Plus", *(Expr("Times", p, v) for (p, _, _), v in zip(data, names))) if n else 0
+    cost = Expr("Plus", *(Expr("Times", c, v) for (_, c, _), v in zip(data, names))) if n else 0
+    cons = [Expr("LessEqual", cost, capacity)]
+    for (p, c, mc), v in zip(data, names):
+        cons.append(Expr("GreaterEqual", v, 0))
+        if mc is not None and not is_sym(mc, "Infinity"):
+            cons.append(Expr("LessEqual", v, mc))
+        if not _is_num(S(c)) or float(sp.N(S(c))) <= 0:
+            if mc is None:
+                raise ValueError(f"{fname}: item costs must be positive (or the item needs a MaxCount)")
+    dom = [Symbol("Integers")] * n
+    prob = _build(ev(Expr("Times", -1, pay)), ev(L(*cons)), L(*names), fname, domains=dom)
+    r = _solve_lp(prob, fname)
+    best = r[1]
+    # tie-break: least total cost among optimal payoffs
+    prob2 = _build(ev(cost), ev(L(*cons, Expr("LessEqual", Expr("Times", -1, pay),
+                                               R(sp.Rational(best.numerator, best.denominator))))),
+                   L(*names), fname, domains=dom)
+    r2 = _solve_lp(prob2, fname)
+    counts = [sp.Integer(int(round(v))) for v in r2[0]]
+    if keys is not None:
+        return Expr("Association", *(Expr("Rule", k, R(c)) for k, c in zip(keys, counts)))
+    return L(*(R(c) for c in counts))
+
+
+# ── FindShortestTour ──
+
+def _tour_dist(opts, pts, fname):
+    df = opts.get("DistanceFunction")
+    if df is not None and not is_sym(df, "Automatic"):
+        return lambda a, b: S(ev(K.call(df, a, b)))
+    if all(isinstance(p, str) for p in pts):
+        return lambda a, b: S(ev(Expr("EditDistance", a, b)))
+    return lambda a, b: S(ev(Expr("EuclideanDistance", a, b)))
+
+
+@fn("FindShortestTour", **ADDED,
+    notes="FindShortestTour[{p1, ...}] gives {length, tour} for the shortest closed tour (starting and ending at "
+          "1); FindShortestTour[pts, j, k] the shortest path from pj to pk through all points; points are vectors "
+          "(EuclideanDistance, exact lengths for exact points) or strings (EditDistance), or use DistanceFunction "
+          "-> f; exact (Held-Karp dynamic programming) for up to 12 points, a 2-opt/Or-opt local search beyond "
+          "that (not guaranteed optimal, like Wolfram's heuristics); the direction of an optimal tour and the choice "
+          "among equally short tours can differ from Wolfram's; graphs and GeoPositions raise")
+def _findshortesttour(pts, *rest):
+    fname = "FindShortestTour"
+    args, opts = split_options(rest, {"DistanceFunction", "Method"}, fname)
+    if isinstance(pts, Expr) and pts.head == "Graph":
+        raise NotImplementedError(f"{fname}: graph input is not supported")
+    P = _items(pts, fname, "point list")
+    if any(isinstance(p, Expr) and p.head == "GeoPosition" for p in P):
+        raise NotImplementedError(f"{fname}: GeoPosition points are not supported")
+    n = len(P)
+    if n == 0:
+        return L(0, L())
+    dist = _tour_dist(opts, P, fname)
+    D = [[sp.Integer(0)] * n for _ in range(n)]
+    Df = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            d = dist(P[i], P[j])
+            D[i][j] = D[j][i] = d
+            Df[i][j] = Df[j][i] = float(sp.N(d))
+    if args:
+        if len(args) != 2:
+            raise ValueError(f"{fname}: expected FindShortestTour[pts, j, k]")
+        j0 = int_arg(args[0], fname) - 1
+        k0 = int_arg(args[1], fname) - 1
+        if not (0 <= j0 < n and 0 <= k0 < n):
+            raise ValueError(f"{fname}: point index out of range")
+        path = _shortest_path_tsp(Df, j0, k0)
+        length = sum((D[a][b] for a, b in zip(path, path[1:])), sp.Integer(0))
+        return L(R(sp.nsimplify(length) if False else sp.simplify(length)), L(*(i + 1 for i in path)))
+    if n == 1:
+        return L(0, L(1, 1))
+    tour = _tsp(Df)
+    length = sum((D[a][b] for a, b in zip(tour, tour[1:] + tour[:1])), sp.Integer(0))
+    return L(R(sp.simplify(length)), L(*([i + 1 for i in tour] + [1])))
+
+
+def _held_karp(Df, start, end=None):
+    n = len(Df)
+    others = [i for i in range(n) if i != start and i != end]
+    idx = {v: k for k, v in enumerate(others)}
+    m = len(others)
+    INF = float("inf")
+    dp = {}
+    for v in others:
+        dp[(1 << idx[v], v)] = (Df[start][v], start)
+    for size in range(2, m + 1):
+        for subset in itertools.combinations(others, size):
+            mask = 0
+            for v in subset:
+                mask |= 1 << idx[v]
+            for v in subset:
+                pm = mask & ~(1 << idx[v])
+                best = (INF, None)
+                for u in subset:
+                    if u == v:
+                        continue
+                    c = dp[(pm, u)][0] + Df[u][v]
+                    if c < best[0] - 1e-12:
+                        best = (c, u)
+                dp[(mask, v)] = best
+    full = (1 << m) - 1
+    target = end if end is not None else start
+    if m == 0:
+        return [start] + ([end] if end is not None else [])
+    best = (INF, None)
+    for v in others:
+        c = dp[(full, v)][0] + Df[v][target]
+        if c < best[0] - 1e-12:
+            best = (c, v)
+    path = []
+    mask, v = full, best[1]
+    while v != start:
+        path.append(v)
+        pv = dp[(mask, v)][1]
+        mask &= ~(1 << idx[v])
+        v = pv
+    path.reverse()
+    return [start] + path + ([end] if end is not None else [])
+
+
+def _two_opt(tour, Df, closed=True):
+    n = len(tour)
+    improved = True
+    while improved:
+        improved = False
+        rng_ = range(1, n - 1) if closed else range(1, n - 2)
+        for i in rng_:
+            for j in range(i + 1, n if closed else n - 1):
+                a, b = tour[i - 1], tour[i]
+                c, d = tour[j], tour[(j + 1) % n] if closed else tour[j + 1]
+                if Df[a][c] + Df[b][d] < Df[a][b] + Df[c][d] - 1e-12:
+                    tour[i:j + 1] = reversed(tour[i:j + 1])
+                    improved = True
+    return tour
+
+
+def _tsp(Df):
+    n = len(Df)
+    if n <= 12:
+        return _held_karp(Df, 0)
+    best = None
+    for s0 in range(min(n, 8)):
+        tour = [s0]
+        left = set(range(n)) - {s0}
+        while left:
+            nxt = min(left, key=lambda v: Df[tour[-1]][v])
+            tour.append(nxt)
+            left.remove(nxt)
+        k = tour.index(0)
+        tour = tour[k:] + tour[:k]
+        tour = _two_opt(tour, Df)
+        L_ = sum(Df[a][b] for a, b in zip(tour, tour[1:] + tour[:1]))
+        if best is None or L_ < best[0] - 1e-12:
+            best = (L_, tour)
+    return best[1]
+
+
+def _shortest_path_tsp(Df, j0, k0):
+    n = len(Df)
+    if j0 == k0:
+        t = _tsp(Df)
+        k = t.index(j0)
+        return t[k:] + t[:k] + [j0]
+    if n <= 12:
+        return _held_karp(Df, j0, k0)
+    tour = [j0] + [v for v in range(n) if v not in (j0, k0)] + [k0]
+    return _two_opt(tour, Df, closed=False)
+
+
+# ── Bayesian optimisation (Gaussian-process expected improvement) ──
+
+def _bo_domain(spec, fname):
+    """('box', lows, highs, scalar?) | ('list', [configs]) | ('sampler', f)."""
+    if is_list(spec) and spec.args:
+        return ("list", list(spec.args))
+    if isinstance(spec, Expr):
+        if spec.head == "Interval" and len(spec.args) == 1 and is_list(spec.args[0]):
+            lo, hi = spec.args[0].args
+            return ("box", [float(sp.N(S(lo)))], [float(sp.N(S(hi)))], True)
+        if spec.head in ("Rectangle", "Cuboid"):
+            lo = spec.args[0] if spec.args else None
+            hi = spec.args[1] if len(spec.args) > 1 else None
+            if lo is None:
+                raise ValueError(f"{fname}: invalid region {spec}")
+            los = [float(sp.N(S(v))) for v in lo.args]
+            his = [float(sp.N(S(v))) for v in hi.args] if hi is not None else [v + 1 for v in los]
+            return ("box", los, his, False)
+        if spec.head in ("Function",) or isinstance(spec.head, Expr):
+            return ("sampler", spec)
+    if isinstance(spec, Symbol):
+        return ("sampler", spec)
+    raise NotImplementedError(f"{fname}: the domain {spec} is not supported (use Interval, Rectangle, Cuboid, a "
+                              "list of configurations or a sampler function)")
+
+
+def _gp_fit_predict(X, y, Xs, noise):
+    np = _np()
+    ym, ys = y.mean(), y.std() or 1.0
+    yn = (y - ym) / ys
+    best = None
+    span = np.ptp(X, axis=0)
+    span[span == 0] = 1.0
+    for ls in (0.05, 0.1, 0.2, 0.4, 0.8):
+        ell = ls * span
+
+        def k(A, B):
+            d = ((A[:, None, :] - B[None, :, :]) / ell) ** 2
+            return np.exp(-0.5 * d.sum(-1))
+        Kxx = k(X, X) + (noise + 1e-8) * np.eye(len(X))
+        try:
+            Lc = np.linalg.cholesky(Kxx)
+        except np.linalg.LinAlgError:
+            continue
+        alpha = np.linalg.solve(Lc.T, np.linalg.solve(Lc, yn))
+        ll = -0.5 * yn @ alpha - np.log(np.diag(Lc)).sum()
+        if best is None or ll > best[0]:
+            best = (ll, k, Lc, alpha)
+    _, k, Lc, alpha = best
+    Ks = k(Xs, X)
+    mu = Ks @ alpha
+    v = np.linalg.solve(Lc, Ks.T)
+    var = np.clip(1.0 - (v ** 2).sum(0), 1e-12, None)
+    return mu * ys + ym, np.sqrt(var) * ys
+
+
+def _bayes(fname, sense):
+    def impl(f, spec, *rest):
+        args, opts = split_options(rest, {"AssumeDeterministic", "InitialEvaluationHistory", "MaxIterations",
+                                          "Method", "ProgressReporting", "RandomSeeding"}, fname)
+        if args:
+            raise ValueError(f"{fname} called with too many arguments")
+        np = _np()
+        from math import erf, sqrt, pi, exp
+        method = opts.get("Method", "MaxExpectedImprovement")
+        if is_sym(method, "Automatic"):
+            method = "MaxExpectedImprovement"
+        if method not in ("MaxExpectedImprovement", "MaxImprovementProbability"):
+            raise ValueError(f"{fname}: unknown Method {method}")
+        iters = opts.get("MaxIterations", 100)
+        iters = int_arg(iters, fname)
+        seed = opts.get("RandomSeeding", 1234)
+        seed = seed if isinstance(seed, int) else 1234
+        det = opts.get("AssumeDeterministic", False) is True
+        rng = np.random.default_rng(seed)
+        dom = _bo_domain(spec, fname)
+        sign = 1.0 if sense == "min" else -1.0
+
+        def to_vec(c):
+            if dom[0] == "box":
+                return np.atleast_1d(np.array(c, dtype=float))
+            v = _np_array_of(c)
+            if v is None:
+                raise NotImplementedError(f"{fname}: configurations must be numeric for the Gaussian-process model")
+            return np.atleast_1d(v.astype(float)).ravel()
+
+        def to_conf(v):
+            if dom[0] == "box":
+                return R(sp.Float(float(v[0]))) if dom[3] else L(*(sp.Float(float(t)) for t in v))
+            return v
+
+        def evaluate_f(conf):
+            r = ev(K.call(f, conf))
+            val = S(r)
+            if not (isinstance(val, sp.Basic) and val.is_number and val.is_real):
+                raise ValueError(f"{fname}: the function must return a real number, got {r}")
+            return float(sp.N(val))
+
+        def sample():
+            if dom[0] == "box":
+                lo, hi = np.array(dom[1]), np.array(dom[2])
+                return lo + rng.random(len(lo)) * (hi - lo)
+            if dom[0] == "sampler":
+                return ev(K.call(dom[1]))
+            return dom[1][int(rng.integers(len(dom[1])))]
+
+        hist = []          # (conf (Mikoshi), vector, value)
+        init = opts.get("InitialEvaluationHistory")
+        if init is not None and not is_sym(init, "None"):
+            for r in _items(init, fname, "evaluation history"):
+                if not is_rule(r):
+                    raise ValueError(f"{fname}: the evaluation history must be a list of rules conf -> value")
+                c = r.args[0]
+                hist.append((c, to_vec(c if dom[0] != "box" else [float(sp.N(S(t))) for t in _flat_expr(c)]),
+                             float(sp.N(S(r.args[1])))))
+        candidates = None
+        if dom[0] == "list":
+            candidates = list(dom[1])
+        n_init = min(5, iters) if not hist else 0
+        total = max(iters, n_init)
+        nxt = None
+        for it in range(total + 1):
+            if it < n_init:
+                if candidates is not None:
+                    left = [c for c in candidates if all(c != h[0] for h in hist)]
+                    if not left:
+                        break
+                    c = left[int(rng.integers(len(left)))]
+                    v = to_vec(c)
+                else:
+                    raw = sample()
+                    c, v = (to_conf(raw), raw) if dom[0] == "box" else (raw, to_vec(raw))
+            else:
+                X = np.array([h[1] for h in hist])
+                y = np.array([sign * h[2] for h in hist])
+                if candidates is not None:
+                    pool = [c for c in candidates if det is False or all(c != h[0] for h in hist)]
+                    if not pool:
+                        break
+                    Xs = np.array([to_vec(c) for c in pool])
+                else:
+                    raws = [sample() for _ in range(1500 if dom[0] == "box" else 60)]
+                    Xs = np.array([r if dom[0] == "box" else to_vec(r) for r in raws])
+                mu, sd = _gp_fit_predict(X, y, Xs, 1e-6 if det else 1e-3)
+                ybest = y.min()
+                z = (ybest - mu) / sd
+                cdf = np.array([0.5 * (1 + erf(t / sqrt(2))) for t in z])
+                pdf = np.exp(-0.5 * z ** 2) / sqrt(2 * pi)
+                score = (ybest - mu) * cdf + sd * pdf if method == "MaxExpectedImprovement" else cdf
+                k = int(np.argmax(score))
+                if candidates is not None:
+                    c, v = pool[k], Xs[k]
+                else:
+                    c, v = (to_conf(Xs[k]), Xs[k]) if dom[0] == "box" else (raws[k], Xs[k])
+            if it == total:
+                nxt = c
+                break
+            hist.append((c, v, evaluate_f(c)))
+        if not hist:
+            raise ValueError(f"{fname}: no configuration could be evaluated")
+        vals = [h[2] for h in hist]
+        k = int(np.argmin([sign * t for t in vals]))
+        head = "BayesianMinimizationObject" if sense == "min" else "BayesianMaximizationObject"
+        key = "Minimum" if sense == "min" else "Maximum"
+        data = [Expr("Rule", f"{key}Configuration", hist[k][0]),
+                Expr("Rule", f"{key}Value", R(sp.Float(vals[k]))),
+                Expr("Rule", "EvaluationHistory", L(*(Expr("Rule", h[0], R(sp.Float(h[2]))) for h in hist))),
+                Expr("Rule", "ObjectiveFunction", f),
+                Expr("Rule", "Method", method),
+                Expr("Rule", "NextConfiguration", nxt if nxt is not None else Symbol("None"))]
+        return Expr(head, Expr("Association", *data))
+    return impl
+
+
+def _bo_props(head, args, ev_):
+    if len(head.args) != 1 or not is_assoc(head.args[0]) or len(args) != 1:
+        return K.UNHANDLED
+    data = {r.args[0]: r.args[1] for r in head.args[0].args}
+    props = list(data) + ["Properties"]
+
+    def one(p):
+        if p == "Properties":
+            return L(*props, "PredictorFunction")
+        if p == "PredictorFunction":
+            raise NotImplementedError(f"{head.head}: the PredictorFunction property is not supported")
+        if p not in data:
+            raise ValueError(f"{head.head}: unknown property {p!r}")
+        return data[p]
+    q = args[0]
+    if is_list(q):
+        return L(*(one(p) for p in q.args))
+    return one(q)
+
+
+for _h in ("BayesianMinimizationObject", "BayesianMaximizationObject"):
+    KL.COMPOUND_HEAD_HOOKS[_h] = _bo_props
+
+_BO_NOTE = ("Gaussian-process Bayesian optimisation (RBF kernel with the length scale chosen by marginal likelihood, "
+            "expected-improvement or improvement-probability acquisition over random candidates) over an Interval, "
+            "Rectangle/Cuboid, a list of numeric configurations or a sampler function; options MaxIterations "
+            "(default 100), AssumeDeterministic, InitialEvaluationHistory, Method, RandomSeeding (default 1234, "
+            "deterministic); results are stochastic like Wolfram's and the GP model differs, so configurations "
+            "differ in detail; the \"PredictorFunction\" property raises")
+fn("BayesianMinimization", **ADDED, notes="BayesianMinimization[f, spec] gives a BayesianMinimizationObject: "
+   + _BO_NOTE)(_bayes("BayesianMinimization", "min"))
+fn("BayesianMaximization", **ADDED, notes="BayesianMaximization[f, spec] gives a BayesianMaximizationObject: "
+   + _BO_NOTE)(_bayes("BayesianMaximization", "max"))
+
+
+@fn("BayesianMinimizationObject", **ADDED,
+    notes="result of BayesianMinimization; obj[\"MinimumConfiguration\"], [\"MinimumValue\"], "
+          "[\"EvaluationHistory\"], [\"ObjectiveFunction\"], [\"Method\"], [\"NextConfiguration\"], "
+          "[\"Properties\"] and lists of properties")
+def _bmo(*args):
+    raise Unevaluated()
+
+
+@fn("BayesianMaximizationObject", **ADDED,
+    notes="result of BayesianMaximization; obj[\"MaximumConfiguration\"], [\"MaximumValue\"], "
+          "[\"EvaluationHistory\"], [\"ObjectiveFunction\"], [\"Method\"], [\"NextConfiguration\"], "
+          "[\"Properties\"] and lists of properties")
+def _bmxo(*args):
+    raise Unevaluated()
