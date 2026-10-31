@@ -134,6 +134,8 @@ ARRAYS = [
     ("TensorSymmetry[MatrixSymbol[\"A\", {n, n}, Reals, Symmetric[{1, 2}]]]", "Symmetric[{1, 2}]"),
     ("VectorSymbol[\"v\", 3]", "VectorSymbol[\"v\", 3]"), ("VectorSymbol[\"v\", n, Reals]", "VectorSymbol[\"v\", n, Reals]"),
     ("VectorSymbol[\"v\", -2]", Raises()),
+    ("VectorSymbol[\"v\", {3}]", "VectorSymbol[\"v\", {3}]"), ("VectorSymbol[\"v\"]", "VectorSymbol[\"v\"]"),
+    ("VectorSymbol[\"v\", {3, 2}]", Raises()),
     ("MatrixSymbol[\"A\", {2, 3}]", "MatrixSymbol[\"A\", {2, 3}]"), ("MatrixSymbol[\"A\", {2}]", Raises()),
     ("MatrixSymbol[\"A\", {n, n}, Reals, Antisymmetric[{1, 2}]]", "MatrixSymbol[\"A\", {n, n}, Reals, Antisymmetric[{1, 2}]]"),
     ("ArraySymbol[\"T\", {2, 3, 4}]", "ArraySymbol[\"T\", {2, 3, 4}]"), ("ArraySymbol[\"T\", {-1}]", Raises()),

@@ -119,7 +119,7 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 
 Remaining unreviewed quarantined names: **5282** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **9665**.
+Differential test cases in tests/library: **9668**.
 
 
 ## By area
@@ -551,7 +551,7 @@ Cases = number of differential test cases in which the head occurs.
 | `ToSphericalCoordinates` | added | 3 | ToSphericalCoordinates[{x, y, z}] = {Sqrt[x^2 + y^2 + z^2], ArcTan[z, Sqrt[x^2 + y^2]], ArcTan[x, y]} (radius, polar angle from the z axis, azimuth); threads over a list of points |
 | `TransformedField` | added | 4 | TransformedField["chart1" -> "chart2", f, {x1, ...} -> {y1, ...}]: a scalar field f (expression) or a vector field (list of components in the orthonormal frame of chart1) re-expressed in chart2 coordinates {y1, ...} (charts Cartesian, Polar, Spherical, Cylindrical); simplification assumes the standard chart ranges (r > 0, polar angles in (0, Pi)); rank >= 2 tensor fields raise |
 | `TruncateSum` | added | 5 | TruncateSum[expr, m]: every Sum and Inactive[Sum] in expr is replaced by the sum of its first m terms (explicit, activated); symbolic m gives Inactive[Sum][f, {i, a, a + m - 1}]; ActivateResult -> False keeps the truncated sums inactive |
-| `VectorSymbol` | added | 9 | VectorSymbol["v", n] / VectorSymbol["v", n, dom]: a symbolic vector of length n (inert; used by ArrayExpand, ArraySimplify, TensorDimensions-style functions in this module); bad arguments raise |
+| `VectorSymbol` | added | 12 | VectorSymbol["v"] / VectorSymbol["v", n] / VectorSymbol["v", {n}] / VectorSymbol["v", n, dom]: a symbolic vector of length n (inert; used by ArrayExpand, ArraySimplify, TensorDimensions-style functions in this module); bad arguments raise |
 | `Vectors` | added | 5 | Vectors[n] / Vectors[n, dom]: the domain of length-n vectors (dom Complexes by default, Reals, ...); inert domain used with Element and VectorSymbol; malformed specifications raise |
 | `ZeroSymmetric` | added | 4 | ZeroSymmetric[{s1, ..., sn}]: the symmetry of a zero array; inert symmetry specification used by TensorSymmetry, ArraySymbol, MatrixSymbol, Matrices and Arrays (Symmetric/Antisymmetric/ZeroSymmetric[All]: every slot); malformed slot lists raise |
 

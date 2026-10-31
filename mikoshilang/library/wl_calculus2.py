@@ -239,11 +239,18 @@ def _arrays(dims, dom=None, symm=None):
 
 
 @fn("VectorSymbol", area=AREA, status="added",
-    notes="VectorSymbol[\"v\", n] / VectorSymbol[\"v\", n, dom]: a symbolic vector of length n (inert; used by "
-          "ArrayExpand, ArraySimplify, TensorDimensions-style functions in this module); bad arguments raise")
-def _vectorsymbol(name, n, dom=None):
+    notes="VectorSymbol[\"v\"] / VectorSymbol[\"v\", n] / VectorSymbol[\"v\", {n}] / VectorSymbol[\"v\", n, dom]: a "
+          "symbolic vector of length n (inert; used by ArrayExpand, ArraySimplify, TensorDimensions-style functions "
+          "in this module); bad arguments raise")
+def _vectorsymbol(name, n=None, dom=None):
     if not isinstance(name, (str, Symbol)):
         raise ValueError("VectorSymbol: the name must be a string or a symbol")
+    if n is None:
+        raise Unevaluated()
+    if is_list(n):                      # Wolfram also accepts the dimension as a one-element list {n}
+        if len(n.args) != 1:
+            raise ValueError("VectorSymbol: the dimension list must have exactly one element")
+        n = n.args[0]
     _dim_ok(n, "VectorSymbol")
     if dom is not None:
         _dom_ok(dom, "VectorSymbol")
@@ -443,8 +450,10 @@ class _MX:
         h = e.head
         if h in ("MatrixSymbol", "ArraySymbol", "VectorSymbol"):
             nm = e.args[0] if isinstance(e.args[0], str) else e.args[0].name
+            if len(e.args) < 2:
+                raise NotImplementedError(f"{self.fname}: {h} needs explicit dimensions here")
             if h == "VectorSymbol":
-                dims = [e.args[1]]
+                dims = list(e.args[1].args) if is_list(e.args[1]) else [e.args[1]]
             else:
                 dims = list(e.args[1].args)
             key = f"{h}:{nm}:{len(dims)}"
