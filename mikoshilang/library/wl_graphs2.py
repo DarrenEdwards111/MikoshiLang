@@ -1580,3 +1580,518 @@ def _cayley(group: Expr) -> Expr:
             gl.append(s)
     es = [_de((pos[e.key()], pos[e.then(s).key()])) for e in elems for s in gl]
     return _new(list(range(1, len(elems) + 1)), es)
+
+
+# ═══════════════════════════════════════ measures ═══════════════════════════════════════
+
+def _connected_or_raise(gr, fname):
+    if gr.n == 0:
+        raise ValueError(f"{fname}: the graph has no vertices")
+    if len(_components(gr)) != 1:
+        raise NotImplementedError(f"{fname}: disconnected graphs are not supported (Wolfram's per-component "
+                                  "convention is not reproduced)")
+
+
+@fn("EccentricityCentrality", area=AREA, status="added",
+    notes="EccentricityCentrality[g] = 1/VertexEccentricity for each vertex in VertexList order, exact for unweighted "
+          "graphs (EdgeWeight distances when present); disconnected (not strongly connected) graphs raise "
+          "NotImplementedError, a single vertex (eccentricity 0) raises ValueError. Check: exact (tests: "
+          "1/VertexEccentricity identity and path/cycle values).")
+def _eccc(g: Expr) -> ListOf[Real]:
+    gr = _g(g, "EccentricityCentrality")
+    gr.require_pure("EccentricityCentrality")
+    _connected_or_raise(gr, "EccentricityCentrality")
+    e = gr.eccentricities()
+    if any(x == 0 for x in e):
+        raise ValueError("EccentricityCentrality: a vertex has eccentricity 0")
+    return L(*(R(1 / sp.sympify(x)) for x in e))
+
+
+def _edge_between(gr):
+    """Brandes' algorithm for edge betweenness (unweighted), exact fractions, per edge index."""
+    n = gr.n
+    adj = gr.out_adj()
+    eb = [Fraction(0)] * len(gr.edges)
+    for s in range(n):
+        stack, pred = [], [[] for _ in range(n)]
+        sigma = [0] * n
+        sigma[s] = 1
+        dist = {s: 0}
+        q = deque([s])
+        while q:
+            u = q.popleft()
+            stack.append(u)
+            for w, _, k in adj[u]:
+                if w == u:
+                    continue
+                if w not in dist:
+                    dist[w] = dist[u] + 1
+                    q.append(w)
+                if dist[w] == dist[u] + 1:
+                    sigma[w] += sigma[u]
+                    pred[w].append((u, k))
+        delta = [Fraction(0)] * n
+        while stack:
+            w = stack.pop()
+            for u, k in pred[w]:
+                c = Fraction(sigma[u], sigma[w]) * (1 + delta[w])
+                eb[k] += c
+                delta[u] += c
+    if not gr.directed:
+        eb = [x / 2 for x in eb]
+    return eb
+
+
+@fn("EdgeBetweennessCentrality", area=AREA, status="added",
+    notes="EdgeBetweennessCentrality[g]: for each edge in EdgeList order, the number of shortest paths through it "
+          "summed over vertex pairs (each path split evenly among equal-length alternatives; unordered pairs for "
+          "undirected graphs, ordered for directed), machine reals as BetweennessCentrality; unweighted, simple "
+          "graphs (multigraphs and EdgeWeight raise NotImplementedError). Check: reference (tests compare with "
+          "networkx.edge_betweenness_centrality(normalized=False)) and the identity that the total equals the sum "
+          "of all pairwise distances.")
+def _ebc(g: Expr) -> ListOf[Real]:
+    gr = _g(g, "EdgeBetweennessCentrality")
+    gr.require_pure("EdgeBetweennessCentrality")
+    if gr.multi():
+        raise NotImplementedError("EdgeBetweennessCentrality: multigraphs are not supported")
+    if gr.weights is not None:
+        raise NotImplementedError("EdgeBetweennessCentrality: edge weights are not supported")
+    return L(*(float(x) for x in _edge_between(gr)))
+
+
+@fn("GraphAssortativity", area=AREA, status="added",
+    notes="GraphAssortativity[g]: Newman's degree assortativity coefficient (the Pearson correlation of the degrees "
+          "at the two ends of each edge, each edge counted in both directions) of an undirected simple graph, as a "
+          "machine real; regular graphs (zero variance) raise ValueError; directed graphs and the property/partition "
+          "forms raise NotImplementedError. Check: reference (networkx.degree_assortativity_coefficient in tests; "
+          "stars give -1).")
+def _gassort(g: Expr, *rest: Expr) -> Real:
+    if rest:
+        raise NotImplementedError("GraphAssortativity: property and partition forms are not supported")
+    gr = _g(g, "GraphAssortativity")
+    _need_simple_undirected(gr, "GraphAssortativity")
+    deg, _, _ = _degree_lists(gr)
+    xs, ys = [], []
+    for i, j, _ in gr.edges:
+        xs += [deg[i], deg[j]]
+        ys += [deg[j], deg[i]]
+    if not xs:
+        raise ValueError("GraphAssortativity: the graph has no edges")
+    m = len(xs)
+    mx = Fraction(sum(xs), m)
+    num = sum((Fraction(a) - mx) * (Fraction(b) - mx) for a, b in zip(xs, ys))
+    den = sum((Fraction(a) - mx) ** 2 for a in xs)
+    if den == 0:
+        raise ValueError("GraphAssortativity: every edge joins vertices of equal degree, so the coefficient is "
+                         "undefined (0/0)")
+    return float(num / den)
+
+
+@fn("GraphHub", area=AREA, status="added",
+    notes="GraphHub[g]: the vertices of maximum degree in the underlying simple graph (directions, self-loops and "
+          "multiple edges ignored), in VertexList order; GraphHub[g, In] / GraphHub[g, Out] use VertexInDegree / "
+          "VertexOutDegree. Check: exact (tests: star centre, regular graphs give every vertex).")
+def _ghub(g: Expr, kind: Expr = None) -> ListOf[Expr]:
+    gr = _g(g, "GraphHub")
+    if gr.n == 0:
+        return L()
+    if kind is None:
+        d = [len(s) for s in _simple_nb(gr)]
+    elif isinstance(kind, Symbol) and kind.name in ("In", "Out"):
+        _, ind, outd = _degree_lists(gr)
+        d = ind if kind.name == "In" else outd
+    else:
+        raise ValueError("GraphHub: the second argument must be In or Out")
+    top = max(d)
+    return _verts(gr, [i for i in range(gr.n) if d[i] == top])
+
+
+def _mean_distance(gr):
+    if gr.n < 2:
+        raise ValueError("MeanGraphDistance: the graph needs at least two vertices")
+    tot = 0
+    for i in range(gr.n):
+        d, _ = gr.sssp(i)
+        if len(d) < gr.n:
+            return INF
+        tot += sum(v for j, v in d.items() if j != i)
+    return sp.nsimplify(tot) / (gr.n * (gr.n - 1)) if not isinstance(tot, sp.Float) else tot / (gr.n * (gr.n - 1))
+
+
+@fn("MeanGraphDistance", area=AREA, status="added",
+    notes="MeanGraphDistance[g]: the mean of GraphDistance over all ordered pairs of distinct vertices (exact for "
+          "unweighted and exact weights; Infinity when some vertex cannot reach another); fewer than two vertices "
+          "raise ValueError; mixed graphs raise. Check: exact (tests: Mean[Flatten[GraphDistanceMatrix]] identities).")
+def _mgd(g: Expr) -> Real:
+    gr = _g(g, "MeanGraphDistance")
+    gr.require_pure("MeanGraphDistance")
+    return R(_mean_distance(gr))
+
+
+@fn("GraphLinkEfficiency", area=AREA, status="added",
+    notes="GraphLinkEfficiency[g] = 1 - MeanGraphDistance[s]/EdgeCount[s] for the underlying simple graph s of an "
+          "undirected graph (Wolfram's documented formula; self-loops and multiple edges ignored), exact; -Infinity "
+          "for disconnected graphs; directed graphs and graphs without edges raise NotImplementedError/ValueError. "
+          "Check: exact (tests: the documented identity, a single edge gives 0).")
+def _glinkeff(g: Expr) -> Real:
+    gr = _g(g, "GraphLinkEfficiency")
+    _need_undirected(gr, "GraphLinkEfficiency")
+    s = graph_of(_simpleg(g), "GraphLinkEfficiency")
+    s = WG(s.vertices, s.edge_exprs, {}, "GraphLinkEfficiency")
+    if not s.edges:
+        raise ValueError("GraphLinkEfficiency: the graph has no edges")
+    md = _mean_distance(s)
+    if md == INF:
+        return R(-INF)
+    return R(1 - md / len(s.edges))
+
+
+@fn("GraphReciprocity", area=AREA, status="added",
+    notes="GraphReciprocity[g] for a directed graph: the fraction of edges u -> v (u != v) whose reverse v -> u is "
+          "also an edge, exact (self-loops ignored, parallel edges merged); undirected and mixed graphs raise "
+          "NotImplementedError, graphs without non-loop edges raise ValueError. Check: exact (tests: a 2-cycle "
+          "gives 1, a DAG 0, hand-counted mixed cases).")
+def _grecip(g: Expr) -> Rational:
+    gr = _g(g, "GraphReciprocity")
+    gr.require_pure("GraphReciprocity")
+    if gr.edges and not gr.directed:
+        raise NotImplementedError("GraphReciprocity: undirected graphs are not supported")
+    es = {(i, j) for i, j, _ in gr.edges if i != j}
+    if not es:
+        raise ValueError("GraphReciprocity: the graph has no edges between distinct vertices")
+    return R(sp.Rational(sum(1 for i, j in es if (j, i) in es), len(es)))
+
+
+@fn("GraphTriangleCount", area=AREA, status="added",
+    notes="GraphTriangleCount[g]: the number of triangles (3-cycles) of the underlying simple graph of an undirected "
+          "graph; directed graphs raise NotImplementedError. Check: exact (tests: Binomial[n, 3] for K_n, "
+          "trace(A^3)/6).")
+def _gtri(g: Expr) -> NonNegInteger:
+    gr = _g(g, "GraphTriangleCount")
+    _need_undirected(gr, "GraphTriangleCount")
+    nb = _simple_nb(gr)
+    return sum(1 for i in range(gr.n) for j in nb[i] if j > i for k in nb[i] & nb[j] if k > j)
+
+
+@fn("KatzCentrality", area=AREA, status="added",
+    notes="KatzCentrality[g, alpha] and [g, alpha, beta] (beta a number or a list, default 1): the solution x of "
+          "x = alpha A^T x + beta (A the adjacency matrix; undirected edges both ways), exact for exact alpha and "
+          "beta, machine reals otherwise; a singular system I - alpha A^T raises ValueError. Check: self-check "
+          "(the residual x - alpha A^T x - beta is recomputed; ArithmeticError if it is not zero).")
+def _katz(g: Expr, alpha: Real, beta: Real | ListOf[Real] = 1) -> ListOf[Real]:
+    gr = _g(g, "KatzCentrality")
+    gr.require_pure("KatzCentrality")
+    a = _real(alpha, "KatzCentrality", "alpha")
+    n = gr.n
+    if n == 0:
+        return L()
+    if is_list(beta):
+        if len(beta.args) != n:
+            raise ValueError("KatzCentrality: beta must have one value per vertex")
+        bv = [_real(b, "KatzCentrality", "beta") for b in beta.args]
+    else:
+        bv = [_real(beta, "KatzCentrality", "beta")] * n
+    A = sp.zeros(n, n)
+    for i, j, d in gr.edges:
+        A[i, j] += 1
+        if not d and i != j:
+            A[j, i] += 1
+    inexact = any(isinstance(x, sp.Float) for x in [a] + bv)
+    M = sp.eye(n) - a * A.T
+    b = sp.Matrix(bv)
+    if inexact:
+        import numpy as np
+        Mn = np.array(M.evalf(), dtype=float)
+        if abs(np.linalg.det(Mn)) < 1e-14:
+            raise ValueError("KatzCentrality: I - alpha A^T is singular for this alpha")
+        x = np.linalg.solve(Mn, np.array(b.evalf(), dtype=float).ravel())
+        res = Mn @ x - np.array(b.evalf(), dtype=float).ravel()
+        if np.max(np.abs(res)) > 1e-8 * max(1.0, np.max(np.abs(x))):
+            raise ArithmeticError("KatzCentrality: result failed verification")
+        return L(*(float(v) for v in x))
+    if M.det() == 0:
+        raise ValueError("KatzCentrality: I - alpha A^T is singular for this alpha")
+    x = M.LUsolve(b)
+    if any(sp.simplify(v) != 0 for v in (M * x - b)):
+        raise ArithmeticError("KatzCentrality: result failed verification")
+    return L(*(R(sp.nsimplify(sp.simplify(v))) for v in x))
+
+
+@fn("MeanNeighborDegree", area=AREA, status="added",
+    notes="MeanNeighborDegree[g]: for each vertex of an undirected simple graph, the mean degree of its neighbours, "
+          "exact, in VertexList order; directed graphs (and the In/Out forms) and graphs with isolated vertices "
+          "(whose value Wolfram defines by convention) raise NotImplementedError. Check: reference "
+          "(networkx.average_neighbor_degree in tests) and the regular-graph identity.")
+def _mnd(g: Expr, *rest: Expr) -> ListOf[Rational]:
+    if rest:
+        raise NotImplementedError("MeanNeighborDegree: the In/Out forms are not supported")
+    gr = _g(g, "MeanNeighborDegree")
+    _need_simple_undirected(gr, "MeanNeighborDegree")
+    nb = _simple_nb(gr)
+    if any(not s for s in nb):
+        raise NotImplementedError("MeanNeighborDegree: graphs with isolated vertices are not supported")
+    return L(*(R(sp.Rational(sum(len(nb[j]) for j in s), len(s))) for s in nb))
+
+
+def _sim(name, f, notes):
+    @fn(name, area=AREA, status="added", notes=notes)
+    def impl(g: Expr, u: Expr, v: Expr) -> Real:
+        gr = _g(g, name)
+        _need_simple_undirected(gr, name)
+        nb = _simple_nb(gr)
+        a, b = gr.vidx(u, name), gr.vidx(v, name)
+        return R(f(nb[a], nb[b], gr.n, name))
+    return impl
+
+
+def _jac(x, y, n, name):
+    if not (x | y):
+        raise ValueError(f"{name}: both vertices are isolated, so the similarity is undefined")
+    return sp.Rational(len(x & y), len(x | y))
+
+
+def _dice(x, y, n, name):
+    if not (x or y):
+        raise ValueError(f"{name}: both vertices are isolated, so the similarity is undefined")
+    return sp.Rational(2 * len(x & y), len(x) + len(y))
+
+
+def _cos(x, y, n, name):
+    if not x or not y:
+        raise ValueError(f"{name}: an isolated vertex has no defined cosine similarity")
+    return sp.Integer(len(x & y)) / sp.sqrt(len(x) * len(y))
+
+
+def _corr(x, y, n, name):
+    kx, ky, c = len(x), len(y), len(x & y)
+    vx, vy = n * kx - kx * kx, n * ky - ky * ky
+    if vx == 0 or vy == 0:
+        raise ValueError(f"{name}: a constant adjacency row has no defined correlation")
+    return sp.Integer(n * c - kx * ky) / sp.sqrt(vx * vy)
+
+
+_sim("VertexJaccardSimilarity", _jac,
+     "VertexJaccardSimilarity[g, u, v] = |N(u) n N(v)| / |N(u) u N(v)| with N the open neighbourhoods of an "
+     "undirected simple graph, exact; two isolated vertices raise ValueError; directed and multigraphs raise "
+     "NotImplementedError. Check: exact (tests: hand-counted neighbourhoods, symmetry).")
+_sim("VertexDiceSimilarity", _dice,
+     "VertexDiceSimilarity[g, u, v] = 2 |N(u) n N(v)| / (|N(u)| + |N(v)|), exact, undirected simple graphs; two "
+     "isolated vertices raise ValueError. Check: exact (tests: Dice = 2J/(1 + J) with the Jaccard value).")
+_sim("VertexCosineSimilarity", _cos,
+     "VertexCosineSimilarity[g, u, v] = |N(u) n N(v)| / Sqrt[|N(u)| |N(v)|], exact, undirected simple graphs; an "
+     "isolated vertex raises ValueError. Check: exact (tests: equals the cosine of the adjacency rows).")
+_sim("VertexCorrelationSimilarity", _corr,
+     "VertexCorrelationSimilarity[g, u, v]: the Pearson correlation of the adjacency-matrix rows of u and v, exact, "
+     "undirected simple graphs; a row that is all 0 or all 1 raises ValueError. Check: exact (tests compare with "
+     "Correlation of the rows of AdjacencyMatrix).")
+
+
+def _local_vconn(gr, s, t, caps=None):
+    """Maximum number of internally vertex-disjoint s-t paths (vertex splitting; caps per vertex or 1)."""
+    n = gr.n
+    vs = list(range(2 * n))
+    es, cap = [], []
+    for v in range(n):
+        if v in (s, t):
+            c = 10 ** 9
+        else:
+            c = 1 if caps is None else caps[v]
+        es.append(Expr("DirectedEdge", 2 * v, 2 * v + 1))
+        cap.append(c)
+    for i, j, d in gr.edges:
+        if i == j:
+            continue
+        es.append(Expr("DirectedEdge", 2 * i + 1, 2 * j))
+        cap.append(10 ** 9)
+        if not d:
+            es.append(Expr("DirectedEdge", 2 * j + 1, 2 * i))
+            cap.append(10 ** 9)
+    H = WG(vs, es, {}, "VertexConnectivity")
+    val, reach = _maxflow(H, 2 * s + 1, 2 * t, cap)
+    return val, reach
+
+
+def _adjacent(gr, s, t):
+    return any((i, j) == (s, t) or (not d and (j, i) == (s, t)) for i, j, d in gr.edges)
+
+
+def _vconn(gr, fname):
+    gr.require_pure(fname)
+    n = gr.n
+    if n <= 1:
+        return 0
+    if len(_weak_components(gr)) > 1:
+        return 0
+    best = None
+    for s in range(n):
+        for t in range(n):
+            if s == t or (not gr.directed and t < s) or _adjacent(gr, s, t):
+                continue
+            v, _ = _local_vconn(gr, s, t)
+            best = v if best is None else min(best, v)
+    return n - 1 if best is None else best
+
+
+@fn("VertexConnectivity", area=AREA, status="added",
+    notes="VertexConnectivity[g]: the minimum number of vertices whose removal disconnects g (n - 1 for complete "
+          "graphs, 0 when disconnected or n <= 1), the minimum over non-adjacent pairs of the s-t connectivity "
+          "(directed graphs: ordered pairs); VertexConnectivity[g, s, t]: the maximum number of internally "
+          "vertex-disjoint s-t paths (Menger, via maximum flow with vertex splitting) for non-adjacent s, t; adjacent "
+          "s, t raise NotImplementedError. Check: exact (tests: Menger duality with FindVertexCut, "
+          "HararyGraph[k, n] has connectivity k, Petersen graph 3).")
+def _vconnectivity(g: Expr, s: Expr = None, t: Expr = None) -> NonNegInteger:
+    gr = _g(g, "VertexConnectivity")
+    if s is None:
+        return _vconn(gr, "VertexConnectivity")
+    if t is None:
+        raise ValueError("VertexConnectivity: give both s and t")
+    gr.require_pure("VertexConnectivity")
+    a, b = gr.vidx(s, "VertexConnectivity"), gr.vidx(t, "VertexConnectivity")
+    if a == b:
+        raise ValueError("VertexConnectivity: s and t must differ")
+    if _adjacent(gr, a, b):
+        raise NotImplementedError("VertexConnectivity: adjacent s and t are not supported")
+    return _local_vconn(gr, a, b)[0]
+
+
+def _econn_val(gr, fname):
+    gr.require_pure(fname)
+    if gr.n <= 1 or len(_weak_components(gr)) > 1:
+        return 0
+    if not gr.directed:
+        w = [[0] * gr.n for _ in range(gr.n)]
+        for i, j, _ in gr.edges:
+            if i != j:
+                w[i][j] += 1
+                w[j][i] += 1
+        return _stoer_wagner(gr.n, w)[0]
+    ones = [sp.Integer(1)] * len(gr.edges)
+    return min(min(_maxflow(gr, 0, t, ones)[0], _maxflow(gr, t, 0, ones)[0]) for t in range(1, gr.n))
+
+
+@fn("KEdgeConnectedGraphQ", area=AREA, status="added",
+    notes="KEdgeConnectedGraphQ[g, k]: True when at least k edges must be removed to disconnect g (EdgeConnectivity "
+          ">= k; strongly for directed graphs, computed by maximum flows); k = 0 is always True; non-graphs give "
+          "False. Check: exact (tests: cycles are 2- but not 3-edge-connected, hypercubes Q_n are n-edge-connected).")
+def _kecq(g: Expr, k: NonNegInteger) -> Boolean:
+    k = _int(k, "KEdgeConnectedGraphQ", 0, "k")
+    if isinstance(g, Symbol):
+        raise Unevaluated()
+    if not is_graph_like(g):
+        return False
+    gr = _g(g, "KEdgeConnectedGraphQ")
+    return k == 0 or (gr.n > 0 and _econn_val(gr, "KEdgeConnectedGraphQ") >= k)
+
+
+@fn("KVertexConnectedGraphQ", area=AREA, status="added",
+    notes="KVertexConnectedGraphQ[g, k]: True when VertexConnectivity[g] >= k (k = 0 always True); non-graphs give "
+          "False. Check: exact (tests: HararyGraph[k, n] is k- but not (k+1)-connected).")
+def _kvcq(g: Expr, k: NonNegInteger) -> Boolean:
+    k = _int(k, "KVertexConnectedGraphQ", 0, "k")
+    if isinstance(g, Symbol):
+        raise Unevaluated()
+    if not is_graph_like(g):
+        return False
+    gr = _g(g, "KVertexConnectedGraphQ")
+    return k == 0 or _vconn(gr, "KVertexConnectedGraphQ") >= k
+
+
+@fn("PathGraphQ", area=AREA, status="added",
+    notes="PathGraphQ[g]: True for a simple undirected path (connected, n - 1 edges, degrees at most 2) or a directed "
+          "path (each vertex at most one in- and one out-edge, connected, n - 1 edges); a single vertex is a path; "
+          "mixed graphs, the empty graph and non-graphs give False. Check: exact (tests: PathGraph, cycles, stars).")
+def _pathq(g: Expr) -> Boolean:
+    if isinstance(g, Symbol):
+        raise Unevaluated()
+    if not is_graph_like(g):
+        return False
+    try:
+        gr = graph_of(g, "PathGraphQ")
+    except ValueError:
+        return False
+    if gr.mixed or gr.n == 0 or gr.loops() or gr.multi():
+        return False
+    if len(gr.edges) != gr.n - 1 or len(_weak_components(gr)) != 1:
+        return False
+    deg, ind, outd = _degree_lists(gr)
+    if gr.directed:
+        return all(ind[i] <= 1 and outd[i] <= 1 for i in range(gr.n))
+    return all(d <= 2 for d in deg)
+
+
+def _edge_set_q(name, check, notes):
+    @fn(name, area=AREA, status="added", notes=notes)
+    def impl(g: Expr, elist: ListOf[Expr]) -> Boolean:
+        gr = _g(g, name)
+        if not is_list(elist):
+            raise TypeError(f"{name}: the second argument must be a list of edges")
+        ks = _edge_indices(gr, list(elist.args), name)
+        if ks is None:
+            return False
+        return check(gr, ks)
+    return impl
+
+
+def _cover_ok(gr, ks):
+    hit = set()
+    for k in ks:
+        i, j, _ = gr.edges[k]
+        hit |= {i, j}
+    return len(hit) == gr.n
+
+
+def _indep_ok(gr, ks):
+    used = set()
+    for k in ks:
+        i, j, _ = gr.edges[k]
+        if i in used or j in used or i == j:
+            return False
+        used |= {i, j}
+    return True
+
+
+_edge_set_q("EdgeCoverQ", _cover_ok,
+            "EdgeCoverQ[g, {e...}]: True when the listed edges are edges of g and every vertex is an endpoint of one "
+            "of them (False when an edge is not in g). Check: exact (tests: FindEdgeCover results pass, deleting an "
+            "edge fails).")
+_edge_set_q("IndependentEdgeSetQ", _indep_ok,
+            "IndependentEdgeSetQ[g, {e...}]: True when the listed edges are edges of g and no two share a vertex "
+            "(self-loops are never independent). Check: exact (tests: FindIndependentEdgeSet results pass, adjacent "
+            "edges fail).")
+
+
+@fn("KCoreComponents", area=AREA, status="added",
+    notes="KCoreComponents[g, k]: the connected components of the k-core of the underlying simple graph (vertices of "
+          "degree < k removed repeatedly), largest first with vertices in VertexList order; the In/Out forms raise "
+          "NotImplementedError. Check: exact (tests: every component vertex has core degree >= k; the Petersen graph "
+          "is its own 3-core).")
+def _kcore(g: Expr, k: NonNegInteger, *rest: Expr) -> ListOf[ListOf[Expr]]:
+    if rest:
+        raise NotImplementedError("KCoreComponents: the In/Out forms are not supported")
+    gr = _g(g, "KCoreComponents")
+    k = _int(k, "KCoreComponents", 0, "k")
+    nb = [set(s) for s in _simple_nb(gr)]
+    alive = set(range(gr.n))
+    changed = True
+    while changed:
+        changed = False
+        for v in list(alive):
+            if len(nb[v] & alive) < k:
+                alive.discard(v)
+                changed = True
+    seen, comps = set(), []
+    for s in sorted(alive):
+        if s in seen:
+            continue
+        comp, q = [], [s]
+        seen.add(s)
+        while q:
+            u = q.pop()
+            comp.append(u)
+            for w in nb[u] & alive:
+                if w not in seen:
+                    seen.add(w)
+                    q.append(w)
+        comps.append(sorted(comp))
+    comps.sort(key=lambda c: (-len(c), c[0]))
+    return L(*(_verts(gr, c) for c in comps))
