@@ -1074,3 +1074,1036 @@ def _arraydot(a, b, spec):
             return R(c.item())
         return L(*(out(c[i]) for i in range(c.shape[0])))
     return out(C)
+
+
+# ═══════════════════════════════ further matrix decompositions ═══════════════════════════════
+
+_DENSE_NOTE = ("; TargetStructure is accepted, but MikoshiLang has no structured arrays, so the factors are always "
+               "ordinary (dense) matrices")
+
+
+def _decomp(m, rest, fname, square=True, extra=()):
+    """Matrix and options for a decomposition: TargetStructure is accepted (always dense)."""
+    args, opts = split_options(rest, {"TargetStructure", *extra}, fname)
+    _target_structure(opts, fname)
+    M = _matrix(m, fname, square=square)
+    return M, args, opts
+
+
+def _kind(M):
+    """'exact', 'machine' or 'bignum' for a SymPy matrix."""
+    floats = [a for v in M for a in sp.preorder_traversal(v) if isinstance(a, sp.Float)]
+    if not floats:
+        return "exact"
+    if all(f._prec <= 53 for f in floats):
+        return "machine"
+    return "bignum"
+
+
+def _numeric_kind(M, fname):
+    k = _kind(M)
+    if k == "bignum":
+        raise NotImplementedError(f"{fname}: arbitrary-precision matrices are not supported; use exact or machine "
+                                  "numbers")
+    return k
+
+
+def _simp(v):
+    if not isinstance(v, sp.Basic) or v.is_Number:
+        return v
+    if v.free_symbols:
+        return sp.factor(sp.cancel(v)) if v.is_rational_function() else sp.simplify(v)
+    return sp.simplify(v)
+
+
+def _msimp(M):
+    return M.applyfunc(_simp)
+
+
+def _ms(M):
+    """Output a SymPy matrix with simplified entries."""
+    return _mout(_msimp(M))
+
+
+def _iszero(v):
+    if isinstance(v, sp.Float):
+        return v == 0
+    if not isinstance(v, sp.Basic):
+        return v == 0
+    if v.is_number:
+        return sp.simplify(v) == 0
+    return sp.cancel(sp.together(v)) == 0
+
+
+def _num_abs(v):
+    return float(abs(complex(sp.N(v, 30))))
+
+
+def _no_symbols(M, fname):
+    if M.free_symbols:
+        raise NotImplementedError(f"{fname}: symbolic matrices are not supported")
+
+
+def _hermitian_kind(M, fname):
+    """'hermitian' if M == ConjugateTranspose[M], else 'symmetric' if M == Transpose[M]."""
+    n = M.rows
+    if all(_iszero(M[i, j] - sp.conjugate(M[j, i])) for i in range(n) for j in range(i, n)):
+        return "hermitian"
+    if all(_iszero(M[i, j] - M[j, i]) for i in range(n) for j in range(i + 1, n)):
+        return "symmetric"
+    raise ValueError(f"{fname}: the matrix is not Hermitian or symmetric")
+
+
+def _np_real_if(a, tol=1e-13):
+    np = _np()
+    a = np.asarray(a)
+    if np.iscomplexobj(a) and (a.size == 0 or np.max(np.abs(a.imag)) <= tol * max(1.0, np.max(np.abs(a)))):
+        return a.real
+    return a
+
+
+def _mach(X, M):
+    """Simplified output; for machine-precision input numeric entries become machine reals."""
+    X = _msimp(X)
+    if _kind(M) == "machine":
+        X = X.applyfunc(lambda v: sp.Float(v) if isinstance(v, sp.Basic) and v.is_number and v.is_real
+                        else (sp.N(v, 15) if isinstance(v, sp.Basic) and v.is_number else v))
+    return _mout(X)
+
+
+def _float_out(a):
+    np = _np()
+    a = np.asarray(a)
+    if a.ndim == 2 and a.shape[1] == 0:
+        return L(*[L() for _ in range(a.shape[0])])
+    return _from_np(a)
+
+
+@fn("LDLDecomposition", **ADDED,
+    notes="{l, d} with m == l.d.ConjugateTranspose[l], l unit lower triangular and d diagonal, for a Hermitian (or "
+          "real symmetric) matrix, exact, symbolic or machine; a zero pivot (no LDL factorisation without pivoting) "
+          "raises (use BunchKaufmanDecomposition)" + _DENSE_NOTE)
+def _ldl(m, *rest):
+    M, args, _ = _decomp(m, rest, "LDLDecomposition")
+    if args:
+        raise ValueError("LDLDecomposition called with too many arguments")
+    _numeric_kind(M, "LDLDecomposition")
+    if _hermitian_kind(M, "LDLDecomposition") != "hermitian":
+        raise ValueError("LDLDecomposition: the matrix is not Hermitian")
+    n = M.rows
+    Lm, d = sp.eye(n), [sp.Integer(0)] * n
+    for j in range(n):
+        dj = _simp(M[j, j] - sum(Lm[j, k] * sp.conjugate(Lm[j, k]) * d[k] for k in range(j)))
+        d[j] = dj
+        for i in range(j + 1, n):
+            num = _simp(M[i, j] - sum(Lm[i, k] * sp.conjugate(Lm[j, k]) * d[k] for k in range(j)))
+            if _iszero(dj):
+                if not _iszero(num):
+                    raise ValueError("LDLDecomposition: zero pivot encountered; the matrix has no LDL "
+                                     "factorisation without pivoting (use BunchKaufmanDecomposition)")
+                Lm[i, j] = 0
+            else:
+                Lm[i, j] = _simp(num / dj)
+    return L(_mach(Lm, M), _mach(sp.diag(*d), M))
+
+
+_BK_ALPHA = (1 + math.sqrt(17)) / 8
+
+
+@fn("BunchKaufmanDecomposition", **ADDED,
+    notes="{l, b, p} with p.m.Transpose[p] == l.b.ConjugateTranspose[l] (Hermitian m) or l.b.Transpose[l] "
+          "(complex symmetric m): Bunch-Kaufman diagonal pivoting (alpha = (1 + Sqrt[17])/8), l unit lower "
+          "triangular, b block diagonal with 1x1 and 2x2 blocks, p a permutation matrix; exact or machine numeric "
+          "matrices (symbolic matrices raise); pivot choices can differ from Wolfram's on ties" + _DENSE_NOTE)
+def _bunchkaufman(m, *rest):
+    M, args, _ = _decomp(m, rest, "BunchKaufmanDecomposition")
+    if args:
+        raise ValueError("BunchKaufmanDecomposition called with too many arguments")
+    _numeric_kind(M, "BunchKaufmanDecomposition")
+    _no_symbols(M, "BunchKaufmanDecomposition")
+    herm = _hermitian_kind(M, "BunchKaufmanDecomposition") == "hermitian"
+    cj = sp.conjugate if herm else (lambda v: v)
+    n = M.rows
+    A = M.copy()
+    Lm = sp.eye(n)
+    B = sp.zeros(n, n)
+    perm = list(range(n))
+
+    def swap(i, j):
+        if i == j:
+            return
+        A.row_swap(i, j)
+        A.col_swap(i, j)
+        for c in range(k):
+            Lm[i, c], Lm[j, c] = Lm[j, c], Lm[i, c]
+        perm[i], perm[j] = perm[j], perm[i]
+
+    k = 0
+    while k < n:
+        lam, r = 0.0, k
+        for i in range(k + 1, n):
+            a = _num_abs(A[i, k])
+            if a > lam:
+                lam, r = a, i
+        akk = _num_abs(A[k, k])
+        s = 1
+        if lam == 0 or akk >= _BK_ALPHA * lam:
+            pass
+        else:
+            sigma = max(_num_abs(A[r, j]) for j in range(k, n) if j != r)
+            if akk * sigma >= _BK_ALPHA * lam * lam:
+                pass
+            elif _num_abs(A[r, r]) >= _BK_ALPHA * sigma:
+                swap(k, r)
+            else:
+                swap(k + 1, r)
+                s = 2
+        if s == 1:
+            d = A[k, k]
+            B[k, k] = d
+            if lam != 0 or any(not _iszero(A[i, k]) for i in range(k + 1, n)):
+                for i in range(k + 1, n):
+                    Lm[i, k] = _simp(A[i, k] / d)
+                for i in range(k + 1, n):
+                    for j in range(k + 1, n):
+                        A[i, j] = _simp(A[i, j] - A[i, k] * cj(A[j, k]) / d)
+            k += 1
+        else:
+            E = A[k:k + 2, k:k + 2]
+            Ei = E.inv()
+            B[k:k + 2, k:k + 2] = E
+            C = A[k + 2:, k:k + 2]
+            if C.rows:
+                Lb = (C * Ei).applyfunc(_simp)
+                Lm[k + 2:, k:k + 2] = Lb
+                Ch = C.T.applyfunc(cj)
+                A[k + 2:, k + 2:] = (A[k + 2:, k + 2:] - C * Ei * Ch).applyfunc(_simp)
+            k += 2
+    P = sp.zeros(n, n)
+    for i, j in enumerate(perm):
+        P[i, j] = 1
+    return L(_mach(Lm, M), _mach(B, M), _mout(P))
+
+
+@fn("RankDecomposition", **ADDED,
+    notes="{c, f} with m == c.f and c, f of full rank MatrixRank[m]: exact and symbolic matrices give c = the pivot "
+          "columns of m and f = the non-zero rows of RowReduce[m] (as Wolfram); machine matrices give c with "
+          "orthonormal columns (SVD-based, the factorisation is not unique); the zero matrix raises" + _DENSE_NOTE)
+def _rankdecomposition(m, *rest):
+    M, args, _ = _decomp(m, rest, "RankDecomposition", square=False, extra=("Tolerance",))
+    if args:
+        raise ValueError("RankDecomposition called with too many arguments")
+    kind = _numeric_kind(M, "RankDecomposition")
+    if kind == "machine":
+        np = _np()
+        A = _npmat(M)
+        U, s, Vh = np.linalg.svd(A, full_matrices=False)
+        tol = max(A.shape) * np.finfo(float).eps * (s[0] if s.size else 0)
+        r = int(np.sum(s > tol))
+        if r == 0:
+            raise ValueError("RankDecomposition: the matrix has rank 0")
+        C, F = U[:, :r], np.diag(s[:r]) @ Vh[:r, :]
+        for j in range(r):          # first non-negligible entry of each column of c positive
+            col = C[:, j]
+            k = int(np.argmax(np.abs(col) > 1e-12))
+            if col[k].real < 0:
+                C[:, j], F[j, :] = -C[:, j], -F[j, :]
+        return L(_float_out(C), _float_out(F))
+    rref, piv = M.rref(iszerofunc=_iszero, simplify=True)
+    if not piv:
+        raise ValueError("RankDecomposition: the matrix has rank 0")
+    C = M[:, list(piv)]
+    F = rref[:len(piv), :]
+    return L(_ms(C), _ms(F))
+
+
+def _int_scale(vec):
+    """Scale a vector of rationals to coprime integers (keeping the sign of the original)."""
+    if not all(isinstance(v, sp.Basic) and v.is_Rational for v in vec):
+        return vec
+    dens = [v.q for v in vec]
+    lcm = reduce(lambda a, b: a * b // math.gcd(a, b), dens, 1)
+    ints = [int(v * lcm) for v in vec]
+    g = reduce(math.gcd, ints, 0) or 1
+    return [sp.Integer(i // g) for i in ints]
+
+
+@fn("EigenvalueDecomposition", **ADDED,
+    notes="{s, d} with m == s.d.Inverse[s]: s has the eigenvectors (Eigenvectors[m]) as columns and d the "
+          "eigenvalues on the diagonal, ordered as Eigensystem; rational eigenvectors are scaled to coprime "
+          "integers as Wolfram does; a non-diagonalizable matrix raises" + _DENSE_NOTE)
+def _eigenvaluedecomposition(m, *rest):
+    M, args, _ = _decomp(m, rest, "EigenvalueDecomposition")
+    if args:
+        raise ValueError("EigenvalueDecomposition called with too many arguments")
+    kind = _numeric_kind(M, "EigenvalueDecomposition")
+    res = ev(Expr("Eigensystem", m))
+    if not (is_list(res) and len(res.args) == 2 and is_list(res.args[1])):
+        raise ValueError("EigenvalueDecomposition: eigensystem could not be computed")
+    vals = [S(v) for v in res.args[0].args]
+    vecs = [[S(x) for x in v.args] for v in res.args[1].args]
+    n = M.rows
+    if kind == "machine":
+        np = _np()
+        V = np.array([[complex(x) for x in v] for v in vecs]).T
+        if np.linalg.matrix_rank(V) < n or np.linalg.cond(V) > 1e10:
+            raise ValueError("EigenvalueDecomposition: the matrix is not diagonalizable")
+        return L(_float_out(_np_real_if(V)), _float_out(_np_real_if(np.diag([complex(v) for v in vals]))))
+    vecs = [_int_scale(v) for v in vecs]
+    Sm = sp.Matrix(vecs).T
+    if any(all(_iszero(x) for x in v) for v in vecs) or Sm.rank(iszerofunc=_iszero, simplify=True) < n:
+        raise ValueError("EigenvalueDecomposition: the matrix is not diagonalizable")
+    return L(_mout(Sm), _mout(sp.diag(*vals)))
+
+
+# ── Smith normal form over the integers ──
+
+def _smith_int(A):
+    """(U, D, V) with U.A.V == D in Smith normal form; A a list of lists of Python ints."""
+    m, n = len(A), len(A[0])
+    A = [row[:] for row in A]
+    U = [[int(i == j) for j in range(m)] for i in range(m)]
+    V = [[int(i == j) for j in range(n)] for i in range(n)]
+
+    def rswap(i, j):
+        A[i], A[j] = A[j], A[i]
+        U[i], U[j] = U[j], U[i]
+
+    def cswap(i, j):
+        for row in A:
+            row[i], row[j] = row[j], row[i]
+        for row in V:
+            row[i], row[j] = row[j], row[i]
+
+    def radd(dst, src, q):          # row_dst += q row_src
+        A[dst] = [a + q * b for a, b in zip(A[dst], A[src])]
+        U[dst] = [a + q * b for a, b in zip(U[dst], U[src])]
+
+    def cadd(dst, src, q):          # col_dst += q col_src
+        for row in A:
+            row[dst] += q * row[src]
+        for row in V:
+            row[dst] += q * row[src]
+
+    for t in range(min(m, n)):
+        while True:
+            best = None
+            for i in range(t, m):
+                for j in range(t, n):
+                    if A[i][j] and (best is None or abs(A[i][j]) < abs(A[best[0]][best[1]])):
+                        best = (i, j)
+            if best is None:
+                break
+            rswap(t, best[0])
+            cswap(t, best[1])
+            p = A[t][t]
+            done = True
+            for i in range(t + 1, m):
+                if A[i][t]:
+                    q = A[i][t] // p
+                    radd(i, t, -q)
+                    if A[i][t]:
+                        done = False
+            for j in range(t + 1, n):
+                if A[t][j]:
+                    q = A[t][j] // p
+                    cadd(j, t, -q)
+                    if A[t][j]:
+                        done = False
+            if not done:
+                continue
+            bad = next(((i, j) for i in range(t + 1, m) for j in range(t + 1, n) if A[i][j] % p), None)
+            if bad is None:
+                break
+            radd(t, bad[0], 1)
+        if t < m and t < n and A[t][t] < 0:
+            A[t] = [-a for a in A[t]]
+            U[t] = [-a for a in U[t]]
+    return U, A, V
+
+
+def _smith(m, rest, fname):
+    M, args, _ = _decomp(m, rest, fname, square=False)
+    if args:
+        raise ValueError(f"{fname} called with too many arguments")
+    if _kind(M) != "exact":
+        raise ValueError(f"{fname}: the matrix must be exact (integers or rationals)")
+    if not all(v.is_Rational for v in M):
+        if all(v.is_number for v in M):
+            raise NotImplementedError(f"{fname}: only integer and rational matrices are supported (Gaussian "
+                                      "integers and algebraic entries are not)")
+        raise NotImplementedError(f"{fname}: symbolic matrices are not supported (see PolynomialSmithReduce)")
+    den = reduce(lambda a, b: a * b // math.gcd(a, b), [int(v.q) for v in M], 1)
+    A = [[int(M[i, j] * den) for j in range(M.cols)] for i in range(M.rows)]
+    U, D, V = _smith_int(A)
+    Dm = sp.Matrix(D) / den
+    return sp.Matrix(U), Dm, sp.Matrix(V)
+
+
+@fn("SmithDecomposition", **ADDED,
+    notes="{u, r, v} with u.m.v == r, u and v unimodular and r the Smith normal form (diagonal, non-negative, "
+          "each entry dividing the next) for integer matrices; rational matrices are handled by clearing "
+          "denominators (as Wolfram); the transformation matrices are not unique and can differ from Wolfram's; "
+          "inexact, Gaussian-integer and symbolic matrices raise" + _DENSE_NOTE)
+def _smithdecomposition(m, *rest):
+    U, D, V = _smith(m, rest, "SmithDecomposition")
+    return L(_mout(U), _mout(D), _mout(V))
+
+
+@fn("SmithReduce", **ADDED,
+    notes="the Smith normal form r of an integer or rational matrix (SmithDecomposition[m][[2]], unique)"
+          + _DENSE_NOTE)
+def _smithreduce(m, *rest):
+    return _mout(_smith(m, rest, "SmithReduce")[1])
+
+
+# ── Frobenius (rational canonical) form ──
+
+def _krylov(A, v):
+    """Krylov basis [v, Av, ...] up to the first dependency, and c with A^d v == sum c_i A^i v."""
+    basis = [v]
+    while True:
+        w = (A * basis[-1]).applyfunc(_simp)
+        K = sp.Matrix.hstack(*basis)
+        if len(basis) == A.rows:
+            Kc = sp.Matrix.hstack(K, w)
+        else:
+            Kc = sp.Matrix.hstack(K, w)
+            if Kc.rank(iszerofunc=_iszero, simplify=True) > len(basis):
+                basis.append(w)
+                continue
+        sol, params = K.gauss_jordan_solve(w)
+        if params.shape[0]:
+            sol = sol.subs({p: 0 for p in params})
+        return basis, [_simp(c) for c in sol]
+
+
+def _vec_candidates(n, seed=20260):
+    import random
+    rnd = random.Random(seed)
+    for i in range(n):
+        yield sp.Matrix([int(j == i) for j in range(n)])
+    for _ in range(60):
+        yield sp.Matrix([rnd.randint(-3, 3) for _ in range(n)])
+
+
+def _frobenius_blocks(A):
+    """List of (coefficients c, basis columns) with invariant factors in increasing (dividing) order."""
+    n = A.rows
+    if n == 0:
+        return []
+    # the minimal polynomial degree is the largest local degree; random vectors reach it generically
+    cands = list(_vec_candidates(n))
+    best = None
+    for v in cands:
+        b, c = _krylov(A, v)
+        if best is None or len(b) > len(best[0]):
+            best = (b, c, v)
+    # make sure no unit vector has a larger local polynomial: the lcm of local polys has degree <= len(best)
+    d = len(best[0])
+    if d == n:
+        return [(best[1], best[0])]
+    At = A.T
+    for u in cands:
+        bu, cu = _krylov(A, u)
+        if len(bu) != d:
+            continue
+        for w in cands:
+            bw, _ = _krylov(At, w)
+            if len(bw) != d:
+                continue
+            Kw, Ku = sp.Matrix.hstack(*bw), sp.Matrix.hstack(*bu)
+            G = (Kw.T * Ku).applyfunc(_simp)
+            if _iszero(_simp(G.det())):
+                continue
+            comp = Kw.T.nullspace(iszerofunc=_iszero, simplify=True)
+            Bm = sp.Matrix.hstack(*comp)
+            _, piv = Bm.T.rref(iszerofunc=_iszero, simplify=True)
+            rows = list(piv)
+            A2 = (Bm[rows, :].inv() * (A * Bm)[rows, :]).applyfunc(_simp)
+            sub = _frobenius_blocks(A2)
+            out = [(c, [(Bm * b).applyfunc(_simp) for b in basis]) for c, basis in sub]
+            return out + [(cu, bu)]
+    raise NotImplementedError("FrobeniusDecomposition: could not find a cyclic decomposition (degenerate case)")
+
+
+def _frobenius(m, rest, fname):
+    M, args, opts = _decomp(m, rest, fname, extra=("Modulus",))
+    if args:
+        raise ValueError(f"{fname} called with too many arguments")
+    mod = opts.get("Modulus")
+    if mod is not None and not (isinstance(mod, int) and mod == 0):
+        raise NotImplementedError(f"{fname}: the Modulus option is not supported")
+    if _kind(M) != "exact":
+        raise NotImplementedError(f"{fname}: inexact matrices are not supported (the rational canonical form is "
+                                  "not numerically stable); use exact input")
+    blocks = _frobenius_blocks(M)
+    n = M.rows
+    C = sp.zeros(n, n)
+    cols = []
+    pos = 0
+    for c, basis in blocks:
+        d = len(basis)
+        for i in range(1, d):
+            C[pos + i, pos + i - 1] = 1
+        for i in range(d):
+            C[pos + i, pos + d - 1] = c[i]
+        cols.extend(basis)
+        pos += d
+    Sm = sp.Matrix.hstack(*cols)
+    return Sm, C
+
+
+@fn("FrobeniusDecomposition", **ADDED,
+    notes="{s, c} with m == s.c.Inverse[s] and c the Frobenius (rational canonical) form: block diagonal with "
+          "companion matrices (ones below the diagonal, coefficients in the last column) of the invariant factors, "
+          "each dividing the next; exact numeric and symbolic matrices (generic case) via cyclic Krylov "
+          "decomposition; s is not unique and can differ from Wolfram's; Modulus and inexact input raise"
+          + _DENSE_NOTE)
+def _frobeniusdecomposition(m, *rest):
+    Sm, C = _frobenius(m, rest, "FrobeniusDecomposition")
+    return L(_ms(Sm), _ms(C))
+
+
+@fn("FrobeniusReduce", **ADDED,
+    notes="the Frobenius (rational canonical) form of a square matrix (unique; FrobeniusDecomposition[m][[2]])"
+          + _DENSE_NOTE)
+def _frobeniusreduce(m, *rest):
+    return _ms(_frobenius(m, rest, "FrobeniusReduce")[1])
+
+
+@fn("JordanReduce", **ADDED,
+    notes="the Jordan normal form j of a square matrix (exact via SymPy, blocks ordered by eigenvalue real part "
+          "then imaginary part); machine matrices must be diagonalizable and give the diagonal matrix of "
+          "Eigenvalues[m] (decreasing absolute value); Wolfram's block order can differ for exact matrices"
+          + _DENSE_NOTE)
+def _jordanreduce(m, *rest):
+    M, args, _ = _decomp(m, rest, "JordanReduce")
+    if args:
+        raise ValueError("JordanReduce called with too many arguments")
+    kind = _numeric_kind(M, "JordanReduce")
+    if kind == "machine":
+        np = _np()
+        vals, vecs = np.linalg.eig(_npmat(M))
+        if np.linalg.cond(vecs) > 1e8:
+            raise NotImplementedError("JordanReduce: this machine matrix is not numerically diagonalizable; use "
+                                      "exact input")
+        ev_ = ev(Expr("Eigenvalues", m))
+        return L(*(L(*(ev_.args[i] if i == j else 0 for j in range(M.rows))) for i in range(M.rows)))
+    _, J = M.jordan_form()
+    n = J.rows
+    blocks, i = [], 0
+    while i < n:
+        j = i
+        while j + 1 < n and J[j, j + 1] == 1 and _iszero(J[j + 1, j + 1] - J[i, i]):
+            j += 1
+        blocks.append((J[i, i], j - i + 1))
+        i = j + 1
+
+    def key(b):
+        try:
+            z = complex(sp.N(b[0], 30))
+            return (round(z.real, 12), round(z.imag, 12), -b[1])
+        except TypeError:
+            return (0, 0, -b[1])
+    blocks.sort(key=key)
+    out = sp.zeros(n, n)
+    pos = 0
+    for lam, size in blocks:
+        for k in range(size):
+            out[pos + k, pos + k] = _simp(lam)
+            if k + 1 < size:
+                out[pos + k, pos + k + 1] = 1
+        pos += size
+    return _mout(out)
+
+
+# ── core-nilpotent decomposition and Drazin inverse ──
+
+def _core_nilpotent(M, fname):
+    """(T, C, N) with M == T.BlockDiagonal[C, N].Inverse[T] (C, N SymPy matrices, possibly 0x0)."""
+    n = M.rows
+    kind = _numeric_kind(M, fname)
+    if kind == "machine":
+        np = _np()
+        A = _npmat(M)
+        ranks = [n]
+        P = np.eye(n)
+        while True:
+            P = P @ A
+            r = int(np.linalg.matrix_rank(P))
+            if r == ranks[-1]:
+                break
+            ranks.append(r)
+        k = len(ranks) - 1
+        Ak = np.linalg.matrix_power(A, k)
+        r = ranks[-1]
+        if r == n or r == 0:
+            return "machine", np.eye(n), (A if r == n else np.zeros((0, 0))), (A if r == 0 else np.zeros((0, 0)))
+        U, s, Vh = np.linalg.svd(Ak)
+        T = np.hstack([U[:, :r], Vh[r:, :].conj().T])
+        B = np.linalg.solve(T, A @ T)
+        B[np.abs(B) < 1e-12 * max(1.0, float(np.max(np.abs(A))))] = 0
+        return "machine", T, B[:r, :r], B[r:, r:]
+    ranks = [n]
+    P = sp.eye(n)
+    while True:
+        P = (P * M).applyfunc(_simp)
+        r = P.rank(iszerofunc=_iszero, simplify=True)
+        if r == ranks[-1]:
+            break
+        ranks.append(r)
+    k = len(ranks) - 1
+    r = ranks[-1]
+    if r == n:
+        return "exact", sp.eye(n), M, sp.zeros(0, 0)
+    if r == 0:
+        return "exact", sp.eye(n), sp.zeros(0, 0), M
+    Ak = (M ** k).applyfunc(_simp)
+    _, piv = Ak.rref(iszerofunc=_iszero, simplify=True)
+    rng = [Ak[:, j] for j in piv]
+    nul = [sp.Matrix(_int_scale(list(v))) for v in reversed(Ak.nullspace(iszerofunc=_iszero, simplify=True))]
+    T = sp.Matrix.hstack(*rng, *nul)
+    B = (T.inv() * M * T).applyfunc(_simp)
+    return "exact", T, B[:r, :r], B[r:, r:]
+
+
+def _cn_out(kind, X):
+    if kind == "machine":
+        return _float_out(_np_real_if(X)) if X.size else L()
+    return _ms(X) if X.rows else L()
+
+
+@fn("CoreNilpotentDecomposition", **ADDED,
+    notes="{t, c, n} with m == t.BlockDiagonalMatrix[{c, n}].Inverse[t], c invertible and n nilpotent; exact "
+          "matrices use t = {pivot columns of m^k, integer null-space basis of m^k} (k the index of m), as "
+          "Wolfram; invertible or nilpotent m give t = IdentityMatrix and {} for the empty part; machine matrices "
+          "use an SVD basis (t is not unique)" + _DENSE_NOTE)
+def _corenilpotent(m, *rest):
+    M, args, _ = _decomp(m, rest, "CoreNilpotentDecomposition")
+    if args:
+        raise ValueError("CoreNilpotentDecomposition called with too many arguments")
+    kind, T, C, N = _core_nilpotent(M, "CoreNilpotentDecomposition")
+    return L(_cn_out(kind, T), _cn_out(kind, C), _cn_out(kind, N))
+
+
+@fn("DrazinInverse", **ADDED,
+    notes="the Drazin inverse t.BlockDiagonalMatrix[{Inverse[c], 0}].Inverse[t] from the core-nilpotent "
+          "decomposition (the inverse for invertible m, zero for nilpotent m); exact, symbolic (generic) or machine "
+          "square matrices" + _DENSE_NOTE)
+def _drazininverse(m, *rest):
+    M, args, _ = _decomp(m, rest, "DrazinInverse")
+    if args:
+        raise ValueError("DrazinInverse called with too many arguments")
+    kind, T, C, N = _core_nilpotent(M, "DrazinInverse")
+    n = M.rows
+    if kind == "machine":
+        np = _np()
+        D = np.zeros((n, n), dtype=complex)
+        r = C.shape[0]
+        if r:
+            D[:r, :r] = np.linalg.inv(C)
+        return _float_out(_np_real_if(T @ D @ np.linalg.inv(T)))
+    r = C.rows
+    D = sp.zeros(n, n)
+    if r:
+        D[:r, :r] = C.inv()
+    return _ms(T * D * T.inv())
+
+
+# ── polar decomposition ──
+
+@fn("PolarDecomposition", **ADDED,
+    notes="{u, p} with m == u.p, u with orthonormal columns (or rows) and p = MatrixPower[ConjugateTranspose[m]"
+          ".m, 1/2] positive semidefinite, via the SVD for machine matrices; exact and arbitrary-precision matrices "
+          "raise (use N[m])" + _DENSE_NOTE)
+def _polardecomposition(m, *rest):
+    M, args, _ = _decomp(m, rest, "PolarDecomposition", square=False)
+    if args:
+        raise ValueError("PolarDecomposition called with too many arguments")
+    _no_symbols(M, "PolarDecomposition")
+    if _kind(M) != "machine":
+        raise NotImplementedError("PolarDecomposition: only machine-precision matrices are supported; use N[m]")
+    np = _np()
+    A = _npmat(M)
+    W, s, Vh = np.linalg.svd(A, full_matrices=False)
+    U = W @ Vh
+    Pm = Vh.conj().T @ np.diag(s) @ Vh
+    return L(_float_out(_np_real_if(U)), _float_out(_np_real_if(Pm)))
+
+
+# ── ordered Schur decomposition ──
+
+_SCHUR_ORDERS = {
+    "DecreasingAbs": lambda z: -abs(z), "IncreasingAbs": lambda z: abs(z),
+    "DecreasingRe": lambda z: -z.real, "IncreasingRe": lambda z: z.real,
+    "DecreasingAbsRe": lambda z: -abs(z.real), "IncreasingAbsRe": lambda z: abs(z.real),
+    "DecreasingAbsIm": lambda z: -abs(z.imag), "IncreasingAbsIm": lambda z: abs(z.imag),
+}
+
+
+def _schur_blocks(T, real):
+    n = T.shape[0]
+    out, i = [], 0
+    while i < n:
+        if real and i + 1 < n and T[i + 1, i] != 0:
+            a, b, c, d = T[i, i], T[i, i + 1], T[i + 1, i], T[i + 1, i + 1]
+            tr, det = a + d, a * d - b * c
+            disc = complex(tr * tr / 4 - det) ** 0.5
+            out.append((i, 2, tr / 2 + disc))
+            i += 2
+        else:
+            out.append((i, 1, complex(T[i, i])))
+            i += 1
+    return out
+
+
+@fn("OrderedSchurDecomposition", **ADDED,
+    notes="{q, t} with m == q.t.ConjugateTranspose[q], t (block) upper triangular with eigenvalues ordered by "
+          "ord (default \"DecreasingAbs\"; also IncreasingAbs, Decreasing/IncreasingRe, ...AbsRe, ...AbsIm); "
+          "RealBlockDiagonalForm -> True (default) keeps 2x2 real blocks for complex pairs of a real matrix; "
+          "{m, a} gives the generalized decomposition {q, s, p, t} with m == q.s.ConjugateTranspose[p], a == "
+          "q.t.ConjugateTranspose[p] ordered by the generalized eigenvalues; LAPACK reordering (trexc/tgexc) of "
+          "SciPy's Schur/QZ forms; numeric matrices only (exact input is evaluated numerically)" + _DENSE_NOTE)
+def _orderedschur(m, *rest):
+    fname = "OrderedSchurDecomposition"
+    args, opts = split_options(rest, {"TargetStructure", "RealBlockDiagonalForm"}, fname)
+    _target_structure(opts, fname)
+    rbd = opts.get("RealBlockDiagonalForm", True)
+    if rbd not in (True, False):
+        raise ValueError(f"{fname}: RealBlockDiagonalForm must be True or False")
+    if len(args) > 1:
+        raise ValueError(f"{fname} called with too many arguments")
+    order = args[0] if args else "DecreasingAbs"
+    if order not in _SCHUR_ORDERS:
+        raise ValueError(f"{fname}: unknown ordering {order}; use one of {', '.join(_SCHUR_ORDERS)}")
+    key = _SCHUR_ORDERS[order]
+    _need_scipy(fname)
+    import scipy.linalg as sla
+    from scipy.linalg import lapack
+    np = _np()
+    gen = is_list(m) and len(m.args) == 2 and len(_dims(m)) == 3
+    if gen:
+        Ms = [_matrix(x, fname, square=True) for x in m.args]
+        for X in Ms:
+            _no_symbols(X, fname)
+            _numeric_kind(X, fname)
+        A, Bm = _npmat(Ms[0]), _npmat(Ms[1])
+        if A.shape != Bm.shape:
+            raise ValueError(f"{fname}: the matrices must have the same dimensions")
+        real = not (np.iscomplexobj(A) or np.iscomplexobj(Bm)) and rbd
+        out = "real" if real else "complex"
+        if not real:
+            A, Bm = A.astype(complex), Bm.astype(complex)
+        AA, BB, Q, Z = sla.qz(A, Bm, output=out)
+        n = A.shape[0]
+        pos = 0
+        while pos < n:
+            blocks = []
+            i = 0
+            while i < n:
+                size = 2 if real and i + 1 < n and AA[i + 1, i] != 0 else 1
+                if size == 2:
+                    w = sla.eigvals(AA[i:i + 2, i:i + 2], BB[i:i + 2, i:i + 2])[0]
+                else:
+                    w = AA[i, i] / BB[i, i] if BB[i, i] != 0 else complex("inf")
+                blocks.append((i, size, complex(w)))
+                i += size
+            rem = [b for b in blocks if b[0] >= pos]
+            best = min(rem, key=lambda b: (key(b[2]) if np.isfinite(b[2]) else float("inf"), b[0]))
+            if best[0] != pos:
+                fun = lapack.dtgexc if real else lapack.ztgexc
+                res = fun(AA, BB, Q, Z, best[0] + 1, pos + 1)
+                AA, BB, Q, Z, info = res[0], res[1], res[2], res[3], res[-1]
+                if info != 0:
+                    raise ValueError(f"{fname}: LAPACK reordering failed (info={info})")
+            pos += best[1]
+        return L(_float_out(Q), _float_out(AA), _float_out(Z), _float_out(BB))
+    M = _matrix(m, fname, square=True)
+    _no_symbols(M, fname)
+    _numeric_kind(M, fname)
+    A = _npmat(M)
+    real = not np.iscomplexobj(A) and rbd
+    T, Q = sla.schur(A if real else A.astype(complex), output="real" if real else "complex")
+    n = A.shape[0]
+    pos = 0
+    while pos < n:
+        rem = [b for b in _schur_blocks(T, real) if b[0] >= pos]
+        best = min(rem, key=lambda b: (key(b[2]), b[0]))
+        if best[0] != pos:
+            fun = lapack.dtrexc if real else lapack.ztrexc
+            T, Q, info = fun(T, Q, best[0] + 1, pos + 1)
+            if info != 0:
+                raise ValueError(f"{fname}: LAPACK reordering failed (info={info})")
+        pos += best[1]
+    if real:
+        T = np.triu(T, -1)
+    else:
+        T = np.triu(T)
+    return L(_float_out(Q), _float_out(T))
+
+
+record("RealBlockDiagonalForm", AREA, "added",
+       "option of OrderedSchurDecomposition (and Wolfram's SchurDecomposition): True keeps real 2x2 blocks for "
+       "complex-conjugate eigenvalue pairs of a real matrix, False gives a complex upper triangular form")
+
+
+# ── Karhunen-Loeve decomposition and principal components ──
+
+def _flat_numeric(x, fname):
+    if is_list(x):
+        out = []
+        for a in x.args:
+            out.extend(_flat_numeric(a, fname))
+        return out
+    v = S(x)
+    if not (isinstance(v, sp.Basic) and v.is_number):
+        raise ValueError(f"{fname}: {x} is not a number")
+    return [complex(sp.N(v))]
+
+
+def _sign_fix(vecs):
+    """Make the largest-magnitude component of each eigenvector (rows) positive."""
+    np = _np()
+    out = vecs.copy()
+    for i in range(out.shape[0]):
+        j = int(np.argmax(np.abs(out[i])))
+        if out[i, j].real < 0:
+            out[i] = -out[i]
+    return out
+
+
+def _reshape_like(flat, x):
+    if not is_list(x):
+        return R(flat.pop(0))
+    return L(*(_reshape_like(flat, a) for a in x.args))
+
+
+@fn("KarhunenLoeveDecomposition", **ADDED,
+    notes="KarhunenLoeveDecomposition[{a1, ..., an}] gives {{b1, ..., bn}, m}: the rows of m are the unit "
+          "eigenvectors of the covariance matrix of the (flattened) arrays ai in order of decreasing eigenvalue "
+          "(sign: largest component positive) and {b1, ...} == m.{a1, ...}; Standardized -> True first shifts each "
+          "ai to zero mean; KarhunenLoeveDecomposition[{b1, ...}, m] inverts the transform (missing b's are 0); "
+          "machine-precision results")
+def _kld(arrays, *rest):
+    fname = "KarhunenLoeveDecomposition"
+    args, opts = split_options(rest, {"Standardized"}, fname)
+    std = opts.get("Standardized", False)
+    if std not in (True, False):
+        raise ValueError(f"{fname}: Standardized must be True or False")
+    items = _items(arrays, fname)
+    if not items:
+        raise ValueError(f"{fname}: the list of arrays is empty")
+    shapes = {_dims(a) for a in items}
+    if len(shapes) != 1:
+        raise ValueError(f"{fname}: the arrays must all have the same dimensions")
+    np = _np()
+    data = np.array([_flat_numeric(a, fname) for a in items])
+    data = _np_real_if(data)
+    if len(args) > 1:
+        raise ValueError(f"{fname} called with too many arguments")
+    if args:
+        Mt = _matrix(args[0], fname, square=True)
+        Mn = _npmat(Mt)
+        k = Mn.shape[0]
+        if len(items) > k:
+            raise ValueError(f"{fname}: more arrays than the transformation matrix has rows")
+        full = np.zeros((k, data.shape[1]), dtype=data.dtype)
+        full[:len(items)] = data
+        res = np.linalg.solve(Mn, full)
+        res = _np_real_if(res)
+        flat = [list(r) for r in res]
+        return L(L(*(_reshape_like([float(v) if not np.iscomplexobj(res) else complex(v) for v in f], items[0])
+                     for f in flat)), args[0])
+    if std:
+        data = data - data.mean(axis=1, keepdims=True)
+    if data.shape[1] < 2:
+        raise ValueError(f"{fname}: the arrays need at least two elements")
+    cov = np.cov(data)
+    cov = np.atleast_2d(cov)
+    w, V = np.linalg.eigh(cov)
+    idx = np.argsort(-w, kind="stable")
+    Mn = _sign_fix(V[:, idx].T)
+    Mn = _np_real_if(Mn)
+    B = Mn @ data
+    out = [_reshape_like([float(v) if not np.iscomplexobj(B) else complex(v) for v in row], items[0]) for row in B]
+    return L(L(*out), _float_out(Mn))
+
+
+record("Standardized", AREA, "added",
+       "option of KarhunenLoeveDecomposition: True shifts each array to zero mean before the transform")
+
+
+@fn("PrincipalComponents", **ADDED,
+    notes="PrincipalComponents[matrix] transforms the rows (observations; columns are variables) to unscaled "
+          "principal components: the centred data times the unit eigenvectors of the covariance matrix in order "
+          "of decreasing variance; Method -> \"Correlation\" standardises the columns first; machine numeric "
+          "data (exact numbers are evaluated numerically); the sign of each component is normalised so that the "
+          "largest eigenvector component is positive, which can differ from Wolfram's sign choice; symbolic and "
+          "arbitrary-precision data raise")
+def _principalcomponents(m, *rest):
+    fname = "PrincipalComponents"
+    args, opts = split_options(rest, {"Method"}, fname)
+    if args:
+        raise ValueError(f"{fname} called with too many arguments")
+    method = opts.get("Method", "Covariance")
+    if is_sym(method, "Automatic"):
+        method = "Covariance"
+    if method not in ("Covariance", "Correlation"):
+        raise ValueError(f"{fname}: Method must be \"Covariance\" or \"Correlation\"")
+    M = _matrix(m, fname)
+    _no_symbols(M, fname)
+    if _kind(M) == "bignum":
+        raise NotImplementedError(f"{fname}: arbitrary-precision data are not supported")
+    if _kind(M) == "exact" and not all(v.is_Rational for v in M):
+        raise NotImplementedError(f"{fname}: exact irrational data are not supported; use N[...]")
+    if _kind(M) == "exact":
+        raise NotImplementedError(f"{fname}: exact data give exact (radical) components in Wolfram, which are not "
+                                  "supported; use N[...] for machine-precision components")
+    np = _np()
+    X = _npmat(M)
+    if X.shape[0] < 2:
+        raise ValueError(f"{fname}: at least two observations are needed")
+    Xc = X - X.mean(axis=0)
+    if method == "Correlation":
+        sd = Xc.std(axis=0, ddof=1)
+        if np.any(sd == 0):
+            raise ValueError(f"{fname}: a column has zero variance")
+        Xc = Xc / sd
+    cov = np.atleast_2d(np.cov(Xc, rowvar=False))
+    w, V = np.linalg.eigh(cov)
+    idx = np.argsort(-w, kind="stable")
+    Vs = _sign_fix(V[:, idx].T).T
+    return _float_out(_np_real_if(Xc @ Vs))
+
+
+# ── Pfaffian ──
+
+def _pfaffian_expand(A):
+    n = A.rows
+    if n == 0:
+        return sp.Integer(1)
+    total = sp.Integer(0)
+    for j in range(1, n):
+        if _iszero(A[0, j]):
+            continue
+        keep = [i for i in range(n) if i not in (0, j)]
+        total += (-1) ** (j - 1) * A[0, j] * _pfaffian_expand(A[keep, keep])
+    return total
+
+
+def _pfaffian_elim(A):
+    A = A.copy()
+    n = A.rows
+    pf = sp.Integer(1)
+    for k in range(0, n - 1, 2):
+        piv = None
+        best = -1.0
+        for j in range(k + 1, n):
+            if not _iszero(A[k, j]):
+                a = _num_abs(A[k, j])
+                if a > best:
+                    piv, best = j, a
+        if piv is None:
+            return sp.Integer(0)
+        if piv != k + 1:
+            A.row_swap(k + 1, piv)
+            A.col_swap(k + 1, piv)
+            pf = -pf
+        akk = A[k, k + 1]
+        pf = pf * akk
+        if k + 2 < n:
+            u = A[k + 2:, k]          # column k below (entries -A[k, i])
+            v = A[k + 2:, k + 1]
+            # A <- A - (v u^T - u v^T)/akk on the trailing block (skew-symmetric update)
+            upd = (v * u.T - u * v.T) / akk
+            A[k + 2:, k + 2:] = (A[k + 2:, k + 2:] + upd).applyfunc(lambda e: e if _kind_float(e) else sp.cancel(e))
+    return pf
+
+
+def _kind_float(e):
+    return isinstance(e, sp.Float) or (isinstance(e, sp.Basic) and e.has(sp.Float))
+
+
+@fn("PfaffianDet", **ADDED,
+    notes="the Pfaffian of an antisymmetric matrix (Pf[m]^2 == Det[m], 0 for odd dimension): exact and machine "
+          "numeric matrices by skew-symmetric (Parlett-Reid style) elimination with pivoting, symbolic matrices by "
+          "expansion along the first row; Method -> Automatic, \"ParlettReid\", \"Householder\", \"Hessenberg\" "
+          "and \"Pauli\" give the same value, \"Det\" gives Sqrt[Det[m]] (sign not conformed, as Wolfram); a "
+          "non-antisymmetric matrix raises")
+def _pfaffiandet(m, *rest):
+    fname = "PfaffianDet"
+    args, opts = split_options(rest, {"Method"}, fname)
+    if args:
+        raise ValueError(f"{fname} called with too many arguments")
+    method = opts.get("Method", "Automatic")
+    if is_sym(method, "Automatic"):
+        method = "Automatic"
+    if method not in ("Automatic", "ParlettReid", "Householder", "Hessenberg", "Pauli", "Det"):
+        raise ValueError(f"{fname}: unknown Method {method}")
+    M = _matrix(m, fname, square=True)
+    n = M.rows
+    if not all(_iszero(M[i, j] + M[j, i]) for i in range(n) for j in range(i, n)):
+        raise ValueError(f"{fname}: the matrix is not antisymmetric")
+    if n % 2:
+        return sp.Integer(0) if _kind(M) == "exact" else 0.0
+    if method == "Det":
+        return R(_simp(sp.sqrt(M.det())))
+    if M.free_symbols and n <= 10:
+        return R(sp.expand(_pfaffian_expand(M)))
+    if M.free_symbols:
+        return R(sp.factor(sp.cancel(_pfaffian_elim(M))))
+    pf = _pfaffian_elim(M)
+    if _kind(M) == "exact":
+        return R(_simp(pf))
+    z = complex(sp.N(pf))
+    return R(sp.Float(z.real) if z.imag == 0 else sp.Float(z.real) + sp.I * sp.Float(z.imag))
+
+
+# ── LinearSolveFunction and TransformationMatrix ──
+
+def _linearsolve_one(m):
+    if not is_list(m):
+        raise Unevaluated()
+    M = _matrix(m, "LinearSolve")
+    if M.rows == M.cols and all(v.is_number for v in M):
+        if _kind(M) == "exact":
+            if M.det() == 0:
+                raise ValueError("LinearSolve: the matrix is singular")
+        else:
+            np = _np()
+            if np.linalg.cond(_npmat(M)) > 1e15:
+                raise ValueError("LinearSolve: the matrix is singular to machine precision")
+    return Expr("LinearSolveFunction", L(M.rows, M.cols), m)
+
+
+from .core import REGISTRY as _REGISTRY  # noqa: E402
+_REGISTRY["LinearSolve"].impls.append((_linearsolve_one, 1, 1))
+
+
+@fn("LinearSolveFunction", **ADDED,
+    notes="LinearSolve[m] gives LinearSolveFunction[{r, c}, m] (the stored data is the matrix itself, not "
+          "Wolfram's factorisation data); f[b] solves m.x == b for a vector or matrix b like LinearSolve[m, b]")
+def _linearsolvefunction(*args):
+    raise Unevaluated()
+
+
+def _lsf_call(head, args, ev_):
+    if len(head.args) == 2 and len(args) == 1:
+        return ev_(Expr("LinearSolve", head.args[1], args[0]))
+    return K.UNHANDLED
+
+
+KL.COMPOUND_HEAD_HOOKS["LinearSolveFunction"] = _lsf_call
+
+
+@fn("TransformationMatrix", **ADDED,
+    notes="TransformationMatrix[TransformationFunction[m]] gives the homogeneous matrix m; anything else stays "
+          "unevaluated")
+def _transformationmatrix(t):
+    tf = isinstance(t, Expr) and t.head == "TransformationFunction"
+    if tf and len(t.args) == 1 and is_list(t.args[0]):
+        return t.args[0]
+    if tf:
+        raise ValueError("TransformationMatrix: invalid TransformationFunction")
+    raise Unevaluated()

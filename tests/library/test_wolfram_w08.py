@@ -53,38 +53,53 @@ def _flatten_py(x):
 
 N50 = "N[{1, 5, 2, 3, 10}, 50], N[{4, 15, 20, 5, 5}, 50]"
 
+
+def hp(digits, prec=50):
+    """A bignum result agreeing with the Wolfram value to 45 digits and keeping ~prec digits of precision."""
+    import mpmath
+    import sympy as sp
+    from mikoshilang.math_ops import to_sympy
+
+    def ok(g):
+        v = to_sympy(g)
+        if not isinstance(v, sp.Float) or v._prec < (prec - 2) * 3.32:
+            return False
+        with mpmath.workdps(60):
+            return abs(mpmath.mpf(str(v)) - mpmath.mpf(digits)) < mpmath.mpf(10) ** (-44) * max(1, abs(mpmath.mpf(digits)))
+    return Pred(ok, f"~{digits}`{prec}")
+
 DISTANCES = [
     ("EuclideanDistance[{a, b, c}, {x, y, z}]", "Sqrt[Abs[a - x]^2 + Abs[b - y]^2 + Abs[c - z]^2]"),
     ("EuclideanDistance[{1, 2, 3}, {2, 4, 6}]", "Sqrt[14]"),
-    (f"EuclideanDistance[{N50}]", "21.494185260204677039244010575481712995963818467845`50"),
+    (f"EuclideanDistance[{N50}]", hp("21.494185260204677039244010575481712995963818467845")),
     ("EuclideanDistance[{a, b}, {a, c}]", "Abs[b - c]"),
     ("EuclideanDistance[3, 7.5]", "4.5"),
     ("EuclideanDistance[{1, 2}, {1, 2, 3}]", Raises()),
     ("SquaredEuclideanDistance[{a, b, c}, {x, y, z}]", "Abs[a - x]^2 + Abs[b - y]^2 + Abs[c - z]^2"),
     ("SquaredEuclideanDistance[{1, 2, 3}, {2, 4, 6}]", "14"),
-    (f"SquaredEuclideanDistance[{N50}]", "462.0000000000000000000000000000000000000000000000`50"),
+    (f"SquaredEuclideanDistance[{N50}]", hp("462.0000000000000000000000000000000000000000000000")),
     ("ManhattanDistance[{a, b, c}, {x, y, z}]", "Abs[a - x] + Abs[b - y] + Abs[c - z]"),
     ("ManhattanDistance[{1, 2, 3}, {2, 4, 6}]", "6"),
-    (f"ManhattanDistance[{N50}]", "38.00000000000000000000000000000000000000000000000`50"),
+    (f"ManhattanDistance[{N50}]", hp("38.00000000000000000000000000000000000000000000000")),
     ("ChessboardDistance[{a, b, c}, {x, y, z}]", "Max[Abs[a - x], Abs[b - y], Abs[c - z]]"),
     ("ChessboardDistance[{1, 2, 3}, {2, 4, 6}]", "3"),
-    (f"ChessboardDistance[{N50}]", "18.000000000000000000000000000000000000000000000000`50"),
+    (f"ChessboardDistance[{N50}]", hp("18.000000000000000000000000000000000000000000000000")),
     ("BrayCurtisDistance[{1, 2, 3}, {2, 4, 6}]", "1/3"),
     ("BrayCurtisDistance[{a, b}, {x, y}]", "(Abs[a - x] + Abs[b - y])/(Abs[a + x] + Abs[b + y])"),
-    (f"BrayCurtisDistance[{N50}]", "0.5428571428571428571428571428571428571428571428571`50"),
+    (f"BrayCurtisDistance[{N50}]", hp("0.5428571428571428571428571428571428571428571428571")),
     ("CanberraDistance[{1, 2, 3}, {2, 4, 6}]", "1"),
     ("CanberraDistance[{a, b}, {a, c}]", "Abs[b - c]/(Abs[b] + Abs[c])"),
-    (f"CanberraDistance[{N50}]", "2.5015151515151515151515151515151515151515151515152`50"),
+    (f"CanberraDistance[{N50}]", hp("2.5015151515151515151515151515151515151515151515152")),
     ("CorrelationDistance[{1, 2, 3}, {3, 5, 10}]", "1 - 7/(2 Sqrt[13])"),
-    (f"CorrelationDistance[{N50}]", "1.2106635188398813533035274347761676650148587810028`50"),
+    (f"CorrelationDistance[{N50}]", hp("1.2106635188398813533035274347761676650148587810028")),
     ("CorrelationDistance[{1, 1, 1}, {1, 2, 3}]", Raises()),
     ("CosineDistance[{1, 2, 3}, {3, 5, 7}]", "1 - 17 Sqrt[2/581]"),
-    (f"CosineDistance[{N50}]", "0.4062940529572788872406931125582100673373718289257`50"),
+    (f"CosineDistance[{N50}]", hp("0.4062940529572788872406931125582100673373718289257")),
     ("CosineDistance[{a, b}, {x, y}]",
      "1 - (a Conjugate[x] + b Conjugate[y])/(Sqrt[Abs[a]^2 + Abs[b]^2] Sqrt[Abs[x]^2 + Abs[y]^2])"),
     ("CosineDistance[{0, 0}, {1, 2}]", Raises()),
     ("NormalizedSquaredEuclideanDistance[{1, 2, 3}, {3, 5, 10}]", "1/4"),
-    (f"NormalizedSquaredEuclideanDistance[{N50}]", "0.583333333333333333333333333333333333333333333333`50"),
+    (f"NormalizedSquaredEuclideanDistance[{N50}]", hp("0.583333333333333333333333333333333333333333333333")),
     ("NormalizedSquaredEuclideanDistance[{1, 2, 3}, {2, 3, 4}]", "0"),
     ("BinaryDistance[{1, 2, 3}, {2, 4, 6}]", "1"), ("BinaryDistance[{a, b, c}, {a, b, c}]", "0"),
     ("BinaryDistance[\"text\", {1, 2, 3}]", "1"), ("BinaryDistance[{1, 2, 3}, {1, 2}]", "1"),
@@ -243,7 +258,7 @@ CONSTRUCTORS = [
     ("SymmetricMatrix[{{1, 2}, {3, 4}}]", Raises()),
     ("OrthogonalMatrix[{{1/2, 1/2, 1/2, 1/2}, {1/2, 1/2, -1/2, -1/2}, {1/2, -1/2, -1/2, 1/2}, {1/2, -1/2, 1/2, -1/2}}]",
      "HadamardMatrix[4]"),
-    ("OrthogonalMatrix[RotationMatrix[t]] // Simplify", "RotationMatrix[t]"),
+    ("OrthogonalMatrix[RotationMatrix[t]]", "RotationMatrix[t]"),
     ("OrthogonalMatrix[{{1, 1}, {1, -1}}]", Raises()),
     ("UnitaryMatrix[{{1, I}, {I, 1}}/Sqrt[2]]", "{{1, I}, {I, 1}}/Sqrt[2]"),
     ("UnitaryMatrix[{{1/2, 1/2, 1/2, 1/2}, {1/2, I/2, -1/2, -I/2}, {1/2, -1/2, 1/2, -1/2}, {1/2, -I/2, -1/2, I/2}}] // Length",
@@ -258,3 +273,218 @@ CONSTRUCTORS = [
      "Flatten[Array[a, {2, 3, 4}], {{1}, {2, 3}}] . Flatten[Array[b, {3, 4, 5}], {{1, 2}, {3}}]", "True"),
     ("ArrayDot[{1, 2}, {1, 2, 3}, 1]", Raises()),
 ]
+
+_M4 = "{{7, 1, -3, -4}, {2, 1, -1, -2}, {-1, 0, 1, 1}, {8, 1, -4, -5}}"
+_SYM3 = "{{1., 2., 3.}, {2., -1., 0.5}, {3., 0.5, 2.}}"
+_A43 = "{{1.2, 3.4}, {5.6, 7.8}, {9.10, 11.12}, {13.14, 15.16}}"
+
+DECOMPOSITIONS = [
+    # LDLDecomposition (Wolfram reference outputs)
+    ("LDLDecomposition[{{2, 6}, {6, 7}}]", "{{{1, 0}, {3, 1}}, {{2, 0}, {0, -11}}}"),
+    ("LDLDecomposition[{{1, a}, {Conjugate[a], 5}}]",
+     "{{{1, 0}, {Conjugate[a], 1}}, {{1, 0}, {0, 5 - a Conjugate[a]}}}"),
+    ("LDLDecomposition[{{Pi, 5, 0}, {5, 0, 0}, {0, 0, 2}}]",
+     "{{{1, 0, 0}, {5/Pi, 1, 0}, {0, 0, 1}}, {{Pi, 0, 0}, {0, -25/Pi, 0}, {0, 0, 2}}}"),
+    ("LDLDecomposition[{{Pi, 0, 0}, {0, 5, 10}, {0, 10, 0}}]",
+     "{{{1, 0, 0}, {0, 1, 0}, {0, 2, 1}}, {{Pi, 0, 0}, {0, 5, 0}, {0, 0, -20}}}"),
+    ("LDLDecomposition[IdentityMatrix[3]]", "{IdentityMatrix[3], IdentityMatrix[3]}"),
+    ("LDLDecomposition[{{2., 1.}, {1., 3.}}]", near([[1, 0], [0.5, 1], [2, 0], [0, 2.5]])),
+    ("LDLDecomposition[{{0, 1}, {1, 0}}]", Raises(ValueError, "zero pivot")),
+    ("LDLDecomposition[{{1, 2}, {3, 4}}]", Raises(ValueError, "Hermitian")),
+    # BunchKaufmanDecomposition: P.m.P^T == L.B.L^H
+    T("m = {{0, 1, 2}, {1, 0, 3}, {2, 3, 0}}; {l, b, p} = BunchKaufmanDecomposition[m]; "
+      "p.m.Transpose[p] == l.b.ConjugateTranspose[l]"),
+    ("BunchKaufmanDecomposition[{{0, 1, 2}, {1, 0, 3}, {2, 3, 0}}][[2]]", "{{0, 2, 0}, {2, 0, 0}, {0, 0, -3}}"),
+    T("m = " + _SYM3 + "; {l, b, p} = BunchKaufmanDecomposition[m]; "
+      "Max[Abs[p.m.Transpose[p] - l.b.Transpose[l]]] < 10^-12"),
+    T("m = {{4, 1 + I}, {1 - I, 3}}; {l, b, p} = BunchKaufmanDecomposition[m]; "
+      "Expand[p.m.Transpose[p] - l.b.ConjugateTranspose[l]] == {{0, 0}, {0, 0}}"),
+    ("BunchKaufmanDecomposition[{{1, 2}, {3, 4}}]", Raises(ValueError, "not Hermitian or symmetric")),
+    ("BunchKaufmanDecomposition[{{a, b}, {b, c}}]", Raises(NotImplementedError, "symbolic")),
+    # RankDecomposition
+    ("RankDecomposition[{{1, 3}, {2, 6}}]", "{{{1}, {2}}, {{1, 3}}}"),
+    ("RankDecomposition[{{1, 2, 3, 4}, {2, 7, 3, 9}, {2, 7, 3, 9}}]",
+     "{{{1, 2}, {2, 7}, {2, 7}}, {{1, 0, 5, 10/3}, {0, 1, -1, 1/3}}}"),
+    ("RankDecomposition[{{3/2, 19/4, -16/5}, {-17/10, 67/10, -93/10}, {49/10, -865/100, 154/10}}]",
+     "{{{3/2, 19/4}, {-17/10, 67/10}, {49/10, -173/20}}, {{1, 0, 4547/3625}, {0, 1, -3878/3625}}}"),
+    ("RankDecomposition[{{a, b, c}, {c, b, a}, {0, 0, 0}}]",
+     "{{{a, b}, {c, b}, {0, 0}}, {{1, 0, -1}, {0, 1, (a + c)/b}}}"),
+    ("RankDecomposition[" + _A43 + "]",
+     near([[0.127002, 0.832764], [0.359099, 0.422887], [0.538509, 0.0195669], [0.751616, -0.356775],
+           [16.94, 20.6155], [-1.14248, 0.938791]], 1e-5)),
+    ("RankDecomposition[{{0, 0}, {0, 0}}]", Raises(ValueError, "rank 0")),
+    # EigenvalueDecomposition
+    ("EigenvalueDecomposition[{{-3, 2}, {-15, 8}}]", "{{{1, 2}, {3, 5}}, {{3, 0}, {0, 2}}}"),
+    ("EigenvalueDecomposition[{{1, 2}, {3, 4}}]",
+     "{{{(-3 + Sqrt[33])/6, (-3 - Sqrt[33])/6}, {1, 1}}, {{(5 + Sqrt[33])/2, 0}, {0, (5 - Sqrt[33])/2}}}"),
+    ("EigenvalueDecomposition[{{1.1, 2.2, 3.25}, {0.76, 4.6, 5}, {0.1, 0.1, 6.1}}][[2]]",
+     near([[6.60674, 0, 0], [0, 4.52536, 0], [0, 0, 0.667901]], 1e-5)),
+    T("m = {{1.1, 2.2, 3.25}, {0.76, 4.6, 5}, {0.1, 0.1, 6.1}}; {t, d} = EigenvalueDecomposition[m]; "
+      "Max[Abs[m - t.d.Inverse[t]]] < 10^-12"),
+    ("EigenvalueDecomposition[{{1, 1}, {0, 1}}]", Raises(ValueError, "not diagonalizable")),
+    # SmithDecomposition / SmithReduce
+    ("SmithDecomposition[{{1, 2, 3}, {5, 4, 3}, {8, 7, 9}}][[2]]", "{{1, 0, 0}, {0, 3, 0}, {0, 0, 6}}"),
+    T("m = {{1, 2, 3}, {5, 4, 3}, {8, 7, 9}}; {u, r, v} = SmithDecomposition[m]; "
+      "u.m.v == r && Abs[Det[u]] == 1 && Abs[Det[v]] == 1"),
+    T("m = {{1/2, 5, 4}, {3, 1, 2}, {3, 5, 4}}; {u, r, v} = SmithDecomposition[m]; "
+      "u.m.v == r && r == {{1/2, 0, 0}, {0, 1, 0}, {0, 0, 30}}"),
+    T("m = {{2, 4, 4}, {-6, 6, 12}, {10, -4, -16}}; {u, r, v} = SmithDecomposition[m]; "
+      "u.m.v == r && r == {{2, 0, 0}, {0, 6, 0}, {0, 0, 12}}"),
+    ("SmithReduce[{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}]", "{{1, 0, 0}, {0, 3, 0}, {0, 0, 0}}"),
+    ("SmithReduce[{{1/2, 5, 4}, {3, 1, 2}, {3, 5, 4}}]", "{{1/2, 0, 0}, {0, 1, 0}, {0, 0, 30}}"),
+    ("SmithReduce[{{0, 0, 1}, {0, 2, 0}, {3, 0, 0}}]", "{{1, 0, 0}, {0, 1, 0}, {0, 0, 6}}"),
+    ("SmithReduce[IdentityMatrix[{3, 4}]]", "IdentityMatrix[{3, 4}]"),
+    ("SmithReduce[{{1., 2.}, {3., 4.}}]", Raises(ValueError, "exact")),
+    ("SmithDecomposition[{{a, 1}, {2, 3}}]", Raises(NotImplementedError, "symbolic")),
+    # FrobeniusDecomposition / FrobeniusReduce
+    ("FrobeniusDecomposition[{{2, 3, 1}, {3, 1, 2}, {3, 2, 4}}][[2]]", "{{0, 0, -15}, {1, 0, 2}, {0, 1, 7}}"),
+    T("m = {{1, 0, 0, 0}, {0, 1, 0, 0}, {-2, -2, 0, 1}, {-2, 0, -1, 2}}; {s, c} = FrobeniusDecomposition[m]; "
+      "s.c.Inverse[s] == m && c == {{1, 0, 0, 0}, {0, 0, 0, 1}, {0, 1, 0, -3}, {0, 0, 1, 3}}"),
+    T("m = {{1 + I, 0, 3 - I}, {-2 - 3 I, 1, 4 I}, {2, -5 + 2 I, 0}}; {s, c} = FrobeniusDecomposition[m]; "
+      "Expand[s.c.Inverse[s] - m] == ConstantArray[0, {3, 3}]"),
+    ("FrobeniusReduce[{{1 + I, 0, 3 - I}, {-2 - 3 I, 1, 4 I}, {2, -5 + 2 I, 0}}]",
+     "{{0, 0, 41 + 47 I}, {1, 0, -3 - 23 I}, {0, 1, 2 + I}}"),
+    ("Expand[FrobeniusReduce[{{1 + x, y}, {-2 z^2 + x, 4 y z}}]]",
+     "{{0, x y - 4 y z - 4 x y z - 2 y z^2}, {1, 1 + x + 4 y z}}"),
+    ("FrobeniusReduce[{{1, -3, 4}, {3, -7, 6}, {-2, -2, 19}}]", "{{0, 0, 6}, {1, 0, 92}, {0, 1, 13}}"),
+    ("FrobeniusReduce[{{2, 0, 0}, {0, 2, 0}, {0, 0, 3}}]", "{{2, 0, 0}, {0, 0, -6}, {0, 1, 5}}"),
+    ("FrobeniusReduce[{{1, 2}, {3, 4}}, Modulus -> 7]", Raises(NotImplementedError, "Modulus")),
+    ("FrobeniusReduce[{{1., 2.}, {3., 4.}}]", Raises(NotImplementedError, "inexact")),
+    # JordanReduce
+    ("JordanReduce[{{-1.2, 2.7, 3.8}, {4.2, 4.4, 5.3}, {3.5, 7.6, 6.8}}]",
+     near([[13.7715, 0, 0], [0, -2.12527, 0], [0, 0, -1.6462]], 1e-5)),
+    ("JordanReduce[{{27, 48, 81}, {-6, 0, 0}, {1, 0, 3}}]", "{{6, 0, 0}, {0, 12, 1}, {0, 0, 12}}"),
+    T("JordanReduce[{{27, 48, 81}, {-6, 0, 0}, {1, 0, 3}}] == BlockDiagonalMatrix[{{{6}}, JordanMatrix[12, 2]}]"),
+    ("JordanReduce[{{1, 1}, {0, 1}}]", "{{1, 1}, {0, 1}}"),
+    # CoreNilpotentDecomposition / DrazinInverse (Wolfram reference outputs)
+    ("CoreNilpotentDecomposition[{{1, 2, 0}, {5, 1, 3}, {0, 0, 0}}]",
+     "{{{1, 2, -2}, {5, 1, 1}, {0, 0, 3}}, {{1, 2}, {5, 1}}, {{0}}}"),
+    ("CoreNilpotentDecomposition[{{14, -22, 2}, {7, -11, 1}, {0, 0, 0}}]",
+     "{{{14, -1, 11}, {7, 0, 7}, {0, 7, 0}}, {{3}}, {{0, 0}, {0, 0}}}"),
+    ("CoreNilpotentDecomposition[{{-4 + 6 I, 8 - 10 I, 2}, {-2 + 3 I, 4 - 5 I, 1}, {1, -1, 1}}]",
+     "{{{-4 + 6 I, 8 - 10 I, -5}, {-2 + 3 I, 4 - 5 I, -3}, {1, -1, 2}}, "
+     "{{-(3/2) + 6 I, (11/2) - 10 I}, {-(1/2) + 3 I, (5/2) - 5 I}}, {{0}}}"),
+    ("CoreNilpotentDecomposition[{{1, 2}, {3, 4}}]", "{IdentityMatrix[2], {{1, 2}, {3, 4}}, {}}"),
+    ("CoreNilpotentDecomposition[{{0, 1}, {0, 0}}]", "{IdentityMatrix[2], {}, {{0, 1}, {0, 0}}}"),
+    T("m = " + _M4 + "; {t, c, n} = CoreNilpotentDecomposition[m]; "
+      "m == t.BlockDiagonalMatrix[{c, n}].Inverse[t] && n.n == {{0, 0}, {0, 0}} && Det[c] != 0"),
+    ("CoreNilpotentDecomposition[{{0.2, -0.32}, {0.1, -0.16}}][[2 ;; 3]]", near([[0.04], [0.]])),
+    ("DrazinInverse[{{0.2, -0.32}, {0.1, -0.16}}]", near([[125., -200.], [62.5, -100.]], 1e-9)),
+    ("DrazinInverse[{{-4 + 6 I, 8 - 10 I, 2}, {-2 + 3 I, 4 - 5 I, 1}, {1, -1, 1}}]",
+     "{{-5 - 5 I, 9 + 9 I, 1 + I}, {-(5/2) - (5 I/2), (9/2) + (9 I/2), (1/2) + (I/2)}, "
+     "{(1/2) + (5 I/2), -(1/2) - (9 I/2), (1/2) - (I/2)}}"),
+    ("DrazinInverse[{{1, 2, -2}, {4, 5, -3}, {1, 5, -3}}]",
+     "{{0, 1/3, -1/3}, {-3/4, 1/12, 5/12}, {-5/4, 1/4, 1/4}}"),
+    ("DrazinInverse[{{a, a, 1}, {0, 0, 0}, {2, 3, -1}}]",
+     "{{1/(2 + a), 3/(2 + a)^2, 1/(2 + a)}, {0, 0, 0}, {2/(2 + a), (6 + 2 a + a^2)/(2 + a)^2, -a/(2 + a)}}"),
+    ("DrazinInverse[{{0, 1}, {0, 0}}]", "{{0, 0}, {0, 0}}"),
+    T("m = " + _M4 + "; d = DrazinInverse[m]; d.m == m.d && d.m.d == d"),
+    ("DrazinInverse[m]", "DrazinInverse[m]"),
+    # PolarDecomposition
+    T("m = {{1., 2.}, {3., 4.}}; {u, p} = PolarDecomposition[m]; Max[Abs[m - u.p]] < 10^-12 && "
+      "Max[Abs[Transpose[u].u - IdentityMatrix[2]]] < 10^-12 && Max[Abs[p - Transpose[p]]] < 10^-12"),
+    ("PolarDecomposition[{{1., 2.}, {3., 4.}}][[2]]", near([[2.05798, 2.40098], [2.40098, 3.77297]], 1e-5)),
+    T("m = {{1. + I, 2.}, {0.5, 3. - 2. I}}; {u, p} = PolarDecomposition[m]; Max[Abs[m - u.p]] < 10^-12 && "
+      "Max[Abs[ConjugateTranspose[u].u - IdentityMatrix[2]]] < 10^-12"),
+    T("m = {{1., 2., 3.}, {4., 5., 6.}}; {u, p} = PolarDecomposition[m]; Dimensions[u] == {2, 3} && "
+      "Dimensions[p] == {3, 3} && Max[Abs[m - u.p]] < 10^-12"),
+    ("PolarDecomposition[{{1, 2}, {3, 4}}]", Raises(NotImplementedError, "machine")),
+    # OrderedSchurDecomposition (needs SciPy)
+    ("OrderedSchurDecomposition[{{2.7, 4.8, 8.1}, {-0.6, 0, 0}, {0.1, 0, 0.3}}][[2]]",
+     near([[1.2, -2.90297, 8.24441], [0, 1.2, -4.0942], [0, 0, 0.6]], 1e-5), "scipy"),
+    ("Diagonal[OrderedSchurDecomposition[{{1., 2.}, {3., 4.}}, \"IncreasingRe\"][[2]]]",
+     near([-0.372281, 5.37228], 1e-5), "scipy"),
+    ("Diagonal[OrderedSchurDecomposition[{{1., 0., 0.}, {0., -3., 0.}, {0., 0., 2.}}][[2]]]",
+     near([-3, 2, 1]), "scipy"),
+    ("Diagonal[OrderedSchurDecomposition[{{1., 0., 0.}, {0., -3., 0.}, {0., 0., 2.}}, \"IncreasingAbs\"][[2]]]",
+     near([1, 2, -3]), "scipy"),
+    (("m = {{1.81066, 0.31066, 1.5}, {-0.53033, 2.03033, 0.43934}, {-0.96967, -0.53033, 2.56066}}; "
+      "{q, t} = OrderedSchurDecomposition[m]; {Max[Abs[m - q.t.Transpose[q]]] < 10^-12, t[[2, 1]] != 0, "
+      "t[[3, 2]] == 0}"), "{True, True, True}", "scipy"),
+    (("m = {{1., 2.}, {3., 4.}}; {q, t} = OrderedSchurDecomposition[m, RealBlockDiagonalForm -> False]; "
+      "Max[Abs[m - q.t.ConjugateTranspose[q]]] < 10^-12"), True, "scipy"),
+    (("{m, a} = {{{1., 2.}, {3., 4.}}, {{2., 0.}, {1., 1.}}}; {q, s, p, t} = OrderedSchurDecomposition[{m, a}]; "
+      "{Max[Abs[m - q.s.Transpose[p]]] < 10^-12, Max[Abs[a - q.t.Transpose[p]]] < 10^-12, "
+      "Abs[s[[1, 1]]/t[[1, 1]]] >= Abs[s[[2, 2]]/t[[2, 2]]]}"), "{True, True, True}", "scipy"),
+    ("OrderedSchurDecomposition[{{1., 2.}, {3., 4.}}, \"Sideways\"]", Raises(ValueError, "unknown ordering")),
+    # KarhunenLoeveDecomposition
+    ("KarhunenLoeveDecomposition[{{1, 2, 4}, {2, 3, 10}}]",
+     near([[2.21649, 3.48733, 10.7572], [0.295268, 0.915726, 0.530689], [0.32519, 0.945649],
+           [0.945649, -0.32519]], 1e-5)),
+    ("KarhunenLoeveDecomposition[{{{7, 3}, {0, 1}}, {{6, 8}, {10, 6}}, {{3, 8}, {3, 1}}}]",
+     near([5.246, 2.65484, -2.27548, -0.734427, 3.81481, 9.83288, 6.67585, 3.1046, 7.20602, 5.76769, 7.69774,
+           5.27466, 0.889127, -0.324397, 0.32283, -0.18142, 0.397775, 0.899367, 0.420166, 0.85822, -0.29482],
+          1e-5)),
+    ("KarhunenLoeveDecomposition[{{0, 0, 1}, {0, 1, 1}}, RotationMatrix[45 Degree]][[1]]",
+     near([[0., 0.707107, 1.41421], [0., 0.707107, 0.]], 1e-5)),
+    ("KarhunenLoeveDecomposition[{{0, 0, 1}}, RotationMatrix[45 Degree]][[1]]",
+     near([[0., 0., 0.707107], [0., 0., -0.707107]], 1e-5)),
+    ("Abs[First[KarhunenLoeveDecomposition[{{1, 2, 3, 4}, {0.8, 2.1, 3.2, 3.9}}, Standardized -> True]]]",
+     near([[2.26549, 0.634514, 0.85168, 2.04832], [0.0870348, 0.085975, 0.121001, 0.119941]], 1e-5)),
+    ("KarhunenLoeveDecomposition[{{1, 2}, {1, 2, 3}}]", Raises(ValueError, "same dimensions")),
+    # PrincipalComponents (component signs are not unique)
+    ("Abs[PrincipalComponents[N[{{1, 2}, {2, 3}, {4, 10}}]]]",
+     near([[3.27053, 0.285293], [1.99969, 0.335165], [5.27023, 0.0498715]], 1e-5)),
+    ("Abs[PrincipalComponents[{{1., 2., -1.}, {2., 3., 2.}, {4., 10., 9.}, {4., 5., 6.}}, "
+     "Method -> \"Correlation\"]]",
+     near([[1.81962, 0.226286, 0.0503109], [0.873896, 0.0527284, 0.0788127], [1.94708, 0.412467, 0.00116417],
+           [0.746438, 0.586024, 0.0273376]], 1e-5)),
+    T("pc = PrincipalComponents[{{1., 2., 0.5}, {2., 3., 2.}, {4., 10., 9.}, {4., 5., 6.}, {0., 1., 1.}}]; "
+      "Max[Abs[Mean[pc]]] < 10^-12 && Max[Abs[Covariance[pc] - DiagonalMatrix[Diagonal[Covariance[pc]]]]] < "
+      "10^-10 && OrderedQ[Reverse[Diagonal[Covariance[pc]]]]"),
+    ("PrincipalComponents[{{a, 1}, {2, a - 1}}]", Raises(NotImplementedError, "symbolic")),
+    # PfaffianDet
+    ("PfaffianDet[{{0, 3, 2, 1}, {-3, 0, 5, 6}, {-2, -5, 0, 4}, {-1, -6, -4, 0}}]", "5"),
+    ("PfaffianDet[{{0, I}, {-I, 0}}]", "I"),
+    ("PfaffianDet[{{0, a}, {-a, 0}}]", "a"),
+    ("PfaffianDet[{{0, a, b, c}, {-a, 0, d, e}, {-b, -d, 0, f}, {-c, -e, -f, 0}}]", "a f - b e + c d"),
+    ("PfaffianDet[{{0, 1, 2}, {-1, 0, 3}, {-2, -3, 0}}]", "0"),
+    ("PfaffianDet[{{0, 1.5, 2, 1}, {-1.5, 0, 5, 6}, {-2, -5, 0, 4}, {-1, -6, -4, 0}}]", near(-1.0)),
+    T("m = {{0, 2, -1, 3, 1, 4}, {-2, 0, 5, -2, 3, 1}, {1, -5, 0, 2, -4, 6}, {-3, 2, -2, 0, 7, -1}, "
+      "{-1, -3, 4, -7, 0, 2}, {-4, -1, -6, 1, -2, 0}}; PfaffianDet[m]^2 == Det[m]"),
+    ("PfaffianDet[{{0, 3, 2, 1}, {-3, 0, 5, 6}, {-2, -5, 0, 4}, {-1, -6, -4, 0}}, Method -> \"Det\"]", "5"),
+    ("PfaffianDet[{{1, 2}, {3, 4}}]", Raises(ValueError, "antisymmetric")),
+    # LinearSolve[m] / LinearSolveFunction
+    ("LinearSolve[{{1, 2}, {3, -2}}][{5, 6}]", "{11/4, 9/8}"),
+    ("LinearSolve[{{1, 2}, {3, -2}}][{{5, 6}, {7, 8}}]", "{{3, 7/2}, {1, 5/4}}"),
+    ("Head[LinearSolve[{{1, 2}, {3, 4}}]]", "LinearSolveFunction"),
+    ("f = LinearSolve[HilbertMatrix[6]]; f[{1, 1, 1, 1, 1, 1}]", "{-6, 210, -1680, 5040, -6300, 2772}"),
+    ("f = LinearSolve[N[HilbertMatrix[3]]]; f[{1, 1, 1}]", near([3, -24, 30], 1e-8)),
+    ("LinearSolve[{{1, 2}, {2, 4}}]", Raises(ValueError, "singular")),
+    # TransformationMatrix
+    ("TransformationMatrix[TransformationFunction[{{1, 0, x0}, {0, 1, y0}, {0, 0, 1}}]]",
+     "{{1, 0, x0}, {0, 1, y0}, {0, 0, 1}}"),
+    ("TransformationMatrix[TransformationFunction[{{Cos[t], -Sin[t], 0}, {Sin[t], Cos[t], 0}, {0, 0, 1}}]]",
+     "{{Cos[t], -Sin[t], 0}, {Sin[t], Cos[t], 0}, {0, 0, 1}}"),
+    ("TransformationMatrix[TransformationFunction[{{2, 0}, {0, 1}}]].{x, 1}", "{2 x, 1}"),
+    ("TransformationMatrix[f]", "TransformationMatrix[f]"),
+]
+
+# ── GROUPS-END (new case groups are inserted above this line) ──
+
+_SCIPY_ONLY = ("WarpingDistance[{Pi",)
+GROUPS = [v for k, v in list(globals().items()) if k.isupper() and k not in ("GROUPS", "N50") and isinstance(v, list)
+          and v and isinstance(v[0], tuple)]
+CASES = [c for g in GROUPS for c in g
+         if HAVE_SCIPY or not (c[0].startswith(_SCIPY_ONLY) or (len(c) > 2 and c[2] == "scipy"))]
+CASES = [c[:2] if len(c) > 2 and c[2] == "scipy" else c for c in CASES]
+
+
+def _scoped(src):
+    """Run sources that assign variables inside Module so that no case leaks definitions into the next."""
+    import re
+    names = set()
+    for grp in re.findall(r"\{([A-Za-z0-9, ]+)\}\s*=(?!=)", src):
+        names.update(n.strip() for n in grp.split(","))
+    names.update(re.findall(r"(?<![A-Za-z0-9\]\}])([a-z][A-Za-z0-9]*)\s*=(?![=>])", src))
+    if not names:
+        return src
+    return "Module[{" + ", ".join(sorted(names)) + "}, " + src + "]"
+
+
+CASES = [(_scoped(c[0]),) + tuple(c[1:]) for c in CASES]
+
+
+@pytest.mark.parametrize("case", CASES, ids=ids(CASES))
+def test_wolfram_w08(case):
+    check(case)
