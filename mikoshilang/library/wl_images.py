@@ -2349,3 +2349,326 @@ def _pixelvaluepositions(x: Expr, val: Real | ListOf[Real] | Expr | String, d: R
           " Check: exact (the documented relation to PixelValuePositions) in tests.")
 def _imagevaluepositions(x: Expr, val: Real | ListOf[Real] | Expr | String, d: Real = None) -> ListOf[ListOf[Real]]:
     return _value_positions(x, val, d, "ImageValuePositions", True)
+
+
+# ───────────────────────────── filters ─────────────────────────────
+
+_PAD_MODES = {"Fixed": "edge", "Periodic": "wrap", "Reflected": "reflect", "Reversed": "symmetric"}
+
+
+def pad_array(a, pads, padding, fname, im=None):
+    """Pad the spatial axes of a (..., h, w, c) array; pads = [(before, after)] for the spatial axes; padding a
+    method name, a number, a colour/channel list (needs im) or None (no padding)."""
+    full = [(0, 0)] * (a.ndim - 1 - len(pads)) + list(pads) + [(0, 0)]
+    if isinstance(padding, str):
+        if padding not in _PAD_MODES:
+            raise ValueError(f"{fname}: unknown Padding {padding!r} (\"Fixed\", \"Periodic\", \"Reflected\", "
+                             f"\"Reversed\", a value or None)")
+        mode = _PAD_MODES[padding]
+        if mode == "reflect" and any(a.shape[i] < 2 for i in range(a.ndim - 1 - len(pads), a.ndim - 1)):
+            mode = "edge"
+        if mode in ("reflect", "symmetric", "wrap"):
+            # numpy repeats these as needed for wide pads (wrap/reflect beyond one period)
+            return np.pad(a, full, mode=mode)
+        return np.pad(a, full, mode=mode)
+    if im is not None and not (isinstance(padding, (int, float)) and not isinstance(padding, bool)):
+        v = value_for(im, padding, fname)
+    else:
+        v = np.full(a.shape[-1], real_arg(padding, fname, "Padding"))
+    out = np.empty([a.shape[i] + full[i][0] + full[i][1] for i in range(a.ndim)])
+    out[...] = v
+    sl = tuple(slice(p[0], p[0] + a.shape[i]) for i, p in enumerate(full))
+    out[sl] = a
+    return out
+
+
+def _padding_opt(o, fname, default="Fixed"):
+    p = o.get("Padding", default)
+    if _is_sym(p, "None"):
+        return None
+    return p
+
+
+def _kernel(ker, fname):
+    if isinstance(ker, Expr) and ker.head in IMAGE_HEADS:
+        k = parse_image(ker, fname)
+        if k.c != 1:
+            raise ValueError(f"{fname}: a kernel image must have a single channel")
+        return k.a[..., 0]
+    k = _numeric_array(ker, fname)
+    if k is None:
+        if isinstance(ker, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the kernel must be a numeric matrix or a single-channel image")
+    if k.ndim != 2:
+        raise ValueError(f"{fname}: the kernel must be a matrix")
+    return k
+
+
+def correlate_array(a, k, padding, fname, im=None, op="Dot"):
+    """Correlation of every channel of a (h, w, c) array with kernel k (odd dimensions, centred)."""
+    kh, kw = k.shape
+    if kh % 2 == 0 or kw % 2 == 0:
+        raise NotImplementedError(f"{fname}: kernels with an even number of rows or columns are not supported")
+    ph, pw = kh // 2, kw // 2
+    if padding is None:
+        P = a
+    else:
+        P = pad_array(a, [(ph, ph), (pw, pw)], padding, fname, im)
+    from numpy.lib.stride_tricks import sliding_window_view
+    win = sliding_window_view(P, (kh, kw), axis=(0, 1))          # (h', w', c, kh, kw)
+    if op == "Dot":
+        return np.einsum("ijcab,ab->ijc", win, k)
+    W = win.reshape(win.shape[:3] + (kh * kw,))
+    kv = k.reshape(-1)
+    if op == "EuclideanDistance":
+        return np.sqrt(((W - kv) ** 2).sum(-1))
+    if op == "SquaredEuclideanDistance":
+        return ((W - kv) ** 2).sum(-1)
+    if op == "ManhattanDistance":
+        return np.abs(W - kv).sum(-1)
+    if op == "CosineDistance":
+        num = (W * kv).sum(-1)
+        den = np.sqrt((W ** 2).sum(-1)) * np.sqrt((kv ** 2).sum())
+        return 1 - np.divide(num, den, out=np.ones_like(num), where=den != 0)
+    if op in ("CorrelationDistance", "NormalizedSquaredEuclideanDistance"):
+        Wc = W - W.mean(-1, keepdims=True)
+        kc = kv - kv.mean()
+        if op == "CorrelationDistance":
+            num = (Wc * kc).sum(-1)
+            den = np.sqrt((Wc ** 2).sum(-1)) * np.sqrt((kc ** 2).sum())
+            return 1 - np.divide(num, den, out=np.ones_like(num), where=den != 0)
+        num = 0.5 * ((Wc - kc) ** 2).sum(-1)
+        den = (Wc ** 2).sum(-1) + (kc ** 2).sum()
+        return np.divide(num, den, out=np.zeros_like(num), where=den != 0)
+    raise NotImplementedError(f"{fname}: correlation function {op} is not supported")
+
+
+def convolve(a, k, padding="Fixed", fname="ImageConvolve", im=None):
+    return correlate_array(a, k[::-1, ::-1], padding, fname, im)
+
+
+def _real_type(im):
+    return "Real64" if im.type == "Real64" else "Real32"
+
+
+@fn("ImageConvolve", area=AREA, status="added",
+    notes="ImageConvolve[image, ker] convolves every channel with the kernel (a numeric matrix with odd dimensions, "
+          "centred, or a single-channel image), equal to ListConvolve[ker, ArrayPad[data, Floor[Dimensions[ker]/2], "
+          "\"Fixed\"]] as documented; Padding -> \"Fixed\" (default), \"Periodic\", \"Reflected\", \"Reversed\", a "
+          "value or colour, or None (smaller image). The result has a real type. Kernels with an even dimension and "
+          "3D images raise NotImplementedError. Check: reference (direct sums written in tests).")
+def _imageconvolve(x: Expr, ker: MatrixOf[Real] | Expr, *opts: Option) -> Expr:
+    _, o = opts_split(opts, {"Padding"}, "ImageConvolve")
+    if _:
+        raise ValueError("ImageConvolve: expected ImageConvolve[image, ker, options]")
+    im = _img1(x, "ImageConvolve", allow3d=False)
+    out = convolve(im.a, _kernel(ker, "ImageConvolve"), _padding_opt(o, "ImageConvolve"), "ImageConvolve", im)
+    return image_expr(im.new(out, typ=_real_type(im)))
+
+
+_CORR_OPS = ("Dot", "EuclideanDistance", "SquaredEuclideanDistance", "ManhattanDistance", "CosineDistance",
+             "CorrelationDistance", "NormalizedSquaredEuclideanDistance")
+
+
+@fn("ImageCorrelate", area=AREA, status="added",
+    notes="ImageCorrelate[image, ker] correlates every channel with the kernel (no flip; odd dimensions, centred); "
+          "ImageCorrelate[image, ker, f] uses f in place of Dot: EuclideanDistance, SquaredEuclideanDistance, "
+          "ManhattanDistance, CosineDistance, CorrelationDistance or NormalizedSquaredEuclideanDistance (the Wolfram "
+          "definitions applied to the kernel and each neighbourhood). Padding as for ImageConvolve; real result type. "
+          "Other functions, even kernels and 3D images raise NotImplementedError. Check: reference (direct sums "
+          "written in tests; ImageCorrelate[i, k] == ImageConvolve[i, Reverse[k, {1, 2}]]).")
+def _imagecorrelate(x: Expr, ker: MatrixOf[Real] | Expr, *rest: Fn | Option) -> Expr:
+    pos, o = opts_split(rest, {"Padding", "PerformanceGoal"}, "ImageCorrelate")
+    if len(pos) > 1:
+        raise ValueError("ImageCorrelate: expected ImageCorrelate[image, ker, f, options]")
+    op = "Dot"
+    if pos:
+        f = pos[0]
+        if not (isinstance(f, Symbol) and f.name in _CORR_OPS):
+            if isinstance(f, (Symbol, Expr)):
+                raise NotImplementedError(f"ImageCorrelate: correlation function {_short(f)} is not supported")
+            raise TypeError(f"ImageCorrelate: {_short(f)} is not a function")
+        op = f.name
+    im = _img1(x, "ImageCorrelate", allow3d=False)
+    out = correlate_array(im.a, _kernel(ker, "ImageCorrelate"), _padding_opt(o, "ImageCorrelate"), "ImageCorrelate",
+                          im, op)
+    return image_expr(im.new(out, typ=_real_type(im)))
+
+
+def gaussian_kernel_1d(r, sigma):
+    """Wolfram's GaussianMatrix[{{r}, {sigma}}] (Method -> "Bessel", Standardized): e^-t I_n(t), t = sigma^2."""
+    import mpmath
+    if r == 0:
+        return np.array([1.0])
+    t = sigma * sigma
+    v = np.array([float(mpmath.exp(-t) * mpmath.besseli(abs(n), t)) for n in range(-r, r + 1)])
+    return v / v.sum()
+
+
+def _radii(r, fname):
+    if K.is_list(r):
+        if len(r.args) != 2:
+            raise ValueError(f"{fname}: give the radius as r or {{r_rows, r_columns}}")
+        vals = [real_arg(v, fname, "radius") for v in r.args]
+    else:
+        vals = [real_arg(r, fname, "radius")] * 2
+    if any(v < 0 for v in vals):
+        raise ValueError(f"{fname}: the radius must be non-negative")
+    return vals
+
+
+def blur_array(a, rr, rc, fname="Blur", im=None):
+    kr = gaussian_kernel_1d(int(round(rr)), rr / 2)
+    kc = gaussian_kernel_1d(int(round(rc)), rc / 2)
+    return correlate_array(a, np.outer(kr, kc), "Fixed", fname, im)
+
+
+@fn("Blur", area=AREA, status="added",
+    notes="Blur[image] = Blur[image, 2]; Blur[image, r] is GaussianFilter[image, r] with standard deviation r/2 and "
+          "\"Fixed\" padding, as documented, using GaussianMatrix's default discrete (\"Bessel\") kernel e^-t I_n(t), "
+          "t = (r/2)^2, truncated at radius Round[r] and normalised to total 1; Blur[image, {r_rows, r_columns}] "
+          "per direction. Every channel separately; the type is kept except that \"Bit\" images give \"Real32\". "
+          "Image3D raises NotImplementedError. Check: reference (the kernel against mpmath Bessel I values; the "
+          "blurred total is preserved) in tests.")
+def _blur(x: Expr, r: Real | ListOf[Real] = 2) -> Expr:
+    im = _img1(x, "Blur", allow3d=False)
+    rr, rc = _radii(r, "Blur")
+    out = blur_array(im.a, rr, rc, "Blur", im)
+    typ = "Real32" if im.type == "Bit" else im.type
+    return image_expr(im.new(quantize(out, typ), typ=typ))
+
+
+@fn("Sharpen", area=AREA, status="added",
+    notes="Sharpen[image] = Sharpen[image, 2]; Sharpen[image, r] is the unsharp mask i + (i - Blur[i, r]) = 2 i - "
+          "Blur[i, r] (the documented relation; Wolfram does not state its gain, so pixel values can differ), every "
+          "channel separately; integer types are clipped; \"Bit\" images give \"Real32\". Sharpen is linear, as "
+          "documented. Check: exact (2 i - Blur[i, r]; constant images are unchanged) in tests.")
+def _sharpen(x: Expr, r: Real | ListOf[Real] = 2) -> Expr:
+    im = _img1(x, "Sharpen", allow3d=False)
+    rr, rc = _radii(r, "Sharpen")
+    out = 2 * im.a - blur_array(im.a, rr, rc, "Sharpen", im)
+    typ = "Real32" if im.type == "Bit" else im.type
+    return image_expr(im.new(quantize(out, typ), typ=typ))
+
+
+@fn("ImageFilter", area=AREA, status="added",
+    notes="ImageFilter[f, image, r] applies f to the (2r + 1) x (2r + 1) neighbourhood matrix of each pixel in each "
+          "channel (values on the 0..1 scale); ImageFilter[f, image, {r_rows, r_columns}]; Padding -> \"Fixed\" "
+          "(default), \"Periodic\", \"Reflected\", \"Reversed\", a value or None; Interleaving -> True passes matrices "
+          "of channel lists and expects channel lists back. f must return numbers (lists with Interleaving -> True). "
+          "Results are cached on the neighbourhood. Same type as the image (integer types clipped). Masking and 3D "
+          "images raise NotImplementedError. Check: exact (Mean/Max filters against direct computations) in tests.")
+def _imagefilter(f: Fn, x: Expr, r: NonNegInteger | ListOf[NonNegInteger], *opts: Option) -> Expr:
+    fname = "ImageFilter"
+    _, o = opts_split(opts, {"Padding", "Interleaving"}, fname)
+    if _:
+        raise ValueError("ImageFilter: expected ImageFilter[f, image, r, options]")
+    im = _img1(x, fname, allow3d=False)
+    if K.is_list(r):
+        if len(r.args) != 2:
+            raise ValueError("ImageFilter: give the radius as r or {r_rows, r_columns}")
+        rr, rc = (int_arg(v, fname, "radius", 0) for v in r.args)
+    else:
+        rr = rc = int_arg(r, fname, "radius", 0)
+    pad = _padding_opt(o, fname)
+    il = _interleave_opt(o, fname, False)
+    P = im.a if pad is None else pad_array(im.a, [(rr, rr), (rc, rc)], pad, fname, im)
+    from numpy.lib.stride_tricks import sliding_window_view
+    win = sliding_window_view(P, (2 * rr + 1, 2 * rc + 1), axis=(0, 1))     # (h', w', c, kh, kw)
+    H, W = win.shape[:2]
+    cache = {}
+    if il:
+        out = np.zeros((H, W, im.c))
+        for i in range(H):
+            for j in range(W):
+                blk = np.moveaxis(win[i, j], 0, -1)
+                key = blk.tobytes()
+                if key not in cache:
+                    m = _lst([[_px_expr(v) if im.c > 1 else float(v[0]) for v in row] for row in blk.tolist()])
+                    res = _result_vec(_ev(K.call(f, m)), fname)
+                    if len(res) != im.c:
+                        raise ValueError(f"{fname}: f must return {im.c} channel values")
+                    cache[key] = res
+                out[i, j] = cache[key]
+    else:
+        out = np.zeros((H, W, im.c))
+        for i in range(H):
+            for j in range(W):
+                for c in range(im.c):
+                    blk = win[i, j, c]
+                    key = blk.tobytes()
+                    if key not in cache:
+                        res = _result_vec(_ev(K.call(f, _lst(blk.tolist()))), fname)
+                        if len(res) != 1:
+                            raise ValueError(f"{fname}: f must return a number")
+                        cache[key] = res[0]
+                    out[i, j, c] = cache[key]
+    if im.type in MAXV:
+        out = np.clip(out, 0, 1)
+    return image_expr(im.new(quantize(out, im.type)))
+
+
+@fn("ImageAccumulate", area=AREA, status="added",
+    notes="ImageAccumulate[image] gives, per channel, the sum of all pixel values below and to the left of (and "
+          "including) each pixel, padded with a row of zeros at the bottom and a column of zeros on the left, so the "
+          "result is 1 + ImageDimensions[image] in size, as documented; real result type. Method -> "
+          "\"CompensatedSummation\" is accepted (the sums are exact for integer types, double precision otherwise). "
+          "Image3D raises NotImplementedError. Check: exact (differences of the result give back the image) in "
+          "tests.")
+def _imageaccumulate(x: Expr, *opts: Option) -> Expr:
+    _, o = opts_split(opts, {"Method"}, "ImageAccumulate")
+    if _:
+        raise ValueError("ImageAccumulate: expected ImageAccumulate[image, options]")
+    if "Method" in o and o["Method"] not in ("CompensatedSummation",) and not _is_sym(o["Method"], "Automatic"):
+        raise ValueError("ImageAccumulate: Method must be Automatic or \"CompensatedSummation\"")
+    im = _img1(x, "ImageAccumulate", allow3d=False)
+    a = im.a[::-1]                                   # bottom row first
+    s = np.cumsum(np.cumsum(a, axis=0), axis=1)
+    out = np.zeros((im.h + 1, im.w + 1, im.c))
+    out[1:, 1:] = s
+    out = out[::-1]
+    return image_expr(Img(out, _real_type(im), im.cs, False))
+
+
+@fn("ImageCooccurrence", area=AREA, status="added",
+    notes="ImageCooccurrence[image, n, ker] gives the n x n matrix of the relative frequencies (total 1) of intensity "
+          "bin pairs {i, j}: a pixel in bin i (centre of the kernel) and a neighbour in bin j at each nonzero kernel "
+          "offset, weighted by the kernel value; intensities (luma for colour images) on the 0..1 scale fall into n "
+          "equal bins (1 in the last). The default kernel of ImageCooccurrence[image, n] is not given in the "
+          "documentation text and raises NotImplementedError; ImageCooccurrence[{image1, image2}, ...] and Masking "
+          "too. Check: exact (frequencies of hand-counted pairs) in tests.")
+def _imagecooccurrence(x: Expr, n: PosInteger, ker: MatrixOf[Real] = None) -> MatrixOf[Real]:
+    fname = "ImageCooccurrence"
+    if K.is_list(x):
+        raise NotImplementedError("ImageCooccurrence: pairs of images are not supported")
+    im = _img1(x, fname, allow3d=False)
+    nb = int_arg(n, fname, "number of bins", 1)
+    if ker is None:
+        raise NotImplementedError("ImageCooccurrence: give the spatial kernel ker (the default kernel is not "
+                                  "documented in a reproducible form)")
+    k = _kernel(ker, fname)
+    kh, kw = k.shape
+    if kh % 2 == 0 or kw % 2 == 0:
+        raise ValueError("ImageCooccurrence: the kernel must have odd dimensions")
+    it = np.clip(_intensity(im, fname), 0, 1)
+    b = np.minimum((it * nb).astype(int), nb - 1)
+    m = np.zeros((nb, nb))
+    ch, cw = kh // 2, kw // 2
+    for di in range(kh):
+        for dj in range(kw):
+            wgt = k[di, dj]
+            if wgt == 0 or (di == ch and dj == cw):
+                continue
+            oy, ox = di - ch, dj - cw
+            r0, r1 = max(0, -oy), min(im.h, im.h - oy)
+            c0, c1 = max(0, -ox), min(im.w, im.w - ox)
+            if r0 >= r1 or c0 >= c1:
+                continue
+            src = b[r0:r1, c0:c1]
+            dst = b[r0 + oy:r1 + oy, c0 + ox:c1 + ox]
+            np.add.at(m, (src.reshape(-1), dst.reshape(-1)), wgt)
+    tot = m.sum()
+    if tot == 0:
+        raise ValueError("ImageCooccurrence: the kernel selects no neighbouring pixel pairs")
+    return _lst((m / tot).tolist())
