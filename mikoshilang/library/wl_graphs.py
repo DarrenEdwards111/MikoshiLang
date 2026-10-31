@@ -29,7 +29,14 @@ import sympy as sp
 from ..expr import Expr, Symbol
 from .. import kernel as K
 from .core import Unevaluated, fn, record, REGISTRY, R, L, rule, S, number, is_list
-from .wl_common import split_options, ev
+from .wl_common import split_options as _split_options_rev, ev
+
+
+def split_options(args, names, fname):
+    """wl_common.split_options keeping the options in their given order (a Graph with several options must
+    normalise to a fixed point; the reversed order made Graph[..., o1, o2] re-evaluate forever)."""
+    pos, opts = _split_options_rev(args, names, fname)
+    return pos, dict(reversed(list(opts.items())))
 
 AREA = "graphs (batch 5)"
 INF = sp.oo

@@ -2739,3 +2739,327 @@ def _fmaxcut(g: Expr) -> ListOf[Expr]:
     S1 = [v for v in range(n) if not bm >> v & 1]
     S2 = [v for v in range(n) if bm >> v & 1]
     return L(R(S(best)), L(_verts(gr, S1), _verts(gr, S2)))
+
+
+def _vertex_caps(gr, fname):
+    vc = gr.opts.get("VertexCapacity")
+    if vc is None:
+        return None
+    if not is_list(vc) or len(vc.args) != gr.n:
+        raise ValueError(f"{fname}: VertexCapacity must be a list with one value per vertex")
+    out = []
+    for x in vc.args:
+        v = S(x)
+        if not (isinstance(v, sp.Basic) and (v == INF or (v.is_number and v.is_real))) or v < 0:
+            raise ValueError(f"{fname}: VertexCapacity values must be non-negative numbers or Infinity (got {x})")
+        out.append(v)
+    return out
+
+
+def _has_vcap(args):
+    try:
+        return len(args) == 3 and is_graph_like(args[0]) and "VertexCapacity" in graph_of(args[0], "FindMaximumFlow").opts
+    except Exception:
+        return False
+
+
+def _fmaxflow_vcap(g, s, t):
+    gr = graph_of(g, "FindMaximumFlow")
+    gr.require_pure("FindMaximumFlow")
+    a, b = gr.vidx(s, "FindMaximumFlow"), gr.vidx(t, "FindMaximumFlow")
+    if a == b:
+        raise ValueError("FindMaximumFlow: s and t must be different vertices")
+    vc = _vertex_caps(gr, "FindMaximumFlow")
+    caps = gr.capacities
+    F, _ = _split_flow(gr, None, (lambda k: caps[k]) if caps is not None else 1, vcaps=vc)
+    return R(S(F.run(2 * a, 2 * b + 1, fname="FindMaximumFlow")))
+
+
+WGM.extend("FindMaximumFlow", _fmaxflow_vcap, _has_vcap,
+           "W24: graphs carrying VertexCapacity -> {c1, ...} use a vertex-split network (every vertex, s and t "
+           "included, passes at most its capacity; edge capacities from EdgeCapacity, default 1). Check: exact (tests: "
+           "a unit capacity on the middle of two parallel paths halves the flow)", status="added")
+
+
+# ═══════════════════════════════════════ tours, cost flows, cycles, dominators ═══════════════════════════════════════
+
+@fn("FindPostmanTour", area=AREA, status="added",
+    notes="FindPostmanTour[g]: {tour} with a closed walk of minimum total EdgeWeight that uses every edge at least "
+          "once (Chinese postman: odd vertices paired by an exact minimum-weight perfect matching, at most 16 odd "
+          "vertices, duplicated shortest paths, then Hierholzer), edges oriented along the walk and starting at the "
+          "first vertex with an edge; {} when the edges are not all in one component or there are no edges; "
+          "FindPostmanTour[g, k] gives at most k tours (one is found); undirected graphs only. Check: self-check "
+          "(the walk is closed, covers every edge, and its weight equals edge weights plus the matching cost; tests: "
+          "Eulerian graphs need no repeats, a path of length 3 is walked twice).")
+def _postman(g: Expr, k: NonNegInteger = None) -> ListOf[ListOf[Expr]]:
+    gr = _g(g, "FindPostmanTour")
+    _need_undirected(gr, "FindPostmanTour")
+    if k is not None and _int(k, "FindPostmanTour", 0, "k") == 0:
+        return L()
+    m = len(gr.edges)
+    if m == 0:
+        return L()
+    touched = {v for i, j, _ in gr.edges for v in (i, j)}
+    comp = next(c for c in _weak_components(gr) if gr.edges[0][0] in c)
+    if not touched <= set(comp):
+        return L()
+    deg = [0] * gr.n
+    for i, j, _ in gr.edges:
+        deg[i] += 1
+        deg[j] += 1
+    odd = [v for v in range(gr.n) if deg[v] % 2]
+    if len(odd) > 16:
+        raise NotImplementedError("FindPostmanTour: at most 16 odd-degree vertices are supported")
+    sp_info = {v: gr.sssp(v, undirected=True) for v in odd}
+    memo = {}
+
+    def match(mask):
+        if mask == 0:
+            return 0, []
+        if mask in memo:
+            return memo[mask]
+        i = (mask & -mask).bit_length() - 1
+        best = None
+        for j in range(i + 1, len(odd)):
+            if mask >> j & 1:
+                c, pr = match(mask & ~(1 << i) & ~(1 << j))
+                c = c + sp_info[odd[i]][0][odd[j]]
+                if best is None or c < best[0]:
+                    best = (c, pr + [(odd[i], odd[j])])
+        memo[mask] = best
+        return best
+    mcost, pairs = match((1 << len(odd)) - 1)
+    use = list(range(m))
+    for a, b in pairs:
+        prev = sp_info[a][1]
+        v = b
+        while v != a:
+            u = prev[v]
+            cand = [k2 for k2, (i, j, _) in enumerate(gr.edges) if {i, j} == {u, v}]
+            use.append(min(cand, key=lambda k2: (gr.weight(k2), k2)))
+            v = u
+    adj = [[] for _ in range(gr.n)]
+    for eid, k2 in enumerate(use):
+        i, j, _ = gr.edges[k2]
+        adj[i].append((j, eid))
+        if i != j:
+            adj[j].append((i, eid))
+    for a in adj:
+        a.reverse()
+    used = [False] * len(use)
+    start = min(touched)
+    stack, walk = [(start, None)], []
+    while stack:
+        v, e = stack[-1]
+        while adj[v] and used[adj[v][-1][1]]:
+            adj[v].pop()
+        if adj[v]:
+            w, eid = adj[v].pop()
+            used[eid] = True
+            stack.append((w, eid))
+        else:
+            stack.pop()
+            if e is not None:
+                walk.append((stack[-1][0], v, e))
+    walk.reverse()
+    total = sum(gr.weight(use[e]) for _, _, e in walk)
+    ok = (len(walk) == len(use) and walk[0][0] == walk[-1][1] == start
+          and all(walk[x][1] == walk[x + 1][0] for x in range(len(walk) - 1))
+          and sp.simplify(total - sum(gr.weight(k2) for k2 in range(m)) - mcost) == 0)
+    if not ok:
+        raise ArithmeticError("FindPostmanTour: internal check failed (the walk is not a valid postman tour)")
+    return L(L(*(gr.edge(a, b, False) for a, b, _ in walk)))
+
+
+def _edge_costs(gr, fname):
+    c = gr.opts.get("EdgeCost")
+    if c is None:
+        return [sp.Integer(1)] * len(gr.edges)
+    if not is_list(c) or len(c.args) != len(gr.edges):
+        raise ValueError(f"{fname}: EdgeCost must be a list with one value per edge")
+    out = []
+    for x in c.args:
+        v = S(x)
+        if not (isinstance(v, sp.Basic) and v.is_number and v.is_real) or v < 0:
+            raise ValueError(f"{fname}: EdgeCost values must be non-negative real numbers (got {x})")
+        out.append(v)
+    return out
+
+
+@fn("FindMinimumCostFlow", area=AREA, status="added",
+    notes="FindMinimumCostFlow[g, s, t]: the minimum total cost of a maximum s-t flow; FindMinimumCostFlow[g, s, t, d]: "
+          "of a flow of value d; FindMinimumCostFlow[g, {sd1, sd2, ...}]: of a flow meeting vertex supplies (> 0) and "
+          "demands (< 0) in VertexList order; a final \"CostValue\" (default) or \"FlowValue\" property; other "
+          "properties raise NotImplementedError. Costs from EdgeCost (default 1), capacities from EdgeCapacity "
+          "(default Infinity); undirected edges carry flow either way; successive shortest paths, exact for exact "
+          "data; an unbounded maximum flow or infeasible demands raise ValueError. Check: self-check (tests: unit "
+          "costs give the shortest-path distance times d; LP duality on a small network).")
+def _mcflow(g: Expr, *args: Expr) -> Expr:
+    fname = "FindMinimumCostFlow"
+    gr = _g(g, fname)
+    gr.require_pure(fname)
+    args = list(args)
+    prop = "CostValue"
+    if args and isinstance(args[-1], str):
+        prop = args.pop()
+        if prop not in ("CostValue", "FlowValue"):
+            raise NotImplementedError(f"{fname}: only the \"CostValue\" and \"FlowValue\" properties are supported")
+    costs = _edge_costs(gr, fname)
+    caps = gr.capacities if gr.capacities is not None else [INF] * len(gr.edges)
+    F = _Flow(gr.n + 2)
+    for k, (i, j, d) in enumerate(gr.edges):
+        if i == j:
+            continue
+        F.arc(i, j, caps[k], costs[k])
+        if not d:
+            F.arc(j, i, caps[k], costs[k])
+    if len(args) == 1:
+        sd = args[0]
+        if not is_list(sd) or len(sd.args) != gr.n:
+            raise ValueError(f"{fname}: give one supply/demand value per vertex")
+        vals = [_real(x, fname, "a supply") for x in sd.args]
+        if sp.simplify(sum(vals)) != 0:
+            raise ValueError(f"{fname}: supplies and demands must sum to zero")
+        src, snk = gr.n, gr.n + 1
+        want = 0
+        for v, x in enumerate(vals):
+            if x > 0:
+                F.arc(src, v, x)
+                want += x
+            elif x < 0:
+                F.arc(v, snk, -x)
+        flow, cost = F.min_cost(src, snk, want, fname)
+        if flow != want:
+            raise ValueError(f"{fname}: the supplies and demands cannot be met")
+    elif len(args) in (2, 3):
+        a, b = gr.vidx(args[0], fname), gr.vidx(args[1], fname)
+        if a == b:
+            raise ValueError(f"{fname}: s and t must be different vertices")
+        want = _real(args[2], fname, "the flow value", lo=0) if len(args) == 3 else None
+        flow, cost = F.min_cost(a, b, want, fname)
+        if want is not None and flow != want:
+            raise ValueError(f"{fname}: a flow of value {args[2]} from s to t is not possible")
+    else:
+        raise ValueError(f"{fname}: expected {fname}[g, s, t], {fname}[g, s, t, d] or {fname}[g, {{sd...}}]")
+    return R(S(cost if prop == "CostValue" else flow))
+
+
+@fn("FindFundamentalCycles", area=AREA, status="added",
+    notes="FindFundamentalCycles[g]: the fundamental cycles of the breadth-first spanning forest (roots and "
+          "neighbours in VertexList order) of an undirected graph: one cycle per non-tree edge, in EdgeList order, "
+          "each a list of edges oriented along the cycle starting with the non-tree edge (self-loops and parallel "
+          "edges give cycles of length 1 and 2); m - n + c cycles; directed graphs raise NotImplementedError. A valid "
+          "cycle basis may differ from Wolfram's. Check: self-check (the count is m - n + c and each cycle is closed; "
+          "tests: trees give {}, the Petersen graph gives 6).")
+def _ffc(g: Expr) -> ListOf[ListOf[Expr]]:
+    gr = _g(g, "FindFundamentalCycles")
+    _need_undirected(gr, "FindFundamentalCycles")
+    n = gr.n
+    parent, pedge, depth = [None] * n, [None] * n, [None] * n
+    adj = gr.out_adj(undirected=True)
+    tree = set()
+    for r in range(n):
+        if depth[r] is not None:
+            continue
+        depth[r] = 0
+        q = deque([r])
+        while q:
+            u = q.popleft()
+            for w, _, k in sorted(adj[u], key=lambda t: (t[0], t[2])):
+                if depth[w] is None:
+                    depth[w], parent[w], pedge[w] = depth[u] + 1, u, k
+                    tree.add(k)
+                    q.append(w)
+    cycles = []
+    for k, (i, j, _) in enumerate(gr.edges):
+        if k in tree:
+            continue
+        up_j, up_i = [], []
+        a, b = j, i
+        while depth[a] > depth[b]:
+            up_j.append(a)
+            a = parent[a]
+        while depth[b] > depth[a]:
+            up_i.append(b)
+            b = parent[b]
+        while a != b:
+            up_j.append(a)
+            up_i.append(b)
+            a, b = parent[a], parent[b]
+        verts = [i, j] + [parent[x] for x in up_j] + [x for x in reversed(up_i)]
+        # verts: i -> j -> ... -> lca -> ... -> i
+        edges = [gr.edge(i, j, False)]
+        for x in range(1, len(verts) - 1):
+            edges.append(gr.edge(verts[x], verts[x + 1], False))
+        if verts[-1] != i and len(verts) > 2:
+            raise ArithmeticError("FindFundamentalCycles: internal check failed (a cycle is not closed)")
+        cycles.append(L(*edges) if i != j else L(gr.edge(i, i, False)))
+    c = len(_weak_components(gr))
+    if len(cycles) != len(gr.edges) - n + c:
+        raise ArithmeticError("FindFundamentalCycles: internal check failed (wrong number of cycles)")
+    return L(*cycles)
+
+
+def _idoms(gr, r, fname):
+    if not gr.directed or gr.mixed:
+        raise NotImplementedError(f"{fname}: only directed graphs are supported")
+    n = gr.n
+    succ = [set() for _ in range(n)]
+    pred = [set() for _ in range(n)]
+    for i, j, _ in gr.edges:
+        succ[i].add(j)
+        pred[j].add(i)
+    reach = _bfs_dist(succ, r)
+    allv = set(reach)
+    dom = {v: set(allv) for v in allv}
+    dom[r] = {r}
+    changed = True
+    while changed:
+        changed = False
+        for v in sorted(allv - {r}):
+            ps = [dom[p] for p in pred[v] if p in allv]
+            nd = set.intersection(*ps) | {v} if ps else {v}
+            if nd != dom[v]:
+                dom[v], changed = nd, True
+    idom = {r: r}
+    for v in allv - {r}:
+        strict = dom[v] - {v}
+        idom[v] = max(strict, key=lambda d: len(dom[d]))
+        if dom[idom[v]] != strict:
+            raise ArithmeticError(f"{fname}: internal check failed (dominator sets are not a chain)")
+    return idom
+
+
+@fn("DominatorTreeGraph", area=AREA, status="added",
+    notes="DominatorTreeGraph[g, r]: the tree with an edge idom(v) -> v for every vertex v != r reachable from r "
+          "(vertices reachable from r, in VertexList order); iterative dominator-set data flow; directed graphs "
+          "only (NotImplementedError otherwise). Check: self-check (dominator sets form a chain; tests: a diamond "
+          "1->2, 1->3, 2->4, 3->4 has 1 as idom of 4).")
+def _domtree(g: Expr, r: Expr) -> Expr:
+    gr = _g(g, "DominatorTreeGraph")
+    root = gr.vidx(r, "DominatorTreeGraph")
+    idom = _idoms(gr, root, "DominatorTreeGraph")
+    vs = [v for v in range(gr.n) if v in idom]
+    return _new([gr.vertices[v] for v in vs],
+                [Expr("DirectedEdge", gr.vertices[idom[v]], gr.vertices[v]) for v in vs if v != root])
+
+
+@fn("DominatorVertexList", area=AREA, status="added",
+    notes="DominatorVertexList[g, r]: the immediate dominator of every vertex in VertexList order (the root maps to "
+          "itself); a vertex unreachable from r raises ValueError (it has no dominator); directed graphs only. Check: "
+          "self-check (as DominatorTreeGraph; tests: on a directed path each vertex's dominator is its predecessor).")
+def _domlist(g: Expr, r: Expr) -> ListOf[Expr]:
+    gr = _g(g, "DominatorVertexList")
+    root = gr.vidx(r, "DominatorVertexList")
+    idom = _idoms(gr, root, "DominatorVertexList")
+    miss = [gr.vertices[v] for v in range(gr.n) if v not in idom]
+    if miss:
+        raise ValueError(f"DominatorVertexList: vertices {miss} are not reachable from {r}")
+    return L(*(gr.vertices[idom[v]] for v in range(gr.n)))
+
+
+_INERT["Direction"] = "option"
+record("Direction", AREA, "added",
+       "Direction: option name for one-sided limits and series (Limit[f, x -> a, Direction -> \"FromAbove\" | "
+       "\"FromBelow\" | 1 | -1]), interpreted by Limit in the calculus modules; inert on its own. Check: exact (tests: "
+       "Limit[1/x, x -> 0, Direction -> \"FromAbove\"] is Infinity).")
