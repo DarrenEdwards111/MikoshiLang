@@ -903,6 +903,8 @@ class InverseChiSquare(UD):
 
 class InverseGamma(InverseChiSquare):
     def __init__(self, name, a):
+        if len(a) == 4:
+            raise NotImplementedError(f"{name}: the generalized form [alpha, beta, gamma, mu] is not supported")
         _nargs(a, (2,), name, "InverseGammaDistribution[alpha, beta]")
         _pos(a[0], "alpha", name)
         _pos(a[1], "beta", name)
@@ -917,6 +919,8 @@ class InverseGaussian(UD):
     open_lo = True
 
     def __init__(self, name, a):
+        if len(a) == 3:
+            raise NotImplementedError(f"{name}: the generalized form [mu, lambda, theta] is not supported")
         _nargs(a, (2,), name, "InverseGaussianDistribution[mu, lambda]")
         _pos(a[0], "mu", name)
         _pos(a[1], "lambda", name)
@@ -1037,7 +1041,7 @@ class KDist(UD):
 
     def pdf(self, x):
         v, w = self.a
-        return 2 * (v / w) ** ((1 + v) / 2) * x ** v * sp.besselk(v - 1, 2 * x * sp.sqrt(v / w)) / sp.gamma(v)
+        return 4 * (v / w) ** ((1 + v) / 2) * x ** v * sp.besselk(v - 1, 2 * x * sp.sqrt(v / w)) / sp.gamma(v)
 
     def cdf(self, x):
         v, w = self.a
@@ -1174,9 +1178,7 @@ class Lindley(UD):
 
 class LogGamma(UD):
     def __init__(self, name, a):
-        _nargs(a, (2, 3), name, "LogGammaDistribution[alpha, beta] or [alpha, beta, mu]")
-        if len(a) == 2:
-            a = list(a) + [sp.Integer(0)]
+        _nargs(a, (3,), name, "LogGammaDistribution[alpha, beta, mu]")
         _pos(a[0], "alpha", name)
         _pos(a[1], "beta", name)
         super().__init__(name, a)
@@ -1882,6 +1884,8 @@ class Rice(UD):
 
     def cdf(self, x):
         al, be = self.a
+        if _num(x) and self.numeric() and (_inexact(x) or any(_inexact(v) for v in self.a)):
+            return self.num_cdf(x)
         return 1 - sp.marcumq(1, al / be, x / be)
 
     def raw(self, r):
@@ -3630,7 +3634,7 @@ _uni("LindleyDistribution", Lindley,
      "LindleyDistribution[delta]: PDF delta^2/(1 + delta) (1 + x) E^(-delta x), CDF, MGF, moments. Check: exact; "
      "reference moments from the mixture representation in tests.")
 _uni("LogGammaDistribution", LogGamma,
-     "LogGammaDistribution[alpha, beta, mu] (and [alpha, beta] with mu = 0): mu - 1 + E^Y for Y ~ GammaDistribution"
+     "LogGammaDistribution[alpha, beta, mu]: mu - 1 + E^Y for Y ~ GammaDistribution"
      "[alpha, beta]; PDF Log[1 + x - mu]^(alpha - 1) (1 + x - mu)^(-1 - 1/beta)/(beta^alpha Gamma[alpha]), CDF, "
      "moments. Check: exact; the gamma transformation identity in tests.")
 _uni("LogLogisticDistribution", LogLogistic,
