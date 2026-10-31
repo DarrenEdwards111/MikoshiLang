@@ -3536,3 +3536,510 @@ def _truncsum(expr, m, *rest):
     if K.is_int(m) and int(m) < 0:
         raise ValueError("TruncateSum: the number of terms must be non-negative")
     return _ev(_truncate(expr, m, activate))
+
+
+# ───────────────────────────── fixed points and stability ─────────────────────────────
+
+def _dep_names(xs, fname):
+    items = list(xs.args) if is_list(xs) else [xs]
+    names = []
+    for it in items:
+        if isinstance(it, Symbol):
+            names.append(it.name)
+        elif _head(it) and len(it.args) == 1 and isinstance(it.head, str):
+            names.append(it.head)
+        else:
+            raise ValueError(f"{fname}: dependent variables must be x or x[t]")
+    return names
+
+
+def _ode_system(eqs, xs, t, fname):
+    """First-order system for {eqns} in x_i[t]: (state symbols, rhs list, per-variable orders)."""
+    tv = _svar(t, fname)
+    names = _dep_names(xs, fname)
+    eql = list(eqs.args) if is_list(eqs) else [eqs]
+    E = []
+    for e in eql:
+        v = SX(e, fname)
+        if not isinstance(v, sp.Equality):
+            raise ValueError(f"{fname}: equations expected")
+        E.append(v.lhs - v.rhs)
+    fs = [sp.Function(nm)(tv) for nm in names]
+    orders = []
+    for f in fs:
+        o = 0
+        for e in E:
+            for d in e.atoms(sp.Derivative):
+                if d.expr == f:
+                    o = max(o, d.derivative_count)
+        if o == 0:
+            raise ValueError(f"{fname}: no derivative of {f} appears")
+        orders.append(o)
+    state, sub = [], {}
+    for f, o, nm in zip(fs, orders, names):
+        for k in range(o):
+            s_ = sp.Symbol(f"__S_{nm}_{k}")
+            state.append(s_)
+            sub[sp.Derivative(f, (tv, k)) if k else f] = s_
+    tops = [sp.Symbol(f"__T_{nm}") for nm in names]
+    Es = []
+    for e in E:
+        for f, o, tp in zip(fs, orders, tops):
+            e = e.subs(sp.Derivative(f, (tv, o)), tp)
+        for f, o, nm in zip(fs, orders, names):
+            for k in range(o - 1, 0, -1):
+                e = e.subs(sp.Derivative(f, (tv, k)), sub[sp.Derivative(f, (tv, k))])
+            e = e.subs(f, sub[f])
+        if e.has(tv):
+            pass
+        Es.append(e)
+    sol = sp.solve(Es, tops, dict=True)
+    if len(sol) != 1:
+        raise NotImplementedError(f"{fname}: the equations cannot be solved uniquely for the highest derivatives")
+    rhs = []
+    idx = 0
+    for f, o, nm, tp in zip(fs, orders, names, tops):
+        for k in range(o):
+            if k < o - 1:
+                rhs.append(state[idx + k + 1])
+            else:
+                rhs.append(sol[0][tp])
+        idx += o
+    if any(r.has(tv) for r in rhs):
+        raise NotImplementedError(f"{fname}: only autonomous systems are supported")
+    return state, rhs, tv
+
+
+def _rec_system(eqs, xs, n, fname):
+    nv = _svar(n, fname)
+    names = _dep_names(xs, fname)
+    eql = list(eqs.args) if is_list(eqs) else [eqs]
+    E = []
+    for e in eql:
+        v = SX(e, fname)
+        if not isinstance(v, sp.Equality):
+            raise ValueError(f"{fname}: equations expected")
+        E.append(v.lhs - v.rhs)
+    fns = [sp.Function(nm) for nm in names]
+    orders = []
+    for f in fns:
+        sh = set()
+        for e in E:
+            for a in e.atoms(AppliedUndef):
+                if a.func == f:
+                    d = sp.simplify(a.args[0] - nv)
+                    if not d.is_integer:
+                        raise ValueError(f"{fname}: shifts must be integers")
+                    sh.add(int(d))
+        if not sh:
+            raise ValueError(f"{fname}: {f} does not appear")
+        if min(sh) != 0:
+            E = [e.subs({f(nv + k): f(nv + k - min(sh)) for k in sorted(sh)}) for e in E]
+            sh = {k - min(sh) for k in sh}
+        if max(sh) == 0:
+            raise ValueError(f"{fname}: no shifted term of {f}")
+        orders.append(max(sh))
+    state = []
+    sub = {}
+    for f, o, nm in zip(fns, orders, names):
+        for k in range(o):
+            s_ = sp.Symbol(f"__S_{nm}_{k}")
+            state.append(s_)
+            sub[f(nv + k)] = s_
+    tops = [sp.Symbol(f"__T_{nm}") for nm in names]
+    Es = []
+    for e in E:
+        e = e.subs({f(nv + o): tp for f, o, tp in zip(fns, orders, tops)})
+        e = e.subs(sub)
+        Es.append(e)
+    sol = sp.solve(Es, tops, dict=True)
+    if len(sol) != 1:
+        raise NotImplementedError(f"{fname}: the equations cannot be solved uniquely for the highest shifts")
+    rhs = []
+    idx = 0
+    for f, o, tp in zip(fns, orders, tops):
+        for k in range(o):
+            rhs.append(state[idx + k + 1] if k < o - 1 else sol[0][tp])
+        idx += o
+    if any(r.has(nv) for r in rhs):
+        raise NotImplementedError(f"{fname}: only autonomous recurrences are supported")
+    return state, rhs
+
+
+def _fixed(state, eqs, fname):
+    try:
+        sols = sp.solve(eqs, state, dict=True)
+    except NotImplementedError:
+        raise NotImplementedError(f"{fname}: the fixed-point equations could not be solved")
+    pts = []
+    for s_ in sols:
+        if any(v not in s_ for v in state):
+            if all(e.subs(s_) == 0 for e in eqs) and len(s_) < len(state):
+                raise NotImplementedError(f"{fname}: there is a continuum of fixed points")
+        pt = [sp.simplify(s_.get(v, v)) for v in state]
+        if any(p.has(*state) for p in pt):
+            raise NotImplementedError(f"{fname}: there is a continuum of fixed points")
+        if pt not in pts:
+            pts.append(pt)
+    if not eqs or all(e == 0 for e in eqs):
+        raise NotImplementedError(f"{fname}: every point is a fixed point")
+
+    def key(p):
+        try:
+            return tuple(float(sp.re(sp.N(v))) for v in p)
+        except Exception:
+            return tuple(0.0 for _ in p)
+    return sorted(pts, key=key)
+
+
+def _pts_arg(p, n, fname):
+    if not is_list(p):
+        raise ValueError(f"{fname}: the fixed points must be a list")
+    pts = []
+    for q in p.args:
+        vals = [SX(v, fname) for v in (q.args if is_list(q) else [q])]
+        if len(vals) != n:
+            raise ValueError(f"{fname}: each point must have {n} coordinates")
+        pts.append(vals)
+    return pts
+
+
+def _stab_cond(eigs, discrete):
+    conds = []
+    for lam in eigs:
+        lam = sp.simplify(lam)
+        if discrete:
+            a = sp.Abs(lam)
+            c = a < 1
+        else:
+            c = sp.re(lam) < 0
+        conds.append(c)
+    num = [c for c in conds if c in (sp.true, sp.false)]
+    if any(c is sp.false for c in num):
+        return False
+    rest = [c for c in conds if c not in (sp.true, sp.false)]
+    return rest
+
+
+@fn("DFixedPoints", area=AREA, status="added",
+    notes="DFixedPoints[eqns, x[t] | {x1, ...}, t]: the equilibria of an autonomous ODE system, as points of the "
+          "first-order state (x, x', ..., x^(k-1)) for higher-order equations; sorted; raises for continua")
+def _dfixed(eqs, xs, t):
+    state, rhs, _tv = _ode_system(eqs, xs, t, "DFixedPoints")
+    return out(_fixed(state, rhs, "DFixedPoints"))
+
+
+@fn("RFixedPoints", area=AREA, status="added",
+    notes="RFixedPoints[eqns, a[n] | {a1, ...}, n]: the fixed points of an autonomous recurrence system (all shifts "
+          "equal), as points of the state (a[n], ..., a[n + k - 1]); sorted; raises for continua")
+def _rfixed(eqs, xs, n):
+    state, rhs = _rec_system(eqs, xs, n, "RFixedPoints")
+    return out(_fixed(state, [r - s_ for r, s_ in zip(rhs, state)], "RFixedPoints"))
+
+
+def _stability(state, rhs, pts, discrete, fname):
+    J = sp.Matrix(rhs).jacobian(sp.Matrix(state))
+    res = []
+    for p in pts:
+        Jp = J.subs(dict(zip(state, p)))
+        Jp = Jp.applyfunc(sp.simplify)
+        try:
+            ev = Jp.eigenvals(multiple=True)
+        except Exception:
+            raise NotImplementedError(f"{fname}: the eigenvalues of the linearisation could not be computed")
+        if len(ev) != Jp.rows:
+            raise NotImplementedError(f"{fname}: the eigenvalues of the linearisation could not be computed")
+        free = set().union(*[e.free_symbols for e in ev]) if ev else set()
+        if not free:
+            vals = [complex(sp.N(e)) for e in ev]
+            if discrete:
+                mags = [abs(v) for v in vals]
+                if all(m < 1 - 1e-12 for m in mags):
+                    c = True
+                elif any(m > 1 + 1e-12 for m in mags):
+                    c = False
+                else:
+                    raise NotImplementedError(f"{fname}: the linearisation at {p} is not hyperbolic; stability "
+                                              "cannot be decided from it")
+            else:
+                if all(v.real < -1e-12 for v in vals):
+                    c = True
+                elif any(v.real > 1e-12 for v in vals):
+                    c = False
+                else:
+                    raise NotImplementedError(f"{fname}: the linearisation at {p} is not hyperbolic; stability "
+                                              "cannot be decided from it")
+            res.append(L(out(p), c))
+            continue
+        cs = []
+        for e in ev:
+            e = sp.simplify(e)
+            if discrete:
+                c = None
+                if len(e.free_symbols) == 1:
+                    (a,) = e.free_symbols
+                    ar = sp.Symbol(a.name, real=True)
+                    er = e.subs(a, ar)
+                    if er.is_real is not False and sp.im(er) == 0:
+                        try:
+                            c = sp.solve_univariate_inequality(sp.Abs(er) < 1, ar, relational=True).subs(ar, a)
+                        except Exception:
+                            c = None
+                cs.append(c if c is not None else sp.Abs(e) < 1)
+            else:
+                cs.append(Expr("Less", Expr("Re", out(e)), 0))
+        cs = [out(c) if not isinstance(c, Expr) else c for c in cs]
+        cond = cs[0] if len(cs) == 1 else Expr("And", *cs)
+        res.append(L(out(p), _ev(cond)))
+    return L(*res)
+
+
+@fn("DStabilityConditions", area=AREA, status="added",
+    notes="DStabilityConditions[eqns, x, t] (optionally with a list of points): {{point, condition}, ...} for "
+          "asymptotic stability from the linearisation (all eigenvalues with negative real part: True/False for "
+          "numeric Jacobians, Re[l] < 0 conditions otherwise); non-hyperbolic numeric cases raise")
+def _dstab(eqs, xs, t, *rest):
+    fname = "DStabilityConditions"
+    state, rhs, _tv = _ode_system(eqs, xs, t, fname)
+    if len(rest) > 1:
+        raise ValueError(f"{fname}: too many arguments")
+    pts = _pts_arg(rest[0], len(state), fname) if rest else _fixed(state, rhs, fname)
+    return _stability(state, rhs, pts, False, fname)
+
+
+@fn("RStabilityConditions", area=AREA, status="added",
+    notes="RStabilityConditions[eqns, a, n] (optionally with points): {{point, condition}, ...} for asymptotic "
+          "stability of the fixed points from the linearisation (all eigenvalues inside the unit circle; a single "
+          "real parameter gives an interval such as -1 < a < 1, otherwise Abs[l] < 1 conditions)")
+def _rstab(eqs, xs, n, *rest):
+    fname = "RStabilityConditions"
+    state, rhs = _rec_system(eqs, xs, n, fname)
+    if len(rest) > 1:
+        raise ValueError(f"{fname}: too many arguments")
+    pts = _pts_arg(rest[0], len(state), fname) if rest else _fixed(state, [r - s_ for r, s_ in zip(rhs, state)],
+                                                                    fname)
+    return _stability(state, rhs, pts, True, fname)
+
+
+# ───────────────────────────── Lyapunov and Riccati matrix equations ─────────────────────────────
+
+def _mat(x, fname, square=False):
+    return matrix_arg(x, fname, square=square)
+
+
+def _ct(m):
+    return m.H
+
+
+def _vec_solve(terms, C, fname):
+    """Solve sum_k A_k . X . B_k == C for X (vec / Kronecker form), exactly or numerically."""
+    n, m = C.shape
+    K_ = sp.zeros(n * m, n * m)
+    from sympy.physics.quantum import TensorProduct
+    for A, B in terms:
+        if A.shape != (n, n) or B.shape != (m, m):
+            raise ValueError(f"{fname}: the matrix dimensions are inconsistent")
+        K_ += TensorProduct(B.T, A)
+    vecC = sp.Matrix([C[i, j] for j in range(m) for i in range(n)])
+    inexact = any(isinstance(v, sp.Float) or v.has(sp.Float) for v in list(K_) + list(vecC))
+    if inexact:
+        import numpy as np
+        try:
+            Kn = np.array(K_.evalf(), dtype=complex)
+            cn = np.array(vecC.evalf(), dtype=complex).ravel()
+        except TypeError:
+            raise NotImplementedError(f"{fname}: mixed symbolic and inexact input is not supported")
+        if np.linalg.matrix_rank(Kn) < Kn.shape[0]:
+            raise ValueError(f"{fname}: the equation does not have a unique solution")
+        xv = np.linalg.solve(Kn, cn)
+        X = [[xv[j * n + i] for j in range(m)] for i in range(n)]
+        return R([[float(v.real) if abs(v.imag) < 1e-13 * max(1, abs(v)) else complex(v) for v in row]
+                  for row in X])
+    if K_.det() == 0:
+        raise ValueError(f"{fname}: the equation does not have a unique solution")
+    xv = K_.LUsolve(vecC)
+    X = sp.Matrix(n, m, lambda i, j: sp.simplify(xv[j * n + i]))
+    return mat_out(X)
+
+
+def _ad(x, fname):
+    if is_list(x) and len(x.args) == 2 and all(is_list(r) and r.args and is_list(r.args[0]) for r in x.args):
+        return _mat(x.args[0], fname), _mat(x.args[1], fname)
+    return _mat(x, fname), None
+
+
+@fn("LyapunovSolve", area=AREA, status="added",
+    notes="LyapunovSolve[a, c]: a.x + x.a^H == c; [a, b, c]: a.x + x.b == c; [{a, d}, c]: a.x.d^H + d.x.a^H == c; "
+          "[{a, d}, {b, e}, c]: a.x.e + d.x.b == c; exact (Kronecker linear system) or numerical for inexact input; "
+          "raises when the solution is not unique")
+def _lyap(*args):
+    fname = "LyapunovSolve"
+    if len(args) == 2:
+        (A, D), C = _ad(args[0], fname), _mat(args[1], fname)
+        if D is None:
+            terms = [(A, sp.eye(C.rows)), (sp.eye(C.rows), _ct(A))]
+        else:
+            terms = [(A, _ct(D)), (D, _ct(A))]
+    elif len(args) == 3:
+        (A, D), (B, E_), C = _ad(args[0], fname), _ad(args[1], fname), _mat(args[2], fname)
+        if D is None and E_ is None:
+            terms = [(A, sp.eye(C.cols)), (sp.eye(C.rows), B)]
+        elif D is not None and E_ is not None:
+            terms = [(A, E_), (D, B)]
+        else:
+            raise ValueError(f"{fname}: give a, b, c or {{a, d}}, {{b, e}}, c")
+    else:
+        raise ValueError(f"{fname}: two or three arguments are expected")
+    return _vec_solve(terms, C, fname)
+
+
+@fn("DiscreteLyapunovSolve", area=AREA, status="added",
+    notes="DiscreteLyapunovSolve[a, c]: a.x.a^H - x == c; [a, b, c]: a.x.b - x == c; [{a, d}, c]: "
+          "a.x.a^H - d.x.d^H == c; [{a, d}, {b, e}, c]: a.x.b - d.x.e == c; exact or numerical; raises when the "
+          "solution is not unique")
+def _dlyap(*args):
+    fname = "DiscreteLyapunovSolve"
+    if len(args) == 2:
+        (A, D), C = _ad(args[0], fname), _mat(args[1], fname)
+        if D is None:
+            terms = [(A, _ct(A)), (-sp.eye(C.rows), sp.eye(C.cols))]
+        else:
+            terms = [(A, _ct(A)), (-D, _ct(D))]
+    elif len(args) == 3:
+        (A, D), (B, E_), C = _ad(args[0], fname), _ad(args[1], fname), _mat(args[2], fname)
+        if D is None and E_ is None:
+            terms = [(A, B), (-sp.eye(C.rows), sp.eye(C.cols))]
+        elif D is not None and E_ is not None:
+            terms = [(A, B), (-D, E_)]
+        else:
+            raise ValueError(f"{fname}: give a, b, c or {{a, d}}, {{b, e}}, c")
+    else:
+        raise ValueError(f"{fname}: two or three arguments are expected")
+    return _vec_solve(terms, C, fname)
+
+
+def _riccati_args(ab, qr, fname):
+    if not (is_list(ab) and len(ab.args) == 2 and is_list(qr) and len(qr.args) in (2, 3)):
+        raise ValueError(f"{fname}: the arguments must be {{a, b}}, {{q, r}} or {{q, r, p}}")
+    A = _mat(ab.args[0], fname, square=True)
+    B = _mat(ab.args[1], fname)
+    Q = _mat(qr.args[0], fname, square=True)
+    Rm = _mat(qr.args[1], fname, square=True)
+    P = _mat(qr.args[2], fname) if len(qr.args) == 3 else sp.zeros(A.rows, B.cols)
+    n, m = A.rows, B.cols
+    if B.rows != n or Q.shape != (n, n) or Rm.shape != (m, m) or P.shape != (n, m):
+        raise ValueError(f"{fname}: the matrix dimensions are inconsistent")
+    return A, B, Q, Rm, P
+
+
+def _inexact(*ms):
+    return any(v.has(sp.Float) for M in ms for v in M)
+
+
+def _num_matrix(M):
+    import numpy as np
+    try:
+        return np.array(M.evalf(), dtype=complex)
+    except TypeError:
+        return None
+
+
+def _np_out(X):
+    import numpy as np
+    X = np.asarray(X)
+    if np.all(np.abs(X.imag) < 1e-12 * max(1.0, np.abs(X).max())):
+        return R([[float(v) for v in row] for row in X.real])
+    return R([[complex(v) for v in row] for row in X])
+
+
+@fn("RiccatiSolve", area=AREA, status="added",
+    notes="RiccatiSolve[{a, b}, {q, r}] (or {q, r, p}): the stabilising solution of the continuous algebraic Riccati "
+          "equation; exact via the stable invariant subspace of the Hamiltonian matrix (verified by substitution) "
+          "for exact input, SciPy's solve_continuous_are for inexact input; unevaluated when no exact solution is found")
+def _care(ab, qr):
+    fname = "RiccatiSolve"
+    A, B, Q, Rm, P = _riccati_args(ab, qr, fname)
+    if _inexact(A, B, Q, Rm, P):
+        mats = [_num_matrix(M) for M in (A, B, Q, Rm, P)]
+        if any(M is None for M in mats):
+            raise NotImplementedError(f"{fname}: mixed symbolic and inexact input is not supported")
+        from scipy.linalg import solve_continuous_are
+        try:
+            X = solve_continuous_are(mats[0], mats[1], mats[2], mats[3], s=mats[4])
+        except Exception as exc:
+            raise ValueError(f"{fname}: no stabilising solution ({exc})")
+        return _np_out(X)
+    if (A, B, Q, Rm, P) and any(M.free_symbols for M in (A, B, Q, Rm, P)):
+        raise Unevaluated
+    n = A.rows
+    Ri = Rm.inv()
+    A_ = A - B * Ri * P.H
+    Q_ = Q - P * Ri * P.H
+    H = sp.Matrix(sp.BlockMatrix([[A_, -B * Ri * B.H], [-Q_, -A_.H]]))
+    X = _stable_subspace(H, n, lambda lam: complex(sp.N(lam)).real < -1e-12)
+    if X is None:
+        raise Unevaluated
+    res = (A.H * X + X * A - (X * B + P) * Ri * (B.H * X + P.H) + Q).applyfunc(sp.simplify)
+    if res != sp.zeros(n, n):
+        raise Unevaluated
+    return mat_out(X)
+
+
+def _stable_subspace(H, n, stable):
+    try:
+        evs = H.eigenvects()
+    except Exception:
+        return None
+    cols = []
+    for lam, mult, vecs in evs:
+        if stable(lam):
+            if len(vecs) != mult:
+                return None
+            cols.extend(vecs)
+    if len(cols) != n:
+        return None
+    U = sp.Matrix.hstack(*cols)
+    U1, U2 = U[:n, :], U[n:, :]
+    if sp.simplify(U1.det()) == 0:
+        return None
+    X = (U2 * U1.inv()).applyfunc(lambda v: sp.nsimplify(sp.radsimp(sp.simplify(v))) if v.is_number else
+                                  sp.simplify(v))
+    return X.applyfunc(sp.simplify)
+
+
+@fn("DiscreteRiccatiSolve", area=AREA, status="added",
+    notes="DiscreteRiccatiSolve[{a, b}, {q, r}] (or {q, r, p}): the stabilising solution of the discrete algebraic "
+          "Riccati equation; exact via the stable eigenvectors of the symplectic pencil (invertible a, verified by "
+          "substitution) for exact input, SciPy's solve_discrete_are for inexact input; unevaluated otherwise")
+def _dare(ab, qr):
+    fname = "DiscreteRiccatiSolve"
+    A, B, Q, Rm, P = _riccati_args(ab, qr, fname)
+    if _inexact(A, B, Q, Rm, P):
+        mats = [_num_matrix(M) for M in (A, B, Q, Rm, P)]
+        if any(M is None for M in mats):
+            raise NotImplementedError(f"{fname}: mixed symbolic and inexact input is not supported")
+        from scipy.linalg import solve_discrete_are
+        try:
+            X = solve_discrete_are(mats[0], mats[1], mats[2], mats[3], s=mats[4])
+        except Exception as exc:
+            raise ValueError(f"{fname}: no stabilising solution ({exc})")
+        return _np_out(X)
+    if any(M.free_symbols for M in (A, B, Q, Rm, P)):
+        raise Unevaluated
+    n = A.rows
+    Ri = Rm.inv()
+    A_ = A - B * Ri * P.H
+    Q_ = Q - P * Ri * P.H
+    if A_.det() == 0:
+        raise Unevaluated
+    G = B * Ri * B.H
+    AiH = A_.H.inv()
+    Z = sp.Matrix(sp.BlockMatrix([[A_ + G * AiH * Q_, -G * AiH], [-AiH * Q_, AiH]]))
+    X = _stable_subspace(Z, n, lambda lam: abs(complex(sp.N(lam))) < 1 - 1e-12)
+    if X is None:
+        raise Unevaluated
+    S_ = Rm + B.H * X * B
+    res = (A.H * X * A - X - (A.H * X * B + P) * S_.inv() * (B.H * X * A + P.H) + Q).applyfunc(sp.simplify)
+    if res != sp.zeros(n, n):
+        raise Unevaluated
+    return mat_out(X)
