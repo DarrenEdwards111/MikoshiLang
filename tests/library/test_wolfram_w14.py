@@ -702,7 +702,64 @@ else:
     RASTER += [("Rasterize[Graphics[{Red, Rectangle[]}], \"Data\"]", Raises(NotImplementedError))]
 
 
-CASES = (NAMED_CASES + COLOR_HEADS + COLOR_FUNCS + CONTAINERS + TRANSFORMS + DIRECTIVES + OPTIONS + RASTER)
+# FindMatchingColor (colour-list form; image forms belong to W21)
+_FMC_DOC = ("{RGBColor[0.9596025905785178, 0.3984044792339911, 0.41392466016763657], "
+            "RGBColor[0.28324476057075976, 0.26097834139620046, 0.27130742463122076], "
+            "RGBColor[0.05826288145041437, 0.053591610965247304, 0.06190272775838334], "
+            "RGBColor[0.4757177856709867, 0.47140005577751737, 0.4837801597898334], "
+            "RGBColor[0.606719111118272, 0.20611757291882038, 0.20631494426934727], "
+            "RGBColor[0.5710576308076775, 0.6028166494876642, 0.7367693265717367]}")
+
+
+def _fmc_is_nearest(g):
+    # Check: the returned colour minimises ColorDistance over the candidates (re-measured through ColorDistance)
+    cands = ["Red", "Blue", "GrayLevel[0.5]", "RGBColor[0.2, 0.8, 0.3]", "Hue[0.8]"]
+    ds = [float(ev("ColorDistance[%s, Pink]" % c)) for c in cands]
+    dg = float(ev("ColorDistance[%s, Pink]" % _k_input(g)))
+    return abs(dg - min(ds)) < 1e-12
+
+
+def _k_input(e):
+    from mikoshilang.library.wl_graphics_color import K_input
+    return K_input(e)
+
+
+FIND_MATCHING = [
+    # Wolfram documentation (Basic Examples): the pinkish entry of the list is the match for Pink
+    ("FindMatchingColor[%s, Pink, MaxColorDistance -> Infinity]" % _FMC_DOC,
+     Col("RGBColor", 0.9596025905785178, 0.3984044792339911, 0.41392466016763657)),
+    # exact member of the list: distance 0
+    ("FindMatchingColor[{Blue, Green, RGBColor[0.3, 0.2, 0.1]}, RGBColor[0.3, 0.2, 0.1], MaxColorDistance -> 0.01]",
+     Col("RGBColor", 0.3, 0.2, 0.1)),
+    # obvious nearest (dark red to Red), and a list of targets
+    ("FindMatchingColor[{Blue, RGBColor[0.9, 0, 0], Green}, Red, MaxColorDistance -> Infinity]", Col("RGBColor", 0.9, 0, 0)),
+    ("FindMatchingColor[{Black, White}, {GrayLevel[0.1], GrayLevel[0.9]}, MaxColorDistance -> Infinity]",
+     "{GrayLevel[0], GrayLevel[1]}"),
+    # no candidate within d (Red/Blue are far from Green: CIE76 > 1 on the 1/100 scale)
+    ("FindMatchingColor[{Red, Blue}, Green, MaxColorDistance -> 0.3]", 'Missing["NotFound"]'),
+    # DistanceFunction: "DeltaL" compares lightness only (L*: Black 0, GrayLevel[0.6] ~ 0.65, White 1; target L ~ 0.5)
+    ("FindMatchingColor[{Black, White, GrayLevel[0.6]}, GrayLevel[0.47], MaxColorDistance -> Infinity, "
+     "DistanceFunction -> \"DeltaL\"]", "GrayLevel[0.6]"),
+    # Check: the result minimises ColorDistance
+    ("FindMatchingColor[{Red, Blue, GrayLevel[0.5], RGBColor[0.2, 0.8, 0.3], Hue[0.8]}, Pink, "
+     "MaxColorDistance -> Infinity]", Pred(_fmc_is_nearest, "nearest by ColorDistance")),
+    # symbolic colour: unevaluated
+    ("FindMatchingColor[{Red, Blue}, w14fmc, MaxColorDistance -> Infinity]",
+     "FindMatchingColor[{RGBColor[1, 0, 0], RGBColor[0, 0, 1]}, w14fmc, MaxColorDistance -> Infinity]"),
+    # errors
+    ("FindMatchingColor[{Red, Blue}, Pink]", Raises(NotImplementedError)),        # undocumented default threshold
+    ("FindMatchingColor[{Red}, Pink, MaxColorDistance -> 1, ColorCoverage -> 0.2]", Raises(NotImplementedError)),
+    ("FindMatchingColor[Image[{{0}}], Pink, MaxColorDistance -> 1]", Raises(NotImplementedError)),
+    ("FindMatchingColor[Red, Pink, MaxColorDistance -> 1]", Raises(TypeError)),
+    ("FindMatchingColor[{Red, 3}, Pink, MaxColorDistance -> 1]", Raises(TypeError)),
+    ("FindMatchingColor[{}, Pink, MaxColorDistance -> 1]", Raises(ValueError)),
+    ("FindMatchingColor[{Red}, Pink, MaxColorDistance -> -1]", Raises(ValueError)),
+    ("FindMatchingColor[{Red}, Pink, MaxColorDistance -> \"x\"]", Raises(ValueError)),
+]
+
+
+CASES = (NAMED_CASES + COLOR_HEADS + COLOR_FUNCS + CONTAINERS + TRANSFORMS + DIRECTIVES + OPTIONS + RASTER
+         + FIND_MATCHING)
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))

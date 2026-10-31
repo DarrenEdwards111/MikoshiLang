@@ -3,8 +3,8 @@
 Colour directives (``RGBColor``, ``GrayLevel``, ``Hue``, ``CMYKColor``, ``XYZColor``, ``LABColor``,
 ``LCHColor``, ``LUVColor``), ``Opacity``, the named colour symbols (``Red``, ``LightBlue``, ``DarkRed``,
 ``StandardRed``, ...), and the colour functions ``ColorQ``, ``ColorConvert``, ``Blend``, ``Lighter``,
-``Darker``, ``ColorDistance``, ``RandomColor`` and ``ColorsNear`` (``FindMatchingColor`` is left to the
-image batch W21: it needs ``DominantColors``).
+``Darker``, ``ColorDistance``, ``RandomColor``, ``ColorsNear`` and ``FindMatchingColor`` (its image
+forms are left to the image batch W21: they need ``DominantColors``).
 
 Every function returns a correct result, raises a clear error, or stays unevaluated for symbolic input
 (see CONVENTIONS.md).
@@ -1000,6 +1000,82 @@ def _colorsnear(c: Expr, *rest: Real | Expr) -> Expr:
     if len(rest) == 2:
         distance_function(rest[1], "ColorsNear")
     raise Unevaluated()
+
+
+
+# ───────────────────────────── FindMatchingColor ─────────────────────────────
+
+def _is_auto(x):
+    return isinstance(x, Symbol) and x.name == "Automatic"
+
+
+def _is_image(x):
+    return isinstance(x, Expr) and x.head in ("Image", "Image3D")
+
+
+@fn("FindMatchingColor", area=AREA, status="added",
+    notes="FindMatchingColor[{col1, col2, ...}, color] gives the coli closest to color (the element itself, first "
+          "one on ties) and FindMatchingColor[{col1, ...}, {color1, color2, ...}] a list of matches. "
+          "MaxColorDistance must be given explicitly: a positive number d (a candidate further than d gives "
+          "Missing[\"NotFound\"]; the Missing tag is not documented by Wolfram) or Infinity (always the nearest, "
+          "as documented). DistanceFunction takes any ColorDistance setting (default Automatic, i.e. CIE76 as in "
+          "ColorDistance). Not supported (NotImplementedError): MaxColorDistance -> Automatic (Wolfram's default "
+          "threshold is not documented), the image forms (they need DominantColors, batch W21), and ColorCoverage "
+          "or MinColorDistance other than Automatic (they apply to images). A non-colour or a non-list first "
+          "argument raises TypeError, an empty colour list, a bad MaxColorDistance or an unknown option ValueError; "
+          "symbolic colours stay unevaluated. "
+          "Check: self-check (the returned colour is re-measured against every candidate and must be minimal and "
+          "within d, else ArithmeticError) and reference cases (independent CIE76 distances) in tests.")
+def _findmatchingcolor(cols: ListOf[Expr], color: Expr | ListOf[Expr], *opts: Option) -> Expr | ListOf[Expr]:
+    fname = "FindMatchingColor"
+    pos, o = _opts(list(opts), {"MaxColorDistance", "DistanceFunction", "ColorCoverage", "MinColorDistance"},
+                   fname)
+    if pos:
+        raise ValueError(f"{fname}: unknown option or extra argument {K_input(pos[0])}")
+    if _is_image(cols) or (K.is_list(cols) and any(_is_image(c) for c in cols.args)):
+        raise NotImplementedError(f"{fname}: image arguments are not supported (they need DominantColors, "
+                                  "batch W21); give a list of colours")
+    if not K.is_list(cols):
+        if isinstance(cols, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the first argument must be a list of colours, not {K_input(cols)}")
+    if not cols.args:
+        raise ValueError(f"{fname}: the list of colours is empty")
+    for name in ("ColorCoverage", "MinColorDistance"):
+        if name in o and not _is_auto(o[name]):
+            raise NotImplementedError(f"{fname}: {name} applies to images and is not supported")
+    dist = distance_function(o.get("DistanceFunction"), fname)
+    md = o.get("MaxColorDistance")
+    if md is None or _is_auto(md):
+        raise NotImplementedError(f"{fname}: MaxColorDistance -> Automatic is not supported (Wolfram's default "
+                                  "threshold is not documented); give MaxColorDistance -> d or Infinity")
+    if isinstance(md, Symbol) and md.name == "Infinity":
+        dmax = math.inf
+    elif is_real_value(md):
+        dmax = real_value(md, fname, "MaxColorDistance")
+        if dmax <= 0:
+            raise ValueError(f"{fname}: MaxColorDistance must be positive or Infinity")
+    else:
+        raise ValueError(f"{fname}: MaxColorDistance must be a positive number or Infinity, not {K_input(md)}")
+    cand = [(c, _color_or_raise(c, fname)) for c in cols.args]
+    labs = [convert_channels(p[0], p[1], "LAB") for _, p in cand]
+
+    def one(target):
+        pt = _color_or_raise(target, fname)
+        lt = convert_channels(pt[0], pt[1], "LAB")
+        ds = [float(dist(lt, lc)) for lc in labs]
+        best = min(range(len(ds)), key=lambda i: ds[i])
+        if ds[best] > dmax:
+            return Expr("Missing", "NotFound")
+        # self-check: re-measure the chosen colour independently and confirm it is minimal and within range
+        db = float(dist(lt, lab(cand[best][0])))
+        if any(d < db - 1e-12 * max(1.0, abs(db)) for d in ds) or db > dmax:
+            raise ArithmeticError(f"{fname}: result failed verification")
+        return cand[best][0]
+
+    if K.is_list(color):
+        return L(*[one(c) for c in color.args])
+    return one(color)
 
 
 def inert_option(name, notes, area=AREA):
