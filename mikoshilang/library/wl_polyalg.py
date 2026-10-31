@@ -5443,6 +5443,11 @@ def _leafcount(e):
     return ev(Expr("LeafCount", e))
 
 
+def _apply(f, *args):
+    """f[args] for a function given as a symbol name or a pure function / other expression."""
+    return ev(Expr(f.name if isinstance(f, Symbol) else f, *args))
+
+
 def _simplify_ext(fname):
     names = ("ComplexityFunction", "TransformationFunctions", "ExcludedForms", "Trig")
 
@@ -5463,7 +5468,7 @@ def _simplify_ext(fname):
         cf = opts.get("ComplexityFunction", _sym("Automatic"))
 
         def score(c):
-            v = _leafcount(c) if _is_sym(cf, "Automatic") else ev(Expr(cf, c))
+            v = _leafcount(c) if _is_sym(cf, "Automatic") else _apply(cf, c)
             try:
                 sv = sym(v, fname)
                 if not sv.is_number or not sv.is_real:
@@ -5491,7 +5496,7 @@ def _simplify_ext(fname):
             new = []
             for c in cands:
                 for t in user:
-                    r = ev(Expr(t, c))
+                    r = _apply(t, c)
                     if auto:
                         try:
                             r2 = orig(r, *extra)
@@ -5570,7 +5575,7 @@ def _rref_zt(m, zt, fname):
     def is_zero(v):
         if _is_sym(zt, "Automatic"):
             return sp.simplify(v) == 0
-        r = _tf(ev(Expr(zt, out(v))))
+        r = _tf(_apply(zt, out(v)))
         if r is None:
             raise ValueError(f"{fname}: the ZeroTest function must return True or False")
         return r
