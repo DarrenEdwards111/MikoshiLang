@@ -736,9 +736,9 @@ OPTION_HEADS_EXTRA = [
     # RealBlockDiagonalForm: True keeps a real quasi-triangular T, False gives a complex upper-triangular T;
     # both reconstruct m == q.t.q^H
     T("{q, t} = OrderedSchurDecomposition[{{1., 2.}, {-3., 4.}}, RealBlockDiagonalForm -> True]; "
-      "FreeQ[t, _Complex] && Norm[q.t.ConjugateTranspose[q] - {{1., 2.}, {-3., 4.}}] < 10^-10"),
+      "FreeQ[t, _Complex] && Norm[q.t.ConjugateTranspose[q] - {{1., 2.}, {-3., 4.}}] < 10^-10") + ("scipy",),
     T("{q, t} = OrderedSchurDecomposition[{{1., 2.}, {-3., 4.}}, RealBlockDiagonalForm -> False]; "
-      "t[[2, 1]] == 0 && Norm[q.t.ConjugateTranspose[q] - {{1., 2.}, {-3., 4.}}] < 10^-10"),
+      "t[[2, 1]] == 0 && Norm[q.t.ConjugateTranspose[q] - {{1., 2.}, {-3., 4.}}] < 10^-10") + ("scipy",),
     ("OrderedSchurDecomposition[{{1, 2}, {3, 4}}, RealBlockDiagonalForm -> 0]", Raises(ValueError, "True or False")),
     # Standardized: zero-mean arrays are unchanged by the shift; otherwise the covariance eigenvectors are the same
     T("KarhunenLoeveDecomposition[{{1., 0., -1.}, {2., 0., -2.}}, Standardized -> True] == "
