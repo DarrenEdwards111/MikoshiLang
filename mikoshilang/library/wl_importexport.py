@@ -2546,7 +2546,7 @@ def _hook_get():
         return
     f0, lo, hi = e.impls[0]
 
-    def get_mx(name, *opts):
+    def get_mx(name: Expr, *opts: Option) -> Expr:
         path = None
         if isinstance(name, str) and not name.endswith("`"):
             path = os.path.expanduser(name)

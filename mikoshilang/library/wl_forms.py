@@ -403,7 +403,7 @@ def _number_form_parts(e):
 
 
 def _validate_number_form(head):
-    def impl(*a):
+    def impl(*a: Expr) -> Expr:
         tmp = Expr(head, *a)
         _number_form_parts(tmp)     # raises for a malformed specification or option value
         raise Unevaluated()
@@ -683,7 +683,7 @@ def _base_arg(e):
     notes="BaseForm[expr, b] inert wrapper (2 <= b <= 36): integers and approximate reals in expr show as digits in "
           "base b with subscript _b (e.g. 100001_2); reals keep as many base-b digits as their decimal precision "
           "(6 digits for machine numbers) and drop trailing zeros")
-def _baseform(*a):
+def _baseform(*a: Expr) -> Expr:
     _base_arg(Expr("BaseForm", *a))
     raise Unevaluated()
 
@@ -1044,7 +1044,7 @@ def _short_args(e):
 @fn("Short", area=AREA, status="added",
     notes="Short[expr, n] inert wrapper: shows expr in about n lines (n * 78 characters), omitted runs of k "
           "elements written <<k>> (Skeleton[k]) and long strings elided with an ellipsis")
-def _short(*a):
+def _short(*a: Expr) -> Expr:
     _short_args(Expr("Short", *a))
     raise Unevaluated()
 
@@ -1058,20 +1058,20 @@ def _r_short(e, c):
 
 @fn("Skeleton", area=AREA, status="added",
     notes="Skeleton[k] inert: k omitted elements, shown as <<k>> (what Short inserts)")
-def _skeleton(k):
+def _skeleton(k: Expr) -> Expr:
     raise Unevaluated()
 
 
 @fn("StringSkeleton", area=AREA, status="added",
     notes="StringSkeleton[k] inert: k omitted characters of a string, shown as an ellipsis")
-def _stringskeleton(k):
+def _stringskeleton(k: Expr) -> Expr:
     raise Unevaluated()
 
 
 @fn("InsertLinebreaks", area=AREA, status="added",
     notes="InsertLinebreaks[s, n] (default 78) replaces whitespace by newlines so no line exceeds n characters; "
           "words longer than n are broken every n characters")
-def _insertlinebreaks(s, n=78):
+def _insertlinebreaks(s: Expr, n: Expr = 78) -> Expr:
     if not isinstance(s, str):
         if isinstance(s, (Symbol, Expr)):
             raise Unevaluated()
@@ -1288,7 +1288,7 @@ def _grid_rows(x, fname):
           "line, left aligned (Wolfram's OutputForm), with Alignment, Spacings, Frame, Dividers and the GridBox "
           "options ColumnAlignments, ColumnSpacings, ColumnWidths, ColumnLines, RowAlignments, RowSpacings, "
           "RowLines, RowMinHeight honoured")
-def _grid(x, *opts):
+def _grid(x: Expr, *opts: Option) -> Expr:
     rest, o = split_opts(opts, GRID_OPTIONS, "Grid")
     if rest:
         raise ValueError("Grid: options expected after the list of rows")
@@ -1310,7 +1310,7 @@ def _r_grid(e, c):
 @fn("Column", area=AREA, status="added",
     notes="Column[{e1, e2, ...}, alignment, spacing, opts] inert layout: elements one per line (spacing blank "
           "lines between), aligned Left, Center or Right")
-def _column(x, *rest):
+def _column(x: Expr, *rest: Expr) -> Expr:
     _column_parts(Expr("Column", x, *rest))
     raise Unevaluated()
 
@@ -1345,7 +1345,7 @@ def _r_column(e, c):
 @fn("Row", area=AREA, status="added",
     notes="Row[{e1, e2, ...}] / Row[list, sep] inert layout: the elements' text concatenated (with sep between); "
           "multi-line elements are placed side by side")
-def _row(x, *rest):
+def _row(x: Expr, *rest: Expr) -> Expr:
     _row_parts(Expr("Row", x, *rest))
     raise Unevaluated()
 
@@ -1478,7 +1478,7 @@ def _table_parts(e):
     notes="TableForm[list, opts] inert display wrapper; text: rows separated by a blank line and columns by 3 spaces "
           "(Wolfram's OutputForm), with TableDepth, TableDirections, TableSpacing, TableAlignments and "
           "TableHeadings")
-def _tableform(*a):
+def _tableform(*a: Expr) -> Expr:
     _table_parts(Expr("TableForm", *a))
     raise Unevaluated()
 
@@ -1611,7 +1611,7 @@ def _style_parts(e):
 @fn("Style", area=AREA, status="added",
     notes="Style[expr, styles...] inert display wrapper (Bold, Italic, colours, font size n, \"stylename\", "
           "FontSize -> n, FontFamily -> \"name\", Background -> c, ...); plain text shows expr unchanged")
-def _style(*a):
+def _style(*a: Expr) -> Expr:
     _style_parts(Expr("Style", *a))
     raise Unevaluated()
 
@@ -1623,7 +1623,7 @@ def _r_style(e, c):
 
 @fn("Framed", area=AREA, status="added",
     notes="Framed[expr, opts] inert display wrapper; text draws an ASCII box (+---+ / | expr |) around expr")
-def _framed(x, *opts):
+def _framed(x: Expr, *opts: Option) -> Expr:
     rest, _o = split_opts(opts, ("Background", "FrameMargins", "FrameStyle", "ImageMargins", "ImageSize",
                                  "RoundingRadius", "Alignment", "BaselinePosition", "BaseStyle", "ContentPadding",
                                  "FrameLabel", "Frame"), "Framed")
@@ -1674,7 +1674,7 @@ def _label_pos(p):
     notes="Labeled[expr, lbl, pos] inert display wrapper (pos Bottom by default; Top, Left, Right, Before, After, "
           "Above, Below, a list of positions, or All for {bottom, left, top, right}); text places the label "
           "blocks around expr, centred above/below")
-def _labeled(*a):
+def _labeled(*a: Expr) -> Expr:
     _labeled_parts(Expr("Labeled", *a))
     raise Unevaluated()
 
@@ -1700,7 +1700,7 @@ def _r_labeled(e, c):
     notes="Placed[expr, pos] / Placed[{e1, ...}, pos, f] inert: an annotation at relative position pos (Top, "
           "Bottom, Left, Right, Center, Above, Below, Before, After, {x, y}, ...); text shows expr (f applied to each "
           "ei when given)")
-def _placed(x, pos, *f):
+def _placed(x: Expr, pos: Expr, *f: Expr) -> Expr:
     if len(f) > 1:
         raise ValueError("Placed called with too many arguments")
     raise Unevaluated()
@@ -1724,7 +1724,7 @@ TEXT_OPTIONS = ("FormatType", "Background", "BaseStyle", "BaselinePosition", "Al
 @fn("Text", area=AREA, status="added",
     notes="Text[expr] shows expr as plain text; Text[expr, coords, offset, dir] is an inert graphics primitive "
           "(coordinates a list of 2 or 3 numbers, Scaled[...] or Offset[...])")
-def _text(x, *rest):
+def _text(x: Expr, *rest: Expr) -> Expr:
     a, o = split_opts(rest, TEXT_OPTIONS, "Text")
     if len(a) > 3:
         raise ValueError("Text called with too many arguments")
@@ -1754,7 +1754,7 @@ def _r_text(e, c):
 @fn("TextElement", area=AREA, status="added",
     notes="TextElement[text, props] / TextElement[{e1, e2, ...}, props] inert: an element of text with a property "
           "association; text shows the elements' strings concatenated")
-def _textelement(x, *props):
+def _textelement(x: Expr, *props: Expr) -> Expr:
     if len(props) > 1:
         raise ValueError("TextElement called with too many arguments")
     if props and not (isinstance(props[0], Expr) and props[0].head == "Association"):
@@ -1775,7 +1775,7 @@ def _r_textelement(e, c):
 @fn("Overlay", area=AREA, status="added",
     notes="Overlay[{e1, e2, ...}, {i, j, ...}] inert: the expressions drawn on top of each other (top-left aligned); "
           "text superimposes the blocks, later ones overwriting earlier ones where they are not blank")
-def _overlay(x, *rest):
+def _overlay(x: Expr, *rest: Expr) -> Expr:
     _overlay_parts(Expr("Overlay", x, *rest))
     raise Unevaluated()
 
@@ -1815,7 +1815,7 @@ def _r_overlay(e, c):
 
 @fn("Item", area=AREA, status="added",
     notes="Item[expr, opts] inert: an entry of Grid, Column, ... with its own options (Alignment honoured in text)")
-def _item(x, *opts):
+def _item(x: Expr, *opts: Option) -> Expr:
     rest, o = split_opts(opts, ITEM_OPTIONS, "Item")
     if rest:
         raise ValueError("Item called with too many arguments")
@@ -1834,7 +1834,7 @@ def _r_item(e, c):
     notes="Multicolumn[list, cols | {rows, Automatic} | {rows, cols}] evaluates to the corresponding Grid, filling "
           "the first column first (Appearance -> \"Horizontal\" fills by rows); Multicolumn[list] uses about "
           "Sqrt[n] columns; {rows, cols} drops elements beyond rows*cols")
-def _multicolumn(x, *rest):
+def _multicolumn(x: Expr, *rest: Expr) -> Expr:
     a, o = split_opts(rest, GRID_OPTIONS, "Multicolumn")
     if not is_list(x):
         if isinstance(x, Symbol):
@@ -1926,7 +1926,7 @@ def string_form_text(tmpl, args, c=None):
 @fn("StringForm", area=AREA, status="added",
     notes="StringForm[\"... `` ... `n` ...\", e1, e2, ...] inert: shows the template with `` replaced by successive "
           "ei and `n` by en (\\` is a literal backquote); out-of-range or unmatched placeholders raise")
-def _stringform(tmpl, *args):
+def _stringform(tmpl: Expr, *args: Expr) -> Expr:
     if not isinstance(tmpl, str):
         if isinstance(tmpl, Symbol):
             raise Unevaluated()
@@ -1944,13 +1944,13 @@ def _r_stringform(e, c):
 
 @fn("DisableFormatting", area=AREA, status="added",
     notes="DisableFormatting[expr] gives expr as soon as it is evaluated (it only matters inside held expressions)")
-def _disableformatting(x):
+def _disableformatting(x: Expr) -> Expr:
     return x
 
 
 def _one_arg_form(name, renderer, notes):
     @fn(name, area=AREA, status="added", notes=notes)
-    def impl(x, *opts):
+    def impl(x: Expr, *opts: Option) -> Expr:
         if len(opts) > 0 and any(_opt_name(t) is None for t in opts):
             raise ValueError(f"{name} called with {1 + len(opts)} arguments; expected 1")
         raise Unevaluated()
@@ -2045,7 +2045,7 @@ def text_string(x, opts):
     notes="TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits "
           "for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default \"\"), lists "
           "per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings")
-def _textstring(x, *opts):
+def _textstring(x: Expr, *opts: Option) -> Expr:
     rest, o = split_opts(opts, TEXTSTRING_OPTIONS, "TextString")
     if rest:
         raise ValueError("TextString called with too many arguments")

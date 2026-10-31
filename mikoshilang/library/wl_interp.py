@@ -4,6 +4,8 @@ An InterpolatingFunction is the expression InterpolatingFunction[{{xmin, xmax}},
 lives in this session's registry under "id".  It is applied as ifun[x] and differentiated as ifun'[x]
 (Derivative[n][ifun][x]).  One-dimensional only.
 """
+
+from __future__ import annotations
 import itertools
 
 import numpy as np
@@ -131,7 +133,7 @@ def _order(opts, fname):
           "piecewise polynomials of InterpolationOrder (default 3) through the nearest order+1 points "
           "(Wolfram's default method; exact through the data); Interpolation[data, x] evaluates at x; "
           "one-dimensional data only (derivative data and grids raise)")
-def _interpolation(data, *rest):
+def _interpolation(data: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"InterpolationOrder", "Method", "PeriodicInterpolation"}, "Interpolation")
     if opts.get("Method") is not None:
         raise NotImplementedError("Interpolation: only the default method is supported")
@@ -145,7 +147,7 @@ def _interpolation(data, *rest):
 @fn("ListInterpolation", area=AREA, status="added",
     notes="ListInterpolation[{f1, ..., fn}] on x = 1..n and ListInterpolation[list, {{xmin, xmax}}] on an "
           "equally spaced grid -> InterpolatingFunction (same piecewise polynomials as Interpolation); 1-D only")
-def _listinterp(data, *rest):
+def _listinterp(data: ListOf[Expr], *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"InterpolationOrder", "Method", "PeriodicInterpolation"}, "ListInterpolation")
     vals = list_arg(data, "ListInterpolation", "data", min_len=2)
     if any(is_list(v) for v in vals):
@@ -370,7 +372,7 @@ def _ndopts(rest, fname):
           "(or {{y[x] -> InterpolatingFunction[...][x]}}); SciPy DOP853 (Radau fallback for stiff problems), "
           "rtol 1e-10; the initial point may be inside the range; machine precision only; boundary-value "
           "problems, DAEs, PDEs and delay equations raise")
-def _ndsolve_fn(eqs, unknowns, rng, *rest):
+def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Expr]:
     _ndopts(rest, "NDSolve")
     us, out, xv = _ndsolve(eqs, unknowns, rng, {}, "NDSolve")
     rules = []
@@ -386,7 +388,7 @@ def _ndsolve_fn(eqs, unknowns, rng, *rest):
 @fn("NDSolveValue", area=AREA, status="added",
     notes="NDSolveValue[{odes, ics}, y, {x, xmin, xmax}] -> InterpolatingFunction (y[x] -> ifun[x], {y, z} -> "
           "list); same solver and limits as NDSolve")
-def _ndsolvevalue(eqs, unknowns, rng, *rest):
+def _ndsolvevalue(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> Expr:
     _ndopts(rest, "NDSolveValue")
     us, out, xv = _ndsolve(eqs, unknowns, rng, {}, "NDSolveValue")
     vals = [out[_fname(u)] if isinstance(u, Symbol) else ev(Expr(out[_fname(u)], *u.args)) for u in us]

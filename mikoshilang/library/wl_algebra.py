@@ -5,6 +5,8 @@ polynomial algorithms, or by substituting back / numerically comparing), raises 
 unevaluated.  Known representational limit: the kernel (like SymPy) distributes a rational number over a sum,
 so 2 (x^2 - 2) displays as -4 + 2 x^2; FactorTermsList keeps the factors apart.
 """
+
+from __future__ import annotations
 import sympy as sp
 
 from ..expr import Expr, Symbol
@@ -115,7 +117,7 @@ def _expand(e, *patt):
 @fn("ExpandAll", area=AREA, status="added",
     notes="ExpandAll[e]: Expand applied to every subexpression, including function arguments and denominators "
           "(ExpandAll[Sin[(x + 1)^2]] -> Sin[1 + 2 x + x^2]); ExpandAll[e, x] only parts containing x")
-def _expandall(e, *patt):
+def _expandall(e: Expr, *patt: Expr) -> Expr:
     th = _thread(e, lambda y: _expandall(y, *patt))
     if th is not None:
         return th
@@ -124,7 +126,7 @@ def _expandall(e, *patt):
 
 @fn("ExpandNumerator", area=AREA, status="added",
     notes="expands the numerator of a rational expression (Numerator/Denominator as Wolfram), denominator kept")
-def _expandnum(e):
+def _expandnum(e: Expr) -> Expr:
     th = _thread(e, _expandnum)
     if th is not None:
         return th
@@ -135,7 +137,7 @@ def _expandnum(e):
 @fn("ExpandDenominator", area=AREA, status="added",
     notes="expands the denominator of a rational expression (ExpandDenominator[1/((x + 1) (x - 1))] -> "
           "1/(-1 + x^2)), numerator kept")
-def _expandden(e):
+def _expandden(e: Expr) -> Expr:
     th = _thread(e, _expandden)
     if th is not None:
         return th
@@ -149,7 +151,7 @@ def _expandden(e):
 @fn("PolynomialQ", area=AREA, status="added",
     notes="PolynomialQ[e, x] / PolynomialQ[e, {x, ...}]: True if e is a polynomial in the variables (coefficients "
           "may be anything free of them; nonnegative integer powers only); PolynomialQ[e] in all its variables")
-def _polyq(e, v=None):
+def _polyq(e: Expr, v: Expr = None) -> Boolean:
     try:
         p = sym(e, "PolynomialQ")
     except Exception:
@@ -187,7 +189,7 @@ def _variables(p):
 @fn("Variables", area=AREA, status="added",
     notes="Variables[poly]: the independent variables (symbols and non-polynomial subexpressions such as "
           "Sin[z]) of a polynomial or rational expression, sorted (Variables[x^2 + y Sin[z]] -> {x, y, Sin[z]})")
-def _variables_fn(e):
+def _variables_fn(e: Expr) -> Expr:
     if is_list(e):
         vs = set()
         for x in e.args:
@@ -221,7 +223,7 @@ def _poly(e, v, fname):
     notes="CoefficientRules[p, {x1, ...}] -> {{e1, ...} -> c, ...} for the nonzero terms, in lexicographic order "
           "(third argument: \"Lexicographic\", \"DegreeLexicographic\", \"DegreeReverseLexicographic\"); "
           "CoefficientRules[p] uses Variables[p]; CoefficientRules[0, vars] -> {}")
-def _coeffrules(e, v=None, order=None):
+def _coeffrules(e: Expr, v: Expr = None, order: Expr = None) -> ListOf[Expr]:
     P, gens = _poly(e, v, "CoefficientRules")
     if P.is_zero:
         return L()
@@ -232,7 +234,7 @@ def _coeffrules(e, v=None, order=None):
 @fn("MonomialList", area=AREA, status="added",
     notes="MonomialList[p, {x1, ...}] -> the terms (coefficient times monomial) in lexicographic order (third "
           "argument: monomial order); MonomialList[p] uses Variables[p]")
-def _monolist(e, v=None, order=None):
+def _monolist(e: Expr, v: Expr = None, order: Expr = None) -> ListOf[Expr]:
     P, gens = _poly(e, v, "MonomialList")
     if P.is_zero:
         return L()
@@ -245,7 +247,7 @@ def _monolist(e, v=None, order=None):
          "batch 4: Exponent[p, x, h] applies h to the list of distinct exponents (in increasing order, 0 for a "
          "constant term): Exponent[x^3 + x, x, Min] -> 1, Exponent[1 + x^2, x, List] -> {0, 2}; threads over "
          "lists")
-def _exponent(e, x, h=None):
+def _exponent(e: Expr, x: Expr, h: Expr = None) -> Expr:
     if is_list(e):
         return L(*(_exponent(y, x, h) for y in e.args))
     if h is None:
@@ -302,7 +304,7 @@ def _mod_positive(p, m, gens=None):
 @fn("PolynomialGCD", area=AREA, status="added",
     notes="greatest common divisor of polynomials with rational coefficients (rational functions: gcd of "
           "numerators over lcm of denominators, as Wolfram); Modulus -> p; PolynomialGCD[p] = p")
-def _pgcd(*args):
+def _pgcd(*args: Expr) -> Expr:
     args, opts = split_opts(args, {"Modulus"}, "PolynomialGCD", extra_known=("Extension",))
     m = _modulus(opts, "PolynomialGCD")
     ps = _poly_list(args, "PolynomialGCD")
@@ -316,7 +318,7 @@ def _pgcd(*args):
 
 @fn("PolynomialLCM", area=AREA, status="added",
     notes="least common multiple of polynomials (factored, as Wolfram); Modulus -> p")
-def _plcm(*args):
+def _plcm(*args: Expr) -> Expr:
     args, opts = split_opts(args, {"Modulus"}, "PolynomialLCM", extra_known=("Extension",))
     m = _modulus(opts, "PolynomialLCM")
     ps = _poly_list(args, "PolynomialLCM")
@@ -331,7 +333,7 @@ def _plcm(*args):
 @fn("PolynomialQuotientRemainder", area=AREA, status="added",
     notes="PolynomialQuotientRemainder[p, q, x] -> {quotient, remainder} with p = quotient q + remainder and "
           "deg remainder < deg q (rational coefficients); a zero divisor raises")
-def _pqr(p, q, x):
+def _pqr(p: Expr, q: Expr, x: Expr) -> ListOf[Expr]:
     quo, rem = _AL._polydiv(p, q, x, "PolynomialQuotientRemainder")
     return L(out(quo), out(rem))
 
@@ -340,7 +342,7 @@ def _pqr(p, q, x):
     notes="PolynomialReduce[p, {p1, ...}, {x1, ...}] -> {{a1, ...}, b} with p = Σ ai pi + b and b reduced with "
           "respect to the leading terms (lexicographic order, SymPy reduced; for a Gröbner basis the remainder "
           "is unique)")
-def _preduce(p, qs, vs, *rest):
+def _preduce(p: Expr, qs: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_opts(rest, {"MonomialOrder"}, "PolynomialReduce")
     gens = _vars_opt(vs, "PolynomialReduce")
     P = sp.expand(sym(p, "PolynomialReduce"))
@@ -357,7 +359,7 @@ def _preduce(p, qs, vs, *rest):
           "coprime to the denominators); a polynomial m in one variable with a unit leading coefficient gives "
           "the remainder of p modulo m (no division by the leading coefficient otherwise: raises); lists of "
           "moduli apply in turn")
-def _pmod(p, m):
+def _pmod(p: Expr, m: Expr) -> Expr:
     P = sp.expand(sym(p, "PolynomialMod"))
     mods = list(m.args) if is_list(m) else [m]
     for mm in mods:
@@ -398,7 +400,7 @@ def _pmod(p, m):
           "integer coefficients and a positive leading coefficient, listed from the smallest leading monomial "
           "(Wolfram's order); GroebnerBasis[polys, vars, elims] eliminates elims; equations are moved to one "
           "side; Modulus -> p")
-def _groebner(polys, vs, *rest):
+def _groebner(polys: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_opts(rest, {"MonomialOrder", "Modulus"}, "GroebnerBasis",
                             extra_known=("CoefficientDomain", "Sort", "Method"))
     elims = _vars_opt(rest[0], "GroebnerBasis") if rest else []
@@ -498,7 +500,7 @@ def _factor(e, *rest):
 @fn("FactorList", area=AREA, status="added",
     notes="FactorList[p] -> {{c, 1}, {f1, e1}, ...}: the numeric content first (always present, 1 when trivial), "
           "then the irreducible factors over the rationals with exponents; Extension, GaussianIntegers, Modulus")
-def _factorlist(e, *rest):
+def _factorlist(e: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_opts(rest, {"Extension", "GaussianIntegers", "Modulus"}, "FactorList")
     p = sym(e, "FactorList")
     kw, m = _factor_kw(opts, "FactorList")
@@ -548,7 +550,7 @@ def _content_split(p, vs):
     notes="FactorTerms[p] pulls out the overall numeric factor (FactorTerms[2 x^2 - 4] = 2 (-2 + x^2), which the "
           "kernel displays distributed); FactorTerms[p, x] also pulls out factors free of x; the leading "
           "coefficient of the remaining polynomial is made positive")
-def _factorterms(e, v=None):
+def _factorterms(e: Expr, v: Expr = None) -> Expr:
     c, g, r = _content_split(sym(e, "FactorTerms"), _vars_opt(v, "FactorTerms"))
     return out(sp.Mul(c, g, r, evaluate=False) if (g != 1 or c != 1) else r)
 
@@ -556,7 +558,7 @@ def _factorterms(e, v=None):
 @fn("FactorTermsList", area=AREA, status="added",
     notes="FactorTermsList[p] -> {numeric factor, polynomial}; FactorTermsList[p, {x, ...}] -> {numeric factor, "
           "factor free of the variables, remaining polynomial}")
-def _factortermslist(e, v=None):
+def _factortermslist(e: Expr, v: Expr = None) -> ListOf[Expr]:
     vs = _vars_opt(v, "FactorTermsList")
     c, g, r = _content_split(sym(e, "FactorTermsList"), vs)
     if vs:
@@ -566,7 +568,7 @@ def _factortermslist(e, v=None):
 
 @fn("FactorSquareFree", area=AREA, status="added",
     notes="square-free factorisation (SymPy sqf): FactorSquareFree[x^3 - x^2 - x + 1] -> (-1 + x)^2 (1 + x)")
-def _sqf(e, *rest):
+def _sqf(e: Expr, *rest: Expr) -> Expr:
     rest, opts = split_opts(rest, {"Modulus"}, "FactorSquareFree")
     m = _modulus(opts, "FactorSquareFree")
     p = sym(e, "FactorSquareFree")
@@ -576,7 +578,7 @@ def _sqf(e, *rest):
 @fn("FactorSquareFreeList", area=AREA, status="added",
     notes="FactorSquareFreeList[p] -> {{c, 1}, {f1, 1}, {f2, 2}, ...} (numeric content first, then square-free "
           "factors with their multiplicities)")
-def _sqflist(e):
+def _sqflist(e: Expr) -> ListOf[Expr]:
     p = sym(e, "FactorSquareFreeList")
     gens = sorted(p.free_symbols, key=str)
     if not gens:
@@ -588,7 +590,7 @@ def _sqflist(e):
 @fn("Decompose", area=AREA, status="added",
     notes="Decompose[p, x] -> {p1, ..., pn} with p = p1[p2[...pn[x]]] (functional decomposition, SymPy); "
           "indecomposable p gives {p}; checked by composing back")
-def _decompose(e, x):
+def _decompose(e: Expr, x: Var) -> ListOf[Expr]:
     p = sp.expand(sym(e, "Decompose"))
     v = variable(x, "Decompose")
     if not p.is_polynomial(v):
@@ -605,7 +607,7 @@ def _decompose(e, x):
 @fn("HornerForm", area=AREA, status="added",
     notes="HornerForm[p] / HornerForm[p, x] / HornerForm[p, {x, y}]: nested Horner form (SymPy horner); rational "
           "functions: HornerForm of numerator and denominator")
-def _horner(e, v=None):
+def _horner(e: Expr, v: Expr = None) -> Expr:
     p = sym(e, "HornerForm")
     vs = _vars_opt(v, "HornerForm") or []
     n, d = sp.fraction(sp.together(p))
@@ -622,7 +624,7 @@ def _horner(e, v=None):
     notes="MinimalPolynomial[s, x]: the minimal polynomial of the algebraic number s over the rationals, primitive "
           "with integer coefficients and positive leading coefficient (Wolfram); MinimalPolynomial[s] gives a "
           "pure function; transcendental input raises")
-def _minpoly(s, x=None, *rest):
+def _minpoly(s: Expr, x: Expr = None, *rest: Expr) -> Expr:
     v = sym(s, "MinimalPolynomial")
     if x is None:
         t = sp.Symbol("x")
@@ -654,7 +656,7 @@ def _slotify(e, name):
 @fn("IrreduciblePolynomialQ", area=AREA, status="added",
     notes="True if the polynomial cannot be factored over the rationals (numeric content ignored, as units of Q); "
           "constants give False; Extension, GaussianIntegers, Modulus options")
-def _irredq(e, *rest):
+def _irredq(e: Expr, *rest: Expr) -> Boolean:
     rest, opts = split_opts(rest, {"Extension", "GaussianIntegers", "Modulus"}, "IrreduciblePolynomialQ")
     try:
         p = sp.expand(sym(e, "IrreduciblePolynomialQ"))
@@ -671,7 +673,7 @@ def _irredq(e, *rest):
 @fn("SymmetricPolynomial", area=AREA, status="added",
     notes="SymmetricPolynomial[k, {x1, ..., xn}]: the k-th elementary symmetric polynomial (0 for k > n, 1 for "
           "k = 0)")
-def _sympoly(k, vs):
+def _sympoly(k: NonNegInteger, vs: Expr) -> Expr:
     kk = nonneg_int(k, "SymmetricPolynomial", "degree")
     xs = _vars_opt(vs, "SymmetricPolynomial")
     if kk > len(xs):
@@ -684,7 +686,7 @@ def _sympoly(k, vs):
     notes="SymmetricReduction[f, {x1, ..., xn}] -> {p, q}: p the symmetric part written in the elementary "
           "symmetric polynomials of the xi, q the remainder, f = p + q; SymmetricReduction[f, xs, {s1, ..., sn}] "
           "writes p in the si; checked by expansion")
-def _symred(e, vs, names=None):
+def _symred(e: Expr, vs: Expr, names: Expr = None) -> ListOf[Expr]:
     from sympy.polys.polyfuncs import symmetrize
     f = sp.expand(sym(e, "SymmetricReduction"))
     xs = _vars_opt(vs, "SymmetricReduction")
@@ -727,7 +729,7 @@ def _root_radicals(r):
 @fn("ToRadicals", area=AREA, status="added",
     notes="ToRadicals[e] rewrites Root objects of degree <= 4 (or solvable by radicals in SymPy) as radicals, "
           "matched to the root numerically; other roots stay Root[...]")
-def _toradicals(e):
+def _toradicals(e: Expr) -> Expr:
     v = sym(e, "ToRadicals")
     return out(v.replace(lambda u: isinstance(u, sp.CRootOf), _root_radicals))
 
@@ -818,7 +820,7 @@ def _fullsimplify(e, *assum):
     notes="TrigFactor[e]: sums of sines and cosines turned into products (sum-to-product, Fu's TR9/TR10i), then "
           "factored (TrigFactor[Sin[x] + Sin[y]] -> 2 Cos[x/2 - y/2] Sin[x/2 + y/2]); the result is checked "
           "numerically; threads over lists")
-def _trigfactor(e):
+def _trigfactor(e: Expr) -> Expr:
     import importlib
     fu = importlib.import_module("sympy.simplify.fu")
     if is_list(e):
@@ -845,7 +847,7 @@ def _trigfactor(e):
     notes="FunctionExpand[e]: special functions rewritten in simpler functions (SymPy expand_func: Gamma[x + 3] -> "
           "x (1 + x) (2 + x) Gamma[x], Binomial[n, 2] -> (n - 1) n/2, Beta -> Gamma ratio, PolyGamma and Zeta at "
           "special arguments), checked numerically; FunctionExpand[e, assum] refines with assumptions")
-def _functionexpand(e, *assum):
+def _functionexpand(e: Expr, *assum: Expr) -> Expr:
     from .assume import split_option, effective, to_sym, from_sym
     if is_list(e):
         return L(*(_functionexpand(y, *assum) for y in e.args))
@@ -864,7 +866,7 @@ def _functionexpand(e, *assum):
 @fn("PossibleZeroQ", area=AREA, status="added",
     notes="PossibleZeroQ[e]: True if e simplifies to 0 or is numerically 0 (40 digits) at several sample points of "
           "its variables, False otherwise (a heuristic, as in Wolfram)")
-def _possiblezeroq(e):
+def _possiblezeroq(e: Expr) -> Boolean:
     try:
         v = sym(e, "PossibleZeroQ")
     except Exception:
@@ -1308,7 +1310,7 @@ def _b_solve(a, ev, expr):
 @fn("SolveValues", area=AREA, status="added",
     notes="SolveValues[eqns, x] -> {v1, v2, ...}; SolveValues[eqns, {x, y}] -> {{x1, y1}, ...}; same solver and "
           "checks as Solve (domains, multiplicity, periodic families)")
-def _solvevalues(*a):
+def _solvevalues(*a: Expr) -> ListOf[Expr]:
     eqs, vs, dom, opts = _solve_args(a, "SolveValues")
     xs, sols = _solve_core(eqs, vs, dom, "SolveValues", opts)
     if xs is None:
@@ -1323,7 +1325,7 @@ def _solvevalues(*a):
     notes="Roots[lhs == rhs, x] -> x == r1 || x == r2 || ... for polynomial equations (repeated roots repeated, as "
           "Wolfram; radicals up to degree 4 unless Cubics/Quartics -> False, Root objects beyond); a single root "
           "gives x == r; no roots gives False")
-def _roots(eq, x, *rest):
+def _roots(eq: Expr, x: Expr, *rest: Expr) -> Expr:
     rest, opts = split_opts(rest, {"Cubics", "Quartics"}, "Roots", extra_known=("Modulus", "Multiplicity"))
     kind, f = _rel_parts(eq, "Roots")
     if kind != "eq":
@@ -1345,7 +1347,7 @@ def _roots(eq, x, *rest):
 @fn("ToRules", area=AREA, status="added",
     notes="ToRules[eqns]: x == a && y == b -> {x -> a, y -> b}; a disjunction gives one rule list per case as a "
           "Sequence (so {ToRules[...]} is a Solve-style list); False gives nothing")
-def _torules(e):
+def _torules(e: Expr) -> Expr:
     if e is False:
         return Expr("Sequence")
     if e is True:
@@ -1369,7 +1371,7 @@ def _torules(e):
     notes="Eliminate[eqns, vars]: polynomial equations with vars eliminated (lexicographic Gröbner basis "
           "elimination), returned as p == 0 relations joined with And (Wolfram may arrange the two sides "
           "differently); True when nothing remains")
-def _eliminate(eqs, vs):
+def _eliminate(eqs: Expr, vs: Expr) -> Expr:
     parts = [_rel_parts(e, "Eliminate") for e in _flatten_and(eqs)]
     if any(k != "eq" for k, _ in parts):
         raise ValueError("Eliminate: expected equations")
@@ -1401,7 +1403,7 @@ def _eliminate(eqs, vs):
     notes="CountRoots[p, x]: number of real roots counted with multiplicity; CountRoots[p, {x, a, b}] in the "
           "closed interval [a, b] (real a, b) or the closed rectangle with corners a, b (complex a, b); exact "
           "(Sturm sequences, SymPy)")
-def _countroots(p, spec):
+def _countroots(p: Expr, spec: Expr) -> Expr:
     if is_list(spec):
         if len(spec.args) != 3:
             raise ValueError("CountRoots: give {x, a, b}")
@@ -1630,7 +1632,7 @@ def _linear_parametric(f, x):
           "linear equations with symbolic coefficients split into cases ((b == 0 && a == 0) || (a != 0 && x == "
           "-b/a)); polynomial equation systems in several variables (Or of And of equations). Results of "
           "inequalities are checked by sampling; quantifiers and multivariate inequalities raise")
-def _reduce(cond, vs=None, dom=None, *rest):
+def _reduce(cond: Expr, vs: Expr = None, dom: Expr = None, *rest: Expr) -> Expr:
     d = _dom_name(dom, "Reduce")
     c = _rel_sym(cond, "Reduce")
     if c in (sp.true, sp.false):
@@ -1806,14 +1808,14 @@ def _opt_result(obj, vs, kind, fname):
          "infimum that is not attained gives the boundary point ({0, {x -> 0}} for {x, x > 0}; {-Infinity, {x -> "
          "-Infinity}} when unbounded), as Wolfram (which also warns); constraints in several "
          "variables raise")
-def _minimize(obj, vs, *rest):
+def _minimize(obj: Expr, vs: Expr, *rest: Expr) -> Expr:
     return _opt_result(obj, vs, "min", "Minimize")
 
 
 @replace("Maximize", AREA,
          "Maximize[f, x] (unconstrained, as before) and batch 4: Maximize[{f, cons}, x] for one variable, as "
          "Minimize")
-def _maximize(obj, vs, *rest):
+def _maximize(obj: Expr, vs: Expr, *rest: Expr) -> Expr:
     return _opt_result(obj, vs, "max", "Maximize")
 
 
@@ -1830,25 +1832,25 @@ def _value_of(kind, obj, vs, fname, arg=False):
 
 @fn("MinValue", area=AREA, status="added", notes="MinValue[f, x] / MinValue[{f, cons}, x]: the minimum (or "
     "infimum) value, as Minimize")
-def _minvalue(obj, vs, *rest):
+def _minvalue(obj: Expr, vs: Expr, *rest: Expr) -> Expr:
     return _value_of("min", obj, vs, "MinValue")
 
 
 @fn("MaxValue", area=AREA, status="added", notes="MaxValue[f, x] / MaxValue[{f, cons}, x]: the maximum (or "
     "supremum) value, as Maximize")
-def _maxvalue(obj, vs, *rest):
+def _maxvalue(obj: Expr, vs: Expr, *rest: Expr) -> Expr:
     return _value_of("max", obj, vs, "MaxValue")
 
 
 @fn("ArgMin", area=AREA, status="added", notes="ArgMin[f, x] / ArgMin[{f, cons}, x]: a minimising point "
     "(the boundary point if the infimum is not attained), as Minimize; {x, y} gives a list")
-def _argmin(obj, vs, *rest):
+def _argmin(obj: Expr, vs: Expr, *rest: Expr) -> Expr:
     return _value_of("min", obj, vs, "ArgMin", arg=True)
 
 
 @fn("ArgMax", area=AREA, status="added", notes="ArgMax[f, x] / ArgMax[{f, cons}, x]: a maximising point, as "
     "Maximize")
-def _argmax(obj, vs, *rest):
+def _argmax(obj: Expr, vs: Expr, *rest: Expr) -> Expr:
     return _value_of("max", obj, vs, "ArgMax", arg=True)
 
 
@@ -1859,7 +1861,7 @@ _PIECEWISE_HEADS = (sp.floor, sp.ceiling, sp.sign, sp.Heaviside, sp.Piecewise, s
     notes="FunctionDomain[f, x]: the largest real domain of f as a condition on x (FunctionDomain[1/x, x] -> x < 0 "
           "|| x > 0, FunctionDomain[Log[x^2 - 1], x] -> x < -1 || x > 1) for elementary f (SymPy continuous "
           "domain; functions with jumps such as Floor raise); checked by sampling; other domains raise")
-def _functiondomain(f, x, dom=None):
+def _functiondomain(f: Expr, x: Expr, dom: Expr = None) -> Expr:
     from sympy.calculus.util import continuous_domain
     if dom is not None and not (isinstance(dom, Symbol) and dom.name == "Reals"):
         raise NotImplementedError("FunctionDomain: only the real domain is supported")
@@ -1889,7 +1891,7 @@ def _functiondomain(f, x, dom=None):
     notes="FunctionRange[f, x, y]: the range of the real function f as a condition on y (FunctionRange[x^2, x, y] "
           "-> y >= 0, FunctionRange[Sin[x], x, y] -> -1 <= y <= 1) via SymPy function_range over the domain; "
           "elementary f in one variable without parameters")
-def _functionrange(f, x, y, *rest):
+def _functionrange(f: Expr, x: Var, y: Var, *rest: Expr) -> Expr:
     from sympy.calculus.util import function_range, continuous_domain
     xv, yv = variable(x, "FunctionRange"), variable(y, "FunctionRange")
     v = sym(f, "FunctionRange")
@@ -1923,7 +1925,7 @@ def _functionrange(f, x, y, *rest):
     notes="FunctionPeriod[f, x]: the fundamental period (FunctionPeriod[Sin[x]^2, x] -> Pi; SymPy's periodicity "
           "can return a multiple, so T/k is tried for k = 2..24 and verified symbolically/numerically); "
           "non-periodic polynomials and rational functions give 0 (Wolfram); undecided cases stay unevaluated")
-def _functionperiod(f, x):
+def _functionperiod(f: Expr, x: Var) -> Expr:
     from sympy.calculus.util import periodicity
     xv = variable(x, "FunctionPeriod")
     v = sym(f, "FunctionPeriod")
