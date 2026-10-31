@@ -396,7 +396,7 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
 
     if not isinstance(head, str):
         # 8b. Associations as functions, Key[k][assoc], compositions and operator forms (Select[crit][list])
-        if isinstance(head, Expr) and isinstance(head.head, str):
+        if isinstance(head, Expr):
             from .kernel_lists import apply_compound_head
             r = apply_compound_head(head, new_args, ev)
             if r is not kernel.UNHANDLED:

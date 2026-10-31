@@ -211,6 +211,11 @@ def _prec_of(e) -> int:
     return P_ATOM
 
 
+# Display hooks for wrappers such as Defer, HoldCompleteForm, Prefix and Definition (set by
+# mikoshilang.library.wl_evaluation): head -> fn(expr, parent_precedence) returning text or None.
+FORMAT_HOOKS = {}
+
+
 def input_form(e, parent: int = 0) -> str:
     """Render e as re-parseable Wolfram-style input."""
     if e is None:
@@ -232,6 +237,10 @@ def input_form(e, parent: int = 0) -> str:
         return str(e)
 
     h, args = e.head, e.args
+    if FORMAT_HOOKS and isinstance(h, str) and h in FORMAT_HOOKS:
+        text = FORMAT_HOOKS[h](e, parent)
+        if text is not None:
+            return text
     q = rational_value(e)
     if q is not None and not is_int(e):
         text = f"{abs(q.numerator)}/{q.denominator}"
