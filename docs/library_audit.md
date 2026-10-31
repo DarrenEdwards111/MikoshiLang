@@ -111,15 +111,15 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 | verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
 | fixed | 502 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
 | promoted | 24 | was quarantined; now properly implemented and tested |
-| added | 1995 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| added | 1998 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
-| error | 1 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
+| error | 4 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **2666** | 620 pre-audit inventory heads, all with a status, plus 2046 promoted/aliased heads |
+| **total reviewed** | **2672** | 620 pre-audit inventory heads, all with a status, plus 2052 promoted/aliased heads |
 
 Remaining unreviewed quarantined names: **5263** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **12585**.
+Differential test cases in tests/library: **12622**.
 
 
 ## By area
@@ -151,6 +151,7 @@ Differential test cases in tests/library: **12585**.
 | graphs (batch 5) | 0 | 0 | 0 | 110 | 0 | 0 | 0 |
 | group theory (W09) | 0 | 0 | 0 | 36 | 0 | 0 | 0 |
 | import/export & serialisation (W13) | 0 | 0 | 0 | 47 | 0 | 0 | 0 |
+| interop (I2) | 0 | 0 | 0 | 3 | 0 | 3 | 0 |
 | kernel | 0 | 34 | 0 | 0 | 24 | 0 | 0 |
 | language (batch 1) | 0 | 0 | 0 | 19 | 0 | 0 | 0 |
 | linear algebra | 8 | 40 | 1 | 0 | 0 | 0 | 0 |
@@ -451,7 +452,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PhasePlane` | fixed | 3 | equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped tuple-form solutions |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Table` | kernel | 56 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 57 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
@@ -1371,6 +1372,17 @@ Cases = number of differential test cases in which the head occurs.
 | `XMLElement` | added | 5 | XMLElement[tag, {attr -> val, ...}, {data, ...}] represents a symbolic XML element; produced by Import of XML and accepted by Export. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
 | `XMLObject` | added | 3 | XMLObject["type"][...] represents a symbolic XML object (Document, Declaration, Comment, ProcessingInstruction); produced by Import of XML and accepted by Export. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
 
+### interop (I2)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `ExternalEvaluate` | error | 3 | ExternalEvaluate is reserved and always raises NotImplementedError: MikoshiLang never evaluates code strings in-process. Python is reachable only through PythonFunction / PythonImport (gated by Session(allow_python=...)) and @session.function. Check: reference (Raises cases in tests). |
+| `ExternalFunction` | error | 1 | ExternalFunction is reserved and always raises NotImplementedError: MikoshiLang never evaluates code strings in-process. Python is reachable only through PythonFunction / PythonImport (gated by Session(allow_python=...)) and @session.function. Check: reference (Raises cases in tests). |
+| `FromPackedArray` | added | 5 | FromPackedArray[list] returns the same list with its elements stored one by one (an unpacked List); any other expression is returned unchanged. Also available as Developer`FromPackedArray. Check: exact; equality with the packed list in tests. |
+| `PackedArrayQ` | added | 11 | PackedArrayQ[expr] is True for a packed List; PackedArrayQ[expr, type] also tests the element type (Integer, Real or Complex) and PackedArrayQ[expr, type, rank] the array rank. Unknown types raise ValueError, a non-integer rank TypeError. Also available as Developer`PackedArrayQ. Check: exact; tested on packed and unpacked lists. |
+| `StartExternalSession` | error | 1 | StartExternalSession is reserved and always raises NotImplementedError: MikoshiLang never evaluates code strings in-process. Python is reachable only through PythonFunction / PythonImport (gated by Session(allow_python=...)) and @session.function. Check: reference (Raises cases in tests). |
+| `ToPackedArray` | added | 25 | ToPackedArray[list] stores a rectangular list of machine integers or reals as one NumPy array (a packed List: same elements, same Head, equal to the unpacked list); a list that cannot be packed (symbolic, exact rational, ragged, bignum, empty) is returned unchanged, as in Wolfram. ToPackedArray[list, type] with type Integer or Real converts machine numbers to that type; an unknown type raises ValueError, a non-symbol type TypeError, Integer for non-integers ValueError, Complex NotImplementedError (complex arrays are packed only when they come from NumPy). Also available as Developer`ToPackedArray. Check: exact (lossless for machine numbers); round trip through FromPackedArray in tests. |
+
 ### kernel
 
 | Function | Status | Cases | Notes |
@@ -1879,7 +1891,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Assert` | added | 5 | Assert[test] / Assert[test, tag] (HoldAll): disabled by default (returns Null without evaluating test); after On[Assert] a test that is not True issues Assert::asrtf (Assert::asrtfl for a {line, file} tag) or evaluates $AssertFunction[HoldComplete[Assert[...]]] when that is set; returns Null |
 | `ByteCount` | added | 4 | ByteCount[expr] gives the bytes MikoshiLang uses to store expr (Python object sizes, every part counted separately, no sharing); symbols (including True, False, Null) are shared and count 0. Values differ from Wolfram's own memory layout, as the documentation allows between systems |
 | `CatchExceptions` | added | 8 | CatchExceptions[expr, spec] (HoldFirst) returns expr's value, or for a thrown exception matching spec (All, tag, {tags}, tag -> handler, {tagspec -> handler, ...}; first matching clause; subtypes match their parents) handler[exceptionData] or, without a handler, the exception's Failure; other exceptions propagate. The operator form CatchExceptions[spec][expr] holds expr |
-| `Check` | added | 20 | Check[expr, failexpr] / Check[expr, failexpr, msgs] (HoldAll): returns failexpr if expr generated a matching message that is not switched off and not quieted inside the Check; a raised MikoshiLang error counts as the message f::evalerr |
+| `Check` | added | 21 | Check[expr, failexpr] / Check[expr, failexpr, msgs] (HoldAll): returns failexpr if expr generated a matching message that is not switched off and not quieted inside the Check; a raised MikoshiLang error counts as the message f::evalerr |
 | `CheckAbort` | added | 14 | CheckAbort[expr, failexpr] (HoldAll) returns failexpr if an abort occurs in expr; option PropagateAborts: Automatic (default: absorb Abort[], propagate constraint aborts after failexpr), True (propagate all), False (absorb all) |
 | `ClearSystemCache` | added | 4 | ClearSystemCache[] clears MikoshiLang's internal caches (SymPy's cache and the evaluator memo table); ClearSystemCache["Symbolic"] / ["Numeric"] clear the symbolic (SymPy) / numeric (mpmath) caches; returns Null |
 | `Confirm` | added | 10 | Confirm[expr] returns expr unless it is a Failure, Missing, $Failed, $Canceled or $Aborted, in which case Failure["ConfirmationFailed", <\|...\|>] is thrown to the lexically enclosing Enclose (info is evaluated only on failure; a ConfirmationFailed failure with Null info is rethrown unchanged); Confirm[expr, info, tag] is caught dynamically by Enclose[..., f, tag]; with no tag and no Enclose: message confirmnotag |
@@ -2740,7 +2752,7 @@ Cases = number of differential test cases in which the head occurs.
 | `QuartileSkewness` | added | 3 | (Q1 - 2 Q2 + Q3)/(Q3 - Q1) with the Quartiles parameters |
 | `Quartiles` | added | 4 | Quantile[data, {1/4, 1/2, 3/4}, {{1/2, 0}, {0, 1}}] (Wolfram's definition); Quartiles[dist] = InverseCDF at 1/4, 1/2, 3/4 |
 | `RandomChoice` | added | 5 | RandomChoice[list], [list, n] (with replacement), [{w...} -> list, n] weighted; reproducible with SeedRandom |
-| `RandomInteger` | added | 5 | RandomInteger[] (0 or 1), [imax] (0..imax), [{imin, imax}], with a count n or dimensions {n, m}; reproducible with SeedRandom (stream differs from Wolfram's) |
+| `RandomInteger` | added | 6 | RandomInteger[] (0 or 1), [imax] (0..imax), [{imin, imax}], with a count n or dimensions {n, m}; reproducible with SeedRandom (stream differs from Wolfram's) |
 | `RandomReal` | added | 7 | RandomReal[] in [0, 1), [xmax], [{xmin, xmax}], with a count n or dimensions; machine reals; reproducible with SeedRandom |
 | `RayleighDistribution` | added | 20 | inert distribution object RayleighDistribution; parameters validated |
 | `RootMeanSquare` | added | 4 | Sqrt[Mean[data^2]] (Abs[x]^2 for complex), exact |
