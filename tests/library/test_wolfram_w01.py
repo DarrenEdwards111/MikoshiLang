@@ -608,6 +608,14 @@ EXTRA = [
     ("InverseFunctions -> True", "InverseFunctions -> True"),
     ("Context[InverseFunctions]", text("System`")),
     ("InverseFunctions = 1", Raises()),
+    ("Heads -> True", "Heads -> True"),
+    ("Context[Heads]", text("System`")),
+    ("Heads = 1", Raises()),
+    ("Context[Constants]", text("System`")),
+    ("Constants = 1", Raises()),
+    ("Context[NonConstants]", text("System`")),
+    ("NonConstants = 1", Raises()),
+    ("D[w1nc2 w1x2, w1x2, NonConstants -> {w1nc2}]", form("w1nc2 + D[w1nc2, w1x2, NonConstants -> {w1nc2}]*w1x2")),
 ]
 
 CASES = (CONTEXTS + ATTRIBUTES + DEFINITIONS + OPTIONS + EVALUATION + FUNCTIONAL + STACK_TRACE + MAIN_LOOP_CASES + MISC
