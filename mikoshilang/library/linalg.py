@@ -246,7 +246,7 @@ fn("SVD", area=AREA, status="fixed", notes="MikoshiLang alias of SingularValueDe
 
 
 def _spectral(M):
-    if any(isinstance(v, sp.Float) for v in M):
+    if any(v.has(sp.Float) for v in M):
         np = _np()
         return float(np.linalg.norm(_npmat(M), 2))
     ev = (M.H * M).eigenvals()

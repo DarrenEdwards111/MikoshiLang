@@ -732,6 +732,38 @@ OPTION_NAMES = [
 # ── GROUPS-END (new case groups are inserted above this line) ──
 
 _SCIPY_ONLY = ("WarpingDistance[{Pi",)
+OPTION_HEADS_EXTRA = [
+    # RealBlockDiagonalForm: True keeps a real quasi-triangular T, False gives a complex upper-triangular T;
+    # both reconstruct m == q.t.q^H
+    T("{q, t} = OrderedSchurDecomposition[{{1., 2.}, {-3., 4.}}, RealBlockDiagonalForm -> True]; "
+      "FreeQ[t, _Complex] && Norm[q.t.ConjugateTranspose[q] - {{1., 2.}, {-3., 4.}}] < 10^-10"),
+    T("{q, t} = OrderedSchurDecomposition[{{1., 2.}, {-3., 4.}}, RealBlockDiagonalForm -> False]; "
+      "t[[2, 1]] == 0 && Norm[q.t.ConjugateTranspose[q] - {{1., 2.}, {-3., 4.}}] < 10^-10"),
+    ("OrderedSchurDecomposition[{{1, 2}, {3, 4}}, RealBlockDiagonalForm -> 0]", Raises(ValueError, "True or False")),
+    # Standardized: zero-mean arrays are unchanged by the shift; otherwise the covariance eigenvectors are the same
+    T("KarhunenLoeveDecomposition[{{1., 0., -1.}, {2., 0., -2.}}, Standardized -> True] == "
+      "KarhunenLoeveDecomposition[{{1., 0., -1.}, {2., 0., -2.}}]"),
+    ("First[KarhunenLoeveDecomposition[{{1, 2, 3}, {2, 4, 6}}, Standardized -> True]]",
+     near([[-5 ** 0.5, 0, 5 ** 0.5], [0, 0, 0]], 1e-9)),
+    ("KarhunenLoeveDecomposition[{{1, 2}, {3, 4}}, Standardized -> 1]", Raises(ValueError, "True or False")),
+    # LinearSolveFunction called directly, as LinearSolve[m] returns it
+    ("LinearSolveFunction[{2, 2}, {{1, 2}, {3, 4}}][{1, 2}]", "{0, 1/2}"),
+    T("f = LinearSolve[{{2, 0}, {0, 4}}]; Head[f] === LinearSolveFunction && f[{2, 8}] == {1, 2}"),
+    ("LinearSolveFunction[{2, 2}, {{1, 2}, {3, 4}}][{1, 2, 3}]", Raises(ValueError, "dimensions")),
+    # Bayesian optimisation result objects
+    T("Head[BayesianMinimization[(# - 2)^2 &, {0, 1, 2, 3}]] === BayesianMinimizationObject"),
+    ("BayesianMinimization[(# - 2)^2 &, {0, 1, 2, 3}] /. BayesianMinimizationObject[a_] :> a[\"MinimumConfiguration\"]",
+     "2"),
+    T("MatchQ[BayesianMinimization[#^2 &, {1, 2}], _BayesianMinimizationObject]"),
+    T("Head[BayesianMaximization[-(# - 1)^2 &, {0, 1, 2}]] === BayesianMaximizationObject"),
+    ("BayesianMaximization[-(# - 1)^2 &, {0, 1, 2}] /. BayesianMaximizationObject[a_] :> a[\"MaximumConfiguration\"]",
+     "1"),
+    T("MatchQ[BayesianMaximization[-(# - 1)^2 &, {0, 1, 2}], _BayesianMaximizationObject]"),
+    # GameActionLabels must give one label list per player
+    ("MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}, GameActionLabels -> {{\"C\", \"D\"}}]",
+     Raises(ValueError, "GameActionLabels")),
+]
+
 GROUPS = [v for k, v in list(globals().items()) if k.isupper() and k not in ("GROUPS", "N50") and isinstance(v, list)
           and v and isinstance(v[0], tuple)]
 CASES = [c for g in GROUPS for c in g

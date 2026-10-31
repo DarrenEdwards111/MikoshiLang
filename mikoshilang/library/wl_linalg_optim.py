@@ -1770,7 +1770,7 @@ def _orderedschur(m, *rest):
     args, opts = split_options(rest, {"TargetStructure", "RealBlockDiagonalForm"}, fname)
     _target_structure(opts, fname)
     rbd = opts.get("RealBlockDiagonalForm", True)
-    if rbd not in (True, False):
+    if not (rbd is True or rbd is False):
         raise ValueError(f"{fname}: RealBlockDiagonalForm must be True or False")
     if len(args) > 1:
         raise ValueError(f"{fname} called with too many arguments")
@@ -1889,7 +1889,7 @@ def _kld(arrays, *rest):
     fname = "KarhunenLoeveDecomposition"
     args, opts = split_options(rest, {"Standardized"}, fname)
     std = opts.get("Standardized", False)
-    if std not in (True, False):
+    if not (std is True or std is False):
         raise ValueError(f"{fname}: Standardized must be True or False")
     items = _items(arrays, fname)
     if not items:
