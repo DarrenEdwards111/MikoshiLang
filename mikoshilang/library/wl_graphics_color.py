@@ -3,7 +3,8 @@
 Colour directives (``RGBColor``, ``GrayLevel``, ``Hue``, ``CMYKColor``, ``XYZColor``, ``LABColor``,
 ``LCHColor``, ``LUVColor``), ``Opacity``, the named colour symbols (``Red``, ``LightBlue``, ``DarkRed``,
 ``StandardRed``, ...), and the colour functions ``ColorQ``, ``ColorConvert``, ``Blend``, ``Lighter``,
-``Darker``, ``ColorDistance``, ``RandomColor``, ``ColorsNear`` and ``FindMatchingColor``.
+``Darker``, ``ColorDistance``, ``RandomColor`` and ``ColorsNear`` (``FindMatchingColor`` is left to the
+image batch W21: it needs ``DominantColors``).
 
 Every function returns a correct result, raises a clear error, or stays unevaluated for symbolic input
 (see CONVENTIONS.md).
