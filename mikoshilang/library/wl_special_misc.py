@@ -396,8 +396,7 @@ class _WLConstant(sp.NumberSymbol):
 
     def _as_mpf_val(self, prec):
         with mpmath.workprec(prec + 20):
-            v = type(self)._mp()
-        return mpmath.mpf(v)._mpf_
+            return (+mpmath.mpf(type(self)._mp()))._mpf_
 
     def approximation_interval(self, number_cls):
         if issubclass(number_cls, sp.Integer):
