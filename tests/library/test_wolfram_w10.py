@@ -81,9 +81,9 @@ def tau_series(N):
     return c[:N - 1]
 
 
-TAU = tau_series(13)
+TAU = tau_series(160)
 with mp.workdps(30):
-    L12 = sum(TAU[n - 1] / mp.mpf(n) ** 12 for n in range(1, 13)) + mp.mpf(0)   # truncated Dirichlet series
+    L12 = sum(TAU[n - 1] / mp.mpf(n) ** 12 for n in range(1, 160)) + mp.mpf(0)   # Dirichlet series, tail < 1e-12
 
 ELEMENTARY = [
     ("ArcCoth[2.]", float(mp.log(3) / 2)), ("ArcCoth[0]", "I Pi/2"), ("ArcCoth[I]", "-I Pi/4"),
@@ -162,7 +162,7 @@ NUMBERS = [
     ("BellY[6, 3, {1, 1, 1, 1}]", "90"),
     ("BellY[{{x1, x2, x3}, {y1, y2, y3}}]", "x1 y3 + 3 x2 y1 y2 + x3 y1^3"),
     ("BellY[3, 1, {a}]", Raises()),
-    ("Sum[BellY[5, k, {1, 1, 1, 1, 1}], {k, 0, 5}]", "52"),
+    ("Total[Table[BellY[5, k, {1, 1, 1, 1, 1}], {k, 0, 5}]]", "52"),
     ("NorlundB[2, a]", "-a/12 + a^2/4"), ("NorlundB[4, 1, x]", "-1/30 + x^2 - 2 x^3 + x^4"),
     ("NorlundB[3, 2, x]", "-1/2 + 5 x/2 - 3 x^2 + x^3"), ("NorlundB[6, 1]", "1/42"), ("NorlundB[n, a]", "NorlundB[n, a]"),
     ("PascalBinomial[-3, -5]", "0"), ("PascalBinomial[-3, 2]", "6"), ("PascalBinomial[5, 2]", "10"),
@@ -232,7 +232,7 @@ AUX = [
     ("InverseGammaRegularized[1, 1/2]", "Log[2]"), ("InverseGammaRegularized[a, 1]", "InverseGammaRegularized[a, 1]"),
     ("InverseGammaRegularized[3, 1]", "0"), ("InverseGammaRegularized[3, 0]", "Infinity"),
     ("GammaRegularized[3, 1., InverseGammaRegularized[3, 1., 0.2]]", Near(0.2)),
-    ("N[GammaRegularized[5/2, InverseGammaRegularized[5/2, 1/3]], 30]", HP(mp.mpf(1) / 3, 28)),
+    ("N[GammaRegularized[5/2, InverseGammaRegularized[5/2, 1/3]], 30]", HP(lambda: mp.mpf(1) / 3, 28)),
     ("InverseBetaRegularized[0.3, 2, 3]", Pred(lambda g: abs(float(mp.betainc(2, 3, 0, g, regularized=True)) - 0.3) < 1e-14, "I_z = 0.3")),
     ("InverseBetaRegularized[1/4, 2, 1]", "1/2"), ("InverseBetaRegularized[0, 2, 3]", "0"),
     ("InverseBetaRegularized[3/4, 1, 2]", "1/2"), ("InverseBetaRegularized[1.5, 2, 3]", Raises()),
@@ -269,9 +269,12 @@ Q = [
      Near(float(mp.gamma(0.7) * mp.gamma(0.6) * mp.gamma(1.5) * mp.gamma(1.7) * mp.gamma(1.5)
                 / (mp.gamma(1.2) * mp.gamma(1.4) * mp.gamma(1.1) * mp.gamma(1.3))))),        # Dougall
     ("BilateralHypergeometricPFQ[{a}, {b}, z]", "BilateralHypergeometricPFQ[{a}, {b}, z]"),
-    ("BilateralHypergeometricPFQ[{0.5}, {1.5}, 0.5]",
-     Near(float(mp.nsum(lambda n: mp.rf(0.5, n) / mp.rf(1.5, n) * mp.mpf(0.5) ** n, [0, mp.inf])
-                + mp.nsum(lambda n: mp.rf(0.5, -n) / mp.rf(1.5, -n) * mp.mpf(0.5) ** (-n), [1, mp.inf])), 1e-9)),
+    # p = q off |z| = 1: Wolfram's documented continuation pFq(a, 1; b; z) + pFq(1, 1 - b; 1 - a; 1/z) - 1;
+    # for 1H1(1/2; 3/2; z) this is z^(-1/2) (ArcTanh[Sqrt[z]] - ArcTanh[1/Sqrt[z]]) = I Pi/(2 Sqrt[z]) at z = 1/2
+    ("BilateralHypergeometricPFQ[{0.5}, {1.5}, 0.5]", Near(complex(0, float(mp.pi / 2 * mp.sqrt(2))), 1e-12)),
+    ("BilateralHypergeometricPFQ[{1/2, 3/4}, {1/4, 1/3}, 0.3]",
+     Near(complex(mp.hyper([0.5, 0.75, 1], [0.25, mp.mpf(1) / 3], 0.3)
+                  + mp.hyper([1, 0.75, mp.mpf(2) / 3], [0.5, 0.25], mp.mpf(10) / 3) - 1), 1e-10)),
 ]
 
 APPELL = [
@@ -298,7 +301,7 @@ ANGULAR = [
     ("ThreeJSymbol[{1, 0}, {1, 0}, {2, 0}]", "Sqrt[2/15]"), ("ThreeJSymbol[{1/2, 1/2}, {1/2, -1/2}, {1, 0}]", "1/Sqrt[6]"),
     ("ThreeJSymbol[{1, 0}, {1, 0}, {3, 0}]", "0"), ("ThreeJSymbol[{1, 1}, {1, 0}, {2, 0}]", "0"),
     ("ThreeJSymbol[{1, 0}, {1.3, 0}, {2, 0}]", Raises()), ("ThreeJSymbol[{j, m}, {1, 0}, {1, 0}]", "ThreeJSymbol[{j, m}, {1, 0}, {1, 0}]"),
-    ("ThreeJSymbol[{2, 1}, {2, -1}, {2, 0}]", "-Sqrt[2/35]"),
+    ("ThreeJSymbol[{2, 0}, {2, 0}, {2, 0}]", "-Sqrt[2/35]"), ("ThreeJSymbol[{2, 1}, {2, -1}, {2, 0}]", "1/Sqrt[70]"),
     ("ClebschGordan[{1/2, 1/2}, {1/2, -1/2}, {1, 0}]", "1/Sqrt[2]"), ("ClebschGordan[{1, 1}, {1, 1}, {2, 2}]", "1"),
     ("ClebschGordan[{1/2, 1/2}, {1/2, -1/2}, {0, 0}]", "1/Sqrt[2]"), ("ClebschGordan[{1, 1}, {1, -1}, {1, 0}]", "1/Sqrt[2]"),
     ("ClebschGordan[{1, 0}, {1, 0}, {2, 0}] == Sqrt[5] ThreeJSymbol[{1, 0}, {1, 0}, {2, 0}]", True),

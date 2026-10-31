@@ -687,7 +687,7 @@ def _belly(*args):
         raise ValueError(f"{name}: n and k must be non-negative")
     vals = [sym(x, name) for x in xs.args]
     need = n - k + 1
-    if k <= n and len(vals) < need and not (n == 0 and k == 0):
+    if 1 <= k <= n and len(vals) < need:
         raise ValueError(f"{name}: BellY[{n}, {k}, list] needs at least {need} variables")
     return R(_bell_partial(n, k, vals + [sp.Integer(0)] * max(0, need - len(vals))))
 
@@ -1750,7 +1750,24 @@ def _bihyper(a, b, z):
     prec = input_precision([a, b, z])
     if prec is None:
         raise Unevaluated()
+    for x in av:
+        if x.is_Integer and x > 0:
+            raise ValueError(f"{name}: the a parameters cannot be positive integers")
+    for x in bv:
+        if x.is_Integer and x <= 0:
+            raise ValueError(f"{name}: the b parameters cannot be zero or negative integers")
     na = len(av)
+    if len(av) == len(bv):
+        if zv == 0:
+            raise ValueError(f"{name}: the series is singular at z = 0 when p = q")
+
+        def f(*v):
+            a_, b_, z_ = list(v[:na]), list(v[na:-1]), v[-1]
+            # Wolfram's documented splitting: pFq(a, 1; b; z) + pFq(1, 1 - b; 1 - a; 1/z) - 1
+            return (mpmath.hyper(a_ + [1], b_, z_) + mpmath.hyper([1] + [1 - x for x in b_], [1 - x for x in a_], 1 / z_)
+                    - 1)
+        return mp_eval(f, allv, prec)
+    # p != q: one half diverges; mpmath's regularised (Borel-type) sum, as Wolfram documents
     return mp_eval(lambda *v: mpmath.bihyper(list(v[:na]), list(v[na:-1]), v[-1]), allv, prec)
 
 
@@ -2110,6 +2127,8 @@ def _hpl_letters(w):
         v = sym(a, "HarmonicPolyLog")
         if not v.is_number:
             raise Unevaluated()
+        if v.is_Float and float(v) == int(v):      # letters numericised by N[...]
+            v = sp.Integer(int(v))
         if not v.is_Integer:
             raise ValueError("HarmonicPolyLog: letters must be 0, 1, -1 or abbreviated indices +-m")
         n = int(v)
