@@ -2251,3 +2251,176 @@ _register("MultiplePolyLog", 2, _mpl,
           "nk^zk): nested series inside the poly-disc |s1 ... sj| < 1, ComplexInfinity outside it, the boundary "
           "via GeneralizedPolyLog (positive integer indices); depth 1 = PolyLog, all s = 1 gives MultipleZeta",
           listable=False)
+
+
+# ───────────────────────────── Fox H, MeijerGReduce, FoxHReduce ─────────────────────────────
+
+def _foxh_pairs(x, name, what):
+    if not is_list(x):
+        raise Unevaluated() if isinstance(x, Symbol) else ValueError(f"{name}: {what} must be a list of pairs")
+    out = []
+    for p in x.args:
+        if not (is_list(p) and len(p.args) == 2):
+            raise ValueError(f"{name}: {what} must contain pairs {{a, alpha}}")
+        out.append((sym(p.args[0], name), sym(p.args[1], name)))
+    return out
+
+
+def _foxh_parse(A, B, name="FoxH"):
+    if not (is_list(A) and len(A.args) == 2 and is_list(B) and len(B.args) == 2):
+        raise ValueError(f"{name}: expected FoxH[{{{{{{a1, alpha1}}, ...}}, {{...}}}}, {{{{{{b1, beta1}}, ...}}, {{...}}}}, z]")
+    a1 = _foxh_pairs(A.args[0], name, "the parameters")
+    a2 = _foxh_pairs(A.args[1], name, "the parameters")
+    b1 = _foxh_pairs(B.args[0], name, "the parameters")
+    b2 = _foxh_pairs(B.args[1], name, "the parameters")
+    return a1, a2, b1, b2
+
+
+def _foxh_to_meijer(a1, a2, b1, b2):
+    """Gauss multiplication: FoxH with rational alpha, beta = D C MeijerG[..., (z K^(-1/D))^D]; returns
+    (D, C, K, A1, A2, B1, B2) with SymPy values."""
+    scal = [al for _, al in a1 + a2 + b1 + b2]
+    if any(not (v.is_Rational and v > 0) for v in scal):
+        return None
+    D = 1
+    for v in scal:
+        D = sp.ilcm(D, v.q)
+    C = sp.Integer(1)
+    K = sp.Integer(1)
+    A1, A2, B1, B2 = [], [], [], []
+    two_pi = 2 * sp.pi
+    for a, al in a1:                              # numerator Gamma(1 - a - alpha s)
+        k = int(al * D)
+        A1 += [(a + j) / k for j in range(k)]
+        C *= two_pi ** sp.Rational(1 - k, 2) * sp.Integer(k) ** (sp.Rational(1, 2) - a)
+        K /= sp.Integer(k) ** k
+    for a, al in a2:                              # denominator Gamma(a + alpha s)
+        k = int(al * D)
+        A2 += [(a + j) / k for j in range(k)]
+        C /= two_pi ** sp.Rational(1 - k, 2) * sp.Integer(k) ** (a - sp.Rational(1, 2))
+        K /= sp.Integer(k) ** k
+    for b, be in b1:                              # numerator Gamma(b + beta s)
+        k = int(be * D)
+        B1 += [(b + j) / k for j in range(k)]
+        C *= two_pi ** sp.Rational(1 - k, 2) * sp.Integer(k) ** (b - sp.Rational(1, 2))
+        K *= sp.Integer(k) ** k
+    for b, be in b2:                              # denominator Gamma(1 - b - beta s)
+        k = int(be * D)
+        B2 += [(b + j) / k for j in range(k)]
+        C /= two_pi ** sp.Rational(1 - k, 2) * sp.Integer(k) ** (sp.Rational(1, 2) - b)
+        K *= sp.Integer(k) ** k
+    return D, C, K, A1, A2, B1, B2
+
+
+def _lst(vals):
+    return Expr("List", *(R(v) for v in vals))
+
+
+def _foxh(A, B, z):
+    name = "FoxH"
+    a1, a2, b1, b2 = _foxh_parse(A, B)
+    zv = sym(z, name)
+    if all(al == 1 for _, al in a1 + a2 + b1 + b2):
+        return Expr("MeijerG", Expr("List", _lst([a for a, _ in a1]), _lst([a for a, _ in a2])),
+                    Expr("List", _lst([b for b, _ in b1]), _lst([b for b, _ in b2])), z)
+    allv = [v for p in a1 + a2 + b1 + b2 for v in p] + [zv]
+    if not all(v.is_number for v in allv):
+        raise Unevaluated()
+    prec = input_precision([A, B, z])
+    if prec is None:
+        raise Unevaluated()
+    conv = _foxh_to_meijer(a1, a2, b1, b2)
+    if conv is None:
+        raise ValueError("FoxH: numerical evaluation is supported for positive rational alpha and beta")
+    D, C, K, A1, A2, B1, B2 = conv
+    if len(A1) + len(A2) + len(B1) + len(B2) > 400:
+        raise ValueError("FoxH: the rational scale factors have too large a common denominator")
+    if zv == 0:
+        raise Unevaluated()
+
+    def f(z):
+        w = z * mpmath.power(to_mp(K), -mpmath.mpf(1) / D)
+        g = mpmath.meijerg([[to_mp(x) for x in A1], [to_mp(x) for x in A2]],
+                           [[to_mp(x) for x in B1], [to_mp(x) for x in B2]], w, r=mpmath.mpf(1) / D)
+        return D * to_mp(C) * g
+    return mp_eval(f, [zv], prec)
+
+
+_register("FoxH", 3, _foxh,
+          "FoxH[{{{a1, alpha1}, ...}, {...}}, {{{b1, beta1}, ...}, {...}}, z] Mellin-Barnes integral of "
+          "Prod Gamma(b_j + beta_j s) Prod Gamma(1 - a_i - alpha_i s)/(...) z^-s (reference convention); all "
+          "alpha = beta = 1 gives MeijerG; positive rational alpha, beta evaluated exactly as a MeijerG by the Gauss "
+          "multiplication formula (mpmath meijerg with the z^(1/r) branch); other scale factors raise under N",
+          listable=False)
+
+
+def _meijer_parts(f, x):
+    """f = c x^p G(...) as (c, p, sympy meijerg) via SymPy's Meijer-G rewriting, or None."""
+    from sympy.integrals.meijerint import _rewrite1
+    try:
+        r = _rewrite1(f, x)
+    except Exception:
+        return None
+    if r is None:
+        return None
+    fac, power, gs, _cond = r            # f = fac * power * Sum[c x^s G]
+    gs = [g for g in gs if g[0] != 0]
+    if len(gs) != 1:
+        return None
+    c, s, g = gs[0]
+    return sp.simplify(fac * power * c * x ** s), g
+
+
+def _inactive(head, *args):
+    return Expr(Expr("Inactive", Symbol(head)), *args)
+
+
+def _reduce_common(name, expr, x, to_fox):
+    if not isinstance(x, Symbol):
+        raise ValueError(f"{name}: the second argument must be a variable")
+    xs = sp.Symbol(x.name, positive=True)
+    f = sym(expr, name).subs(sp.Symbol(x.name), xs)
+    parts = _meijer_parts(f, xs)
+    if parts is None:
+        raise Unevaluated()
+    pre, g = parts
+    an, ap = [sp.sympify(v) for v in g.an], [sp.sympify(v) for v in g.aother]
+    bm, bq = [sp.sympify(v) for v in g.bm], [sp.sympify(v) for v in g.bother]
+    arg = g.argument.subs(xs, sp.Symbol(x.name))
+    if to_fox:
+        pair = lambda v: Expr("List", R(v), 1)
+        core = _inactive("FoxH", Expr("List", Expr("List", *map(pair, an)), Expr("List", *map(pair, ap))),
+                         Expr("List", Expr("List", *map(pair, bm)), Expr("List", *map(pair, bq))), R(arg))
+    else:
+        core = _inactive("MeijerG", Expr("List", _lst(an), _lst(ap)), Expr("List", _lst(bm), _lst(bq)), R(arg))
+    pre = pre.subs(xs, sp.Symbol(x.name))
+    if pre == 1:
+        return core
+    return Expr("Times", R(pre), core)
+
+
+def _sympy_meijerg_back():
+    """SymPy meijerg -> MeijerG when expressions holding MeijerG pass through SymPy (e.g. 2 MeijerG[...])."""
+    from .. import math_ops
+    math_ops._INV_FUNCS.setdefault(sp.meijerg, "MeijerG")
+
+
+_sympy_meijerg_back()
+
+
+def _meijerg_reduce(expr, x, *opts):
+    return _reduce_common("MeijerGReduce", expr, x, False)
+
+
+def _foxh_reduce(expr, x, *opts):
+    return _reduce_common("FoxHReduce", expr, x, True)
+
+
+fn("MeijerGReduce", area=AREA, status=STATUS,
+   notes="MeijerGReduce[expr, x] -> c x^p Inactive[MeijerG][...] (SymPy's Meijer-G rewriting of elementary and "
+         "special functions; Activate recovers expr, e.g. Sin[x] = Sqrt[Pi] MeijerG[{{}, {}}, {{1/2}, {0}}, x^2/4]); "
+         "expressions with no single-G representation stay unevaluated; Assumptions are accepted and ignored")(
+    _meijerg_reduce)
+fn("FoxHReduce", area=AREA, status=STATUS,
+   notes="FoxHReduce[expr, x] -> c x^p Inactive[FoxH][...] with unit scale factors (from the MeijerGReduce "
+         "representation); Activate recovers expr; unsupported expressions stay unevaluated")(_foxh_reduce)
