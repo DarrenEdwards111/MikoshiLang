@@ -64,8 +64,12 @@ a list, an association, a rule or `True`/`False` where the type excludes it.
 ## Cost
 
 When no checking session is active, the evaluator and the library dispatcher read one module-level integer
-(`mikoshilang._typestate.ACTIVE`). `scripts/benchmark_typecheck.py` measures this. Its numbers are in the pull
-request that added the checker.
+(`mikoshilang._typestate.ACTIVE`). `scripts/benchmark_typecheck.py` measures this. On its dispatch-heavy workload (Python 3.13, means of 3
+interleaved best-of-5 runs):
+
+* **Checking off:** 1.087 s against 1.083 s on a checkout without the checker. That's +0.4%, within the
+  run-to-run noise.
+* **`check_types=True`:** 1.196 s (about +10%).
 
 ## Coverage of the library annotations
 
