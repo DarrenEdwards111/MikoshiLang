@@ -22,6 +22,11 @@ HAVE_SCIPY = importlib.util.find_spec("scipy") is not None
 HAVE_NUMPY = importlib.util.find_spec("numpy") is not None
 
 
+def needs_scipy(case):
+    """A case whose numeric evaluation needs SciPy: without it, expect the clear 'requires SciPy' error."""
+    return case if HAVE_SCIPY else (case[0], Raises(NotImplementedError, match="requires SciPy"))
+
+
 class S:
     """a SciPy reference value, computed lazily (the case is dropped without SciPy)"""
 
@@ -657,7 +662,7 @@ MULTI = [
     ("PDF[BinormalDistribution[{1, 2}, {1, 2}, 1/2], {1, 2}]", "Sqrt[3]/(6 Pi)"),  # 1/(2 Pi s1 s2 Sqrt[1 - rho^2])
     ("PDF[BinormalDistribution[{1, 2}, {1, 2}, 1/2], {1.5, 1.}]",
      S(lambda st: st.multivariate_normal.pdf([1.5, 1.0], [1, 2], [[1, 1], [1, 4]]))),
-    ("CDF[BinormalDistribution[{0, 0}, {1, 1}, 0.5], {0., 0.}]", 1 / 3, 1e-7),
+    needs_scipy(("CDF[BinormalDistribution[{0, 0}, {1, 1}, 0.5], {0., 0.}]", 1 / 3, 1e-7)),
     ("Covariance[BinormalDistribution[{1, 2}, {1, 2}, 1/2]]", "{{1, 1}, {1, 4}}"),
     ("Mean[BinormalDistribution[{1, 2}, {1, 2}, 1/2]]", "{1, 2}"),
     ("MarginalDistribution[BinormalDistribution[{1, 2}, {1, 3}, 1/2], 2]", "NormalDistribution[2, 3]"),
@@ -984,7 +989,7 @@ DERIVED = [
     ("CDF[CopulaDistribution[{\"GumbelHougaard\", 2}, {UniformDistribution[], UniformDistribution[]}], {1/2, 1/2}]",
      "2^-Sqrt[2]"),
     ("CDF[CopulaDistribution[{\"AMH\", 1/2}, {UniformDistribution[], UniformDistribution[]}], {1/2, 1/2}]", "2/7"),
-    ("CDF[CopulaDistribution[{\"Binormal\", 0.5}, {NormalDistribution[], NormalDistribution[]}], {0., 0.}]", 1 / 3, 1e-7),
+    needs_scipy(("CDF[CopulaDistribution[{\"Binormal\", 0.5}, {NormalDistribution[], NormalDistribution[]}], {0., 0.}]", 1 / 3, 1e-7)),
     ("Mean[CopulaDistribution[{\"Clayton\", 2}, {NormalDistribution[1, 2], ExponentialDistribution[1]}]]", "{1, 1}"),
     ("PDF[CopulaDistribution[\"Maximal\", {UniformDistribution[], UniformDistribution[]}], {1/2, 1/2}]",
      Raises(NotImplementedError)),
