@@ -8,6 +8,8 @@ without an mpmath counterpart are computed here from their defining series / dif
 working-precision checks.  Exact arguments give exact special values where Wolfram does and otherwise stay
 unevaluated.  Arguments outside the implemented domain raise a clear error instead of returning a guess.
 """
+
+from __future__ import annotations
 import mpmath
 import sympy as sp
 from sympy.core.function import AppliedUndef
@@ -98,10 +100,11 @@ def mpfun(name, nargs, mpf, exact=None, notes="", listable=True, symbolic=None, 
     import inspect
     for n in range(lo, hi + 1):
         def make(n):
-            def f(*args):
+            def f(*args: Expr) -> Expr:
                 return impl(*args)
             f.__signature__ = inspect.Signature(
-                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD) for i in range(n)])
+                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation="Expr")
+                 for i in range(n)], return_annotation="Expr")
             f.__name__ = f"_{name}_{n}"
             return f
         fn(name, area=AREA, status=status, notes=notes, listable=listable)(make(n))
@@ -2728,5 +2731,5 @@ def _ci_conditions(conds, cand, X, Cs, to_sympy):
           "without u that separate additively (F(Du) = 0, Hamilton-Jacobi type, f(x, p) = g(y, q)); every result is "
           "substituted back and its constants checked independent; conditions u[...] == v fix the constants; other "
           "PDEs stay unevaluated. Constants may be numbered differently from Wolfram")
-def _complete_integral_3(pde, u, xs):
+def _complete_integral_3(pde: Expr, u: Expr, xs: Expr) -> Expr:
     return _complete_integral(pde, u, xs)

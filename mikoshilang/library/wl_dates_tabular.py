@@ -981,7 +981,7 @@ _DATE_OPTS = {"CalendarType", "DateFormat", "DateGranularity", "TimeSystem", "Ti
           "floating day-and-coarser dates and DateObject[list, gran, cal, tz] otherwise; d[\"Date\"], "
           "d[\"Granularity\"], d[\"TimeZone\"], d[\"CalendarType\"], d[\"DateList\"] and date elements such as "
           "d[\"Year\"], d[\"DayName\"]")
-def _dateobject(*args):
+def _dateobject(*args: Expr) -> Expr:
     raw = args
     args, o = _opts(args, _DATE_OPTS, "DateObject")
     d0 = parse_dobj(Expr("DateObject", *raw))
@@ -1119,7 +1119,7 @@ def date_string(d, fmt=None):
 
 
 @fn("DateObjectQ", **ADDED, notes="True for a DateObject with a valid canonical specification, else False")
-def _dateobjectq(x):
+def _dateobjectq(x: Expr) -> Boolean:
     return parse_dobj(x) is not None
 
 
@@ -1127,7 +1127,7 @@ def _dateobjectq(x):
     notes="DateList[] (now in $TimeZone), DateList[date] for DateObject, date list (out-of-range values reduced, "
           "fractional d/h/m/s allowed), absolute time (seconds since 1900 in $TimeZone), date string or "
           "{\"string\", {e1, sep, e2, ...}}; always {y, m, d, h, m, s} with real seconds; DateList[TimeZone -> z]")
-def _datelist(*args):
+def _datelist(*args: Expr) -> Expr:
     args, o = _opts(args, {"TimeZone"}, "DateList")
     if len(args) > 1:
         raise ValueError("DateList: expected at most one date specification")
@@ -1154,7 +1154,7 @@ def _datelist(*args):
           "DateObject (converted from its zone), date list (exact for exact input: AbsoluteTime[{2000, 1, 1}] = "
           "3155673600), date string or absolute time; TimeZone -> z gives the value in zone z; leap seconds are not "
           "counted")
-def _absolutetime(*args):
+def _absolutetime(*args: Expr) -> Expr:
     args, o = _opts(args, {"TimeZone"}, "AbsoluteTime")
     if len(args) > 1:
         raise ValueError("AbsoluteTime: expected at most one date specification")
@@ -1194,7 +1194,7 @@ def _wrap_datestring():
                 return f_(*a)
         raise ValueError("DateString: wrong number of arguments")
 
-    def ds(*args):
+    def ds(*args: Expr) -> Expr:
         args, o = _opts(args, {"TimeZone"}, "DateString")
         if len(args) > 2:
             raise ValueError("DateString: expected DateString[], DateString[date], DateString[fmt] or "
@@ -1319,7 +1319,7 @@ def parse_tobj(e):
           "(time part of a DateObject of granularity Hour or finer), TimeObject[t, gran] (Hour ... Nanosecond, "
           "Instant, 0..9); options DateGranularity and TimeZone (None by default); times are reduced modulo 24 h; "
           "t[\"Time\"], t[\"Granularity\"], t[\"TimeZone\"], t[\"Hour\"], t[\"Minute\"], t[\"Second\"]")
-def _timeobject(*args):
+def _timeobject(*args: Expr) -> Expr:
     raw = args
     args, o = _opts(args, {"DateGranularity", "TimeZone"}, "TimeObject")
     t0 = parse_tobj(Expr("TimeObject", *raw))
@@ -1391,7 +1391,7 @@ KL.COMPOUND_HEAD_HOOKS["TimeObject"] = _time_hook
 
 
 @fn("TimeObjectQ", **ADDED, notes="True for a TimeObject with a valid canonical specification, else False")
-def _timeobjectq(x):
+def _timeobjectq(x: Expr) -> Boolean:
     return parse_tobj(x) is not None
 
 
@@ -1567,7 +1567,7 @@ def _wall_key(d, g, end):
           "(its final instant excluded); canonical form DateInterval[{{startlist, endlist}, ...}, gran] (floating) or "
           "DateInterval[..., gran, cal, tz]; properties \"DateBounds\", \"Granularity\", \"TimeZone\", "
           "\"CalendarType\"")
-def _dateinterval(*args):
+def _dateinterval(*args: Expr) -> Expr:
     raw = Expr("DateInterval", *args)
     di = parse_interval(raw)
     if di is not None:
@@ -1672,7 +1672,7 @@ def _later(a, b):
     notes="MinDate[{d1, d2, ...}] gives the earliest date in the form given (DateObject, date list, absolute time, "
           "string, DateInterval); MinDate[interval] the start of a DateInterval, MinDate[interval, gran] at "
           "granularity gran")
-def _mindate(x, g=None):
+def _mindate(x: Expr, g: Expr = None) -> Expr:
     di = parse_interval(x)
     if di is not None:
         return _min_of_interval(di, g)
@@ -1688,7 +1688,7 @@ def _mindate(x, g=None):
 @fn("MaxDate", **ADDED,
     notes="MaxDate[{d1, d2, ...}] gives the latest date (latest end of its period) in the form given; "
           "MaxDate[interval] the end date of a DateInterval, MaxDate[interval, gran] at granularity gran")
-def _maxdate(x, g=None):
+def _maxdate(x: Expr, g: Expr = None) -> Expr:
     di = parse_interval(x)
     if di is not None:
         return _max_of_interval(di, g)
@@ -1705,7 +1705,7 @@ def _maxdate(x, g=None):
     notes="DateBounds[{d1, d2, ...}] = {earliest, latest} in the form given; DateBounds[interval] the first and last "
           "dates of a DateInterval; DateBounds[gdate] the first and final instants of a granular DateObject (the "
           "final instant is the start of the next period); DateBounds[obj, gran] at granularity gran")
-def _datebounds(x, g=None):
+def _datebounds(x: Expr, g: Expr = None) -> ListOf[Expr]:
     di = parse_interval(x)
     if di is not None:
         return L(_min_of_interval(di, g), _max_of_interval(di, g))
@@ -1743,7 +1743,7 @@ def _outer2(f, a, b, fname):
 @fn("DateWithinQ", **ADDED,
     notes="DateWithinQ[d1, d2] is True if the period of DateObject (or DateInterval) d2 lies entirely within d1; "
           "lists in either argument thread like Outer")
-def _datewithinq(a, b):
+def _datewithinq(a: Expr, b: Expr) -> Boolean:
     def f(s1, s2, x, y):
         di = parse_interval(x)
         if di is not None:
@@ -1755,7 +1755,7 @@ def _datewithinq(a, b):
 @fn("DateOverlapsQ", **ADDED,
     notes="DateOverlapsQ[d1, d2] is True if the periods of two DateObjects (or DateIntervals) intersect; instants "
           "overlap a period they lie in; lists thread like Outer")
-def _dateoverlapsq(a, b):
+def _dateoverlapsq(a: Expr, b: Expr) -> Boolean:
     def f(s1, s2, x, y):
         p1 = parse_interval(x).utc_parts() if parse_interval(x) is not None else [s1]
         p2 = parse_interval(y).utc_parts() if parse_interval(y) is not None else [s2]
@@ -1951,7 +1951,7 @@ def _walls_in_common_zone(a, b, fname):
           "(ActualActual, Thirty360, Thirty360US, ThirtyE360, ThirtyE360ISDA, ThirtyEPlus360, Actual365, Actual360, "
           "ActualActualISDA; Actual365L and ActualActualICMA raise); integer results are exact, others machine "
           "reals (as Wolfram displays them)")
-def _datedifference(*args):
+def _datedifference(*args: Expr) -> Expr:
     args, o = _opts(args, {"DayCountConvention", "Method"}, "DateDifference")
     if len(args) == 1:
         z = current_tz()
@@ -2119,7 +2119,7 @@ def _date_tai(d):
           "default), \"UTC\" (leap seconds shown as second 60), \"TAI\", \"TT\" (TAI + 32.184 s), \"GPS\", \"TDB\" "
           "(Fairhead-Bretagnon leading terms, ~10 us), \"TCG\" and \"TCB\" (IAU 2006 linear relations); leap seconds "
           "from 1972 to 2017 are tabulated; \"UT1\" (needs IERS data) and dates before 1972 raise")
-def _timesystemconvert(x, tsys=None):
+def _timesystemconvert(x: Expr, tsys: Expr = None) -> Expr:
     if is_list(x) and parse_dobj(x) is None:
         return L(*(_timesystemconvert(v, tsys) for v in x.args))
     d = parse_dobj(x)
@@ -2173,7 +2173,7 @@ def _jd_date(x, fname):
           "date list or string in $TimeZone, absolute time) and the variants \"Full\", \"Reduced\" (JD - 2400000), "
           "\"Modified\" (JD - 2400000.5), \"Truncated\" (JD - 2440000.5), \"Dublin\" (JD - 2415020); exact for exact "
           "input; TimeSystem option (UT/UTC, TAI, TT, TDB, ...)")
-def _juliandate(*args):
+def _juliandate(*args: Expr) -> Expr:
     args, o = _opts(args, {"TimeSystem"}, "JulianDate")
     variant = "Full"
     if args and isinstance(args[0], str) and args[0] in _JD_VARIANTS:
@@ -2199,7 +2199,7 @@ def _juliandate(*args):
           "TimeZone option) of a Julian date (variants Full, Reduced, Modified, Truncated, Dublin); exact for exact "
           "input (FromJulianDate[2457754, TimeZone -> 0] = 2016-12-31 12:00:00); options CalendarType, DateFormat, "
           "DateGranularity, TimeSystem, TimeZone")
-def _fromjuliandate(*args):
+def _fromjuliandate(*args: Expr) -> Expr:
     args, o = _opts(args, _DATE_OPTS, "FromJulianDate")
     variant = "Full"
     if len(args) == 2:
@@ -2338,7 +2338,7 @@ def _jd_ut(d):
           "GoldstineLunationNumber (+37105), HebrewLunationNumber (+71234), IslamicLunationNumber (+17038), "
           "ThaiLunationNumber (+16843); Moon from Meeus ch. 47 (60 terms), Sun from Meeus ch. 25, TT - UT from the "
           "Espenak-Meeus fits: about 1e-5 lunation (~30 s) accuracy")
-def _lunationnumber(*args):
+def _lunationnumber(*args: Expr) -> Expr:
     scheme = None
     if len(args) == 2:
         scheme, args = args[0], args[1:]
@@ -2358,7 +2358,7 @@ def _lunationnumber(*args):
           "TimeZone option) with the given lunation number, found by Newton iteration on LunationNumber; "
           "FromLunationNumber[0] is the new moon of 2000-01-06 18:14 UTC; options CalendarType, DateFormat, "
           "DateGranularity, TimeSystem, TimeZone")
-def _fromlunationnumber(*args):
+def _fromlunationnumber(*args: Expr) -> Expr:
     args, o = _opts(args, _DATE_OPTS, "FromLunationNumber")
     scheme = None
     if len(args) == 2:
@@ -2426,7 +2426,7 @@ def _hms_quantity(h):
           "(east longitude positive) and a DateObject, date list or string; SiderealTime[{{loc1, date1}, ...}]; "
           "result Quantity[MixedMagnitude[{h, m, s}], MixedUnit[{\"HoursOfRightAscension\", ...}]] (IAU 1982 GMST, "
           "UT1 taken as UTC: ~1 s accuracy); forms needing  (SiderealTime[], SiderealTime[date]) raise")
-def _siderealtime(*args):
+def _siderealtime(*args: Expr) -> Expr:
     kind = "ApparentTime"
     if args and args[0] in ("MeanTime", "ApparentTime"):
         kind, args = args[0], args[1:]
@@ -2496,7 +2496,7 @@ def _quantity_secs(q, fname):
           "unit]] and RandomDate[{q1, q2}] (relative to now), RandomDate[range, n | {n1, n2, ...}]; options "
           "DateGranularity (default \"Instant\"), TimeZone, CalendarType, DateFormat; uses the session generator "
           "(SeedRandom)")
-def _randomdate(*args):
+def _randomdate(*args: Expr) -> Expr:
     args, o = _opts(args, _DATE_OPTS, "RandomDate")
     if len(args) > 2:
         raise ValueError("RandomDate: expected RandomDate[range] or RandomDate[range, n]")
@@ -2568,7 +2568,7 @@ def _time_span(t, z):
     notes="RandomTime[] (a time of day), RandomTime[{tmin, tmax}], RandomTime[time] (within a granular TimeObject "
           "or DateObject), RandomTime[Quantity[...]] relative to now, RandomTime[range, n | {n1, ...}]; options "
           "DateGranularity (default \"Instant\") and TimeZone; gives TimeObjects")
-def _randomtime(*args):
+def _randomtime(*args: Expr) -> Expr:
     args, o = _opts(args, {"DateGranularity", "TimeZone"}, "RandomTime")
     if len(args) > 2:
         raise ValueError("RandomTime: expected RandomTime[range] or RandomTime[range, n]")
@@ -2598,7 +2598,7 @@ def _randomtime(*args):
     notes="Dated[obj, year], Dated[obj, date] and Dated[obj, All]: an inert wrapper associating obj (an entity, "
           "entity property or property name) with a date; the date must be an integer year, a DateObject or "
           "DateInterval, Interval of dates or All (resolving entity data needs curated data and is not available)")
-def _dated(obj, date):
+def _dated(obj: Expr, date: Expr) -> Expr:
     if K.is_int(date) or is_sym(date, "All") or parse_dobj(date) is not None or parse_interval(date) is not None:
         raise Unevaluated()
     if isinstance(date, Expr) and date.head == "Interval":
@@ -2612,7 +2612,7 @@ def _dated(obj, date):
     notes="Clock[...] outside Dynamic evaluates to its starting value (documented 'Possible Issues'): Clock[] -> 0, "
           "Clock[vmax] -> 0, Clock[{vmin, vmax}] and Clock[{vmin, vmax, dv}] -> vmin, with the optional cycle time "
           "t and count n validated; Clock[Infinity] -> 0")
-def _clock(spec=None, t=None, n=None):
+def _clock(spec: Expr = None, t: Expr = None, n: Expr = None) -> Expr:
     if t is not None:
         tv = _num(t, "Clock", "cycle time")
         if tv <= 0:
@@ -2641,7 +2641,7 @@ def _clock(spec=None, t=None, n=None):
 @fn("DateScale", **ADDED,
     notes="DateScale[] and DateScale[DateFunction -> f, DateTicksFormat -> fmt]: the inert date scale for "
           "ScalingFunctions; options are validated (unknown options raise)")
-def _datescale(*args):
+def _datescale(*args: Expr) -> Expr:
     for a in args:
         if not (is_rule(a) and isinstance(a.args[0], Symbol) and a.args[0].name in ("DateFunction",
                                                                                     "DateTicksFormat")):
@@ -2696,7 +2696,7 @@ _hook_string_patterns()
           "StringReplace, ...): elements Year (4 digits), Quarter, Month, MonthName (full or 3-letter), Day, "
           "DayName, Hour, AMPM, Minute, Second; consecutive elements are separated by one of / - : . (or by sep), "
           "literal strings in the list are matched exactly; inert as an expression")
-def _datepattern(*args):
+def _datepattern(*args: Expr) -> Expr:
     _datepattern_rx(Expr("DatePattern", *args), lambda q: re.escape(q) if isinstance(q, str) else "(?:.+?)")
     raise Unevaluated()
 
@@ -2745,7 +2745,7 @@ def wrap_registry(name, pre):
         return
     old = list(e.impls)
 
-    def call(*a):
+    def call(*a: Expr) -> Expr:
         r = pre(a)
         if r is not _PASS:
             return r
@@ -2856,7 +2856,7 @@ def _scale_of(x):
 
 
 def _make_categorical(kind):
-    def impl(scale, *c):
+    def impl(scale: Expr, *c: Expr) -> Expr:
         if len(c) > 1:
             raise ValueError(f"{kind}: expected {kind}[scale] or {kind}[scale, category]")
         if not c and isinstance(scale, Expr) and scale.head == kind and len(scale.args) == 1 \
@@ -2894,7 +2894,7 @@ KL.COMPOUND_HEAD_HOOKS["Ordinal"] = _cat_hook
 _CAT_PROPS = ("Expression", "Category", "Index", "Label", "Scale", "Score")
 
 
-def _catvalue(obj, prop="Expression"):
+def _catvalue(obj: Expr, prop: Expr = "Expression") -> Expr:
     if prop not in _CAT_PROPS:
         raise ValueError(f"CategoricalValue: {prop!r} is not a property; use one of {', '.join(_CAT_PROPS)}")
     if is_list(obj):
@@ -2996,17 +2996,21 @@ def _scale_validate(*a, head):
     raise Unevaluated()
 
 
-fn("NominalScale", **ADDED,
+@fn("NominalScale", **ADDED,
    notes="NominalScale[{c...}], NominalScale[<|c -> lab, ...|>], NominalScale[cats, labels]: inert scale for "
          "ScalingFunctions and Nominal, validated; scale[prop] and scale[prop, arg] give \"CategoryList\", "
-         "\"LabelAssociation\", \"LabelList\", \"Label\", \"Labels\", \"Properties\"")(
-    lambda *a: _scale_validate(*a, head="NominalScale"))
-fn("OrdinalScale", **ADDED,
+         "\"LabelAssociation\", \"LabelList\", \"Label\", \"Labels\", \"Properties\"")
+def _nominal_scale(*a: Expr) -> Expr:
+    return _scale_validate(*a, head="NominalScale")
+
+
+@fn("OrdinalScale", **ADDED,
    notes="OrdinalScale[{c...}], OrdinalScale[cats, vals], OrdinalScale[<|c -> v|>], OrdinalScale[..., labels]: "
          "inert, validated; scale[prop] / scale[prop, arg] give \"CategoryAssociation\" (<|v -> c|>), "
          "\"CategoryList\", \"LabelAssociation\", \"LabelList\", \"ValueAssociation\", \"ValueList\", \"Category\", "
-         "\"Categories\", \"Label\", \"Labels\", \"Value\", \"Values\", \"Properties\"")(
-    lambda *a: _scale_validate(*a, head="OrdinalScale"))
+         "\"Categories\", \"Label\", \"Labels\", \"Value\", \"Values\", \"Properties\"")
+def _ordinal_scale(*a: Expr) -> Expr:
+    return _scale_validate(*a, head="OrdinalScale")
 
 _NS_PROPS = ["CategoryList", "LabelAssociation", "LabelList", "Label", "Labels", "Properties"]
 _OS_PROPS = ["CategoryAssociation", "CategoryList", "LabelAssociation", "LabelList", "ValueAssociation", "ValueList",
@@ -3269,7 +3273,7 @@ def _cast_array(v, elem, rank, method):
           "\"BitCast\" (reinterprets the bits between same-size integer/real types; the source type is inferred "
           "as Integer64 / Real64, or give {val, srcType}); types Integer8-64, UnsignedInteger8-64, Real32, Real64, "
           "ComplexReal32/64, Boolean, String, InertExpression and TypeSpecifier[\"PackedArray\"][elem, rank]")
-def _cast(val, typ, method="ConversionCast"):
+def _cast(val: Expr, typ: Expr, method: Expr = "ConversionCast") -> Expr:
     if method not in ("ConversionCast", "CCast", "BitCast"):
         raise ValueError(f"Cast: {method!r} is not a casting method (ConversionCast, CCast or BitCast)")
     name, pa = _type_name(typ)

@@ -115,7 +115,7 @@ def _pw_parts(pw, fname="Piecewise"):
           "dropped, the first True case gives its value (later cases are dropped), Piecewise[{}, d] -> d, the "
           "default is 0; values are evaluated only when they can be returned. Symbolic cases stay; Integrate, D, "
           "Limit and PiecewiseExpand work with it through SymPy's Piecewise")
-def _piecewise(*args):
+def _piecewise(*args: Expr) -> Expr:
     if len(args) not in (1, 2):
         raise ValueError("Piecewise called with the wrong number of arguments; expected 1 or 2")
     cl = ev(args[0])
@@ -152,7 +152,7 @@ def _piecewise(*args):
           "DirectedInfinity[0 | Indeterminate] -> ComplexInfinity; a positive real -> Infinity, a negative real -> "
           "-Infinity; other numeric directions are normalised to z/Abs[z] (DirectedInfinity[1 + I] -> "
           "DirectedInfinity[(1 + I)/Sqrt[2]]); symbolic directions stay")
-def _dirinf(*a):
+def _dirinf(*a: Expr) -> Expr:
     if len(a) > 1:
         raise ValueError("DirectedInfinity called with 2 or more arguments; expected 0 or 1")
     if not a:
@@ -347,7 +347,7 @@ def _combine_add(r1, r2, fname, sub=False):
 
 
 def _sides_add(fname, sub):
-    def impl(*args):
+    def impl(*args: Expr) -> Expr:
         args, opts = _opts(args, _SIDES_OPTS, fname)
         if len(args) == 1:
             r = args[0]
@@ -420,7 +420,7 @@ def _sides_mul(fname, div):
             return ev(Expr(h, *reversed(sides)))
         return ev(Expr(h, *sides))
 
-    def impl(*args):
+    def impl(*args: Expr) -> Expr:
         args, opts = _opts(args, _SIDES_OPTS, fname)
         gc = opts.get("GenerateConditions", _sym("All"))
         gcn = gc.name if isinstance(gc, Symbol) else ("True" if gc is True else "False" if gc is False else None)
@@ -535,7 +535,7 @@ fn("DivideSides", area=AREA, status="added",
     notes="ApplySides[f, rel]: applies f to every side of an equation, inequation, inequality or chain (also "
           "inside And, ConditionalExpression and Piecewise), purely structurally as Wolfram (no check that an "
           "inequality stays valid); True/False stay")
-def _applysides(f, r):
+def _applysides(f: Fn, r: Expr) -> Expr:
     return _map_rel(r, lambda q: ev(Expr(q.head, *(K.call(f, s) for s in q.args))), "ApplySides")
 
 
@@ -600,7 +600,7 @@ def _poly_struct(e, vs, rational, test):
 
 
 def _structq(fname, rational):
-    def impl(e, v, *test):
+    def impl(e: Expr, v: Expr, *test: Expr) -> Boolean:
         if len(test) > 1:
             raise ValueError(f"{fname} called with too many arguments")
         vs = _vars(v, fname)
@@ -721,7 +721,7 @@ def _pick_var(e, x, fname):
           "-> -1/(-1 + x^2)^2 + 1/(-1 + x^2)), exact over the rationals and rational functions of other symbols; "
           "threads over lists, equations and inequalities; the result is checked to equal the input; the Modulus "
           "and Trig options raise")
-def _apartsqf(e, *rest):
+def _apartsqf(e: Expr, *rest: Expr) -> Expr:
     rest, opts = _opts(rest, {"Modulus", "Trig"}, "ApartSquareFree")
     if opts.get("Modulus", 0) not in (0,) or (opts.get("Trig") is not None and not is_false(opts.get("Trig"))):
         raise NotImplementedError("ApartSquareFree: the Modulus and Trig options are not supported")
@@ -773,7 +773,7 @@ def _pfe_full(f, x):
           "c_k the coefficient of 1/(x - pole)^k), \"Poles\", \"PoleMultiplicities\"|>, the complete decomposition "
           "over the algebraic numbers (poles in radicals); PartialFractionElements[f, x, prop] gives one property; "
           "poles are sorted as Wolfram (real ascending, then complex); the decomposition is checked to equal f")
-def _pfe(e, x, *prop):
+def _pfe(e: Expr, x: Var, *prop: Expr) -> Expr:
     xs = _var1(x, "PartialFractionElements")
     f = _S(e, "PartialFractionElements")
     n, d = sp.fraction(sp.together(f))
@@ -808,7 +808,7 @@ def _pfe(e, x, *prop):
     notes="PolynomialExtendedGCD[p, q, x] -> {g, {r, s}} with r p + s q == g, g the monic GCD and deg r < deg q - "
           "deg g, deg s < deg p - deg g (unique cofactors; coefficients may be rational functions of other "
           "symbols, as Wolfram); Modulus -> prime works over GF(p) with representatives 0..p-1; checked")
-def _pegcd(p, q, x, *rest):
+def _pegcd(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = _opts(rest, {"Modulus"}, "PolynomialExtendedGCD")
     if rest:
         raise ValueError("PolynomialExtendedGCD called with too many arguments")
@@ -845,7 +845,7 @@ _ORDERS = {"Lexicographic": "lex", "DegreeLexicographic": "grlex", "DegreeRevers
           "with respect to their leading terms; unique when the pi are a Gröbner basis), coefficients in the field "
           "of rational functions of the other symbols; MonomialOrder -> Lexicographic | DegreeLexicographic | "
           "DegreeReverseLexicographic, Modulus -> prime; the identity p == Σ ai pi + r is checked")
-def _preduction(p, ps, vs, *rest):
+def _preduction(p: Expr, ps: Expr, vs: Expr, *rest: Expr) -> Expr:
     rest, opts = _opts(rest, {"MonomialOrder", "Modulus", "CoefficientDomain"}, "PolynomialReduction")
     if rest:
         raise ValueError("PolynomialReduction called with too many arguments")
@@ -940,7 +940,7 @@ def _order_pq(P, Q, fname):
           "p): psc_j is the leading coefficient of the j-th subresultant (determinant of the Sylvester submatrix), "
           "psc_0 = Resultant and psc_n = lc(q)^(deg p - deg q); the first k vanish exactly when p and q have k "
           "common roots; deg p < deg q and Modulus raise")
-def _subresultants(p, q, x, *rest):
+def _subresultants(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("Subresultants: options (Modulus) are not supported")
     xs, P, Q = _sres_setup(p, q, x, "Subresultants")
@@ -955,7 +955,7 @@ def _subresultants(p, q, x, *rest):
     notes="SubresultantPolynomials[p, q, x]: the subresultant polynomials {S_0, ..., S_n} (n = deg q <= deg p) "
           "from the Sylvester submatrices, S_0 = Resultant[p, q, x] and S_n = lc(q)^(deg p - deg q - 1) q; deg p < "
           "deg q and Modulus raise")
-def _subrespolys(p, q, x, *rest):
+def _subrespolys(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("SubresultantPolynomials: options (Modulus) are not supported")
     xs, P, Q = _sres_setup(p, q, x, "SubresultantPolynomials")
@@ -967,7 +967,7 @@ def _subrespolys(p, q, x, *rest):
     notes="SubresultantPolynomialRemainders[p, q, x]: the subresultant polynomial remainder sequence {p, q, ...} "
           "(each term a multiple of the corresponding Euclidean remainder; the last is a multiple of the GCD), "
           "computed with SymPy's determinant-based subresultant PRS; Modulus raises")
-def _subresprs(p, q, x, *rest):
+def _subresprs(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("SubresultantPolynomialRemainders: options (Modulus) are not supported")
     xs, P, Q = _sres_setup(p, q, x, "SubresultantPolynomialRemainders")
@@ -983,7 +983,7 @@ def _subresprs(p, q, x, *rest):
 @fn("FromCoefficientRules", area=AREA, status="added",
     notes="FromCoefficientRules[{{e1, e2, ...} -> c, ...}, {x1, x2, ...}] -> Σ c x1^e1 x2^e2 ... (inverse of "
           "CoefficientRules); a single variable may be given without a list")
-def _fromcr(rules, vs):
+def _fromcr(rules: Expr, vs: Expr) -> Expr:
     V = list(vs.args) if is_list(vs) else [vs]
     rs = list(rules.args) if is_list(rules) else [rules]
     terms = []
@@ -1005,7 +1005,7 @@ def _fromcr(rules, vs):
           "equally over all orderings with \"Symmetric\" -> True; equations are taken as lhs - rhs; a single "
           "polynomial gives a scalar c0. MikoshiLang has no sparse storage, so the arrays are dense (Wolfram returns "
           "SparseArray objects; Normal gives these arrays)")
-def _coefarrays(polys, vs, *rest):
+def _coefarrays(polys: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     sym_ = False
     rest = list(rest)
     while rest and _is_head(rest[-1], "Rule") and rest[-1].args[0] == "Symmetric":
@@ -1097,7 +1097,7 @@ def _pade_core(c, m, n, t):
           "algorithm, so degenerate cases such as PadeApproximant[Cos[x], {x, 0, 1}] -> 1 are handled); a pole or "
           "zero (x - x0)^k of f is factored out as Wolfram does (Exp[x]/x); x0 may be symbolic or Infinity "
           "(series in 1/x); fractional powers (Puiseux series) raise; the result's series is checked")
-def _pade(f, spec):
+def _pade(f: Expr, spec: Expr) -> Expr:
     if not (is_list(spec) and len(spec.args) == 3):
         raise ValueError("PadeApproximant: expected {x, x0, {m, n}} or {x, x0, n}")
     xv, x0e, mn = spec.args
@@ -1256,7 +1256,7 @@ def _q_poly(e, fname):
           "roots), and for each interval the positions of the polynomials having that root. Each real interval "
           "contains exactly one root in its interior, or is {r, r} for a rational root; isolation is certified "
           "from exact root separation; the interval endpoints differ from Wolfram's (they are not unique)")
-def _rootintervals(ps, *dom):
+def _rootintervals(ps: Expr, *dom: Expr) -> ListOf[Expr]:
     if len(dom) > 1:
         raise ValueError("RootIntervals called with too many arguments")
     complexes = False
@@ -1298,7 +1298,7 @@ def _rootintervals(ps, *dom):
           "with rational endpoints (Gaussian-rational corners {lower-left, upper-right} for a non-real a) "
           "containing a and no other root of its minimal polynomial, of width below dx when given; a rational "
           "number gives {a, a}; endpoints are certified but differ from Wolfram's choice")
-def _isolinterval(a, *dx):
+def _isolinterval(a: Expr, *dx: Expr) -> ListOf[Expr]:
     if len(dx) > 1:
         raise ValueError("IsolatingInterval called with too many arguments")
     v = _S(a, "IsolatingInterval")
@@ -1341,7 +1341,7 @@ def _isolinterval(a, *dx):
     notes="NSolveValues[eqns, vars] / NSolveValues[eqns, vars, dom]: the values of the NSolve solutions ({v1, "
           "...} for one variable, {{x1, y1, ...}, ...} for several), with NSolve's options (WorkingPrecision) and "
           "MaxRoots -> n (at most n solutions, Wolfram order)")
-def _nsolvevalues(eqs, vs, *rest):
+def _nsolvevalues(eqs: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = _opts(rest, {"MaxRoots", "WorkingPrecision"}, "NSolveValues")
     if len(rest) > 1:
         raise ValueError("NSolveValues called with too many arguments")
@@ -1382,7 +1382,7 @@ record("MaxRoots", AREA, "added",
           "all values of vars: every coefficient of the numerators as polynomials in vars must vanish (an "
           "inequation p != 0 needs p to be a nonzero constant); the parameter system is solved exactly and each "
           "solution is substituted back. Non-polynomial dependence on vars and Or raise")
-def _solvealways(eqs, vs, *rest):
+def _solvealways(eqs: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("SolveAlways: options are not supported")
     V = [_var1(v, "SolveAlways") for v in (vs.args if is_list(vs) else [vs])]
@@ -1476,7 +1476,7 @@ def _pyth_variants(g):
           "simplifying each factor with the Pythagorean identities (TrigFactorList[Cosh[x]^2 - Cosh[x]^4] -> "
           "{{-1, 1}, {Sinh[x], 2}, {Cosh[x], 2}}); the product is checked to equal expr; the chosen factors can "
           "differ from Wolfram's sum-to-product forms")
-def _trigfactorlist(e):
+def _trigfactorlist(e: Expr) -> ListOf[Expr]:
     v = _S(e, "TrigFactorList")
     w = sp.together(_trig_gens_rewrite(v))
     facs = {}
@@ -1539,7 +1539,7 @@ def _trigfactorlist(e):
     notes="MatrixPolynomialValue[poly, m, x] -> poly with x replaced by the square matrix m (constant term times "
           "the identity, powers as MatrixPower); MatrixPolynomialValue[{c0, c1, ...}, m] -> Σ ck m^k (Horner "
           "scheme, exact or numeric)")
-def _matpolyval(p, m, *x):
+def _matpolyval(p: Expr, m: Expr, *x: Expr) -> Expr:
     from .core import matrix_arg
     if len(x) > 1:
         raise ValueError("MatrixPolynomialValue called with too many arguments")
@@ -1774,7 +1774,7 @@ def _check_um(U, A0, H, mult):
     notes="HermiteDecomposition[m] -> {u, r} for an integer matrix: u unimodular (Det = ±1), u.m == r, r the Hermite "
           "normal form (row echelon, positive pivots, entries above a pivot reduced into [0, pivot)), unique; u is "
           "unique when m is square and nonsingular (otherwise one valid u); non-integer entries raise")
-def _hermitedecomp(m):
+def _hermitedecomp(m: MatrixOf[Integer]) -> ListOf[Expr]:
     A = _int_matrix(m, "HermiteDecomposition")
     U, H = _hnf(A, _IntRing)
     _check_um(U, A, H, None)
@@ -1784,7 +1784,7 @@ def _hermitedecomp(m):
 @fn("HermiteReduce", area=AREA, status="added",
     notes="HermiteReduce[m]: the Hermite normal form r of an integer matrix (the second element of "
           "HermiteDecomposition)")
-def _hermitereduce(m):
+def _hermitereduce(m: MatrixOf[Integer]) -> Expr:
     A = _int_matrix(m, "HermiteReduce")
     U, H = _hnf(A, _IntRing)
     _check_um(U, A, H, None)
@@ -1820,7 +1820,7 @@ def _phd(*args):
           "the pivot, over the rational numbers (or rational functions of other symbols). The Hermite form is "
           "canonical only up to constant multiples of the rows; MikoshiLang makes the pivots monic (Wolfram's row "
           "scaling differs). Modulus and approximate coefficients raise")
-def _polyhermitedecomp(*args):
+def _polyhermitedecomp(*args: Expr) -> ListOf[Expr]:
     U, H, R_ = _phd(*args)
     return L(_pm_out(U, R_), _pm_out(H, R_))
 
@@ -1828,7 +1828,7 @@ def _polyhermitedecomp(*args):
 @fn("PolynomialHermiteReduce", area=AREA, status="added",
     notes="PolynomialHermiteReduce[m] / [m, x]: the Hermite form h of a univariate polynomial matrix (second "
           "element of PolynomialHermiteDecomposition; pivots monic)")
-def _polyhermitereduce(*args):
+def _polyhermitereduce(*args: Expr) -> Expr:
     U, H, R_ = _phd(*args)
     return _pm_out(H, R_)
 
@@ -1854,14 +1854,14 @@ def _psd(*args, fname):
           "with each diagonal entry dividing the next (the invariant factors), over the rationals or rational "
           "functions of other symbols; invariant factors are unique up to constants and are made monic here "
           "(Wolfram leaves constant multiples). Checked")
-def _polysmithdecomp(*args):
+def _polysmithdecomp(*args: Expr) -> ListOf[Expr]:
     U, S, V, R_ = _psd(*args, fname="PolynomialSmithDecomposition")
     return L(_pm_out(U, R_), _pm_out(S, R_), _pm_out(V, R_))
 
 
 @fn("PolynomialSmithReduce", area=AREA, status="added",
     notes="PolynomialSmithReduce[m] / [m, x]: the Smith form s (monic invariant factors on the diagonal)")
-def _polysmithreduce(*args):
+def _polysmithreduce(*args: Expr) -> Expr:
     U, S, V, R_ = _psd(*args, fname="PolynomialSmithReduce")
     return _pm_out(S, R_)
 
@@ -1901,7 +1901,7 @@ def _bool_vectors(spec, n, fname):
 
 
 def _terms_fn(fname, maxterms):
-    def impl(spec, *rest):
+    def impl(spec: Expr, *rest: Expr) -> Expr:
         if len(rest) > 2:
             raise ValueError(f"{fname} called with too many arguments")
         vars_ = rest[0] if rest else None
@@ -2010,7 +2010,7 @@ def _flatten_items(x):
           "Applied to arguments it gives the equivalent DNF Or of window conjunctions (Wolfram keeps the operator "
           "unevaluated; BooleanConvert of it gives the same DNF); BooleanConsecutiveFunction[spec, {vars}] / "
           "[spec, {vars}, form] give the formula directly")
-def _bcfn(spec, n, *form):
+def _bcfn(spec: Expr, n: Expr, *form: Expr) -> Expr:
     if len(form) > 1:
         raise ValueError("BooleanConsecutiveFunction called with too many arguments")
     if K.is_int(n) or (is_list(n) and all(K.is_int(v) for v in n.args)):
@@ -2069,7 +2069,7 @@ def _truth(f, vals, vars_):
           "variables; UnateQ[f, {x, !y, ...}] checks positive unateness in x and negative unateness in y (only the "
           "listed variables); pure functions and BooleanFunction take a list of True (positive), False (negative) "
           "or _ (ignore) per argument; decided from the complete truth table")
-def _unateq(f, *spec):
+def _unateq(f: Expr, *spec: Expr) -> Boolean:
     if len(spec) > 1:
         raise ValueError("UnateQ called with too many arguments")
     pure = _is_head(f, "Function") or _is_head(f, "BooleanFunction")
@@ -2551,7 +2551,7 @@ def _strict_opt(opts, fname):
           "Indeterminate if f takes both signs or is not real somewhere; StrictInequalities -> True asks for f > 0 "
           "/ f < 0. Univariate elementary functions over Reals; proofs by solveset (Abs split at its zeros) and "
           "verified sample points; anything undecidable raises")
-def _fsign(*args):
+def _fsign(*args: Expr) -> Expr:
     f, cond, vs, dom, opts = _prop_args(args, "FunctionSign", extra_opts=("StrictInequalities",))
     if dom != "Reals":
         raise NotImplementedError("FunctionSign: only the Reals domain is supported")
@@ -2616,7 +2616,7 @@ def _monotonicity(f, cond, vs, opts, fname):
           "Indeterminate otherwise (or if f is not real on the domain); StrictInequalities -> True for strict "
           "monotonicity. Univariate elementary functions continuous on an interval domain (derivative sign, with "
           "Abs split at its zeros); undecidable cases raise")
-def _fmono(*args):
+def _fmono(*args: Expr) -> Expr:
     f, cond, vs, dom, opts = _prop_args(args, "FunctionMonotonicity", extra_opts=("StrictInequalities",))
     if dom != "Reals":
         raise NotImplementedError("FunctionMonotonicity: only the Reals domain is supported")
@@ -2628,7 +2628,7 @@ def _fmono(*args):
           "otherwise; StrictInequalities -> True for strict convexity. Univariate: sign of f'' on the smooth "
           "pieces plus the jump of f' at Abs kinks; multivariate: polynomials of degree <= 2 (constant Hessian, "
           "eigenvalue signs) and f = g(linear form). Undecidable cases raise")
-def _fconv(*args):
+def _fconv(*args: Expr) -> Expr:
     fname = "FunctionConvexity"
     f, cond, vs, dom, opts = _prop_args(args, fname, extra_opts=("StrictInequalities",))
     if dom != "Reals":
@@ -2840,7 +2840,7 @@ def _entire_like(e, vs):
 
 
 def _prop_bool(kind, fname, default_dom):
-    def impl(*args):
+    def impl(*args: Expr) -> Expr:
         f, cond, vs, dom, _ = _prop_args(args, fname, default_dom)
         f = ev(f)
         if len(vs) > 1:
@@ -2888,7 +2888,7 @@ _orig_mero = None
           "heads as Wolfram does: Tan[x] -> Cos[x] == 0, Sqrt[x] -> x <= 0, Floor[g] -> Sin[Pi g] == 0, Gamma[x] "
           "-> Sin[Pi x] == 0 && x <= 0, Log[x] over Complexes -> x == 0 || (Im[x] == 0 && Re[x] <= 0); False if "
           "there are none; unsupported heads raise")
-def _fdisc(*args):
+def _fdisc(*args: Expr) -> Expr:
     f, cond, vs, dom, _ = _prop_args(args, "FunctionDiscontinuities")
     c = _bad(ev(f), vs, "disc", dom, "FunctionDiscontinuities")
     return c if cond is True or c is False else ev(Expr("And", cond, c))
@@ -2898,7 +2898,7 @@ def _fdisc(*args):
     notes="FunctionSingularities[f, x] / [{f, cond}, x] / [f, x, Complexes]: a condition describing where f is not "
           "analytic (as FunctionDiscontinuities, plus zeros of Abs arguments, boundary points of Sqrt/ArcSin "
           "domains: Abs[Tan[2 Sin[x]]] -> Cos[2 Sin[x]] == 0 || Tan[2 Sin[x]] == 0)")
-def _fsing(*args):
+def _fsing(*args: Expr) -> Expr:
     f, cond, vs, dom, _ = _prop_args(args, "FunctionSingularities")
     c = _bad(ev(f), vs, "sing", dom, "FunctionSingularities")
     return c if cond is True or c is False else ev(Expr("And", cond, c))
@@ -3076,7 +3076,7 @@ def _surjective(f, xc, yc, vs, ys, dom, fname):
 def _map_prop(which):
     fname = {"inj": "FunctionInjective", "sur": "FunctionSurjective", "bij": "FunctionBijective"}[which]
 
-    def impl(*args):
+    def impl(*args: Expr) -> Expr:
         f, xc, yc, vs, ys, dom = _split_map_args(args, fname)
         if which == "inj":
             return _injective(f, xc, yc, vs, ys, dom, fname)
@@ -3138,7 +3138,7 @@ def _pole_sources(e, vs, fname):
           "explicit poles from denominators (multiplicity from the Laurent leading term, removable points dropped) "
           "and, without a condition, periodic families {ConditionalExpression[..., C[1] in Integers], k} for "
           "c Tan[g]^k-type terms; functions with branch points stay unevaluated (as in Wolfram); others raise")
-def _fpoles(*args):
+def _fpoles(*args: Expr) -> ListOf[Expr]:
     fname = "FunctionPoles"
     f, cond, vs, dom, _ = _prop_args(args, fname, "Complexes")
     if len(vs) != 1 or not isinstance(vs[0], Symbol):
@@ -3349,7 +3349,7 @@ def _pw_int_parts(h, g, D, xvar, fname):
           "condition simplification; cases are equivalent to Wolfram's, conditions may be written differently); "
           "Floor/Ceiling/Round of a univariate expression are expanded when the condition bounds its range (at "
           "most $MaxPiecewiseCases cases); inequalities with piecewise sides are expanded to conditions")
-def _pwexpand(e, *rest):
+def _pwexpand(e: Expr, *rest: Expr) -> Expr:
     fname = "PiecewiseExpand"
     rest, opts = _opts(rest, ("Assumptions", "Method"), fname)
     reals = False
@@ -3468,7 +3468,7 @@ def _in_dom(v, dom):
           "domain, variables are real when the condition has inequalities (as Wolfram). {} is returned only when "
           "the system is proved to have no solution (0-dimensional Solve or an empty solveset); otherwise a search "
           "that finds nothing raises")
-def _findinstance(expr, vars_, *rest):
+def _findinstance(expr: Expr, vars_: Expr, *rest: Expr) -> Expr:
     fname = "FindInstance"
     rest, opts = _opts(rest, ("WorkingPrecision", "RandomSeeding"), fname)
     vs = _vars(vars_, fname)
@@ -4043,7 +4043,7 @@ def _cad_args(args, fname):
           "in the second (exact CAD: leading coefficients, discriminants, resultants, exact cell samples); "
           "\"Function\" gives a CylindricalDecompositionFunction; quantifiers, 3+ variables, parameters and other "
           "forms (\"Boundary\", ...) raise")
-def _cylindrical(*args):
+def _cylindrical(*args: Expr) -> Expr:
     fname = "CylindricalDecomposition"
     e, X, rest = _cad_args(args, fname)
     if e is True or e is False:
@@ -4066,7 +4066,7 @@ def _cylindrical(*args):
     notes="GenericCylindricalDecomposition[ineqs, {x, y}]: {full-dimensional part, boundary condition}: the "
           "open cells of the CAD (same scope as CylindricalDecomposition) and an Or of polynomial == 0 conditions "
           "containing every lower-dimensional solution cell (False if there is none)")
-def _gcad(*args):
+def _gcad(*args: Expr) -> ListOf[Expr]:
     fname = "GenericCylindricalDecomposition"
     e, X, rest = _cad_args(args, fname)
     if rest:
@@ -4141,7 +4141,7 @@ _KL.COMPOUND_HEAD_HOOKS["CylindricalDecompositionFunction"] = _cdf_hook
     notes="CylindricalDecompositionFunction[cond, {x, y}] (returned by CylindricalDecomposition[..., "
           "\"Function\"]): applied to numbers it tests membership (cdf[x0, y0] -> True/False); Normal gives the "
           "cylindrical condition")
-def _cdf(*args):
+def _cdf(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -4149,7 +4149,7 @@ def _cdf(*args):
     notes="SemialgebraicComponentInstances[ineqs, {x, y}] / [ineqs, x]: sample points {{x -> a, y -> b}, ...}, "
           "at least one in each connected component of the solution set (one per true CAD cell, so possibly more "
           "than one per component); same scope as CylindricalDecomposition")
-def _sci(*args):
+def _sci(*args: Expr) -> ListOf[Expr]:
     fname = "SemialgebraicComponentInstances"
     e, X, rest = _cad_args(args, fname)
     if rest:
@@ -4553,7 +4553,7 @@ def _nc_normal(ctx, alg, p, fname):
     notes="a ** b ** c (parsed with precedence between Dot and Power): associative (Flat) noncommutative product "
           "that otherwise stays symbolic; NonCommutativeExpand and the NonCommutative* functions expand and reduce "
           "it")
-def _ncm(*args):
+def _ncm(*args: Expr) -> Expr:
     if any(_is_head(a, "NonCommutativeMultiply") for a in args):
         flat = []
         for a in args:
@@ -4567,7 +4567,7 @@ def _ncm(*args):
           "\"Addition\", \"Unity\", \"Zero\", \"ScalarVariables\", \"CommutativeVariables\", \"Generators\", "
           "\"Relations\", \"CommutationRelations\": an inert algebra description used by the NonCommutative* "
           "functions (validated; unknown properties raise). The {mult, n} shorthand is not supported")
-def _ncalg(*args):
+def _ncalg(*args: Expr) -> Expr:
     if len(args) > 1:
         raise ValueError("NonCommutativeAlgebra takes at most one argument")
     if args:
@@ -4609,7 +4609,7 @@ def _m(mult, *xs):
     notes="CliffordAlgebra[{{p1, ...}, {n1, ...}, {z1, ...}}] (generators squaring to 1, -1 and 0, all pairwise "
           "anticommuting) -> a NonCommutativeAlgebra with those relations (\"Multiplication\" and scalar options "
           "accepted); used by NonCommutativeExpand etc.")
-def _clifford(spec, *rest):
+def _clifford(spec: Expr, *rest: Expr) -> Expr:
     fname = "CliffordAlgebra"
     if not is_list(spec) or not all(is_list(b) for b in spec.args) or not 1 <= len(spec.args) <= 3:
         raise ValueError(f"{fname}: expected {{{{positive generators}}, {{negative}}, {{null}}}}")
@@ -4629,7 +4629,7 @@ def _clifford(spec, *rest):
 @fn("GrassmannAlgebra", area=AREA, status="added",
     notes="GrassmannAlgebra[{x1, ...}] (anticommuting generators with xi^2 == 0; default multiplication Wedge, or "
           "\"Multiplication\" -> NonCommutativeMultiply) -> a NonCommutativeAlgebra with those relations")
-def _grassmann(gens, *rest):
+def _grassmann(gens: ListOf[Expr], *rest: Expr) -> Expr:
     fname = "GrassmannAlgebra"
     if not is_list(gens):
         raise ValueError(f"{fname}: expected a list of generators")
@@ -4647,7 +4647,7 @@ def _grassmann(gens, *rest):
 @fn("WeylAlgebra", area=AREA, status="added",
     notes="WeylAlgebra[{{x1, ...}, {d1, ...}}]: di ** xi == xi ** di + 1, all other pairs commute -> a "
           "NonCommutativeAlgebra (normal order: variables before derivations)")
-def _weyl(spec, *rest):
+def _weyl(spec: Expr, *rest: Expr) -> Expr:
     fname = "WeylAlgebra"
     if not (is_list(spec) and len(spec.args) == 2 and all(is_list(b) for b in spec.args)
             and len(spec.args[0].args) == len(spec.args[1].args)):
@@ -4675,7 +4675,7 @@ def _nc_expand_impl(e, ctx, alg, fname):
           "products over sums, moving scalars (numbers, ScalarVariables) to coefficients and CommutativeVariables "
           "to the front of each word, and reduces modulo the algebra relations (Groebner basis). Repeated factors "
           "are written out (a ** a) where Wolfram displays a power")
-def _ncexpand(*args):
+def _ncexpand(*args: Expr) -> Expr:
     fname = "NonCommutativeExpand"
     args, alg, ctx, _ = _nc_setup(args, fname)
     if len(args) != 1:
@@ -4688,7 +4688,7 @@ def _ncexpand(*args):
 @fn("NonCommutativeVariables", area=AREA, status="added",
     notes="NonCommutativeVariables[expr] / [expr, alg]: sorted list of the noncommutative generators in expr "
           "(scalars, ScalarVariables, CommutativeVariables and the unity excluded); lists are searched elementwise")
-def _ncvars(*args):
+def _ncvars(*args: Expr) -> Expr:
     fname = "NonCommutativeVariables"
     args, alg, ctx, _ = _nc_setup(args, fname)
     if len(args) != 1:
@@ -4706,7 +4706,7 @@ def _ncvars(*args):
 @fn("NonCommutativePolynomialQ", area=AREA, status="added",
     notes="NonCommutativePolynomialQ[expr, vars] / [expr, vars, alg]: True if expr is a noncommutative polynomial "
           "in vars with scalar (or commutative-variable) coefficients")
-def _ncpq(*args):
+def _ncpq(*args: Expr) -> Boolean:
     fname = "NonCommutativePolynomialQ"
     args, alg, ctx, blocks = _nc_setup(args, fname)
     if len(args) != 2:
@@ -4731,7 +4731,7 @@ def _ncpq(*args):
           "times word) in decreasing monomial order: {x, y} is an elimination order (degree in the last variable "
           "first, then the word, later variables larger), {{x, y}} degree-lexicographic; reduced modulo the "
           "algebra relations first")
-def _ncml(*args):
+def _ncml(*args: Expr) -> ListOf[Expr]:
     fname = "NonCommutativeMonomialList"
     args, alg, ctx, blocks = _nc_setup(args, fname)
     if len(args) not in (1, 2):
@@ -4755,7 +4755,7 @@ def _nc_basis_args(args, fname, var_pos=1):
           "vars ({x, y} elimination, {{x, y}} degree-lexicographic), together with the algebra relations; "
           "computations that do not close within degree 12 raise (noncommutative bases can be infinite); "
           "one-sided (Left/Right) bases are not supported")
-def _ncgb(*args):
+def _ncgb(*args: Expr) -> ListOf[Expr]:
     fname = "NonCommutativeGroebnerBasis"
     args, alg, ctx, blocks, side = _nc_basis_args(args, fname)
     if side is not None:
@@ -4790,7 +4790,7 @@ def _nc_reduce_main(args, fname):
     notes="NonCommutativePolynomialReduce[p, {q1, ...}, vars] / [..., alg]: {{f1, ...}, r} with pure functions "
           "fi (sums of c u ** #1 ** v) so that p == f1[q1] + ... + r and no word of r contains a leading word of "
           "a qi (reduction in the monomial order of vars); verified by re-expansion")
-def _ncpr(*args):
+def _ncpr(*args: Expr) -> ListOf[Expr]:
     fname = "NonCommutativePolynomialReduce"
     ctx, alg, qs, r, hist = _nc_reduce_main(args, fname)
     fns = []
@@ -4809,7 +4809,7 @@ def _ncpr(*args):
 @fn("NonCommutativePolynomialReduction", area=AREA, status="added",
     notes="NonCommutativePolynomialReduction[p, {q1, ...}, vars] / [..., alg]: the remainder of "
           "NonCommutativePolynomialReduce")
-def _ncprn(*args):
+def _ncprn(*args: Expr) -> Expr:
     ctx, alg, qs, r, hist = _nc_reduce_main(args, "NonCommutativePolynomialReduction")
     return ctx.out(r)
 
@@ -4819,7 +4819,7 @@ def _ncprn(*args):
           "expanded terms by the pattern of x-factors (default: x-runs with one varying gap between them; Left: "
           "leading x power; Right: trailing x power) and factors the varying part, e.g. x**(3y + 4z)**x**x; "
           "terms whose patterns differ in more than one gap are left separate")
-def _nccollect(*args):
+def _nccollect(*args: Expr) -> Expr:
     fname = "NonCommutativeCollect"
     args, alg, ctx, blocks = _nc_setup(args, fname)
     if len(args) != 2:
@@ -4945,7 +4945,7 @@ def _dims_of(spec, fname):
           "replaced by arrays of their components Indexed[a, {i, ...}] and the expression is evaluated (Det, Dot, "
           "Tr, ... then act on explicit arrays); VectorLess/VectorLessEqual/VectorGreater/VectorGreaterEqual "
           "become componentwise And")
-def _compexpand(e, *rest):
+def _compexpand(e: Expr, *rest: Expr) -> Expr:
     fname = "ComponentExpand"
     back = []
     decl = {}
@@ -5032,7 +5032,7 @@ def _ldl_psd(G):
           "Wolfram); free Gram entries (at most 3) are searched over simple rationals. Wolfram picks a different "
           "decomposition when the Gram matrix is not unique. Raises when no decomposition is found (p may not be a "
           "sum of squares)")
-def _psos(p, vars_):
+def _psos(p: Expr, vars_: Expr) -> Expr:
     fname = "PolynomialSumOfSquaresList"
     vs = _vars(vars_, fname)
     X = [sp.Symbol(v.name) for v in vs]
@@ -5234,7 +5234,7 @@ def _subst_struct(e, vl, vals):
           "of the problem (iterated twice); a found proof is sound and is returned as ProofObject[<|\"Logic\" -> "
           "\"EquationalLogic\", \"Theorem\" -> thm, \"Axioms\" -> axioms, ...|>]. Predicate-logic statements "
           "(Implies, predicates) raise; a failed search raises (it does not prove the statement false)")
-def _fep(thm, axioms, *rest):
+def _fep(thm: Expr, axioms: Expr, *rest: Expr) -> Expr:
     fname = "FindEquationalProof"
     if rest:
         raise NotImplementedError(f"{fname}: options are not supported")
@@ -5294,7 +5294,7 @@ _KL.COMPOUND_HEAD_HOOKS["ProofObject"] = _proof_hook
     notes="ProofObject[<|...|>] returned by FindEquationalProof; proof[\"Theorem\"], [\"Theorems\"], "
           "[\"Axioms\"], [\"Logic\"], [\"Method\"], [\"Properties\"] (ProofGraph/ProofDataset/ProofNotebook are "
           "not supported and raise)")
-def _proofobj(*args):
+def _proofobj(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -5306,7 +5306,7 @@ def _proofobj(*args):
 
 def _option_name(name, notes):
     @fn(name, area=AREA, status="added", notes="Wolfram option name: " + notes)
-    def _call(*a):
+    def _call(*a: Expr) -> Expr:
         raise ValueError(f"{name} is an option name (use it as {name} -> value in a function call), not a function")
     return _call
 
@@ -5360,7 +5360,7 @@ def _extend(name, impl, accepts, note):
                 return g(*args)
         raise ValueError(f"{name} called with {len(args)} argument(s)")
 
-    def f(*args):
+    def f(*args: Expr) -> Expr:
         if accepts(args):
             return impl(orig, *args)
         return orig(*args)
