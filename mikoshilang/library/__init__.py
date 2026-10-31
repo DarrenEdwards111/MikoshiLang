@@ -11,3 +11,4 @@ from . import wl_symbolic, wl_calculus, wl_algebra  # noqa: F401,E402  (coverage
 from . import wl_graphs, wl_stats  # noqa: F401,E402  (coverage batch 5)
 from . import wl_combinat, wl_logic, wl_discrete  # noqa: F401,E402  (coverage batch 6)
 from . import wl_structural  # noqa: F401,E402  (coverage batch W03)
+from . import wl_trees  # noqa: F401,E402  (coverage batch W03)
