@@ -2870,3 +2870,313 @@ def _bio_hook(head, args, ev_):
 
 
 KL.COMPOUND_HEAD_HOOKS["BioSequence"] = _bio_hook
+
+
+# ═════════════════════════════════════════════════════════════════ diffs ══
+_DIFF_GRAN = ("Characters", "Words", "Lines", "Elements")
+
+
+def _diff_tokens(x, gran, fname):
+    if isinstance(x, Expr) and x.head == "File" and x.args and isinstance(x.args[0], str):
+        with open(os.path.expanduser(x.args[0]), encoding="utf-8") as fh:
+            x = fh.read()
+        if gran is None:
+            gran = "Lines"
+    if isinstance(x, str):
+        gran = gran or "Characters"
+        if gran == "Characters":
+            return list(x), gran
+        if gran == "Words":
+            return re.findall(r"\w+|\W+", x), gran
+        if gran == "Lines":
+            return x.split("\n"), gran
+        raise ValueError(f"{fname}: DiffGranularity -> {gran!r} does not apply to strings")
+    if is_list(x):
+        if gran not in (None, "Elements"):
+            raise ValueError(f"{fname}: DiffGranularity -> {gran!r} does not apply to lists")
+        return list(x.args), "Elements"
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    raise ValueError(f"{fname}: {x!r} is not a string, list or File")
+
+
+def _diff_join(items, gran):
+    if gran == "Elements":
+        return L(*items)
+    if gran == "Lines":
+        return L(*items)
+    return "".join(items)
+
+
+def _matches(x, y):
+    """Monotone map index-in-x -> index-in-y of aligned equal elements."""
+    _, ops, _ = _align(x, y, _Scorer(None, "Diff3"), 0)
+    return {i: j for op, i, j in ops if op == "S" and _key(x[i]) == _key(y[j])}
+
+
+def _diff3_hunks(o, a, b):
+    ma, mb = _matches(o, a), _matches(o, b)
+    hunks = []
+    io = ia = ib = 0
+    while io < len(o) or ia < len(a) or ib < len(b):
+        k = 0
+        while io + k < len(o) and ma.get(io + k) == ia + k and mb.get(io + k) == ib + k:
+            k += 1
+        if k:
+            hunks.append(("C", (io, ia, ib), o[io:io + k]))
+            io, ia, ib = io + k, ia + k, ib + k
+            continue
+        nxt = next((p for p in range(io, len(o)) if p in ma and p in mb), None)
+        if nxt is None:
+            eo, ea, eb = len(o), len(a), len(b)
+        else:
+            eo, ea, eb = nxt, ma[nxt], mb[nxt]
+        hunks.append(("D", (io, ia, ib), (o[io:eo], a[ia:ea], b[ib:eb])))
+        io, ia, ib = eo, ea, eb
+    return hunks
+
+
+def _hpos(start, part):
+    return start + 1 if part else start
+
+
+def _diff_part(items, gran):
+    return _diff_join(items, gran)
+
+
+def _diff3_changes(hunks, gran):
+    out = []
+    for h in hunks:
+        if h[0] == "C":
+            out.append(L(Expr("Rule", L(*(s + 1 for s in h[1])), _diff_part(h[2], gran))))
+        else:
+            out.append(L(*(Expr("Rule", _hpos(s, p), _diff_part(p, gran)) for s, p in zip(h[1], h[2]))))
+    return L(*out)
+
+
+def _diff_opts(rest, fname):
+    args, o = _opts(rest, {"DiffGranularity", "DiffIgnore", "DiffIncludeMatches", "DiffInputFunction",
+                           "DiffAlignmentMethod"}, fname)
+    if args:
+        raise NotImplementedError(f"{fname}: views such as {args[0]!r} are not supported")
+    for k in ("DiffIgnore", "DiffInputFunction", "DiffAlignmentMethod"):
+        v = o.get(k)
+        if v is not None and not is_sym(v, "Automatic") and not is_sym(v, "None") and not is_sym(v, "Identity"):
+            raise NotImplementedError(f"{fname}: only the default {k} is supported")
+    inc = o.get("DiffIncludeMatches")
+    if inc is not None and not is_sym(inc, "Automatic") and inc is not True:
+        raise NotImplementedError(f"{fname}: only DiffIncludeMatches -> Automatic is supported")
+    g = o.get("DiffGranularity")
+    if g is not None and not is_sym(g, "Automatic"):
+        if g not in _DIFF_GRAN:
+            raise ValueError(f"{fname}: DiffGranularity must be one of {', '.join(_DIFF_GRAN)}")
+        return g
+    return None
+
+
+@fn("Diff3", area=AREA, status="added",
+    notes="three-way diff of a base and two revisions (strings by character, or by \"Words\"/\"Lines\" with "
+          "DiffGranularity; lists by element; File contents by line) as DiffObject[1, {type, 3}, "
+          "<|\"Changes\" -> hunks|>]: {{i, j, k} -> common} and {p1 -> base, p2 -> rev1, p3 -> rev2} hunks; "
+          "matching uses an optimal alignment of each revision against the base; other views raise")
+def _diff3(o, a, b, *rest):
+    gran = _diff_opts(rest, "Diff3")
+    xo, g1 = _diff_tokens(o, gran, "Diff3")
+    xa, g2 = _diff_tokens(a, gran, "Diff3")
+    xb, g3 = _diff_tokens(b, gran, "Diff3")
+    if len({g1, g2, g3}) != 1:
+        raise ValueError("Diff3: the three inputs must all be strings or all be lists")
+    hunks = _diff3_hunks(xo, xa, xb)
+    return Expr("DiffObject", 1, L(g1, 3), Expr("Association", Expr("Rule", "Changes", _diff3_changes(hunks, g1))))
+
+
+def _dobj(x):
+    if not (isinstance(x, Expr) and x.head == "DiffObject" and len(x.args) == 3 and is_assoc(x.args[2])):
+        return None
+    ver, typ, data = x.args
+    if ver != 1:
+        raise NotImplementedError(f"DiffObject version {ver!r} is not supported")
+    if is_list(typ) and len(typ.args) == 2:
+        typ, n = typ.args
+    else:
+        n = 2
+    found, ch = False, None
+    for r in data.args:
+        if is_rule(r) and r.args[0] == "Changes":
+            found, ch = True, r.args[1]
+    if not found or not is_list(ch):
+        raise ValueError("DiffObject: missing \"Changes\"")
+    return typ, n, ch
+
+
+def _part_items(p, typ):
+    if isinstance(p, str):
+        if typ == "Characters":
+            return list(p)
+        if typ == "Words":
+            return re.findall(r"\w+|\W+", p)
+        return [p]
+    if is_list(p):
+        return list(p.args)
+    raise ValueError(f"DiffObject: invalid hunk content {p!r}")
+
+
+def _is_conflict(parts, typ):
+    o, a, b = (tuple(_key(e) for e in _part_items(p, typ)) for p in parts)
+    return not (a == o or b == o or a == b)
+
+
+def _resolve(parts, typ):
+    o, a, b = parts
+    ko, ka, kb = (tuple(_key(e) for e in _part_items(p, typ)) for p in parts)
+    if ka == ko:
+        return b
+    return a
+
+
+def _conflicts(ch, typ, n):
+    if n != 3:
+        return []
+    return [h for h in ch.args if is_list(h) and len(h.args) == 3 and
+            _is_conflict([r.args[1] for r in h.args], typ)]
+
+
+def _diff_props(x, prop):
+    typ, n, ch = _dobj(x)
+    if prop == "Changes":
+        return ch
+    if prop == "Conflicts":
+        return L(*_conflicts(ch, typ, n))
+    if prop == "Properties":
+        return L("Changes", "Conflicts", "Deletions", "Insertions", "SummaryString", "Properties")
+    if prop in ("Deletions", "Insertions"):
+        if n != 2:
+            raise NotImplementedError(f"DiffObject: {prop!r} is only available for two-way diffs")
+        out = []
+        for h in ch.args:
+            if is_list(h) and len(h.args) == 2:
+                src, dst = (_part_items(r.args[1], typ) for r in h.args)
+                if (prop == "Deletions" and src) or (prop == "Insertions" and dst):
+                    out.append(h)
+        return L(*out)
+    if prop == "SummaryString":
+        if n != 2:
+            raise NotImplementedError("DiffObject: \"SummaryString\" is only available for two-way diffs")
+        ins = dels = 0
+        for h in ch.args:
+            if is_list(h) and len(h.args) == 2:
+                dels += len(_part_items(h.args[0].args[1], typ))
+                ins += len(_part_items(h.args[1].args[1], typ))
+        parts = []
+        if ins:
+            parts.append(f"{ins} insertion" + ("s" if ins != 1 else ""))
+        if dels:
+            parts.append(f"{dels} deletion" + ("s" if dels != 1 else ""))
+        return ", ".join(parts) if parts else "no changes"
+    raise ValueError(f"DiffObject: unknown property {prop!r}")
+
+
+def _diffobj_hook(head, args, ev_):
+    if head.head == "DiffObject" and len(args) == 1 and isinstance(args[0], str):
+        try:
+            if _dobj(head) is None:
+                return K.UNHANDLED
+        except NotImplementedError:
+            return K.UNHANDLED
+        return _diff_props(head, args[0])
+    return K.UNHANDLED
+
+
+KL.COMPOUND_HEAD_HOOKS["DiffObject"] = _diffobj_hook
+record("DiffObject", AREA, "added",
+       "DiffObject[1, type | {type, n}, <|\"Changes\" -> hunks, ...|>] (as made by Diff3 or Wolfram's Diff) is "
+       "inert; obj[\"Changes\"], [\"Conflicts\"], [\"Deletions\"], [\"Insertions\"], [\"SummaryString\"]; other "
+       "versions stay unevaluated")
+
+
+def _failure(tag, msg, params):
+    return Expr("Failure", tag, Expr("Association",
+                Expr("RuleDelayed", "MessageTemplate", Expr("MessageName", Symbol("DiffApply"), msg)),
+                Expr("Rule", "MessageParameters", Expr("Association", *(Expr("Rule", k, v)
+                                                                        for k, v in params.items())))))
+
+
+def _head_sym(x):
+    h = ev(Expr("Head", x))
+    return Symbol(h) if isinstance(h, str) else h
+
+
+@fn("DiffApply", area=AREA, status="added",
+    notes="applies a DiffObject to the original (the first argument of the diff): two-way diffs give the "
+          "second input; three-way diffs merge both revisions, giving Failure[\"DiffObjectContainsConflicts\", "
+          "...] if they conflict; Failure[\"WrongType\", ...] for the wrong kind of input; DiffApply[obj, File[in], "
+          "File[out]] writes the result")
+def _diffapply(obj, x, *rest):
+    d = _dobj(obj)
+    if d is None:
+        raise Unevaluated()
+    typ, n, ch = d
+    out_file = None
+    if rest:
+        if len(rest) > 1 or not (isinstance(rest[0], Expr) and rest[0].head == "File"):
+            raise ValueError("DiffApply: the optional third argument must be File[...]")
+        out_file = rest[0].args[0]
+    is_file = isinstance(x, Expr) and x.head == "File"
+    if typ in ("Characters", "Words", "Lines"):
+        if is_file:
+            with open(os.path.expanduser(x.args[0]), encoding="utf-8") as fh:
+                text = fh.read()
+        elif isinstance(x, str):
+            text = x
+        else:
+            return _failure("WrongType", "nmcot", {"type": typ, "head": _head_sym(x)})
+    elif not is_list(x):
+        return _failure("WrongType", "nmcot", {"type": typ, "head": _head_sym(x)})
+    pieces, base = [], []
+    for h in ch.args:
+        if not is_list(h) or not h.args or not all(is_rule(r) for r in h.args):
+            raise ValueError(f"DiffApply: invalid hunk {h!r}")
+        if len(h.args) == 1:
+            items = _part_items(h.args[0].args[1], typ)
+            pieces.extend(items)
+            base.extend(items)
+            continue
+        parts = [r.args[1] for r in h.args]
+        if len(parts) != n:
+            raise ValueError(f"DiffApply: hunk {h!r} does not match a {n}-way diff")
+        base.extend(_part_items(parts[0], typ))
+        if n == 2:
+            pieces.extend(_part_items(parts[1], typ))
+        else:
+            if _is_conflict(parts, typ):
+                conf = L(*(Expr("Rule", r.args[0], L(*_part_items(r.args[1], typ)) if typ != "Elements" and
+                                isinstance(r.args[1], str) else r.args[1]) for r in h.args))
+                return _failure("DiffObjectContainsConflicts", "conflict", {"conflict": conf})
+            pieces.extend(_part_items(_resolve(parts, typ), typ))
+    if typ in ("Characters", "Words", "Lines"):
+        cur = text.split("\n") if typ == "Lines" else _part_items(text, typ)
+        if typ == "Lines" and not any(isinstance(h, Expr) for h in []):
+            pass
+        if [_key(e) for e in cur] != [_key(e) for e in (base if typ != "Lines" else base)] and \
+                "".join(cur) != "".join(map(str, base)):
+            raise ValueError("DiffApply: the input is not the original that the diff was computed from")
+        res = "\n".join(pieces) if typ == "Lines" else "".join(pieces)
+    else:
+        if [_key(e) for e in x.args] != [_key(e) for e in base]:
+            raise ValueError("DiffApply: the input is not the original that the diff was computed from")
+        res = L(*pieces)
+    if out_file is not None:
+        with open(os.path.expanduser(out_file), "w", encoding="utf-8") as fh:
+            fh.write(res if isinstance(res, str) else "\n".join(_text_string(e) for e in res.args))
+        return Expr("File", out_file)
+    return res
+
+
+for _n, _note in (("DiffGranularity", "Diff3 option: \"Characters\" (strings), \"Words\", \"Lines\" or "
+                                      "\"Elements\" (lists)"),
+                  ("DiffIgnore", "Diff3 option: only the default (nothing ignored) is supported; others raise"),
+                  ("DiffIncludeMatches", "Diff3 option: matches are always included; other settings raise"),
+                  ("DiffInputFunction", "Diff3 option: only the default (Identity) is supported; others raise"),
+                  ("DiffAlignmentMethod", "Diff3 option: only Automatic (optimal alignment) is supported; others "
+                                          "raise")):
+    record(_n, AREA, "added", _note)
