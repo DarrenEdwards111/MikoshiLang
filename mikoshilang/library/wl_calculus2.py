@@ -580,7 +580,7 @@ class _MX:
 
 def _array_simp(e, fname, simplify):
     if is_list(e):
-        return _ev(Expr("Simplify", e)) if simplify else _ev(Expr("Expand", e))
+        return L(*[_array_simp(a, fname, simplify) for a in e.args])
     if not _contains_symarray(e):
         return _ev(Expr("Simplify" if simplify else "Expand", e))
     c = _MX(fname)
@@ -766,9 +766,17 @@ def _antisym_wedge(A, rank):
 def _tensorwedge(*ts):
     if not ts:
         return 1
-    if any(not is_list(t) and isinstance(t, (Symbol, Expr)) and not K.is_number(t) and
-           (_contains_symarray(t) or isinstance(t, Symbol) and t.name not in ("Pi", "E")) for t in ts):
-        raise Unevaluated()
+    for t in ts:
+        if is_list(t):
+            continue
+        if _contains_symarray(t):
+            raise Unevaluated()
+        try:
+            v = K.to_sp(t)
+        except Exception:
+            raise Unevaluated()
+        if isinstance(v, list) or not isinstance(v, sp.Basic) or v.free_symbols:
+            raise Unevaluated()      # symbolic factors have unknown rank
     if len(ts) == 1:
         return ts[0]
     acc, accr = None, 0
