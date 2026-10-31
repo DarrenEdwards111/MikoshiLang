@@ -907,6 +907,8 @@ def _lattice(g):
 
 def _sigma_zeta(u, g, which):
     w1, w3 = _lattice(g)
+    if which == "sigma" and u == 0:
+        return mpmath.mpf(0)            # sigma is odd: exactly 0 (theta1(0) can carry round-off)
     eta1 = _etas(w1, w3)[0]
     q = mpmath.exp(1j * mpmath.pi * w3 / w1)
     v = mpmath.pi * u / (2 * w1)
