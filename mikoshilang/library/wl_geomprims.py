@@ -1126,3 +1126,1446 @@ _PRIM_NOTES = {
 
 for _h, _n in _PRIM_NOTES.items():
     _register_prim(_h, _n + _PRIM_COMMON + " Check: reference (Wolfram documentation forms) in tests.")
+
+
+# ───────────────────────────── option symbols and scene heads ─────────────────────────────
+
+def _inert(name, notes):
+    @fn(name, area=AREA, status="added", notes=notes)
+    def _opt(*args: Expr) -> Expr:
+        raise Unevaluated()
+    return _opt
+
+
+_inert("RoundingRadius", "Option of Rectangle (and Framed-like boxes) giving the radius of rounded corners: a "
+                         "non-negative number, {rx, ry}, None or Automatic; Rectangle validates it (negative values "
+                         "raise ValueError). Inert as an expression. Check: reference (Wolfram documentation) in "
+                         "tests.")
+_inert("SplineDegree", "Option of BSplineCurve, BSplineSurface, BezierCurve, BSplineFunction and BezierFunction: a "
+                       "positive integer (per-direction list for surfaces) or Automatic; validated by those heads "
+                       "(other values raise ValueError). Inert as an expression. Check: reference in tests.")
+_inert("SplineKnots", "Option of BSplineCurve / BSplineSurface / BSplineFunction: Automatic, \"Clamped\", "
+                      "\"Unclamped\" or an explicit non-decreasing knot list (length n + d + 1, else ValueError in "
+                      "BSplineFunction). Inert as an expression. Check: reference in tests.")
+_inert("SplineWeights", "Option of BSplineCurve / BSplineSurface / BSplineFunction: Automatic or one positive "
+                        "weight per control point (rational B-splines). Inert as an expression. Check: reference "
+                        "in tests.")
+_inert("SplineClosed", "Option of BSplineCurve / BSplineSurface / BSplineFunction: True or False (whether the "
+                       "spline is closed); other values raise ValueError. Inert as an expression. Check: reference "
+                       "in tests.")
+_inert("CurveClosed", "Option of JoinedCurve / FilledCurve: True, False or a list per component. Inert as an "
+                      "expression. Check: reference in tests.")
+_inert("RevolutionAxis", "Option of RevolutionPlot3D / RevolutionSurface giving the axis of revolution ({x, y, z} "
+                         "or {{x1, y1, z1}, {x2, y2, z2}}). Inert as an expression; no function of this batch reads "
+                         "it. Check: reference in tests.")
+_inert("GeometricStylingRules", "Option of GeometricScene giving styling rules for the diagram of a scene. Inert as "
+                                "an expression. Check: reference in tests.")
+
+
+def _ck_scene(args):
+    _nargs(args, 1, 4, "GeometricScene")
+    a, opts = split_trailing_options(args)
+    for r in opts:
+        if opt_name(r) not in ("GeometricStylingRules", "RandomSeeding", "PlotLabel", "ImageSize"):
+            raise ValueError(f"GeometricScene: {opt_name(r)} is not a known option of GeometricScene")
+    if not a:
+        raise ValueError("GeometricScene: expected GeometricScene[points, hypotheses]")
+    p = a[0]
+    if not K.is_list(p):
+        raise TypeError("GeometricScene: the first argument must be a list of points (or {points, scalars})")
+    for x in a[1:]:
+        if not K.is_list(x):
+            raise TypeError(f"GeometricScene: hypotheses and conclusions must be lists, not {K_input(x)}")
+
+
+@fn("GeometricScene", area=AREA, status="added",
+    notes="GeometricScene[{p1, ...}, {hyp1, ...}], GeometricScene[{{p1, ...}, {k1, ...}}, hyps] and "
+          "GeometricScene[params, hyps, {con1, ...}] (option GeometricStylingRules): an inert symbolic scene. "
+          "The structure is validated (a non-list point or hypothesis specification raises TypeError, unknown "
+          "options ValueError). Solving a scene (RandomInstance, GeometricSolveValues, FindGeometricConjectures) "
+          "is not provided by this batch. Check: reference (Wolfram documentation forms) in tests.")
+def _geometric_scene(*args: Expr | Option) -> Expr:
+    _ck_scene(list(args))
+    raise Unevaluated()
+
+
+@fn("GeometricStep", area=AREA, status="added",
+    notes="GeometricStep[{hyp1, ...}] / GeometricStep[hyps, label]: inert step of a GeometricScene; hyps must be a "
+          "list (else TypeError) and may not contain another GeometricStep (ValueError). "
+          "Check: reference in tests.")
+def _geometric_step(hyps: ListOf[Expr], *label: Expr) -> Expr:
+    if len(label) > 1:
+        raise ValueError("GeometricStep: expected GeometricStep[hyps] or GeometricStep[hyps, label]")
+    if not K.is_list(hyps):
+        if isinstance(hyps, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"GeometricStep: the hypotheses must be a list, not {K_input(hyps)}")
+    for h in hyps.args:
+        if isinstance(h, Expr) and h.head == "GeometricStep":
+            raise ValueError("GeometricStep: a step cannot contain another GeometricStep")
+    raise Unevaluated()
+
+
+# ───────────────────────────── vector helpers ─────────────────────────────
+
+def _sub(p, q):
+    return [a - b for a, b in zip(p, q)]
+
+
+def _add(p, q):
+    return [a + b for a, b in zip(p, q)]
+
+
+def _mul(c, p):
+    return [c * a for a in p]
+
+
+def _dot(p, q):
+    return sum((a * b for a, b in zip(p, q)), sp.Integer(0))
+
+
+def _norm(p):
+    return sp.sqrt(_dot(p, p))
+
+
+def _cross(u, v):
+    return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+
+
+def _is_zero_vec(v):
+    return all(fsign(c) == 0 for c in v)
+
+
+def _float_mode(*inputs):
+    return inexact(*inputs)
+
+
+def _zero(v, flt):
+    v = sp.sympify(v)
+    if flt or v.has(sp.Float):
+        return abs(num(v)) <= 1e-10
+    return sign_of(v, "zero test") == 0
+
+
+def _rank(vectors, flt):
+    if not vectors:
+        return 0
+    if flt:
+        import numpy as np
+        A = np.array([[num(c) for c in v] for v in vectors], dtype=float)
+        scale = max(1.0, float(np.abs(A).max()))
+        return int(np.linalg.matrix_rank(A, tol=1e-10 * scale))
+    M = sp.Matrix(vectors)
+    return M.rank(simplify=True)
+
+
+def _point_arg(x, fname, what="point"):
+    p = pt(x, fname, what)
+    return p
+
+
+def _point_list(x, fname, what="points", **kw):
+    if isinstance(x, Expr) and x.head in ("Line", "Polygon", "Triangle", "Simplex", "Point") and len(x.args) == 1 \
+            and K.is_list(x.args[0]):
+        x = x.args[0]
+    return pts(x, fname, what, **kw)
+
+
+# ───────────────────────────── angles and vectors ─────────────────────────────
+
+@fn("AngleVector", area=AREA, status="added",
+    notes="AngleVector[theta] = {Cos[theta], Sin[theta]}; AngleVector[{r, theta}] = r {Cos, Sin}; "
+          "AngleVector[{x, y}, theta] and AngleVector[{x, y}, {r, theta}] add the point. Symbolic arguments give "
+          "the formula (as in Wolfram); strings raise TypeError, lists of the wrong length ValueError. "
+          "Check: exact; reference values and the identity Norm[AngleVector[{r, t}]] == r in tests.")
+def _angle_vector(*args: Real | ListOf[Real]) -> ListOf[Real]:
+    _nargs(args, 1, 2, "AngleVector")
+    if len(args) == 2:
+        p = pt(args[0], "AngleVector", "point", dim=2)
+        spec = args[1]
+    else:
+        p = [sp.Integer(0), sp.Integer(0)]
+        spec = args[0]
+    if K.is_list(spec):
+        if len(spec.args) != 2:
+            raise ValueError("AngleVector: the polar specification must be {r, theta}")
+        r, t = (sx(c, "AngleVector", w) for c, w in zip(spec.args, ("radius", "angle")))
+    else:
+        r, t = sp.Integer(1), sx(spec, "AngleVector", "angle")
+    return out([p[0] + r * sp.cos(t), p[1] + r * sp.sin(t)], *args, simplify=False)
+
+
+@fn("CirclePoints", area=AREA, status="added",
+    notes="CirclePoints[n], CirclePoints[r, n], CirclePoints[{r, theta1}, n], CirclePoints[{x, y}, rspec, n]: n "
+          "points on a circle at angles theta1 + 2 Pi k/n, with theta1 = Pi/n - Pi/2 by default (horizontal "
+          "base). n must be a positive integer (symbolic n stays unevaluated; non-integer n raises "
+          "NotImplementedError, Wolfram accepts it); r, theta1 and the centre may be symbolic. "
+          "Check: exact; reference values (Wolfram documentation) and equal distances to the centre in tests.")
+def _circle_points(*args: Real | ListOf[Real] | PosInteger) -> MatrixOf[Real]:
+    _nargs(args, 1, 3, "CirclePoints")
+    n = args[-1]
+    if isinstance(n, (bool, str)) or K.is_list(n):
+        raise TypeError(f"CirclePoints: the number of points must be a positive integer, not {K_input(n)}")
+    if not K.is_int(n):
+        if _numberish(n):
+            raise NotImplementedError("CirclePoints: a non-integer number of points is not supported")
+        raise Unevaluated()
+    n = int(n)
+    if n < 1:
+        raise ValueError("CirclePoints: the number of points must be positive")
+    c = [sp.Integer(0), sp.Integer(0)]
+    rest = list(args[:-1])
+    if len(rest) == 2:
+        c = pt(rest[0], "CirclePoints", "centre", dim=2)
+        rest = rest[1:]
+    r, t1 = sp.Integer(1), sp.pi / n - sp.pi / 2
+    if rest:
+        spec = rest[0]
+        if K.is_list(spec):
+            if len(spec.args) != 2:
+                raise ValueError("CirclePoints: the radius specification must be r or {r, theta1}")
+            r, t1 = sx(spec.args[0], "CirclePoints", "radius"), sx(spec.args[1], "CirclePoints", "angle")
+        else:
+            r = sx(spec, "CirclePoints", "radius")
+    res = [[c[0] + r * sp.cos(t1 + 2 * sp.pi * k / n), c[1] + r * sp.sin(t1 + 2 * sp.pi * k / n)] for k in range(n)]
+    return out(res, *args, simplify=False)
+
+
+def _planar_interior(p, q1, q2, fname):
+    u, v = _sub(q1, p), _sub(q2, p)
+    if _is_zero_vec(u) or _is_zero_vec(v):
+        raise ValueError(f"{fname}: the angle is undefined because two of the points coincide")
+    c = _dot(u, v) / (_norm(u) * _norm(v))
+    if len(p) == 2:
+        return sp.Abs(sp.atan2(u[0] * v[1] - u[1] * v[0], _dot(u, v)))
+    return sp.acos(c)
+
+
+def _planar_ccw(p, q1, q2, fname):
+    u, v = _sub(q1, p), _sub(q2, p)
+    if len(p) != 2:
+        raise ValueError(f"{fname}: oriented angles are only defined in 2D")
+    if _is_zero_vec(u) or _is_zero_vec(v):
+        raise ValueError(f"{fname}: the angle is undefined because two of the points coincide")
+    a = sp.atan2(u[0] * v[1] - u[1] * v[0], _dot(u, v))
+    return a if fsign(a) >= 0 else a + 2 * sp.pi
+
+
+_PLANAR_SPECS = ("Interior", "Exterior", "FullExterior", "Counterclockwise", "Clockwise")
+
+
+@fn("PlanarAngle", area=AREA, status="added",
+    notes="PlanarAngle[{q1, p, q2}] (interior angle at p, in [0, Pi], any dimension), PlanarAngle[p -> {q1, q2}] "
+          "(counterclockwise angle from q1 to q2 around p, in [0, 2 Pi), 2-D), and the specs \"Interior\", "
+          "\"Exterior\" (Pi - interior), \"FullExterior\" (2 Pi - interior), \"Counterclockwise\", \"Clockwise\". "
+          "Points may be Point[...] objects. Symbolic points stay unevaluated (Wolfram: GeometricScene use); "
+          "coincident points raise ValueError, oriented specs in 3D ValueError, unknown specs ValueError. "
+          "Check: exact; reference values and interior + exterior == Pi in tests.")
+def _planar_angle(spec: ListOf[Expr] | Rule, *kind: String) -> Real:
+    _nargs((spec,) + kind, 1, 2, "PlanarAngle")
+    k = _string_arg(kind[0], _PLANAR_SPECS, "PlanarAngle") if kind else None
+    if isinstance(spec, Expr) and spec.head == "Rule":
+        p = pt(spec.args[0], "PlanarAngle")
+        qs = _point_list(spec.args[1], "PlanarAngle", n=2)
+        q1, q2 = qs
+        k = k or "Counterclockwise"
+    else:
+        ps = _point_list(spec, "PlanarAngle", n=3)
+        q1, p, q2 = ps
+        k = k or "Interior"
+    if len(p) != len(q1):
+        raise ValueError("PlanarAngle: all points must have the same dimension")
+    concrete(p, q1, q2)
+    if k == "Counterclockwise":
+        a = _planar_ccw(p, q1, q2, "PlanarAngle")
+    elif k == "Clockwise":
+        a = _planar_ccw(p, q2, q1, "PlanarAngle")
+    else:
+        a = _planar_interior(p, q1, q2, "PlanarAngle")
+        a = {"Interior": a, "Exterior": sp.pi - a, "FullExterior": 2 * sp.pi - a}[k]
+    return out(a, spec)
+
+
+@fn("AngleBisector", area=AREA, status="added",
+    notes="AngleBisector[{q1, p, q2}] and AngleBisector[p -> {q1, q2}] give the bisector of the interior angle at p "
+          "as InfiniteLine[p, v] with v = u1/|u1| + u2/|u2| (unit vectors towards q1, q2); \"Exterior\" uses "
+          "v = u1/|u1| - u2/|u2|. 2-D only (else ValueError, as in Wolfram); coincident points or a straight angle "
+          "for \"Interior\" (where v = 0) take the perpendicular direction. Deviation: the direction vector's "
+          "scaling may differ from Wolfram's (same line). Symbolic points stay unevaluated. "
+          "Check: self-check (the result direction makes equal angles with both sides, ArithmeticError otherwise).")
+def _angle_bisector(spec: ListOf[Expr] | Rule, *kind: String) -> Expr:
+    _nargs((spec,) + kind, 1, 2, "AngleBisector")
+    k = _string_arg(kind[0], ("Interior", "Exterior"), "AngleBisector", "bisector type") if kind else "Interior"
+    if isinstance(spec, Expr) and spec.head == "Rule":
+        p = pt(spec.args[0], "AngleBisector")
+        q1, q2 = _point_list(spec.args[1], "AngleBisector", n=2)
+    else:
+        q1, p, q2 = _point_list(spec, "AngleBisector", n=3)
+    if len(p) != 2:
+        raise ValueError("AngleBisector: only 2-D points are supported (as in Wolfram)")
+    concrete(p, q1, q2)
+    u, w = _sub(q1, p), _sub(q2, p)
+    if _is_zero_vec(u) or _is_zero_vec(w):
+        raise ValueError("AngleBisector: the angle is undefined because two of the points coincide")
+    a = _mul(1 / _norm(u), u)
+    b = _mul(1 / _norm(w), w)
+    v = _add(a, b) if k == "Interior" else _sub(a, b)
+    if _is_zero_vec(v):
+        base = a
+        v = [-base[1], base[0]]
+    v = [sp.radsimp(sp.simplify(c)) for c in v]
+    # self-check: equal (unsigned) angles between the direction and the two sides
+    if k == "Interior":
+        c1 = _dot(v, a) / _norm(v)
+        c2 = _dot(v, b) / _norm(v)
+        if abs(num(c1 - c2)) > 1e-9:
+            raise ArithmeticError("AngleBisector: result failed verification")
+    return Expr("InfiniteLine", out(p, spec), out(v, spec))
+
+
+@fn("PerpendicularBisector", area=AREA, status="added",
+    notes="PerpendicularBisector[{p1, p2}] and PerpendicularBisector[Line[{p1, p2}]] give InfiniteLine[m, v] with "
+          "m the midpoint and v = p2 - p1 rotated by +90 degrees. 2-D only (else ValueError, as in Wolfram); equal "
+          "points raise ValueError; symbolic points stay unevaluated. "
+          "Check: exact; tests verify equidistance of the line points from p1 and p2.")
+def _perpendicular_bisector(seg: ListOf[Expr] | Expr) -> Expr:
+    if isinstance(seg, Expr) and seg.head == "Line" and len(seg.args) == 1:
+        seg = seg.args[0]
+    p1, p2 = _point_list(seg, "PerpendicularBisector", n=2)
+    if len(p1) != 2:
+        raise ValueError("PerpendicularBisector: only 2-D points are supported (as in Wolfram)")
+    concrete(p1, p2)
+    d = _sub(p2, p1)
+    if _is_zero_vec(d):
+        raise ValueError("PerpendicularBisector: the two points coincide")
+    m = _mul(sp.Rational(1, 2), _add(p1, p2))
+    return Expr("InfiniteLine", out(m, seg), out([-d[1], d[0]], seg))
+
+
+@fn("InfiniteLineThrough", area=AREA, status="added",
+    notes="InfiniteLineThrough[{p1, p2, ...}] gives InfiniteLine[{p, q}] through the first two distinct points when "
+          "all points are collinear; non-collinear points or fewer than two distinct points raise ValueError. "
+          "Symbolic points stay unevaluated (GeometricScene constraint). Check: exact (rank test of p_i - p1).")
+def _infinite_line_through(points: ListOf[ListOf[Real]]) -> Expr:
+    ps = _point_list(points, "InfiniteLineThrough", lo=2)
+    concrete(ps)
+    flt = _float_mode(points)
+    q = next((p for p in ps[1:] if not all(_zero(c, flt) for c in _sub(p, ps[0]))), None)
+    if q is None:
+        raise ValueError("InfiniteLineThrough: the points do not determine a line (they coincide)")
+    if _rank([_sub(p, ps[0]) for p in ps[1:]], flt) > 1:
+        raise ValueError("InfiniteLineThrough: the points are not collinear")
+    return Expr("InfiniteLine", out([ps[0], q], points))
+
+
+def _orientation_det(ps, fname):
+    d = len(ps[0])
+    if len(ps) != d + 1:
+        raise NotImplementedError(f"{fname}: exactly d + 1 points in d dimensions are supported (got {len(ps)} "
+                                  f"points in {d} dimensions)")
+    return sp.Matrix([_sub(p, ps[0]) for p in ps[1:]]).det()
+
+
+def _oriented(x, fname, want):
+    ps = _point_list(x, fname, lo=2)
+    concrete(ps)
+    det = _orientation_det(ps, fname)
+    return fsign(det) == want
+
+
+@fn("PositivelyOrientedPoints", area=AREA, status="added",
+    notes="PositivelyOrientedPoints[{p1, ..., pd+1}] in R^d is True when Det[{p2 - p1, ..., pd+1 - p1}] > 0 "
+          "(counterclockwise in 2-D, right-hand rule in 3-D); Line[...] / Point[...] / Polygon[...] wrappers are "
+          "accepted. Other point counts raise NotImplementedError; symbolic points stay unevaluated (Wolfram "
+          "returns a condition). Check: exact (sign of the exact determinant; tolerance 1e-12 for machine numbers).")
+def _positively_oriented(points: ListOf[ListOf[Real]]) -> Boolean:
+    return _oriented(points, "PositivelyOrientedPoints", 1)
+
+
+@fn("NegativelyOrientedPoints", area=AREA, status="added",
+    notes="NegativelyOrientedPoints[{p1, ..., pd+1}] in R^d is True when Det[{p2 - p1, ..., pd+1 - p1}] < 0 "
+          "(clockwise in 2-D, left-hand rule in 3-D); wrappers and errors as for PositivelyOrientedPoints. "
+          "Check: exact (sign of the exact determinant).")
+def _negatively_oriented(points: ListOf[ListOf[Real]]) -> Boolean:
+    return _oriented(points, "NegativelyOrientedPoints", -1)
+
+
+@fn("CollinearPoints", area=AREA, status="added",
+    notes="CollinearPoints[{p1, p2, ...}] is True when MatrixRank[{p2 - p1, p3 - p1, ...}] <= 1 (any dimension; "
+          "fewer than three points are trivially collinear); Point/Line wrappers accepted. Symbolic points stay "
+          "unevaluated (Wolfram returns a condition); mixed dimensions raise ValueError. "
+          "Check: exact (exact rank; relative tolerance 1e-10 for machine numbers).")
+def _collinear_points(points: ListOf[ListOf[Real]]) -> Boolean:
+    ps = _point_list(points, "CollinearPoints", lo=1)
+    concrete(ps)
+    return _rank([_sub(p, ps[0]) for p in ps[1:]], _float_mode(points)) <= 1
+
+
+@fn("CoplanarPoints", area=AREA, status="added",
+    notes="CoplanarPoints[{p1, p2, ...}] is True when MatrixRank[{p2 - p1, p3 - p1, ...}] <= 2 (any dimension); "
+          "Point/Line wrappers accepted; symbolic points stay unevaluated. "
+          "Check: exact (exact rank; relative tolerance 1e-10 for machine numbers).")
+def _coplanar_points(points: ListOf[ListOf[Real]]) -> Boolean:
+    ps = _point_list(points, "CoplanarPoints", lo=1)
+    concrete(ps)
+    return _rank([_sub(p, ps[0]) for p in ps[1:]], _float_mode(points)) <= 2
+
+
+@fn("DihedralAngle", area=AREA, status="promoted",
+    notes="DihedralAngle[{p1, p2}, {v, w}]: the angle in [0, Pi] between the half-planes bounded by the line "
+          "through p1, p2 and extended in the directions v and w (both projected orthogonally to p2 - p1); any "
+          "dimension >= 2. Equal points p1 = p2, or v or w parallel to the edge, raise ValueError; symbolic input "
+          "stays unevaluated. Replaces the quarantined legacy rule. "
+          "Check: exact; reference values (cube and tetrahedron dihedral angles) in tests.")
+def _dihedral_angle(edge: ListOf[ListOf[Real]], dirs: ListOf[ListOf[Real]]) -> Real:
+    p1, p2 = _point_list(edge, "DihedralAngle", n=2)
+    v, w = pts(dirs, "DihedralAngle", "directions", n=2)
+    if len(v) != len(p1):
+        raise ValueError("DihedralAngle: the points and directions must have the same dimension")
+    concrete(p1, p2, v, w)
+    e = _sub(p2, p1)
+    if _is_zero_vec(e):
+        raise ValueError("DihedralAngle: the two edge points coincide")
+    ee = _dot(e, e)
+    vp = _sub(v, _mul(_dot(v, e) / ee, e))
+    wp = _sub(w, _mul(_dot(w, e) / ee, e))
+    if _is_zero_vec(vp) or _is_zero_vec(wp):
+        raise ValueError("DihedralAngle: a direction is parallel to the edge, so its half-plane is undefined")
+    c = sp.simplify(_dot(vp, wp) / (_norm(vp) * _norm(wp)))
+    return out(sp.acos(c), edge, dirs)
+
+
+def _solid_triangle(a, b, c):
+    """Signed solid angle of the cone spanned by vectors a, b, c (Van Oosterom & Strackee 1983)."""
+    na, nb, nc = _norm(a), _norm(b), _norm(c)
+    numr = _dot(a, _cross(b, c))
+    den = na * nb * nc + _dot(a, b) * nc + _dot(a, c) * nb + _dot(b, c) * na
+    return 2 * sp.atan2(numr, den)
+
+
+@fn("SolidAngle", area=AREA, status="added",
+    notes="SolidAngle[p, {u1, u2}] in 2-D (angle in [0, Pi] between the vectors) and SolidAngle[p, {u1, u2, u3}] in "
+          "3-D (solid angle of the cone they span, Van Oosterom-Strackee formula); SolidAngle[p, reg] for reg a "
+          "Ball/Sphere (3-D: 2 Pi (1 - Sqrt[1 - r^2/d^2]), 4 Pi from inside) or Disk/Circle (2-D: 2 ArcSin[r/d], "
+          "2 Pi from inside) and for a planar Polygon/Triangle in 3-D (triangle fan; p in the polygon's plane "
+          "raises ValueError). Other region heads, more vectors than dimensions, or other dimensions raise "
+          "NotImplementedError; zero vectors ValueError; symbolic input stays unevaluated. "
+          "Check: exact; reference values (octant = Pi/2, hemisphere = 2 Pi) and the identity that the 8 octants "
+          "sum to 4 Pi in tests.")
+def _solid_angle(p: ListOf[Real], spec: MatrixOf[Real] | Expr) -> Real:
+    pp = pt(p, "SolidAngle", "apex")
+    if isinstance(spec, Expr) and isinstance(spec.head, str) and spec.head in (
+            "Ball", "Sphere", "Disk", "Circle", "Polygon", "Triangle"):
+        return out(_solid_angle_region(pp, spec), p, spec)
+    us = pts(spec, "SolidAngle", "vectors")
+    if len(us[0]) != len(pp):
+        raise ValueError("SolidAngle: the apex and the vectors must have the same dimension")
+    concrete(pp, us)
+    d = len(pp)
+    if any(_is_zero_vec(u) for u in us):
+        raise ValueError("SolidAngle: the spanning vectors must be non-zero")
+    if d == 2 and len(us) == 2:
+        return out(_planar_interior([0, 0], us[0], us[1], "SolidAngle"), p, spec)
+    if d == 3 and len(us) == 3:
+        return out(sp.Abs(_solid_triangle(*us)), p, spec)
+    raise NotImplementedError("SolidAngle: only d vectors in d = 2 or 3 dimensions are supported")
+
+
+def _solid_angle_region(p, reg):
+    h = reg.head
+    if h in ("Ball", "Sphere", "Disk", "Circle"):
+        c, r = _center_radius(reg, "SolidAngle")
+        if len(c) != len(p):
+            raise ValueError("SolidAngle: the apex and the region must have the same dimension")
+        concrete(p, c, [r])
+        dd = _norm(_sub(c, p))
+        if len(p) == 3 and h in ("Ball", "Sphere"):
+            if fsign(dd - r) <= 0:
+                if h == "Sphere" and fsign(dd - r) == 0:
+                    raise NotImplementedError("SolidAngle: an apex on the sphere is not supported")
+                return 4 * sp.pi
+            return 2 * sp.pi * (1 - sp.sqrt(1 - r ** 2 / dd ** 2))
+        if len(p) == 2 and h in ("Disk", "Circle", "Ball", "Sphere"):
+            if fsign(dd - r) <= 0:
+                if fsign(dd - r) == 0 and h in ("Circle", "Sphere"):
+                    raise NotImplementedError("SolidAngle: an apex on the circle is not supported")
+                return 2 * sp.pi
+            return 2 * sp.asin(r / dd)
+        raise NotImplementedError(f"SolidAngle: {h} regions in {len(p)} dimensions are not supported")
+    rings = polygon_data(reg, "SolidAngle", dim=None)
+    if len(rings) != 1 or len(rings[0][0]) != 3 or len(p) != 3:
+        raise NotImplementedError("SolidAngle: only a single planar polygon in 3-D is supported")
+    vs = rings[0]
+    concrete(p, vs)
+    n = _cross(_sub(vs[1], vs[0]), _sub(vs[2], vs[0]))
+    if fsign(_dot(n, _sub(p, vs[0]))) == 0:
+        raise ValueError("SolidAngle: the apex lies in the plane of the polygon")
+    tot = sp.Integer(0)
+    for i in range(1, len(vs) - 1):
+        tot += _solid_triangle(_sub(vs[0], p), _sub(vs[i], p), _sub(vs[i + 1], p))
+    return sp.Abs(tot)
+
+
+def _center_radius(reg, fname):
+    a = list(reg.args)
+    if reg.head in ("Ball", "Sphere"):
+        if not a:
+            c = [sp.Integer(0)] * 3
+        elif K.is_int(a[0]) and not isinstance(a[0], bool):
+            c = [sp.Integer(0)] * int(a[0])
+        else:
+            c = pt(a[0], fname, "centre")
+    else:
+        c = pt(a[0], fname, "centre", dim=2) if a else [sp.Integer(0)] * 2
+    if len(a) > 1 and K.is_list(a[1]):
+        raise NotImplementedError(f"{fname}: elliptical {reg.head} regions are not supported")
+    if len(a) > 2:
+        raise NotImplementedError(f"{fname}: {reg.head} sectors/arcs are not supported")
+    r = sx(a[1], fname, "radius") if len(a) > 1 and not (K.is_int(a[0]) and reg.head in ("Ball", "Sphere")) \
+        else sp.Integer(1)
+    return c, r
+
+
+# ───────────────────────────── spherical geometry ─────────────────────────────
+
+def _sph_to_cart(c):
+    """Hyperspherical angles {t1, ..., t(n-2), phi} (CoordinateTransformData conventions, r dropped) -> unit
+    vector.  Only inner products are used, so the axis order does not matter."""
+    out_ = []
+    s = sp.Integer(1)
+    for t in c[:-1]:
+        out_.append(s * sp.cos(t))
+        s = s * sp.sin(t)
+    out_ += [s * sp.cos(c[-1]), s * sp.sin(c[-1])]
+    return out_
+
+
+def _sph_point(x, fname):
+    if isinstance(x, Expr) and x.head == "GeoPosition":
+        if len(x.args) != 1 or not K.is_list(x.args[0]) or len(x.args[0].args) < 2:
+            raise ValueError(f"{fname}: GeoPosition must be GeoPosition[{{lat, lon}}]")
+        lat, lon = (sx(c, fname, "coordinate") for c in x.args[0].args[:2])
+        return [sp.pi / 2 - lat * sp.pi / 180, lon * sp.pi / 180]
+    p = pt(x, fname, "point", point_head=False)
+    if len(p) < 2:
+        raise ValueError(f"{fname}: a point on the sphere needs at least two angles {{theta, phi}}")
+    return p
+
+
+def _sph_dist(p, q):
+    """Great-circle distance by the haversine formula (accurate for small and antipodal distances)."""
+    if len(p) == 2:
+        h = sp.sin((q[0] - p[0]) / 2) ** 2 + sp.sin(p[0]) * sp.sin(q[0]) * sp.sin((q[1] - p[1]) / 2) ** 2
+        return 2 * sp.asin(sp.sqrt(h))
+    a, b = _sph_to_cart(p), _sph_to_cart(q)
+    d = _norm(_sub(a, b))
+    return 2 * sp.asin(d / 2)
+
+
+def _is_point_list_arg(x):
+    return K.is_list(x) and bool(x.args) and (K.is_list(x.args[0]) or
+                                              (isinstance(x.args[0], Expr) and x.args[0].head == "GeoPosition"))
+
+
+@fn("SphericalDistance", area=AREA, status="added",
+    notes="SphericalDistance[{t1, p1}, {t2, p2}]: great-circle distance on the unit sphere between points given by "
+          "polar angle theta and azimuth phi (Wolfram's spherical-coordinate convention with r dropped), by the "
+          "haversine formula; hyperspherical points {t1, ..., phi} use the chord length 2 ArcSin[|a - b|/2]; "
+          "GeoPosition[{lat, lon}] (degrees) is accepted. Threads: SphericalDistance[p, {q1, ...}] gives a list, "
+          "SphericalDistance[pts1, pts2] a matrix. Points of different dimension raise ValueError, strings "
+          "TypeError; symbolic angles give the closed form. "
+          "Check: exact; reference values (quarter circle Pi/2, antipodes Pi) and symmetry in tests.")
+def _spherical_distance(p: ListOf[Real] | MatrixOf[Real], q: ListOf[Real] | MatrixOf[Real]) -> Real | ListOf[Real]:
+    f = "SphericalDistance"
+    pl, ql = _is_point_list_arg(p), _is_point_list_arg(q)
+    P = [_sph_point(x, f) for x in p.args] if pl else [_sph_point(p, f)]
+    Q = [_sph_point(x, f) for x in q.args] if ql else [_sph_point(q, f)]
+    if len({len(x) for x in P + Q}) > 1:
+        raise ValueError(f"{f}: the points must have the same dimension")
+    M = [[_sph_dist(a, b) for b in Q] for a in P]
+    if not pl and not ql:
+        return out(M[0][0], p, q)
+    if not pl:
+        return out(M[0], p, q)
+    if not ql:
+        return out([r[0] for r in M], p, q)
+    return out(M, p, q)
+
+
+@fn("SphericalAngle", area=AREA, status="added",
+    notes="SphericalAngle[p -> {q, r}]: on the 2-sphere (points {theta, phi}, Wolfram's convention) the signed "
+          "angle at p from the great circle towards q to the one towards r, positive counterclockwise around the "
+          "outward normal at p; on higher-dimensional hyperspheres the unsigned angle. SphericalAngle[p -> {{q1, "
+          "r1}, ...}] and SphericalAngle[{p1, ...} -> {{q1, r1}, ...}] give lists. q or r equal or antipodal to p "
+          "raise ValueError; symbolic angles stay unevaluated. "
+          "Check: exact; reference values (octant triangle angles Pi/2, sign reversal under q <-> r) in tests.")
+def _spherical_angle(spec: Rule) -> Real | ListOf[Real]:
+    f = "SphericalAngle"
+    if not (isinstance(spec, Expr) and spec.head == "Rule"):
+        if isinstance(spec, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{f}: expected SphericalAngle[p -> {{q, r}}]")
+    lhs, rhs = spec.args
+    if not K.is_list(rhs) or not rhs.args:
+        raise TypeError(f"{f}: expected p -> {{q, r}}")
+    pairs = rhs.args if (K.is_list(rhs.args[0]) and rhs.args[0].args and _is_point_list_arg(rhs.args[0])) else None
+    if pairs is None:
+        if len(rhs.args) != 2:
+            raise ValueError(f"{f}: expected p -> {{q, r}}")
+        return out(_sph_angle(_sph_point(lhs, f), _sph_point(rhs.args[0], f), _sph_point(rhs.args[1], f), f), spec)
+    plist = [_sph_point(x, f) for x in lhs.args] if _is_point_list_arg(lhs) else None
+    if plist is not None and len(plist) != len(pairs):
+        raise ValueError(f"{f}: the number of points p must match the number of pairs {{q, r}}")
+    res = []
+    for i, pr in enumerate(pairs):
+        if not K.is_list(pr) or len(pr.args) != 2:
+            raise ValueError(f"{f}: each pair must be {{q, r}}")
+        p_ = plist[i] if plist is not None else _sph_point(lhs, f)
+        res.append(_sph_angle(p_, _sph_point(pr.args[0], f), _sph_point(pr.args[1], f), f))
+    return out(res, spec)
+
+
+def _sph_angle(p, q, r, f):
+    if not len(p) == len(q) == len(r):
+        raise ValueError(f"{f}: the points must have the same dimension")
+    concrete(p, q, r)
+    P, Qv, Rv = _sph_to_cart(p), _sph_to_cart(q), _sph_to_cart(r)
+    if len(p) == 2:
+        # standard axes: x = sin t cos f, y = sin t sin f, z = cos t (right-handed)
+        def cart(c):
+            return [sp.sin(c[0]) * sp.cos(c[1]), sp.sin(c[0]) * sp.sin(c[1]), sp.cos(c[0])]
+        P, Qv, Rv = cart(p), cart(q), cart(r)
+    t1 = _sub(Qv, _mul(_dot(Qv, P), P))
+    t2 = _sub(Rv, _mul(_dot(Rv, P), P))
+    if _is_zero_vec(t1) or _is_zero_vec(t2):
+        raise ValueError(f"{f}: the great circle through p and a point equal or antipodal to p is undefined")
+    if len(p) == 2:
+        return sp.atan2(_dot(P, _cross(t1, t2)), _dot(t1, t2))
+    return sp.acos(sp.simplify(_dot(t1, t2) / (_norm(t1) * _norm(t2))))
+
+
+# ───────────────────────────── triangles ─────────────────────────────
+
+def _pos_side(x, f, what="side length"):
+    v = sx(x, f, what)
+    if v.is_number and fsign(v) <= 0:
+        raise ValueError(f"{f}: the {what} must be positive, not {K_input(x)}")
+    return v
+
+
+def _angle_val(x, f):
+    v = sx(x, f, "angle")
+    if v.is_number and not (0 < num(v) < math.pi):
+        raise ValueError(f"{f}: the angles must lie strictly between 0 and Pi, not {K_input(x)}")
+    return v
+
+
+def _tri(points, inputs):
+    return Expr("Triangle", out(points, *inputs, simplify=True))
+
+
+@fn("SSSTriangle", area=AREA, status="added",
+    notes="SSSTriangle[a, b, c] = Triangle[{{0, 0}, {c, 0}, {(b^2 + c^2 - a^2)/(2 c), Sqrt[(a + b - c)(a - b + c)"
+          "(-a + b + c)(a + b + c)]/(2 c)}}] (Wolfram documentation formula; a, b, c opposite the vertices at the "
+          "origin, at {c, 0} and in the upper half-plane). Non-positive sides or a violated triangle inequality "
+          "raise ValueError, strings TypeError; symbolic sides give the symbolic triangle (as in Wolfram). "
+          "Check: self-check (the side lengths of the result are compared with a, b, c; ArithmeticError).")
+def _sss_triangle(a: Real, b: Real, c: Real) -> Expr:
+    f = "SSSTriangle"
+    a, b, c = (_pos_side(v, f) for v in (a, b, c))
+    if all(v.is_number for v in (a, b, c)):
+        if fsign(a + b - c) <= 0 or fsign(a - b + c) <= 0 or fsign(-a + b + c) <= 0:
+            raise ValueError(f"{f}: the side lengths violate the triangle inequality")
+    y = (-a ** 2 + b ** 2 + c ** 2) / (2 * c)
+    z = sp.sqrt((a + b - c) * (a - b + c) * (-a + b + c) * (a + b + c)) / (2 * c)
+    P = [[0, 0], [c, 0], [y, z]]
+    if all(v.is_number for v in (a, b, c)):
+        _check_sides(P, (a, b, c), f)
+    return _tri(P, (a, b, c))
+
+
+def _check_sides(P, abc, f):
+    A, B, C = ([sp.sympify(t) for t in p] for p in P)
+    got = (_norm(_sub(B, C)), _norm(_sub(A, C)), _norm(_sub(A, B)))
+    for g, w in zip(got, abc):
+        if abs(num(g - w)) > 1e-9 * max(1.0, abs(num(w))):
+            raise ArithmeticError(f"{f}: result failed verification")
+
+
+@fn("SASTriangle", area=AREA, status="added",
+    notes="SASTriangle[a, gamma, b] = Triangle[{{0, 0}, {x, 0}, {y, z}}] with x = Sqrt[a^2 + b^2 - 2 a b Cos[gamma]], "
+          "y = (b^2 - a b Cos[gamma])/x, z = a b Sin[gamma]/x (Wolfram documentation formula). Sides must be "
+          "positive and 0 < gamma < Pi (else ValueError); symbolic arguments give the symbolic triangle. "
+          "Check: self-check (side lengths a, b of the result are verified; ArithmeticError).")
+def _sas_triangle(a: Real, gamma: Real, b: Real) -> Expr:
+    f = "SASTriangle"
+    a, b = _pos_side(a, f), _pos_side(b, f)
+    g = _angle_val(gamma, f)
+    x = sp.sqrt(a ** 2 + b ** 2 - 2 * a * b * sp.cos(g))
+    P = [[0, 0], [x, 0], [(b ** 2 - a * b * sp.cos(g)) / x, a * b * sp.sin(g) / x]]
+    if all(v.is_number for v in (a, b, g)):
+        _check_sides(P, (a, b, x), f)
+    return _tri(P, (a, gamma, b))
+
+
+@fn("ASATriangle", area=AREA, status="added",
+    notes="ASATriangle[alpha, c, beta] = Triangle[{{0, 0}, {c, 0}, {c x, c y}}] with x = Cos[alpha] Csc[alpha + beta] "
+          "Sin[beta], y = Csc[alpha + beta] Sin[alpha] Sin[beta] (Wolfram documentation formula). Angles must lie in "
+          "(0, Pi) with alpha + beta < Pi and c > 0 (else ValueError); symbolic arguments give the symbolic triangle. "
+          "Check: self-check (the angle at the origin is verified; ArithmeticError).")
+def _asa_triangle(alpha: Real, c: Real, beta: Real) -> Expr:
+    f = "ASATriangle"
+    al, be = _angle_val(alpha, f), _angle_val(beta, f)
+    c_ = _pos_side(c, f)
+    if al.is_number and be.is_number and fsign(al + be - sp.pi) >= 0:
+        raise ValueError(f"{f}: the two angles must sum to less than Pi")
+    s = 1 / sp.sin(al + be)
+    P = [[0, 0], [c_, 0], [c_ * sp.cos(al) * s * sp.sin(be), c_ * s * sp.sin(al) * sp.sin(be)]]
+    if all(v.is_number for v in (al, be, c_)):
+        ang = sp.atan2(P[2][1], P[2][0])
+        if abs(num(ang - al)) > 1e-9:
+            raise ArithmeticError(f"{f}: result failed verification")
+    return _tri(P, (alpha, c, beta))
+
+
+@fn("AASTriangle", area=AREA, status="added",
+    notes="AASTriangle[alpha, beta, a] = Triangle[{{0, 0}, {a Csc[alpha] Sin[alpha + beta], 0}, {a Cot[alpha] "
+          "Sin[beta], a Sin[beta]}}] (Wolfram documentation formula; a is opposite alpha). Angles in (0, Pi) with "
+          "alpha + beta < Pi and a > 0 (else ValueError); symbolic arguments give the symbolic triangle. "
+          "Check: self-check (the side opposite the origin angle has length a; ArithmeticError).")
+def _aas_triangle(alpha: Real, beta: Real, a: Real) -> Expr:
+    f = "AASTriangle"
+    al, be = _angle_val(alpha, f), _angle_val(beta, f)
+    a_ = _pos_side(a, f)
+    if al.is_number and be.is_number and fsign(al + be - sp.pi) >= 0:
+        raise ValueError(f"{f}: the two angles must sum to less than Pi")
+    P = [[0, 0], [a_ / sp.sin(al) * sp.sin(al + be), 0], [a_ * sp.cot(al) * sp.sin(be), a_ * sp.sin(be)]]
+    if all(v.is_number for v in (al, be, a_)):
+        side = _norm(_sub([sp.sympify(t) for t in P[1]], [sp.sympify(t) for t in P[2]]))
+        if abs(num(side - a_)) > 1e-9 * max(1.0, abs(num(a_))):
+            raise ArithmeticError(f"{f}: result failed verification")
+    return _tri(P, (alpha, beta, a))
+
+
+def _triangle_pts(tri, f):
+    if isinstance(tri, Expr) and tri.head in ("Triangle", "Polygon") and len(tri.args) == 1:
+        tri = tri.args[0]
+    elif isinstance(tri, Expr) and tri.head == "Triangle" and not tri.args:
+        return [[sp.Integer(0), sp.Integer(0)], [sp.Integer(1), sp.Integer(0)], [sp.Integer(0), sp.Integer(1)]]
+    P = pts(tri, f, "triangle vertices", n=3)
+    concrete(P)
+    if _rank([_sub(P[1], P[0]), _sub(P[2], P[0])], False) < 2:
+        raise ValueError(f"{f}: the triangle is degenerate (collinear vertices)")
+    return P
+
+
+def _vertex_index(spec, P, f):
+    """Vertex spec: index i (1..3), an explicit vertex {x, y} / Point[...]; returns 0-based index."""
+    if K.is_int(spec) and not isinstance(spec, bool):
+        i = int(spec)
+        if not 1 <= i <= 3:
+            raise ValueError(f"{f}: vertex index {i} must be 1, 2 or 3")
+        return i - 1
+    if isinstance(spec, Symbol):
+        raise Unevaluated()
+    v = pt(spec, f, "vertex")
+    for i, p in enumerate(P):
+        if len(p) == len(v) and all(fsign(a - b) == 0 for a, b in zip(p, v)):
+            return i
+    raise ValueError(f"{f}: {K_input(spec)} is not a vertex of the triangle")
+
+
+def _abc(P):
+    A, B, C = P
+    return _norm(_sub(B, C)), _norm(_sub(A, C)), _norm(_sub(A, B))
+
+
+def _tri_area(P):
+    u, v = _sub(P[1], P[0]), _sub(P[2], P[0])
+    return sp.sqrt(sp.simplify(_dot(u, u) * _dot(v, v) - _dot(u, v) ** 2)) / 2
+
+
+def _bary(P, w):
+    s = sum(w, sp.Integer(0))
+    if fsign(s) == 0:
+        raise ValueError("TriangleCenter: the center is at infinity for this triangle")
+    return [sp.simplify(sum((w[i] * P[i][k] for i in range(3)), sp.Integer(0)) / s) for k in range(len(P[0]))]
+
+
+def _rot(i):
+    """Vertex order (i, j, k) with j, k the other two vertices in cyclic order."""
+    return i, (i + 1) % 3, (i + 2) % 3
+
+
+def _center(P, typ, f):
+    a, b, c = _abc(P)
+    a2, b2, c2 = (sp.simplify(t ** 2) for t in (a, b, c))
+    SA, SB, SC = (b2 + c2 - a2) / 2, (a2 + c2 - b2) / 2, (a2 + b2 - c2) / 2
+    if typ == "Centroid":
+        return _bary(P, [1, 1, 1])
+    if typ == "Incenter":
+        return _bary(P, [a, b, c])
+    if typ == "Circumcenter":
+        return _bary(P, [a2 * SA, b2 * SB, c2 * SC])
+    if typ == "Orthocenter":
+        if any(fsign(s) == 0 for s in (SA, SB, SC)):          # right triangle: the right-angle vertex
+            return list(P[[fsign(s) == 0 for s in (SA, SB, SC)].index(True)])
+        return _bary(P, [SB * SC, SC * SA, SA * SB])
+    if typ == "NinePointCenter":
+        O = _center(P, "Circumcenter", f)
+        H = _center(P, "Orthocenter", f)
+        return [sp.simplify((o + h) / 2) for o, h in zip(O, H)]
+    if typ == "SymmedianPoint":
+        return _bary(P, [a2, b2, c2])
+    raise ValueError(f"{f}: unknown center type {typ!r}")
+
+
+_CENTER_NAMES = ("Centroid", "Circumcenter", "Incenter", "Orthocenter", "NinePointCenter", "SymmedianPoint")
+_VERTEX_CENTERS = ("AngleBisectingCevianEndpoint", "CevianEndpoint", "Excenter", "Foot", "Midpoint",
+                   "SymmedianEndpoint")
+
+
+def _vertex_center(P, typ, i, f, center=None):
+    i, j, k = _rot(i)
+    A, B, C = P[i], P[j], P[k]
+    sides = _abc(P)
+    a, b, c = sides[i], sides[j], sides[k]           # a opposite A, b opposite B, c opposite C
+    if typ == "Midpoint":
+        return [sp.simplify((x + y) / 2) for x, y in zip(B, C)]
+    if typ == "Foot":
+        d = _sub(C, B)
+        t = _dot(_sub(A, B), d) / _dot(d, d)
+        return [sp.simplify(x) for x in _add(B, _mul(t, d))]
+    if typ == "Excenter":
+        w = [0, 0, 0]
+        w[i], w[j], w[k] = -a, b, c
+        return _bary(P, w)
+    if typ == "AngleBisectingCevianEndpoint":
+        return [sp.simplify((b * x + c * y) / (b + c)) for x, y in zip(B, C)]
+    if typ == "SymmedianEndpoint":
+        return [sp.simplify((b ** 2 * x + c ** 2 * y) / (b ** 2 + c ** 2)) for x, y in zip(B, C)]
+    if typ == "CevianEndpoint":
+        X = center
+        # intersection of line A X with line B C (in the plane of the triangle)
+        M = sp.Matrix([_sub(X, A), _sub(B, C)]).T
+        rhs = sp.Matrix(_sub(B, A))
+        try:
+            sol = (M.T * M).LUsolve(M.T * rhs)
+        except Exception:
+            raise ValueError(f"{f}: the cevian through the center is parallel to the opposite side")
+        s = sol[1]
+        return [sp.simplify(x) for x in _sub(B, _mul(s, _sub(B, C)))]
+    raise ValueError(f"{f}: unknown center type {typ!r}")
+
+
+def _parse_type(spec, P, f, names, vnames, extra=()):
+    """-> (typ, vertex index list or None, center point or None, all_flag)."""
+    if isinstance(spec, str):
+        if spec in names or spec in extra:
+            return spec, None, None, False
+        if spec in vnames:
+            return spec, [1], None, False                 # short form: vertex p2
+        raise ValueError(f"{f}: unknown type {spec!r}")
+    if not K.is_list(spec) or not spec.args or not isinstance(spec.args[0], str):
+        if isinstance(spec, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{f}: the type must be a string or {{\"type\", vertex}}, not {K_input(spec)}")
+    typ = spec.args[0]
+    rest = list(spec.args[1:])
+    if typ not in vnames:
+        raise ValueError(f"{f}: unknown type {typ!r}")
+    center = None
+    if typ in ("CevianEndpoint", "Cevian"):
+        if not rest:
+            raise ValueError(f"{f}: {typ} needs a center")
+        cs = rest.pop(0)
+        center = _center(P, cs, f) if isinstance(cs, str) else pt(cs, f, "center")
+        concrete(center)
+    if len(rest) > 1:
+        raise ValueError(f"{f}: too many elements in {K_input(spec)}")
+    if not rest:
+        return typ, [1], center, False
+    v = rest[0]
+    if isinstance(v, Symbol) and v.name == "All":
+        return typ, [0, 1, 2], center, True
+    return typ, [_vertex_index(v, P, f)], center, False
+
+
+@fn("TriangleCenter", area=AREA, status="added",
+    notes="TriangleCenter[tri] (centroid) and TriangleCenter[tri, type] for tri = {p1, p2, p3}, Triangle[...] or "
+          "Polygon[...] in any dimension; types \"Centroid\", \"Circumcenter\", \"Incenter\", \"Orthocenter\", "
+          "\"NinePointCenter\", \"SymmedianPoint\" and {\"Midpoint\" | \"Foot\" | \"Excenter\" | "
+          "\"AngleBisectingCevianEndpoint\" | \"SymmedianEndpoint\", p} / {\"CevianEndpoint\", center, p} with p a "
+          "vertex index, an explicit vertex or All (short forms use vertex p2, as documented). Computed with exact "
+          "barycentric coordinates. Degenerate triangles, unknown types or non-vertices raise ValueError; symbolic "
+          "vertices stay unevaluated (GeometricScene use in Wolfram). "
+          "Check: self-check (circumcenter equidistant from the vertices, incenter equidistant from the sides; "
+          "ArithmeticError).")
+def _triangle_center(tri: MatrixOf[Real] | Expr, *typ: String | ListOf[Expr]) -> ListOf[Real] | MatrixOf[Real]:
+    f = "TriangleCenter"
+    _nargs((tri,) + typ, 1, 2, f)
+    P = _triangle_pts(tri, f)
+    spec = typ[0] if typ else "Centroid"
+    t, idx, center, all_ = _parse_type(spec, P, f, _CENTER_NAMES, _VERTEX_CENTERS)
+    if idx is None:
+        res = _center(P, t, f)
+        _verify_center(P, t, res, f)
+        return out(res, tri)
+    vals = [_vertex_center(P, t, i, f, center) for i in idx]
+    return out(vals if all_ else vals[0], tri)
+
+
+def _verify_center(P, t, c, f):
+    if t == "Circumcenter":
+        ds = [num(_dot(_sub(c, p), _sub(c, p))) for p in P]
+    elif t == "Incenter":
+        ds = []
+        for i in range(3):
+            _, j, k = _rot(i)
+            d = _sub(P[k], P[j])
+            w = _sub(c, P[j])
+            ds.append(num((_dot(w, w) * _dot(d, d) - _dot(w, d) ** 2) / _dot(d, d)))
+    else:
+        return
+    if max(ds) - min(ds) > 1e-9 * max(1.0, max(abs(x) for x in ds)):
+        raise ArithmeticError(f"{f}: result failed verification")
+
+
+_MEASURES = ("Area", "Circumradius", "Inradius", "NinePointRadius", "Perimeter", "Semiperimeter")
+_VERTEX_MEASURES = ("Exradius", "ExteriorAngle", "FullExteriorAngle", "Height", "InteriorAngle")
+
+
+def _measure(P, t, i, f):
+    a, b, c = _abc(P)
+    K_ = _tri_area(P)
+    s = (a + b + c) / 2
+    if t == "Area":
+        return K_
+    if t == "Perimeter":
+        return a + b + c
+    if t == "Semiperimeter":
+        return s
+    if t == "Circumradius":
+        return a * b * c / (4 * K_)
+    if t == "NinePointRadius":
+        return a * b * c / (8 * K_)
+    if t == "Inradius":
+        return K_ / s
+    i_, j, k = _rot(i)
+    sides = (a, b, c)
+    ai, bj, ck = sides[i_], sides[j], sides[k]
+    if t == "Exradius":
+        return K_ / (s - ai)
+    if t == "Height":
+        return 2 * K_ / ai
+    ang = sp.acos(sp.simplify((bj ** 2 + ck ** 2 - ai ** 2) / (2 * bj * ck)))
+    return {"InteriorAngle": ang, "ExteriorAngle": sp.pi - ang, "FullExteriorAngle": 2 * sp.pi - ang}[t]
+
+
+@fn("TriangleMeasurement", area=AREA, status="added",
+    notes="TriangleMeasurement[tri, type] for tri = {p1, p2, p3}, Triangle[...] or Polygon[...] (any dimension): "
+          "\"Area\", \"Perimeter\", \"Semiperimeter\", \"Circumradius\" (abc/(4K)), \"Inradius\" (K/s), "
+          "\"NinePointRadius\" (R/2) and {\"InteriorAngle\" | \"ExteriorAngle\" | \"FullExteriorAngle\" | "
+          "\"Height\" | \"Exradius\", p} with p a vertex index, explicit vertex or All (short forms use vertex p2). "
+          "Degenerate triangles and unknown types raise ValueError; symbolic vertices stay unevaluated. "
+          "Check: exact; reference values (3-4-5 triangle) and the identities K = r s and sum of angles = Pi in "
+          "tests.")
+def _triangle_measurement(tri: MatrixOf[Real] | Expr, typ: String | ListOf[Expr]) -> Real | ListOf[Real]:
+    f = "TriangleMeasurement"
+    P = _triangle_pts(tri, f)
+    t, idx, _c, all_ = _parse_type(typ, P, f, _MEASURES, _VERTEX_MEASURES)
+    if idx is None:
+        return out(sp.simplify(_measure(P, t, 0, f)), tri)
+    vals = [sp.simplify(_measure(P, t, i, f)) for i in idx]
+    return out(vals if all_ else vals[0], tri)
+
+
+_POINT_CONSTRUCTS = _CENTER_NAMES
+_LINE_CONSTRUCTS = ("Altitude", "AngleBisectingCevian", "AngleBisector", "Cevian", "ExteriorAngleBisector", "Median",
+                    "OppositeSide", "PerpendicularBisector", "Symmedian")
+_CIRCLE_CONSTRUCTS = ("Circumcircle", "Incircle", "NinePointCircle")
+_TRI_CONSTRUCTS = ("AntimedialTriangle", "MedialTriangle", "Triangle")
+
+
+def _construct(P, t, i, center, f, inputs):
+    if t in _CENTER_NAMES:
+        return Expr("Point", out(_center(P, t, f), *inputs))
+    if t in _VERTEX_CENTERS:
+        return Expr("Point", out(_vertex_center(P, t, i, f, center), *inputs))
+    if t == "Boundary":
+        return Expr("Line", out([P[0], P[1], P[2], P[0]], *inputs))
+    if t in _TRI_CONSTRUCTS:
+        if t == "Triangle":
+            Q = P
+        elif t == "MedialTriangle":
+            Q = [_mul(sp.Rational(1, 2), _add(P[j], P[k])) for (_, j, k) in map(_rot, range(3))]
+        else:
+            Q = [_sub(_add(P[j], P[k]), P[i_]) for (i_, j, k) in map(_rot, range(3))]
+        return Expr("Triangle", out(Q, *inputs))
+    if t in _CIRCLE_CONSTRUCTS or t == "Excircle":
+        if len(P[0]) != 2:
+            raise NotImplementedError(f"{f}: circles of triangles in {len(P[0])} dimensions are not supported")
+        a, b, c = _abc(P)
+        K_ = _tri_area(P)
+        s = (a + b + c) / 2
+        if t == "Circumcircle":
+            cc, r = _center(P, "Circumcenter", f), a * b * c / (4 * K_)
+        elif t == "Incircle":
+            cc, r = _center(P, "Incenter", f), K_ / s
+        elif t == "NinePointCircle":
+            cc, r = _center(P, "NinePointCenter", f), a * b * c / (8 * K_)
+        else:
+            cc, r = _vertex_center(P, "Excenter", i, f), _measure(P, "Exradius", i, f)
+        return Expr("Circle", out(cc, *inputs), out(sp.simplify(r), *inputs))
+    i_, j, k = _rot(i if i is not None else 1)
+    A, B, C = P[i_], P[j], P[k]
+    if t == "OppositeSide":
+        return Expr("Line", out([B, C], *inputs))
+    if t == "Altitude":
+        return Expr("Line", out([A, _vertex_center(P, "Foot", i_, f)], *inputs))
+    if t == "Median":
+        return Expr("Line", out([A, _vertex_center(P, "Midpoint", i_, f)], *inputs))
+    if t == "AngleBisectingCevian":
+        return Expr("Line", out([A, _vertex_center(P, "AngleBisectingCevianEndpoint", i_, f)], *inputs))
+    if t == "Symmedian":
+        return Expr("Line", out([A, _vertex_center(P, "SymmedianEndpoint", i_, f)], *inputs))
+    if t == "Cevian":
+        return Expr("Line", out([A, _vertex_center(P, "CevianEndpoint", i_, f, center)], *inputs))
+    if t in ("AngleBisector", "ExteriorAngleBisector"):
+        u, w = _sub(B, A), _sub(C, A)
+        e1, e2 = _mul(1 / _norm(u), u), _mul(1 / _norm(w), w)
+        v = _add(e1, e2) if t == "AngleBisector" else _sub(e1, e2)
+        return Expr("InfiniteLine", out(A, *inputs), out([sp.radsimp(sp.simplify(x)) for x in v], *inputs))
+    if t == "PerpendicularBisector":
+        m = _mul(sp.Rational(1, 2), _add(B, C))
+        d = _sub(C, B)
+        if len(d) != 2:
+            raise NotImplementedError(f"{f}: perpendicular bisectors are only supported in 2D")
+        return Expr("InfiniteLine", out(m, *inputs), out([-d[1], d[0]], *inputs))
+    raise ValueError(f"{f}: unknown construct {t!r}")
+
+
+@fn("TriangleConstruct", area=AREA, status="added",
+    notes="TriangleConstruct[tri, type] for tri = {p1, p2, p3}, Triangle[...] or Polygon[...]: point types (as in "
+          "TriangleCenter) give Point[...]; \"Boundary\" Line[{p1, p2, p3, p1}]; {\"Altitude\" | \"Median\" | "
+          "\"AngleBisectingCevian\" | \"Symmedian\" | \"OppositeSide\", p} and {\"Cevian\", center, p} give "
+          "Line segments; {\"AngleBisector\" | \"ExteriorAngleBisector\" | \"PerpendicularBisector\", p} and "
+          "\"EulerLine\" give InfiniteLine; \"Circumcircle\", \"Incircle\", \"NinePointCircle\", {\"Excircle\", p} "
+          "give Circle (2-D only, NotImplementedError otherwise); \"MedialTriangle\", \"AntimedialTriangle\", "
+          "\"Triangle\" give Triangle. p is a vertex index, explicit vertex or All (short form: vertex p2). "
+          "Deviation: the vertex order of derived triangles and the scaling of InfiniteLine directions may differ "
+          "from Wolfram's (same regions). Degenerate triangles, an undefined Euler line (equilateral triangle) and "
+          "unknown types raise ValueError; symbolic vertices stay unevaluated. "
+          "Check: exact; tests verify incidence relations (feet on the opposite side, circle through the vertices).")
+def _triangle_construct(tri: MatrixOf[Real] | Expr, typ: String | ListOf[Expr]) -> Expr | ListOf[Expr]:
+    f = "TriangleConstruct"
+    P = _triangle_pts(tri, f)
+    if typ == "EulerLine":
+        O, H = _center(P, "Circumcenter", f), _center(P, "Orthocenter", f)
+        if _is_zero_vec(_sub(O, H)):
+            raise ValueError(f"{f}: the Euler line of an equilateral triangle is undefined")
+        return Expr("InfiniteLine", out([O, H], tri))
+    vnames = _VERTEX_CENTERS + _LINE_CONSTRUCTS + ("Excircle",)
+    t, idx, center, all_ = _parse_type(typ, P, f, _POINT_CONSTRUCTS + _CIRCLE_CONSTRUCTS + _TRI_CONSTRUCTS,
+                                       vnames, ("Boundary",))
+    if idx is None:
+        return _construct(P, t, None, center, f, (tri,))
+    vals = [_construct(P, t, i, center, f, (tri,)) for i in idx]
+    return L(*vals) if all_ else vals[0]
+
+
+# ───────────────────────────── circles and spheres through points ─────────────────────────────
+
+def _circumcenter_affine(P, flt=False):
+    """Centre (in the affine hull) and squared radius of the sphere through affinely independent points P."""
+    p0 = P[0]
+    V = [_sub(p, p0) for p in P[1:]]
+    if not V:
+        return list(p0), sp.Integer(0)
+    G = sp.Matrix([[_dot(u, w) for w in V] for u in V])
+    rhs = sp.Matrix([_dot(u, u) / 2 for u in V])
+    if flt:
+        import numpy as np
+        Gn = np.array(G.evalf(30).tolist(), dtype=float)
+        if abs(np.linalg.det(Gn)) <= 1e-12 * max(1.0, float(np.abs(Gn).max())) ** len(V):
+            raise ZeroDivisionError
+        lam = np.linalg.solve(Gn, np.array(rhs.evalf(30).tolist(), dtype=float).ravel())
+        lam = [sp.Float(x) for x in lam]
+    else:
+        if fsign(G.det()) == 0:
+            raise ZeroDivisionError
+        lam = list(G.LUsolve(rhs))
+    c = list(p0)
+    for l_, u in zip(lam, V):
+        c = _add(c, _mul(l_, u))
+    c = [sp.simplify(x) if not flt else x for x in c]
+    d = _sub(P[0], c)
+    return c, sp.simplify(_dot(d, d)) if not flt else _dot(d, d)
+
+
+def _sphere_through(P, f, inputs):
+    """Sphere through all P (P spans the space); ValueError if they are not cospherical. -> (c, r)."""
+    flt = _float_mode(*inputs)
+    d = len(P[0])
+    # choose d + 1 affinely independent points
+    base = [P[0]]
+    for p in P[1:]:
+        cand = base + [p]
+        if _rank([_sub(q, cand[0]) for q in cand[1:]], flt) == len(cand) - 1:
+            base = cand
+        if len(base) == d + 1:
+            break
+    if len(base) < d + 1:
+        raise ValueError(f"{f}: the points are affinely dependent (degenerate), so the circumsphere is undefined")
+    try:
+        c, r2 = _circumcenter_affine(base, flt)
+    except ZeroDivisionError:
+        raise ValueError(f"{f}: the points are degenerate")
+    for p in P:
+        e = _sub(p, c)
+        if not _zero(_dot(e, e) - r2, flt):
+            raise ValueError(f"{f}: the points do not lie on a common sphere")
+    return c, sp.sqrt(r2)
+
+
+def _vertices_of(x, f):
+    """Coordinates of a point list, polygon or polyhedron argument."""
+    if isinstance(x, Expr) and isinstance(x.head, str) and x.head in _POLYHEDRON_HEADS:
+        V, _F = polyhedron_data(x, f)
+        return V
+    if isinstance(x, Expr) and isinstance(x.head, str) and x.head in _POLYGON_HEADS:
+        rings = polygon_data(x, f, dim=None)
+        if len(rings) != 1:
+            raise NotImplementedError(f"{f}: polygons with several components or holes are not supported")
+        return rings[0]
+    return pts(x, f, lo=1)
+
+
+@fn("Circumsphere", area=AREA, status="added",
+    notes="Circumsphere[{p1, ..., pn+1}] gives Sphere[c, r] through n + 1 affinely independent points of R^n "
+          "(circumcircle in 2-D); Circumsphere[poly] for a Polygon/Triangle/Rectangle or polyhedron uses its "
+          "vertices, which must lie on a common sphere. Wrong point counts or degenerate (affinely dependent) points "
+          "raise ValueError, as do vertices that are not cospherical; symbolic points stay unevaluated. "
+          "Check: self-check (every vertex lies on the sphere; ValueError otherwise) and reference values.")
+def _circumsphere(points: MatrixOf[Real] | Expr) -> Expr:
+    f = "Circumsphere"
+    P = _vertices_of(points, f)
+    concrete(P)
+    d = len(P[0])
+    if K.is_list(points) and len(P) != d + 1:
+        raise ValueError(f"{f}: expected {d + 1} points in {d} dimensions, got {len(P)}")
+    c, r = _sphere_through(P, f, (points,))
+    return Expr("Sphere", out(c, points), out(r, points))
+
+
+def _facet_measure(F):
+    """(k-1)-volume of the simplex F (k points)."""
+    V = [_sub(p, F[0]) for p in F[1:]]
+    G = sp.Matrix([[_dot(u, w) for w in V] for u in V])
+    return sp.sqrt(sp.simplify(G.det())) / math.factorial(len(V))
+
+
+@fn("Insphere", area=AREA, status="added",
+    notes="Insphere[{p1, ..., pn+1}] gives Sphere[c, r] inscribed in the simplex (incircle of a triangle): c is "
+          "the facet-measure weighted mean of the opposite vertices and r = n Volume/Sum[facet measures]. "
+          "Insphere[poly] for a convex Polygon/Triangle/Rectangle in 2-D or a convex polyhedron tangential to all "
+          "edges/faces gives the sphere tangent to them; a polygon or polyhedron without an insphere raises "
+          "ValueError, a non-convex one NotImplementedError; degenerate simplices raise ValueError; symbolic points "
+          "stay unevaluated. Check: self-check (the centre is at distance r from every facet; ArithmeticError).")
+def _insphere(points: MatrixOf[Real] | Expr) -> Expr:
+    f = "Insphere"
+    if isinstance(points, Expr) and isinstance(points.head, str) and points.head in _POLYHEDRON_HEADS + _POLYGON_HEADS \
+            and not (points.head in ("Triangle", "Simplex") and points.args):
+        return _insphere_poly(points, f)
+    P = _vertices_of(points, f)
+    concrete(P)
+    d = len(P[0])
+    if len(P) != d + 1:
+        raise ValueError(f"{f}: expected {d + 1} points in {d} dimensions, got {len(P)}")
+    if _rank([_sub(p, P[0]) for p in P[1:]], _float_mode(points)) < d:
+        raise ValueError(f"{f}: the simplex is degenerate")
+    w = [_facet_measure(P[:i] + P[i + 1:]) for i in range(d + 1)]
+    S = sum(w, sp.Integer(0))
+    c = [sp.simplify(sum((w[i] * P[i][k] for i in range(d + 1)), sp.Integer(0)) / S) for k in range(d)]
+    vol = _facet_measure(P)
+    r = sp.simplify(d * vol / S)
+    return Expr("Sphere", out(c, points), out(r, points))
+
+
+def _insphere_poly(poly, f):
+    facets = _facet_planes(poly, f)              # list of (unit outward normal n, offset b): n.x <= b
+    d = len(facets[0][0])
+    # solve n_i.c + r = b_i for the first d + 1 independent facets, then verify the rest
+    rows = []
+    for n_, b_ in facets:
+        cand = rows + [(n_, b_)]
+        M = sp.Matrix([list(n) + [1] for n, _ in cand])
+        if M.rank(simplify=True) == len(cand):
+            rows = cand
+        if len(rows) == d + 1:
+            break
+    if len(rows) < d + 1:
+        raise ValueError(f"{f}: the region is unbounded or degenerate")
+    M = sp.Matrix([list(n) + [1] for n, _ in rows])
+    sol = M.LUsolve(sp.Matrix([b for _, b in rows]))
+    c, r = [sp.simplify(x) for x in sol[:d]], sp.simplify(sol[d])
+    for n_, b_ in facets:
+        if not _zero(_dot(n_, c) + r - b_, _float_mode(poly)):
+            raise ValueError(f"{f}: the {('polygon' if d == 2 else 'polyhedron')} has no inscribed sphere tangent to "
+                             f"all its {'edges' if d == 2 else 'faces'}")
+    if fsign(r) <= 0:
+        raise ValueError(f"{f}: the region has no inscribed sphere")
+    return Expr("Sphere", out(c, poly), out(r, poly))
+
+
+def _facet_planes(poly, f):
+    if isinstance(poly.head, str) and poly.head in _POLYHEDRON_HEADS:
+        V, F = polyhedron_data(poly, f)
+        concrete(V)
+        if not _convex_polyhedron(V, F, f):
+            raise NotImplementedError(f"{f}: non-convex polyhedra are not supported")
+        cen = [sum((v[k] for v in V), sp.Integer(0)) / len(V) for k in range(3)]
+        out_ = []
+        for face in F:
+            a, b, c = (V[i] for i in face[:3])
+            n_ = _cross(_sub(b, a), _sub(c, a))
+            if fsign(_dot(n_, _sub(a, cen))) < 0:
+                n_ = _mul(-1, n_)
+            nn = _norm(n_)
+            u = [sp.simplify(x / nn) for x in n_]
+            out_.append((u, sp.simplify(_dot(u, a))))
+        return out_
+    rings = polygon_data(poly, f, dim=2)
+    if len(rings) != 1:
+        raise NotImplementedError(f"{f}: polygons with several components or holes are not supported")
+    R_ = rings[0]
+    concrete(R_)
+    if not _convex_ring(R_):
+        raise NotImplementedError(f"{f}: non-convex polygons are not supported")
+    s = fsign(_signed_area(R_))
+    out_ = []
+    for i in range(len(R_)):
+        a, b = R_[i], R_[(i + 1) % len(R_)]
+        e = _sub(b, a)
+        n_ = [e[1], -e[0]] if s > 0 else [-e[1], e[0]]
+        nn = _norm(n_)
+        u = [sp.simplify(x / nn) for x in n_]
+        out_.append((u, sp.simplify(_dot(u, a))))
+    return out_
+
+
+@fn("CircleThrough", area=AREA, status="added",
+    notes="CircleThrough[{p1, p2, p3, ...}] gives Circle[c, r] through the 2-D points (all must be concyclic, else "
+          "ValueError); CircleThrough[pts, q] gives Circle[q, r] (all points equidistant from q, else ValueError); "
+          "CircleThrough[pts, q, r] gives Circle[q, r] after checking the points lie on it. Fewer than three points "
+          "without a centre do not determine a circle (ValueError); collinear points ValueError; non-2-D points "
+          "ValueError; symbolic points stay unevaluated (GeometricScene constraint in Wolfram). "
+          "Check: self-check (every point lies on the returned circle).")
+def _circle_through(points: MatrixOf[Real], *rest: ListOf[Real] | Real) -> Expr:
+    f = "CircleThrough"
+    _nargs((points,) + rest, 1, 3, f)
+    P = _point_list(points, f, lo=1, dim=2)
+    concrete(P)
+    flt = _float_mode(points, *rest)
+    if rest:
+        q = pt(rest[0], f, "centre", dim=2)
+        concrete(q)
+        if len(rest) > 1:
+            r = _pos_side(rest[1], f, "radius")
+            concrete(r)
+        else:
+            r = _norm(_sub(P[0], q))
+        for p in P:
+            if not _zero(_dot(_sub(p, q), _sub(p, q)) - r ** 2, flt):
+                raise ValueError(f"{f}: the points do not lie on a circle with the given centre and radius")
+        return Expr("Circle", out(q, points, *rest), out(r, points, *rest))
+    if len(P) < 3:
+        raise ValueError(f"{f}: at least three points (or a centre) are needed to determine a circle")
+    c, r = _sphere_through(P, f, (points,))
+    return Expr("Circle", out(c, points), out(r, points))
+
+
+@fn("CircularArcThrough", area=AREA, status="added",
+    notes="CircularArcThrough[{p1, p2, ..., pk}] (k >= 3 concyclic 2-D points in order along the arc) gives "
+          "Circle[c, r, {t1, t2}] with t1 < t2, the counterclockwise arc from p1 to pk passing through the others "
+          "(from pk to p1 when the points run clockwise); t1 is normalised to (-Pi, Pi]. Points that are not "
+          "concyclic, not in arc order, or fewer than three raise ValueError; the centre/radius forms "
+          "CircularArcThrough[pts, q(, r)] raise NotImplementedError; symbolic points stay unevaluated. "
+          "Deviation: Wolfram may choose a different but equivalent angle branch. "
+          "Check: self-check (all points lie on the circle within the angle range).")
+def _circular_arc_through(points: MatrixOf[Real], *rest: ListOf[Real] | Real) -> Expr:
+    f = "CircularArcThrough"
+    if rest:
+        raise NotImplementedError(f"{f}: the forms with a given centre or radius are not supported")
+    P = _point_list(points, f, lo=1, dim=2)
+    concrete(P)
+    if len(P) < 3:
+        raise ValueError(f"{f}: at least three points are needed to determine an arc")
+    c, r = _sphere_through(P, f, (points,))
+    angs = [sp.atan2(p[1] - c[1], p[0] - c[0]) for p in P]
+    # unwrap counterclockwise from p1
+    a0 = angs[0]
+    rel = []
+    for a in angs:
+        d = a - a0
+        while fsign(d) < 0:
+            d += 2 * sp.pi
+        while fsign(d - 2 * sp.pi) >= 0:
+            d -= 2 * sp.pi
+        rel.append(d)
+    nums = [num(x) for x in rel]
+    if all(nums[i] < nums[i + 1] for i in range(len(nums) - 1)):
+        t1, t2 = a0, a0 + rel[-1]
+    else:
+        back = [(2 * math.pi - x) % (2 * math.pi) for x in nums]
+        if not all(back[i] < back[i + 1] for i in range(len(back) - 1)):
+            raise ValueError(f"{f}: the points are not in order along a circular arc")
+        t1 = angs[-1]
+        t2 = t1 + (2 * sp.pi - rel[-1])
+    t1, t2 = sp.simplify(t1), sp.simplify(t2)
+    return Expr("Circle", out(c, points), out(r, points), out([t1, t2], points))
+
+
+def _min_ball_numeric(Pn):
+    """Welzl's algorithm (move-to-front, floats) -> support point indices."""
+    import numpy as np
+    pts_ = [np.array(p, dtype=float) for p in Pn]
+
+    def ball(R):
+        if not R:
+            return np.zeros(len(Pn[0])), -1.0
+        A = [pts_[i] for i in R]
+        p0 = A[0]
+        V = [a - p0 for a in A[1:]]
+        if not V:
+            return p0, 0.0
+        G = np.array([[u @ w for w in V] for u in V])
+        rhs = np.array([u @ u / 2 for u in V])
+        lam = np.linalg.lstsq(G, rhs, rcond=None)[0]
+        c = p0 + sum(l_ * u for l_, u in zip(lam, V))
+        return c, float(np.linalg.norm(c - p0))
+
+    def inside(c, r, i):
+        return r >= 0 and np.linalg.norm(pts_[i] - c) <= r * (1 + 1e-9) + 1e-12
+
+    def welzl(Pidx, R):
+        if not Pidx or len(R) == len(Pn[0]) + 1:
+            return R
+        p = Pidx[0]
+        S = welzl(Pidx[1:], R)
+        c, r = ball(S)
+        if inside(c, r, p):
+            return S
+        return welzl(Pidx[1:], R + [p])
+
+    idx = list(range(len(pts_)))
+    _random.Random(1).shuffle(idx)
+    import sys
+    lim = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(lim, 10 * len(idx) + 1000))
+    try:
+        return welzl(idx, [])
+    finally:
+        sys.setrecursionlimit(lim)
+
+
+@fn("CircumscribedBall", area=AREA, status="added",
+    notes="CircumscribedBall[{p1, p2, ...}] gives Ball[c, r], the smallest ball containing the points (minimal "
+          "enclosing circle in 2-D), any dimension: Welzl's algorithm selects the support points numerically and "
+          "the ball is then computed exactly from them (exact input gives exact c and r). Symbolic points stay "
+          "unevaluated; strings raise TypeError, mixed dimensions ValueError; more than 2000 points raise "
+          "NotImplementedError. Check: self-check (every point lies in the ball; ArithmeticError).")
+def _circumscribed_ball(points: MatrixOf[Real]) -> Expr:
+    f = "CircumscribedBall"
+    P = _point_list(points, f, lo=1)
+    concrete(P)
+    if len(P) > 2000:
+        raise NotImplementedError(f"{f}: more than 2000 points are not supported")
+    flt = _float_mode(points)
+    Pn = [[num(c) for c in p] for p in P]
+    S = _min_ball_numeric(Pn)
+    sup = [P[i] for i in S]
+    c, r2 = _circumcenter_affine(sup, flt) if len(sup) > 1 else (list(sup[0]), sp.Integer(0))
+    rn = math.sqrt(max(num(r2), 0.0))
+    for p in Pn:
+        if math.dist(p, [num(x) for x in c]) > rn * (1 + 1e-8) + 1e-10:
+            raise ArithmeticError(f"{f}: result failed verification")
+    return Expr("Ball", out(c, points), out(sp.sqrt(r2), points))
+
+
+@fn("InscribedBall", area=AREA, status="added",
+    notes="InscribedBall[{p1, p2, ...}] gives Ball[c, r], the largest ball inside the convex hull of the points "
+          "(Chebyshev centre), in 2-D and 3-D: the hull (SciPy Qhull) and a linear program (SciPy HiGHS) select the "
+          "touching facets, then c and r are solved exactly from them (exact input gives exact c, r). When the "
+          "largest ball is not unique (e.g. a long rectangle) the LP's centre is returned, computed in machine "
+          "numbers. Degenerate hulls raise ValueError, other dimensions NotImplementedError, symbolic points stay "
+          "unevaluated; SciPy is required (ImportError otherwise). "
+          "Check: self-check (the ball lies inside every hull facet; ArithmeticError).")
+def _inscribed_ball(points: MatrixOf[Real]) -> Expr:
+    f = "InscribedBall"
+    P = _point_list(points, f, lo=1)
+    concrete(P)
+    d = len(P[0])
+    if d not in (2, 3):
+        raise NotImplementedError(f"{f}: only 2-D and 3-D points are supported")
+    import numpy as np
+    from scipy.optimize import linprog
+    from scipy.spatial import ConvexHull
+    Pn = np.array([[num(c) for c in p] for p in P])
+    try:
+        hull = ConvexHull(Pn)
+    except Exception:
+        raise ValueError(f"{f}: the convex hull of the points is degenerate")
+    eqs = np.unique(np.round(hull.equations, 12), axis=0)
+    A = eqs[:, :d]
+    b = -eqs[:, d]
+    res = linprog(np.r_[np.zeros(d), -1.0], A_ub=np.c_[A, np.ones(len(A))], b_ub=b,
+                  bounds=[(None, None)] * d + [(0, None)], method="highs")
+    if not res.success:
+        raise ArithmeticError(f"{f}: the linear program failed")
+    xc, rr = res.x[:d], res.x[d]
+    slack = b - A @ xc - rr
+    active = np.where(np.abs(slack) < 1e-7 * max(1.0, abs(rr)))[0]
+    flt = _float_mode(points)
+    exact_ok = not flt
+    planes = []
+    if exact_ok:
+        for k in active:
+            simplex = None
+            for s_, eq in zip(hull.simplices, hull.equations):
+                if np.allclose(eq, eqs[k], atol=1e-9):
+                    simplex = s_
+                    break
+            if simplex is None:
+                exact_ok = False
+                break
+            V = [P[i] for i in simplex]
+            if d == 2:
+                e = _sub(V[1], V[0])
+                n_ = [e[1], -e[0]]
+            else:
+                n_ = _cross(_sub(V[1], V[0]), _sub(V[2], V[0]))
+            if float(np.dot([num(x) for x in n_], eqs[k][:d])) < 0:
+                n_ = _mul(-1, n_)
+            nn = _norm(n_)
+            planes.append(([x / nn for x in n_], _dot(n_, V[0]) / nn))
+    if exact_ok and len(planes) >= d + 1:
+        M = sp.Matrix([list(n_) + [1] for n_, _ in planes])
+        if M.rank(simplify=True) == d + 1:
+            sol = (M.T * M).LUsolve(M.T * sp.Matrix([b_ for _, b_ in planes]))
+            c = [sp.simplify(x) for x in sol[:d]]
+            r = sp.simplify(sol[d])
+            for n_, b_ in planes:
+                if abs(num(_dot(n_, c) + r - b_)) > 1e-8:
+                    exact_ok = False
+            if exact_ok:
+                _check_ball_inside(A, b, [num(x) for x in c], num(r), f)
+                return Expr("Ball", out(c, points), out(r, points))
+    _check_ball_inside(A, b, xc, rr, f)
+    return Expr("Ball", L(*[float(x) for x in xc]), float(rr))
+
+
+def _check_ball_inside(A, b, c, r, f):
+    import numpy as np
+    if np.any(A @ np.array(c, dtype=float) + r > b + 1e-7 * max(1.0, abs(r))):
+        raise ArithmeticError(f"{f}: result failed verification")
