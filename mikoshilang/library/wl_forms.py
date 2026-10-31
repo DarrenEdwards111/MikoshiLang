@@ -444,6 +444,7 @@ class Ctx:
 
     def with_num(self, num):
         c = Ctx(self.mode, num, self.quote, self.list_format, self.missing, self.booleans)
+        c.assoc_format = getattr(self, "assoc_format", None)
         return c
 
 
@@ -537,6 +538,12 @@ class _Walker:
                 if h == "List" and c.list_format is not None:
                     lf = c.list_format
                     return self.ph(lf[0] + lf[1].join(output_text(a, c) for a in e.args) + lf[2])
+                af = getattr(c, "assoc_format", None)
+                if h == "Association" and af is not None and all(
+                        isinstance(r, Expr) and r.head in ("Rule", "RuleDelayed") and len(r.args) == 2
+                        for r in e.args):
+                    return self.ph(af[0] + af[1].join(output_text(r.args[0], c) + af[3] + output_text(r.args[1], c)
+                                                      for r in e.args) + af[2])
         if h == "Times":
             args, sign = [], 1
             for a in e.args:
@@ -1983,6 +1990,18 @@ TEXTSTRING_OPTIONS = ("ListFormat", "MissingString", "BooleanStrings", "Associat
                       "DateFormat", "TimeFormat", "TimeZone")
 
 
+def _association_format(v):
+    """AssociationFormat -> Automatic | "sep" | {"left", "sep", "right"} | {"left", "sep", "right", "arrow"}."""
+    if is_sym(v, "Automatic"):
+        return ("<|", ", ", "|>", " -> ")
+    if isinstance(v, str):
+        return ("", v, "", " -> ")
+    if is_list(v) and len(v.args) in (3, 4) and all(isinstance(t, str) for t in v.args):
+        return tuple(v.args) + ((" -> ",) if len(v.args) == 3 else ())
+    raise ValueError("TextString: AssociationFormat must be Automatic, a separator string or "
+                     "{\"left\", \"sep\", \"right\"[, \"arrow\"]}")
+
+
 def text_string(x, opts):
     lf = None
     if "ListFormat" in opts:
@@ -2016,6 +2035,7 @@ def text_string(x, opts):
         else:
             raise ValueError("TextString: BooleanStrings must be a pair of strings {\"true\", \"false\"}")
     ctx = Ctx("text", list_format=lf, missing=ms, booleans=bs)
+    ctx.assoc_format = _association_format(opts.get("AssociationFormat", Symbol("Automatic")))
     if isinstance(x, str):
         return x
     return output_text(x, ctx)
@@ -2034,6 +2054,10 @@ def _textstring(x, *opts):
 
 record("ListFormat", AREA, "added", "option of TextString: {\"left\", \"sep\", \"right\"} for lists (Automatic: "
                                     "{\"{\", \", \", \"}\"})")
+record("AssociationFormat", AREA, "added", "option of TextString: Automatic ({\"<|\", \", \", \"|>\", \" -> \"}), "
+                                          "a separator string or {\"left\", \"sep\", \"right\"[, \"arrow\"]} "
+                                          "for associations; other values raise ValueError. Check: exact; "
+                                          "reference strings in tests.")
 record("MissingString", AREA, "added", "option of TextString: the string for Missing[...] (default \"\"; Automatic: "
                                        "the reason; None: unchanged)")
 

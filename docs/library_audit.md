@@ -111,15 +111,15 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 | verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
 | fixed | 502 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
 | promoted | 24 | was quarantined; now properly implemented and tested |
-| added | 1733 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| added | 1841 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 1 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **2404** | 620 pre-audit inventory heads, all with a status, plus 1784 promoted/aliased heads |
+| **total reviewed** | **2512** | 620 pre-audit inventory heads, all with a status, plus 1892 promoted/aliased heads |
 
-Remaining unreviewed quarantined names: **5265** (all raise NotImplementedError; see below).
+Remaining unreviewed quarantined names: **5264** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **11086**.
+Differential test cases in tests/library: **11658**.
 
 
 ## By area
@@ -173,6 +173,7 @@ Differential test cases in tests/library: **11086**.
 | special functions: elliptic, theta & ODE-defined (W07) | 0 | 0 | 0 | 107 | 0 | 0 | 0 |
 | statistics | 9 | 40 | 2 | 0 | 0 | 0 | 0 |
 | statistics (batch 5) | 0 | 0 | 0 | 63 | 0 | 0 | 0 |
+| strings & text (W11) | 0 | 0 | 0 | 108 | 0 | 0 | 0 |
 | strings (batch 1) | 0 | 7 | 0 | 58 | 0 | 0 | 0 |
 | strings and dates | 12 | 23 | 0 | 0 | 0 | 0 | 0 |
 | structural (W03) | 0 | 0 | 0 | 63 | 0 | 0 | 0 |
@@ -390,7 +391,7 @@ Cases = number of differential test cases in which the head occurs.
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `AssociateTo` | added | 3 | AssociateTo[a, k -> v] (or a list of rules) updates the association stored in symbol a and returns it |
-| `Association` | added | 7 | normalises <\|...\|>: lists of rules and nested associations are flattened in, a repeated key keeps its first position and takes the last value; non-rule arguments raise |
+| `Association` | added | 13 | normalises <\|...\|>: lists of rules and nested associations are flattened in, a repeated key keeps its first position and takes the last value; non-rule arguments raise |
 | `AssociationMap` | added | 4 | AssociationMap[f, {k1, ...}] gives <\|k1 -> f[k1], ...\|>; on an association f is applied to each rule and must return a rule |
 | `AssociationQ` | added | 3 | True for a valid association |
 | `AssociationThread` | added | 4 | AssociationThread[{k...}, {v...}] or [{k...} -> {v...}]; lengths must agree; repeated keys keep the last value |
@@ -404,7 +405,7 @@ Cases = number of differential test cases in which the head occurs.
 | `KeyMap` | added | 3 | KeyMap[f, assoc] applies f to every key (later entries win when keys collide) |
 | `KeyMemberQ` | added | 3 | True if some key matches the pattern |
 | `KeySelect` | added | 3 | entries whose key k gives crit[k] True |
-| `KeySort` | added | 3 | entries ordered by canonical order of keys, or by the ordering function p |
+| `KeySort` | added | 7 | entries ordered by canonical order of keys, or by the ordering function p |
 | `KeySortBy` | added | 3 | entries ordered by canonical order of f[key] (stable for ties) |
 | `KeyTake` | added | 3 | entries for the given keys in the order the keys are listed (absent keys ignored); rule lists give rule lists; lists of associations thread |
 | `KeyUnion` | added | 3 | each association extended to the union of keys (in order of first appearance); absent keys get Missing["KeyAbsent", k] (or f[k] with KeyUnion[list, f]) |
@@ -447,7 +448,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PhasePlane` | fixed | 3 | equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped tuple-form solutions |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Table` | kernel | 46 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 47 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
@@ -478,7 +479,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Limit` | fixed | 15 | batch 4: Limit[f, x -> a] (two-sided: Indeterminate when the one-sided limits differ), Direction -> "FromAbove" / "FromBelow" / -1 / 1 / "TwoSided", Assumptions, limits at +-Infinity, lists of functions, and multivariate limits Limit[f, {x, y} -> {a, b}] (continuity after cancellation, Indeterminate when two paths disagree, otherwise a clear error); oscillating limits raise (use MaxLimit/MinLimit); legacy rejected every option |
 | `MaxLimit` | added | 4 | upper limit (limsup) MaxLimit[f, x -> a] with Direction and Assumptions: the larger one-sided limit, or A + \|B\| for f = A + B Sin[g] / A + B Cos[g] with g -> +-Infinity (MaxLimit[Sin[1/x], x -> 0] -> 1); other oscillating functions raise |
 | `MinLimit` | added | 3 | lower limit (liminf) MinLimit[f, x -> a]; see MaxLimit (MinLimit[Sign[x], x -> 0] -> -1) |
-| `Normal` | fixed | 48 | batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate series) and evaluates the remaining polynomial; associations and other heads as before (batch 1) |
+| `Normal` | fixed | 57 | batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate series) and evaluates the remaining polynomial; associations and other heads as before (batch 1) |
 | `O` | added | 3 | order term O[x]^n / O[x - x0]^n / O[1/x]^n of Series results (stays symbolic); Normal removes it; SeriesCoefficient, InverseSeries and ComposeSeries read it |
 | `Product` | fixed | 7 | batch 4: as Sum (finite, symbolic and infinite products via SymPy; parametric products give the generic value, ConditionalExpression with GenerateConditions -> True) |
 | `RSolve` | fixed | 10 | batch 4: RSolve[eqns, a[n], n] -> {{a[n] -> ...}} and RSolve[eqns, a, n] -> {{a -> Function[{n}, ...]}}; linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every solution is substituted back into the recurrence and the initial conditions; free constants are C[1], C[2], ...; systems raise |
@@ -597,7 +598,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Compositions` | fixed | 3 | legacy returned k-subsets of {1..n-1}; now Compositions[n, k] lists all ordered k-tuples of non-negative integers summing to n (Combinatorica convention), lexicographic |
 | `Derangements` | verified | 4 | number of derangements !n (MikoshiLang; same as Subfactorial) |
 | `DoubleFactorial` | fixed | 4 | negative odd integers supported ((-5)!! = 1/3); legacy truncated reals |
-| `Factorial` | fixed | 5 | non-integers use Gamma[n + 1] (Factorial[1/2] = Sqrt[Pi]/2); negative integers give ComplexInfinity; symbols stay unevaluated; legacy truncated with int() |
+| `Factorial` | fixed | 6 | non-integers use Gamma[n + 1] (Factorial[1/2] = Sqrt[Pi]/2); negative integers give ComplexInfinity; symbols stay unevaluated; legacy truncated with int() |
 | `Factorial2` | promoted | 3 | Wolfram name for the double factorial |
 | `FibonacciSequence` | verified | 3 | first n Fibonacci numbers F0, F1, ... (MikoshiLang) |
 | `GeometricSequence` | fixed | 3 | first n terms a, a r, ...; exact for exact input (legacy converted to floats and rounded) |
@@ -714,14 +715,14 @@ Cases = number of differential test cases in which the head occurs.
 | `BitGet` | added | 3 |  |
 | `BitLength` | added | 5 | for negative n, the length of BitNot[n] (two's complement without the sign) |
 | `BitNot` | added | 3 |  |
-| `BitOr` | added | 3 |  |
+| `BitOr` | added | 4 |  |
 | `BitSet` | added | 3 |  |
 | `BitShiftLeft` | added | 4 | negative shifts shift right (IntegerPart) |
 | `BitShiftRight` | added | 4 | IntegerPart[n / 2^k] (rounds toward zero) |
 | `BitXor` | added | 3 |  |
 | `CellularAutomaton` | added | 13 | 1D rules (number, {n, k}, {n, k, r} or explicit neighbourhood rules); init a cyclic list or {{cells}, background}; CellularAutomaton[rule, init] is one step, [rule, init, t] gives t + 1 rows (the {{cells}, bg} form uses width m + 2 r t, Wolfram's default region) |
 | `CompositeQ` | added | 5 | integers; CompositeQ[-n] == CompositeQ[n] |
-| `ContinuedFraction` | added | 22 | rationals exactly; quadratic irrationals as {a1, ..., {period}}; other exact reals need the term count (certified at two precisions); inexact numbers give only the terms fixed by their precision |
+| `ContinuedFraction` | added | 23 | rationals exactly; quadratic irrationals as {a1, ..., {period}}; other exact reals need the term count (certified at two precisions); inexact numbers give only the terms fixed by their precision |
 | `Convergents` | added | 6 | Convergents[list] for finite term lists (symbolic allowed); Convergents[x, n] via ContinuedFraction |
 | `CoprimeQ` | added | 8 | pairwise coprime integers |
 | `DifferenceDelta` | added | 11 | n-th forward difference sum_k (-1)^(n-k) C(n,k) f(i + k h); result simplified (expanded when polynomial) |
@@ -761,7 +762,7 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Abs` | verified | 82 | verified against SymPy/mpmath |
+| `Abs` | verified | 83 | verified against SymPy/mpmath |
 | `ArcCos` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCosh` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCot` | verified | 3 | verified against SymPy/mpmath |
@@ -781,25 +782,25 @@ Cases = number of differential test cases in which the head occurs.
 | `Csch` | verified | 3 | verified against SymPy/mpmath |
 | `CubeRoot` | fixed | 3 | returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2) |
 | `Exp` | verified | 129 | verified against SymPy/mpmath |
-| `Floor` | fixed | 16 | Floor[x] and Floor[x, a] (a Floor[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
+| `Floor` | fixed | 18 | Floor[x] and Floor[x, a] (a Floor[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `ImaginaryPart` | verified | 3 | verified against SymPy/mpmath |
 | `Log` | fixed | 34 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
 | `Log10` | verified | 3 | log base 10; Log10[0] = -Infinity |
 | `Log2` | verified | 3 | log base 2; Log2[0] = -Infinity |
 | `Max` | fixed | 18 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
-| `Min` | fixed | 7 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
-| `Mod` | fixed | 29 | Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset form and complex arguments were missing |
+| `Min` | fixed | 9 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
+| `Mod` | fixed | 30 | Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset form and complex arguments were missing |
 | `Quotient` | fixed | 12 | Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = Floor[(m - d)/n]; complex arguments use Round |
 | `QuotientRemainder` | added | 4 | {Quotient[m, n], Mod[m, n]} |
 | `RealPart` | verified | 3 | verified against SymPy/mpmath |
 | `Root` | fixed | 47 | Wolfram Root[f, k]: the k-th root of the polynomial f[x] (f a pure function), ordered as Wolfram: real roots ascending, then complex roots by real part, then \|Im\|, conjugate pairs adjacent (negative imaginary part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. Legacy Root[a, n] meant a^(1/n) (now Surd/Power) |
-| `Round` | fixed | 16 | Round[x] was not implemented and Round[x, a] returned floats (Round[7, 5] = 5.0); now Wolfram half-to-even rounding, exact for exact input |
+| `Round` | fixed | 17 | Round[x] was not implemented and Round[x, a] returned floats (Round[7, 5] = 5.0); now Wolfram half-to-even rounding, exact for exact input |
 | `Sec` | verified | 3 | verified against SymPy/mpmath |
 | `Sech` | verified | 3 | verified against SymPy/mpmath |
 | `Sign` | fixed | 12 | Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals |
 | `Sin` | verified | 170 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
-| `Sqrt` | verified | 163 | verified against SymPy/mpmath |
+| `Sqrt` | verified | 164 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
 | `Tan` | verified | 16 | verified against SymPy/mpmath |
 | `Tanh` | verified | 3 | verified against SymPy/mpmath |
@@ -830,7 +831,7 @@ Cases = number of differential test cases in which the head occurs.
 | `ApplyTo` | added | 3 | x //= f sets x to f[x] and returns the new value (like x = f[x]); x must have a value |
 | `ArgumentsOptions` | added | 4 | ArgumentsOptions[f[args], n] gives {{positional args}, {options}} (checked against Options[f]); a Failure["ArgumentsOptions", ...] when the count or an option is wrong; {min, max}; "Head" key |
 | `Attributes` | added | 20 | Attributes[f], Attributes["f"], Attributes[{f, g}] (built-in Protected included, Temporary for live Module symbols, Stub, user attributes); Attributes[f] = {...} replaces them |
-| `Automatic` | added | 30 | inert option value: chosen automatically by the function that uses it |
+| `Automatic` | added | 35 | inert option value: chosen automatically by the function that uses it |
 | `Begin` | added | 5 | Begin["ctx`"] sets $Context (a context starting with ` extends the current one) and returns it; End[] restores $Context and $ContextAliases. Affects how later inputs are parsed |
 | `BeginPackage` | added | 6 | BeginPackage["ctx`"] sets $Context to ctx` and $ContextPath to {ctx`, System`}, adds ctx` to $Packages; BeginPackage["ctx`", {"need1`", ...}] calls Needs on each and puts them on the path |
 | `CheckArguments` | added | 6 | CheckArguments[f[args], n] is True when args is n positional arguments followed by options known to f (Options[f]), else False; {min, max} counts; <\|"ExtraOptions" -> ..., "OptionsMode" -> ...\|> |
@@ -874,7 +875,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LocalSymbol` | added | 6 | LocalSymbol["name"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol["name"] = val or := val; unevaluated when never assigned; LocalSymbol["name", "dir"] uses another base; =. deletes it |
 | `Locked` | added | 5 | attribute: the attributes of the symbol can no longer be changed (Protect/Unprotect, SetAttributes, ClearAttributes, Attributes[f] = ... raise) |
 | `Manual` | added | 3 | inert option value: selected manually |
-| `Method` | added | 14 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
+| `Method` | added | 16 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
 | `NHoldAll` | added | 3 | attribute: N does not affect any argument of f |
 | `NHoldFirst` | added | 3 | attribute: N does not affect the first argument of f |
 | `NHoldRest` | added | 3 | attribute: N affects only the first argument of f |
@@ -883,7 +884,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Needs` | added | 4 | Needs["ctx`"] loads the package (Get["ctx`"]) unless ctx` is in $Packages and puts ctx` on $ContextPath; Needs["ctx`" -> "alias`"] adds a context alias instead; Needs["ctx`" -> None] only loads; Needs["ctx`", "file"] loads the given file |
 | `NonConstants` | added | 6 | option NonConstants -> {...} of Dt and D (symbols treated as constant / as depending on the variable) |
 | `NonThreadable` | added | 3 | attribute: arithmetic and other Listable functions do not thread lists over f or f[...]; the threadable arguments still combine |
-| `Once` | added | 5 | Once[expr] evaluates expr the first time and afterwards returns the cached result for the rest of the session (Once[expr, "KernelSession"]); other persistence locations raise; Once[expr] =. clears |
+| `Once` | added | 7 | Once[expr] evaluates expr the first time and afterwards returns the cached result for the rest of the session (Once[expr, "KernelSession"]); other persistence locations raise; Once[expr] =. clears |
 | `OperatorApplied` | added | 7 | OperatorApplied[f][y][x] = f[x, y]; OperatorApplied[f, n][x1]...[xn] = f[x1, ..., xn]; OperatorApplied[f, {i1, ...}] and k -> {i1, ...} reorder; bracket structure is irrelevant |
 | `OptionValue` | added | 9 | OptionValue[name] inside f[..., OptionsPattern[]] := rhs gives the value of option name in the call (or f's default); OptionValue[f, name], OptionValue[f, opts, name], lists of names; OptionsPattern[{f, g}] searches several defaults |
 | `Options` | added | 25 | Options[f] gives the default option rules of a user symbol (set by Options[f] = {...} or SetOptions); Options[f, name] or Options[f, {names}] selects; Options[expr] gives the options at the end of expr (f[x, a -> 1] gives {a -> 1}). Built-in option lists are not catalogued and raise |
@@ -1215,25 +1216,25 @@ Cases = number of differential test cases in which the head occurs.
 | `Drop` | fixed | 6 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Equal` | fixed | 8 | kernel builtin extended in batch 1: more than two arguments chain |
 | `EvenQ` | kernel | 36 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `First` | fixed | 45 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
+| `First` | fixed | 46 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
 | `Flatten` | fixed | 15 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
 | `FreeQ` | fixed | 16 | kernel builtin extended in batch 1: level specifications, Heads -> False |
-| `IntegerQ` | kernel | 17 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `IntegerQ` | kernel | 18 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Join` | fixed | 6 | kernel builtin extended in batch 1: Join[..., n] at level n; associations merge (later values win) |
 | `Last` | fixed | 26 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
-| `Length` | fixed | 94 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
-| `Less` | fixed | 5 | kernel builtin extended in batch 1: more than two arguments chain |
+| `Length` | fixed | 99 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
+| `Less` | fixed | 6 | kernel builtin extended in batch 1: more than two arguments chain |
 | `List` | fixed | 6 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
-| `ListQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `ListQ` | kernel | 5 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Map` | fixed | 23 | kernel builtin extended in batch 1: level specifications (n, {n}, {m, n}, negative), associations, operator form Map[f] |
 | `MapAll` | fixed | 3 | kernel builtin extended in batch 1: f //@ expr |
 | `MapIndexed` | fixed | 3 | kernel builtin extended in batch 1: level specifications; associations index by Key[k] |
-| `MemberQ` | fixed | 26 | kernel builtin extended in batch 1: level specifications |
+| `MemberQ` | fixed | 28 | kernel builtin extended in batch 1: level specifications |
 | `Most` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
-| `N` | kernel | 496 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `N` | kernel | 498 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Negative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NonNegative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `NumberQ` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `NumberQ` | kernel | 6 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `OddQ` | kernel | 20 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Part` | fixed | 4 | kernel builtin extended in batch 1: Span (i;;j;;k), All, position lists, negative indices, Key[k] and string keys of associations |
 | `PartialD` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -1243,21 +1244,21 @@ Cases = number of differential test cases in which the head occurs.
 | `Power` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Prepend` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule; any head |
 | `PrimeQ` | kernel | 11 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Range` | fixed | 80 | kernel builtin extended in batch 1: rational, real and symbolic steps |
+| `Range` | fixed | 94 | kernel builtin extended in batch 1: rational, real and symbolic steps |
 | `ReplaceAll` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Rest` | fixed | 6 | kernel builtin extended in batch 1: any head; empty expressions raise |
-| `Reverse` | fixed | 11 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
+| `Reverse` | fixed | 13 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
 | `Select` | fixed | 15 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
-| `Sort` | fixed | 18 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
-| `StringJoin` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Sort` | fixed | 23 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
+| `StringJoin` | kernel | 12 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `StringLength` | kernel | 8 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringQ` | kernel | 5 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `StringQ` | kernel | 10 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Take` | fixed | 10 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Thread` | fixed | 3 | kernel builtin extended in batch 1: Thread[f[...], h] and Thread[expr, h, n]; rules thread |
 | `Times` | kernel | 7 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `ToString` | kernel | 399 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `ToString` | kernel | 402 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Together` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Total` | fixed | 31 | kernel builtin extended in batch 1: Total[list, n], {n}, {n1, n2}, Infinity; associations |
+| `Total` | fixed | 36 | kernel builtin extended in batch 1: Total[list, n], {n}, {n1, n2}, Infinity; associations |
 | `Transpose` | fixed | 20 | kernel builtin extended in batch 1: permutation specifications (including repeated levels for diagonals) |
 | `Unequal` | fixed | 5 | kernel builtin extended in batch 1: more than two arguments need all pairs distinct |
 
@@ -1265,15 +1266,15 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Composition` | added | 3 | f @* g; Composition[f, g][x] = f[g[x]] |
+| `Composition` | added | 8 | f @* g; Composition[f, g][x] = f[g[x]] |
 | `EqualTo` | added | 3 | operator x == y |
-| `Except` | added | 7 | Except[c] and Except[c, p] in patterns |
+| `Except` | added | 8 | Except[c] and Except[c, p] in patterns |
 | `GreaterEqualThan` | added | 3 | operator x >= y |
 | `GreaterThan` | added | 3 | operator GreaterThan[y][x] = x > y |
 | `Key` | added | 4 | Key[k] in Part and as an operator on associations |
 | `LessEqualThan` | added | 3 | operator x <= y |
 | `LessThan` | added | 3 | operator x < y |
-| `Missing` | added | 19 | inert; Missing["KeyAbsent", k] for absent keys |
+| `Missing` | added | 20 | inert; Missing["KeyAbsent", k] for absent keys |
 | `Nothing` | added | 6 | removed from lists |
 | `Optional` | added | 3 | x_:d and x_. (Plus/Times/Power defaults) |
 | `Repeated` | added | 3 | p.. and Repeated[p, n \| {m, n}] in sequences |
@@ -1511,7 +1512,7 @@ Cases = number of differential test cases in which the head occurs.
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `AllMatch` | added | 3 | True if every element (or association value) matches the pattern; operator form |
-| `AllTrue` | added | 4 | test[e] is True for every element (stops at the first failure); optional level |
+| `AllTrue` | added | 5 | test[e] is True for every element (stops at the first failure); optional level |
 | `AnyMatch` | added | 3 | True if some element matches the pattern; operator form |
 | `AnyTrue` | added | 3 | test[e] is True for some element (stops at the first success); optional level |
 | `AppendTo` | added | 6 | AppendTo[s, e] sets s = Append[s, e] and returns the new value (s must have a value) |
@@ -1520,7 +1521,7 @@ Cases = number of differential test cases in which the head occurs.
 | `ArrayFlatten` | added | 3 | ArrayFlatten[{{m11, m12, ...}, ...}] builds a block matrix; scalar blocks (e.g. 0) become constant blocks of the matching size |
 | `ArrayQ` | added | 6 | ArrayQ[expr], ArrayQ[expr, n] (n may be a pattern) and ArrayQ[expr, n, test] for the elements |
 | `ArrayReshape` | added | 3 | ArrayReshape[list, dims]: the flattened elements arranged with the given dimensions, padded with 0 (or the given padding) when there are too few |
-| `Between` | added | 4 | min <= x <= max for {min, max}, or within any interval of {{min1, max1}, ...}; Between[{min, max}] is an operator form |
+| `Between` | added | 5 | min <= x <= max for {min, max}, or within any interval of {{min1, max1}, ...}; Between[{min, max}] is an operator form |
 | `BinCounts` | added | 6 | counts in bins [b_k, b_k+1): BinCounts[data, dx] (bins at multiples of dx), BinCounts[data, {min, max, dx}] and BinCounts[data, {{b1, b2, ...}}] |
 | `BinLists` | added | 3 | the elements falling in each bin [b_k, b_k+1), with the same bin specifications as BinCounts |
 | `BlockMap` | added | 3 | BlockMap[f, list, n] = Map[f, Partition[list, n]]; BlockMap[f, list, n, d] |
@@ -1529,7 +1530,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Comap` | added | 3 | Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys) |
 | `ComapApply` | added | 3 | ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...} |
 | `ComposeList` | added | 3 | ComposeList[{f1, f2, ...}, x] = {x, f1[x], f2[f1[x]], ...} |
-| `ConstantArray` | added | 12 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
+| `ConstantArray` | added | 13 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
 | `Construct` | added | 4 | Construct[f, x, y, ...] = f[x, y, ...] |
 | `ContainsAll` | added | 3 | every element of e2 occurs in e1 (SameQ or SameTest) |
 | `ContainsAny` | added | 3 | some element of e2 occurs in e1 |
@@ -1577,8 +1578,8 @@ Cases = number of differential test cases in which the head occurs.
 | `NoneTrue` | added | 3 | test[e] is True for no element; optional level |
 | `NumericalSort` | added | 3 | sorts numeric elements by numerical value (ties by canonical order); non-numeric elements raise |
 | `Operate` | added | 4 | Operate[p, f[x, y]] = p[f][x, y]; Operate[p, expr, 0] = p[expr]; Operate[p, expr, n] applies p to the head n levels down (f[a][b] at level 2 gives p[f][a][b]); an atomic head that deep leaves expr unchanged |
-| `Order` | added | 3 | 1 if e1 comes before e2 in canonical order, -1 if after, 0 if identical |
-| `OrderedQ` | added | 5 | True when the elements are in canonical (non-decreasing) order, or ordered by p |
+| `Order` | added | 4 | 1 if e1 comes before e2 in canonical order, -1 if after, 0 if identical |
+| `OrderedQ` | added | 6 | True when the elements are in canonical (non-decreasing) order, or ordered by p |
 | `Ordering` | added | 5 | positions that put the list in canonical order (stable); Ordering[list, n] the first n (negative n: the last n), Ordering[list, n, p] with ordering p |
 | `OrderingBy` | added | 3 | positions that sort the list by f (ties by canonical order of the elements); OrderingBy[list, f, n] |
 | `PadLeft` | added | 4 | PadLeft[list, n, x] pads on the left with x (default 0) or keeps the last n elements; PadLeft[list, {n1, n2}] and PadLeft[ragged] (to a full array); cyclic list padding raises |
@@ -1628,7 +1629,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Cardinality` | fixed | 3 | number of distinct elements (legacy returned Length, counting duplicates) |
 | `Chunk` | verified | 3 | consecutive blocks of size n, last one possibly shorter (MikoshiLang) |
 | `Complement` | fixed | 4 | Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form); SameTest -> f |
-| `DeleteDuplicates` | fixed | 4 | SameQ comparison keeping first occurrences (legacy compared string forms, so the string "x" and the symbol x were treated as duplicates); DeleteDuplicates[list, test] |
+| `DeleteDuplicates` | fixed | 5 | SameQ comparison keeping first occurrences (legacy compared string forms, so the string "x" and the symbol x were treated as duplicates); DeleteDuplicates[list, test] |
 | `Differences` | fixed | 6 | exact successive differences, Differences[list, n] for n-th differences (legacy used rounded floats) |
 | `ElementQ` | fixed | 3 | ElementQ[x, list]: SameQ membership (legacy used ==, so ElementQ[1, {1.0}] was True; MemberQ gives False) |
 | `GroupBy` | fixed | 7 | legacy ignored the function and grouped equal values; now GroupBy[list, f] -> <\|k -> {...}\|> keyed by f[elem] in order of first appearance; GroupBy[list, f -> g] maps g over each group's elements, GroupBy[list, spec, red] applies red to each group, GroupBy[list, {f1, f2}] nests; associations group their values |
@@ -1636,14 +1637,14 @@ Cases = number of differential test cases in which the head occurs.
 | `Intersection` | fixed | 5 | variadic; canonical order (legacy sorted by string form); SameTest -> f |
 | `Partition` | fixed | 8 | Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n |
 | `Riffle` | fixed | 3 | Riffle[list, x] and Riffle[list, {y1, ...}] (interleaves when the second list has n or n - 1 elements; legacy inserted the whole list each time) |
-| `RotateLeft` | verified | 4 | RotateLeft[list] and RotateLeft[list, n] (n may be negative) |
-| `RotateRight` | verified | 4 | RotateRight[list] and RotateRight[list, n] |
+| `RotateLeft` | verified | 5 | RotateLeft[list] and RotateLeft[list, n] (n may be negative) |
+| `RotateRight` | verified | 5 | RotateRight[list] and RotateRight[list, n] |
 | `SetDifference` | fixed | 3 | alias of Complement[a, b] (canonical order) |
 | `SlidingWindow` | verified | 3 | overlapping windows = Partition[list, n, 1] (MikoshiLang) |
 | `SubsetQ` | fixed | 4 | SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse) |
 | `SymmetricDifference` | fixed | 3 | elements in exactly one of the two lists, canonical order (legacy sorted by string form) |
 | `Tally` | promoted | 4 | {{elem, count}, ...} in order of first appearance (SameQ); Tally[list, test] uses the first representative of each class |
-| `Union` | promoted | 11 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
+| `Union` | promoted | 13 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
 
 ### logic
 
@@ -1750,7 +1751,7 @@ Cases = number of differential test cases in which the head occurs.
 | `QuietEcho` | added | 3 | QuietEcho[expr] (HoldFirst) evaluates expr without Echo, EchoLabel, EchoFunction, EchoEvaluation or EchoTiming printing anything; messages and Print are not affected |
 | `RegisterExceptionType` | added | 9 | RegisterExceptionType[sym] / [sym, parent \| {parents}] (HoldFirst) registers the symbol sym as an exception type in this session and returns Success["RegisteredExceptionType", <\|"ExceptionType" -> sym, "ParentExceptionTypes" -> {...}, "OwnerContext" -> "Global`"\|>]; registering twice issues RegisterExceptionType::regd and returns $Failed |
 | `RepeatedTiming` | added | 3 | RepeatedTiming[expr] / RepeatedTiming[expr, t] (HoldFirst) evaluates expr at least 4 times and for at least t seconds (default 1) and gives {trimmed mean of the timings without the lower and upper quartiles, result of the first evaluation} |
-| `SameTest` | added | 11 | option of TestCreate / VerificationTest / IntermediateTest / TestReport giving the function that compares the actual and expected outputs (default SameQ); inert as an expression |
+| `SameTest` | added | 18 | option of TestCreate / VerificationTest / IntermediateTest / TestReport giving the function that compares the actual and expected outputs (default SameQ); inert as an expression |
 | `SessionTime` | added | 3 | SessionTime[] gives the real seconds since the MikoshiLang (Python) process started (procfs on Linux; elsewhere since the library was loaded) |
 | `Success` | added | 5 | Success["tag", assoc] is inert; success["prop"] gives assoc values, "Message", "Tag" and "Properties" (the association keys in order) |
 | `TerminatedEvaluation` | added | 4 | TerminatedEvaluation["reason"] is the inert representation of an evaluation stopped by a session limit ("IterationLimit", "RecursionLimit", ...); a non-string reason raises |
@@ -1809,9 +1810,9 @@ Cases = number of differential test cases in which the head occurs.
 | `EulerPhi` | fixed | 4 | EulerPhi[0] = 0 and EulerPhi[-n] = EulerPhi[n] (legacy raised / gave wrong values) |
 | `ExtendedGCD` | fixed | 3 | returned {x, y, g}; Wolfram order is {g, {x, y}} with g = a x + b y |
 | `FactorInteger` | fixed | 5 | FactorInteger[1] returned {} (Wolfram {{1,1}}), 0 and rationals failed; now {{-1,1},...} for negatives, negative exponents for rationals |
-| `Fibonacci` | fixed | 7 | symbolic n raised TypeError (now unevaluated); negative n, real n and Fibonacci[n, x] added |
+| `Fibonacci` | fixed | 9 | symbolic n raised TypeError (now unevaluated); negative n, real n and Fibonacci[n, x] added |
 | `FibonacciNumber` | fixed | 3 | MikoshiLang alias of Fibonacci |
-| `FromDigits` | fixed | 11 | now accepts digit strings (letters a-z = 10-35), symbolic digits and digits >= base as Wolfram; legacy silently used base 10 for invalid bases |
+| `FromDigits` | fixed | 12 | now accepts digit strings (letters a-z = 10-35), symbolic digits and digits >= base as Wolfram; legacy silently used base 10 for invalid bases |
 | `GCD` | fixed | 4 | now variadic, exact for rationals, GCD[] = 0; legacy truncated reals (GCD[2.5, 5] = 1) |
 | `HarmonicNumber` | fixed | 10 | HarmonicNumber[n] for rational n in closed form (HarmonicNumber[1/2] = 2 - 2 Log[2], legacy left it unevaluated); HarmonicNumber[n, r] |
 | `IntegerDigits` | fixed | 8 | legacy silently used base 10 for a non-integer base; now IntegerDigits[n], [n, b], [n, b, len] (digits of \|n\|, padded/truncated on the left) |
@@ -1999,7 +2000,7 @@ Cases = number of differential test cases in which the head occurs.
 | `ColumnWidths` | added | 6 | inert symbol: option of Grid (GridBox): minimum column widths in characters (honoured in text) |
 | `DecimalForm` | added | 5 | DecimalForm[expr, n \| {n, f}, opts]: approximate reals always in decimal notation (no exponent) |
 | `DefaultPrintPrecision` | added | 6 | option of NumberForm and related number forms (inert symbol; default Automatic) |
-| `Delimiters` | added | 4 | inert symbol: option of various functions: the delimiters to use or look for (inert) |
+| `Delimiters` | added | 6 | inert symbol: option of various functions: the delimiters to use or look for (inert) |
 | `DigitBlock` | added | 9 | option of NumberForm and related number forms (inert symbol; default Infinity) |
 | `DisableFormatting` | added | 3 | DisableFormatting[expr] gives expr as soon as it is evaluated (it only matters inside held expressions) |
 | `EngineeringForm` | added | 5 | EngineeringForm[expr, n \| {n, f}, opts]: exponents that are multiples of 3 |
@@ -2047,7 +2048,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PercentForm` | added | 7 | PercentForm[expr, n \| {n, f}, opts]: numbers shown as percentages (x 100, then %) |
 | `Placed` | added | 6 | Placed[expr, pos] / Placed[{e1, ...}, pos, f] inert: an annotation at relative position pos (Top, Bottom, Left, Right, Center, Above, Below, Before, After, {x, y}, ...); text shows expr (f applied to each ei when given) |
 | `Right` | added | 18 | inert symbol: position/alignment symbol: Column/Grid/Item alignment, Labeled position (label to the right) |
-| `Row` | added | 12 | Row[{e1, e2, ...}] / Row[list, sep] inert layout: the elements' text concatenated (with sep between); multi-line elements are placed side by side |
+| `Row` | added | 13 | Row[{e1, e2, ...}] / Row[list, sep] inert layout: the elements' text concatenated (with sep between); multi-line elements are placed side by side |
 | `RowAlignments` | added | 8 | inert symbol: option of Grid (GridBox): vertical alignment of multi-line rows (honoured in text) |
 | `RowLines` | added | 6 | inert symbol: option of Grid (GridBox): draw a line between rows (honoured in text) |
 | `RowMinHeight` | added | 6 | inert symbol: option of Grid (GridBox): minimum row height in lines (honoured in text) |
@@ -2072,7 +2073,7 @@ Cases = number of differential test cases in which the head occurs.
 | `TeXForm` | added | 27 | TeXForm[expr] inert: shows the LaTeX of expr (TraditionalForm conventions: \frac, \sqrt, \sin (x), x^2+1); ToString[TeXForm[expr]] gives the TeX string |
 | `Text` | added | 7 | Text[expr] shows expr as plain text; Text[expr, coords, offset, dir] is an inert graphics primitive (coordinates a list of 2 or 3 numbers, Scaled[...] or Offset[...]) |
 | `TextElement` | added | 4 | TextElement[text, props] / TextElement[{e1, e2, ...}, props] inert: an element of text with a property association; text shows the elements' strings concatenated |
-| `TextString` | added | 24 | TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default ""), lists per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings |
+| `TextString` | added | 25 | TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default ""), lists per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings |
 | `Top` | added | 10 | inert symbol: position/alignment symbol: Labeled position (label above), vertical alignment in Grid rows |
 | `TotalWidth` | added | 7 | option of ToString: output longer than n characters is shortened with <<k>> skeletons |
 | `TraditionalForm` | added | 8 | TraditionalForm[expr] inert: shows expr in traditional mathematical notation (f(x), sin(x), e^x, π, i, polynomials in decreasing degree) |
@@ -2486,7 +2487,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LinearRegression` | fixed | 4 | {slope, intercept, r_squared} exact least squares plus p_value and std_error of the slope (t-test, as scipy.stats.linregress; no SciPy needed); legacy rounded |
 | `MAD` | fixed | 3 | median absolute deviation Median[Abs[x - Median[x]]] (Wolfram MedianDeviation), exact for exact data (legacy converted to floats and rounded to 10 digits) |
 | `MannWhitneyU` | fixed | 3 | {U -> statistic, p_value -> two-sided p} (SciPy), unrounded |
-| `Mean` | fixed | 63 | matrix data: the statistic of each column (Wolfram); Mean[dist] for the batch 5 distributions (Indeterminate when the moment does not exist); exact for exact data (legacy converted to floats and rounded to 10 digits); Mean[dist] gives the distribution mean |
+| `Mean` | fixed | 65 | matrix data: the statistic of each column (Wolfram); Mean[dist] for the batch 5 distributions (Indeterminate when the moment does not exist); exact for exact data (legacy converted to floats and rounded to 10 digits); Mean[dist] gives the distribution mean |
 | `Median` | fixed | 17 | matrix data: the statistic of each column (Wolfram); Median[dist] for every supported distribution (Indeterminate when undefined; Kurtosis is the non-excess kurtosis, 3 for the normal distribution); exact for exact data (legacy converted to floats and rounded to 10 digits); even length averages the two middle values |
 | `Mode` | fixed | 3 | the unique most frequent value (MikoshiLang); multimodal data now raises (legacy returned the first mode silently) - use Commonest |
 | `NormalDistribution` | verified | 39 | inert distribution object NormalDistribution[mu, sigma] (NormalDistribution[] = [0, 1]) |
@@ -2581,6 +2582,119 @@ Cases = number of differential test cases in which the head occurs.
 | `WinsorizedMean` | added | 4 | mean after replacing the Floor[f n] smallest and largest values by the nearest remaining values (default f = 1/5); exact |
 | `WinsorizedVariance` | added | 4 | unbiased variance of the winsorised data (default f = 1/5); exact |
 
+### strings & text (W11)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$TemplatePath` | added | 3 | directories searched (after the working directory) by FileTemplate/StringTemplate[File[...]]: {~/.mikoshilang/Templates, Directory[]} by default; assignable |
+| `AddToSearchIndex` | added | 4 | adds files, directories, ContentObjects or associations to an index; returns the index |
+| `AnchoredSearch` | added | 3 | Find/FindList option: the text must start the record |
+| `AnyOrder` | added | 3 | string pattern: AnyOrder[p1, p2, ...] matches the patterns in sequence in any order (at most 6); GrammarRules is not available |
+| `BaseDecode` | added | 6 | inverse of BaseEncode, giving a ByteArray; characters outside the alphabet are dropped; Base64 input must be padded to a multiple of 4 (otherwise an error) |
+| `BaseEncode` | added | 6 | "Base64" (RFC 4648, padded; default), "Base16" (upper-case hex) and "Base85ASCII" (Ascii85 with the z shortcut, no padding) encodings of a ByteArray |
+| `BioSequence` | added | 89 | BioSequence[type, "letters" (, bonds)] for DNA, RNA, Peptide, their Circular forms and None; BioSequence["letters"] infers DNA, then RNA, then Peptide (else None); three-letter amino-acid codes, letter patterns ("A" \| "G" ~~ ...), dot-bracket structures and Bond lists; HybridStrand and sequence collections; properties SequenceString, SequenceLength, SequenceType, SequenceBondList, SequenceBondCount, SequencePattern, AbbreviationSequence, ChemicalList, ChemicalPatternList, HELM. Masses, molecules and entity-backed sequences are not available |
+| `BioSequenceComplement` | added | 7 | complementary DNA/RNA strand letter by letter (degenerate letters too: R<->Y, K<->M, B<->V, D<->H); unevaluated for peptides and invalid sequences |
+| `BioSequenceInstances` | added | 6 | all fully specified sequences matching a degenerate BioSequence, sorted; BioSequenceInstances[seq, n] gives at most n of them (the first n in sorted order) |
+| `BioSequenceModify` | added | 9 | "MakeCircular", "MakeLinear", "DropIncompleteCodons", "DropToStartCodon" (standard start codons TTG/CTG/ATG), "DropFromStopLetter", {"DeleteBond", bond} and {"AddToCollection", seqs}; "AddBond" (which validates base pairing chemistry) and the bond-representation conversions are not supported |
+| `BioSequenceQ` | added | 15 | True for a valid BioSequence (letters in the type's alphabet); BioSequenceQ[x, type] also checks the type (a string pattern such as "DNA" \| "RNA", "HybridStrand", "SequenceCollection"), "FullySpecified" or "FullySpecifiedtype" (no degenerate letters) |
+| `BioSequenceReverseComplement` | added | 5 | reverse of the complementary DNA/RNA strand (bond positions mirrored); unevaluated for peptides and invalid sequences |
+| `BioSequenceTranscribe` | added | 3 | DNA -> RNA (T -> U) and RNA -> DNA (U -> T), circular forms kept; unevaluated for peptides and invalid sequences |
+| `BioSequenceTranslate` | added | 12 | translates DNA/RNA codons to a Peptide (stop codons give ".", incomplete final codons dropped, a degenerate codon gives its amino acid if all its instances agree, else X); genetic codes 1-5 and 11 by number or name, a 64-letter TCAG-ordered string or codon rules; third argument True (start codons of codes 1, 2, 11 give M), a table, or rules for the first codon |
+| `ByteArray` | added | 26 | ByteArray[{b1, ...}] (bytes 0..255) and ByteArray["base64"]; the evaluated form is ByteArray["base64"] (Wolfram's InputForm); Normal and Length work on it |
+| `ByteArrayFormat` | added | 5 | heuristic import format of a ByteArray (as StringFormat) |
+| `ByteArrayFormatQ` | added | 6 | whether a ByteArray is (heuristically) in the format or any of a list of formats |
+| `ByteArrayQ` | added | 3 | True for a valid ByteArray object, False otherwise |
+| `ByteArrayToString` | added | 5 | decodes a ByteArray (or {}) as UTF-8 (default) or a named encoding; invalid data raises |
+| `CaseSensitive` | added | 3 | string pattern wrapper: CaseSensitive[p] matches p with case respected even under IgnoreCase -> True |
+| `CharacterCounts` | added | 6 | association of character (or n-character) counts, by decreasing count with ties in reverse order of first appearance; IgnoreCase; threads over lists of strings; BioSequence letters |
+| `CharacterName` | added | 11 | Wolfram standard names (\[name]) for Greek letters, Latin letters with diacritics and common mathematical/typographic characters, and "UnicodeName" for any character; CharacterName[n] by code; "CommonName" (the Unicode name in sentence case), "HTMLName" for the HTML 4 entity set; a string gives a list; types without a reproducible table (LongName, TeXName), and characters outside the table, raise. Greek epsilon/phi forms are omitted (Wolfram's naming of the lunate/curly variants differs from Unicode's) |
+| `CharacterNormalize` | added | 6 | Unicode normalization forms NFC, NFD, NFKC, NFKD; threads over lists of strings |
+| `CombinerFunction` | added | 7 | template construct: template option: function applied to the whole filled-in body |
+| `CompoundElement` | added | 3 | inert symbol: form/interpreter specification for several fields (Interpreter and forms are not available) |
+| `Containing` | added | 3 | inert symbol: Containing[outer, inner] entity/region containment specification (no evaluation semantics here) |
+| `ContentLocationFunction` | added | 3 | inert symbol: CreateSearchIndex option; only the default is accepted |
+| `ContentObject` | added | 12 | ContentObject[<\|field -> value, ...\|>] document for search indices; ContentObject["text"] gives <\|"Plaintext" -> text\|>, ContentObject[File[f]] gives Location, FileName, FileExtension, FileByteCount, Title and Plaintext -> Text[File[f]] (no dates); co["field"], co["Snippet"] |
+| `CreateSearchIndex` | added | 46 | in-memory search index of files, directories (text files, recursively), ContentObjects or associations; SearchIndexObject[File[~/.mikoshilang/SearchIndices/id]] (the index lives in the session; nothing is written); ContentFieldOptions weights and DocumentWeightingRules are kept as defaults for TextSearch |
+| `DamerauLevenshteinDistance` | added | 7 | minimum number of insertions, deletions, substitutions and adjacent transpositions (unrestricted Damerau-Levenshtein distance, a metric); strings, lists or BioSequences; IgnoreCase |
+| `DeleteSearchIndex` | added | 3 | deletes an index; later searches with it raise |
+| `DelimitedSequence` | added | 3 | inert symbol: Interpreter specification for a delimited sequence (Interpreter is not available) |
+| `Diff3` | added | 22 | three-way diff of a base and two revisions (strings by character, or by "Words"/"Lines" with DiffGranularity; lists by element; File contents by line) as DiffObject[1, {type, 3}, <\|"Changes" -> hunks\|>]: {{i, j, k} -> common} and {p1 -> base, p2 -> rev1, p3 -> rev2} hunks; matching uses an optimal alignment of each revision against the base; other views raise |
+| `DiffAlignmentMethod` | added | 3 | Diff3 option: only Automatic (optimal alignment) is supported; others raise |
+| `DiffApply` | added | 10 | applies a DiffObject to the original (the first argument of the diff): two-way diffs give the second input; three-way diffs merge both revisions, giving Failure["DiffObjectContainsConflicts", ...] if they conflict; Failure["WrongType", ...] for the wrong kind of input; DiffApply[obj, File[in], File[out]] writes the result |
+| `DiffGranularity` | added | 4 | Diff3 option: "Characters" (strings), "Words", "Lines" or "Elements" (lists) |
+| `DiffIgnore` | added | 3 | Diff3 option: only the default (nothing ignored) is supported; others raise |
+| `DiffIncludeMatches` | added | 3 | Diff3 option: matches are always included; other settings raise |
+| `DiffInputFunction` | added | 3 | Diff3 option: only the default (Identity) is supported; others raise |
+| `DiffObject` | added | 7 | DiffObject[1, type \| {type, n}, <\|"Changes" -> hunks, ...\|>] (as made by Diff3 or Wolfram's Diff) is inert; obj["Changes"], ["Conflicts"], ["Deletions"], ["Insertions"], ["SummaryString"]; other versions stay unevaluated |
+| `DocumentWeightingRules` | added | 3 | CreateSearchIndex/TextSearch option <\|field -> <\|value -> weight\|>\|> multiplying document scores |
+| `FileHash` | added | 4 | hash of the raw bytes of a file (default MD5, format Integer); FileHash[{file, range}, ...] with n, -n, {n}, {m, n}, 0 or All byte ranges; the legacy FileHash[file, type, range, format] is accepted |
+| `FileTemplate` | added | 7 | template from a file (string path or File, searched in the working directory then $TemplatePath): .html/.htm/.xml/.xhtml/.svg files are XMLTemplates, anything else a StringTemplate |
+| `FileTemplateApply` | added | 20 | applies a template (TemplateObject, string or File) and writes the result (strings as is, other results as TextString) to the given file, or a new temporary .txt file; returns the file name |
+| `Find` | added | 15 | first record (line) containing the text (or any of a list of texts) in an InputStream[String, n] (advancing the stream past it) or a file (searched from its start); EndOfFile if none; AnchoredSearch, IgnoreCase, RecordSeparators, WordSearch, WordSeparators |
+| `FindList` | added | 7 | all records (lines) containing the text (or any of several texts) in a file, list of files, File[...] or InputStream[String, n]; FindList[src, text, n] keeps the first n; {} if none; options as Find |
+| `FindRepeat` | added | 12 | minimal block that repeats (with an incomplete final repeat allowed) to give a list, array, string or association; FindRepeat[x, n] needs n complete repeats ({} or "" if none); FindRepeat[x, {n1, ...}] per array level; SameTest |
+| `FindTransientRepeat` | added | 11 | {transient, repeat} with the shortest transient after which a minimal block repeats at least n complete times (an incomplete final repeat allowed); {list, {}} if none; strings give strings; SameTest |
+| `FixedOrder` | added | 3 | TextSearch query: the words must occur in the given order (any distance); also a grammar token (GrammarRules is not available) |
+| `GapPenalty` | added | 4 | alignment option (SequenceAlignment, NeedlemanWunschSimilarity, SmithWatermanSimilarity): subtracted once per run of insertions or deletions |
+| `Hash` | added | 23 | Hash[expr, type, format]: Adler32, CRC32, MD4, MD5, RIPEMD160, RIPEMD160SHA256, SHA (SHA-1), SHA224/256/384/512, SHA256SHA256, SHA3-*, Keccak*, BLAKE2b/BLAKE2s ({type, bits}); strings hash their UTF-8 bytes, ByteArrays their bytes; other expressions raise (Wolfram hashes an internal serialization that is not reproduced). The default "Expression" type is a deterministic 63-bit hash of the expression (Wolfram documents its value as implementation-dependent). Formats Integer, DecimalString, HexString, HexStringLittleEndian, Base36String, Base64Encoding, ByteArray. MD2 and the BLAKE2 parallel/XOF variants raise. |
+| `IgnoreDiacritics` | added | 3 | inert symbol: string/grammar option; not used by the functions in this library |
+| `IgnorePunctuation` | added | 3 | inert symbol: AlphabeticSort option; not used by the functions in this library |
+| `InsertionFunction` | added | 13 | template construct: template option: function applied to each inserted value |
+| `LetterCounts` | added | 6 | association of letter (LetterQ) or letter n-gram counts, optionally allowing extra characters; Wolfram's *Counts ordering; IgnoreCase; threads over lists |
+| `LongestCommonSequencePositions` | added | 3 | positions {pos1, pos2} of a longest common (not necessarily contiguous) sequence, each a list of {start, end} runs; {} if there is none; choice among equally long sequences as in Wolfram's examples; IgnoreCase |
+| `LongestCommonSubsequencePositions` | added | 4 | positions {{s1, e1}, {s2, e2}} of a longest contiguous common run (the earliest in s1); {} if none; IgnoreCase |
+| `LongestOrderedSequence` | added | 7 | longest subsequence whose successive elements satisfy the ordering function (default: canonical order for lists, character codes for strings), by patience sorting; IgnoreCase lower-cases strings |
+| `MatchLocalNames` | added | 3 | inert symbol: Trace option (Trace is not part of this library) |
+| `MaxWordGap` | added | 3 | SearchAdjustment option: words of a phrase may be up to n words apart |
+| `NeedlemanWunschSimilarity` | added | 11 | score of an optimal global (Needleman-Wunsch/Gotoh) alignment as a machine real: +1 per match, -1 per mismatch/insertion/deletion (SimilarityRules overrides, patterns allowed), minus GapPenalty per gap run; IgnoreCase; strings, lists or BioSequences. Named matrices (BLOSUM62, ...) raise |
+| `NoWhitespace` | added | 3 | inert symbol: grammar pattern for the absence of whitespace (GrammarRules is not available) |
+| `NullRecords` | added | 3 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
+| `NullWords` | added | 3 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
+| `OptionalElement` | added | 3 | inert symbol: grammar pattern for an optional element (GrammarRules is not available) |
+| `PreprocessingRules` | added | 3 | inert symbol: input preprocessing option; only the default is accepted by the search functions |
+| `RecordSeparators` | added | 3 | Find/FindList option: strings separating records (default line breaks) |
+| `RectangularRepeatingElement` | added | 3 | inert symbol: form/interpreter specification of a rectangular array (forms are not available) |
+| `SearchAdjustment` | added | 5 | SearchAdjustment[q, w] multiplies the score of q by w; SearchAdjustment[q, MaxWordGap -> n] lets phrase words be up to n words apart |
+| `SearchIndexObject` | added | 4 | handle to an index made by CreateSearchIndex; idx["DocumentCount"], idx["Documents"] |
+| `SearchIndices` | added | 4 | the SearchIndexObjects that currently exist |
+| `SearchQueryString` | added | 3 | search-engine query syntax for TextSearch: words (OR by default), "phrases", +required, -excluded, NOT, AND, OR, (...), field:term, term^boost, ? and * wildcards |
+| `SearchResultObject` | added | 3 | SearchResultObject[src, query, {}, <\|"Results" -> ranked ContentObjects\|>]; res[All], res[n], res[m ;; n], res[All, prop or {props}], res["Count"] |
+| `SequenceAlignment` | added | 18 | optimal alignment as a list of common segments and {u1, u2} differences; Method "Global" (Needleman-Wunsch, default) or "Local" (Smith-Waterman, unaligned ends shown as differences); GapPenalty, IgnoreCase (lower-cases both strings), MergeDifferences, SimilarityRules. Among equally good alignments the choice follows Wolfram's documented examples; other methods and named similarity matrices raise |
+| `ShowContents` | added | 3 | inert symbol: Style/Cell display option |
+| `SimilarityRules` | added | 4 | alignment option: Automatic or {{e1, e2} -> score, ...} with "" for insertions/deletions; patterns allowed; named matrices raise |
+| `SmithWatermanSimilarity` | added | 8 | score of an optimal local (Smith-Waterman/Gotoh) alignment as a machine real (0. if nothing matches); options as NeedlemanWunschSimilarity |
+| `Snippet` | added | 4 | Snippet[doc] / Snippet[doc, n]: the first n lines (default 1) of a ContentObject's text or of a File, long lines wrapped at 80 characters; a string is its own snippet |
+| `SpecificityGoal` | added | 3 | inert symbol: ImageIdentify option; only the default is accepted by the search functions |
+| `SquareRepeatingElement` | added | 3 | inert symbol: form/interpreter specification of a square array (forms are not available) |
+| `StringApply` | added | 8 | applies f to Characters[s] and joins the result (nested lists of strings keep their structure, joined at the innermost level); StringApply[f] operator form; threads over lists |
+| `StringFormat` | added | 6 | heuristic import format of a string: magic numbers for binary formats (PNG, GIF, JPEG, PDF, ZIP, GZIP, TIFF, WAV, WXF, ...), else JSON, XML, HTML, SVG, TSV, CSV, Table (numeric columns) or Text; "Binary" for unrecognised binary data |
+| `StringFormatQ` | added | 5 | whether the string is (heuristically) in the format or any of a list of formats; "Text" and "Binary" are the generic text/binary classes |
+| `StringTemplate` | added | 17 | TemplateObject[{pieces}, InsertionFunction -> TextString, CombinerFunction -> StringJoin] from a string or File: `` sequential slots, `n` positional, `name` named, <* expr *> template expressions with #name/#n slots; \` escapes; an optional association of default values |
+| `StringToByteArray` | added | 5 | bytes of a string in UTF-8 (default) or a named $CharacterEncodings encoding; a character the encoding cannot represent raises |
+| `StringToStream` | added | 19 | InputStream[String, n] reading from the string; Find and FindList read records from it (the stream keeps its position); Read/ReadList/Close belong to the stream I/O batch |
+| `SyntaxLength` | added | 3 | length of the longest prefix that is syntactically valid so far (the position of the first syntax error); StringLength + 1 when the whole string is valid but incomplete |
+| `SyntaxQ` | added | 4 | True if the string parses as one Wolfram Language expression (InputForm); other forms raise |
+| `TemplateApply` | added | 64 | applies a template (TemplateObject, string, File or any expression containing TemplateSlot, TemplateExpression, TemplateIf, TemplateSequence, TemplateWith or nested TemplateObject) to positional arguments (a list, or a single non-list value) and named values from associations; the template's own bound association is searched first; :> values are inserted unevaluated; a missing slot without "DefaultValue" inserts Missing["TemplateSlotAbsent", key] ("" in string templates) |
+| `TemplateExpression` | added | 4 | template construct: HoldFirst; the expression is filled in and evaluated on application |
+| `TemplateIf` | added | 7 | template construct: HoldAll; TemplateIf[cond, t, f] chooses a branch at application time |
+| `TemplateObject` | added | 26 | TemplateObject[body, (assoc), InsertionFunction -> f, CombinerFunction -> g] is applied with TemplateApply or t[args]; defaults Identity |
+| `TemplateSequence` | added | 6 | template construct: TemplateSequence[body, values] splices one copy of body per value, with Delimiters, InsertionFunction and "DefaultValue" |
+| `TemplateSlot` | added | 28 | template construct: slot n or "name" with InsertionFunction and "DefaultValue" options |
+| `TemplateWith` | added | 3 | template construct: HoldAll; TemplateWith["name" -> value or list, body] binds named slots |
+| `TextSearch` | added | 35 | searches a SearchIndexObject, a list of them, a file, a directory, or ContentObjects; queries: "phrase", {all}, any \| alternatives, Except/Not, "field" -> q, FixedOrder, SearchAdjustment (boost, MaxWordGap), And/Or/ContainsAll/ContainsAny/ContainsNone, All, SearchQueryString; words are lower-cased with plural stemming; results ranked by BM25 (Lucene's formula, k1 = 1.2, b = 0.75); ContentFieldOptions weights, DocumentWeightingRules, MaxItems; third argument a property, "Count" or "ContentObject"; numeric range queries raise |
+| `TokenWords` | added | 3 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
+| `UpdateSearchIndex` | added | 3 | re-reads the files and directories an index was built from (adding new files, dropping deleted ones); returns the index |
+| `ValuePreprocessingFunction` | added | 3 | inert symbol: PersistentSymbol option; accepted by CreateSearchIndex/TextSearch only with its default |
+| `WordCount` | added | 4 | number of words, identified as by TextWords (hyphenated and apostrophe words count once) |
+| `WordCounts` | added | 5 | association of word counts (words as in TextWords); WordCounts[s, n] counts n-grams of consecutive words separated only by whitespace (keys are lists of words); Wolfram's *Counts ordering; IgnoreCase |
+| `WordOrientation` | added | 3 | inert symbol: WordCloud option (WordCloud graphics are not available) |
+| `WordSearch` | added | 6 | Find/FindList option: the text must appear as a whole word |
+| `WordSelectionFunction` | added | 3 | inert symbol: WordCloud option (WordCloud graphics are not available) |
+| `WordSeparators` | added | 3 | Find/FindList option: strings separating words (default {" ", "\t"}) |
+| `WordSpacings` | added | 3 | inert symbol: WordCloud option (WordCloud graphics are not available) |
+| `WordStem` | added | 5 | Porter stemming algorithm (reference implementation: bli->ble, logi->log), preserving the word's case and surrounding punctuation; listable |
+| `XMLTemplate` | added | 26 | TemplateObject from XML/HTML text or File with <wolfram:slot id= inserter=>default</wolfram:slot>, expr, if test=, which/else, sequence (values, slot, index, delimiters, default, inserter), with, template (inserter, combiner), get path=, comment and verbatim, plus `slot` and <* expr *>; InsertionFunction "HTMLFragment" (escapes & < >) by default, "JSON" supported; block tags alone on a line drop that line |
+
 ### strings (batch 1)
 
 | Function | Status | Cases | Notes |
@@ -2598,7 +2712,7 @@ Cases = number of differential test cases in which the head occurs.
 | `FromRomanNumeral` | added | 13 | integer value of a Roman numeral string ("N" -> 0) |
 | `HammingDistance` | added | 4 | number of differing positions between equal-length strings or lists (unequal lengths raise); IgnoreCase |
 | `HexadecimalCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
-| `IgnoreCase` | added | 10 | string pattern object / option interpreted by the batch-1 string functions |
+| `IgnoreCase` | added | 23 | string pattern object / option interpreted by the batch-1 string functions |
 | `IntegerString` | added | 10 | digits of \|n\| (the sign is dropped, as Wolfram) in base 2-36 with lower-case letters, padded with zeros or truncated to the last len digits; IntegerString[n, "Roman"]; threads over lists |
 | `LetterCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `LetterNumber` | added | 3 | position of a letter in the English alphabet (either case), 0 for other characters; a string of several characters gives a list; threads over lists |
@@ -2618,7 +2732,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Shortest` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `StartOfLine` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `StartOfString` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
-| `StringCases` | added | 32 | substrings matching a string pattern, or rule right-hand sides with named parts substituted; StringCases[s, p, n]; Overlaps -> False by default; IgnoreCase |
+| `StringCases` | added | 34 | substrings matching a string pattern, or rule right-hand sides with named parts substituted; StringCases[s, p, n]; Overlaps -> False by default; IgnoreCase |
 | `StringContainsQ` | fixed | 8 | string patterns (legacy: literal substrings only); IgnoreCase; threads over lists |
 | `StringCount` | fixed | 10 | non-overlapping matches of a string pattern (legacy: literal substrings only); Overlaps -> True counts one match per start position; IgnoreCase; the empty literal raises |
 | `StringDelete` | fixed | 7 | deletes every match of a string pattern (or list of patterns); IgnoreCase; the legacy slice form StringDelete[s, i, j] raises (use StringDrop[s, {i, j}]) |
@@ -2626,13 +2740,13 @@ Cases = number of differential test cases in which the head occurs.
 | `StringExpression` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `StringExtract` | added | 5 | StringExtract[s, n] gives the n-th whitespace-separated piece (spans, lists and negative n allowed); StringExtract[s, sep -> n] splits at sep |
 | `StringFreeQ` | added | 3 | not StringContainsQ; string patterns; IgnoreCase |
-| `StringMatchQ` | added | 18 | whole-string match against a string pattern; literal patterns use the metacharacters * (any characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists |
+| `StringMatchQ` | added | 22 | whole-string match against a string pattern; literal patterns use the metacharacters * (any characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists |
 | `StringPartition` | added | 3 | substrings of length n (incomplete final piece dropped), offset d, or UpTo[n] keeping the remainder |
 | `StringPosition` | added | 4 | {{start, end}, ...} 1-based; Overlaps -> True by default (one match per start position), StringPosition[s, p, n]; IgnoreCase |
-| `StringReplace` | fixed | 21 | StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts substitute into the right-hand side; RegularExpression rules accept "$1" group references; non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises |
+| `StringReplace` | fixed | 24 | StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts substitute into the right-hand side; RegularExpression rules accept "$1" group references; non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises |
 | `StringReplaceList` | added | 3 | every string obtained by replacing a single match of the rules (one result per match position and rule, left to right); StringReplaceList[s, rules, n] keeps at most n |
 | `StringReplacePart` | added | 3 | StringReplacePart[s, new, {m, n}], a list of ranges with one new string, or a list of new strings matched to the ranges; negative positions count from the end |
-| `StringRiffle` | added | 7 | StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per level above), StringRiffle[list, sep], StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings are converted with ToString |
+| `StringRiffle` | added | 8 | StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per level above), StringRiffle[list, sep], StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings are converted with ToString |
 | `StringRotateLeft` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringRotateRight` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringSplit` | added | 15 | splits at whitespace or at matches of a string pattern; empty pieces at the ends are dropped (kept with StringSplit[s, p, All]), interior ones kept; p -> r inserts r at each split; StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists |
@@ -2643,8 +2757,8 @@ Cases = number of differential test cases in which the head occurs.
 | `SymbolName` | added | 4 | name of a symbol as a string (no context prefix) |
 | `TextWords` | added | 3 | words of the text: runs of letters/digits, keeping internal apostrophes and hyphens (rule-based; Wolfram's tokenizer may differ on unusual punctuation) |
 | `ToExpression` | added | 14 | parses and evaluates InputForm text; ToExpression[s, InputForm, h] wraps the unevaluated parse in h (e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated |
-| `ToLowerCase` | added | 3 | lower-cases every letter; threads over lists |
-| `ToUpperCase` | added | 6 | upper-cases every letter; threads over lists |
+| `ToLowerCase` | added | 4 | lower-cases every letter; threads over lists |
+| `ToUpperCase` | added | 14 | upper-cases every letter; threads over lists |
 | `UpperCaseQ` | added | 4 | True when every character of the string satisfies the test (so True for ""); non-strings False |
 | `Whitespace` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `WhitespaceCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
@@ -2659,12 +2773,12 @@ Cases = number of differential test cases in which the head occurs.
 | `Base64Decode` | fixed | 3 | invalid Base64 or non-UTF-8 data now raises |
 | `Base64Encode` | verified | 3 | Base64 of the UTF-8 bytes (MikoshiLang) |
 | `CaesarCipher` | verified | 3 | shift ASCII letters by k (k may be negative); integer k only |
-| `Characters` | verified | 3 | list of single-character strings |
+| `Characters` | verified | 5 | list of single-character strings |
 | `DateString` | fixed | 3 | DateString[] (now) and DateString[{y, m, d, h, min, s}] in Wolfram's default format "Fri 30 Oct 2026 14:05:09"; legacy registered only a 1-argument form that ignored its argument |
 | `DateTimeString` | fixed | 3 | ISO 8601 "YYYY-MM-DDTHH:MM:SS" for now or a date list (MikoshiLang); legacy ignored its argument |
 | `DayOfWeek` | fixed | 3 | day of the week of a Gregorian date as a symbol (Friday), DayOfWeek[y, m, d] or DayOfWeek[{y, m, d}] (Wolfram DayName); legacy returned a string and truncated reals |
 | `DaysInMonth` | fixed | 3 | days in month m of year y; invalid months raise |
-| `FromCharacterCode` | fixed | 3 | FromCharacterCode[n] and FromCharacterCode[{n1, n2, ...}] (legacy accepted only one code and truncated reals) |
+| `FromCharacterCode` | fixed | 8 | FromCharacterCode[n] and FromCharacterCode[{n1, n2, ...}] (legacy accepted only one code and truncated reals) |
 | `HexDecode` | fixed | 3 | invalid hex now raises (legacy returned an Error expression) |
 | `HexEncode` | verified | 3 | hex of the UTF-8 bytes (MikoshiLang) |
 | `LeapYearQ` | fixed | 3 | Gregorian leap year test; LeapYearQ[{y, ...}] accepted |
@@ -2680,14 +2794,14 @@ Cases = number of differential test cases in which the head occurs.
 | `StringPadLeft` | fixed | 3 | pads on the left or truncates to the rightmost n characters, as Wolfram (legacy never truncated); single-character padding |
 | `StringPadRight` | fixed | 3 | pads on the right or truncates to the leftmost n characters, as Wolfram; single-character padding |
 | `StringPart` | fixed | 3 | 1-based (legacy was 0-based: StringPart["abc", 1] gave "b"); negative positions count from the end; a list of positions gives a list |
-| `StringRepeat` | fixed | 4 | StringRepeat[s, n] for n >= 1; legacy truncated non-integers |
+| `StringRepeat` | fixed | 5 | StringRepeat[s, n] for n >= 1; legacy truncated non-integers |
 | `StringReverse` | verified | 3 | reverses the characters |
 | `StringTake` | fixed | 4 | StringTake[s, n], [s, -n], [s, {n}], [s, {m, n}] (legacy: only the first n, and Python slicing silently accepted negative/out-of-range n) |
 | `StringToLowerCase` | verified | 3 | alias of ToLowerCase |
 | `StringToTitleCase` | fixed | 3 | capitalises the first letter of each whitespace-separated word and leaves the rest unchanged; legacy str.title() mangled words ("don't" -> "Don'T", "NASA" -> "Nasa") |
 | `StringToUpperCase` | verified | 3 | alias of ToUpperCase |
 | `TimeString` | fixed | 3 | TimeString[] -> "HH:MM:SS" (MikoshiLang); legacy only had a 1-argument form that ignored its argument |
-| `ToCharacterCode` | fixed | 3 | list of all character codes (legacy returned only the first code); lists of strings thread |
+| `ToCharacterCode` | fixed | 5 | list of all character codes (legacy returned only the first code); lists of strings thread |
 | `UnixTime` | fixed | 3 | UnixTime[] = whole seconds since 1970-01-01 00:00 UTC; UnixTime[{y, m, d, ...}] interprets the date in UTC; legacy only had a 1-argument form that ignored its argument |
 | `XORCipher` | fixed | 3 | hex string of UTF-8 bytes XOR the repeated key; empty key raises |
 
