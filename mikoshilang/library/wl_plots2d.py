@@ -2328,3 +2328,375 @@ def _reliefplot(m: MatrixOf[Real], *opts: Option) -> Expr:
     defaults = [("AspectRatio", Symbol("Automatic")), ("Frame", True), ("FrameTicks", NONE),
                 ("PlotRange", range_expr([(x0, x1), (y0, y1)])), ("PlotRangePadding", 0)]
     return finish_graphics(L(_raster(rows, rect)), gopts, defaults)
+
+
+# ───────────────────────────── triangle meshes (density, contour and region plots) ─────────────────────────────
+
+def grid_mesh(a, b, c, d, nx, ny):
+    """Vertices of an nx x ny grid over [a, b] x [c, d] and its triangles (two per cell)."""
+    np = _np()
+    xs = np.linspace(a, b, nx)
+    ys = np.linspace(c, d, ny)
+    X, Y = np.meshgrid(xs, ys)
+    P = np.column_stack([X.ravel(), Y.ravel()])
+    tris = []
+    for j in range(ny - 1):
+        for i in range(nx - 1):
+            k = j * nx + i
+            tris.append((k, k + 1, k + nx + 1))
+            tris.append((k, k + nx + 1, k + nx))
+    return P, np.array(tris, dtype=int), xs, ys
+
+
+def clip_poly(poly, lo=None, hi=None):
+    """Clip a polygon [(x, y, v), ...] (v linear along edges) to lo <= v <= hi (Sutherland-Hodgman)."""
+    def clip(poly, inside, cross):
+        out = []
+        n = len(poly)
+        for i in range(n):
+            p, q = poly[i], poly[(i + 1) % n]
+            ip, iq = inside(p), inside(q)
+            if ip:
+                out.append(p)
+            if ip != iq:
+                out.append(cross(p, q))
+        return out
+
+    def cross_at(level):
+        def f(p, q):
+            t = (level - p[-1]) / (q[-1] - p[-1]) if q[-1] != p[-1] else 0.5
+            return tuple(p[k] + t * (q[k] - p[k]) for k in range(len(p) - 1)) + (level,)
+        return f
+    if lo is not None:
+        poly = clip(poly, lambda p: p[-1] >= lo, cross_at(lo))
+    if hi is not None and poly:
+        poly = clip(poly, lambda p: p[-1] <= hi, cross_at(hi))
+    return poly
+
+
+def iso_segment(tri, level):
+    """The segment where the linear interpolant of a triangle [(x, y, v)] * 3 equals ``level`` (or None)."""
+    pts_ = []
+    for i in range(3):
+        p, q = tri[i], tri[(i + 1) % 3]
+        if (p[-1] - level) * (q[-1] - level) < 0:
+            t = (level - p[-1]) / (q[-1] - p[-1])
+            pts_.append(tuple(p[k] + t * (q[k] - p[k]) for k in range(len(p) - 1)))
+    return pts_ if len(pts_) == 2 else None
+
+
+def bands(P, V, T, levels):
+    """Polygons of the mesh for each band [levels[k], levels[k+1]] (with -inf/+inf at the ends)."""
+    np = _np()
+    edges = [-math.inf] + list(levels) + [math.inf]
+    out = [[] for _ in range(len(edges) - 1)]
+    for t in T:
+        vs = V[t]
+        if not np.isfinite(vs).all():
+            continue
+        tri = [(P[k][0], P[k][1], V[k]) for k in t]
+        lo_v, hi_v = float(vs.min()), float(vs.max())
+        for k in range(len(edges) - 1):
+            lo, hi = edges[k], edges[k + 1]
+            if hi_v < lo or lo_v > hi:
+                continue
+            if lo <= lo_v and hi_v <= hi:
+                out[k].append([(p[0], p[1]) for p in tri])
+            else:
+                c = clip_poly(tri, None if lo == -math.inf else lo, None if hi == math.inf else hi)
+                if len(c) >= 3:
+                    out[k].append([(p[0], p[1]) for p in c])
+    return out
+
+
+def iso_lines(P, V, T, level):
+    np = _np()
+    segs = []
+    for t in T:
+        vs = V[t]
+        if not np.isfinite(vs).all():
+            continue
+        if vs.min() < level < vs.max():
+            s = iso_segment([(P[k][0], P[k][1], V[k]) for k in t], level)
+            if s:
+                segs.append(s)
+    return chain_segments(segs)
+
+
+def chain_segments(segs, ndigits=9):
+    """Join segments that share end points into polylines."""
+    def key(p):
+        return tuple(round(c, ndigits) for c in p)
+    from collections import defaultdict
+    adj = defaultdict(list)
+    for i, (p, q) in enumerate(segs):
+        adj[key(p)].append(i)
+        adj[key(q)].append(i)
+    used = [False] * len(segs)
+    lines = []
+    for i in range(len(segs)):
+        if used[i]:
+            continue
+        used[i] = True
+        line = [segs[i][0], segs[i][1]]
+        for end in (1, 0):
+            while True:
+                tip = line[-1] if end == 1 else line[0]
+                nxt = None
+                for j in adj[key(tip)]:
+                    if not used[j]:
+                        nxt = j
+                        break
+                if nxt is None:
+                    break
+                used[nxt] = True
+                p, q = segs[nxt]
+                new = q if key(p) == key(tip) else p
+                if end == 1:
+                    line.append(new)
+                else:
+                    line.insert(0, new)
+        lines.append(line)
+    return lines
+
+
+def multi_polygon(polys):
+    if len(polys) == 1:
+        return Expr("Polygon", pts(polys[0]))
+    return Expr("Polygon", L(*[pts(p) for p in polys]))
+
+
+def contour_levels(spec, lo, hi, fname):
+    """Contours setting -> list of levels (Automatic: FindDivisions-style nice values strictly inside the range)."""
+    if spec is None or is_sym(spec, "Automatic"):
+        ts = PO.tick_positions(lo, hi, 10) if hi > lo else []
+        return [t for t in ts if lo < t < hi] or ([(lo + hi) / 2] if hi > lo else [])
+    if isinstance(spec, int) and not isinstance(spec, bool):
+        if spec < 0:
+            raise ValueError(f"{fname}: the number of contours must be non-negative")
+        return [lo + (hi - lo) * (k + 1) / (spec + 1) for k in range(spec)]
+    if K.is_list(spec):
+        out = []
+        for c in spec.args:
+            if K.is_list(c) and c.args:
+                c = c.args[0]
+            v = num(c)
+            if v is None:
+                raise ValueError(f"{fname}: contour level {K_input(c)} is not a real number")
+            out.append(v)
+        return sorted(out)
+    raise NotImplementedError(f"{fname}: Contours -> {K_input(spec)} is not supported")
+
+
+def density_complex(P, V, T, cf, vlo, vhi, scale=True):
+    """GraphicsComplex with the mesh triangles and per-vertex colours cf((v - vlo)/(vhi - vlo))."""
+    np = _np()
+    ok = np.isfinite(V)
+    tris = [t for t in T if ok[t].all()]
+    span = (vhi - vlo) if vhi > vlo else 1.0
+    cols = [rgb(cf((float(v) - vlo) / span if scale else float(v))) if math.isfinite(v) else rgb((1.0, 1.0, 1.0))
+            for v in V]
+    poly = Expr("Polygon", L(*[L(*[int(k) + 1 for k in t]) for t in tris]))
+    return Expr("GraphicsComplex", pts([tuple(p) for p in P]), L(Expr("EdgeForm"), poly),
+                Expr("Rule", Symbol("VertexColors"), L(*cols)))
+
+
+def two_iterators(pos, fname):
+    if len(pos) != 3:
+        raise ValueError(f"{fname}: expected {fname}[f, {{x, xmin, xmax}}, {{y, ymin, ymax}}, options]")
+    f, sx, sy = pos
+    x, a, b = iterator(sx, fname, 2)
+    y, c, d = iterator(sy, fname, 3)
+    if x.name == y.name:
+        raise ValueError(f"{fname}: the two iterator variables must differ")
+    return f, x, a, b, y, c, d
+
+
+_FIELD_DEFAULTS = {"PlotRange": AUTO, "PlotPoints": AUTO, "MaxRecursion": AUTO, "ColorFunction": AUTO,
+                   "ColorFunctionScaling": True, "PlotLegends": NONE, "Mesh": NONE, "MeshStyle": AUTO,
+                   "MeshFunctions": AUTO, "Exclusions": AUTO, "ExclusionsStyle": NONE, "RegionFunction": AUTO,
+                   "PlotTheme": AUTO, "PerformanceGoal": AUTO, "WorkingPrecision": Symbol("MachinePrecision"),
+                   "EvaluationMonitor": NONE, "Method": AUTO, "ClippingStyle": NONE, "ScalingFunctions": NONE,
+                   "BoundaryStyle": AUTO, "PlotStyle": AUTO, "Contours": AUTO, "ContourStyle": AUTO,
+                   "ContourShading": AUTO, "ContourLabels": AUTO, "InterpolationOrder": AUTO,
+                   "DataRange": AUTO, "MaxPlotPoints": AUTO, "PlotRangePadding": AUTO, "PlotHighlighting": AUTO,
+                   "TextureCoordinateFunction": AUTO, "TextureCoordinateScaling": AUTO}
+
+
+def _check_field_unsupported(o, fname, allowed):
+    for n, v in o.items():
+        if n in allowed or n == "PlotRange":
+            continue
+        if is_sym(v, "Automatic", "None", "Infinity") or (n == "WorkingPrecision" and is_sym(v, "MachinePrecision")) \
+                or (n == "PlotTheme" and v == "Default") or (n == "PerformanceGoal" and v in ("Quality", "Speed")) \
+                or (n == "ColorFunctionScaling" and v is True):
+            continue
+        raise NotImplementedError(f"{fname}: the option {n} -> {K_input(v)} is not supported")
+
+
+def _grid_n(o, fname, default):
+    n = _int_opt(o["PlotPoints"], default, fname, "PlotPoints", 2)
+    rec = _int_opt(o["MaxRecursion"], 1, fname, "MaxRecursion", 0)
+    n = (n - 1) * (2 ** min(rec, 2)) + 1
+    return min(n, 401)
+
+
+@fn("DensityPlot", area=AREA, status="added", hold=True,
+    notes="DensityPlot[f, {x, xmin, xmax}, {y, ymin, ymax}] (HoldAll): Graphics[GraphicsComplex[grid points, "
+          "{EdgeForm[], Polygon[triangles]}, VertexColors -> colours]] with colours ColorFunction((f - fmin)/"
+          "(fmax - fmin)) (default gradient dark blue - teal - yellow - orange, an approximation of Wolfram's); "
+          "grid of (PlotPoints - 1) 2^min(MaxRecursion, 2) + 1 points per side (default PlotPoints 25, "
+          "MaxRecursion 1: 49 x 49); undefined/non-real values leave holes. Options: PlotPoints, MaxRecursion, "
+          "ColorFunction (colour head or pure function), ColorFunctionScaling, PlotRange (clips the colour "
+          "scale) and Graphics options; PlotLegends, Mesh, RegionFunction and other settings raise "
+          "NotImplementedError. Free parameters leave the call unevaluated. Check: numeric cross-check (compiled "
+          "vs kernel N) and reference (tests compare vertex values with f).")
+def _densityplot(f: Held, sx: Held, sy: Held, *opts: Held | Option) -> Expr:
+    fname = "DensityPlot"
+    pos, o_ = hold_args((f, sx, sy) + opts)
+    f, x, a, b, y, c, d = two_iterators(pos, fname)
+    o, gopts = split_options(fname, o_, _FIELD_DEFAULTS)
+    _check_field_unsupported(o, fname, ("PlotPoints", "MaxRecursion", "ColorFunction", "ColorFunctionScaling"))
+    n = _grid_n(o, fname, 25)
+    comp = Compiled(f, [x, y], fname)
+    symbolic_check(comp, [x, y], fname)
+    comp.cross_check([(a + (b - a) * 0.31, c + (d - c) * 0.67), (a + (b - a) * 0.77, c + (d - c) * 0.21)])
+    P, T, _, _ = grid_mesh(a, b, c, d, n, n)
+    V = comp(P[:, 0], P[:, 1])
+    fin = V[_np().isfinite(V)]
+    vlo, vhi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    pr = o["PlotRange"]
+    if not is_sym(pr, "Automatic", "All", "Full"):
+        rr = resolve_plot_range(pr, fname, [(a, b), (c, d), (vlo, vhi)], dims=3)
+        vlo, vhi = rr[2]
+    cf = color_function(o["ColorFunction"], fname, lambda t: blend(DENSITY_GRADIENT, t))
+    g = density_complex(P, V, T, cf, vlo, vhi, o["ColorFunctionScaling"] is not False)
+    defaults = [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr([(a, b), (c, d)])),
+                ("PlotRangePadding", 0)]
+    return finish_graphics(L(g), gopts, defaults)
+
+
+def _level_function(pred, fname):
+    """Inequality predicate -> held expression g with g >= 0 exactly where pred holds (strictness ignored, as the
+    boundary has no area), or None if pred is not a combination of inequalities."""
+    if isinstance(pred, Expr):
+        h = pred.head
+        if h in ("Greater", "GreaterEqual", "Less", "LessEqual") and len(pred.args) >= 2:
+            parts = []
+            for p_, q_ in zip(pred.args, pred.args[1:]):
+                if h in ("Greater", "GreaterEqual"):
+                    parts.append(Expr("Plus", p_, Expr("Times", -1, q_)))
+                else:
+                    parts.append(Expr("Plus", q_, Expr("Times", -1, p_)))
+            return parts[0] if len(parts) == 1 else Expr("Min", *parts)
+        if h == "Inequality":
+            raise NotImplementedError(f"{fname}: Inequality[...] predicates are not supported; use a < x < b")
+        if h == "And":
+            gs = [_level_function(a, fname) for a in pred.args]
+            return None if any(g is None for g in gs) else Expr("Min", *gs)
+        if h == "Or":
+            gs = [_level_function(a, fname) for a in pred.args]
+            return None if any(g is None for g in gs) else Expr("Max", *gs)
+        if h == "Not" and len(pred.args) == 1:
+            g = _level_function(pred.args[0], fname)
+            return None if g is None else Expr("Times", -1, g)
+    return None
+
+
+_REGION_DEFAULTS = dict(_FIELD_DEFAULTS)
+
+
+@fn("RegionPlot", area=AREA, status="added", hold=True,
+    notes="RegionPlot[pred, {x, xmin, xmax}, {y, ymin, ymax}] and lists of predicates (HoldAll): filled polygons "
+          "of the region where pred is True. Predicates made of <, <=, >, >= (chains too), And, Or and Not are "
+          "turned into a level function g (min/max of lhs - rhs) whose zero set is interpolated linearly on a "
+          "grid of triangles (default 81 x 81: PlotPoints 41, MaxRecursion 1), so boundaries are accurate to the "
+          "grid; other Boolean predicates are sampled as True/False with the boundary at the cell midpoints. "
+          "Output: {Directive[Opacity[0.3], colour], Polygon[{...}], boundary Line} per predicate. Options: "
+          "PlotPoints, MaxRecursion, PlotStyle, BoundaryStyle (None or a directive), PlotLegends and Graphics "
+          "options. Equations (==) and other settings raise NotImplementedError; free parameters leave the call "
+          "unevaluated. Check: numeric cross-check and reference (tests check polygon vertices satisfy pred and "
+          "the filled area against the exact area).")
+def _regionplot(pred: Held, sx: Held, sy: Held, *opts: Held | Option) -> Expr:
+    fname = "RegionPlot"
+    pos, o_ = hold_args((pred, sx, sy) + opts)
+    pred, x, a, b, y, c, d = two_iterators(pos, fname)
+    o, gopts = split_options(fname, o_, _REGION_DEFAULTS)
+    _check_field_unsupported(o, fname, ("PlotPoints", "MaxRecursion", "PlotStyle", "BoundaryStyle", "PlotLegends"))
+    n = _grid_n(o, fname, 41)
+    preds, _ = _curves_of(pred, x)
+    styles = style_list(o["PlotStyle"], len(preds), fname)
+    content = []
+    np = _np()
+    P, T, _, _ = grid_mesh(a, b, c, d, n, n)
+    for i, pr in enumerate(preds):
+        ev_pred = pr
+        if isinstance(pr, Expr) and pr.head == "Equal":
+            raise NotImplementedError(f"{fname}: equations have no area; use ContourPlot for curves")
+        g = _level_function(ev_pred, fname)
+        if g is None:
+            g = Expr("Plus", Expr("Times", 2, Expr("Boole", ev_pred)), -1)
+        comp = Compiled(g, [x, y], fname)
+        symbolic_check(comp, [x, y], fname)
+        comp.cross_check([(a + (b - a) * 0.31, c + (d - c) * 0.67), (a + (b - a) * 0.77, c + (d - c) * 0.21)])
+        V = comp(P[:, 0], P[:, 1])
+        if not np.isfinite(V).any():
+            v0 = comp.point(a + (b - a) * 0.37, c + (d - c) * 0.41)
+            if math.isnan(v0):
+                pass
+        polys = region_polygons(P, V, T, n, n)
+        col = style_color(styles[i]) if styles[i] is not None else None
+        if styles[i] is None:
+            continue
+        fill_style = Expr("Directive", Expr("Opacity", 0.3), col) if is_sym(o["PlotStyle"], "Automatic") else \
+            styles[i]
+        grp = [fill_style, Expr("EdgeForm")]
+        if polys:
+            grp.append(multi_polygon(polys))
+        bs = o["BoundaryStyle"]
+        if not is_sym(bs, "None"):
+            lines = iso_lines(P, V, T, 0.0)
+            if lines:
+                bstyle = col if is_sym(bs, "Automatic") else bs
+                if not is_sym(bs, "Automatic"):
+                    G.directive_like(bs, fname, "BoundaryStyle")
+                grp.append(L(bstyle, Expr("Line", L(*[pts(ln) for ln in lines]))))
+        content.append(L(*grp))
+    defaults = [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr([(a, b), (c, d)])),
+                ("PlotRangePadding", 0)]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], [Expr("Directive", Expr("Opacity", 0.3), style_color(s)) for s in styles],
+                       [Expr("HoldForm", p) for p in preds], fname, "swatch")
+
+
+def region_polygons(P, V, T, nx, ny):
+    """Polygons of {v >= 0}: whole grid cells merged into row runs, boundary cells clipped per triangle."""
+    np = _np()
+    out = []
+    Vg = V.reshape(ny, nx)
+    inside_v = np.isfinite(Vg) & (Vg >= 0)
+    cell_in = inside_v[:-1, :-1] & inside_v[:-1, 1:] & inside_v[1:, :-1] & inside_v[1:, 1:]
+    xs = P[:nx, 0]
+    ys = P[::nx, 1]
+    for j in range(ny - 1):
+        i = 0
+        while i < nx - 1:
+            if cell_in[j, i]:
+                k = i
+                while k + 1 < nx - 1 and cell_in[j, k + 1]:
+                    k += 1
+                out.append([(xs[i], ys[j]), (xs[k + 1], ys[j]), (xs[k + 1], ys[j + 1]), (xs[i], ys[j + 1])])
+                i = k + 1
+            else:
+                i += 1
+    for idx, t in enumerate(T):
+        j, i = divmod(idx // 2, nx - 1)
+        if cell_in[j, i]:
+            continue
+        vs = V[t]
+        if not np.isfinite(vs).all() or vs.max() < 0:
+            continue
+        c = clip_poly([(P[k][0], P[k][1], V[k]) for k in t], 0.0, None)
+        if len(c) >= 3:
+            out.append([(p[0], p[1]) for p in c])
+    return out
