@@ -2107,3 +2107,1338 @@ def _transformationmatrix(t):
     if tf:
         raise ValueError("TransformationMatrix: invalid TransformationFunction")
     raise Unevaluated()
+
+
+# ═══════════════════════════════ vector inequalities ═══════════════════════════════
+
+_VEC_OPS = {"VectorLess": ("<", True), "VectorLessEqual": ("<", False),
+            "VectorGreater": (">", True), "VectorGreaterEqual": (">", False)}
+
+
+def _np_array_of(x):
+    """NumPy array of a numeric scalar / array, or None when it is not explicitly numeric."""
+    np = _np()
+    if is_list(x):
+        try:
+            parts = [_np_array_of(a) for a in x.args]
+        except ValueError:
+            return None
+        if any(p is None for p in parts):
+            return None
+        try:
+            return np.array(parts)
+        except ValueError:
+            return None
+    try:
+        v = S(x) if not isinstance(x, (bool, str)) else None
+    except Exception:
+        return None
+    if isinstance(v, sp.Basic) and v.is_number:
+        z = complex(sp.N(v))
+        if z.imag != 0:
+            return None
+        return np.array(z.real)
+    return None
+
+
+def _cone_spec(c, fname):
+    if isinstance(c, str):
+        return c, None
+    if is_list(c) and len(c.args) == 2 and isinstance(c.args[0], str):
+        return c.args[0], c.args[1]
+    raise ValueError(f"{fname}: invalid cone specification {c}")
+
+
+def _in_cone(d, cone, param, strict):
+    """Whether the numeric array d lies in (the interior of, when strict) the cone."""
+    np = _np()
+    tol = 0.0
+    if cone == "NonNegativeCone":
+        return bool(np.all(d > tol) if strict else np.all(d >= -tol))
+    if cone == "NormCone":
+        v = d.ravel()
+        r = float(np.linalg.norm(v[:-1]))
+        return bool(v[-1] > r if strict else v[-1] >= r)
+    if cone == "SemidefiniteCone":
+        if d.ndim != 2 or d.shape[0] != d.shape[1]:
+            raise ValueError("SemidefiniteCone: a square matrix is required")
+        if not np.allclose(d, d.T):
+            return False
+        w = np.linalg.eigvalsh(d)
+        return bool(np.all(w > 0) if strict else np.all(w >= -1e-14 * max(1.0, float(np.max(np.abs(w))))))
+    if cone == "ExponentialCone":
+        x, y, z = d.ravel()
+        if y > 0:
+            return bool(y * math.exp(x / y) < z if strict else y * math.exp(x / y) <= z)
+        return (not strict) and y == 0 and x <= 0 and z >= 0
+    if cone == "DualExponentialCone":
+        u, v, w = d.ravel()
+        if u < 0:
+            return bool(-u * math.exp(v / u) < math.e * w if strict else -u * math.exp(v / u) <= math.e * w)
+        return (not strict) and u == 0 and v >= 0 and w >= 0
+    if cone == "PowerCone":
+        a = float(param if param is not None else 0.5)
+        x, y, z = d.ravel()
+        if x < 0 or y < 0:
+            return False
+        lhs = x ** a * y ** (1 - a)
+        return bool(lhs > abs(z) if strict else lhs >= abs(z))
+    raise NotImplementedError(f"cone {cone} is not supported")
+
+
+def _vec_ineq(name, args):
+    op, strict = _VEC_OPS[name]
+    if len(args) not in (1, 2):
+        raise ValueError(f"{name} called with {len(args)} arguments; expected 1 or 2")
+    if not is_list(args[0]) or len(args[0].args) < 2:
+        raise Unevaluated()
+    cone, param = ("NonNegativeCone", None)
+    if len(args) == 2:
+        cone, param = _cone_spec(args[1], name)
+        if cone not in ("NonNegativeCone", "NormCone", "SemidefiniteCone", "ExponentialCone",
+                        "DualExponentialCone", "PowerCone"):
+            raise ValueError(f"{name}: unknown cone {cone}")
+    arrs = [_np_array_of(a) for a in args[0].args]
+    if any(a is None for a in arrs):
+        raise Unevaluated()
+    np = _np()
+    for a, b in zip(arrs, arrs[1:]):
+        if a.ndim and b.ndim and a.shape != b.shape:
+            raise ValueError(f"{name}: the arrays {a.tolist()} and {b.tolist()} have incompatible dimensions")
+        d = (b - a) if op == "<" else (a - b)
+        if cone == "NonNegativeCone":
+            d = np.broadcast_to(d, np.broadcast_shapes(a.shape, b.shape))
+        elif not d.ndim:
+            raise ValueError(f"{name}: the cone {cone} needs vector or matrix arguments")
+        if not _in_cone(np.asarray(d, dtype=float), cone, param, strict):
+            return False
+    return True
+
+
+for _vn, (_vop, _vstrict) in _VEC_OPS.items():
+    def _mk(vn):
+        def impl(*args):
+            return _vec_ineq(vn, args)
+        return impl
+    fn(_vn, **ADDED,
+       notes=f"{_vn}[{{x, y, ...}}] (infix \\[{_vn}]): {'strict ' if _vstrict else ''}elementwise "
+             f"{'<' if _vop == '<' else '>'}{'' if _vstrict else '='} comparison of numeric scalars/arrays, a "
+             "scalar is broadcast against an array; "
+             f"{_vn}[{{x, y}}, cone] uses the partial order of {{\"NonNegativeCone\", n}}, {{\"NormCone\", n}}, "
+             "{\"SemidefiniteCone\", n}, \"ExponentialCone\", \"DualExponentialCone\" or {\"PowerCone\", a}; "
+             "symbolic comparisons stay unevaluated (they are understood as constraints by the optimisers)")(_mk(_vn))
+
+
+# ═══════════════════════════════ optimisation engine ═══════════════════════════════
+
+class _OptError(ValueError):
+    pass
+
+
+class _Prob:
+    """A finite-dimensional optimisation problem in flat scalar variables."""
+
+    def __init__(self):
+        self.syms = []          # real SymPy symbols
+        self.ints = set()       # indices of integer variables
+        self.template = []      # output layout: (name, None) scalar or (name, [indices]) vector
+        self.starts = {}        # index -> starting value
+        self.obj = sp.Integer(0)
+        self.cons = []          # (expr, op) meaning expr op 0, op in "<=", "==" (>= normalised to <=)
+        self.cones = []         # (list of exprs or matrix, cone, param)
+        self.inexact = False
+        self.bare = False       # a single bare variable (NArgMin returns a scalar)
+
+
+def _fresh(name, i=None):
+    return sp.Symbol(f"{name}" if i is None else f"{name}${i + 1}", real=True)
+
+
+def _infer_dim(e, name):
+    """Length of the vector variable `name`, from a Dot with an explicit list or matrix."""
+    if isinstance(e, Expr):
+        if e.head == "Dot":
+            for k, a in enumerate(e.args):
+                if isinstance(a, Symbol) and a.name == name:
+                    nb = e.args[k - 1] if k > 0 else None
+                    if nb is not None and is_list(nb):
+                        d = _dims(nb)
+                        return d[-1]
+                    na = e.args[k + 1] if k + 1 < len(e.args) else None
+                    if na is not None and is_list(na):
+                        return _dims(na)[0]
+        for a in e.args:
+            r = _infer_dim(a, name)
+            if r:
+                return r
+        if isinstance(e.head, Expr):
+            return _infer_dim(e.head, name)
+    return None
+
+
+def _subst(e, mapping):
+    """Replace symbols (by name) in a MikoshiLang expression and re-evaluate."""
+    if not mapping:
+        return e
+    rules = L(*(Expr("Rule", Symbol(k) if isinstance(k, str) else k, v) for k, v in mapping.items()))
+    return ev(Expr("ReplaceAll", e, rules))
+
+
+def _parse_vars(vspec, fname, prob, exprs, allow_start=False, domains=None):
+    """Fill prob.syms / template from a variable specification; returns the name -> replacement mapping."""
+    specs = list(vspec.args) if is_list(vspec) else [vspec]
+    if allow_start and is_list(vspec) and len(vspec.args) in (2, 4) and isinstance(vspec.args[0], Symbol) and \
+            not isinstance(vspec.args[1], Symbol) and not is_list(vspec.args[1]):
+        specs = [vspec]
+    prob.bare = not is_list(vspec) and isinstance(vspec, Symbol)
+    mapping = {}
+    for k, s in enumerate(specs):
+        integer = False
+        dim = None
+        start = lo = hi = None
+        if domains is not None and k < len(domains):
+            integer = is_sym(domains[k], "Integers")
+        if isinstance(s, Expr) and s.head == "Element" and len(s.args) == 2:
+            v, dom = s.args
+            if is_sym(dom, "Integers"):
+                integer = True
+            elif is_sym(dom, "Reals"):
+                pass
+            elif isinstance(dom, Expr) and dom.head == "Vectors":
+                dim = int_arg(dom.args[0], fname)
+                if len(dom.args) > 1:
+                    integer = is_sym(dom.args[1], "Integers")
+                    if not integer and not is_sym(dom.args[1], "Reals"):
+                        raise NotImplementedError(f"{fname}: vector domain {dom} is not supported")
+            else:
+                raise NotImplementedError(f"{fname}: variable domain {dom} is not supported")
+            if is_list(v):
+                for w in v.args:
+                    mapping.update(_parse_vars(Expr("Element", w, dom), fname, prob, exprs, False))
+                continue
+            s = v
+        elif is_list(s) and allow_start and len(s.args) in (2, 4) and isinstance(s.args[0], Symbol):
+            start = S(s.args[1])
+            if len(s.args) == 4:
+                lo, hi = S(s.args[2]), S(s.args[3])
+            s = s.args[0]
+        if not isinstance(s, (Symbol, Expr)) or (isinstance(s, Expr) and s.head == "List"):
+            raise ValueError(f"{fname}: {s} is not a valid variable")
+        name = str(s) if isinstance(s, Expr) else s.name
+        if isinstance(s, Symbol) and dim is None:
+            for e in exprs:
+                dim = dim or _infer_dim(e, s.name)
+        if dim:
+            idx = []
+            comps = []
+            for i in range(dim):
+                sym = _fresh(name, i)
+                idx.append(len(prob.syms))
+                if integer:
+                    prob.ints.add(len(prob.syms))
+                prob.syms.append(sym)
+                comps.append(Symbol(sym.name))
+            prob.template.append((s, idx))
+            mapping[s] = L(*comps)
+        else:
+            sym = _fresh(name)
+            i = len(prob.syms)
+            if integer:
+                prob.ints.add(i)
+            prob.syms.append(sym)
+            prob.template.append((s, i))
+            if isinstance(s, Expr) or s.name != sym.name:
+                mapping[s] = Symbol(sym.name)
+            if start is not None:
+                prob.starts[i] = float(sp.N(start))
+            if lo is not None:
+                prob.cons.append(("bound", sym, lo, hi))
+    return mapping
+
+
+def _to_sym(prob, e, fname):
+    v = S(e)
+    if isinstance(v, list):
+        raise ValueError(f"{fname}: expected a scalar expression, got a list {e}")
+    if not isinstance(v, sp.Basic):
+        v = sp.sympify(v)
+    rep = {sp.Symbol(s.name): s for s in prob.syms}
+    v = v.xreplace(rep)
+    if any(isinstance(a, sp.Float) for a in sp.preorder_traversal(v)):
+        prob.inexact = True
+    return v
+
+
+def _region_cons(pts, region, fname):
+    """Inequalities (as MikoshiLang expressions) for {x, ...} \\[Element] region."""
+    if not isinstance(region, Expr):
+        raise NotImplementedError(f"{fname}: region {region} is not supported")
+    h, a = region.head, region.args
+    n = len(pts)
+    if h in ("Disk", "Ball"):
+        c = a[0] if a else L(*([0] * n))
+        r = a[1] if len(a) > 1 else 1
+        if not is_list(c) or len(c.args) != n or is_list(r):
+            raise NotImplementedError(f"{fname}: region {region} is not supported")
+        return [Expr("LessEqual", Expr("Plus", *(Expr("Power", Expr("Plus", p, Expr("Times", -1, ci)), 2)
+                                                  for p, ci in zip(pts, c.args))), Expr("Power", r, 2))]
+    if h in ("Rectangle", "Cuboid"):
+        lo = a[0] if a else L(*([0] * n))
+        hi = a[1] if len(a) > 1 else Expr("Plus", lo, L(*([1] * n)))
+        hi = ev(hi)
+        out = []
+        for p, l_, u_ in zip(pts, lo.args, hi.args):
+            out += [Expr("GreaterEqual", p, l_), Expr("LessEqual", p, u_)]
+        return out
+    raise NotImplementedError(f"{fname}: region {h} is not supported (Disk, Ball, Rectangle and Cuboid are)")
+
+
+def _add_rel(prob, lhs, rhs, op, fname):
+    a, b = _to_sym(prob, lhs, fname), _to_sym(prob, rhs, fname)
+    if op in ("<=", "<"):
+        prob.cons.append((a - b, "<="))
+    elif op in (">=", ">"):
+        prob.cons.append((b - a, "<="))
+    else:
+        prob.cons.append((a - b, "=="))
+
+
+_REL = {"LessEqual": "<=", "Less": "<", "GreaterEqual": ">=", "Greater": ">", "Equal": "=="}
+
+
+def _parse_cons(prob, c, fname, mapping):
+    if c is True or c is None:
+        return
+    if c is False:
+        raise _OptError(f"{fname}: the constraints are infeasible")
+    if is_list(c) or (isinstance(c, Expr) and c.head == "And"):
+        for a in c.args:
+            _parse_cons(prob, a, fname, mapping)
+        return
+    if not isinstance(c, Expr):
+        raise ValueError(f"{fname}: invalid constraint {c}")
+    h = c.head
+    if h == "Element" and len(c.args) == 2:
+        v, dom = c.args
+        vs = list(v.args) if is_list(v) else [v]
+        if is_sym(dom, "Integers") or is_sym(dom, "Reals"):
+            for w in vs:
+                w = _subst(w, mapping)
+                ws = list(w.args) if is_list(w) else [w]
+                for x in ws:
+                    sym = _to_sym(prob, x, fname)
+                    if sym not in prob.syms:
+                        raise ValueError(f"{fname}: {x} is not a variable")
+                    if is_sym(dom, "Integers"):
+                        prob.ints.add(prob.syms.index(sym))
+            return
+        pts = list(_subst(v, mapping).args) if is_list(_subst(v, mapping)) else [_subst(v, mapping)]
+        for r in _region_cons(pts, dom, fname):
+            _parse_cons(prob, ev(r), fname, mapping)
+        return
+    if h in _VEC_OPS:
+        op, strict = _VEC_OPS[h]
+        items = c.args[0]
+        if not is_list(items):
+            raise ValueError(f"{fname}: invalid vector inequality {c}")
+        cone = "NonNegativeCone"
+        param = None
+        if len(c.args) == 2:
+            cone, param = _cone_spec(c.args[1], fname)
+        parts = [ev(p) for p in items.args]
+        for a, b in zip(parts, parts[1:]):
+            d = ev(Expr("Plus", b, Expr("Times", -1, a))) if op == "<" else ev(Expr("Plus", a, Expr("Times", -1, b)))
+            if cone == "NonNegativeCone":
+                flat = _flat_expr(d)
+                for e in flat:
+                    prob.cons.append((-_to_sym(prob, e, fname), "<="))
+            else:
+                prob.cones.append((d, cone, param))
+        return
+    if h == "Inequality":
+        a = c.args
+        for i in range(0, len(a) - 2, 2):
+            _add_rel(prob, a[i], a[i + 2], _REL[a[i + 1].name], fname)
+        return
+    if h in _REL and len(c.args) >= 2:
+        args = c.args
+        for x, y in zip(args, args[1:]):
+            if is_list(x) or is_list(y):
+                xs, ys = _flat_expr(x), _flat_expr(y)
+                if len(xs) == 1:
+                    xs = xs * len(ys)
+                if len(ys) == 1:
+                    ys = ys * len(xs)
+                if len(xs) != len(ys):
+                    raise ValueError(f"{fname}: incompatible dimensions in {c}")
+                for p, q in zip(xs, ys):
+                    _add_rel(prob, p, q, _REL[h], fname)
+            else:
+                _add_rel(prob, x, y, _REL[h], fname)
+        return
+    if h == "Unequal":
+        raise NotImplementedError(f"{fname}: Unequal constraints are not supported")
+    raise ValueError(f"{fname}: invalid constraint {c}")
+
+
+def _flat_expr(x):
+    if is_list(x):
+        out = []
+        for a in x.args:
+            out.extend(_flat_expr(a))
+        return out
+    return [x]
+
+
+def _build(f, cons, vspec, fname, allow_start=False, domains=None):
+    prob = _Prob()
+    exprs = [f, cons]
+    mapping = _parse_vars(vspec, fname, prob, exprs, allow_start, domains)
+    bounds = [c for c in prob.cons if c and c[0] == "bound"]
+    prob.cons = [c for c in prob.cons if not (c and c[0] == "bound")]
+    for _, sym, lo, hi in bounds:
+        prob.cons.append((lo - sym, "<="))
+        prob.cons.append((sym - hi, "<="))
+    f2 = _subst(f, mapping)
+    if is_list(f2):
+        raise ValueError(f"{fname}: the objective must be a scalar, got {f2}")
+    prob.obj = _to_sym(prob, f2, fname)
+    _parse_cons(prob, _subst(cons, mapping) if cons is not None else None, fname, mapping)
+    allowed = set(prob.syms)
+    for e in [prob.obj] + [c[0] for c in prob.cons]:
+        extra = e.free_symbols - allowed
+        if extra:
+            raise ValueError(f"{fname}: the problem contains parameters {sorted(map(str, extra))} that are not "
+                             "variables")
+    return prob
+
+
+def _split_problem(args, fname):
+    """(objective, constraints) from f or {f, cons...}."""
+    f = args
+    if is_list(f) and f.args:
+        return f.args[0], L(*f.args[1:]) if len(f.args) > 1 else None
+    return f, None
+
+
+# ── exact simplex (Fractions) ──
+
+def _frac(v):
+    if isinstance(v, Fraction):
+        return v
+    v = sp.nsimplify(v) if isinstance(v, sp.Float) and False else v
+    if isinstance(v, sp.Float):
+        return Fraction(float(v))
+    if isinstance(v, sp.Rational):
+        return Fraction(int(v.p), int(v.q))
+    if isinstance(v, (int,)):
+        return Fraction(v)
+    raise TypeError("not rational")
+
+
+def _linear_parts(e, syms):
+    """(coefficient list, constant) of a linear expression, or None if not linear."""
+    e = sp.expand(e)
+    try:
+        p = sp.Poly(e, *syms)
+    except sp.PolynomialError:
+        return None
+    if p.total_degree() > 1:
+        return None
+    coeffs = []
+    for s in syms:
+        coeffs.append(p.coeff_monomial(s))
+    const = p.coeff_monomial(1)
+    vals = coeffs + [const]
+    if not all(isinstance(v, sp.Basic) and v.is_number for v in vals):
+        return None
+    return coeffs, const
+
+
+def _simplex(c, A, b, kinds, n):
+    """Minimise c.x over free x with rows A_i.x (kind) b_i, kind in '<=', '=='.  Exact Fractions.
+
+    Returns ('optimal', x, value) | ('infeasible',) | ('unbounded',)."""
+    # variables: x = p - q (2n), slack per '<=' row, artificial per row
+    rows = []
+    rhs = []
+    m = len(A)
+    nslack = sum(1 for k in kinds if k == "<=")
+    ncol = 2 * n + nslack
+    si = 0
+    for i in range(m):
+        row = [Fraction(0)] * ncol
+        for j in range(n):
+            row[j] = A[i][j]
+            row[n + j] = -A[i][j]
+        if kinds[i] == "<=":
+            row[2 * n + si] = Fraction(1)
+            si += 1
+        bi = b[i]
+        if bi < 0:
+            row = [-v for v in row]
+            bi = -bi
+        rows.append(row)
+        rhs.append(bi)
+    # phase 1 tableau with artificials
+    total = ncol + m
+    T = [rows[i] + [Fraction(int(i == k)) for k in range(m)] + [rhs[i]] for i in range(m)]
+    basis = [ncol + i for i in range(m)]
+
+    def pivot(r, col):
+        pv = T[r][col]
+        T[r] = [v / pv for v in T[r]]
+        for i in range(len(T)):
+            if i != r and T[i][col] != 0:
+                f = T[i][col]
+                T[i] = [a - f * bb for a, bb in zip(T[i], T[r])]
+        basis[r] = col
+
+    def run(cost, allowed):
+        while True:
+            # reduced costs
+            cb = [cost[basis[i]] for i in range(m)]
+            enter = None
+            for j in range(total):
+                if not allowed(j) or j in basis:
+                    continue
+                rc = cost[j] - sum(cb[i] * T[i][j] for i in range(m))
+                if rc < 0:
+                    enter = j          # Bland: smallest index
+                    break
+            if enter is None:
+                return "optimal"
+            best = None
+            for i in range(m):
+                if T[i][enter] > 0:
+                    ratio = T[i][-1] / T[i][enter]
+                    if best is None or ratio < best[0] or (ratio == best[0] and basis[i] < basis[best[1]]):
+                        best = (ratio, i)
+            if best is None:
+                return "unbounded"
+            pivot(best[1], enter)
+
+    cost1 = [Fraction(0)] * ncol + [Fraction(1)] * m
+    run(cost1, lambda j: True)
+    if sum(T[i][-1] for i in range(m) if basis[i] >= ncol) != 0:
+        return ("infeasible",)
+    # drive artificials out of the basis
+    for i in range(m):
+        if basis[i] >= ncol:
+            for j in range(ncol):
+                if T[i][j] != 0:
+                    pivot(i, j)
+                    break
+    cost2 = [Fraction(0)] * total
+    for j in range(n):
+        cost2[j] = c[j]
+        cost2[n + j] = -c[j]
+    st = run(cost2, lambda j: j < ncol)
+    if st == "unbounded":
+        return ("unbounded",)
+    z = [Fraction(0)] * total
+    for i in range(m):
+        z[basis[i]] = T[i][-1]
+    x = [z[j] - z[n + j] for j in range(n)]
+    return ("optimal", x, sum(ci * xi for ci, xi in zip(c, x)))
+
+
+def _lp_data(prob, fname):
+    """Exact (Fraction) LP data from a linear problem, or None if it is not linear."""
+    if prob.cones:
+        return None
+    lin = _linear_parts(prob.obj, prob.syms)
+    if lin is None:
+        return None
+    rows = []
+    for e, op in prob.cons:
+        lp = _linear_parts(e, prob.syms)
+        if lp is None:
+            return None
+        rows.append((lp, op))
+    try:
+        c = [_frac(v) for v in lin[0]]
+        c0 = _frac(lin[1])
+        A = [[_frac(v) for v in lp[0]] for lp, _ in rows]
+        b = [-_frac(lp[1]) for lp, _ in rows]
+    except TypeError:
+        # irrational coefficients: use floats exactly converted
+        c = [Fraction(float(v)) for v in lin[0]]
+        c0 = Fraction(float(lin[1]))
+        A = [[Fraction(float(v)) for v in lp[0]] for lp, _ in rows]
+        b = [-Fraction(float(lp[1])) for lp, _ in rows]
+        prob.inexact = True
+    kinds = [op for _, op in rows]
+    return c, c0, A, b, kinds
+
+
+def _bnb(solve, ints, extra=(), limit=20000):
+    """Branch and bound: solve(extra_bounds) -> ('optimal', x, val) | ...; ints indices integer."""
+    best = None
+    stack = [list(extra)]
+    nodes = 0
+    status_any = None
+    while stack:
+        nodes += 1
+        if nodes > limit:
+            raise NotImplementedError("branch and bound exceeded its node limit")
+        bounds = stack.pop()
+        res = solve(bounds)
+        if res[0] == "unbounded":
+            if best is None:
+                return res
+            continue
+        if res[0] != "optimal":
+            continue
+        status_any = "optimal"
+        x, val = res[1], res[2]
+        if best is not None and val >= best[2] - (1e-9 if isinstance(val, float) else 0):
+            continue
+        frac_i = None
+        for i in sorted(ints):
+            xi = x[i]
+            if abs(xi - round(xi)) > (1e-7 if isinstance(xi, float) else 0):
+                frac_i = i
+                break
+        if frac_i is None:
+            best = res
+            continue
+        xi = x[frac_i]
+        fl = math.floor(xi)
+        stack.append(bounds + [(frac_i, "<=", fl)])
+        stack.append(bounds + [(frac_i, ">=", fl + 1)])
+    if best is None:
+        return ("infeasible",) if status_any is None else ("infeasible",)
+    return best
+
+
+def _solve_lp(prob, fname):
+    data = _lp_data(prob, fname)
+    if data is None:
+        return None
+    c, c0, A, b, kinds = data
+    n = len(prob.syms)
+
+    def solve(bounds):
+        A2, b2, k2 = [r[:] for r in A], b[:], kinds[:]
+        for i, op, v in bounds:
+            row = [Fraction(0)] * n
+            row[i] = Fraction(1) if op == "<=" else Fraction(-1)
+            A2.append(row)
+            b2.append(Fraction(v) if op == "<=" else Fraction(-v))
+            k2.append("<=")
+        return _simplex(c, A2, b2, k2, n)
+
+    res = _bnb(solve, prob.ints) if prob.ints else solve([])
+    if res[0] == "infeasible":
+        raise _OptError(f"{fname}: the constraints are infeasible")
+    if res[0] == "unbounded":
+        raise _OptError(f"{fname}: the problem is unbounded")
+    return res[1], res[2] + c0
+
+
+def _result_values(prob, x, exact):
+    """MikoshiLang values for the flat solution x (Fractions or floats)."""
+    out = []
+    for i, v in enumerate(x):
+        if i in prob.ints:
+            out.append(sp.Integer(int(round(v))))
+        elif exact and isinstance(v, Fraction) and not prob.inexact and not prob.ints:
+            out.append(sp.Rational(v.numerator, v.denominator))
+        else:
+            out.append(sp.Float(float(v)))
+    return out
+
+
+def _rules(prob, vals):
+    out = []
+    for var, idx in prob.template:
+        if isinstance(idx, int):
+            out.append(Expr("Rule", var, R(vals[idx])))
+        else:
+            out.append(Expr("Rule", var, L(*(R(vals[i]) for i in idx))))
+    return L(*out)
+
+
+def _vector(prob, vals):
+    out = []
+    for var, idx in prob.template:
+        if isinstance(idx, int):
+            out.append(R(vals[idx]))
+        else:
+            out.append(L(*(R(vals[i]) for i in idx)))
+    return L(*out)
+
+
+# ── exact convex quadratic programming (active-set enumeration) ──
+
+def _frac_solve(M, rhs):
+    """One solution of M x == rhs (free variables 0) over Fractions, or None if inconsistent."""
+    m = len(M)
+    n = len(M[0]) if M else 0
+    A = [row[:] + [r] for row, r in zip(M, rhs)]
+    piv_cols = []
+    r = 0
+    for c in range(n):
+        p = next((i for i in range(r, m) if A[i][c] != 0), None)
+        if p is None:
+            continue
+        A[r], A[p] = A[p], A[r]
+        pv = A[r][c]
+        A[r] = [v / pv for v in A[r]]
+        for i in range(m):
+            if i != r and A[i][c] != 0:
+                f = A[i][c]
+                A[i] = [a - f * b for a, b in zip(A[i], A[r])]
+        piv_cols.append(c)
+        r += 1
+        if r == m:
+            break
+    for i in range(r, m):
+        if A[i][-1] != 0:
+            return None
+    x = [Fraction(0)] * n
+    for i, c in enumerate(piv_cols):
+        x[c] = A[i][-1]
+    return x
+
+
+def _qp_data(prob):
+    """(Q, c, c0) Fractions for a quadratic objective, or None."""
+    e = sp.expand(prob.obj)
+    try:
+        p = sp.Poly(e, *prob.syms)
+    except sp.PolynomialError:
+        return None
+    if p.total_degree() > 2:
+        return None
+    n = len(prob.syms)
+    try:
+        Q = [[Fraction(0)] * n for _ in range(n)]
+        c = [Fraction(0)] * n
+        c0 = Fraction(0)
+        for mon, coef in p.terms():
+            if not coef.is_number:
+                return None
+            v = _frac(coef) if coef.is_Rational or isinstance(coef, sp.Float) else Fraction(float(coef))
+            idx = [i for i, k in enumerate(mon) for _ in range(k)]
+            if len(idx) == 0:
+                c0 += v
+            elif len(idx) == 1:
+                c[idx[0]] += v
+            else:
+                i, j = idx
+                if i == j:
+                    Q[i][i] += 2 * v
+                else:
+                    Q[i][j] += v
+                    Q[j][i] += v
+    except TypeError:
+        return None
+    return Q, c, c0
+
+
+def _psd(Q):
+    M = sp.Matrix([[sp.Rational(v.numerator, v.denominator) for v in row] for row in Q])
+    return bool(M.is_positive_semidefinite)
+
+
+def _solve_qp_exact(prob, fname, Q, c, c0, A, b, kinds, extra=()):
+    n = len(prob.syms)
+    ineq = [(A[i], b[i]) for i in range(len(A)) if kinds[i] == "<="]
+    eq = [(A[i], b[i]) for i in range(len(A)) if kinds[i] == "=="]
+    for i, op, v in extra:
+        row = [Fraction(0)] * n
+        row[i] = Fraction(1) if op == "<=" else Fraction(-1)
+        ineq.append((row, Fraction(v) if op == "<=" else Fraction(-v)))
+    m = len(ineq)
+    if m > 12:
+        return None
+    for size in range(0, min(m, n + len(eq) + m) + 1):
+        for W in itertools.combinations(range(m), size):
+            rows_c = [ineq[i][0] for i in W] + [r for r, _ in eq]
+            k = len(rows_c)
+            M = []
+            for i in range(n):
+                M.append(Q[i][:] + [rows_c[j][i] for j in range(k)])
+            for j in range(k):
+                M.append(rows_c[j][:] + [Fraction(0)] * k)
+            rhs = [-v for v in c] + [ineq[i][1] for i in W] + [v for _, v in eq]
+            sol = _frac_solve(M, rhs)
+            if sol is None:
+                continue
+            x, lam = sol[:n], sol[n:n + len(W)]
+            if any(l_ < 0 for l_ in lam):       # Q x + c + A_W^T lambda == 0 needs lambda >= 0
+                continue
+            if all(sum(a * xi for a, xi in zip(r, x)) <= bb for r, bb in ineq):
+                val = sum(Q[i][j] * x[i] * x[j] for i in range(n) for j in range(n)) / 2 + \
+                    sum(ci * xi for ci, xi in zip(c, x)) + c0
+                return ("optimal", x, val)
+    return ("infeasible",)
+
+
+def _solve_qp(prob, fname):
+    if prob.cones:
+        return None
+    qd = _qp_data(prob)
+    if qd is None:
+        return None
+    Q, c, c0 = qd
+    lin = []
+    for e, op in prob.cons:
+        lp = _linear_parts(e, prob.syms)
+        if lp is None:
+            return None
+        lin.append((lp, op))
+    if not _psd(Q):
+        raise _OptError(f"{fname}: the objective is not convex (its Hessian is not positive semidefinite)")
+    try:
+        A = [[_frac(v) for v in lp[0]] for lp, _ in lin]
+        b = [-_frac(lp[1]) for lp, _ in lin]
+    except TypeError:
+        A = [[Fraction(float(v)) for v in lp[0]] for lp, _ in lin]
+        b = [-Fraction(float(lp[1])) for lp, _ in lin]
+    kinds = [op for _, op in lin]
+    if sum(1 for k in kinds if k == "<=") + 2 * len(prob.ints) > 12:
+        return None
+
+    def solve(bounds):
+        r = _solve_qp_exact(prob, fname, Q, c, c0, A, b, kinds, bounds)
+        if r is None:
+            raise NotImplementedError("too many constraints")
+        return r
+    try:
+        res = _bnb(solve, prob.ints) if prob.ints else solve([])
+    except NotImplementedError:
+        return None
+    if res[0] == "infeasible":
+        # an unbounded convex QP has no KKT point either; distinguish with the LP of the constraints
+        raise _OptError(f"{fname}: the problem is infeasible or unbounded")
+    return res[1], res[2]
+
+
+# ── general nonlinear problems (SciPy SLSQP, multi-start) ──
+
+def _lam(e, syms):
+    np = _np()
+    f = sp.lambdify(syms, e, modules=["numpy", {"Abs": np.abs}])
+    return lambda x: f(*x)
+
+
+def _cone_funcs(prob, cone, d, param, fname):
+    """Inequality functions (>= 0) for a cone constraint d \\[Element] cone."""
+    np = _np()
+    syms = prob.syms
+    if is_list(d) and is_list(d.args[0]) if is_list(d) and d.args else False:
+        mat = [[_to_sym(prob, v, fname) for v in r.args] for r in d.args]
+        fs = [[_lam(v, syms) for v in r] for r in mat]
+        if cone != "SemidefiniteCone":
+            raise NotImplementedError(f"{fname}: matrix arguments need the SemidefiniteCone")
+
+        def sdp(x):
+            Mx = np.array([[float(f(x)) for f in r] for r in fs])
+            Mx = (Mx + Mx.T) / 2
+            return float(np.linalg.eigvalsh(Mx)[0])
+        return [sdp]
+    vec = [_to_sym(prob, v, fname) for v in _flat_expr(d)]
+    fs = [_lam(v, syms) for v in vec]
+    if cone == "NormCone":
+        return [lambda x: float(fs[-1](x)) - float(np.sqrt(sum(float(f(x)) ** 2 for f in fs[:-1])))]
+    if cone == "ExponentialCone":
+        def ec(x):
+            a, b_, c_ = (float(f(x)) for f in fs)
+            return c_ - b_ * math.exp(min(a / b_, 700)) if b_ > 1e-12 else -abs(b_) - max(a, 0)
+        return [ec, lambda x: float(fs[1](x))]
+    if cone == "PowerCone":
+        a = float(sp.N(S(param))) if param is not None else 0.5
+
+        def pc(x):
+            u, v, w = (float(f(x)) for f in fs)
+            return max(u, 0) ** a * max(v, 0) ** (1 - a) - abs(w)
+        return [pc, lambda x: float(fs[0](x)), lambda x: float(fs[1](x))]
+    if cone == "NonNegativeCone":
+        return [(lambda f: (lambda x: float(f(x))))(f) for f in fs]
+    raise NotImplementedError(f"{fname}: the cone {cone} is not supported")
+
+
+def _nlp(prob, fname, local, extra_bounds=()):
+    _need_scipy(fname)
+    from scipy.optimize import minimize
+    np = _np()
+    syms = prob.syms
+    n = len(syms)
+    fobj = _lam(prob.obj, syms)
+    try:
+        grad = [_lam(sp.diff(prob.obj, s), syms) for s in syms]
+        jac = lambda x: np.array([float(g(x)) for g in grad])  # noqa: E731
+    except Exception:
+        jac = None
+    cons = []
+    viol = []
+    for e, op in prob.cons:
+        fe = _lam(e, syms)
+        try:
+            ge = [_lam(sp.diff(e, s), syms) for s in syms]
+            je = (lambda ge_: (lambda x: -np.array([float(g(x)) for g in ge_])))(ge)
+        except Exception:
+            je = None
+        if op == "<=":
+            fun = (lambda f: (lambda x: -float(f(x))))(fe)
+            cons.append({"type": "ineq", "fun": fun, **({"jac": je} if je else {})})
+            viol.append((lambda f: (lambda x: max(0.0, float(f(x)))))(fe))
+        else:
+            fun = (lambda f: (lambda x: float(f(x))))(fe)
+            cons.append({"type": "eq", "fun": fun, **({"jac": (lambda j: (lambda x: -j(x)))(je)} if je else {})})
+            viol.append((lambda f: (lambda x: abs(float(f(x)))))(fe))
+    for d, cone, param in prob.cones:
+        for g in _cone_funcs(prob, cone, d, param, fname):
+            cons.append({"type": "ineq", "fun": g})
+            viol.append((lambda g_: (lambda x: max(0.0, -g_(x))))(g))
+    for i, op, v in extra_bounds:
+        g = (lambda i_, v_: (lambda x: v_ - x[i_]))(i, v) if op == "<=" else (lambda i_, v_: (lambda x: x[i_] - v_))(i, v)
+        cons.append({"type": "ineq", "fun": g})
+        viol.append((lambda g_: (lambda x: max(0.0, -g_(x))))(g))
+    rng = np.random.default_rng(1234)
+    base = np.array([prob.starts.get(i, 1.0 if local else 0.0) for i in range(n)], dtype=float)
+    starts = [base]
+    if not local:
+        starts += [np.ones(n), -np.ones(n), np.full(n, 0.5)]
+        starts += [rng.normal(0, 3, n) for _ in range(16)]
+    best = None
+    for x0 in starts:
+        try:
+            with np.errstate(all="ignore"):
+                r = minimize(fobj, x0, jac=jac, method="SLSQP", constraints=cons,
+                             options={"maxiter": 1000, "ftol": 1e-12})
+        except (ValueError, OverflowError, ZeroDivisionError, FloatingPointError):
+            continue
+        x = r.x
+        try:
+            v = float(fobj(x))
+        except Exception:
+            continue
+        if not np.isfinite(v):
+            continue
+        mv = max([f(x) for f in viol], default=0.0)
+        if mv > 1e-6 * max(1.0, float(np.max(np.abs(x))) if n else 1.0):
+            continue
+        if np.max(np.abs(x)) > 1e10 or v < -1e14:
+            raise _OptError(f"{fname}: the problem appears to be unbounded")
+        if best is None or v < best[1] - 1e-12:
+            best = (x, v)
+    if best is None:
+        return ("infeasible",)
+    return ("optimal", [float(t) for t in best[0]], best[1])
+
+
+def _solve_nlp(prob, fname, local):
+    if prob.ints:
+        res = _bnb(lambda bounds: _nlp(prob, fname, local, bounds), prob.ints, limit=400)
+    else:
+        res = _nlp(prob, fname, local)
+    if res[0] != "optimal":
+        raise _OptError(f"{fname}: no feasible point was found (the constraints may be infeasible)")
+    return res[1], res[2]
+
+
+def _solve(prob, fname, local=False, convex=False):
+    """(x list, value, exact?) minimising prob.obj."""
+    r = _solve_lp(prob, fname)
+    if r is not None:
+        return r[0], r[1], True
+    r = _solve_qp(prob, fname)
+    if r is not None:
+        return r[0], r[1], False
+    if convex:
+        _check_convex(prob, fname)
+    x, v = _solve_nlp(prob, fname, local)
+    return x, v, False
+
+
+def _check_convex(prob, fname):
+    """Reject problems whose objective or inequality constraints are visibly non-convex (sampled Hessians)."""
+    np = _np()
+    syms = prob.syms
+    rng = np.random.default_rng(7)
+    pts = [rng.normal(0, 2, len(syms)) for _ in range(12)]
+
+    def convex_at(e):
+        try:
+            H = sp.hessian(e, syms)
+        except Exception:
+            return True
+        if all(_iszero(h) for h in H):
+            return True
+        Hf = sp.lambdify(syms, H, modules=["numpy"])
+        for p in pts:
+            try:
+                with np.errstate(all="ignore"):
+                    Hn = np.array(Hf(*p), dtype=float)
+            except Exception:
+                continue
+            if not np.all(np.isfinite(Hn)):
+                continue
+            if np.linalg.eigvalsh((Hn + Hn.T) / 2)[0] < -1e-8 * max(1.0, float(np.max(np.abs(Hn)))):
+                return False
+        return True
+    if not convex_at(prob.obj):
+        raise _OptError(f"{fname}: the objective is not convex")
+    for e, op in prob.cons:
+        if op == "==" and _linear_parts(e, syms) is None:
+            raise _OptError(f"{fname}: equality constraints must be affine for a convex problem")
+        if op == "<=" and not convex_at(e):
+            raise _OptError(f"{fname}: the constraint {e} <= 0 is not convex")
+
+
+_OPT_OPTS = {"Method", "WorkingPrecision", "AccuracyGoal", "PrecisionGoal", "MaxIterations", "StepMonitor",
+             "EvaluationMonitor", "Tolerance", "PerformanceGoal", "RandomSeed"}
+
+
+def _opt_options(opts, fname):
+    wp = opts.get("WorkingPrecision")
+    if wp is not None and not is_sym(wp, "MachinePrecision") and not (S(wp).is_number and float(S(wp)) <= 16):
+        raise NotImplementedError(f"{fname}: WorkingPrecision above machine precision is not supported")
+    for k in ("StepMonitor", "EvaluationMonitor"):
+        if k in opts:
+            raise NotImplementedError(f"{fname}: the option {k} is not supported")
+
+
+def _argopt(fname, sense, what, local):
+    def impl(f, *rest):
+        args, opts = split_options(rest, _OPT_OPTS, fname)
+        _opt_options(opts, fname)
+        if len(args) == 0 and not local:
+            raise ValueError(f"{fname}: the variables must be given")
+        obj, cons = _split_problem(f, fname)
+        if len(args) == 2 and not local:
+            # NArgMin[f, cons, vars] is not a Wolfram form; NArgMin[f, x \[Element] reg] is
+            raise ValueError(f"{fname} called with too many arguments")
+        if len(args) != 1:
+            raise ValueError(f"{fname}: expected the variables as the second argument")
+        vspec = args[0]
+        if not local and isinstance(vspec, Expr) and vspec.head == "Element" and not \
+                (is_sym(vspec.args[1], "Integers") or is_sym(vspec.args[1], "Reals") or
+                 (isinstance(vspec.args[1], Expr) and vspec.args[1].head == "Vectors")):
+            cons = L(*(cons.args if cons is not None else ()), vspec)
+            vspec = vspec.args[0]
+        prob = _build(obj, cons, vspec, fname, allow_start=local)
+        if sense == "max":
+            prob.obj = -prob.obj
+        x, v, exact = _solve(prob, fname, local=local)
+        if sense == "max":
+            v = -v
+        if what == "value":
+            return R(sp.Float(float(v)))
+        vals = [sp.Integer(int(round(t))) if i in prob.ints else sp.Float(float(t)) for i, t in enumerate(x)]
+        out = _vector(prob, vals)
+        if not local and prob.bare and len(out.args) == 1:
+            return out.args[0]
+        return out
+    return impl
+
+
+_OPT_NOTE = ("; linear problems are solved exactly (rational simplex, branch and bound for integer variables), "
+             "convex quadratic ones by exact active-set enumeration, others with SciPy SLSQP ({}); constraints may "
+             "be equations, inequalities, vector inequalities (VectorGreaterEqual, ...), x \\[Element] Integers and "
+             "{{x, ...}} \\[Element] Disk/Ball/Rectangle/Cuboid; infeasible or unbounded problems raise")
+
+for _nm, _sense, _what, _local in [
+        ("FindArgMin", "min", "arg", True), ("FindArgMax", "max", "arg", True),
+        ("FindMinValue", "min", "value", True), ("FindMaxValue", "max", "value", True),
+        ("NArgMin", "min", "arg", False), ("NArgMax", "max", "arg", False),
+        ("NMinValue", "min", "value", False), ("NMaxValue", "max", "value", False)]:
+    _desc = ("the {} {} of f (optionally {{f, cons}}) ".format(
+        "local" if _local else "global", ("minimiser" if _sense == "min" else "maximiser") if _what == "arg"
+        else ("minimum value" if _sense == "min" else "maximum value")))
+    _desc += ("as a list of values for vars ({x, x0} starting points and {x, x0, xmin, xmax} accepted)"
+              if _what == "arg" and _local else
+              ("(a single variable gives a number, a list of variables a list)" if _what == "arg" else
+               "as a machine number"))
+    fn(_nm, **ADDED, notes=_desc + _OPT_NOTE.format(
+        "a local search from the starting point (default 1)" if _local else
+        "multi-start, so a global optimum is likely but not guaranteed for non-convex problems"))(
+        _argopt(_nm, _sense, _what, _local))
+
+
+# ── LinearOptimization and the convex-optimisation family ──
+
+_PROPS = ("PrimalMinimizer", "PrimalMinimizerRules", "PrimalMinimizerVector", "PrimalMinimumValue")
+
+
+def _is_prop(x):
+    return isinstance(x, str) or (is_list(x) and x.args and all(isinstance(a, str) for a in x.args))
+
+
+def _numeric_list(x):
+    return is_list(x) and all(isinstance(a, (int, float)) or (not is_list(a) and _is_num(S(a)))
+                              for a in x.args)
+
+
+def _matrix_form_prob(c_vec, ineq, eq, domains, fname, quad=None, frac=None):
+    """Problem for the matrix forms: minimise c.x (or 1/2 x.q.x + c.x, or (a.x+b)/(g.x+d)) subject to
+    a.x + b >= 0 and aeq.x + beq == 0."""
+    n = len(c_vec.args) if c_vec is not None else None
+    if n is None:
+        raise ValueError(f"{fname}: invalid objective specification")
+    names = [Symbol(f"x$${i + 1}") for i in range(n)]
+    xs = L(*names)
+    if quad is not None:
+        q = quad
+        f = Expr("Plus", Expr("Times", sp.Rational(1, 2) if False else Expr("Rational", 1, 2),
+                              Expr("Dot", xs, q, xs)), Expr("Dot", c_vec, xs))
+    elif frac is not None:
+        a1, b1, g1, d1 = frac
+        f = Expr("Times", Expr("Plus", Expr("Dot", a1, xs), b1),
+                 Expr("Power", Expr("Plus", Expr("Dot", g1, xs), d1), -1))
+    else:
+        f = Expr("Dot", c_vec, xs)
+    cons = []
+    for spec, op in ((ineq, "GreaterEqual"), (eq, "Equal")):
+        if spec is None:
+            continue
+        if not (is_list(spec) and len(spec.args) == 2):
+            raise ValueError(f"{fname}: constraints must be given as {{a, b}}")
+        a, b = spec.args
+        lhs = ev(Expr("Plus", Expr("Dot", a, xs), b))
+        for e in _flat_expr(lhs):
+            cons.append(Expr(op, e, 0))
+    dom = list(domains.args) if domains is not None and is_list(domains) else \
+        ([domains] * n if domains is not None else None)
+    prob = _build(ev(f), L(*cons), xs, fname, domains=dom)
+    return prob
+
+
+def _opt_props(prob, x, v, exact, props, default_rules, fname):
+    vals = _result_values(prob, x, exact)
+    value = (sp.Rational(v.numerator, v.denominator) if exact and isinstance(v, Fraction) and not prob.inexact
+             and not prob.ints else sp.Float(float(v)))
+
+    def one(p):
+        if p in ("PrimalMinimizer", "PrimalMinimizerVector"):
+            return _vector(prob, vals) if p == "PrimalMinimizerVector" or not default_rules else \
+                _vector(prob, vals)
+        if p == "PrimalMinimizerRules":
+            return _rules(prob, vals)
+        if p == "PrimalMinimumValue":
+            return R(value)
+        raise NotImplementedError(f"{fname}: the property {p!r} is not supported (supported: "
+                                  f"{', '.join(_PROPS)})")
+    if props is None:
+        return _rules(prob, vals) if default_rules else _vector(prob, vals)
+    if isinstance(props, str):
+        return one(props)
+    return L(*(one(p) for p in props.args))
+
+
+def _family(fname, kind):
+    """Implementation for LinearOptimization-like functions: kind in lp, qp, lfp, convex."""
+    def impl(*rest):
+        args, opts = split_options(rest, _OPT_OPTS, fname)
+        _opt_options(opts, fname)
+        props = None
+        if args and _is_prop(args[-1]) and len(args) >= 2:
+            props, args = args[-1], args[:-1]
+        if len(args) < 2:
+            raise ValueError(f"{fname}: expected an objective, constraints and variables")
+        matrix_form = False
+        if kind == "lp" and _numeric_list(args[0]):
+            matrix_form = True
+        if kind == "qp" and is_list(args[0]) and len(args[0].args) == 2 and is_list(args[0].args[1]) and \
+                _numeric_list(args[0].args[1]):
+            matrix_form = True
+        if kind == "lfp" and is_list(args[0]) and len(args[0].args) == 4 and is_list(args[0].args[0]):
+            matrix_form = True
+        if matrix_form:
+            rest_args = list(args[1:])
+            domains = None
+            if rest_args and (is_sym(rest_args[-1], "Integers") or is_sym(rest_args[-1], "Reals") or
+                              (is_list(rest_args[-1]) and rest_args[-1].args and
+                               all(is_sym(a, "Integers") or is_sym(a, "Reals") for a in rest_args[-1].args))):
+                domains = rest_args.pop()
+            ineq = rest_args[0] if rest_args else None
+            eq = rest_args[1] if len(rest_args) > 1 else None
+            if ineq is not None and is_sym(ineq, "None"):
+                ineq = None
+            if kind == "lp":
+                prob = _matrix_form_prob(args[0], ineq, eq, domains, fname)
+            elif kind == "qp":
+                prob = _matrix_form_prob(args[0].args[1], ineq, eq, domains, fname, quad=args[0].args[0])
+            else:
+                a1, b1, g1, d1 = args[0].args
+                prob = _matrix_form_prob(a1, ineq, eq, domains, fname, frac=(a1, b1, g1, d1))
+            default_rules = False
+        else:
+            if len(args) != 3:
+                raise ValueError(f"{fname}: expected {fname}[f, cons, vars]")
+            prob = _build(args[0], args[1], args[2], fname)
+            default_rules = True
+        if kind == "lfp":
+            x, v, exact = _solve_lfp(prob, fname)
+        elif kind == "lp":
+            r = _solve_lp(prob, fname)
+            if r is None:
+                raise ValueError(f"{fname}: the objective and constraints must be linear in the variables")
+            x, v, exact = r[0], r[1], True
+        elif kind == "qp":
+            if _qp_data(prob) is None:
+                raise ValueError(f"{fname}: the objective must be quadratic in the variables")
+            r = _solve_lp(prob, fname)
+            if r is None:
+                r = _solve_qp(prob, fname)
+            if r is None:
+                if any(_linear_parts(e, prob.syms) is None for e, _ in prob.cons):
+                    raise ValueError(f"{fname}: the constraints must be linear in the variables")
+                if not _psd(_qp_data(prob)[0]):
+                    raise _OptError(f"{fname}: the objective is not convex")
+                r = _solve_nlp(prob, fname, False)
+            x, v, exact = r[0], r[1], False
+        elif kind == "geometric":
+            x, v, exact = _solve_geometric(prob, fname)
+        else:
+            x, v, exact = _solve(prob, fname, convex=True)
+            exact = False
+        return _opt_props(prob, x, v, exact, props, default_rules, fname)
+    return impl
+
+
+def _solve_lfp(prob, fname):
+    """Linear-fractional programming by the Charnes-Cooper transformation (exact)."""
+    num, den = sp.fraction(sp.together(prob.obj))
+    ln, ld = _linear_parts(num, prob.syms), _linear_parts(den, prob.syms)
+    if ln is None or ld is None:
+        raise ValueError(f"{fname}: the objective must be a ratio of linear (affine) functions")
+    rows = []
+    for e, op in prob.cons:
+        lp = _linear_parts(e, prob.syms)
+        if lp is None:
+            raise ValueError(f"{fname}: the constraints must be linear")
+        rows.append((lp, op))
+    n = len(prob.syms)
+    try:
+        a = [_frac(v) for v in ln[0]]
+        b = _frac(ln[1])
+        g = [_frac(v) for v in ld[0]]
+        d = _frac(ld[1])
+        A = [[_frac(v) for v in lp[0]] for lp, _ in rows]
+        bb = [-_frac(lp[1]) for lp, _ in rows]
+    except TypeError:
+        raise NotImplementedError(f"{fname}: irrational coefficients are not supported")
+    kinds = [op for _, op in rows]
+
+    def solve(bounds):
+        # variables y (n) and t: minimise a.y + b t s.t. A y - bb t (op) 0, g.y + d t == 1, -t <= 0
+        A2, b2, k2 = [], [], []
+        for row, rhs, k in zip(A, bb, kinds):
+            A2.append(row + [-rhs])
+            b2.append(Fraction(0))
+            k2.append(k)
+        for i, op, v in bounds:
+            row = [Fraction(0)] * (n + 1)
+            row[i] = Fraction(1) if op == "<=" else Fraction(-1)
+            row[n] = Fraction(-v) if op == "<=" else Fraction(v)
+            A2.append(row)
+            b2.append(Fraction(0))
+            k2.append("<=")
+        A2.append(g + [d])
+        b2.append(Fraction(1))
+        k2.append("==")
+        row = [Fraction(0)] * (n + 1)
+        row[n] = Fraction(-1)
+        A2.append(row)
+        b2.append(Fraction(0))
+        k2.append("<=")
+        res = _simplex(a + [b], A2, b2, k2, n + 1)
+        if res[0] != "optimal":
+            return res
+        y, t = res[1][:n], res[1][n]
+        if t <= 0:
+            return ("unbounded",)
+        return ("optimal", [yi / t for yi in y], res[2])
+    def run(sign):
+        nonlocal a, b, g, d
+        a, b, g, d = [sign * v for v in a0], sign * b0, [sign * v for v in g0], sign * d0
+        return _bnb(solve, prob.ints) if prob.ints else solve([])
+    a0, b0, g0, d0 = a, b, g, d
+    rp, rn = run(1), run(-1)
+    if rp[0] == "optimal" and rn[0] == "optimal":
+        raise _OptError(f"{fname}: the denominator changes sign on the feasible set")
+    res = rp if rp[0] == "optimal" else (rn if rn[0] == "optimal" else rp)
+    if res[0] == "infeasible":
+        raise _OptError(f"{fname}: the constraints are infeasible")
+    if res[0] == "unbounded":
+        raise _OptError(f"{fname}: the problem is unbounded or its minimum is not attained")
+    return res[1], res[2], True
+
+
+def _solve_geometric(prob, fname):
+    """Geometric programming: positive variables x = Exp[u]; minimise Log[f] with Log[g/h] <= 0."""
+    us = [sp.Symbol(f"u${i}", real=True) for i in range(len(prob.syms))]
+    sub = {s: sp.exp(u) for s, u in zip(prob.syms, us)}
+    gp = _Prob()
+    gp.syms = us
+    gp.ints = set(prob.ints)
+    if prob.ints:
+        raise NotImplementedError(f"{fname}: integer variables are not supported")
+    obj = prob.obj.xreplace(sub)
+    if not _is_posy(prob.obj, prob.syms):
+        raise ValueError(f"{fname}: the objective must be a posynomial (or a generalized posynomial)")
+    gp.obj = sp.log(obj)
+    for e, op in prob.cons:
+        # e = lhs - rhs; recover lhs/rhs as positive and negative parts
+        pos = sp.Add(*[t for t in sp.Add.make_args(sp.expand(e)) if not t.could_extract_minus_sign()])
+        neg = -sp.Add(*[t for t in sp.Add.make_args(sp.expand(e)) if t.could_extract_minus_sign()])
+        if neg == 0:
+            raise _OptError(f"{fname}: the constraint {e} <= 0 cannot be satisfied by positive variables")
+        if pos == 0:
+            continue
+        expr = sp.log(pos.xreplace(sub)) - sp.log(neg.xreplace(sub))
+        gp.cons.append((sp.simplify(expr), op))
+    x, v = _solve_nlp(gp, fname, False)
+    xs = [math.exp(t) for t in x]
+    return xs, float(sp.N(prob.obj.subs(dict(zip(prob.syms, xs))))), False
+
+
+def _is_posy(e, syms):
+    try:
+        val = e.subs({s: sp.Rational(3, 2) for s in syms})
+        return bool(val.is_positive)
+    except Exception:
+        return False
+
+
+_FAMILY_NOTE = ("; constraints as in NMinimize (equations, inequalities, vector inequalities, x \\[Element] "
+                "Integers); properties \"PrimalMinimizer\", \"PrimalMinimizerRules\", \"PrimalMinimizerVector\" and "
+                "\"PrimalMinimumValue\" (dual properties raise); infeasible or unbounded problems raise")
+
+fn("LinearOptimization", **ADDED,
+   notes="LinearOptimization[f, cons, vars] gives the minimiser rules; LinearOptimization[c, {a, b}] (a.x + b >= 0) "
+         "and [c, {a, b}, {aeq, beq}] (aeq.x + beq == 0) give the vector; domains {Integers, Reals, ...}; exact "
+         "rational simplex (Bland's rule) so exact input gives exact results, branch and bound for integer "
+         "variables (integer values exact, the others machine numbers as Wolfram); vertex choice among multiple "
+         "optima can differ from Wolfram's" + _FAMILY_NOTE)(_family("LinearOptimization", "lp"))
+fn("QuadraticOptimization", **ADDED,
+   notes="minimise a convex quadratic objective subject to linear constraints: QuadraticOptimization[f, cons, "
+         "vars] or [{q, c}, {a, b}, {aeq, beq}] (1/2 x.q.x + c.x); exact active-set enumeration (up to 12 "
+         "inequalities, results as machine numbers like Wolfram), SciPy beyond that; a non-convex objective "
+         "raises" + _FAMILY_NOTE)(_family("QuadraticOptimization", "qp"))
+fn("LinearFractionalOptimization", **ADDED,
+   notes="minimise (a.x + b)/(c.x + d) subject to linear constraints (the denominator must be positive on the "
+         "feasible set): exact Charnes-Cooper transformation to a linear program, branch and bound for integer "
+         "variables; matrix form [{a, b, c, d}, {a1, b1}, ...]" + _FAMILY_NOTE)(
+    _family("LinearFractionalOptimization", "lfp"))
+for _nm, _what in [("ConvexOptimization", "convex objective and constraints"),
+                   ("ConicOptimization", "linear objective with conic constraints (NormCone, SemidefiniteCone, "
+                                         "ExponentialCone, PowerCone, quadratic inequalities)"),
+                   ("SecondOrderConeOptimization", "linear objective with second-order-cone (Norm[...] <= ...) "
+                                                   "constraints"),
+                   ("SemidefiniteOptimization", "linear objective with linear matrix inequalities "
+                                                "(VectorGreaterEqual[{m, 0}, {\"SemidefiniteCone\", n}])")]:
+    fn(_nm, **ADDED,
+       notes=f"{_nm}[f, cons, vars] for a {_what}: linear problems are solved exactly (results as machine "
+             "numbers), convex quadratic ones by active-set enumeration, the rest with SciPy SLSQP after a sampled "
+             "convexity check (a visibly non-convex objective or constraint raises); matrix forms are not "
+             "supported" + _FAMILY_NOTE)(_family(_nm, "convex"))
+fn("GeometricOptimization", **ADDED,
+   notes="GeometricOptimization[f, cons, vars] for a posynomial objective with posynomial <= monomial and monomial "
+         "== monomial constraints in positive variables: solved as the convex problem in u = Log[x] (SciPy SLSQP); "
+         "matrix forms are not supported" + _FAMILY_NOTE)(_family("GeometricOptimization", "geometric"))
