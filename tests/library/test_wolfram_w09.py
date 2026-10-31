@@ -672,12 +672,12 @@ GROUPS = _sporadic_cases() + [
      "GroupElementFromWord[G, GroupElementToWord[G, g]] == g]", "True"),
     ("With[{G = MathieuGroupM11[], g = PermutationProduct @@ GroupGenerators[MathieuGroupM11[]]}, "
      "GroupElementFromWord[G, GroupElementToWord[G, g]] == g]", "True"),
-    ("CycleIndexPolynomial[Cycles[{{1, 2}, {3, 4, 5}}], {x1, x2, x3}]", "x2 x3"),
-    ("CycleIndexPolynomial[Cycles[{{1, 2}}], {x1, x2}, 4]", "x1^2 x2"),
-    ("CycleIndexPolynomial[SymmetricGroup[3], {x1, x2, x3}]", "x1^3/6 + x1 x2/2 + x3/3"),
-    ("CycleIndexPolynomial[CyclicGroup[4], {x1, x2, x3, x4}]", "x1^4/4 + x2^2/4 + x4/2"),
+    ("CycleIndexPolynomial[Cycles[{{1, 2}, {3, 4, 5}}], {cy1, cy2, cy3}]", "cy2 cy3"),
+    ("CycleIndexPolynomial[Cycles[{{1, 2}}], {cy1, cy2}, 4]", "cy1^2 cy2"),
+    ("CycleIndexPolynomial[SymmetricGroup[3], {cy1, cy2, cy3}]", "cy1^3/6 + cy1 cy2/2 + cy3/3"),
+    ("CycleIndexPolynomial[CyclicGroup[4], {cy1, cy2, cy3, cy4}]", "cy1^4/4 + cy2^2/4 + cy4/2"),
     # Polya: the number of 2-colourings of the 4-cycle up to rotation is 6
-    ("CycleIndexPolynomial[CyclicGroup[4], {x1, x2, x3, x4}] /. {x1 -> 2, x2 -> 2, x3 -> 2, x4 -> 2}", "6"),
+    ("CycleIndexPolynomial[CyclicGroup[4], {cy1, cy2, cy3, cy4}] /. {cy1 -> 2, cy2 -> 2, cy3 -> 2, cy4 -> 2}", "6"),
 ]
 
 # ─────────────────────────── AnglePath3D and JuliaSetPoints ───────────────────────────
@@ -770,7 +770,7 @@ JULIA = [
      _rational_julia_ok(lambda z: (z * z - 1) / (z * z + 1), 0.02, 50)),
     ("JuliaSetPoints[z^3 - z - 1, z, \"ClosenessTolerance\" -> 0.02]",
      _rational_julia_ok(lambda z: z ** 3 - z - 1, 0.02, 50, bound=3)),
-    ("JuliaSetPoints[c]", "JuliaSetPoints[c]"),
+    ("JuliaSetPoints[cJulia]", "JuliaSetPoints[cJulia]"),
     ("JuliaSetPoints[z + 1, z]", Raises()),
     ("JuliaSetPoints[0, \"ClosenessTolerance\" -> -1]", Raises()),
 ]
