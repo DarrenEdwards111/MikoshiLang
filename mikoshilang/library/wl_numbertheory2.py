@@ -61,7 +61,7 @@ def wrap_registry(name, handler):
         raise RuntimeError(f"wrap_registry: {name} is not a library head")
     first = e.impls[0][0]
 
-    def pre(*args):
+    def pre(*args: Expr) -> Expr:
         try:
             return handler(args)
         except _NotMine:
@@ -215,7 +215,7 @@ SPECIAL_HEADS.update({"Overflow", "Underflow"})
 @fn("Overflow", **ADDED, notes="Overflow[] represents a number too large to represent; Overflow[] + x = Overflow[], "
     "c Overflow[] = Sign[c] Overflow[] for real c != 0, 1/Overflow[] = Underflow[]; NumberQ-like tests treat it as "
     "a real number. MikoshiLang's arbitrary-precision numbers never overflow, so it only arises when entered")
-def _overflow(*a):
+def _overflow(*a: Expr) -> Expr:
     if a:
         raise ValueError("Overflow takes no arguments")
     raise Unevaluated()
@@ -223,7 +223,7 @@ def _overflow(*a):
 
 @fn("Underflow", **ADDED, notes="Underflow[] represents a number too small to represent; x + Underflow[] = x for "
     "numbers x != 0 (as a machine real), c Underflow[] = Sign[c] Underflow[], 1/Underflow[] = Overflow[]")
-def _underflow(*a):
+def _underflow(*a: Expr) -> Expr:
     if a:
         raise ValueError("Underflow takes no arguments")
     raise Unevaluated()
@@ -366,7 +366,7 @@ def _is_real_number_atom(x):
 @fn("RealValuedNumberQ", **ADDED, notes="True for integers, rationals, approximate reals and Overflow[]/"
     "Underflow[]; False for complex numbers (even with zero imaginary part), exact numeric expressions such as "
     "Sqrt[2] and symbols")
-def _rvnq(x):
+def _rvnq(x: Expr) -> Boolean:
     return _is_real_number_atom(x)
 
 
@@ -394,7 +394,7 @@ def _numeric_real(v):
 @fn("RealValuedNumericQ", **ADDED, notes="True when expr is numeric (NumericQ) and real-valued: exact quantities "
     "such as Sin[Sqrt[2]], E or Exp[I] - I Sin[1] (decided exactly when possible, otherwise numerically at 40 and "
     "120 digits); False for complex numbers with a zero inexact imaginary part, Infinity and non-numeric input")
-def _rvnumq(x):
+def _rvnumq(x: Expr) -> Boolean:
     if _is_real_number_atom(x):
         return True
     if isinstance(x, (bool, str, complex)):
@@ -424,7 +424,7 @@ def _rvnumq(x):
 @fn("RealSign", **ADDED, listable=True, notes="sign of a real number: -1, 0 or 1 (an exact integer, also for "
     "approximate input); RealSign[Infinity] = 1, RealSign[-Infinity] = -1; complex and symbolic arguments stay "
     "unevaluated")
-def _realsign(x):
+def _realsign(x: Expr) -> Expr:
     if isinstance(x, Symbol) and x.name == "Infinity":
         return 1
     if isinstance(x, Expr) and K.same(x, Expr("Times", -1, Symbol("Infinity"))):
@@ -453,7 +453,7 @@ _MACHINE_ZERO_EXPONENT = math.log10(2.2250738585072014e-308)
 @fn("RealExponent", **ADDED, listable=True, notes="RealExponent[x] = Log10[Abs[x]], RealExponent[x, b] = "
     "Log[b, Abs[x]], as machine reals; RealExponent[0] = -Infinity; RealExponent[0.] = -307.653 (minus the "
     "accuracy of a machine zero); symbolic arguments stay unevaluated")
-def _realexp(x, b=10):
+def _realexp(x: Expr, b: Expr = 10) -> Expr:
     if not is_numeric_value(x) or (not is_numeric_value(b)):
         raise Unevaluated()
     vb = S(b)
@@ -477,7 +477,7 @@ def mathlog(a):
 
 @fn("MixedFractionParts", **ADDED, listable=True, notes="{IntegerPart[x], FractionalPart[x]} (both parts carry "
     "the sign of x; complex numbers are split componentwise); symbolic arguments stay unevaluated")
-def _mixedfrac(x):
+def _mixedfrac(x: Expr) -> ListOf[Expr]:
     if not is_numeric_value(x):
         raise Unevaluated()
     ip = ev(Expr("IntegerPart", x))
@@ -489,7 +489,7 @@ def _mixedfrac(x):
 
 @fn("NumeratorDenominator", **ADDED, notes="{Numerator[expr], Denominator[expr]}; lists give the pair of lists. "
     "The Modulus and Trig options are not supported (raise)")
-def _numden(x, *opts):
+def _numden(x: Expr, *opts: Option) -> ListOf[Expr]:
     if opts:
         raise NotImplementedError("NumeratorDenominator: the Modulus and Trig options are not supported")
     return L(ev(Expr("Numerator", x)), ev(Expr("Denominator", x)))
@@ -515,7 +515,7 @@ def _sp_or_float(v):
 @fn("NumberDecompose", **ADDED, notes="NumberDecompose[x, {u1, ..., un}]: coefficients ci with x == Sum[ci ui]; "
     "c1..c(n-1) are integers taken greedily with IntegerPart (so the signs follow x) and cn = remainder/un may be "
     "fractional; exact inputs give exact results")
-def _numdecomp(x, units):
+def _numdecomp(x: Expr, units: ListOf[Expr]) -> ListOf[Expr]:
     us = _num_list(units, "NumberDecompose", "the units")
     if not us:
         raise ValueError("NumberDecompose: the list of units must not be empty")
@@ -547,7 +547,7 @@ def _numdecomp(x, units):
 
 @fn("NumberCompose", **ADDED, notes="NumberCompose[{c1, ..., ck}, {u1, ..., un}] = Sum[ci u(n-k+i)]: the "
     "coefficients are aligned with the last k units (k <= n)")
-def _numcompose(cs, units):
+def _numcompose(cs: Expr, units: Expr) -> Expr:
     if not is_list(cs) or not is_list(units):
         raise ValueError("NumberCompose: both arguments must be lists")
     c, u = list(cs.args), list(units.args)
@@ -574,7 +574,7 @@ def _mixed_bases(mr, fname):
 
 @fn("MixedRadix", **ADDED, notes="MixedRadix[{b1, ..., bn}] mixed-radix base for IntegerDigits, FromDigits, "
     "IntegerLength and IntegerReverse; the leading digit is unbounded")
-def _mixedradix(bs):
+def _mixedradix(bs: Expr) -> Expr:
     if is_list(bs):
         for b in bs.args:
             if _intq(b) and int(b) < 1:
@@ -1022,7 +1022,7 @@ def _poly_var(poly, fname, var=None):
 @fn("Cyclotomic", **ADDED, notes="Cyclotomic[n, x] is the n-th cyclotomic polynomial (product of x - zeta over "
     "the primitive n-th roots of unity); Cyclotomic[0, x] = 1; any x, including numbers and matrices of "
     "symbols, is substituted")
-def _cyclotomic(n, x):
+def _cyclotomic(n: Integer, x: Expr) -> Expr:
     if not _intq(n):
         raise Unevaluated()
     k = int(n)
@@ -1104,7 +1104,7 @@ def gf_primitive(cs_high, p):
 
 @fn("PrimitivePolynomialQ", **ADDED, notes="PrimitivePolynomialQ[poly, p]: True if the univariate poly, reduced "
     "modulo the prime p and made monic, is primitive over GF(p) (irreducible with x of order p^n - 1)")
-def _primpolyq(poly, p):
+def _primpolyq(poly: Expr, p: Expr) -> Boolean:
     if not _intq(p) or not sp.isprime(int(p)):
         raise ValueError("PrimitivePolynomialQ: the modulus must be a prime")
     if not isinstance(poly, (Expr, Symbol)) or isinstance(poly, bool):
@@ -1149,7 +1149,7 @@ def _free_of(f, i):
     "...)); finite numeric limits are evaluated exactly; infinite fractions with constant terms give the closed "
     "form 2 f/(g + Sqrt[g^2 + 4 f]) (for numeric terms the attracting fixed point, unevaluated when the fraction "
     "oscillates); other infinite or symbolic-length fractions stay unevaluated")
-def _cfk(*args):
+def _cfk(*args: Held) -> Expr:
     pos, opts = split_options(args, ("Assumptions", "GenerateConditions", "Method", "VerifyConvergence"),
                               "ContinuedFractionK")
     gc = opts.get("GenerateConditions")
@@ -1227,7 +1227,7 @@ def _fkm(k, n):
     "sequence (FKM algorithm) in the order of the elements of list (duplicates removed, first occurrence kept); "
     "DeBruijnSequence[k, n] uses Range[0, k - 1]; a string gives a string. The positions-based form "
     "DeBruijnSequence[list, n, positions] is not supported")
-def _debruijn(lst, n):
+def _debruijn(lst: Expr, n: Expr) -> Expr:
     if not _intq(n) or int(n) < 0:
         raise ValueError("DeBruijnSequence: n must be a non-negative integer")
     n = int(n)
@@ -1303,7 +1303,7 @@ def _srs_run(step, state, length):
     "bits at the tap positions), [{n, taps, f}] (feedback function f, result taken mod 2), [poly] (Galois register), with optional "
     "initial state (list, or polynomial for the Galois form) and length (an integer or All, default one full "
     "period p^n - 1, or 2^n terms with a feedback function); options Method -> \"Fibonacci\"|\"Galois\" and Modulus -> p (Galois form)")
-def _srs(*args):
+def _srs(*args: Expr) -> ListOf[Expr]:
     pos, opts = split_options(args, ("Method", "Modulus"), "ShiftRegisterSequence")
     if not pos or len(pos) > 3:
         raise ValueError("ShiftRegisterSequence takes 1 to 3 arguments")
@@ -1432,7 +1432,7 @@ def _holder_squarefree(n):
     "for n <= 2047 (SmallGroups library, OEIS A000001); beyond the table exact formulas for cyclic numbers "
     "(gcd(n, EulerPhi[n]) = 1 gives 1), square-free n (Hoelder), p, p^2, p^3, p^4 and p^5 (p >= 5); other orders "
     "raise")
-def _fgc(n):
+def _fgc(n: Expr) -> Expr:
     if not _intq(n):
         if is_numeric_value(n):
             raise ValueError("FiniteGroupCount: the argument must be a positive integer")
@@ -1461,7 +1461,7 @@ def _fgc(n):
 
 @fn("FiniteAbelianGroupCount", **ADDED, listable=True, notes="number of abelian groups of order n: the product "
     "of PartitionsP[e] over the prime-power exponents e of n")
-def _fagc(n):
+def _fagc(n: Expr) -> Expr:
     if not _intq(n):
         if is_numeric_value(n):
             raise ValueError("FiniteAbelianGroupCount: the argument must be a positive integer")
@@ -1511,7 +1511,7 @@ def _groupings(leaves, k, head, limit):
     "Groupings[list, h -> k] uses head h; Groupings[{list1, list2, ...}, spec] gives the groupings of every "
     "list, grouping structure outermost; a third argument wraps each result (e.g. HoldForm). Several heads or "
     "arities, arity 1 and Orderless/Flat specifications are not supported (raise)")
-def _groupings_fn(lst, spec, wrapper=None):
+def _groupings_fn(lst: Expr, spec: Expr, wrapper: Fn = None) -> ListOf[Expr]:
     if _intq(lst):
         if int(lst) < 0:
             raise ValueError("Groupings: n must be non-negative")
@@ -1572,7 +1572,7 @@ def _complex_bounds(spec, fname):
 @fn("RandomComplex", **ADDED, notes="RandomComplex[] in the unit square, RandomComplex[zmax] in the rectangle "
     "0..zmax, RandomComplex[{zmin, zmax}], with a count or dimension list; uniform real and imaginary parts "
     "from the session generator (SeedRandom reproducible); WorkingPrecision -> p gives p-digit numbers")
-def _randcomplex(*args):
+def _randcomplex(*args: Expr) -> Expr:
     pos, opts = split_options(args, ("WorkingPrecision",), "RandomComplex")
     if len(pos) > 2:
         raise ValueError("RandomComplex takes at most 2 arguments")
@@ -1667,7 +1667,7 @@ def _kj(k, j, fname):
     "(j = 1 is the principal character); for a prime modulus chi_j(g^a) = Exp[2 Pi I (j - 1) a/(k - 1)] with g "
     "the least primitive root (the Wolfram ordering); moduli 1, 2, 4 and primes are supported, other moduli "
     "raise; zero when n is not coprime to k; listable in n")
-def _dirichletchar(k, j, n):
+def _dirichletchar(k: Expr, j: Expr, n: Expr) -> Expr:
     k, j = _kj(k, j, "DirichletCharacter")
     if is_list(n):
         return L(*[_dirichletchar(k, j, x) for x in n.args])
@@ -1713,7 +1713,7 @@ def _dirichlet_numeric(k, j, s, prec):
     "DirichletCharacter[k, j, n]; DirichletL[1, 1, s] = Zeta[s]; the principal character gives Zeta[s] "
     "Product[1 - p^-s, {p | k}]; non-positive integers s give -B[1 - s, chi]/(1 - s) (generalized Bernoulli "
     "numbers); inexact s is evaluated with mpmath; other exact arguments stay unevaluated (N evaluates them)")
-def _dirichletl(k, j, s):
+def _dirichletl(k: Expr, j: Expr, s: Expr) -> Expr:
     k, j = _kj(k, j, "DirichletL")
     tab = _char_table(k, j)
     if k == 1:
@@ -1822,7 +1822,7 @@ def _is_delta1(f, n):
     "a positive integer m; for symbolic m, sums of powers of n give DivisorSigma closed forms (n^a * n^b -> "
     "m^Min[a,b] DivisorSigma[|a - b|, m]), KroneckerDelta[n - 1] is the identity, and other inputs stay "
     "unevaluated")
-def _dirconv(f, g, n, m):
+def _dirconv(f: Expr, g: Expr, n: Expr, m: Expr) -> Expr:
     if not isinstance(n, Symbol):
         raise ValueError("DirichletConvolve: the variable must be a symbol")
     if _intq(m):
@@ -1960,7 +1960,7 @@ def _dt(f, n, s):
     "k] (Hurwitz zeta), MoebiusMu, EulerPhi, LiouvilleLambda, DivisorSigma, DirichletCharacter (DirichletL), "
     "KroneckerDelta[n - 1] and DivisorSum[n, f] (Zeta[s] times the transform of f); other functions stay "
     "unevaluated")
-def _dirtransform(f, n, s, *opts):
+def _dirtransform(f: Expr, n: Expr, s: Expr, *opts: Option) -> Expr:
     if not isinstance(n, Symbol):
         raise ValueError("DirichletTransform: the variable must be a symbol")
     r = _dt(f, n, s)
@@ -1979,7 +1979,7 @@ def _is_exact_vec(items):
     "zero, with a1 x1 + ... + an xn == 0 (PSLQ at the input precision, or at 3 n + 30 digits for exact input); "
     "FindIntegerNullVector[x, d] restricts to vectors of norm <= d and raises when none exists; for exact input "
     "the relation is verified to 60 more digits")
-def _findintnull(xs, d=None, *opts):
+def _findintnull(xs: Expr, d: Expr = None, *opts: Option) -> ListOf[Expr]:
     import mpmath
     if not is_list(xs) or len(xs.args) < 2:
         raise ValueError("FindIntegerNullVector: the argument must be a list of at least two numbers")
@@ -2048,7 +2048,7 @@ def _pslq_complex(zs, maxcoeff, dps):
 @fn("LatticeReduce", **ADDED, notes="LatticeReduce[{v1, v2, ...}] gives an LLL-reduced basis (delta = 3/4) of "
     "the lattice spanned by the integer (or rational) vectors vi; linearly dependent inputs drop to the rank; "
     "approximate vectors raise")
-def _latticereduce(m):
+def _latticereduce(m: Expr) -> ListOf[Expr]:
     if not is_list(m) or not m.args or not all(is_list(r) for r in m.args):
         raise ValueError("LatticeReduce: the argument must be a list of vectors")
     rows = []

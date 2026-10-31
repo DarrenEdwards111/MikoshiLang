@@ -14,6 +14,8 @@ Conventions follow the Wolfram Language reference pages:
 * bit operations use infinite two's complement for negative integers (``BitNot[n] == -1 - n``) and
   ``BitShiftRight[n, k] == IntegerPart[n / 2^k]``.
 """
+
+from __future__ import annotations
 import math
 from fractions import Fraction
 
@@ -129,7 +131,7 @@ def _interval(comps):
 @fn("Interval", area=AREA, status="added",
     notes="canonical form only: endpoints ordered, components sorted and overlapping/touching components merged; "
           "interval arithmetic is not implemented")
-def _interval_fn(*args):
+def _interval_fn(*args: Expr) -> Expr:
     if not args:
         raise Unevaluated()
     iv = Expr("Interval", *args)
@@ -140,7 +142,7 @@ def _interval_fn(*args):
 
 
 @fn("IntervalUnion", area=AREA, status="added")
-def _interval_union(*ivs):
+def _interval_union(*ivs: Expr) -> Expr:
     comps = []
     for iv in ivs:
         comps += _components(iv, "IntervalUnion")
@@ -148,7 +150,7 @@ def _interval_union(*ivs):
 
 
 @fn("IntervalIntersection", area=AREA, status="added")
-def _interval_intersection(*ivs):
+def _interval_intersection(*ivs: Expr) -> Expr:
     if not ivs:
         raise ValueError("IntervalIntersection: needs at least one interval")
     cur = _merge(_components(ivs[0], "IntervalIntersection"))
@@ -167,7 +169,7 @@ def _interval_intersection(*ivs):
 
 @fn("IntervalMemberQ", area=AREA, status="added",
     notes="False for symbolic x; an Interval x must lie within the union")
-def _interval_memberq(iv, x):
+def _interval_memberq(iv: Expr, x: Expr) -> Boolean:
     comps = _merge(_components(iv, "IntervalMemberQ"))
     if _head(x, "Interval"):
         try:
@@ -217,7 +219,7 @@ def _tidy(e, var_list):
 
 @fn("DifferenceDelta", area=AREA, status="added",
     notes="n-th forward difference sum_k (-1)^(n-k) C(n,k) f(i + k h); result simplified (expanded when polynomial)")
-def _difference_delta(f, *specs):
+def _difference_delta(f: Expr, *specs: Expr) -> Expr:
     if is_list(f):
         return L(*(_difference_delta(x, *specs) for x in f.args))
     e = sym(f, "DifferenceDelta")
@@ -228,7 +230,7 @@ def _difference_delta(f, *specs):
 
 
 @fn("DiscreteShift", area=AREA, status="added")
-def _discrete_shift(f, *specs):
+def _discrete_shift(f: Expr, *specs: Expr) -> Expr:
     if is_list(f):
         return L(*(_discrete_shift(x, *specs) for x in f.args))
     e = sym(f, "DiscreteShift")
@@ -239,7 +241,7 @@ def _discrete_shift(f, *specs):
 
 @fn("DiscreteRatio", area=AREA, status="added",
     notes="iterated ratio r_{k+1}(i) = r_k(i + h) / r_k(i); simplified with combsimp/simplify")
-def _discrete_ratio(f, *specs):
+def _discrete_ratio(f: Expr, *specs: Expr) -> Expr:
     if is_list(f):
         return L(*(_discrete_ratio(x, *specs) for x in f.args))
     e = sym(f, "DiscreteRatio")
@@ -277,7 +279,7 @@ def _matpow(M, e):
 @fn("LinearRecurrence", area=AREA, status="added",
     notes="ker and init must have the same length (Wolfram's 'only the last Length[ker] values are used' case is "
           "refused); {n} gives the n-th term, {nmin, nmax} needs 1 <= nmin <= nmax; matrix kernels are not supported")
-def _linear_recurrence(ker, init, spec):
+def _linear_recurrence(ker: ListOf[Expr], init: ListOf[Expr], spec: Expr) -> Expr:
     kl = list_arg(ker, "LinearRecurrence", "kernel", 1)
     il = list_arg(init, "LinearRecurrence", "initial values", 1)
     if any(is_list(x) for x in kl):
@@ -357,7 +359,7 @@ def _berlekamp_massey(s):
 @fn("FindLinearRecurrence", area=AREA, status="added",
     notes="exact rational sequences only (Berlekamp-Massey); the minimal recurrence is returned only when the list "
           "holds at least twice its order of terms; stays unevaluated otherwise")
-def _find_linear_recurrence(lst, dmax=None):
+def _find_linear_recurrence(lst: ListOf[Expr], dmax: Expr = None) -> ListOf[Expr]:
     items = list_arg(lst, "FindLinearRecurrence", "sequence", 1)
     vals = [_exact_rational(x) for x in items]
     if any(v is None for v in vals):
@@ -391,7 +393,7 @@ def _flat_eqs(e):
 @fn("RecurrenceTable", area=AREA, status="added",
     notes="explicit recurrences: each equation must contain exactly one term of maximal shift, which is solved "
           "for; initial conditions are f[k] == value; iterator {n, nmax} (from 1) or {n, nmin, nmax}")
-def _recurrence_table(eqns, expr, it):
+def _recurrence_table(eqns: Expr, expr: Expr, it: Expr) -> ListOf[Expr]:
     fname = "RecurrenceTable"
     if not (is_list(it) and len(it.args) in (2, 3) and isinstance(it.args[0], Symbol)):
         raise ValueError(f"{fname}: iterator must be {{n, nmax}} or {{n, nmin, nmax}}")
@@ -598,7 +600,7 @@ def _periodic_out(terms):
 @fn("ContinuedFraction", area=AREA, status="added",
     notes="rationals exactly; quadratic irrationals as {a1, ..., {period}}; other exact reals need the term count "
           "(certified at two precisions); inexact numbers give only the terms fixed by their precision")
-def _continued_fraction(x, n=None):
+def _continued_fraction(x: Expr, n: Expr = None) -> Expr:
     fname = "ContinuedFraction"
     if n is not None:
         n = nonneg_int(n, fname, "number of terms")
@@ -636,7 +638,7 @@ def _continued_fraction(x, n=None):
 
 @fn("FromContinuedFraction", area=AREA, status="added",
     notes="a trailing list is a period (gives the quadratic irrational); symbolic terms allowed for finite lists")
-def _from_continued_fraction(lst):
+def _from_continued_fraction(lst: ListOf[Expr]) -> Expr:
     items = list_arg(lst, "FromContinuedFraction", "continued fraction", 1)
     if is_list(items[-1]):
         if any(is_list(x) for x in items[:-1]):
@@ -656,7 +658,7 @@ def _from_continued_fraction(lst):
 
 @fn("Convergents", area=AREA, status="added",
     notes="Convergents[list] for finite term lists (symbolic allowed); Convergents[x, n] via ContinuedFraction")
-def _convergents(x, n=None):
+def _convergents(x: Expr, n: Expr = None) -> ListOf[Expr]:
     if is_list(x):
         if n is not None:
             raise ValueError("Convergents: give either a term list or a number and a count")
@@ -683,7 +685,7 @@ def _convergents(x, n=None):
 @fn("QuadraticIrrationalQ", area=AREA, status="added",
     notes="True for irrational real roots of rational quadratics; False for rationals, inexact and symbolic input "
           "and non-real numbers; raises when algebraicity cannot be decided")
-def _quadratic_irrational_q(x):
+def _quadratic_irrational_q(x: Expr) -> Boolean:
     if isinstance(x, (str, bool)) or has_float(x):
         return False
     try:
@@ -698,7 +700,7 @@ def _quadratic_irrational_q(x):
 
 
 @fn("FareySequence", area=AREA, status="added")
-def _farey(n, k=None):
+def _farey(n: PosInteger, k: Expr = None) -> Expr:
     n = pos_int(n, "FareySequence", "order")
     if n > 3000:
         raise ValueError("FareySequence: order is limited to 3000")
@@ -723,7 +725,7 @@ def _bint(x, fname, what="argument"):
 
 
 @fn("BitAnd", area=AREA, status="added", listable=True)
-def _bitand(*xs):
+def _bitand(*xs: Expr) -> Expr:
     r = -1
     for x in xs:
         r &= _bint(x, "BitAnd")
@@ -731,7 +733,7 @@ def _bitand(*xs):
 
 
 @fn("BitOr", area=AREA, status="added", listable=True)
-def _bitor(*xs):
+def _bitor(*xs: Expr) -> Expr:
     r = 0
     for x in xs:
         r |= _bint(x, "BitOr")
@@ -739,7 +741,7 @@ def _bitor(*xs):
 
 
 @fn("BitXor", area=AREA, status="added", listable=True)
-def _bitxor(*xs):
+def _bitxor(*xs: Expr) -> Expr:
     r = 0
     for x in xs:
         r ^= _bint(x, "BitXor")
@@ -747,7 +749,7 @@ def _bitxor(*xs):
 
 
 @fn("BitNot", area=AREA, status="added", listable=True)
-def _bitnot(x):
+def _bitnot(x: Integer) -> Expr:
     return -1 - _bint(x, "BitNot")
 
 
@@ -758,18 +760,18 @@ def _shift_right(n, k):
 
 
 @fn("BitShiftLeft", area=AREA, status="added", listable=True, notes="negative shifts shift right (IntegerPart)")
-def _bitshiftleft(n, k=1):
+def _bitshiftleft(n: Integer, k: Integer = 1) -> Expr:
     return _shift_right(_bint(n, "BitShiftLeft"), -_bint(k, "BitShiftLeft", "shift"))
 
 
 @fn("BitShiftRight", area=AREA, status="added", listable=True, notes="IntegerPart[n / 2^k] (rounds toward zero)")
-def _bitshiftright(n, k=1):
+def _bitshiftright(n: Integer, k: Integer = 1) -> Expr:
     return _shift_right(_bint(n, "BitShiftRight"), _bint(k, "BitShiftRight", "shift"))
 
 
 @fn("BitLength", area=AREA, status="added", listable=True,
     notes="for negative n, the length of BitNot[n] (two's complement without the sign)")
-def _bitlength(n):
+def _bitlength(n: Integer) -> Expr:
     n = _bint(n, "BitLength")
     return n.bit_length() if n >= 0 else (-1 - n).bit_length()
 
@@ -782,28 +784,28 @@ def _bitpos(k, fname):
 
 
 @fn("BitGet", area=AREA, status="added", listable=True)
-def _bitget(n, k):
+def _bitget(n: Integer, k: Integer) -> Expr:
     return (_bint(n, "BitGet") >> _bitpos(k, "BitGet")) & 1
 
 
 @fn("BitSet", area=AREA, status="added", listable=True)
-def _bitset(n, k):
+def _bitset(n: Integer, k: Integer) -> Expr:
     return _bint(n, "BitSet") | (1 << _bitpos(k, "BitSet"))
 
 
 @fn("BitClear", area=AREA, status="added", listable=True)
-def _bitclear(n, k):
+def _bitclear(n: Integer, k: Integer) -> Expr:
     return _bint(n, "BitClear") & ~(1 << _bitpos(k, "BitClear"))
 
 
 @fn("BitFlip", area=AREA, status="added", listable=True)
-def _bitflip(n, k):
+def _bitflip(n: Integer, k: Integer) -> Expr:
     return _bint(n, "BitFlip") ^ (1 << _bitpos(k, "BitFlip"))
 
 
 @fn("IntegerExponent", area=AREA, status="added", listable=True,
     notes="default base 10; IntegerExponent[0, b] = Infinity; negative n uses |n|")
-def _integer_exponent(n, b=10):
+def _integer_exponent(n: Integer, b: Integer = 10) -> Expr:
     n = int_arg(n, "IntegerExponent")
     b = int_arg(b, "IntegerExponent", "base")
     if b < 2:
@@ -875,7 +877,7 @@ def _ca_step_cyclic(row, r, table, fname):
     notes="1D rules (number, {n, k}, {n, k, r} or explicit neighbourhood rules); init a cyclic list or "
           "{{cells}, background}; CellularAutomaton[rule, init] is one step, [rule, init, t] gives t + 1 rows "
           "(the {{cells}, bg} form uses width m + 2 r t, Wolfram's default region)")
-def _cellular_automaton(rule, init, t=None):
+def _cellular_automaton(rule: Expr, init: Expr, t: Expr = None) -> ListOf[Expr]:
     fname = "CellularAutomaton"
     k, r, table = _ca_rule(rule, fname)
     steps = 1 if t is None else nonneg_int(t, fname, "number of steps")
@@ -917,7 +919,7 @@ def _cellular_automaton(rule, init, t=None):
 @fn("SubstitutionSystem", area=AREA, status="added",
     notes="single-element rules on strings (character -> string) or lists (element -> list); "
           "SubstitutionSystem[rule, init, t] gives t + 1 states; neighbourhood rules are not supported")
-def _substitution_system(rules, init, t=None):
+def _substitution_system(rules: Expr, init: Expr, t: Expr = None) -> Expr:
     fname = "SubstitutionSystem"
     rl = list(rules.args) if is_list(rules) else [rules]
     if not rl or not all(_head(x, "Rule", 2) for x in rl):
@@ -964,13 +966,13 @@ def _substitution_system(rules, init, t=None):
 
 
 @fn("ThueMorse", area=AREA, status="added", listable=True)
-def _thue_morse(n):
+def _thue_morse(n: NonNegInteger) -> Expr:
     n = nonneg_int(n, "ThueMorse")
     return bin(n).count("1") % 2
 
 
 @fn("RudinShapiro", area=AREA, status="added", listable=True, notes="(-1)^(number of possibly overlapping 11 blocks)")
-def _rudin_shapiro(n):
+def _rudin_shapiro(n: NonNegInteger) -> Expr:
     n = nonneg_int(n, "RudinShapiro")
     return -1 if bin(n & (n >> 1)).count("1") % 2 else 1
 
@@ -993,7 +995,7 @@ def _factorint(n, fname):
 
 @fn("SquareFreeQ", area=AREA, status="added",
     notes="integers (0 is not square-free) and polynomials with integer content 1 (via sqf_list)")
-def _square_free_q(x, *rest):
+def _square_free_q(x: Expr, *rest: Expr) -> Boolean:
     if rest:
         raise NotImplementedError("SquareFreeQ: the GaussianIntegers / Modulus forms are not supported")
     if _intq(x):
@@ -1023,7 +1025,7 @@ def _square_free_q(x, *rest):
 
 @fn("PerfectNumberQ", area=AREA, status="added",
     notes="even perfect numbers via the 48 known Mersenne prime exponents; odd n beyond 10^1500 raise")
-def _perfect_number_q(x):
+def _perfect_number_q(x: Expr) -> Boolean:
     if not _intq(x):
         return False
     n = int(x)
@@ -1043,7 +1045,7 @@ def _perfect_number_q(x):
 
 
 @fn("PerfectNumber", area=AREA, status="added", listable=True, notes="k <= 48 (verified Mersenne primes)")
-def _perfect_number(k):
+def _perfect_number(k: PosInteger) -> Expr:
     k = pos_int(k, "PerfectNumber", "index")
     if k > len(_MERSENNE_EXPONENTS):
         raise NotImplementedError(f"PerfectNumber: only the first {len(_MERSENNE_EXPONENTS)} perfect numbers are "
@@ -1053,7 +1055,7 @@ def _perfect_number(k):
 
 
 @fn("MersennePrimeExponent", area=AREA, status="added", listable=True, notes="k <= 48")
-def _mersenne_exponent(k):
+def _mersenne_exponent(k: PosInteger) -> Expr:
     k = pos_int(k, "MersennePrimeExponent", "index")
     if k > len(_MERSENNE_EXPONENTS):
         raise NotImplementedError(f"MersennePrimeExponent: only the first {len(_MERSENNE_EXPONENTS)} exponents are "
@@ -1063,7 +1065,7 @@ def _mersenne_exponent(k):
 
 @fn("MersennePrimeExponentQ", area=AREA, status="added", listable=True,
     notes="decided up to 57885161 and for composite n; larger primes raise")
-def _mersenne_exponent_q(x):
+def _mersenne_exponent_q(x: Expr) -> Boolean:
     if not _intq(x):
         return False
     n = int(x)
@@ -1075,7 +1077,7 @@ def _mersenne_exponent_q(x):
 
 
 @fn("CompositeQ", area=AREA, status="added", listable=True, notes="integers; CompositeQ[-n] == CompositeQ[n]")
-def _composite_q(x):
+def _composite_q(x: Expr) -> Boolean:
     if not _intq(x):
         if isinstance(x, (Symbol, Expr)) and not isinstance(x, bool):
             v = S(x) if not isinstance(x, Symbol) else None
@@ -1088,7 +1090,7 @@ def _composite_q(x):
 
 
 @fn("PrimeNu", area=AREA, status="added", listable=True, notes="number of distinct prime factors of |n|; 0 raises")
-def _prime_nu(x):
+def _prime_nu(x: Integer) -> Integer:
     n = int_arg(x, "PrimeNu")
     if n == 0:
         raise ValueError("PrimeNu: undefined for 0")
@@ -1097,7 +1099,7 @@ def _prime_nu(x):
 
 @fn("PrimeOmega", area=AREA, status="added", listable=True,
     notes="prime factors of |n| counted with multiplicity; 0 raises")
-def _prime_omega(x):
+def _prime_omega(x: Integer) -> Expr:
     n = int_arg(x, "PrimeOmega")
     if n == 0:
         raise ValueError("PrimeOmega: undefined for 0")
@@ -1106,7 +1108,7 @@ def _prime_omega(x):
 
 @fn("Divisible", area=AREA, status="added", listable=True,
     notes="exact numbers: n/m an integer (Gaussian integer for complex input)")
-def _divisible(n, m):
+def _divisible(n: Expr, m: Expr) -> Boolean:
     a, b = S(n), S(m)
     for v in (a, b):
         if not isinstance(v, sp.Basic) or v.free_symbols or not v.is_number:
@@ -1123,7 +1125,7 @@ def _divisible(n, m):
 
 
 @fn("CoprimeQ", area=AREA, status="added", listable=True, notes="pairwise coprime integers")
-def _coprime_q(*xs):
+def _coprime_q(*xs: Expr) -> Boolean:
     if len(xs) < 2:
         raise ValueError("CoprimeQ: needs at least two integers")
     ns = [int_arg(x, "CoprimeQ") for x in xs]
@@ -1132,7 +1134,7 @@ def _coprime_q(*xs):
 
 @fn("NumberExpand", area=AREA, status="added",
     notes="integers only: digit values d b^k, sign carried by every term; length pads with leading zeros")
-def _number_expand(x, b=10, length=None):
+def _number_expand(x: Integer, b: Integer = 10, length: Expr = None) -> ListOf[Expr]:
     n = int_arg(x, "NumberExpand", "number")
     b = int_arg(b, "NumberExpand", "base")
     if b < 2:
@@ -1154,7 +1156,7 @@ def _number_expand(x, b=10, length=None):
 
 @fn("NumberDigit", area=AREA, status="added", listable=True,
     notes="digit of |x| multiplying b^n; exact reals only (irrationals certified at two precisions)")
-def _number_digit(x, n, b=10):
+def _number_digit(x: Expr, n: Integer, b: Integer = 10) -> Expr:
     n = int_arg(n, "NumberDigit", "position")
     b = int_arg(b, "NumberDigit", "base")
     if b < 2:
@@ -1184,7 +1186,7 @@ def _number_digit(x, n, b=10):
 
 
 @fn("SquaresR", area=AREA, status="added", listable=True, notes="d <= 200, n <= 10^5 (exact counting)")
-def _squares_r(d, n):
+def _squares_r(d: PosInteger, n: Integer) -> Expr:
     d = pos_int(d, "SquaresR", "dimension")
     n = int_arg(n, "SquaresR")
     if n < 0:
@@ -1212,7 +1214,7 @@ def _squares_r(d, n):
 
 @fn("PowersRepresentations", area=AREA, status="added",
     notes="non-decreasing k-tuples of non-negative integers whose p-th powers sum to n, in lexicographic order")
-def _powers_representations(n, k, p):
+def _powers_representations(n: NonNegInteger, k: PosInteger, p: PosInteger) -> ListOf[Expr]:
     n = nonneg_int(n, "PowersRepresentations")
     k = pos_int(k, "PowersRepresentations", "number of terms")
     p = pos_int(p, "PowersRepresentations", "power")
@@ -1237,7 +1239,7 @@ def _powers_representations(n, k, p):
 
 @fn("PrimitiveRootList", area=AREA, status="added", listable=True,
     notes="sorted primitive roots modulo n; {} when none exist; n <= 10^7")
-def _primitive_root_list(n):
+def _primitive_root_list(n: PosInteger) -> ListOf[Expr]:
     n = pos_int(n, "PrimitiveRootList", "modulus")
     if n == 1:
         raise ValueError("PrimitiveRootList: the modulus must be at least 2")
@@ -1253,7 +1255,7 @@ def _primitive_root_list(n):
 
 @fn("PowerModList", area=AREA, status="added",
     notes="all x in [0, m) with x^q == a^p (mod m) for s = p/q; brute force for m <= 10^6")
-def _power_mod_list(a, s, m):
+def _power_mod_list(a: Integer, s: Expr, m: PosInteger) -> ListOf[Expr]:
     a = int_arg(a, "PowerModList")
     m = pos_int(m, "PowerModList", "modulus")
     fr = _exact_rational(s)
@@ -1277,7 +1279,7 @@ def _power_mod_list(a, s, m):
 
 @fn("MantissaExponent", area=AREA, status="added", listable=True,
     notes="{m, e} with 1/b <= |m| < 1 and x == m b^e; exact input stays exact; MantissaExponent[0] = {0, 0}")
-def _mantissa_exponent(x, b=10):
+def _mantissa_exponent(x: Expr, b: Expr = 10) -> ListOf[Expr]:
     bb = int_arg(b, "MantissaExponent", "base") if not has_float(b) else None
     if bb is None or bb < 2:
         raise ValueError("MantissaExponent: base must be an integer greater than 1")

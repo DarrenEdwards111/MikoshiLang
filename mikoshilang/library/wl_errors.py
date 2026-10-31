@@ -517,7 +517,7 @@ def issue_error(exc):
     notes="Message[s::t, e1, ...] prints s::t: text (StringForm of the message text with the ei) on $Messages unless "
           "switched off or quieted, appends HoldForm[s::t] to $MessageList and returns Null; the text is looked up as "
           "s::t, then General::t, then via $NewMessage, else '-- Message text not found --'")
-def _message(name, *args):
+def _message(name: Expr, *args: Expr) -> Expr:
     while isinstance(name, Expr) and name.head == "HoldForm" and len(name.args) == 1:
         name = name.args[0]
     if not (isinstance(name, Expr) and name.head == "MessageName" and len(name.args) in (2, 3)
@@ -532,7 +532,7 @@ def _message(name, *args):
 @fn("MessageName", area=AREA, status="added",
     notes="s::t (parsed as MessageName[s, \"t\"], HoldFirst) evaluates to the message text assigned with "
           "s::t = \"text\" or to MikoshiLang's built-in text; otherwise it stays unevaluated")
-def _message_name(s, t, *lang):
+def _message_name(s: Expr, t: Expr, *lang: Expr) -> Expr:
     if isinstance(s, Symbol) and isinstance(t, str) and not lang:
         txt = BUILTIN_MESSAGES.get((s.name, t))
         if txt is not None:
@@ -565,7 +565,7 @@ def _switch_targets(args, fname):
     notes="Off[s::t, ...] switches messages off (Off[General::t] switches off every s::t that has not been switched "
           "on explicitly); Off[\"group\"] uses $MessageGroups; Off[Assert] disables assertions; Off[s] (tracing) and "
           "Off[] are accepted and change nothing because symbol tracing is never on")
-def _off(*args):
+def _off(*args: Expr) -> Expr:
     keys, syms = _switch_targets(args, "Off")
     d = _state_data()
     for k in keys:
@@ -581,7 +581,7 @@ def _off(*args):
 @fn("On", area=AREA, status="added",
     notes="On[s::t, ...] and On[\"group\"] switch messages back on; On[Assert] enables assertions.  On[s] for symbol "
           "tracing is not supported (the evaluator has no per-symbol trace printing) and raises")
-def _on(*args):
+def _on(*args: Expr) -> Expr:
     keys, syms = _switch_targets(args, "On")
     if not args:
         raise NotImplementedError("On[]: symbol tracing is not supported in MikoshiLang; use Trace or Echo")
@@ -600,7 +600,7 @@ def _on(*args):
     notes="Quiet[expr] / Quiet[expr, moff] / Quiet[expr, moff, mon] (HoldAll): messages in moff are not printed, "
           "those in mon are; the innermost Quiet specification for a message wins; Check outside is unaffected. "
           "A raised MikoshiLang error is not a message and still propagates")
-def _quiet(expr, *specs):
+def _quiet(expr: Expr, *specs: Expr) -> Expr:
     if len(specs) > 2:
         raise ValueError("Quiet called with more than 3 arguments; 1, 2 or 3 arguments are expected")
     off = MessageSpec(_held_spec(specs[0]), "Quiet", 2) if specs else MessageSpec(ALL, "Quiet")
@@ -613,7 +613,7 @@ def _quiet(expr, *specs):
     notes="Check[expr, failexpr] / Check[expr, failexpr, msgs] (HoldAll): returns failexpr if expr generated a "
           "matching message that is not switched off and not quieted inside the Check; a raised MikoshiLang error "
           "counts as the message f::evalerr")
-def _check(expr, failexpr, *spec):
+def _check(expr: Expr, failexpr: Expr, *spec: Expr) -> Expr:
     if len(spec) > 1:
         raise ValueError("Check called with more than 3 arguments; 2 or 3 arguments are expected")
     ms = MessageSpec(_held_spec(spec[0]), "Check", 3) if spec else MessageSpec(ALL, "Check")
@@ -633,7 +633,7 @@ def _check(expr, failexpr, *spec):
 @fn("Messages", area=AREA, status="added",
     notes="Messages[s] gives {HoldPattern[s::t] :> text, ...} for the messages assigned to s (sorted by tag); "
           "messages switched off are given as HoldPattern[s::t] :> $Off[text]")
-def _messages(s):
+def _messages(s: Expr) -> ListOf[Expr]:
     if not isinstance(s, Symbol):
         raise ValueError(f"Messages: {input_text(s)} is not a symbol")
     found = {}
@@ -712,7 +712,7 @@ _ECHO_DEPTH: ContextVar[int] = ContextVar("w02_echo_depth", default=0)
 @fn("Print", area=AREA, status="added",
     notes="Print[e1, e2, ...] writes the ei concatenated (OutputForm: strings without quotes) and a newline to "
           "$Output (stdout) and returns Null")
-def _print(*args):
+def _print(*args: Expr) -> Expr:
     print_line("".join(output_text(a) for a in args))
     return NULL
 
@@ -720,7 +720,7 @@ def _print(*args):
 @fn("PrintTemporary", area=AREA, status="added",
     notes="text interface: PrintTemporary[e1, ...] prints like Print (there are no notebook cells to delete "
           "afterwards) and returns Null")
-def _print_temporary(*args):
+def _print_temporary(*args: Expr) -> Expr:
     print_line("".join(output_text(a) for a in args))
     return NULL
 
@@ -735,7 +735,7 @@ def echo(value, label=None, f=None):
 @fn("Echo", area=AREA, status="added",
     notes="Echo[expr] prints >> expr and returns expr; Echo[expr, label] prints >> label  expr; Echo[expr, label, f] "
           "prints f[expr]; output is suppressed inside QuietEcho")
-def _echo(x, label=None, f=None):
+def _echo(x: Expr, label: Expr = None, f: Expr = None) -> Expr:
     return echo(x, label, f)
 
 
@@ -761,14 +761,14 @@ def _echo_function_hook(head, args, ev_):
 
 @fn("EchoLabel", area=AREA, status="added",
     notes="operator form: EchoLabel[label][expr] prints >> label  expr and returns expr; EchoLabel[][expr] is Echo[expr]")
-def _echo_label(*label):
+def _echo_label(*label: Expr) -> Expr:
     raise Unevaluated()
 
 
 @fn("EchoFunction", area=AREA, status="added",
     notes="operator form: EchoFunction[f][expr] prints >> f[expr], EchoFunction[label, f][expr] prints >> label  "
           "f[expr]; both return expr; EchoFunction[][expr] is Echo[expr]")
-def _echo_function(*args):
+def _echo_function(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -784,7 +784,7 @@ def _labels(spec):
     notes="EchoEvaluation[expr] (HoldFirst) prints << expr before and >> result after evaluating (nested calls use "
           "<<<< / >>>>); EchoEvaluation[expr, l1 -> l2], EchoEvaluation[expr, labels, f] and "
           "EchoEvaluation[expr, labels, g -> f] as documented; returns the result")
-def _echo_evaluation(expr, labels=None, f=None):
+def _echo_evaluation(expr: Expr, labels: Expr = None, f: Fn = None) -> Expr:
     labels = None if labels is None else ev(labels)
     f = None if f is None else ev(f)
     l1, l2 = _labels(labels)
@@ -809,7 +809,7 @@ def _echo_evaluation(expr, labels=None, f=None):
 @fn("QuietEcho", area=AREA, status="added",
     notes="QuietEcho[expr] (HoldFirst) evaluates expr without Echo, EchoLabel, EchoFunction, EchoEvaluation or "
           "EchoTiming printing anything; messages and Print are not affected")
-def _quiet_echo(expr):
+def _quiet_echo(expr: Expr) -> Expr:
     tok = _QUIET_ECHO.set(True)
     try:
         return ev(expr)
@@ -820,7 +820,7 @@ def _quiet_echo(expr):
 @fn("Monitor", area=AREA, status="added",
     notes="Monitor[expr, mon] (HoldAll) evaluates and returns expr; the monitor display is a notebook feature, so in "
           "MikoshiLang's text interface nothing is shown (as in a Wolfram text-based session)")
-def _monitor(expr, *rest):
+def _monitor(expr: Expr, *rest: Expr) -> Expr:
     if len(rest) > 2:
         raise ValueError("Monitor called with more than 3 arguments; 1, 2 or 3 arguments are expected")
     return ev(expr)
@@ -838,7 +838,7 @@ KL.COMPOUND_HEAD_HOOKS["EchoFunction"] = _echo_function_hook
     notes="Assert[test] / Assert[test, tag] (HoldAll): disabled by default (returns Null without evaluating test); "
           "after On[Assert] a test that is not True issues Assert::asrtf (Assert::asrtfl for a {line, file} tag) or "
           "evaluates $AssertFunction[HoldComplete[Assert[...]]] when that is set; returns Null")
-def _assert(test, *tag):
+def _assert(test: Expr, *tag: Expr) -> Expr:
     if len(tag) > 1:
         raise ValueError("Assert called with more than 2 arguments; 1 or 2 arguments are expected")
     if not _state_data()["assert"]:
@@ -978,7 +978,7 @@ def _failure_hook(head, args, ev_):
     notes="Failure[\"tag\", assoc] is inert; failure[\"prop\"] gives assoc values and the derived properties "
           "\"Message\" (template applied to \"MessageParameters\"), \"MessageTemplate\", \"MessageName\", "
           "\"HeldMessageTemplate\", \"Tag\" and \"Properties\" (sorted); failure[{p1, p2}] gives a list")
-def _failure(*args):
+def _failure(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
     if len(args) == 2 and not is_assoc(args[1]):
@@ -991,7 +991,7 @@ def _failure(*args):
 @fn("Success", area=AREA, status="added",
     notes="Success[\"tag\", assoc] is inert; success[\"prop\"] gives assoc values, \"Message\", \"Tag\" and "
           "\"Properties\" (the association keys in order)")
-def _success(*args):
+def _success(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
     if len(args) == 2 and not is_assoc(args[1]):
@@ -1016,7 +1016,7 @@ def confirm_failure_q(x):
 
 @fn("FailureQ", area=AREA, status="added",
     notes="FailureQ[expr] is True for Failure[...], $Failed and $Aborted, False otherwise")
-def _failure_q(x):
+def _failure_q(x: Expr) -> Boolean:
     return failure_q(x)
 
 
@@ -1046,7 +1046,7 @@ def _failsafe_hook(head, args, ev_):
     notes="operator form: Failsafe[f][x1, ...] gives f[x1, ...] unless some xi is a failure (Failure, Missing, "
           "$Failed, $Canceled, $Aborted), then the first such xi; Failsafe[f, test][...] gives "
           "Failure[\"FailsafeFailed\", ...] when test[x1, ...] is not True; Failsafe[f, test, failf] gives failf[...]")
-def _failsafe(*args):
+def _failsafe(*args: Expr) -> Expr:
     if not 1 <= len(args) <= 3:
         raise ValueError(f"Failsafe called with {len(args)} arguments; 1, 2 or 3 arguments are expected")
     raise Unevaluated()
@@ -1135,7 +1135,7 @@ def _is_null(x):
           "Failure[\"ConfirmationFailed\", <|...|>] is thrown to the lexically enclosing Enclose (info is evaluated "
           "only on failure; a ConfirmationFailed failure with Null info is rethrown unchanged); Confirm[expr, info, "
           "tag] is caught dynamically by Enclose[..., f, tag]; with no tag and no Enclose: message confirmnotag")
-def _confirm(*args):
+def _confirm(*args: Expr) -> Expr:
     tag = _confirm_setup("Confirm", args)
     if tag is None:
         return _no_tag("Confirm", args)
@@ -1152,7 +1152,7 @@ def _confirm(*args):
 @fn("ConfirmBy", area=AREA, status="added",
     notes="ConfirmBy[expr, f] returns expr if f[expr] is True, else throws Failure[\"ConfirmationFailed\", ...] "
           "with \"Expression\" and \"Function\" to the enclosing Enclose; info/tag as for Confirm")
-def _confirm_by(*args):
+def _confirm_by(*args: Expr) -> Expr:
     tag = _confirm_setup("ConfirmBy", args)
     if tag is None:
         return _no_tag("ConfirmBy", args)
@@ -1168,7 +1168,7 @@ def _confirm_by(*args):
 @fn("ConfirmMatch", area=AREA, status="added",
     notes="ConfirmMatch[expr, form] returns expr if it matches form, else throws Failure[\"ConfirmationFailed\", "
           "...] with \"Expression\" and \"Pattern\" to the enclosing Enclose; info/tag as for Confirm")
-def _confirm_match(*args):
+def _confirm_match(*args: Expr) -> Expr:
     tag = _confirm_setup("ConfirmMatch", args)
     if tag is None:
         return _no_tag("ConfirmMatch", args)
@@ -1184,7 +1184,7 @@ def _confirm_match(*args):
 @fn("ConfirmAssert", area=AREA, status="added",
     notes="ConfirmAssert[test] returns Null if test is True, else throws Failure[\"ConfirmationFailed\", "
           "<|\"MessageTemplate\" -> \"Assertion failed.\", ..., \"Test\" -> value|>] to the enclosing Enclose")
-def _confirm_assert(*args):
+def _confirm_assert(*args: Expr) -> Expr:
     tag = _confirm_setup("ConfirmAssert", args)
     if tag is None:
         return _no_tag("ConfirmAssert", args)
@@ -1200,7 +1200,7 @@ def _confirm_assert(*args):
           "switched off and not quieted inside); evaluation stops at the first such message, which is quieted, and "
           "Failure[\"ConfirmationFailed\", ...] with \"HeldExpression\", \"HeldMessageName\" and "
           "\"HeldMessageCall\" is thrown to the enclosing Enclose; a raised MikoshiLang error counts as f::evalerr")
-def _confirm_quiet(*args):
+def _confirm_quiet(*args: Expr) -> Expr:
     tag = _confirm_setup("ConfirmQuiet", args)
     if tag is None:
         return _no_tag("ConfirmQuiet", args)
@@ -1232,7 +1232,7 @@ def _confirm_quiet(*args):
           "it (untagged confirmations are rewritten with a private tag, inner untagged Enclose blocks keep their "
           "own); Enclose[expr, f] gives f[failure] (f a string: failure[f]); Enclose[expr, f, form] catches only "
           "confirmations whose tag matches form, dynamically")
-def _enclose(expr, *rest):
+def _enclose(expr: Expr, *rest: Expr) -> Expr:
     if len(rest) > 2:
         raise ValueError(f"Enclose called with {len(rest) + 1} arguments; 1, 2 or 3 arguments are expected")
     handler = ev(rest[0]) if rest else Symbol("Identity")
@@ -1486,7 +1486,7 @@ KL.COMPOUND_HEAD_HOOKS["Exception"] = _exception_hook
           "parent types; spec may be a tag, a list of tags, an Exception, a Failure carrying \"ExceptionTagList\" or "
           "an association; malformed input issues Exception::untagged / Exception::invargs and stays unevaluated; "
           "exc[\"prop\"] gives the documented properties")
-def _exception(*args):
+def _exception(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
     if len(args) == 2 and is_exception(Expr("Exception", *args)):
@@ -1501,7 +1501,7 @@ def _exception(*args):
 @fn("ExceptionQ", area=AREA, status="added",
     notes="ExceptionQ[expr] is True for a validated Exception object; ExceptionQ[expr, tag | {tags}] also requires "
           "one of the tags in its (expanded) tag list")
-def _exception_q(x, *tagspec):
+def _exception_q(x: Expr, *tagspec: Expr) -> Boolean:
     if len(tagspec) > 1:
         raise ValueError("ExceptionQ called with more than 2 arguments; 1 or 2 arguments are expected")
     if not is_exception(x):
@@ -1534,7 +1534,7 @@ def _tags_match(tags, spec, fname):
     notes="ThrowException[args] throws Exception[args] (to CatchExceptions; Catch[..., _] also intercepts it); "
           "malformed arguments throw an \"ErrorHandlingException\" exception after an Exception:: message; uncaught "
           "exceptions reach the top level as an Uncaught Throw error")
-def _throw_exception(*args):
+def _throw_exception(*args: Expr) -> Expr:
     try:
         exc = build_exception(args, "ThrowException")
     except _BadException as bad:
@@ -1575,7 +1575,7 @@ def catch_exceptions(expr, spec):
           "(All, tag, {tags}, tag -> handler, {tagspec -> handler, ...}; first matching clause; subtypes match "
           "their parents) handler[exceptionData] or, without a handler, the exception's Failure; other exceptions "
           "propagate. The operator form CatchExceptions[spec][expr] holds expr")
-def _catch_exceptions(*args):
+def _catch_exceptions(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
     if len(args) != 2:
@@ -1609,7 +1609,7 @@ _hold_operator("CatchExceptions")
           "exception type in this session and returns Success[\"RegisteredExceptionType\", <|\"ExceptionType\" -> sym, "
           "\"ParentExceptionTypes\" -> {...}, \"OwnerContext\" -> \"Global`\"|>]; registering twice issues "
           "RegisterExceptionType::regd and returns $Failed")
-def _register_exception_type(sym, *parents):
+def _register_exception_type(sym: Expr, *parents: Expr) -> Expr:
     if len(parents) > 1:
         raise ValueError("RegisterExceptionType called with more than 2 arguments; 1 or 2 arguments are expected")
     if not isinstance(sym, Symbol):
@@ -1638,7 +1638,7 @@ _hold_first("RegisterExceptionType")
 @fn("ExceptionTypes", area=AREA, status="added",
     notes="ExceptionTypes[] / ExceptionTypes[All] lists the registered exception types in registration order; "
           "ExceptionTypes[tag | {tags}] lists the registered types that are the given types or their descendants")
-def _exception_types(*spec):
+def _exception_types(*spec: Expr) -> ListOf[Expr]:
     if len(spec) > 1:
         raise ValueError("ExceptionTypes called with more than 1 argument")
     regs = [v[0] for v in _types().values()]
@@ -1651,7 +1651,7 @@ def _exception_types(*spec):
 @fn("ExceptionTypeRegisteredQ", area=AREA, status="added",
     notes="ExceptionTypeRegisteredQ[sym] is True if sym is a registered exception type; with a second argument, "
           "True if it is registered and one of the given types is among its ancestors")
-def _exception_type_registered_q(sym, *spec):
+def _exception_type_registered_q(sym: Expr, *spec: Expr) -> Boolean:
     if len(spec) > 1:
         raise ValueError("ExceptionTypeRegisteredQ called with more than 2 arguments")
     if not isinstance(sym, Symbol) or _type_key(sym) not in _types():
@@ -1718,7 +1718,7 @@ def _raise_or_defer(exc):
 @fn("Abort", area=AREA, status="added",
     notes="Abort[] aborts the computation: it raises AbortSignal ($Aborted), caught by CheckAbort; inside "
           "AbortProtect the abort takes effect when the AbortProtect finishes")
-def _abort():
+def _abort() -> Expr:
     _raise_or_defer(AbortSignal())
     return ABORTED
 
@@ -1726,14 +1726,14 @@ def _abort():
 @fn("Interrupt", area=AREA, status="added",
     notes="Interrupt[] generates an interactive interrupt: in MikoshiLang (Python) that is KeyboardInterrupt, the "
           "same effect as pressing Ctrl-C at that point")
-def _interrupt():
+def _interrupt() -> Expr:
     raise KeyboardInterrupt("Interrupt[]")
 
 
 @fn("AbortProtect", area=AREA, status="added",
     notes="AbortProtect[expr] (HoldAll) evaluates expr completely, saving any Abort[] or TimeConstrained / "
           "MemoryConstrained abort until it finishes (a CheckAbort inside still catches them)")
-def _abort_protect(expr):
+def _abort_protect(expr: Expr) -> Expr:
     with _AbortCtx("P"):
         return ev(expr)
 
@@ -1752,7 +1752,7 @@ def _option(args, names, fname):
     notes="CheckAbort[expr, failexpr] (HoldAll) returns failexpr if an abort occurs in expr; option PropagateAborts: "
           "Automatic (default: absorb Abort[], propagate constraint aborts after failexpr), True (propagate all), "
           "False (absorb all)")
-def _check_abort(*args):
+def _check_abort(*args: Expr) -> Expr:
     args, opts = _option(args, {"PropagateAborts"}, "CheckAbort")
     if len(args) != 2:
         raise ValueError(f"CheckAbort called with {len(args)} arguments; 2 arguments are expected")
@@ -1774,7 +1774,7 @@ def _check_abort(*args):
 
 @fn("PropagateAborts", area=AREA, status="added",
     notes="option name for CheckAbort (Automatic, True or False); used as a function it stays unevaluated")
-def _propagate_aborts(*args):
+def _propagate_aborts(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -1782,7 +1782,7 @@ def _propagate_aborts(*args):
     notes="WithCleanup[expr, cleanup] / WithCleanup[init, expr, cleanup] (HoldAll) returns expr's value and always "
           "evaluates cleanup, also after an abort, Throw, Confirm or error in expr; aborts during init and cleanup "
           "are postponed until cleanup is done (an abort in init skips expr)")
-def _with_cleanup(*args):
+def _with_cleanup(*args: Expr) -> Expr:
     if len(args) == 2:
         init, body, cleanup = None, args[0], args[1]
     elif len(args) == 3:
@@ -1968,7 +1968,7 @@ def _bytes(b, fname):
     notes="TimeConstrained[expr, t] / TimeConstrained[expr, t, failexpr] (HoldAll) evaluates expr, aborting it after "
           "t seconds of real time and returning $Aborted (or failexpr, evaluated only then); t may be Infinity or a "
           "Quantity in seconds; AbortProtect postpones the abort")
-def _time_constrained(expr, t, *fail):
+def _time_constrained(expr: Expr, t: Expr, *fail: Expr) -> Expr:
     if len(fail) > 1:
         raise ValueError("TimeConstrained called with more than 3 arguments; 2 or 3 arguments are expected")
     tv = ev(t)
@@ -1988,7 +1988,7 @@ def _time_constrained(expr, t, *fail):
     notes="MemoryConstrained[expr, b] / MemoryConstrained[expr, b, failexpr] (HoldAll) evaluates expr, aborting it "
           "when the additional Python heap memory it allocates (tracemalloc) exceeds b bytes, and returns $Aborted "
           "(or failexpr); b may be Infinity or a byte Quantity")
-def _memory_constrained(expr, b, *fail):
+def _memory_constrained(expr: Expr, b: Expr, *fail: Expr) -> Expr:
     if len(fail) > 1:
         raise ValueError("MemoryConstrained called with more than 3 arguments; 2 or 3 arguments are expected")
     bv = ev(b)
@@ -2007,7 +2007,7 @@ def _memory_constrained(expr, b, *fail):
 @fn("TimeRemaining", area=AREA, status="added",
     notes="TimeRemaining[] gives the seconds (real time) left before the earliest enclosing TimeConstrained aborts, "
           "or Infinity outside TimeConstrained")
-def _time_remaining():
+def _time_remaining() -> Expr:
     deadlines = [c.deadline for c in _ACTIVE if c.kind == "time" and not c.fired]
     if not deadlines:
         return INFINITY
@@ -2028,7 +2028,7 @@ def _timed(expr, clock):
 @fn("Timing", area=AREA, status="added",
     notes="Timing[expr] (HoldAll) gives {CPU seconds used by this process while evaluating expr, result} "
           "(time.process_time); time spent in Pause is not counted")
-def _timing(expr):
+def _timing(expr: Expr) -> ListOf[Expr]:
     t, v = _timed(expr, time.process_time)
     return L(t, v)
 
@@ -2036,7 +2036,7 @@ def _timing(expr):
 @fn("AbsoluteTiming", area=AREA, status="added",
     notes="AbsoluteTiming[expr] (HoldAll) gives {real seconds elapsed while evaluating expr, result} "
           "(time.perf_counter)")
-def _absolute_timing(expr):
+def _absolute_timing(expr: Expr) -> ListOf[Expr]:
     t, v = _timed(expr, time.perf_counter)
     return L(t, v)
 
@@ -2066,7 +2066,7 @@ def repeated_timing(expr, total=None):
     notes="RepeatedTiming[expr] / RepeatedTiming[expr, t] (HoldFirst) evaluates expr at least 4 times and for at "
           "least t seconds (default 1) and gives {trimmed mean of the timings without the lower and upper quartiles, "
           "result of the first evaluation}")
-def _repeated_timing(expr, *t):
+def _repeated_timing(expr: Expr, *t: Expr) -> ListOf[Expr]:
     if len(t) > 1:
         raise ValueError("RepeatedTiming called with more than 2 arguments; 1 or 2 arguments are expected")
     total = None
@@ -2083,7 +2083,7 @@ def _repeated_timing(expr, *t):
     notes="EchoTiming[expr] / EchoTiming[expr, label] (HoldFirst) evaluates expr, prints >> [label  ]seconds and "
           "returns the result; Method -> AbsoluteTiming (default), Timing, RepeatedTiming or a holding function "
           "returning {timing, result}")
-def _echo_timing(expr, *rest):
+def _echo_timing(expr: Expr, *rest: Expr) -> Expr:
     rest, opts = _option(rest, {"Method"}, "EchoTiming")
     if len(rest) > 1:
         raise ValueError("EchoTiming called with too many arguments; EchoTiming[expr] or EchoTiming[expr, label]")
@@ -2109,7 +2109,7 @@ def _echo_timing(expr, *rest):
 
 @fn("Pause", area=AREA, status="added",
     notes="Pause[n] waits at least n seconds (n a non-negative real number or a Quantity of time) and returns Null")
-def _pause(n):
+def _pause(n: Expr) -> Expr:
     secs = _seconds(n, "Pause")
     if secs is None or secs == float("inf"):
         issue("Pause", "numnm", Expr("Pause", n))
@@ -2147,14 +2147,14 @@ _PROCESS_START = _process_start()
 @fn("SessionTime", area=AREA, status="added",
     notes="SessionTime[] gives the real seconds since the MikoshiLang (Python) process started (procfs on Linux; "
           "elsewhere since the library was loaded)")
-def _session_time():
+def _session_time() -> Expr:
     return time.time() - _PROCESS_START
 
 
 @fn("TimeUsed", area=AREA, status="added",
     notes="TimeUsed[] gives the CPU seconds used so far by the MikoshiLang (Python) process (time.process_time); "
           "Pause is not counted")
-def _time_used():
+def _time_used() -> Expr:
     return time.process_time()
 
 
@@ -2177,7 +2177,7 @@ def _bytecount(e, seen=None):
     notes="ByteCount[expr] gives the bytes MikoshiLang uses to store expr (Python object sizes, every part counted "
           "separately, no sharing); symbols (including True, False, Null) are shared and count 0. Values differ "
           "from Wolfram's own memory layout, as the documentation allows between systems")
-def _byte_count(e):
+def _byte_count(e: Expr) -> Expr:
     return _bytecount(e)
 
 
@@ -2198,7 +2198,7 @@ def _rss_now():
 @fn("MemoryInUse", area=AREA, status="added",
     notes="MemoryInUse[] gives the resident memory (bytes) of the MikoshiLang process (/proc/self/statm on Linux, "
           "psutil elsewhere); MemoryInUse[$FrontEnd] raises because there is no front end")
-def _memory_in_use(*fe):
+def _memory_in_use(*fe: Expr) -> Expr:
     if fe:
         raise NotImplementedError("MemoryInUse[$FrontEnd]: MikoshiLang has no front end process")
     return _rss_now()
@@ -2207,7 +2207,7 @@ def _memory_in_use(*fe):
 @fn("MaxMemoryUsed", area=AREA, status="added",
     notes="MaxMemoryUsed[] gives the peak resident memory (bytes) of the process (getrusage); MaxMemoryUsed[expr] "
           "(HoldAll) gives the peak additional Python heap bytes (tracemalloc) used while evaluating expr")
-def _max_memory_used(*args):
+def _max_memory_used(*args: Expr) -> Expr:
     if len(args) > 1:
         raise ValueError("MaxMemoryUsed called with more than 1 argument")
     if not args:
@@ -2235,7 +2235,7 @@ def _max_memory_used(*args):
 @fn("MemoryAvailable", area=AREA, status="added",
     notes="MemoryAvailable[] gives the bytes the operating system reports as available (MemAvailable in "
           "/proc/meminfo on Linux, psutil elsewhere)")
-def _memory_available():
+def _memory_available() -> Expr:
     try:
         with open("/proc/meminfo") as f:
             for line in f:
@@ -2257,7 +2257,7 @@ _hold_all("MaxMemoryUsed")
     notes="ClearSystemCache[] clears MikoshiLang's internal caches (SymPy's cache and the evaluator memo table); "
           "ClearSystemCache[\"Symbolic\"] / [\"Numeric\"] clear the symbolic (SymPy) / numeric (mpmath) caches; "
           "returns Null")
-def _clear_system_cache(*kind):
+def _clear_system_cache(*kind: Expr) -> Expr:
     if len(kind) > 1:
         raise ValueError("ClearSystemCache called with more than 1 argument")
     if kind and kind[0] not in ("Numeric", "Symbolic"):
@@ -2283,7 +2283,7 @@ def _clear_system_cache(*kind):
 @fn("TerminatedEvaluation", area=AREA, status="added",
     notes="TerminatedEvaluation[\"reason\"] is the inert representation of an evaluation stopped by a session limit "
           "(\"IterationLimit\", \"RecursionLimit\", ...); a non-string reason raises")
-def _terminated_evaluation(reason):
+def _terminated_evaluation(reason: Expr) -> Expr:
     if _has_pattern(reason):
         raise Unevaluated()
     if not isinstance(reason, str):
@@ -2586,7 +2586,7 @@ KL.COMPOUND_HEAD_HOOKS["TestObject"] = _test_object_hook
           "test[\"prop\"] for \"Outcome\" (Success, Failure, MessagesFailure, NotEvaluated), \"FailureType\", "
           "\"Input\", \"ExpectedOutput\", \"ActualOutput\", \"ActualMessages\", \"TestID\", \"TestKey\", "
           "\"TestCreate\", \"Created\", timings, ...; test[{p1, ...}] gives an association; \"Properties\"")
-def _test_object(*args):
+def _test_object(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
     if len(args) != 1 or not is_assoc(args[0]):
@@ -2598,7 +2598,7 @@ def _test_object(*args):
     notes="TestCreate[input] / [input, expected] / [input, expected, messages] (HoldAllComplete) creates an "
           "unevaluated TestObject; options MemoryConstraint, MetaInformation, SameTest, TestID (Automatic = hash "
           "of the test), TimeConstraint")
-def _test_create(*args):
+def _test_create(*args: Expr) -> Expr:
     return _test_args(args, "TestCreate")
 
 
@@ -2623,7 +2623,7 @@ def _test_from_assoc(a):
     notes="TestEvaluate[test] runs a TestObject (messages are recorded, not printed) and gives the evaluated "
           "TestObject with \"ActualOutput\", \"ActualMessages\", timings and the \"Outcome\" / \"FailureType\"; "
           "TestEvaluate[<|\"Input\" :> ..., \"ExpectedOutput\" -> ..., ...|>] builds the test from an association")
-def _test_evaluate(x):
+def _test_evaluate(x: Expr) -> Expr:
     if is_assoc(x):
         x = _test_from_assoc(x)
     if not is_test(x):
@@ -2634,7 +2634,7 @@ def _test_evaluate(x):
 @fn("VerificationTest", area=AREA, status="added",
     notes="VerificationTest[input, expected, messages, opts] (HoldAllComplete) = TestEvaluate[TestCreate[...]]: "
           "evaluates the test immediately without printing messages and gives the evaluated TestObject")
-def _verification_test(*args):
+def _verification_test(*args: Expr) -> Expr:
     obj = evaluate_test(_test_args(args, "VerificationTest"))[0]
     coll = _REPORT_COLLECT.get()
     if coll is not None:
@@ -2646,7 +2646,7 @@ def _verification_test(*args):
     notes="IntermediateTest[input, expected, messages, opts] (HoldAllComplete) evaluates a test (without printing "
           "messages) and returns the evaluated input; inside VerificationTest / TestEvaluate a failing intermediate "
           "test makes the enclosing test fail (IntermediateTestFailure / IntermediateTestMessagesFailure)")
-def _intermediate_test(*args):
+def _intermediate_test(*args: Expr) -> Expr:
     obj, value = evaluate_test(_test_args(args, "IntermediateTest"))
     parent = _ITESTS.get()
     if parent is not None:
@@ -2768,7 +2768,7 @@ KL.COMPOUND_HEAD_HOOKS["TestReportObject"] = _report_hook
     notes="TestReportObject[<|...|>] is the inert result of TestReport; report[\"prop\"] for \"Results\", "
           "\"ResultsByOutcome\", \"ResultsByTestID\", \"ResultsByTestFileName\", \"ResultsDataset\", "
           "\"ReportSucceeded\", \"RuntimeFailures\", \"Title\", timings, \"TestsSucceededCount\", the key lists ...")
-def _test_report_object(*args):
+def _test_report_object(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
     if len(args) != 1 or not is_assoc(args[0]):
@@ -2891,7 +2891,7 @@ def _report_file(path, handlers, evalf, defaults):
           "test file with $TestFileName set (notebooks raise). Options HandlerFunctions (events ReportStarted, "
           "TestCreated, TestEvaluated, RuntimeFailure, FileStarted, FileCompleted, ReportCompleted, UnhandledEvent), "
           "HandlerFunctionsKeys, TestEvaluationFunction, SameTest, TimeConstraint, MemoryConstraint")
-def _test_report(*args):
+def _test_report(*args: Expr) -> Expr:
     names = {"HandlerFunctions", "HandlerFunctionsKeys", "TestEvaluationFunction", "SameTest", "TimeConstraint",
              "MemoryConstraint", "ProgressReporting"}
     args, opts = _split_options(args, names, "TestReport")
@@ -2930,7 +2930,7 @@ def _test_report(*args):
 
 def _inert_option(name, notes):
     @fn(name, area=AREA, status="added", notes=notes)
-    def _opt(*args):
+    def _opt(*args: Expr) -> Expr:
         raise Unevaluated()
     return _opt
 
