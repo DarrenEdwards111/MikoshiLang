@@ -1086,3 +1086,557 @@ def _syntaxlength(s):
         if _syntax_state(s[:k]) != "error":
             return k
     return 0
+
+
+# ═════════════════════════════════════════════════════════════════ sequences & alignment ══
+def _seq(x, fname):
+    """(elements, kind) of a string ("str"), BioSequence ("str") or list ("list")."""
+    b = _bio_string(x)
+    if b is not None:
+        return list(b), "str"
+    if isinstance(x, str):
+        return list(x), "str"
+    if is_list(x):
+        return list(x.args), "list"
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    raise ValueError(f"{fname}: {x!r} is not a string, list or BioSequence")
+
+
+def _seq_pair(a, b, fname, ignore_case=False):
+    x, ka = _seq(a, fname)
+    y, kb = _seq(b, fname)
+    if ka != kb:
+        raise ValueError(f"{fname}: both arguments must be strings (or BioSequences) or both lists")
+    if ignore_case and ka == "str":
+        x = [c.lower() for c in x]
+        y = [c.lower() for c in y]
+    return x, y, ka
+
+
+def _key(e):
+    return e if isinstance(e, str) else ("\0tag", K.tag(e))
+
+
+def _wrap(items, kind):
+    return "".join(items) if kind == "str" else L(*items)
+
+
+class _Scorer:
+    """Similarity scores from SimilarityRules (Automatic: +1 match, -1 mismatch/insertion/deletion)."""
+
+    def __init__(self, rules, fname):
+        self.rules = []
+        self.cache = {}
+        if rules is None or is_sym(rules, "Automatic"):
+            return
+        if isinstance(rules, str):
+            raise NotImplementedError(f"{fname}: named similarity matrices ({rules!r}) are not supported")
+        if not is_list(rules):
+            raise ValueError(f"{fname}: SimilarityRules must be Automatic or a list of rules {{e1, e2}} -> v")
+        for r in rules.args:
+            if not (is_rule(r) and is_list(r.args[0]) and len(r.args[0].args) == 2):
+                raise ValueError(f"{fname}: invalid similarity rule {r!r}")
+            v = r.args[1]
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                try:
+                    v = float(ev(Expr("N", v)))
+                except Exception:  # noqa: BLE001
+                    raise ValueError(f"{fname}: the similarity value in {r!r} must be a real number")
+            self.rules.append((r.args[0], v))
+
+    def __call__(self, x, y):
+        k = (_key(x), _key(y))
+        v = self.cache.get(k)
+        if v is None:
+            v = self._compute(x, y)
+            self.cache[k] = v
+        return v
+
+    def _compute(self, x, y):
+        pair = L(x, y)
+        for lhs, v in self.rules:
+            a, b = lhs.args
+            if _plain(a) and _plain(b):
+                if _key(a) == _key(x) and _key(b) == _key(y):
+                    return v
+            elif ev(Expr("MatchQ", pair, lhs)) is True:
+                return v
+        if isinstance(x, str) and x == "" or isinstance(y, str) and y == "":
+            return -1
+        return 1 if _key(x) == _key(y) else -1
+
+
+def _plain(e):
+    if isinstance(e, Expr):
+        if e.head in ("Blank", "BlankSequence", "BlankNullSequence", "Pattern", "Alternatives", "Condition",
+                      "PatternTest", "Except", "Optional"):
+            return False
+        return all(_plain(a) for a in e.args)
+    return True
+
+
+_NEG = float("-inf")
+
+
+def _align(x, y, score, gap, local=False):
+    """Gotoh alignment maximising the similarity; returns (score, ops) with ops ('S'|'D'|'I', i, j) 0-based."""
+    n, m = len(x), len(y)
+    dl = [score(c, "") for c in x]
+    ins = [score("", c) for c in y]
+    sub = [[score(x[i], y[j]) for j in range(m)] for i in range(n)]
+    M = [[_NEG] * (m + 1) for _ in range(n + 1)]
+    X = [[_NEG] * (m + 1) for _ in range(n + 1)]
+    Y = [[_NEG] * (m + 1) for _ in range(n + 1)]
+    M[0][0] = 0
+    if not local:
+        acc = -gap
+        for i in range(1, n + 1):
+            acc += dl[i - 1]
+            X[i][0] = acc
+        acc = -gap
+        for j in range(1, m + 1):
+            acc += ins[j - 1]
+            Y[0][j] = acc
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            best = max(M[i - 1][j - 1], X[i - 1][j - 1], Y[i - 1][j - 1])
+            if local:
+                best = max(best, 0)
+            M[i][j] = best + sub[i - 1][j - 1]
+            X[i][j] = max(M[i - 1][j] - gap, X[i - 1][j], Y[i - 1][j] - gap) + dl[i - 1]
+            Y[i][j] = max(M[i][j - 1] - gap, Y[i][j - 1], X[i][j - 1] - gap) + ins[j - 1]
+    tables = {"M": M, "X": X, "Y": Y}
+    if local:
+        best, bi, bj = 0, 0, 0
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                if M[i][j] > best:
+                    best, bi, bj = M[i][j], i, j
+        if best <= 0:
+            return 0, [], (0, 0, 0, 0)
+        i, j, st = bi, bj, "M"
+    else:
+        cands = [(M[n][m], "M"), (X[n][m], "X"), (Y[n][m], "Y")] if (n or m) else [(0, "M")]
+        best = max(c[0] for c in cands)
+        st = next(s for v, s in cands if v == best)
+        i, j = n, m
+    ops = []
+    eps = 1e-9
+    while i > 0 or j > 0:
+        if st == "M":
+            if local and abs(M[i][j] - sub[i - 1][j - 1]) < eps and max(M[i - 1][j - 1], X[i - 1][j - 1],
+                                                                        Y[i - 1][j - 1]) <= 0:
+                ops.append(("S", i - 1, j - 1))
+                i, j = i - 1, j - 1
+                break
+            ops.append(("S", i - 1, j - 1))
+            target = M[i][j] - sub[i - 1][j - 1]
+            i, j = i - 1, j - 1
+            if i == 0 and j == 0:
+                break
+            st = next(s for s in ("M", "X", "Y") if abs(tables[s][i][j] - target) < eps)
+        elif st == "X":
+            ops.append(("D", i - 1, j))
+            v = X[i][j] - dl[i - 1]
+            i -= 1
+            if i == 0 and j == 0 or (not local and j == 0):
+                st = "X"
+                if i == 0:
+                    break
+                continue
+            opts_ = [("M", M[i][j] - gap), ("X", X[i][j]), ("Y", Y[i][j] - gap)]
+            st = next(s for s, w in opts_ if abs(w - v) < eps)
+        else:
+            ops.append(("I", i, j - 1))
+            v = Y[i][j] - ins[j - 1]
+            j -= 1
+            if i == 0 and j == 0 or (not local and i == 0):
+                st = "Y"
+                if j == 0:
+                    break
+                continue
+            opts_ = [("M", M[i][j] - gap), ("Y", Y[i][j]), ("X", X[i][j] - gap)]
+            st = next(s for s, w in opts_ if abs(w - v) < eps)
+    ops.reverse()
+    if local:
+        i0 = min((o[1] for o in ops if o[0] != "I"), default=0)
+        j0 = min((o[2] for o in ops if o[0] != "D"), default=0)
+        return best, ops, (i0, bi, j0, bj)
+    return best, ops, (0, n, 0, m)
+
+
+def _alignment_opts(rest, fname, extra=()):
+    allowed = {"GapPenalty", "IgnoreCase", "SimilarityRules"} | set(extra)
+    args, o = _opts(rest, allowed, fname)
+    if args:
+        raise ValueError(f"{fname} called with too many arguments")
+    gap = o.get("GapPenalty", 0)
+    if isinstance(gap, bool) or not isinstance(gap, (int, float)):
+        try:
+            gap = float(ev(Expr("N", gap)))
+        except Exception:  # noqa: BLE001
+            raise ValueError(f"{fname}: GapPenalty must be a real number")
+    return o, gap, _bool_opt(o, "IgnoreCase", fname), _Scorer(o.get("SimilarityRules"), fname)
+
+
+@fn("NeedlemanWunschSimilarity", area=AREA, status="added",
+    notes="score of an optimal global (Needleman-Wunsch/Gotoh) alignment as a machine real: +1 per match, -1 "
+          "per mismatch/insertion/deletion (SimilarityRules overrides, patterns allowed), minus GapPenalty per "
+          "gap run; IgnoreCase; strings, lists or BioSequences. Named matrices (BLOSUM62, ...) raise")
+def _nws(a, b, *rest):
+    o, gap, ic, sc = _alignment_opts(rest, "NeedlemanWunschSimilarity")
+    x, y, _ = _seq_pair(a, b, "NeedlemanWunschSimilarity", ic)
+    return float(_align(x, y, sc, gap)[0])
+
+
+@fn("SmithWatermanSimilarity", area=AREA, status="added",
+    notes="score of an optimal local (Smith-Waterman/Gotoh) alignment as a machine real (0. if nothing "
+          "matches); options as NeedlemanWunschSimilarity")
+def _sws(a, b, *rest):
+    o, gap, ic, sc = _alignment_opts(rest, "SmithWatermanSimilarity")
+    x, y, _ = _seq_pair(a, b, "SmithWatermanSimilarity", ic)
+    return float(_align(x, y, sc, gap, local=True)[0])
+
+
+def _segments(x, y, ops, kind, merge, span):
+    """Wolfram's SequenceAlignment segments from alignment operations."""
+    i0, i1, j0, j1 = span
+    out = []          # items: ("C", list) common; ("D", kind, list_a, list_b)
+
+    def add_diff(k, ua, ub):
+        if out and out[-1][0] == "D" and (merge or out[-1][1] == k):
+            out[-1][2].extend(ua)
+            out[-1][3].extend(ub)
+        else:
+            out.append(["D", k, list(ua), list(ub)])
+    if i0 > 0 or j0 > 0:
+        add_diff("U", x[:i0], y[:j0])
+    for op, i, j in ops:
+        if op == "S":
+            if _key(x[i]) == _key(y[j]):
+                if out and out[-1][0] == "C":
+                    out[-1][1].append(x[i])
+                else:
+                    out.append(["C", [x[i]]])
+            else:
+                add_diff("S", [x[i]], [y[j]])
+        elif op == "D":
+            add_diff("D", [x[i]], [])
+        else:
+            add_diff("I", [], [y[j]])
+    if i1 < len(x) or j1 < len(y):
+        add_diff("U2", x[i1:], y[j1:])
+    res = []
+    for seg in out:
+        if seg[0] == "C":
+            res.append(_wrap(seg[1], kind))
+        else:
+            res.append(L(_wrap(seg[2], kind), _wrap(seg[3], kind)))
+    return L(*res)
+
+
+@fn("SequenceAlignment", area=AREA, status="added",
+    notes="optimal alignment as a list of common segments and {u1, u2} differences; Method \"Global\" "
+          "(Needleman-Wunsch, default) or \"Local\" (Smith-Waterman, unaligned ends shown as differences); "
+          "GapPenalty, IgnoreCase (lower-cases both strings), MergeDifferences, SimilarityRules. Among equally "
+          "good alignments the choice follows Wolfram's documented examples; other methods and named "
+          "similarity matrices raise")
+def _seqalign(a, b, *rest):
+    o, gap, ic, sc = _alignment_opts(rest, "SequenceAlignment", ("MergeDifferences", "Method"))
+    merge = _bool_opt(o, "MergeDifferences", "SequenceAlignment", True)
+    method = o.get("Method", "Global")
+    if method not in ("Global", "Local"):
+        raise NotImplementedError(f"SequenceAlignment: Method -> {method!r} is not supported")
+    x, y, kind = _seq_pair(a, b, "SequenceAlignment", ic)
+    _, ops, span = _align(x, y, sc, gap, local=(method == "Local"))
+    if method == "Local" and not ops:
+        return L(L(_wrap(x, kind), _wrap(y, kind))) if (x or y) else L()
+    return _segments(x, y, ops, kind, merge, span)
+
+
+@fn("DamerauLevenshteinDistance", area=AREA, status="added",
+    notes="minimum number of insertions, deletions, substitutions and adjacent transpositions (unrestricted "
+          "Damerau-Levenshtein distance, a metric); strings, lists or BioSequences; IgnoreCase")
+def _dldist(a, b, *rest):
+    args, o = _opts(rest, {"IgnoreCase"}, "DamerauLevenshteinDistance")
+    if args:
+        raise ValueError("DamerauLevenshteinDistance called with too many arguments")
+    x, y, _ = _seq_pair(a, b, "DamerauLevenshteinDistance", _bool_opt(o, "IgnoreCase", "DamerauLevenshteinDistance"))
+    x = [_key(c) for c in x]
+    y = [_key(c) for c in y]
+    n, m = len(x), len(y)
+    big = n + m
+    da = {}
+    d = [[0] * (m + 2) for _ in range(n + 2)]
+    d[0][0] = big
+    for i in range(n + 1):
+        d[i + 1][0] = big
+        d[i + 1][1] = i
+    for j in range(m + 1):
+        d[0][j + 1] = big
+        d[1][j + 1] = j
+    for i in range(1, n + 1):
+        db = 0
+        for j in range(1, m + 1):
+            k = da.get(y[j - 1], 0)
+            l_ = db
+            cost = 0 if x[i - 1] == y[j - 1] else 1
+            if cost == 0:
+                db = j
+            d[i + 1][j + 1] = min(d[i][j] + cost, d[i + 1][j] + 1, d[i][j + 1] + 1,
+                                  d[k][l_] + (i - k - 1) + 1 + (j - l_ - 1))
+        da[x[i - 1]] = i
+    return d[n + 1][m + 1]
+
+
+def _runs(ps):
+    out = []
+    for p in ps:
+        if out and out[-1][1] == p - 1:
+            out[-1][1] = p
+        else:
+            out.append([p, p])
+    return L(*(L(*r) for r in out))
+
+
+@fn("LongestCommonSequencePositions", area=AREA, status="added",
+    notes="positions {pos1, pos2} of a longest common (not necessarily contiguous) sequence, each a list of "
+          "{start, end} runs; {} if there is none; choice among equally long sequences as in Wolfram's "
+          "examples; IgnoreCase")
+def _lcseqpos(a, b, *rest):
+    args, o = _opts(rest, {"IgnoreCase"}, "LongestCommonSequencePositions")
+    if args:
+        raise ValueError("LongestCommonSequencePositions called with too many arguments")
+    x, y, _ = _seq_pair(a, b, "LongestCommonSequencePositions",
+                        _bool_opt(o, "IgnoreCase", "LongestCommonSequencePositions"))
+    x = [_key(c) for c in x]
+    y = [_key(c) for c in y]
+    n, m = len(x), len(y)
+    P = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            P[i][j] = P[i - 1][j - 1] + 1 if x[i - 1] == y[j - 1] else max(P[i - 1][j], P[i][j - 1])
+    i, j, pa, pb = n, m, [], []
+    while i > 0 and j > 0:
+        if x[i - 1] == y[j - 1] and P[i][j] == P[i - 1][j - 1] + 1:
+            pa.append(i)
+            pb.append(j)
+            i, j = i - 1, j - 1
+        elif P[i - 1][j] >= P[i][j - 1]:
+            i -= 1
+        else:
+            j -= 1
+    if not pa:
+        return L()
+    return L(_runs(pa[::-1]), _runs(pb[::-1]))
+
+
+@fn("LongestCommonSubsequencePositions", area=AREA, status="added",
+    notes="positions {{s1, e1}, {s2, e2}} of a longest contiguous common run (the earliest in s1); {} if none; "
+          "IgnoreCase")
+def _lcsubpos(a, b, *rest):
+    args, o = _opts(rest, {"IgnoreCase"}, "LongestCommonSubsequencePositions")
+    if args:
+        raise ValueError("LongestCommonSubsequencePositions called with too many arguments")
+    x, y, _ = _seq_pair(a, b, "LongestCommonSubsequencePositions",
+                        _bool_opt(o, "IgnoreCase", "LongestCommonSubsequencePositions"))
+    x = [_key(c) for c in x]
+    y = [_key(c) for c in y]
+    best, bi, bj = 0, 0, 0
+    prev = [0] * (len(y) + 1)
+    for i in range(1, len(x) + 1):
+        cur = [0] * (len(y) + 1)
+        for j in range(1, len(y) + 1):
+            if x[i - 1] == y[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                if cur[j] > best or (cur[j] == best and i - cur[j] < bi - best):
+                    best, bi, bj = cur[j], i, j
+        prev = cur
+    if best == 0:
+        return L()
+    return L(L(bi - best + 1, bi), L(bj - best + 1, bj))
+
+
+def _order_le(a, b):
+    """Wolfram canonical order a <= b (OrderedQ[{a, b}])."""
+    return ev(Expr("OrderedQ", L(a, b))) is True
+
+
+@fn("LongestOrderedSequence", area=AREA, status="added",
+    notes="longest subsequence whose successive elements satisfy the ordering function (default: canonical "
+          "order for lists, character codes for strings), by patience sorting; IgnoreCase lower-cases strings")
+def _longestordered(s, *rest):
+    args, o = _opts(rest, {"IgnoreCase"}, "LongestOrderedSequence")
+    if len(args) > 1:
+        raise ValueError("LongestOrderedSequence called with too many arguments")
+    seq, kind = _seq(s, "LongestOrderedSequence")
+    if kind == "str" and _bool_opt(o, "IgnoreCase", "LongestOrderedSequence"):
+        seq = [c.lower() for c in seq]
+    if args:
+        p = args[0]
+        le = lambda u, v: apply(p, u, v) is True  # noqa: E731
+    elif kind == "str":
+        le = lambda u, v: ord(u) <= ord(v)  # noqa: E731
+    else:
+        le = _order_le
+    tails, prev = [], [None] * len(seq)
+    for i, e in enumerate(seq):
+        lo, hi = 0, len(tails)
+        while lo < hi:                      # number of piles whose tail t satisfies le(t, e)
+            mid = (lo + hi) // 2
+            if le(seq[tails[mid]], e):
+                lo = mid + 1
+            else:
+                hi = mid
+        if lo > 0:
+            prev[i] = tails[lo - 1]
+        if lo == len(tails):
+            tails.append(i)
+        else:
+            tails[lo] = i
+    out = []
+    i = tails[-1] if tails else None
+    while i is not None:
+        out.append(seq[i])
+        i = prev[i]
+    return _wrap(out[::-1], kind)
+
+
+# ── repeats ──
+def _same_fn(test):
+    if test is None or is_sym(test, "SameQ") or is_sym(test, "Automatic"):
+        return lambda u, v: K.tag(u) == K.tag(v) if not (isinstance(u, str) and isinstance(v, str)) else u == v
+    return lambda u, v: apply(test, u, v) is True
+
+
+def _period(items, same, n_min):
+    """Smallest p such that items[i] ~ items[i mod p] for all i and len(items) // p >= n_min; None if none."""
+    N = len(items)
+    for p in range(1, N + 1):
+        if N // p < n_min:
+            return None
+        if all(same(items[i % p], items[i]) for i in range(p, N)):
+            return p
+    return None
+
+
+def _dims(x):
+    d = []
+    while is_list(x):
+        d.append(len(x.args))
+        if not x.args:
+            break
+        x = x.args[0]
+    return d
+
+
+def _subarray_level(x, axis):
+    """Slices of an array along axis (0-based): list of sub-expressions indexed by that axis."""
+    if axis == 0:
+        return list(x.args)
+    rows = [_subarray_level(r, axis - 1) for r in x.args]
+    return [L(*(row[k] for row in rows)) for k in range(len(rows[0]))]
+
+
+def _take_axis(x, axis, p):
+    if axis == 0:
+        return L(*x.args[:p])
+    return L(*(_take_axis(r, axis - 1, p) for r in x.args))
+
+
+@fn("FindRepeat", area=AREA, status="added",
+    notes="minimal block that repeats (with an incomplete final repeat allowed) to give a list, array, string or "
+          "association; FindRepeat[x, n] needs n complete repeats ({} or \"\" if none); FindRepeat[x, {n1, ...}] "
+          "per array level; SameTest")
+def _findrepeat(x, *rest):
+    args, o = _opts(rest, {"SameTest"}, "FindRepeat")
+    if len(args) > 1:
+        raise ValueError("FindRepeat called with too many arguments")
+    same = _same_fn(o.get("SameTest"))
+    spec = args[0] if args else None
+    if isinstance(x, str):
+        n = 1 if spec is None else _int(spec, "FindRepeat", "repeat count", 1)
+        p = _period(list(x), same, n)
+        return x[:p] if p else ""
+    if is_assoc(x):
+        vals = KL.assoc_values(x, ev)
+        n = 1 if spec is None else _int(spec, "FindRepeat", "repeat count", 1)
+        p = _period(vals, same, n)
+        return Expr("Association", *x.args[:p]) if p else Expr("Association")
+    if not is_list(x):
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise ValueError("FindRepeat: the first argument must be a list, array, string or association")
+    dims = _dims(x)
+    if spec is None:
+        depth = 1
+        while depth < len(dims) and _is_array(x, depth + 1):
+            depth += 1
+        counts = [1] * depth
+    elif is_list(spec):
+        counts = [_int(c, "FindRepeat", "repeat count", 1) for c in spec.args]
+        if len(counts) > len(dims):
+            raise ValueError("FindRepeat: the repeat specification is deeper than the array")
+    else:
+        counts = [_int(spec, "FindRepeat", "repeat count", 1)]
+    k = len(counts)
+    if k > 1 and not _is_array(x, k):
+        raise ValueError("FindRepeat: the list is not a rectangular array to the requested depth")
+    cur = x
+    for axis, n in enumerate(counts):
+        slices = _subarray_level(cur, axis)
+        # a slice along any axis holds the level-k elements k-1 list levels down; SameTest compares those
+        p = _period(slices, lambda u, v: _deep_same(u, v, same, k - 1), n)
+        if p is None:
+            return L()
+        cur = _take_axis(cur, axis, p)
+    return cur
+
+
+def _is_array(x, depth):
+    d = _dims(x)
+    if len(d) < depth:
+        return False
+
+    def check(e, lvl):
+        if lvl == depth:
+            return True
+        return is_list(e) and len(e.args) == d[lvl] and all(check(a, lvl + 1) for a in e.args)
+    return check(x, 0)
+
+
+def _deep_same(u, v, same, depth):
+    if depth <= 0:
+        return same(u, v)
+    if not (is_list(u) and is_list(v)) or len(u.args) != len(v.args):
+        return False
+    return all(_deep_same(a, b, same, depth - 1) for a, b in zip(u.args, v.args))
+
+
+@fn("FindTransientRepeat", area=AREA, status="added",
+    notes="{transient, repeat} with the shortest transient after which a minimal block repeats at least n "
+          "complete times (an incomplete final repeat allowed); {list, {}} if none; strings give strings; "
+          "SameTest")
+def _findtransient(x, n, *rest):
+    args, o = _opts(rest, {"SameTest"}, "FindTransientRepeat")
+    if args:
+        raise ValueError("FindTransientRepeat called with too many arguments")
+    n = _int(n, "FindTransientRepeat", "repeat count", 1)
+    same = _same_fn(o.get("SameTest"))
+    if isinstance(x, str):
+        items, kind = list(x), "str"
+    elif is_list(x):
+        items, kind = list(x.args), "list"
+    elif isinstance(x, Symbol):
+        raise Unevaluated()
+    else:
+        raise ValueError("FindTransientRepeat: the first argument must be a list or a string")
+    for t in range(len(items) + 1):
+        rest_ = items[t:]
+        if not rest_:
+            break
+        p = _period(rest_, same, n)
+        if p is not None:
+            return L(_wrap(items[:t], kind), _wrap(rest_[:p], kind))
+    return L(_wrap(items, kind), _wrap([], kind))
