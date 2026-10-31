@@ -2730,7 +2730,7 @@ def _auto(v):
     return isinstance(v, Symbol) and v.name == "Automatic"
 
 
-def _num_param(v, fname, what, allow_auto=True):
+def _real_param(v, fname, what, allow_auto=True):
     if allow_auto and _auto(v):
         return None
     if isinstance(v, (str, bool)) or is_list(v):
@@ -2761,9 +2761,9 @@ def _kernel_spec(spec, fname):
         d = 2
     else:
         cols, d = [[spec, spec]], 2
-    rs = [_num_param(v, fname, "radius") for v in cols[0]]
-    sig = [_num_param(v, fname, "standard deviation") for v in cols[1]] if len(cols) > 1 else [None] * d
-    fr = [_num_param(v, fname, "fraction") for v in cols[2]] if len(cols) > 2 else [None] * d
+    rs = [_real_param(v, fname, "radius") for v in cols[0]]
+    sig = [_real_param(v, fname, "standard deviation") for v in cols[1]] if len(cols) > 1 else [None] * d
+    fr = [_real_param(v, fname, "fraction") for v in cols[2]] if len(cols) > 2 else [None] * d
     return rs, sig, fr
 
 
@@ -2977,7 +2977,7 @@ def _disk_matrix(r: Expr, w: Expr = None) -> ListOf[Integer]:
         for v in rl:
             if isinstance(v, Symbol) and v.name == "All":
                 raise NotImplementedError(f"{fname}: All radii in a list are not supported")
-            x = _num_param(v, fname, "radius", allow_auto=False)
+            x = _real_param(v, fname, "radius", allow_auto=False)
             if x < 0:
                 raise ValueError(f"{fname}: the radius must be non-negative")
             radii.append(x)
@@ -3045,7 +3045,7 @@ def _savitzky_golay(r: Expr, k: Expr, *rest: Expr) -> ListOf[Real]:
             raise NotImplementedError(f"{fname}: only one-dimensional kernels SavitzkyGolayMatrix[{{r}}, k] are "
                                       "supported (the multidimensional polynomial basis is not documented)")
         raise TypeError(f"{fname}: the radius must be a number or a list, not {r!r}")
-    rv = _num_param(r.args[0], fname, "radius", allow_auto=False)
+    rv = _real_param(r.args[0], fname, "radius", allow_auto=False)
     kk = k.args[0] if is_list(k) and len(k.args) == 1 else k
     if isinstance(kk, Symbol):
         raise Unevaluated()

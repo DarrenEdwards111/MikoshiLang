@@ -71,7 +71,7 @@ def _family_ctor(name):
 
 
 _FAMILY_NOTES = {
-    "HaarWavelet": "HaarWavelet[]: the Haar wavelet object (φ = 1 on [0, 1), ψ = ±1 on the two halves)",
+    "HaarWavelet": "HaarWavelet[]: the Haar wavelet object (φ = 1 on [0, 1), ψ = 1 on [0, 1/2) and -1 on [1/2, 1))",
     "MorletWavelet": "MorletWavelet[]: the Morlet wavelet object, ψ = π^(-1/4) e^(-x²/2) cos(π √(2/log 2) x), "
                      "no scaling function",
     "DaubechiesWavelet": "DaubechiesWavelet[n] (default 2): the Daubechies wavelet object with n vanishing moments "
@@ -241,7 +241,7 @@ fn("WaveletFilterCoefficients", area=AREA, status="added",
 def _psi_expr(name, p, x):
     if name == "HaarWavelet":
         half = sp.Rational(1, 2)
-        return sp.Piecewise((-1, (x > half) & (x < 1)), (1, (x > 0) & (x < half)), (0, True))
+        return sp.Piecewise((1, (x >= 0) & (x < half)), (-1, (x >= half) & (x < 1)), (0, True))
     if name == "ShannonWavelet":
         return 2 * (sp.sin(2 * sp.pi * x) - sp.cos(sp.pi * x)) / (sp.pi - 2 * sp.pi * x)
     if name == "MorletWavelet":
