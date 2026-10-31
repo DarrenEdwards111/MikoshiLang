@@ -725,7 +725,10 @@ def render_figure(g, image_size=None, raster_size=None, background=None, resolut
         dpi = rw / (width / 72.0)
         if rh is not None:
             height = rh / dpi * 72.0
-    fig = Figure(figsize=(width / 72.0, height / 72.0), dpi=dpi)
+    # Snap to whole pixels (nudged up by 1e-3 px) so the raster size is the same whether matplotlib truncates
+    # (older versions) or rounds figsize * dpi; otherwise 199.9999 px could become 199 px.
+    px_w, px_h = max(1, int(round(width / 72.0 * dpi))), max(1, int(round(height / 72.0 * dpi)))
+    fig = Figure(figsize=((px_w + 1e-3) / dpi, (px_h + 1e-3) / dpi), dpi=dpi)
     FigureCanvasAgg(fig)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
