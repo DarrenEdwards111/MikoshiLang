@@ -1707,13 +1707,54 @@ def _sym_var(v, fname, what="variable"):
     raise TypeError(f"{fname}: the {what} must be a symbol, not {v!r}")
 
 
+_RELS = {"Greater": sp.Gt, "Less": sp.Lt, "GreaterEqual": sp.Ge, "LessEqual": sp.Le, "Equal": sp.Eq,
+         "Unequal": sp.Ne}
+
+
+def _sym_cond(c, fname):
+    """A Wolfram condition (relations combined with And/Or/Not) as a SymPy Boolean."""
+    if isinstance(c, Symbol) and c.name in ("True", "False"):
+        return sp.true if c.name == "True" else sp.false
+    if isinstance(c, bool):
+        return sp.true if c else sp.false
+    if isinstance(c, Expr):
+        if c.head in _RELS and len(c.args) >= 2:
+            xs = [_sym_expr(a, fname) for a in c.args]
+            return sp.And(*[_RELS[c.head](xs[i], xs[i + 1]) for i in range(len(xs) - 1)])
+        if c.head in ("And", "Or"):
+            return (sp.And if c.head == "And" else sp.Or)(*[_sym_cond(a, fname) for a in c.args])
+        if c.head == "Not" and len(c.args) == 1:
+            return sp.Not(_sym_cond(c.args[0], fname))
+    raise TypeError(f"{fname}: unsupported Piecewise condition {c!r}")
+
+
 def _sym_expr(e, fname):
     if isinstance(e, (str, bool)) or is_list(e):
         raise TypeError(f"{fname}: the function must be a mathematical expression, not {e!r}")
+    holders = {}
+
+    def strip(x):
+        if isinstance(x, Expr) and x.head == "Piecewise" and x.args and is_list(x.args[0]):
+            name = f"pw__{len(holders)}"
+            pairs = []
+            for pr in x.args[0].args:
+                if not (is_list(pr) and len(pr.args) == 2):
+                    raise TypeError(f"{fname}: malformed Piecewise {x!r}")
+                pairs.append((_sym_expr(pr.args[0], fname), _sym_cond(pr.args[1], fname)))
+            pairs.append((_sym_expr(x.args[1], fname) if len(x.args) > 1 else sp.Integer(0), sp.true))
+            holders[sp.Symbol(name)] = sp.Piecewise(*pairs)
+            return Symbol(name)
+        if isinstance(x, Expr):
+            return Expr(x.head, *[strip(a) for a in x.args])
+        return x
     try:
-        return sp.sympify(S(e))
+        e2 = strip(e)
+        out = sp.sympify(S(e2))
+    except TypeError:
+        raise
     except Exception:
         raise TypeError(f"{fname}: cannot interpret {e!r} as a mathematical expression") from None
+    return out.subs(holders) if holders else out
 
 
 def _is_step(f):
@@ -2298,3 +2339,353 @@ fn("MellinConvolve", area=AREA, status="added",
          "NotImplementedError; stays unevaluated when no closed form is found. Check: numeric cross-check "
          "(mpmath.quad at sample y, ArithmeticError on mismatch); reference (Wolfram documentation examples) in "
          "tests.")(_mellin_conv)
+
+
+def _exp_to_x(F, w, x, b):
+    """Rewrite F(ω) as a function of x = e^(i b ω); None if some ω-dependence is not a power of x."""
+    G = F.rewrite(sp.exp) if F.has(sp.sin, sp.cos) else F
+    bad = []
+
+    def conv(e):
+        c = sp.simplify(e.args[0] / (sp.I * b * w))
+        if c.is_Integer:
+            return x ** c
+        bad.append(e)
+        return e
+    G = G.replace(lambda e: isinstance(e, sp.exp) and e.args[0].has(w), conv)
+    G = sp.powsimp(G)
+    if bad or G.has(w):
+        return None
+    return G
+
+
+def _laurent(G, x, n, fname):
+    """f(n) = coefficient of x^-n in the Laurent expansion of the rational function G(x) on |x| = 1."""
+    if not G.is_rational_function(x):
+        return None
+    num, den = sp.fraction(sp.cancel(sp.together(G)))
+    if den.free_symbols - {x} or num.free_symbols - {x}:
+        return None
+    try:
+        parts = sp.apart(G, x, full=True).doit()
+    except Exception:
+        return None
+    A, B, deltas = sp.Integer(0), sp.Integer(0), {}
+    for t in sp.Add.make_args(parts):
+        c, rest = t.as_independent(x, as_Add=False)
+        if rest == 1:
+            deltas[0] = deltas.get(0, 0) + c
+            continue
+        base, j = rest.as_base_exp()
+        if base == x and j.is_Integer:
+            deltas[-int(j)] = deltas.get(-int(j), 0) + c
+            continue
+        if j.is_Integer and j < 0 and base.is_polynomial(x) and sp.degree(base, x) == 1:
+            j = -int(j)
+            lead = sp.Poly(base, x).LC()
+            p = sp.solve(base, x)[0]
+            c = c / lead ** j
+            mod = sp.Abs(p)
+            if mod == 1 or not mod.is_number:
+                return None
+            if mod < 1:
+                A += c * sp.binomial(n - 1, j - 1) * p ** (n - j)
+            else:
+                B += c * (-p) ** (-j) * sp.binomial(-n + j - 1, j - 1) * p ** n
+            continue
+        return None
+    A, B = sp.simplify(sp.expand_func(A)), sp.simplify(sp.expand_func(B))
+    if B == 0 and set(deltas) <= {0} and A != 0 and sp.simplify(A.subs(n, 0) - deltas.get(0, 0)) == 0:
+        return sp.Piecewise((A, n >= 0), (0, True))
+    out = sp.Integer(0)
+    if A != 0 or B != 0:
+        out = sp.Piecewise((A, n >= 1), (B, True)) if B != 0 else sp.Piecewise((A, n >= 1), (0, True))
+    for d, c in deltas.items():
+        out += c * _DD(n - d)
+    return out
+
+
+def _ifst(F: Expr, w: Symbol, n: Symbol, *rest: Option) -> Expr:
+    fname = "InverseFourierSequenceTransform"
+    pos, opts = _opts(rest, {"FourierParameters"}, fname)
+    if pos:
+        raise TypeError(f"{fname}: unexpected arguments {pos!r}")
+    a, b = _fparams(opts, fname)
+    wn = _sym_var(w, fname)
+    Fe = _sym_expr(F, fname)
+    ws = sp.Symbol(wn, real=True)
+    Fe = Fe.subs(sp.Symbol(wn), ws)
+    pref = sp.Abs(b / (2 * sp.pi)) ** ((1 + a) / 2)
+    nv = None
+    if isinstance(n, Symbol):
+        ni = sp.Symbol(n.name, integer=True)
+    else:
+        nv = _sym_expr(n, fname)
+        if _is_symbolic(nv):
+            raise Unevaluated()
+        if not nv.is_Integer:
+            raise ValueError(f"{fname}: the sequence index must be an integer, not {n!r}")
+        ni = sp.Dummy("n", integer=True)
+    x = sp.Dummy("x")
+    G = _exp_to_x(Fe, ws, x, b)
+    res = None
+    if G is not None and not _has_unknown(G) and not (G.free_symbols - {x}):
+        L_ = _laurent(G, x, ni, fname)
+        if L_ is not None:
+            res = sp.simplify(pref * 2 * sp.pi / sp.Abs(b)) * L_
+    if res is None:
+        lim = sp.pi / sp.Abs(b)
+        try:
+            r = sp.integrate(_cont_steps(Fe) * sp.exp(sp.I * b * ni * ws), (ws, -lim, lim))
+        except Exception:
+            raise Unevaluated() from None
+        r = _strip_conds(r)
+        if r.has(sp.Integral):
+            raise Unevaluated()
+        res = sp.simplify(pref * r)
+    if not (Fe.free_symbols - {ws}) and not _has_unknown(Fe) and not Fe.has(sp.DiracDelta):
+        lim = float(sp.pi / sp.Abs(b))
+        g = sp.lambdify([ws, ni], _piecewise_steps(_back_steps(_cont_steps(Fe))) * sp.exp(sp.I * b * ni * ws),
+                        modules="mpmath")
+        rf = sp.lambdify([ni], _piecewise_steps(_back_steps(res)), modules="mpmath")
+        pts = [p for p in _breaks(_cont_steps(Fe), ws) if -lim < p < lim]
+        for nv_ in (0, 1, 2, -1, -3):
+            try:
+                ex = complex(rf(nv_)) / complex(sp.N(pref))
+            except (ZeroDivisionError, ValueError, TypeError):
+                continue
+            _check_quad(fname, lambda t, nv_=nv_: g(t, nv_), -lim, lim, ex, pts)
+    res = _back_steps(res)
+    if nv is not None:
+        res = res.subs(ni, nv).replace(_DD, lambda e: 1 if e == 0 else 0)
+        return R(sp.simplify(res))
+    return R(res.subs(ni, sp.Symbol(n.name)))
+
+
+fn("InverseFourierSequenceTransform", area=AREA, status="added",
+   notes="InverseFourierSequenceTransform[F, ω, n] = |b/2π|^((1+a)/2) ∫_(-π/|b|)^(π/|b|) F(ω) e^(i b n ω) dω "
+         "(FourierParameters {a, b}, default {1, 1}); rational functions of e^(i b ω) use the Laurent expansion "
+         "on the unit circle (results are Piecewise in n plus DiscreteDelta terms), other F use SymPy "
+         "integrate; poles on the unit circle or no closed form stay unevaluated. Check: numeric cross-check "
+         "(mpmath.quad of the defining integral at sample n, ArithmeticError on mismatch); reference (Wolfram "
+         "documentation examples) in tests.")(_ifst)
+
+
+def _half_line(e, t):
+    """Normalise a function of t > 0 for sympy.laplace_transform: Abs(a t + b) -> (a t + b)(2 H(a t + b) - 1),
+    H(-a t + b) -> 1 - H(a t - b) (equal almost everywhere)."""
+    e = e.replace(lambda x: isinstance(x, sp.Abs) and _lin(x.args[0], t) is not None and x.args[0].has(t),
+                  lambda x: sp.Piecewise((x.args[0], x.args[0] >= 0), (-x.args[0], True)))
+    e = sp.piecewise_fold(e)
+    if isinstance(e, sp.Piecewise):
+        acc, prev = sp.Integer(0), sp.Integer(1)
+        for v, c in e.args:
+            if c == True:  # noqa: E712
+                acc += v * prev
+                break
+            if not (isinstance(c, sp.core.relational.Relational) and _lin(c.lhs - c.rhs, t)):
+                return e
+            d = c.lhs - c.rhs
+            ind = sp.Heaviside(d) if isinstance(c, (sp.Gt, sp.Ge)) else sp.Heaviside(-d)
+            acc += v * ind * prev
+            prev = prev * (1 - ind)
+        e = acc
+
+    def fix(x):
+        lab = _lin(x.args[0], t)
+        if lab is not None and lab[0] < 0:
+            return 1 - sp.Heaviside(-x.args[0])
+        return sp.Heaviside(x.args[0])
+    e = e.replace(sp.Heaviside, lambda *a: fix(sp.Heaviside(a[0])))
+    return sp.expand(e)
+
+
+def _laplace_half(g, t, s):
+    """sympy.laplace_transform with abscissa -oo for functions that vanish for large t."""
+    g = sp.simplify(g) if not g.has(sp.Heaviside) else g
+    if g == 0:
+        return sp.Integer(0), -sp.oo, True
+    try:
+        F, a, c = sp.laplace_transform(g, t, s)
+    except Exception:
+        raise _Fail() from None
+    g_inf = g.replace(sp.Heaviside, lambda *x: sp.Heaviside(sp.sign(_lin(x[0], t)[0]) if _lin(x[0], t) else x[0]))
+    tail = _tail_abscissa(sp.simplify(g_inf), t)
+    if tail is not None:
+        a = tail
+    return sp.sympify(F), a, c
+
+
+def _tail_abscissa(g, t):
+    """max Re λ over the terms t^k e^(λ t) (times trig/hyperbolic factors) of the large-t form g; -oo for 0;
+    None if a term has another shape."""
+    if g == 0:
+        return -sp.oo
+    best = None
+    for term in sp.Add.make_args(sp.expand(sp.powsimp(g), power_base=False, log=False, multinomial=False)):
+        lam = sp.Integer(0)
+        for f in sp.Mul.make_args(sp.powsimp(term)):
+            if not f.has(t):
+                continue
+            base, ex = f.as_base_exp()
+            if isinstance(f, sp.exp) or (base == sp.E):
+                arg = sp.expand(f.args[0] if isinstance(f, sp.exp) else ex)
+                lab = _lin(arg, t)
+                if lab is not None and lab[0].is_number:
+                    lam += sp.re(lab[0])
+                    continue
+                if arg.is_polynomial(t):
+                    P = sp.Poly(arg, t)
+                    lc = P.LC()
+                    if P.degree() >= 2 and lc.is_number and sp.re(lc) < 0:
+                        lam = -sp.oo
+                        continue
+                return None
+            elif base == t and ex.is_number:
+                continue
+            elif isinstance(base, (sp.sin, sp.cos)) and ex.is_Integer and ex > 0 and _lin(base.args[0], t):
+                lam += ex * sp.Abs(sp.im(_lin(base.args[0], t)[0]))
+            elif isinstance(base, (sp.sinh, sp.cosh)) and ex.is_Integer and ex > 0 and _lin(base.args[0], t):
+                lam += ex * sp.Abs(sp.re(_lin(base.args[0], t)[0]))
+            else:
+                return None
+        if lam is -sp.oo:
+            best = lam if best is None else best
+            continue
+        if lam.has(sp.nan) or not lam.is_number:
+            return None
+        best = lam if best is None or best is -sp.oo else sp.Max(best, lam)
+    return best
+
+
+def _bilateral_laplace(f: Expr, t: Symbol, s: Expr) -> Expr:
+    fname = "BilateralLaplaceTransform"
+    tn = _sym_var(t, fname)
+    fe = _sym_expr(f, fname)
+    ts = sp.Symbol(tn, real=True)
+    fe = _cont_steps(fe.subs(sp.Symbol(tn), ts))
+    s_num = None
+    if isinstance(s, Symbol):
+        sv = sp.Symbol(s.name)
+    else:
+        s_num = _sym_expr(s, fname)
+        if _is_symbolic(s_num):
+            raise Unevaluated()
+        sv = sp.Dummy("s")
+    s2 = sp.Dummy("s2")
+    tp = sp.Dummy("tp", positive=True)
+    delta_part, rest_terms = sp.Integer(0), []
+    for term in sp.Add.make_args(sp.expand(fe, power_base=False, power_exp=False, log=False, multinomial=False)):
+        ds = [f for f in sp.Mul.make_args(term) if isinstance(f, sp.DiracDelta)]
+        if not ds:
+            rest_terms.append(term)
+            continue
+        lab = _lin(ds[0].args[0], ts) if len(ds) == 1 and len(ds[0].args) == 1 else None
+        if lab is None or lab[0] == 0:
+            raise NotImplementedError(f"{fname}: this DiracDelta form is not supported")
+        t0 = -lab[1] / lab[0]
+        c = (term / ds[0]).subs(ts, t0)
+        if c.has(sp.DiracDelta):
+            raise NotImplementedError(f"{fname}: products of DiracDelta are not supported")
+        delta_part += c * sp.exp(-sv * t0) / sp.Abs(lab[0])
+    fe = sp.Add(*rest_terms)
+    try:
+        F1, a1, c1 = _laplace_half(_half_line(fe.subs(ts, tp), tp), tp, sv)
+        F2, a2, c2 = _laplace_half(_half_line(fe.subs(ts, -tp), tp), tp, s2)
+    except _Fail:
+        raise Unevaluated() from None
+    if F1.has(sp.LaplaceTransform) or F2.has(sp.LaplaceTransform) or not (c1 == True and c2 == True):  # noqa
+        raise Unevaluated()
+    lo, hi = a1, -a2
+    if not ((lo.is_number or lo == -sp.oo) and (hi.is_number or hi == sp.oo)):
+        raise Unevaluated()
+    if lo >= hi:
+        raise Unevaluated()   # empty strip of convergence: the bilateral transform does not exist
+    F = sp.simplify(F1 + F2.subs(s2, -sv) + delta_part)
+    if F.has(sp.nan) or F.has(sp.zoo):
+        raise Unevaluated()
+    if fe != 0 and not (fe.free_symbols - {ts}) and not _has_unknown(fe) and not fe.has(sp.DiracDelta):
+        if lo == -sp.oo and hi == sp.oo:
+            s0 = 0.3
+        elif hi == sp.oo:
+            s0 = float(lo) + 0.7
+        elif lo == -sp.oo:
+            s0 = float(hi) - 0.7
+        else:
+            s0 = (float(lo) + float(hi)) / 2
+        ex = complex(sp.N(F.subs(sv, s0)))
+        g = sp.lambdify([ts], _piecewise_steps(_back_steps(fe)) * sp.exp(-s0 * ts), modules="mpmath")
+        _check_quad(fname, g, -mpmath.inf, mpmath.inf, ex, [0.0] + _breaks(fe, ts))
+    if s_num is not None:
+        re_s = sp.re(s_num)
+        if not ((lo == -sp.oo or re_s > lo) and (hi == sp.oo or re_s < hi)):
+            raise ValueError(f"{fname}: the integral does not converge at s = {s!r}")
+        out = F.subs(sv, s_num)
+        if any(isinstance(v, sp.Float) for v in sp.preorder_traversal(s_num)):
+            return R(sp.N(out))
+        return R(sp.simplify(out))
+    cond = []
+    if lo != -sp.oo:
+        cond.append(sp.re(sv) > lo)
+    if hi != sp.oo:
+        cond.append(sp.re(sv) < hi)
+    out = R(_back_steps(F))
+    return Expr("ConditionalExpression", out, R(sp.And(*cond))) if cond else out
+
+
+fn("BilateralLaplaceTransform", area=AREA, status="added",
+   notes="BilateralLaplaceTransform[f, t, s] = ∫_(-∞)^∞ f(t) e^(-s t) dt as the sum of two SymPy unilateral "
+         "Laplace transforms, returned as ConditionalExpression[F, a < Re[s] < b] (no condition when it "
+         "converges everywhere); a numeric s evaluates inside the strip (outside raises ValueError); an empty "
+         "strip or no closed form stays unevaluated; multivariate forms raise NotImplementedError. Check: "
+         "numeric cross-check (mpmath.quad at a point of the strip, ArithmeticError on mismatch); reference "
+         "(Wolfram documentation examples) in tests.")(_bilateral_laplace)
+
+
+def _hankel(fname, inverse):
+    def impl(f: Expr, r: Symbol, s: Expr, nu: Expr = 0) -> Expr:
+        rn = _sym_var(r, fname)
+        fe = _sym_expr(f, fname)
+        rs = sp.Symbol(rn, positive=True)
+        fe = _cont_steps(fe.subs(sp.Symbol(rn), rs))
+        nuv = _sym_expr(nu, fname) if not isinstance(nu, int) else sp.Integer(nu)
+        if nuv.is_number and not nuv.is_real:
+            raise ValueError(f"{fname}: the order ν must be real")
+        if isinstance(s, Symbol):
+            sv, s_num = sp.Symbol(s.name, positive=True), None
+        else:
+            s_num = _sym_expr(s, fname)
+            if _is_symbolic(s_num):
+                raise Unevaluated()
+            if not (s_num.is_real and s_num > 0):
+                raise ValueError(f"{fname}: the transform variable must be positive, not {s!r}")
+            sv = sp.Dummy("s", positive=True)
+        tr = sp.inverse_hankel_transform if inverse else sp.hankel_transform
+        try:
+            F = tr(fe, rs, sv, nuv)
+        except Exception:
+            raise Unevaluated() from None
+        if F.has(sp.HankelTransform) or F.has(sp.InverseHankelTransform) or F.has(sp.nan) or F.has(sp.zoo) \
+                or F.has(sp.Integral):
+            raise Unevaluated()
+        F = sp.simplify(F)
+        if s_num is not None:
+            out = F.subs(sv, s_num)
+            if any(isinstance(v, sp.Float) for v in sp.preorder_traversal(s_num)):
+                return R(sp.N(out))
+            return R(sp.simplify(out))
+        return R(_back_steps(F).subs(sv, sp.Symbol(s.name)))
+    return impl
+
+
+fn("HankelTransform", area=AREA, status="added",
+   notes="HankelTransform[f, r, s, ν] = ∫_0^∞ f(r) J_ν(s r) r dr (ν defaults to 0) for s > 0 via "
+         "sympy.hankel_transform; a numeric s evaluates the closed form; divergent or unknown transforms stay "
+         "unevaluated (Wolfram's regularized values for divergent integrals are not produced). Check: delegated "
+         "(sympy.hankel_transform); reference (Wolfram documentation examples) in tests.")(
+    _hankel("HankelTransform", False))
+fn("InverseHankelTransform", area=AREA, status="added",
+   notes="InverseHankelTransform[F, s, r, ν] = ∫_0^∞ F(s) J_ν(s r) s ds (ν defaults to 0) for r > 0 via "
+         "sympy.inverse_hankel_transform; a numeric r evaluates the closed form; unknown transforms stay "
+         "unevaluated. Check: delegated (sympy.inverse_hankel_transform); reference (Wolfram documentation "
+         "examples, HankelTransform round trips) in tests.")(_hankel("InverseHankelTransform", True))
