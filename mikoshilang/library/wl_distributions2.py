@@ -6180,6 +6180,10 @@ class MatrixT(MatrixD):
 
 
 class GaussianEnsemble(MatrixD):
+    """GOE / GUE / GSE. The density is E^(-Tr[X.X]/(2 sigma^2))/Z with respect to Lebesgue measure on the
+    independent real coordinates of X (upper-triangle entries, real and imaginary parts; for the GSE the
+    quaternion coordinates z0, z1, z2, z3 of the Wolfram Details block form)"""
+
     def __init__(self, expr, fname):
         super().__init__(expr)
         a = list(expr.args)
@@ -6192,42 +6196,69 @@ class GaussianEnsemble(MatrixD):
         _pos(s, "sigma", expr.head)
         _posint(n, "n", expr.head)
         self.s, self.n = s, n
-        self.unitary = expr.head == "GaussianUnitaryMatrixDistribution"
+        self.kind = {"GaussianOrthogonalMatrixDistribution": "O", "GaussianUnitaryMatrixDistribution": "U",
+                     "GaussianSymplecticMatrixDistribution": "S"}[expr.head]
+        self.unitary = self.kind == "U"
 
     def params(self):
         return [self.s, self.n]
+
+    def dim(self):
+        return 2 * int(self.n) if self.kind == "S" else int(self.n)
 
     def pdf(self, x):
         n, s = self.n, self.s
         if not _num(n):
             raise Unevaluated()
         n = int(n)
-        X_ = _mpoint(x, n, n, "PDF")
-        herm = X_.H if self.unitary else X_.T
+        d = self.dim()
+        X_ = _mpoint(x, d, d, "PDF")
+        herm = X_.T if self.kind == "O" else X_.H
         if any(sp.simplify(v) != 0 for v in (X_ - herm)):
             return 0
-        if self.unitary:
+        if self.kind == "S":
+            J = sp.Matrix(sp.BlockMatrix([[sp.zeros(n), -sp.eye(n)], [sp.eye(n), sp.zeros(n)]]))
+            if any(sp.simplify(v) != 0 for v in (X_ * J - J * X_.T)):
+                return 0
+        if self.kind == "U":
             Z = (2 * sp.pi * s ** 2) ** sp.Rational(n, 2) * (sp.pi * s ** 2) ** sp.Rational(n * (n - 1), 2)
-        else:
+        elif self.kind == "O":
             Z = (2 * sp.pi * s ** 2) ** sp.Rational(n, 2) * (sp.pi * s ** 2) ** sp.Rational(n * (n - 1), 4)
+        else:
+            Z = (sp.pi * s ** 2) ** sp.Rational(n, 2) * (sp.pi * s ** 2 / 2) ** (n * (n - 1))
         return _out(sp.simplify(sp.exp(-sp.re((X_ * X_).trace()) / (2 * s ** 2)) / Z), self.expr, x)
 
     def mean_m(self):
-        n = int(self.n)
-        return sp.zeros(n, n)
+        if not _num(self.n):
+            raise Unevaluated()
+        d = self.dim()
+        return sp.zeros(d, d)
 
     def var_m(self):
-        n = int(self.n)
-        return sp.Matrix(n, n, lambda i, j: self.s ** 2 if i == j else self.s ** 2 / 2)
+        # elementwise E[|X_ij - mu_ij|^2] (Wolfram's complex variance convention)
+        if not _num(self.n):
+            raise Unevaluated()
+        s2, n = self.s ** 2, int(self.n)
+        if self.kind == "O":
+            return sp.Matrix(n, n, lambda i, j: s2 if i == j else s2 / 2)
+        if self.kind == "U":
+            return sp.Matrix(n, n, lambda i, j: s2)
+        return sp.Matrix(2 * n, 2 * n, lambda i, j: 0 if i != j and i % n == j % n else s2 / 2)
 
     def sample(self, rng):
         if not self.numeric():
             raise ValueError("RandomVariate: distribution parameters must be numeric")
         g = _rng_np(rng)
         n, s = int(self.n), _f(self.s)
-        if self.unitary:
+        if self.kind == "U":
             x = g.normal(0, s, (n, n)) + 1j * g.normal(0, s, (n, n))
             return _mat_out((x + x.conj().T) / 2)
+        if self.kind == "S":
+            # Wolfram Details: (x + x^H - J.(x + x^H)^T.J)/4 with complex Gaussian x (2n x 2n)
+            x = g.normal(0, s, (2 * n, 2 * n)) + 1j * g.normal(0, s, (2 * n, 2 * n))
+            h = x + x.conj().T
+            J = _jmat(n)
+            return _mat_out((h - J @ h.T @ J) / 4)
         x = g.normal(0, s, (n, n))
         return _mat_out((x + x.T) / 2)
 
@@ -6416,8 +6447,16 @@ _multi("GaussianOrthogonalMatrixDistribution", GaussianEnsemble,
        "RandomVariate. Check: exact normalisation (product of the entry densities) in tests.")
 _multi("GaussianUnitaryMatrixDistribution", GaussianEnsemble,
        "GaussianUnitaryMatrixDistribution[sigma, n] and [n] (GUE): (x + x^H)/2 with iid NormalDistribution[0, sigma] "
-       "real and imaginary parts; PDF E^(-Tr[X.X]/(2 sigma^2))/Z for Hermitian X, Mean 0, Variance, RandomVariate. "
-       "Check: exact normalisation in tests.")
+       "real and imaginary parts; PDF E^(-Tr[X.X]/(2 sigma^2))/Z for Hermitian X (0 otherwise; Lebesgue measure on "
+       "the real and imaginary parts of the upper triangle), Mean 0, elementwise Variance E[|X_ij|^2] = sigma^2, "
+       "RandomVariate. Check: exact normalisation in tests, and a Monte Carlo check of the variance.")
+_multi("GaussianSymplecticMatrixDistribution", GaussianEnsemble,
+       "GaussianSymplecticMatrixDistribution[sigma, n] and [n] (GSE, 2n x 2n): (x + x^H - J.(x + x^H)^T.J)/4 with "
+       "complex Gaussian x and J = KroneckerProduct[{{0, -1}, {1, 0}}, IdentityMatrix[n]] (Wolfram Details); PDF "
+       "E^(-Tr[X.X]/(2 sigma^2))/((Pi sigma^2)^(n/2) (Pi sigma^2/2)^(n (n - 1))) for Hermitian, quaternion self-dual "
+       "X (X.J == J.Transpose[X]; 0 otherwise), the measure being Lebesgue on the quaternion coordinates z0 (symmetric) "
+       "and z1, z2, z3 (antisymmetric); Mean 0; elementwise Variance E[|X_ij|^2] (sigma^2/2, and 0 at {i, i + n}); "
+       "RandomVariate. Check: self-duality and Hermiticity of samples, and a Monte Carlo variance check, in tests.")
 for _h in ("CircularUnitaryMatrixDistribution", "CircularRealMatrixDistribution", "CircularOrthogonalMatrixDistribution",
            "CircularQuaternionMatrixDistribution", "CircularSymplecticMatrixDistribution"):
     _multi(_h, CircularEnsemble,
