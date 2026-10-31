@@ -3689,3 +3689,485 @@ def _fi_integers(expr, vs, n, fname):
         return L(*(L(*(rule(v, c) for v, c in a)) for a in found[:n]))
     raise NotImplementedError(f"{fname}: no integer instance found in the searched range (this does not prove "
                               f"that none exists)")
+
+
+# ───────────────────────────── cylindrical algebraic decomposition (1 and 2 variables) ─────────────────────────
+#
+# Real CAD for polynomial systems with rational coefficients in one variable, or two variables where every
+# polynomial has degree <= 2 in the inner variable (so sections are explicit radicals).  Projection: leading
+# coefficients, discriminants and pairwise resultants; cells are sampled exactly and the formula is evaluated on
+# each cell.  Larger problems raise.
+
+def _cad_formula(e, X, fname):
+    s = tosp(e, fname)
+    s = s.xreplace({sp.Symbol(v.name): v for v in X})
+    if s.has(sp.Piecewise):
+        raise NotImplementedError(f"{fname}: Piecewise is not supported")
+    polys = []
+    for r in s.atoms(sp.core.relational.Relational):
+        p = sp.together(r.lhs - r.rhs)
+        num, den = sp.fraction(p)
+        if den.free_symbols & set(X):
+            raise NotImplementedError(f"{fname}: rational functions are not supported")
+        num = sp.expand(num)
+        if not num.is_polynomial(*X):
+            raise NotImplementedError(f"{fname}: only polynomial (in)equalities are supported")
+        if num.free_symbols - set(X):
+            raise NotImplementedError(f"{fname}: the system has parameters {num.free_symbols - set(X)}")
+        if not all(c.is_rational for c in sp.Poly(num, *X).coeffs()):
+            raise NotImplementedError(f"{fname}: only rational coefficients are supported")
+        if num.free_symbols:
+            polys.append(sp.Poly(num, *X))
+    if s.free_symbols - set(X):
+        raise NotImplementedError(f"{fname}: the formula has free symbols {s.free_symbols - set(X)}")
+    return s, polys
+
+
+def _truth_at(s, point, fname):
+    v = s.xreplace(point)
+    if v in (sp.true, sp.false):
+        return v is sp.true
+    if isinstance(v, sp.core.relational.Relational):
+        d = _num(v.lhs - v.rhs)
+        if d is None:
+            raise NotImplementedError(f"{fname}: cannot evaluate the sign at a sample point")
+        sgn = d[1]
+        return {sp.Eq: sgn == 0, sp.Ne: sgn != 0, sp.Lt: sgn < 0, sp.Le: sgn <= 0, sp.Gt: sgn > 0,
+                sp.Ge: sgn >= 0}[type(v)]
+    if isinstance(v, sp.And):
+        return all(_truth_at(a, {}, fname) for a in v.args)
+    if isinstance(v, sp.Or):
+        return any(_truth_at(a, {}, fname) for a in v.args)
+    if isinstance(v, sp.Not):
+        return not _truth_at(v.args[0], {}, fname)
+    if isinstance(v, (sp.Xor, sp.Implies, sp.Equivalent)):
+        return _truth_at(sp.simplify_logic(v.to_nnf()) if not isinstance(v, sp.Xor) else v.to_nnf(), {}, fname)
+    raise NotImplementedError(f"{fname}: cannot evaluate {v}")
+
+
+def _real_roots_1d(polys, x):
+    roots = set()
+    for p in polys:
+        q = sp.Poly(p.as_expr(), x)
+        if q.degree() <= 0:
+            continue
+        for fac, _ in sp.factor_list(q.as_expr())[1]:
+            fq = sp.Poly(fac, x)
+            if fq.degree() <= 0:
+                continue
+            if fq.degree() <= 2:
+                rs = [r for r in sp.roots(fq, x).keys() if r.is_real]
+            else:
+                rs = list(sp.Poly(fac, x).real_roots())
+                rs = [sp.nsimplify(r) if not isinstance(r, sp.CRootOf) else r for r in rs]
+            roots |= set(rs)
+    rs = sorted(roots, key=lambda r: float(sp.N(r, 30)))
+    out_ = []
+    for r in rs:
+        if not out_ or abs(float(sp.N(r - out_[-1], 30))) > 1e-25:
+            out_.append(r)
+    return out_
+
+
+def _between(a, b):
+    """A simple rational strictly between reals a < b (either may be infinite)."""
+    if a == -sp.oo and b == sp.oo:
+        return sp.Integer(0)
+    if a == -sp.oo:
+        return sp.floor(sp.N(b, 30)) - 1
+    if b == sp.oo:
+        return sp.ceiling(sp.N(a, 30)) + 1
+    fa, fb = sp.N(a, 40), sp.N(b, 40)
+    for d in (1, 2, 4, 8, 16, 64, 256, 1024, 2 ** 16, 2 ** 30):
+        n0 = sp.floor(fa * d) + 1
+        cand = sp.Rational(int(n0), d)
+        if fa < cand < fb:
+            # prefer integers / short fractions closest to the middle
+            return cand
+    return sp.nsimplify((fa + fb) / 2, rational=True)
+
+
+def _cells_1d(roots):
+    """[('pt', r) | ('iv', lo, hi, sample)] in increasing order."""
+    edges = [-sp.oo] + roots + [sp.oo]
+    cells = []
+    for i, (a, b) in enumerate(zip(edges, edges[1:])):
+        cells.append(("iv", a, b, _between(a, b)))
+        if i < len(roots):
+            cells.append(("pt", roots[i]))
+    return cells
+
+
+def _iv_cond(var, cells):
+    """Condition for a maximal run of consecutive 1-D cells."""
+    first, last = cells[0], cells[-1]
+    lo, lo_strict = (first[1], True) if first[0] == "iv" else (first[1], False)
+    hi, hi_strict = (last[2], True) if last[0] == "iv" else (last[1], False)
+    if first[0] == "pt" and last[0] == "pt" and len(cells) == 1:
+        return Expr("Equal", var, fromsp(lo))
+    L_ = lo != -sp.oo
+    H_ = hi != sp.oo
+    if not L_ and not H_:
+        return True
+    if not L_:
+        return Expr("Less" if hi_strict else "LessEqual", var, fromsp(hi))
+    if not H_:
+        return Expr("Greater" if lo_strict else "GreaterEqual", var, fromsp(lo))
+    if lo_strict == hi_strict:
+        return Expr("Less" if lo_strict else "LessEqual", fromsp(lo), var, fromsp(hi))
+    return Expr("Inequality", fromsp(lo), Symbol("Less" if lo_strict else "LessEqual"), var,
+                Symbol("Less" if hi_strict else "LessEqual"), fromsp(hi))
+
+
+def _runs(cells, flags):
+    out_, cur = [], []
+    for c, f in zip(cells, flags):
+        if f:
+            cur.append(c)
+        elif cur:
+            out_.append(cur)
+            cur = []
+    if cur:
+        out_.append(cur)
+    return out_
+
+
+def _sections(polys, x, y, x0):
+    """Exact y-roots at x = x0 of the polys (with their symbolic branch expressions in x when available)."""
+    secs = []
+    for p in polys:
+        if not p.as_expr().has(y):
+            continue
+        q = sp.Poly(p.as_expr(), y)
+        if q.degree() > 2:
+            raise NotImplementedError("CylindricalDecomposition: inner degree above 2 is not supported")
+        cs = [sp.expand(c) for c in q.all_coeffs()]
+        if q.degree() == 1:
+            branches = [-cs[1] / cs[0]]
+        else:
+            a, b, c = cs
+            disc = sp.expand(b ** 2 - 4 * a * c)
+            branches = [sp.simplify((-b - sp.sqrt(disc)) / (2 * a)), sp.simplify((-b + sp.sqrt(disc)) / (2 * a))]
+            if a.has(x) or True:
+                branches.append(-c / b if b != 0 else sp.nan)       # degenerate a == 0 at isolated x
+        for br in branches:
+            if br is sp.nan:
+                continue
+            try:
+                v = br.subs(x, x0)
+            except Exception:  # noqa: BLE001
+                continue
+            if v.has(sp.zoo, sp.nan, sp.oo):
+                continue
+            r = _num(v)
+            if r is None or not r[0]:
+                continue
+            pv = _num(p.as_expr().subs({x: x0, y: v}))
+            if pv is None or pv[1] != 0:
+                continue
+            secs.append((v, br))
+    # sort and merge equal values
+    secs.sort(key=lambda t: float(sp.N(t[0], 30)))
+    merged = []
+    for v, br in secs:
+        if merged and abs(float(sp.N(v - merged[-1][0], 30))) < 1e-25:
+            continue
+        merged.append((v, br))
+    return merged
+
+
+def _ycond(yml, y, s, x, x0, secs, is_point, fname):
+    """Description in y of {y : s(x0, y)} with sections secs (values at x0 and branch expressions)."""
+    vals = [v for v, _ in secs]
+    exprs = [v if is_point else br for v, br in secs]
+    edges = [-sp.oo] + vals + [sp.oo]
+    eedges = [-sp.oo] + exprs + [sp.oo]
+    cells, flags = [], []
+    for i, (a, b) in enumerate(zip(edges, edges[1:])):
+        smp = _between(a, b)
+        cells.append(("iv", eedges[i], eedges[i + 1], smp))
+        flags.append(_truth_at(s, {x: x0, y: smp}, fname))
+        if i < len(vals):
+            cells.append(("pt", exprs[i]))
+            flags.append(_truth_at(s, {x: x0, y: vals[i]}, fname))
+    runs = _runs(cells, flags)
+    if not runs:
+        return False, cells, flags
+    conds = [_iv_cond(yml, r) for r in runs]
+    return (conds[0] if len(conds) == 1 else Expr("Or", *conds)), cells, flags
+
+
+def _cad(e, X, fname):
+    if len(X) > 2:
+        raise NotImplementedError(f"{fname}: more than two variables are not supported")
+    if any(not isinstance(v, Symbol) for v in X):
+        raise ValueError(f"{fname}: the variables must be symbols")
+    if _contains(e, lambda q: _is_head(q, "Exists", "ForAll")):
+        raise NotImplementedError(f"{fname}: quantifiers are not supported")
+    XS = [sp.Symbol(v.name, real=True) for v in X]
+    s, polys = _cad_formula(e, XS, fname)
+    x = XS[0]
+    if len(XS) == 1:
+        roots = _real_roots_1d(polys, x)
+        cells = _cells_1d(roots)
+        flags = [_truth_at(s, {x: c[1] if c[0] == "pt" else c[3]}, fname) for c in cells]
+        return {"dim": 1, "cells": [(c, f, None) for c, f in zip(cells, flags)], "s": s, "X": XS, "polys": polys}
+    y = XS[1]
+    proj = []
+    ys = [p for p in polys if p.as_expr().has(y)]
+    for p in polys:
+        q = sp.Poly(p.as_expr(), y)
+        if q.degree() == 0:
+            proj.append(sp.Poly(p.as_expr(), x))
+            continue
+        if q.degree() > 2:
+            raise NotImplementedError(f"{fname}: degree above 2 in {y} is not supported")
+        proj.append(sp.Poly(q.LC(), x)) if sp.Poly(q.LC(), x).degree() > 0 else None
+        if q.degree() >= 2:
+            d = sp.discriminant(q.as_expr(), y)
+            if d != 0:
+                proj.append(sp.Poly(d, x))
+        if q.degree() >= 1:
+            for c in q.all_coeffs():
+                pass
+    for p1, p2 in itertools.combinations(ys, 2):
+        r = sp.resultant(p1.as_expr(), p2.as_expr(), y)
+        if r != 0:
+            proj.append(sp.Poly(r, x))
+        else:
+            raise NotImplementedError(f"{fname}: polynomials with a common factor are not supported")
+    proj = [p for p in proj if p is not None and p.degree() > 0]
+    roots = _real_roots_1d(proj, x)
+    xcells = _cells_1d(roots)
+    out_ = []
+    for c in xcells:
+        x0 = c[1] if c[0] == "pt" else c[3]
+        secs = _sections(ys, x, y, x0)
+        yc, ycells, yflags = _ycond(X[1], y, s, x, x0, secs, c[0] == "pt", fname)
+        out_.append((c, yc, (ycells, yflags, x0)))
+    return {"dim": 2, "cells": out_, "s": s, "X": XS, "polys": polys, "proj": proj, "xml": X[0], "yml": X[1]}
+
+
+def _cad_to_cond(cad, X):
+    """Wolfram-style nested condition from the CAD cells (adjacent x-cells with equal descriptions merged)."""
+    xv = X[0]
+    if cad["dim"] == 1:
+        cells = [c for c, _, _ in cad["cells"]]
+        flags = [f for _, f, _ in cad["cells"]]
+        runs = _runs(cells, flags)
+        conds = [_iv_cond(xv, r) for r in runs]
+        if not conds:
+            return False
+        return conds[0] if len(conds) == 1 else Expr("Or", *conds)
+    cells_ = cad["cells"]
+    x = cad["X"][0] if "X" in cad else None
+
+    def compat(pt_i, iv_i):
+        if not (0 <= iv_i < len(cells_)):
+            return False
+        c, _, data = cells_[pt_i]
+        ci, _, di = cells_[iv_i]
+        if data is None or di is None or x is None:
+            return False
+        (yc1, f1, _), (yc2, f2, _) = data, di
+        pvals = [u[1] for u in yc1 if u[0] == "pt"]
+        for w in yc2:
+            if w[0] != "pt":
+                continue
+            try:
+                v2 = w[1].subs(x, c[1])
+            except Exception:  # noqa: BLE001
+                return False
+            if v2.has(sp.zoo, sp.nan):
+                return False
+            r = _num(v2)
+            if r is None or not r[0]:
+                return False
+            if not any((_num(v2 - pv) or (0, 1))[1] == 0 for pv in pvals):
+                return False
+        ycm = cells_[iv_i][1]
+        if ycm is True or ycm is False:
+            return all(f == ycm for f in f1)
+        ysym = cad["yml"]
+        for u, f in zip(yc1, f1):
+            yv = u[3] if u[0] == "iv" else u[1]
+            t = ev(Expr("ReplaceAll", ycm, L(rule(cad["xml"], fromsp(c[1])), rule(ysym, fromsp(yv)))))
+            if t is not True and t is not False:
+                t = ev(Expr("N", t, 50))
+            if t is not f:
+                return False
+        return True
+    groups = []
+    for i, (c, yc, _) in enumerate(cells_):
+        if yc is False:
+            groups.append(None)
+            continue
+        ycm = ev(yc) if yc is not True else True
+        if c[0] == "pt" and groups and groups[-1] is not None and compat(i, i - 1):
+            groups[-1][0].append(c)
+            continue
+        if c[0] == "pt" and compat(i, i + 1):
+            nyc = cells_[i + 1][1]
+            groups.append(([c], ev(nyc) if nyc is not True else True))
+            continue
+        if groups and groups[-1] is not None and K.same(groups[-1][1], ycm) and c[0] == "iv":
+            groups[-1][0].append(c)
+        else:
+            groups.append(([c], ycm))
+    conds = []
+    for g in groups:
+        if g is None:
+            continue
+        cells, ycm = g
+        xc = _iv_cond(xv, cells)
+        conds.append(xc if ycm is True else (ycm if xc is True else Expr("And", xc, ycm)))
+    if not conds:
+        return False
+    return ev(conds[0] if len(conds) == 1 else Expr("Or", *conds))
+
+
+def _cad_args(args, fname):
+    args, opts = _opts(args, ("Assumptions", "Method", "Backsubstitution", "WorkingPrecision"), fname)
+    if len(args) < 2:
+        raise ValueError(f"{fname} expects a condition and variables")
+    e = ev(args[0])
+    X = _vars(args[1], fname)
+    rest = list(args[2:])
+    return e, X, rest
+
+
+@fn("CylindricalDecomposition", area=AREA, status="added",
+    notes="CylindricalDecomposition[ineqs, {x, y}] / [ineqs, x]: equivalent condition in cylindrical form "
+          "(x-intervals with y between explicit sections, e.g. -1 < x < 1 && -Sqrt[1 - x^2] < y < Sqrt[1 - x^2]) for "
+          "polynomial (in)equalities with rational coefficients in one variable, or two variables with degree <= 2 "
+          "in the second (exact CAD: leading coefficients, discriminants, resultants, exact cell samples); "
+          "\"Function\" gives a CylindricalDecompositionFunction; quantifiers, 3+ variables, parameters and other "
+          "forms (\"Boundary\", ...) raise")
+def _cylindrical(*args):
+    fname = "CylindricalDecomposition"
+    e, X, rest = _cad_args(args, fname)
+    if e is True or e is False:
+        return e
+    form = None
+    if rest:
+        if len(rest) != 1 or not isinstance(rest[0], str):
+            raise ValueError(f"{fname}: invalid third argument")
+        form = rest[0]
+        if form not in ("Function",):
+            raise NotImplementedError(f"{fname}: the form {form!r} is not supported")
+    cad = _cad(e, X, fname)
+    cond = _cad_to_cond(cad, X)
+    if form == "Function":
+        return Expr("CylindricalDecompositionFunction", cond, L(*X))
+    return cond
+
+
+@fn("GenericCylindricalDecomposition", area=AREA, status="added",
+    notes="GenericCylindricalDecomposition[ineqs, {x, y}]: {full-dimensional part, boundary condition}: the "
+          "open cells of the CAD (same scope as CylindricalDecomposition) and an Or of polynomial == 0 conditions "
+          "containing every lower-dimensional solution cell (False if there is none)")
+def _gcad(*args):
+    fname = "GenericCylindricalDecomposition"
+    e, X, rest = _cad_args(args, fname)
+    if rest:
+        raise NotImplementedError(f"{fname}: extra arguments are not supported")
+    cad = _cad(e, X, fname)
+    xv = cad["X"][0]
+    bound = []
+
+    def add_b(p):
+        p = p.primitive()[1]
+        pe = fromsp(p.as_expr().xreplace({v: sp.Symbol(v.name) for v in cad["X"]}))
+        c = ev(Expr("Equal", pe, 0))
+        if not any(K.same(c, b) for b in bound):
+            bound.append(c)
+    if cad["dim"] == 1:
+        full = {"dim": 1, "cells": [(c, f and c[0] == "iv", None) for c, f, _ in cad["cells"]]}
+        for c, f, _ in cad["cells"]:
+            if f and c[0] == "pt":
+                for p in cad["polys"]:
+                    if _num(p.as_expr().subs(xv, c[1]))[1] == 0:
+                        add_b(p)
+        cond = _cad_to_cond(full, X)
+    else:
+        y = cad["X"][1]
+        new = []
+        for c, yc, (ycells, yflags, x0) in cad["cells"]:
+            if c[0] == "pt":
+                for yc_, f in zip(ycells, yflags):
+                    if not f:
+                        continue
+                    yv = yc_[3] if yc_[0] == "iv" else yc_[1]
+                    hit = [p for p in cad["polys"] if yc_[0] == "pt" and
+                           (_num(p.as_expr().subs({xv: c[1], y: yv})) or (0, 1))[1] == 0]
+                    if hit:
+                        add_b(hit[0])
+                    else:
+                        for p in cad["proj"]:
+                            if _num(p.as_expr().subs(xv, c[1]))[1] == 0:
+                                add_b(p)
+                                break
+                continue
+            fl = [f and yc_[0] == "iv" for yc_, f in zip(ycells, yflags)]
+            for yc_, f in zip(ycells, yflags):
+                if f and yc_[0] == "pt":
+                    for p in cad["polys"]:
+                        if p.as_expr().has(y):
+                            pv = _num(p.as_expr().subs({xv: x0, y: yc_[1].subs(xv, x0)}))
+                            if pv is not None and pv[1] == 0:
+                                add_b(p)
+            runs = _runs(ycells, fl)
+            conds = [_iv_cond(X[1], r) for r in runs]
+            ycm = False if not conds else (conds[0] if len(conds) == 1 else Expr("Or", *conds))
+            new.append((c, ycm, None))
+        cond = _cad_to_cond({"dim": 2, "cells": new}, X)
+    b = False if not bound else (bound[0] if len(bound) == 1 else Expr("Or", *bound))
+    return L(cond, b)
+
+
+def _cdf_hook(head, args, ev_):
+    if len(head.args) != 2 or not is_list(head.args[1]):
+        return K.UNHANDLED
+    cond, X = head.args
+    if len(args) != len(X.args):
+        raise ValueError("CylindricalDecompositionFunction: wrong number of arguments")
+    return ev(Expr("ReplaceAll", cond, L(*(rule(v, a) for v, a in zip(X.args, args)))))
+
+
+_KL.COMPOUND_HEAD_HOOKS["CylindricalDecompositionFunction"] = _cdf_hook
+
+
+@fn("CylindricalDecompositionFunction", area=AREA, status="added",
+    notes="CylindricalDecompositionFunction[cond, {x, y}] (returned by CylindricalDecomposition[..., "
+          "\"Function\"]): applied to numbers it tests membership (cdf[x0, y0] -> True/False); Normal gives the "
+          "cylindrical condition")
+def _cdf(*args):
+    raise Unevaluated()
+
+
+@fn("SemialgebraicComponentInstances", area=AREA, status="added",
+    notes="SemialgebraicComponentInstances[ineqs, {x, y}] / [ineqs, x]: sample points {{x -> a, y -> b}, ...}, "
+          "at least one in each connected component of the solution set (one per true CAD cell, so possibly more "
+          "than one per component); same scope as CylindricalDecomposition")
+def _sci(*args):
+    fname = "SemialgebraicComponentInstances"
+    e, X, rest = _cad_args(args, fname)
+    if rest:
+        raise NotImplementedError(f"{fname}: extra arguments are not supported")
+    if e is False:
+        return L()
+    cad = _cad(e, X, fname)
+    pts = []
+    if cad["dim"] == 1:
+        for c, f, _ in cad["cells"]:
+            if f:
+                pts.append(L(rule(X[0], fromsp(c[1] if c[0] == "pt" else c[3]))))
+        return L(*pts)
+    xv = cad["X"][0]
+    for c, yc, (ycells, yflags, x0) in cad["cells"]:
+        for yc_, f in zip(ycells, yflags):
+            if f:
+                yv = yc_[3] if yc_[0] == "iv" else (yc_[1].subs(xv, x0) if hasattr(yc_[1], "subs") else yc_[1])
+                pts.append(L(rule(X[0], fromsp(sp.nsimplify(x0) if x0.is_Rational else x0)),
+                             rule(X[1], fromsp(sp.simplify(yv)))))
+    return L(*pts)
