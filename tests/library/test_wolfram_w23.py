@@ -379,6 +379,8 @@ CASES = [
     ('FindPeaks["a"]', Raises(TypeError)),
     # ── DiscreteConvolve / UnilateralDiscreteConvolve (checked at integer points)
     ("Table[DiscreteConvolve[UnitStep[n], UnitStep[n], n, m] /. m -> k, {k, -2, 3}]", "{0, 0, 1, 2, 3, 4}"),
+    # regression: closed form must not depend on SymPy cache state (UndefinedFunction identity)
+    ("ClearSystemCache[]; Table[DiscreteConvolve[UnitStep[n], UnitStep[n], n, m] /. m -> k, {k, -2, 3}]", "{0, 0, 1, 2, 3, 4}"),
     ("DiscreteConvolve[DiscreteDelta[n - 1], f[n], n, m]", "f[m - 1]"),                 # Wolfram doc example
     ("Table[DiscreteConvolve[UnitStep[n] (1/2)^n, UnitStep[n], n, m] /. m -> k, {k, -1, 3}]",
      "{0, 1, 3/2, 7/4, 15/8}"),                                                         # partial geometric sums

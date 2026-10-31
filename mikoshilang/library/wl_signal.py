@@ -1832,15 +1832,15 @@ def _term_sum(term, k, conds):
             if lab is None or lab[0] == 0:
                 raise _Fail()
             a, b = lab
-            if fn_ is _US:
+            if fn_ == _US:
                 (lowers if a > 0 else uppers).append(sp.ceiling(-b / a) if a > 0 else sp.floor(-b / a))
-            elif fn_ is _UB:
+            elif fn_ == _UB:
                 lo_, hi_ = (-sp.Rational(1, 2) - b) / a, (sp.Rational(1, 2) - b) / a
                 if a < 0:
                     lo_, hi_ = hi_, lo_
                 lowers.append(sp.ceiling(lo_))
                 uppers.append(sp.floor(hi_))
-            elif fn_ is _DD:
+            elif fn_ == _DD:
                 if abs(a) != 1 or delta is not None:
                     raise _Fail()
                 delta = -b / a
@@ -1856,7 +1856,7 @@ def _term_sum(term, k, conds):
                                                                     and f.as_base_exp()[0].has(k)
                                                                     and (isinstance(f.as_base_exp()[0],
                                                                                     sp.KroneckerDelta)
-                                                                         or f.as_base_exp()[0].func is _DD))])
+                                                                         or f.as_base_exp()[0].func == _DD))])
         return others.subs(k, delta)
     bsyms = set()
     for b in lowers + uppers:
@@ -2255,7 +2255,7 @@ def _breaks(e, x):
         elif _is_step(f) or isinstance(f, (sp.Heaviside, sp.Abs)):
             a = f.args[0]
             offs = (0,) if f.func not in (_UB, _UT) else ((-sp.Rational(1, 2), sp.Rational(1, 2))
-                                                         if f.func is _UB else (-1, 0, 1))
+                                                         if f.func == _UB else (-1, 0, 1))
             args = [a - o for o in offs]
         else:
             continue
