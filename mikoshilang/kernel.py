@@ -1987,8 +1987,33 @@ def _sympy_arith(expr):
     if _exact_zero(out) and not (expr.head == "Times" and any(_exact_zero(x) for x in expr.args)):
         # SymPy collapses an inexact zero to exact 0 (Float(0.5) - Float(0.5) -> Zero). Wolfram keeps it inexact:
         # 0.5 - 0.5 -> 0., 0. x -> 0.; only an exact 0 factor makes a product exactly 0 (0 * 1.5 -> 0).
-        return 0.0 if p == "m" else sp.Float(0, precision=p)
+        return inexact_zero(p)
+    if expr.head == "Plus" and not is_number(out):
+        # SymPy also drops an inexact zero term: x + 0. -> x. Wolfram keeps it: 0. + x, x + 1.5 - 1.5 -> 0. + x.
+        flat, stack = [], list(expr.args)
+        while stack:
+            x = stack.pop()
+            if isinstance(x, Expr) and x.head == "Plus":
+                stack.extend(x.args)
+            else:
+                flat.append(x)
+        nums = [x for x in flat if is_number(x)]
+        q = input_precision(nums)
+        if q is not None:
+            try:
+                total = to_sympy(Expr("Plus", *nums)) if len(nums) > 1 else to_sympy(nums[0])
+            except (ValueError, TypeError, AttributeError):
+                total = None
+            if total is not None and total.is_zero:
+                terms = list(out.args) if isinstance(out, Expr) and out.head == "Plus" else [out]
+                if not any(is_number(t) for t in terms):
+                    return Expr("Plus", inexact_zero(q), *(round_to(t, p) for t in terms))
     return round_to(out, p)
+
+
+def inexact_zero(p):
+    """The inexact zero of precision p ("m" for machine, else bits): 0. or 0``p."""
+    return 0.0 if p == "m" else sp.Float(0, precision=p)
 
 
 def _exact_zero(x):

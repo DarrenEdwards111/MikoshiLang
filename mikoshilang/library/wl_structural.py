@@ -1544,7 +1544,11 @@ def _numericarray(a: Expr, typ: Expr = None, method: Expr = None) -> Expr:
     if not isinstance(typ, str) or typ not in _NA_TYPES:
         raise ValueError(f"NumericArray: unknown type {typ!r}")
     if _na_valid(Expr("NumericArray", a, typ)) and method is None:
-        raise Unevaluated()
+        from ..packed import is_packed, pack
+        packed = None if typ in _NA_COMPLEX or is_packed(a) else pack(a)
+        if packed is None:
+            raise Unevaluated()              # already in normal form
+        return Expr("NumericArray", packed, typ)
     m = "ClipAndRound" if method is None else method
     if not isinstance(m, str) or m not in _NA_METHODS:
         raise ValueError(f"NumericArray: unknown conversion method {m!r}")
@@ -1555,7 +1559,11 @@ def _numericarray(a: Expr, typ: Expr = None, method: Expr = None) -> Expr:
     dims = _full_dims(a)
     if not dims or 0 in dims:
         raise ValueError("NumericArray: a non-empty full array of numbers is expected")
-    return Expr("NumericArray", _na_convert(a, typ, m, "NumericArray"), typ)
+    vals = _na_convert(a, typ, m, "NumericArray")
+    if typ not in _NA_COMPLEX:
+        from ..packed import pack
+        vals = pack(vals) or vals            # stored as one NumPy array (packed List) when it fits int64/float64
+    return Expr("NumericArray", vals, typ)
 
 
 def _na_valid(x):

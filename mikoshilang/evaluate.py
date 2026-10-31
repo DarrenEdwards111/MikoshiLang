@@ -4,7 +4,9 @@ from __future__ import annotations
 from typing import Any, Dict, Set
 from .expr import Expr, Symbol
 from .rules import SIMPLIFICATION_RULES, replace
-from .interop import PYFUNCS_KEY, UNSUPPORTED_EXTERNAL
+from .interop import PYFUNCS_KEY, INTEROP_HEADS
+_CONTEXT_ALIASES = {"Developer`" + n: n for n in ("ToPackedArray", "FromPackedArray", "PackedArrayQ")}
+from .packed import PackedArray, FAST as PACKED_FAST, UNHANDLED as PACKED_UNHANDLED, apply as packed_apply
 
 # The reviewed function library (mikoshilang.library) replaces the legacy
 # extended/extended2/extended3/visualization rule tables, which are no longer
@@ -163,6 +165,8 @@ def _ev_arg(x, depth):
 
 
 def _evaluate(expr, depth: int) -> Any:
+    if expr.__class__ is PackedArray:
+        return expr                      # packed machine numbers are already in normal form
     if not isinstance(expr, Expr) or _STACK_INHIBIT.get():
         return _evaluate_body(expr, depth)
     frames = _STACK.get()
@@ -341,6 +345,10 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
         new_args = sorted(new_args, key=kernel.order_key)
     if "OneIdentity" in uattrs and "Flat" in uattrs and len(new_args) == 1:
         pass
+    if head in PACKED_FAST:
+        r = packed_apply(head, new_args)     # NumPy for packed (or large machine-number) arrays
+        if r is not PACKED_UNHANDLED:
+            return r
     if PRE_LISTABLE_HOOK is not None:
         r = PRE_LISTABLE_HOOK(head, new_args, attrs, ev)
         if r is not kernel.UNHANDLED:
@@ -423,7 +431,7 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
                 return r
         return new_expr
 
-    # 9a. Session-local typed Python functions (Session.function); external code strings raise
+    # 9a. Session-local typed Python functions (Session.function); PythonImport / PythonAttribute
     st = kernel.state()
     if st.ext.get(PYFUNCS_KEY):
         from .interop import lookup, call_registered
@@ -438,9 +446,16 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
                 _supersede(chain)
                 result = evaluate(result, depth + 1)
             return result
-    if head in UNSUPPORTED_EXTERNAL:
-        from .interop import reject_external
-        reject_external(head)
+    if head in _CONTEXT_ALIASES:
+        _supersede(chain)
+        return evaluate(Expr(_CONTEXT_ALIASES[head], *new_expr.args), depth + 1)
+    if head in INTEROP_HEADS:
+        from .interop import apply_interop_head
+        from .library.core import Unevaluated as _Uneval
+        try:
+            return apply_interop_head(head, new_expr.args)
+        except _Uneval:
+            return new_expr
 
     # 9. Reviewed function library
     result = replace(new_expr, SIMPLIFICATION_RULES)
