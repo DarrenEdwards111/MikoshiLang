@@ -640,7 +640,107 @@ DISC = [
     ("ZipfDistribution[0]", Raises(ValueError)),
 ]
 
-GROUPS = [CONT, SPECIAL, DISC]
+
+# ───────────────────────────── multivariate ─────────────────────────────
+
+def _mvpois_cdf(m0, m1, m2, a, b):
+    """independent reference: P[Y0 + Y1 <= a, Y0 + Y2 <= b] by direct summation"""
+    def po(m, k):
+        return mpmath.exp(-m) * mpmath.mpf(m) ** k / mpmath.factorial(k)
+    return float(sum(po(m0, y0) * po(m1, y1) * po(m2, y2) for y0 in range(min(a, b) + 1)
+                     for y1 in range(a - y0 + 1) for y2 in range(b - y0 + 1)))
+
+
+MULTI = [
+    # BinormalDistribution: SciPy multivariate_normal; orthant probability 1/4 + ArcSin[rho]/(2 Pi)
+    ("BinormalDistribution[w17r]", "BinormalDistribution[w17r]"),
+    ("PDF[BinormalDistribution[{1, 2}, {1, 2}, 1/2], {1, 2}]", "Sqrt[3]/(6 Pi)"),  # 1/(2 Pi s1 s2 Sqrt[1 - rho^2])
+    ("PDF[BinormalDistribution[{1, 2}, {1, 2}, 1/2], {1.5, 1.}]",
+     S(lambda st: st.multivariate_normal.pdf([1.5, 1.0], [1, 2], [[1, 1], [1, 4]]))),
+    ("CDF[BinormalDistribution[{0, 0}, {1, 1}, 0.5], {0., 0.}]", 1 / 3, 1e-7),
+    ("Covariance[BinormalDistribution[{1, 2}, {1, 2}, 1/2]]", "{{1, 1}, {1, 4}}"),
+    ("Mean[BinormalDistribution[{1, 2}, {1, 2}, 1/2]]", "{1, 2}"),
+    ("MarginalDistribution[BinormalDistribution[{1, 2}, {1, 3}, 1/2], 2]", "NormalDistribution[2, 3]"),
+    ("BinormalDistribution[2]", Raises(ValueError)),
+    ("BinormalDistribution[{1, 2}, {1, -2}, 1/2]", Raises(ValueError)),
+    # DirichletDistribution: Gamma[6]/(Gamma[1] Gamma[2] Gamma[3]) x2 x3^2; SciPy dirichlet
+    ("DirichletDistribution[{w17a, w17b}]", "DirichletDistribution[{w17a, w17b}]"),
+    ("PDF[DirichletDistribution[{1, 2, 3}], {1/4, 1/4}]", "15/4"),
+    ("PDF[DirichletDistribution[{1.5, 2, 3}], {0.2, 0.3}]",
+     S(lambda st: st.dirichlet.pdf([0.2, 0.3, 0.5], [1.5, 2, 3]))),
+    ("Mean[DirichletDistribution[{1, 2, 3}]]", "{1/6, 1/3}"),
+    ("Covariance[DirichletDistribution[{1, 2, 3}]]", "{{5/252, -1/126}, {-1/126, 2/63}}"),  # a_i(a0 - a_i)/(a0^2 (a0 + 1))
+    ("MarginalDistribution[DirichletDistribution[{1, 2, 3}], 1]", "BetaDistribution[1, 5]"),
+    ("CDF[DirichletDistribution[{2, 3}], {1/2}]", "11/16"),  # BetaRegularized[1/2, 2, 3]
+    ("CDF[DirichletDistribution[{1, 2, 3}], {1/2, 1/2}]", Raises(NotImplementedError)),
+    ("DirichletDistribution[{1, -2, 3}]", Raises(ValueError)),
+    ("Total[RandomVariate[DirichletDistribution[{1, 2, 3}], 20], {2}]", nums(20, 0, 1)),
+    # MultivariateTDistribution: SciPy multivariate_t
+    ("MultivariateTDistribution[{{1, 0}, {0, 1}}, w17n]", "MultivariateTDistribution[{{1, 0}, {0, 1}}, w17n]"),
+    ("PDF[MultivariateTDistribution[{{1, 0}, {0, 1}}, 3], {0, 0}]", "1/(2 Pi)"),  # Gamma[5/2]/(Gamma[3/2] 3 Pi)
+    ("PDF[MultivariateTDistribution[{1, 2}, {{2, 1/2}, {1/2, 1}}, 5], {0.5, 1.5}]",
+     S(lambda st: st.multivariate_t.pdf([0.5, 1.5], [1, 2], [[2, 0.5], [0.5, 1]], df=5))),
+    ("Covariance[MultivariateTDistribution[{{2, 1/2}, {1/2, 1}}, 5]]", "{{10/3, 5/6}, {5/6, 5/3}}"),  # nu/(nu - 2) Sigma
+    ("Mean[MultivariateTDistribution[{1, 2}, {{2, 1/2}, {1/2, 1}}, 5]]", "{1, 2}"),
+    ("MarginalDistribution[MultivariateTDistribution[{{4, 1/2}, {1/2, 1}}, 5], 1]", "StudentTDistribution[0, 2, 5]"),
+    ("MultivariateTDistribution[{{1, 2}, {2, 1}}, 3]", Raises(ValueError)),
+    # LogMultinormalDistribution: PDF = Multinormal PDF at Log[x] / Product[x]; E[X_i] = E^(mu_i + S_ii/2)
+    ("LogMultinormalDistribution[{w17a, w17b}, {{1, 0}, {0, 1}}]",
+     "LogMultinormalDistribution[{w17a, w17b}, {{1, 0}, {0, 1}}]"),
+    ("Mean[LogMultinormalDistribution[{0, 1}, {{1, 0}, {0, 2}}]]", "{Sqrt[E], E^2}"),
+    ("PDF[LogMultinormalDistribution[{0, 1}, {{1, 1/2}, {1/2, 2}}], {1.2, 3.}]",
+     S(lambda st: st.multivariate_normal.pdf([math.log(1.2), math.log(3.0)], [0, 1], [[1, 0.5], [0.5, 2]]) / 3.6)),
+    ("MarginalDistribution[LogMultinormalDistribution[{0, 1}, {{1, 0}, {0, 2}}], 2]",
+     "LogNormalDistribution[1, Sqrt[2]]"),
+    ("Covariance[LogMultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}]]", "{{E^2 - E, 0}, {0, E^2 - E}}"),
+    ("LogMultinormalDistribution[{0, 1}, {{1, 2}, {2, 1}}]", Raises(ValueError)),
+    # MultivariateHypergeometricDistribution: Product[Binomial[m_i, x_i]]/Binomial[12, 4]
+    ("MultivariateHypergeometricDistribution[w17n, {3, 4, 5}]", "MultivariateHypergeometricDistribution[w17n, {3, 4, 5}]"),
+    ("PDF[MultivariateHypergeometricDistribution[4, {3, 4, 5}], {1, 1, 2}]", "8/33"),
+    ("PDF[MultivariateHypergeometricDistribution[4, {3, 4, 5}], {1, 1, 1}]", "0"),
+    ("PDF[MultivariateHypergeometricDistribution[4, {3, 4, 5}], {0, 2, 2}]",
+     S(lambda st: st.multivariate_hypergeom.pmf([0, 2, 2], [3, 4, 5], 4))),
+    ("Mean[MultivariateHypergeometricDistribution[4, {3, 4, 5}]]", "{1, 4/3, 5/3}"),
+    ("Covariance[MultivariateHypergeometricDistribution[4, {3, 4, 5}]][[1, 2]]", "-8/33"),  # -n m1 m2 (N-n)/(N^2 (N-1))
+    ("MarginalDistribution[MultivariateHypergeometricDistribution[4, {3, 4, 5}], 1]", "HypergeometricDistribution[4, 3, 12]"),
+    ("MultivariateHypergeometricDistribution[20, {3, 4, 5}]", Raises(ValueError)),
+    ("MultivariateHypergeometricDistribution[-1, {3, 4, 5}]", Raises(ValueError)),
+    # MultivariatePoissonDistribution: {Y0 + Y1, Y0 + Y2}
+    ("MultivariatePoissonDistribution[w17m, {2, 3}]", "MultivariatePoissonDistribution[w17m, {2, 3}]"),
+    ("PDF[MultivariatePoissonDistribution[1, {2, 3}], {1, 2}]", "12/E^6"),  # 9 E^-6 (Y0 = 0) + 3 E^-6 (Y0 = 1)
+    ("CDF[MultivariatePoissonDistribution[1, {2, 3}], {2, 3}]", _mvpois_cdf(1, 2, 3, 2, 3)),
+    ("Covariance[MultivariatePoissonDistribution[1, {2, 3}]]", "{{3, 1}, {1, 4}}"),
+    ("MarginalDistribution[MultivariatePoissonDistribution[1, {2, 3}], 2]", "PoissonDistribution[4]"),
+    ("MultivariatePoissonDistribution[-1, {2, 3}]", Raises(ValueError)),
+    # NegativeMultinomialDistribution: Gamma[4]/(Gamma[2]) (1/2)^2 (1/4)^2
+    ("NegativeMultinomialDistribution[w17n, {1/4, 1/4}]", "NegativeMultinomialDistribution[w17n, {1/4, 1/4}]"),
+    ("PDF[NegativeMultinomialDistribution[2, {1/4, 1/4}], {1, 1}]", "3/32"),
+    ("Mean[NegativeMultinomialDistribution[2, {1/4, 1/4}]]", "{1, 1}"),  # n p_i/p0
+    ("Covariance[NegativeMultinomialDistribution[2, {1/4, 1/4}]]", "{{3/2, 1/2}, {1/2, 3/2}}"),
+    ("MarginalDistribution[NegativeMultinomialDistribution[2, {1/4, 1/4}], 1]", "NegativeBinomialDistribution[2, 2/3]"),
+    ("NegativeMultinomialDistribution[2, {1/2, 1/2}]", Raises(ValueError)),
+    # CategoricalDistribution
+    ("CategoricalDistribution[{w17x, w17y, w17z}]", "CategoricalDistribution[{w17x, w17y, w17z}]"),
+    ("PDF[CategoricalDistribution[{w17x, w17y, w17z}, {1, 2, 3}], w17y]", "1/3"),
+    ("PDF[CategoricalDistribution[{w17x, w17y, w17z}], w17z]", "1/3"),
+    ("PDF[CategoricalDistribution[{w17x, w17y, w17z}], w17q]", "0"),
+    ("RandomVariate[CategoricalDistribution[{w17x, w17y}, {1, 0}], 3]", "{w17x, w17x, w17x}"),
+    ("Mean[CategoricalDistribution[{1, 2, 3}]]", Raises(TypeError)),
+    ("CategoricalDistribution[{w17x, w17y}, {1, -1}]", Raises(ValueError)),
+    # MarginalDistribution
+    ("MarginalDistribution[w17d, 1]", "MarginalDistribution[w17d, 1]"),
+    ("MarginalDistribution[MultinormalDistribution[{1, 2}, {{1, 0}, {0, 4}}], 2]", "NormalDistribution[2, 2]"),
+    ("MarginalDistribution[MultinomialDistribution[5, {1/2, 1/3, 1/6}], 2]", "BinomialDistribution[5, 1/3]"),
+    ("MarginalDistribution[ProductDistribution[NormalDistribution[], ExponentialDistribution[2], PoissonDistribution[3]], "
+     "{1, 3}]", "ProductDistribution[NormalDistribution[0, 1], PoissonDistribution[3]]"),
+    # check: marginal means agree with Mean[dist]
+    ("Mean[MarginalDistribution[MultivariatePoissonDistribution[1, {2, 3}], 1]] == "
+     "Mean[MultivariatePoissonDistribution[1, {2, 3}]][[1]]", "True"),
+    ("MarginalDistribution[NormalDistribution[], 1]", Raises(ValueError)),
+    ("MarginalDistribution[MultinormalDistribution[{1, 2}, {{1, 0}, {0, 4}}], 3]", Raises(ValueError)),
+]
+
+GROUPS = [CONT, SPECIAL, DISC, MULTI]
 
 
 def _resolve(cases):
