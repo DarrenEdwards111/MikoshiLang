@@ -99,7 +99,7 @@ FUNCTIONAL = [
     ("ReplaceAt[<|\"x\" -> 1, \"y\" -> 2|>, 2 -> 5, \"y\"]", "<|\"x\" -> 1, \"y\" -> 5|>"),
     ("SubsetMap[Reverse, {x1, x2, x3, x4, x5, x6}, {2, 4}]", "{x1, x4, x3, x2, x5, x6}"),
     ("SubsetMap[RotateLeft, {x1, x2, x3, x4, x5, x6}, {2, 4, 5}]", "{x1, x4, x3, x5, x2, x6}"),
-    ("SubsetMap[Accumulate, {x1, x2, x3, x4, x5, x6}, 2 ;; 5]", "{x1, x2, x2 + x3, x2 + x3 + x4, x2 + x3 + x4 + x5, x6}"),
+    ("SubsetMap[RotateRight, {x1, x2, x3, x4, x5, x6}, 2 ;; 5]", "{x1, x5, x2, x3, x4, x6}"),
     ("SubsetMap[Reverse, {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}, {{1, 1}, {2, 2}, {3, 3}}]", "{{9, 2, 3}, {4, 5, 6}, {7, 8, 1}}"),
     ("SubsetMap[Reverse, {2, 3}][{a, b, c}]", "{a, c, b}"),
     ("AssociationComap[{f, g, h}, x]", "<|f -> f[x], g -> g[x], h -> h[x]|>"),
