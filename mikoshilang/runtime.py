@@ -46,6 +46,39 @@ class Session:
             _state.reset(token)
             _network.reset(network_token)
 
+    def evaluate_input(self, source, whole=True):
+        """Evaluate input as the Wolfram main loop: In[n]/Out[n]/InString[n] history, $Line, $Pre, $Post, $PreRead.
+
+        Returns a list of (line number, value) pairs; one line for the whole source (whole=True) or one per
+        top-level statement.  Use output_form(value) for the printed form ($PrePrint).
+        """
+        from .library.wl_evaluation import main_loop
+        network_token = _network.set(self.allow_network)
+        token = _state.set(self.state)
+        try:
+            return main_loop(source, whole)
+        finally:
+            _state.reset(token)
+            _network.reset(network_token)
+
+    def output_form(self, value):
+        """The value as printed by the main loop ($PrePrint applied)."""
+        from .library.wl_evaluation import preprint
+        token = _state.set(self.state)
+        try:
+            return preprint(value)
+        finally:
+            _state.reset(token)
+
+    def end(self):
+        """End the session: evaluates $Epilog."""
+        from .library.wl_evaluation import epilog
+        token = _state.set(self.state)
+        try:
+            epilog()
+        finally:
+            _state.reset(token)
+
     def clear(self):
         self.state.clear()
 

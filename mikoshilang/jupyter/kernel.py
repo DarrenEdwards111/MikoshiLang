@@ -38,8 +38,10 @@ class MikoshiLangKernel(Kernel):
             return {"status": "ok", "execution_count": self._counter, "payload": [], "user_expressions": {}}
 
         try:
-            expr = parse(code)
-            result = self._session.evaluate(expr)
+            parse(code)  # syntax errors are reported before anything is recorded in In/Out
+            # the Wolfram main loop: In[n], Out[n] (%), $Line, $Pre, $Post, $PrePrint
+            outs = self._session.evaluate_input(code)
+            result = self._session.output_form(outs[-1][1]) if outs else None
         except Exception as e:
             if not silent:
                 self.send_response(self.iopub_socket, "stream", {

@@ -111,15 +111,15 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 | verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
 | fixed | 502 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
 | promoted | 23 | was quarantined; now properly implemented and tested |
-| added | 707 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| added | 1132 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 0 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **1376** | 620 pre-audit inventory heads, all with a status, plus 756 promoted/aliased heads |
+| **total reviewed** | **1801** | 620 pre-audit inventory heads, all with a status, plus 1181 promoted/aliased heads |
 
-Remaining unreviewed quarantined names: **5298** (all raise NotImplementedError; see below).
+Remaining unreviewed quarantined names: **5288** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **6433**.
+Differential test cases in tests/library: **8449**.
 
 
 ## By area
@@ -134,8 +134,10 @@ Differential test cases in tests/library: **6433**.
 | combinatorics | 5 | 12 | 6 | 0 | 0 | 0 | 0 |
 | combinatorics (batch 6) | 0 | 0 | 0 | 37 | 0 | 0 | 0 |
 | constants | 0 | 33 | 0 | 0 | 0 | 0 | 0 |
+| data structures (W03) | 0 | 0 | 0 | 4 | 0 | 0 | 0 |
 | discrete mathematics (batch 6) | 0 | 0 | 0 | 48 | 0 | 0 | 0 |
 | elementary | 28 | 12 | 1 | 1 | 0 | 0 | 0 |
+| evaluation control, definitions, contexts (W01) | 0 | 0 | 0 | 119 | 0 | 0 | 0 |
 | finance | 0 | 20 | 0 | 0 | 0 | 0 | 0 |
 | geometry | 0 | 29 | 0 | 0 | 0 | 0 | 0 |
 | graphs | 3 | 14 | 0 | 0 | 0 | 0 | 0 |
@@ -148,11 +150,13 @@ Differential test cases in tests/library: **6433**.
 | lists and sets | 4 | 14 | 2 | 0 | 0 | 0 | 0 |
 | logic | 5 | 8 | 0 | 0 | 0 | 0 | 0 |
 | logic (batch 6) | 0 | 0 | 0 | 17 | 0 | 0 | 0 |
+| messages, exceptions & testing (W02) | 0 | 0 | 0 | 80 | 0 | 0 | 0 |
 | ml | 4 | 0 | 0 | 0 | 0 | 0 | 0 |
 | number theory | 3 | 51 | 3 | 0 | 0 | 0 | 0 |
 | number theory (batch 2) | 0 | 0 | 0 | 4 | 0 | 0 | 0 |
 | numerics | 4 | 5 | 0 | 0 | 0 | 0 | 0 |
 | numerics (batch 2) | 0 | 0 | 0 | 44 | 0 | 0 | 0 |
+| output forms & formatting (W04) | 0 | 0 | 0 | 105 | 0 | 0 | 0 |
 | physics | 0 | 48 | 0 | 0 | 0 | 0 | 0 |
 | plots | 0 | 14 | 0 | 0 | 0 | 0 | 0 |
 | special functions | 11 | 28 | 5 | 0 | 0 | 0 | 0 |
@@ -161,7 +165,9 @@ Differential test cases in tests/library: **6433**.
 | statistics (batch 5) | 0 | 0 | 0 | 63 | 0 | 0 | 0 |
 | strings (batch 1) | 0 | 7 | 0 | 58 | 0 | 0 | 0 |
 | strings and dates | 12 | 23 | 0 | 0 | 0 | 0 | 0 |
+| structural (W03) | 0 | 0 | 0 | 63 | 0 | 0 | 0 |
 | transforms | 4 | 15 | 0 | 6 | 0 | 0 | 0 |
+| trees (W03) | 0 | 0 | 0 | 54 | 0 | 0 | 0 |
 
 ## Every function
 
@@ -255,7 +261,7 @@ Cases = number of differential test cases in which the head occurs.
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `AssociateTo` | added | 3 | AssociateTo[a, k -> v] (or a list of rules) updates the association stored in symbol a and returns it |
-| `Association` | added | 3 | normalises <\|...\|>: lists of rules and nested associations are flattened in, a repeated key keeps its first position and takes the last value; non-rule arguments raise |
+| `Association` | added | 7 | normalises <\|...\|>: lists of rules and nested associations are flattened in, a repeated key keeps its first position and takes the last value; non-rule arguments raise |
 | `AssociationMap` | added | 4 | AssociationMap[f, {k1, ...}] gives <\|k1 -> f[k1], ...\|>; on an association f is applied to each rule and must return a rule |
 | `AssociationQ` | added | 3 | True for a valid association |
 | `AssociationThread` | added | 4 | AssociationThread[{k...}, {v...}] or [{k...} -> {v...}]; lengths must agree; repeated keys keep the last value |
@@ -274,7 +280,7 @@ Cases = number of differential test cases in which the head occurs.
 | `KeyTake` | added | 3 | entries for the given keys in the order the keys are listed (absent keys ignored); rule lists give rule lists; lists of associations thread |
 | `KeyUnion` | added | 3 | each association extended to the union of keys (in order of first appearance); absent keys get Missing["KeyAbsent", k] (or f[k] with KeyUnion[list, f]) |
 | `KeyValueMap` | added | 3 | {f[k1, v1], f[k2, v2], ...} |
-| `Keys` | added | 4 | keys of an association in order; Keys of a rule list gives each rule's key; lists of associations thread; Keys[a, f] applies f to each key |
+| `Keys` | added | 7 | keys of an association in order; Keys of a rule list gives each rule's key; lists of associations thread; Keys[a, f] applies f to each key |
 | `Lookup` | added | 7 | Lookup[assoc, key] (Missing["KeyAbsent", key] if absent), Lookup[assoc, key, default], a list of keys gives a list, a list of associations threads; rule lists act as associations |
 | `Merge` | added | 4 | Merge[{a1, a2, ...}, f] gives <\|k -> f[{values for k}]\|> with keys in order of first appearance; rule lists act as associations |
 | `MissingQ` | added | 3 | True for Missing[...] expressions |
@@ -312,7 +318,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PhasePlane` | fixed | 3 | equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped tuple-form solutions |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Table` | kernel | 12 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 33 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
@@ -323,12 +329,12 @@ Cases = number of differential test cases in which the head occurs.
 |---|---|---|---|
 | `ComposeSeries` | added | 3 | ComposeSeries[s1, s2, ...] = s1(s2(...)) for power series about 0 where the inner series vanish at 0; the order is the one the truncations allow (ComposeSeries[Series[Exp[x], {x, 0, 5}], Series[Sin[x], {x, 0, 5}]] -> 1 + x + x^2/2 - x^4/8 - x^5/15 + O[x]^6) |
 | `ConditionalExpression` | added | 8 | ConditionalExpression[expr, cond]: expr when cond is True, Undefined when cond is False, nested conditions combine with And (ConditionalExpression[ConditionalExpression[x, a], b] = ConditionalExpression[x, a && b]), otherwise unevaluated (returned by Integrate, Sum, Solve and the Fourier coefficient functions for parameter conditions; arithmetic on ConditionalExpression objects is not propagated).  Single implementation shared by batches 4 and 6. |
-| `D` | fixed | 18 | batch 4: D[f, x, y, ...], D[f, {x, n}], D[f, {{x1, x2, ...}}] (gradient) and {{...}, n} (arrays of higher derivatives), threads over lists and equations (implicit differentiation D[x^2 + y[x]^2 == 1, x]), NonConstants -> {y}, derivatives with respect to f[x]; chain rule results are Wolfram Derivative forms (D[f[g[x]], x] -> f'[g[x]] g'[x]; previously D[f[g[x]], g[x]] g'[x]); symbolic orders stay unevaluated; D[f] with no variable returns f |
+| `D` | fixed | 20 | batch 4: D[f, x, y, ...], D[f, {x, n}], D[f, {{x1, x2, ...}}] (gradient) and {{...}, n} (arrays of higher derivatives), threads over lists and equations (implicit differentiation D[x^2 + y[x]^2 == 1, x]), NonConstants -> {y}, derivatives with respect to f[x]; chain rule results are Wolfram Derivative forms (D[f[g[x]], x] -> f'[g[x]] g'[x]; previously D[f[g[x]], g[x]] g'[x]); symbolic orders stay unevaluated; D[f] with no variable returns f |
 | `DSolve` | fixed | 13 | batch 4: every solution returned by DSolve (ODEs and ODE systems in one variable, initial conditions, y[x] or y forms) is now substituted back into the equations and checked (symbolically, else numerically at sample points); PDEs raise. Free constants may be numbered differently from Wolfram (the solution family is the same) |
 | `DSolveValue` | added | 4 | DSolveValue[eqns, y[x], x] gives the solution value, DSolveValue[eqns, y, x] a pure function, DSolveValue[eqns, expr, x] the value of expr; several solutions give a list; checked like DSolve |
 | `Derivative` | added | 4 | Derivative[n1, n2, ...][f] for pure functions and built-in mathematical functions gives a pure function (Derivative[1][Sin] -> Cos[#1] &, Derivative[2][#^3 &] -> 6 #1 &); Derivative[n...][f][x...] evaluates for known f (Sin'[x] -> Cos[x], previously unevaluated) and stays symbolic for undefined f (f'[x], Derivative[1, 0][f][x, y]); Derivative[0][f] -> f |
 | `DiracDelta` | added | 6 | Wolfram DiracDelta[x1, ...]: 0 when any argument is a nonzero real number, unevaluated otherwise (DiracDelta[0] stays); complex numeric arguments raise; integrates and transforms through SymPy (Integrate[f[x] DiracDelta[x - a], {x, -Infinity, Infinity}] -> f[a]); D[HeavisideTheta[x], x] -> DiracDelta[x] |
-| `Dt` | added | 4 | total derivatives: Dt[f, x] treats every other symbol as a function of x (Dt[x^2 y, x] -> 2 x y + x^2 Dt[y, x]), Dt[f, {x, n}], Dt[f] is the total differential (Dt[x y] -> y Dt[x] + x Dt[y]); Constants -> {a, ...}; Dt[y, x] for an independent symbol y stays unevaluated; numeric constants (Pi, E, ...) have derivative 0 |
+| `Dt` | added | 9 | total derivatives: Dt[f, x] treats every other symbol as a function of x (Dt[x^2 y, x] -> 2 x y + x^2 Dt[y, x]), Dt[f, {x, n}], Dt[f] is the total differential (Dt[x y] -> y Dt[x] + x Dt[y]); Constants -> {a, ...}; Dt[y, x] for an independent symbol y stays unevaluated; numeric constants (Pi, E, ...) have derivative 0 |
 | `FourierCoefficient` | added | 7 | FourierCoefficient[f, t, n] = 1/(2π) ∫_{-π}^{π} f e^(-int) dt (Wolfram default FourierParameters {1, 1}; other parameters raise); integer or symbolic n (symbolic n is integer: a separate n == 0 value appears as Piecewise[{{c0, n == 0}}, g[n]]); the general term is checked against direct integrals at n = ±1, ±2, 3, 5 |
 | `FourierCosCoefficient` | added | 3 | FourierCosCoefficient[f, t, n] = 2/π ∫_0^π f cos(nt) dt, with 1/π ∫_0^π f dt for n = 0 (Wolfram); symbolic n checked against direct integrals |
 | `FourierCosSeries` | added | 3 | FourierCosSeries[f, t, k] = Σ_{n=0}^{k} FourierCosCoefficient[f, t, n] Cos[n t] (even extension of f on [0, π]) |
@@ -338,12 +344,12 @@ Cases = number of differential test cases in which the head occurs.
 | `FourierTrigSeries` | added | 3 | FourierTrigSeries[f, t, k] = a0 + Σ_{n=1}^{k} (a_n Cos[n t] + b_n Sin[n t]) with a0 = 1/(2π)∫f, a_n = 1/π ∫_{-π}^{π} f cos(nt), b_n = 1/π ∫_{-π}^{π} f sin(nt) (Wolfram default parameters) |
 | `HeavisideTheta` | added | 8 | Wolfram HeavisideTheta[x1, ...]: 1 when every argument is positive, 0 when any is negative, unevaluated at 0 (unlike UnitStep[0] = 1 and SymPy's Heaviside(0) = 1/2); D gives DiracDelta |
 | `ImplicitD` | added | 5 | ImplicitD[f == g, y, x] = dy/dx for y defined implicitly (ImplicitD[x^2 + y^2 == 1, y, x] -> -x/y), ImplicitD[eqn, y, {x, n}] higher derivatives (expressed in x and y), ImplicitD[{eqns}, {y1, y2}, x] for systems |
-| `Integrate` | fixed | 33 | batch 4: indefinite integrals (verified by differentiating back), definite, improper and multiple integrals (the last specification is innermost); options Assumptions, GenerateConditions (Automatic/True give ConditionalExpression[value, cond] when the result needs a parameter condition, e.g. Integrate[x^a, {x, 0, 1}] -> ConditionalExpression[1/(1 + a), Re[a] > -1]; False gives the generic value) and PrincipalValue -> True (Cauchy principal value, Integrate[1/x, {x, -1, 2}, PrincipalValue -> True] -> Log[2]); SymPy convergence conditions are rewritten in Wolfram form (Abs[Arg[a]] < Pi/2 -> Re[a] > 0); integrals that diverge to +-Infinity give that limit, indeterminate (oscillating/cancelling) ones raise; HeavisideTheta and DiracDelta integrands are supported; integrals SymPy cannot do stay unevaluated |
+| `Integrate` | fixed | 36 | batch 4: indefinite integrals (verified by differentiating back), definite, improper and multiple integrals (the last specification is innermost); options Assumptions, GenerateConditions (Automatic/True give ConditionalExpression[value, cond] when the result needs a parameter condition, e.g. Integrate[x^a, {x, 0, 1}] -> ConditionalExpression[1/(1 + a), Re[a] > -1]; False gives the generic value) and PrincipalValue -> True (Cauchy principal value, Integrate[1/x, {x, -1, 2}, PrincipalValue -> True] -> Log[2]); SymPy convergence conditions are rewritten in Wolfram form (Abs[Arg[a]] < Pi/2 -> Re[a] > 0); integrals that diverge to +-Infinity give that limit, indeterminate (oscillating/cancelling) ones raise; HeavisideTheta and DiracDelta integrands are supported; integrals SymPy cannot do stay unevaluated |
 | `InverseSeries` | added | 3 | InverseSeries[s] / InverseSeries[s, y] for a power series s = a1 x + a2 x^2 + ... + O[x]^n about 0 with a1 != 0: the series of the inverse function to the same order (InverseSeries[Series[Sin[x], {x, 0, 5}]] -> x + x^3/6 + 3 x^5/40 + O[x]^6); the result is checked by composing back |
 | `Limit` | fixed | 15 | batch 4: Limit[f, x -> a] (two-sided: Indeterminate when the one-sided limits differ), Direction -> "FromAbove" / "FromBelow" / -1 / 1 / "TwoSided", Assumptions, limits at +-Infinity, lists of functions, and multivariate limits Limit[f, {x, y} -> {a, b}] (continuity after cancellation, Indeterminate when two paths disagree, otherwise a clear error); oscillating limits raise (use MaxLimit/MinLimit); legacy rejected every option |
 | `MaxLimit` | added | 4 | upper limit (limsup) MaxLimit[f, x -> a] with Direction and Assumptions: the larger one-sided limit, or A + \|B\| for f = A + B Sin[g] / A + B Cos[g] with g -> +-Infinity (MaxLimit[Sin[1/x], x -> 0] -> 1); other oscillating functions raise |
 | `MinLimit` | added | 3 | lower limit (liminf) MinLimit[f, x -> a]; see MaxLimit (MinLimit[Sign[x], x -> 0] -> -1) |
-| `Normal` | fixed | 20 | batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate series) and evaluates the remaining polynomial; associations and other heads as before (batch 1) |
+| `Normal` | fixed | 36 | batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate series) and evaluates the remaining polynomial; associations and other heads as before (batch 1) |
 | `O` | added | 3 | order term O[x]^n / O[x - x0]^n / O[1/x]^n of Series results (stays symbolic); Normal removes it; SeriesCoefficient, InverseSeries and ComposeSeries read it |
 | `Product` | fixed | 7 | batch 4: as Sum (finite, symbolic and infinite products via SymPy; parametric products give the generic value, ConditionalExpression with GenerateConditions -> True) |
 | `RSolve` | fixed | 10 | batch 4: RSolve[eqns, a[n], n] -> {{a[n] -> ...}} and RSolve[eqns, a, n] -> {{a -> Function[{n}, ...]}}; linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every solution is substituted back into the recurrence and the initial conditions; free constants are C[1], C[2], ...; systems raise |
@@ -461,6 +467,15 @@ Cases = number of differential test cases in which the head occurs.
 | `WienDisplacement` | fixed | 3 | Wien displacement constant b (m K), CODATA 2018; the legacy 1-argument form, which ignored its argument, now raises an arity error |
 | `WienDisplacementConstant` | fixed | 4 | CODATA 2018 (m K); only a 1-argument form existed, ignoring its argument |
 
+### data structures (W03)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$DataStructures` | added | 3 | the data structure types this implementation of CreateDataStructure supports (a subset of Wolfram's list) |
+| `CreateDataStructure` | added | 25 | CreateDataStructure["type", args] for Stack, Queue, Deque, RingBuffer, DynamicArray, FixedArray, LinkedList, DoublyLinkedList, PriorityQueue, HashSet, OrderedHashSet, HashTable, OrderedHashTable, LeastRecentlyUsedCache, Value, Counter, SortedMultiset, DisjointSet, BitVector; operations ds["Op", ...] mutate in place; empty Pop/Peek raise |
+| `DataStructure` | added | 3 | DataStructure["type", DataStructureHandle[n]] is the (mutable) object returned by CreateDataStructure; DataStructure["type", data] with explicit data creates one |
+| `DataStructureQ` | added | 5 | DataStructureQ[x] / DataStructureQ[x, "type"] |
+
 ### discrete mathematics (batch 6)
 
 | Function | Status | Cases | Notes |
@@ -518,7 +533,7 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Abs` | verified | 37 | verified against SymPy/mpmath |
+| `Abs` | verified | 41 | verified against SymPy/mpmath |
 | `ArcCos` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCosh` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCot` | verified | 3 | verified against SymPy/mpmath |
@@ -526,27 +541,27 @@ Cases = number of differential test cases in which the head occurs.
 | `ArcSec` | verified | 3 | verified against SymPy/mpmath |
 | `ArcSin` | verified | 3 | verified against SymPy/mpmath |
 | `ArcSinh` | verified | 3 | verified against SymPy/mpmath |
-| `ArcTan` | fixed | 5 | ArcTan[x, y] was atan2(x, y); Wolfram's ArcTan[x, y] is the angle of the point (x, y), atan2(y, x) |
+| `ArcTan` | fixed | 6 | ArcTan[x, y] was atan2(x, y); Wolfram's ArcTan[x, y] is the angle of the point (x, y), atan2(y, x) |
 | `ArcTanh` | verified | 3 | verified against SymPy/mpmath |
 | `Ceiling` | fixed | 8 | Ceiling[x] and Ceiling[x, a] (a Ceiling[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `Conjugate` | verified | 3 | verified against SymPy/mpmath |
-| `Cos` | verified | 44 | verified against SymPy/mpmath |
+| `Cos` | verified | 47 | verified against SymPy/mpmath |
 | `Cosh` | verified | 4 | verified against SymPy/mpmath |
 | `Cot` | verified | 3 | verified against SymPy/mpmath |
 | `Coth` | verified | 3 | verified against SymPy/mpmath |
 | `Csc` | verified | 3 | verified against SymPy/mpmath |
 | `Csch` | verified | 3 | verified against SymPy/mpmath |
 | `CubeRoot` | fixed | 3 | returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2) |
-| `Exp` | verified | 89 | verified against SymPy/mpmath |
+| `Exp` | verified | 90 | verified against SymPy/mpmath |
 | `Floor` | fixed | 15 | Floor[x] and Floor[x, a] (a Floor[x/a], exact when a is exact); complex numbers are rounded in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] = 2. + 3. I, and had no step form) |
 | `ImaginaryPart` | verified | 3 | verified against SymPy/mpmath |
 | `Log` | fixed | 21 | Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b |
 | `Log10` | verified | 3 | log base 10; Log10[0] = -Infinity |
 | `Log2` | verified | 3 | log base 2; Log2[0] = -Infinity |
-| `Max` | fixed | 5 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
-| `Min` | fixed | 5 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
-| `Mod` | fixed | 24 | Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset form and complex arguments were missing |
-| `Quotient` | fixed | 11 | Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = Floor[(m - d)/n]; complex arguments use Round |
+| `Max` | fixed | 8 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
+| `Min` | fixed | 6 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
+| `Mod` | fixed | 27 | Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset form and complex arguments were missing |
+| `Quotient` | fixed | 12 | Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = Floor[(m - d)/n]; complex arguments use Round |
 | `QuotientRemainder` | added | 4 | {Quotient[m, n], Mod[m, n]} |
 | `RealPart` | verified | 3 | verified against SymPy/mpmath |
 | `Root` | fixed | 40 | Wolfram Root[f, k]: the k-th root of the polynomial f[x] (f a pure function), ordered as Wolfram: real roots ascending, then complex roots by real part, then \|Im\|, conjugate pairs adjacent (negative imaginary part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. Legacy Root[a, n] meant a^(1/n) (now Surd/Power) |
@@ -554,12 +569,136 @@ Cases = number of differential test cases in which the head occurs.
 | `Sec` | verified | 3 | verified against SymPy/mpmath |
 | `Sech` | verified | 3 | verified against SymPy/mpmath |
 | `Sign` | fixed | 9 | Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals |
-| `Sin` | verified | 95 | verified against SymPy/mpmath |
+| `Sin` | verified | 118 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
-| `Sqrt` | verified | 73 | verified against SymPy/mpmath |
+| `Sqrt` | verified | 81 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
-| `Tan` | verified | 5 | verified against SymPy/mpmath |
+| `Tan` | verified | 6 | verified against SymPy/mpmath |
 | `Tanh` | verified | 3 | verified against SymPy/mpmath |
+
+### evaluation control, definitions, contexts (W01)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$Context` | added | 23 | current context (default "Global`"); set by Begin, BeginPackage, End, EndPackage; assignable (validated); Block localises it |
+| `$ContextAliases` | added | 23 | association "alias`" -> "context`" used when parsing qualified names; $ContextAliases["a`"] = "ctx`" and =. update it; Needs[ctx -> alias] adds one |
+| `$ContextPath` | added | 23 | contexts searched (before $Context) when a name is parsed; default {"System`", "Global`"}; modified by BeginPackage, EndPackage, Needs, DeclarePackage |
+| `$Epilog` | added | 3 | expression evaluated when the REPL session ends |
+| `$HistoryLength` | added | 3 | number of In/Out lines kept by the main loop (default Infinity) |
+| `$IterationLimit` | added | 6 | maximum length of an evaluation chain (default 4096): each rewrite of an expression by a definition or rule counts once; exceeding it raises $IterationLimit::itlim |
+| `$Line` | added | 3 | number of the current main-loop input line; assignable |
+| `$ModuleNumber` | added | 4 | the number the next Module or Unique symbol gets (x$nnn); assignable |
+| `$NewSymbol` | added | 3 | if set, $NewSymbol[name, context] is evaluated before a new symbol is created by the parser |
+| `$Packages` | added | 21 | contexts of loaded packages (BeginPackage adds; Needs consults it) |
+| `$Post` | added | 3 | function applied to each main-loop result before it is stored in Out |
+| `$Pre` | added | 3 | function applied to each main-loop input before evaluation (unevaluated if it holds) |
+| `$PrePrint` | added | 3 | function applied to each main-loop result before it is printed (not stored) |
+| `$PreRead` | added | 3 | function applied to each main-loop input string before it is parsed |
+| `$RecursionLimit` | added | 4 | maximum evaluation depth (default 1024, Infinity or an integer >= 20); exceeding it raises $RecursionLimit::reclim. MikoshiLang counts nested evaluator calls |
+| `Activate` | added | 9 | Activate[expr] replaces Inactive[f] by f everywhere in expr and evaluates; Activate[expr, patt] only for f matching patt; Heads -> False does not enter heads |
+| `ActivateResult` | added | 3 | option name: whether Inactive results are activated before being returned |
+| `AllowedHeads` | added | 3 | option name: heads of subexpressions into which a function may descend |
+| `Application` | added | 3 | Application[f, g] is a formal application with no built-in meaning (stays unevaluated) |
+| `ApplyTo` | added | 3 | x //= f sets x to f[x] and returns the new value (like x = f[x]); x must have a value |
+| `ArgumentsOptions` | added | 4 | ArgumentsOptions[f[args], n] gives {{positional args}, {options}} (checked against Options[f]); a Failure["ArgumentsOptions", ...] when the count or an option is wrong; {min, max}; "Head" key |
+| `Attributes` | added | 20 | Attributes[f], Attributes["f"], Attributes[{f, g}] (built-in Protected included, Temporary for live Module symbols, Stub, user attributes); Attributes[f] = {...} replaces them |
+| `Automatic` | added | 26 | inert option value: chosen automatically by the function that uses it |
+| `Begin` | added | 5 | Begin["ctx`"] sets $Context (a context starting with ` extends the current one) and returns it; End[] restores $Context and $ContextAliases. Affects how later inputs are parsed |
+| `BeginPackage` | added | 6 | BeginPackage["ctx`"] sets $Context to ctx` and $ContextPath to {ctx`, System`}, adds ctx` to $Packages; BeginPackage["ctx`", {"need1`", ...}] calls Needs on each and puts them on the path |
+| `CheckArguments` | added | 6 | CheckArguments[f[args], n] is True when args is n positional arguments followed by options known to f (Options[f]), else False; {min, max} counts; <\|"ExtraOptions" -> ..., "OptionsMode" -> ...\|> |
+| `Constant` | added | 3 | attribute: Dt treats the symbol as a constant (Dt[c] = 0, Dt[c[x], x] = 0) |
+| `Constants` | added | 5 | option Constants -> {...} of Dt and D (symbols treated as constant / as depending on the variable) |
+| `Context` | added | 28 | Context[] gives $Context; Context[symbol] and Context["name"] the context of a symbol (System` for built-ins, Global` for unqualified user symbols); a name that does not exist raises |
+| `Contexts` | added | 4 | Contexts[] and Contexts["pattern"]: the contexts of all existing symbols (and their parent contexts), $ContextPath and $Packages, sorted; ResolveContextAliases option |
+| `CurryApplied` | added | 6 | CurryApplied[f, n][x1]...[xn] = f[x1, ..., xn]; CurryApplied[n][f] = CurryApplied[f, n]; CurryApplied[f, {i1, ...}] and k -> {i1, ...} reorder |
+| `DeclarePackage` | added | 4 | DeclarePackage["ctx`", {"name1", ...}] creates ctx`name with attribute Stub and prepends ctx` to $ContextPath; the first use of such a symbol calls Needs["ctx`"] and evaluates it again |
+| `Default` | added | 11 | Default[f], Default[f, i], Default[f, i, n]: the value an omitted x_. takes in f[...] (user values set by Default[f, ...] = v; Plus 0, Times 1, Power exponent 1); unevaluated when none is defined |
+| `DefaultValues` | added | 4 | DefaultValues[f]: {HoldPattern[Default[f, ...]] :> value, ...} set by Default[f, ...] = value |
+| `Defer` | added | 4 | Defer[expr] keeps expr unevaluated and prints as expr itself (InputForm/ToString show the contents); evaluating the printed form later evaluates it |
+| `Definition` | added | 7 | Definition[f] stays as a held object that prints the definitions of f (Attributes, values with = or :=, upvalues with ^= / ^:=, Default, Options), separated by blank lines as in Wolfram; ToString gives the text; ReadProtected hides everything but the attributes |
+| `Distribute` | added | 7 | Distribute[f[a + b, c + d]] = f[a, c] + f[a, d] + f[b, c] + f[b, d]; Distribute[expr, g] over g; Distribute[expr, g, f] only when the head is f; Distribute[expr, g, f, gp, fp] uses gp and fp in the result |
+| `DownValues` | added | 8 | DownValues[f]: the rules HoldPattern[f[...]] :> rhs in the order they are tried (pattern-free definitions first, then by specificity); DownValues[f] = {...} replaces them |
+| `End` | added | 5 | End[] returns the current context and restores $Context and $ContextAliases to their values before the matching Begin; an unmatched End raises |
+| `EndPackage` | added | 6 | EndPackage[] restores $Context and $ContextPath to their values before BeginPackage and prepends the package context to $ContextPath |
+| `ExcludedContexts` | added | 3 | FullDefinition option: contexts whose symbols are not followed (System` always) |
+| `FilterRules` | added | 6 | FilterRules[rules, patt] keeps rules whose lhs matches patt; FilterRules[rules, {k1, ...}] keeps the named options; FilterRules[rules, Except[...]] removes them; FilterRules[rules, Options[f]] keeps f's |
+| `Full` | added | 3 | inert option value (e.g. PlotRange -> Full) |
+| `FullDefinition` | added | 10 | FullDefinition[f] prints the definitions of f and of every symbol they refer to, recursively (System` symbols excluded); options ExcludedContexts and IncludedContexts |
+| `General` | added | 7 | symbol to which general messages are attached (General::tag) |
+| `Get` | added | 5 | Get["file"] (<<file) reads a file of Wolfram Language input and evaluates each expression in turn, returning the last result (a relative file name is also searched for in PACKAGE_PATH and $MIKOSHILANG_PATH); Get["ctx`"] loads ctx.wl, ctx.m, ctx/init.m or ctx/Kernel/init.m from the working directory, PACKAGE_PATH or $MIKOSHILANG_PATH. A file that cannot be opened raises Get::noopen |
+| `Goto` | added | 4 | Goto[tag] continues evaluation after Label[tag] in the enclosing compound expression (the innermost one containing that label, searching outwards); a missing label raises Goto::nolabel |
+| `Heads` | added | 8 | option Heads -> True/False of Inactivate, Activate (and the level functions) |
+| `HoldAllComplete` | added | 3 | attribute: no argument is evaluated, Sequence is not spliced, Unevaluated is kept and upvalues are not used |
+| `HoldCompleteForm` | added | 5 | HoldCompleteForm[expr] keeps expr completely unevaluated (no Sequence splicing, no upvalues, Unevaluated kept) and prints as expr without the wrapper |
+| `IgnoringInactive` | added | 3 | IgnoringInactive[patt] matches as patt with Inactive removed from both the pattern and the expression (Cases[{Sin[m], Inactive[Sin][p]}, IgnoringInactive[Sin[a_]]] gives both) |
+| `In` | added | 3 | In[n] re-evaluates input line n of the main loop; In[] the last line, In[-k] earlier lines; unevaluated when there is no such line |
+| `InString` | added | 3 | InString[n] is the text of input line n of the main loop; InString[] the last, InString[-k] earlier |
+| `Inactivate` | added | 11 | Inactivate[expr] replaces every head f (except List, Rule, Blank and other structural heads) by Inactive[f] before evaluation; Inactivate[expr, patt] only heads matching patt (a symbol, Alternatives, Except[...]); Heads -> False leaves compound heads alone |
+| `Inactive` | added | 10 | Inactive[f][args] is an inert form of f[args] (the arguments are evaluated, f is not applied); Inactive[atom] gives atom for atoms other than symbols |
+| `IncludedContexts` | added | 3 | FullDefinition option: only symbols in these contexts are followed |
+| `Indexed` | added | 6 | Indexed[list, i] gives list[[i]], Indexed[list, {i, j, ...}] indexes recursively; for a symbolic expr, Indexed[x, i] stays as the component x_i (Indexed[x, {i}] is the same as Indexed[x, i]) |
+| `Information` | added | 8 | Information[symbol] (also ?f, ??f) gives InformationData[<\|ObjectType, Usage, Documentation, OwnValues, UpValues, DownValues, SubValues, DefaultValues, NValues, FormatValues, Options, Attributes, FullName\|>]; Information[s, "prop"] gives one property; Information["patt*"] a list; LongForm -> False keeps only the summary. Usage messages (f::usage) are not available |
+| `InformationData` | added | 3 | InformationData[assoc, False]["prop"] gives a property of an Information result |
+| `Inherited` | added | 3 | inert option value: inherited from an enclosing setting |
+| `InverseFunction` | added | 8 | InverseFunction[f]: ArcSin for Sin etc. (named inverses), the solved inverse of a pure function with a unique inverse (InverseFunction[2 # + 3 &] = (#1 - 3)/2 &), InverseFunction[InverseFunction[f]] = f; InverseFunction[f, n, tot] for the n-th of tot arguments; otherwise stays symbolic (InverseFunction[f][x]) |
+| `InverseFunctions` | added | 3 | option name of Solve and Reduce: whether InverseFunction objects may be used |
+| `Label` | added | 5 | Label[tag] marks a point in a compound expression for Goto[tag]; evaluates to Null |
+| `LocalSymbol` | added | 6 | LocalSymbol["name"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol["name"] = val or := val; unevaluated when never assigned; LocalSymbol["name", "dir"] uses another base; =. deletes it |
+| `Locked` | added | 5 | attribute: the attributes of the symbol can no longer be changed (Protect/Unprotect, SetAttributes, ClearAttributes, Attributes[f] = ... raise) |
+| `Manual` | added | 3 | inert option value: selected manually |
+| `Method` | added | 9 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
+| `NHoldAll` | added | 3 | attribute: N does not affect any argument of f |
+| `NHoldFirst` | added | 3 | attribute: N does not affect the first argument of f |
+| `NHoldRest` | added | 3 | attribute: N affects only the first argument of f |
+| `NameQ` | added | 4 | NameQ["string"]: True if any symbol name matches (abbreviated string patterns); ResolveContextAliases option |
+| `Names` | added | 9 | Names["pattern"] (metacharacters * and @, a context prefix such as "Global`*", StringExpression or RegularExpression), Names[{p1, ...}], Names[] ; options IgnoreCase, ResolveContextAliases, SpellingCorrection -> False. Names are short when their context is $Context or on $ContextPath. System` contains the symbols MikoshiLang implements |
+| `Needs` | added | 4 | Needs["ctx`"] loads the package (Get["ctx`"]) unless ctx` is in $Packages and puts ctx` on $ContextPath; Needs["ctx`" -> "alias`"] adds a context alias instead; Needs["ctx`" -> None] only loads; Needs["ctx`", "file"] loads the given file |
+| `NonConstants` | added | 6 | option NonConstants -> {...} of Dt and D (symbols treated as constant / as depending on the variable) |
+| `NonThreadable` | added | 3 | attribute: arithmetic and other Listable functions do not thread lists over f or f[...]; the threadable arguments still combine |
+| `Once` | added | 5 | Once[expr] evaluates expr the first time and afterwards returns the cached result for the rest of the session (Once[expr, "KernelSession"]); other persistence locations raise; Once[expr] =. clears |
+| `OperatorApplied` | added | 7 | OperatorApplied[f][y][x] = f[x, y]; OperatorApplied[f, n][x1]...[xn] = f[x1, ..., xn]; OperatorApplied[f, {i1, ...}] and k -> {i1, ...} reorder; bracket structure is irrelevant |
+| `OptionValue` | added | 9 | OptionValue[name] inside f[..., OptionsPattern[]] := rhs gives the value of option name in the call (or f's default); OptionValue[f, name], OptionValue[f, opts, name], lists of names; OptionsPattern[{f, g}] searches several defaults |
+| `Options` | added | 25 | Options[f] gives the default option rules of a user symbol (set by Options[f] = {...} or SetOptions); Options[f, name] or Options[f, {names}] selects; Options[expr] gives the options at the end of expr (f[x, a -> 1] gives {a -> 1}). Built-in option lists are not catalogued and raise |
+| `OptionsPattern` | added | 9 | OptionsPattern[] matches a sequence of zero or more rules or lists of rules; OptionsPattern[f] or OptionsPattern[{f, ...}] names where OptionValue finds defaults |
+| `Out` | added | 3 | Out[n] (%n) is the n-th output of the main loop (Session.evaluate_input / REPL / Jupyter), Out[] (%) the last, Out[-k] (%%...) the k-th previous; unevaluated when there is no such output |
+| `OwnValues` | added | 4 | OwnValues[x]: {HoldPattern[x] :> value} for a symbol with a value, else {}; OwnValues[x] = {...} sets it |
+| `Postfix` | added | 3 | Postfix[f[x]] prints as x//f and Postfix[f[x], h] as x<>h (display wrapper) |
+| `Prefix` | added | 3 | Prefix[f[x]] prints as f@x and Prefix[f[x], h] as h<>x (display wrapper; the expression inside is evaluated) |
+| `Protect` | added | 6 | Protect[s1, s2, ...] (symbols, names or string patterns) sets the Protected attribute (assignments then raise); returns the names whose protection changed |
+| `ReadProtected` | added | 3 | attribute: Definition, FullDefinition and Information show only the attributes; the values are still used in evaluation and DownValues etc. still return them |
+| `Remove` | added | 4 | Remove[s1, ...] removes symbols completely (values, attributes, options, the name: Names no longer lists it); Remove["ctx`*"] removes by pattern; protected symbols raise Remove::rmptc |
+| `ResolveContextAliases` | added | 3 | option of Names, NameQ and Contexts: False ignores $ContextAliases |
+| `SetOptions` | added | 4 | SetOptions[f, name -> value, ...] resets defaults that f already has (SetOptions::optnf for an unknown option), returning the new Options[f]; SetOptions[{f, g}, ...] sets several |
+| `Stack` | added | 11 | Stack[] gives the tags (heads) of the evaluations in progress, outermost first, excluding Stack itself; Stack[patt] the expressions matching patt wrapped in HoldCompleteForm (Stack[_] all); MikoshiLang's internal evaluations made by library code also appear |
+| `StackBegin` | added | 7 | StackBegin[expr] evaluates expr with a fresh evaluation stack (outer evaluations are not shown by Stack) |
+| `StackComplete` | added | 3 | StackComplete[expr] evaluates expr keeping the earlier expressions of each evaluation chain on the stack (f[2] and g[4] both appear after f[x_] := g[x^2]) |
+| `StackInhibit` | added | 3 | StackInhibit[expr] evaluates expr without adding its evaluations to the stack |
+| `Stub` | added | 4 | attribute set by DeclarePackage: using the symbol loads its package |
+| `SubValues` | added | 3 | SubValues[f]: rules for f[...][...] (HoldPattern[lhs] :> rhs); SubValues[f] = {...} replaces them |
+| `SubValuesHoldAll` | added | 4 | attribute: in f[a...][s...], the subvalue arguments s are held (Unevaluated stripped, Sequence spliced) |
+| `SyntaxInformation` | added | 4 | SyntaxInformation[f] gives the syntax properties set by SyntaxInformation[f] = {"ArgumentsPattern" -> {...}, ...} ({} if none); used only for advisories, not evaluation. Built-in syntax data is not catalogued and raises |
+| `TagSet` | added | 4 | f /: lhs = rhs: attaches the rule to f, which must be the head of lhs (a DownValue or SubValue) or an argument of lhs or an argument's head (an UpValue); otherwise TagSet::tagnf is raised |
+| `TagSetDelayed` | added | 3 | f /: lhs := rhs (delayed TagSet); returns Null |
+| `TagUnset` | added | 3 | f /: lhs =. removes the rule for lhs attached to f (an UpValue, DownValue or SubValue); raises if there is none |
+| `Temporary` | added | 3 | attribute of Module local symbols (and Unique[x, {Temporary}]); reported by Attributes |
+| `Threaded` | added | 6 | f[a, Threaded[b]] for Listable f combines b with the lowest-level subarrays of a; Threaded[b, alev] and Threaded[b, 1 -> alev] choose the level (other blev raise) |
+| `TraceAbove` | added | 3 | Trace option: True adds the first and last forms of every chain containing a match; All adds all forms of those chains |
+| `TraceBackward` | added | 4 | Trace option: True also keeps the earlier forms of a chain in which form matched; All also their subevaluations |
+| `TraceDepth` | added | 3 | Trace option: TraceDepth -> n keeps only the first n levels of nested lists |
+| `TraceForward` | added | 3 | Trace option: True also keeps the later forms of a chain in which form matched; All also their subevaluations |
+| `TraceOff` | added | 3 | Trace option: TraceOff -> patt does not trace inside evaluations of forms matching patt (the forms themselves and their results are kept) |
+| `TraceOn` | added | 3 | Trace option: TraceOn -> patt traces only inside evaluations of forms matching patt |
+| `TracePrint` | added | 3 | TracePrint[expr] prints the forms of the evaluation of expr indented by nesting level and returns the value; TracePrint[expr, form] only matching forms; Trace options accepted (forms are printed after evaluation completes) |
+| `TraceScan` | added | 4 | TraceScan[f, expr] applies f to HoldForm of every form in the evaluation of expr and returns its value; TraceScan[f, expr, form] only matching forms; TraceScan[f, expr, form, fp] also applies fp to (HoldForm[form], HoldForm[result]) of each matching chain; f runs after the evaluation completes |
+| `Unevaluated` | added | 6 | Unevaluated[expr] passes expr unevaluated as an argument of a function; the wrapper is removed when the function uses it, kept when the function returns the expression unchanged (Length[Unevaluated[1 + 2]] = 2) |
+| `Unique` | added | 11 | Unique[] gives $nnn, Unique[x] gives x$nnn (using $ModuleNumber, then incrementing it), Unique["xxx"] gives xxxn with n counting up from 1 per prefix, Unique[{x, y}] gives a list; Unique[x, {attrs}] sets attributes |
+| `Unprotect` | added | 4 | Unprotect[s1, ...] removes Protected, also from built-in symbols (definitions for them are then used before the built-in rules); returns the names whose protection changed. Special forms evaluated by the kernel itself (If, Set, Module, ...) still cannot get definitions |
+| `Until` | added | 6 | Until[test, body] evaluates body then test, repeating until test is True (at least once); Until[test] has an empty body; Break[] exits, Continue[] skips to the test; returns Null |
+| `UpSet` | added | 4 | lhs ^= rhs: rhs is evaluated and the rule is attached (as an upvalue) to every symbol that is an argument of lhs or the head of an argument (h[x_] in f[h[x_]] attaches to h); returns rhs |
+| `UpSetDelayed` | added | 3 | lhs ^:= rhs: like UpSet with rhs kept unevaluated until the rule is used; returns Null |
+| `UpValues` | added | 8 | UpValues[f]: rules attached to f by UpSet/TagSet (HoldPattern[lhs] :> rhs); UpValues[f] = {...} replaces them |
+| `Update` | added | 3 | Update[s] / Update[] tell the system that values depending on s may have changed; MikoshiLang keeps no evaluation caches that could go stale, so this returns Null |
+| `ValueQ` | added | 15 | ValueQ[expr] is True when expr has a value: a symbol with an OwnValue, or an expression changed by evaluation (Method -> "Legacy" default compares the result; "SymbolDefinitionsPresent" and "TrialEvaluation" also accepted) |
 
 ### finance
 
@@ -672,7 +811,7 @@ Cases = number of differential test cases in which the head occurs.
 | `EdgeCount` | added | 20 | number of edges (multi-edges and self-loops counted) |
 | `EdgeDelete` | added | 3 | removes every edge matching the given edges (undirected edges match either orientation) |
 | `EdgeIndex` | added | 3 | position of e in EdgeList[g]; unknown edges raise |
-| `EdgeList` | added | 4 | edges in Graph order (Rule given as DirectedEdge) |
+| `EdgeList` | added | 5 | edges in Graph order (Rule given as DirectedEdge) |
 | `EdgeQ` | added | 4 | True when e is an edge of g (an undirected edge matches either orientation) |
 | `EdgeWeight` | added | 20 | Graph option; EdgeWeight[g] is not supported (use AnnotationValue) |
 | `EdgeWeightedGraphQ` | added | 3 | True when the graph carries EdgeWeight |
@@ -693,7 +832,7 @@ Cases = number of differential test cases in which the head occurs.
 | `FindSpanningTree` | added | 6 | a minimum spanning tree (forest when disconnected) as a Graph on all the vertices (Kruskal with EdgeWeight, edges kept in the input orientation); directed graphs use the underlying undirected graph |
 | `FindVertexCover` | added | 4 | a minimum vertex cover (complement of a maximum independent set), as a flat vertex list in VertexList order |
 | `GlobalClusteringCoefficient` | added | 4 | 3 x triangles / connected triples (transitivity), exact; 0 when there are no triples; undirected graphs |
-| `Graph` | added | 281 | Graph[{e...}] and Graph[{v...}, {e...}] normalise to Graph[{v...}, {e...}, opts] (Rule -> DirectedEdge, TwoWayRule -> UndirectedEdge, vertices in order of first appearance); EdgeWeight/EdgeCapacity/VertexWeight options are used by the algorithms, presentation options are kept; unknown options, tagged edges and edges to unlisted vertices raise |
+| `Graph` | added | 283 | Graph[{e...}] and Graph[{v...}, {e...}] normalise to Graph[{v...}, {e...}, opts] (Rule -> DirectedEdge, TwoWayRule -> UndirectedEdge, vertices in order of first appearance); EdgeWeight/EdgeCapacity/VertexWeight options are used by the algorithms, presentation options are kept; unknown options, tagged edges and edges to unlisted vertices raise |
 | `GraphComplement` | added | 4 | same vertices; undirected: u <-> v (VertexList order) for every non-adjacent pair; directed: every missing u -> v; requires a simple (loop-free, no multi-edge) graph |
 | `GraphDensity` | added | 5 | m / (n (n - 1)/2) for undirected, m / (n (n - 1)) for directed graphs (exact) |
 | `GraphDifference` | added | 3 | vertices of g1 with the edges of g1 that are not in g2; multigraphs raise |
@@ -738,14 +877,14 @@ Cases = number of differential test cases in which the head occurs.
 | `UndirectedGraph` | added | 3 | every edge made undirected; for directed input, u -> v and v -> u become one edge (duplicates merged) |
 | `UndirectedGraphQ` | added | 4 | True when every edge is undirected |
 | `VertexAdd` | added | 3 | adds new vertices (existing ones are ignored) |
-| `VertexCount` | added | 9 | number of vertices |
+| `VertexCount` | added | 10 | number of vertices |
 | `VertexCoverQ` | added | 3 | True when every edge has an endpoint in the list |
 | `VertexDelete` | added | 3 | removes the vertices and their incident edges |
 | `VertexEccentricity` | added | 5 | maximum distance from v to the other vertices; Infinity when some vertex is unreachable |
 | `VertexInComponent` | added | 3 | vertices that can reach v (v first, then breadth-first order); VertexInComponent[g, v, k] within k steps |
 | `VertexInDegree` | added | 3 | in-degrees in VertexList order or of one vertex; for undirected edges in- and out-degree equal the degree |
 | `VertexIndex` | added | 3 | position of v in VertexList[g]; unknown vertices raise |
-| `VertexList` | added | 3 | vertices in Graph order |
+| `VertexList` | added | 4 | vertices in Graph order |
 | `VertexOutComponent` | added | 3 | vertices reachable from v (v first, then breadth-first order); VertexOutComponent[g, v, k] within k steps |
 | `VertexOutDegree` | added | 3 | out-degrees in VertexList order or of one vertex; for undirected edges in- and out-degree equal the degree |
 | `VertexQ` | added | 3 | True when v is a vertex of g |
@@ -763,60 +902,60 @@ Cases = number of differential test cases in which the head occurs.
 |---|---|---|---|
 | `Apart` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Append` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule |
-| `Apply` | fixed | 3 | kernel builtin extended in batch 1: level specifications (f @@@ expr); an association gives f[values] |
+| `Apply` | fixed | 4 | kernel builtin extended in batch 1: level specifications (f @@@ expr); an association gives f[values] |
 | `AtomQ` | fixed | 6 | kernel builtin extended in batch 1: associations and rationals are atoms |
 | `Cancel` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Cases` | fixed | 6 | kernel builtin extended in batch 1: level specifications and a maximum count |
+| `Cases` | fixed | 12 | kernel builtin extended in batch 1: level specifications and a maximum count |
 | `Count` | fixed | 5 | kernel builtin extended in batch 1: level specifications |
 | `DeleteCases` | fixed | 3 | kernel builtin extended in batch 1: level specifications and a maximum count |
 | `Diff` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Distance2D` | kernel | 3 | kernel builtin, Euclidean distance of two 2D points (not a Wolfram name; equals EuclideanDistance) |
 | `Drop` | fixed | 6 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
-| `Equal` | fixed | 6 | kernel builtin extended in batch 1: more than two arguments chain |
-| `EvenQ` | kernel | 24 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `First` | fixed | 24 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
-| `Flatten` | fixed | 6 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
+| `Equal` | fixed | 8 | kernel builtin extended in batch 1: more than two arguments chain |
+| `EvenQ` | kernel | 35 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `First` | fixed | 30 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
+| `Flatten` | fixed | 10 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
 | `FreeQ` | fixed | 8 | kernel builtin extended in batch 1: level specifications, Heads -> False |
-| `IntegerQ` | kernel | 7 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `IntegerQ` | kernel | 15 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Join` | fixed | 5 | kernel builtin extended in batch 1: Join[..., n] at level n; associations merge (later values win) |
 | `Last` | fixed | 15 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
-| `Length` | fixed | 40 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
-| `Less` | fixed | 3 | kernel builtin extended in batch 1: more than two arguments chain |
+| `Length` | fixed | 74 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
+| `Less` | fixed | 5 | kernel builtin extended in batch 1: more than two arguments chain |
 | `List` | fixed | 6 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
 | `ListQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
-| `Map` | fixed | 17 | kernel builtin extended in batch 1: level specifications (n, {n}, {m, n}, negative), associations, operator form Map[f] |
+| `Map` | fixed | 18 | kernel builtin extended in batch 1: level specifications (n, {n}, {m, n}, negative), associations, operator form Map[f] |
 | `MapAll` | fixed | 3 | kernel builtin extended in batch 1: f //@ expr |
 | `MapIndexed` | fixed | 3 | kernel builtin extended in batch 1: level specifications; associations index by Key[k] |
-| `MemberQ` | fixed | 7 | kernel builtin extended in batch 1: level specifications |
+| `MemberQ` | fixed | 22 | kernel builtin extended in batch 1: level specifications |
 | `Most` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
-| `N` | kernel | 284 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `N` | kernel | 321 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Negative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NonNegative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NumberQ` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `OddQ` | kernel | 14 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `OddQ` | kernel | 19 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Part` | fixed | 4 | kernel builtin extended in batch 1: Span (i;;j;;k), All, position lists, negative indices, Key[k] and string keys of associations |
 | `PartialD` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Plus` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Plus` | kernel | 22 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Position` | fixed | 5 | kernel builtin extended in batch 1: level specifications, a maximum count, Heads -> False |
-| `Positive` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Power` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Positive` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Power` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Prepend` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule; any head |
-| `PrimeQ` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Range` | fixed | 33 | kernel builtin extended in batch 1: rational, real and symbolic steps |
-| `ReplaceAll` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `PrimeQ` | kernel | 7 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `Range` | fixed | 74 | kernel builtin extended in batch 1: rational, real and symbolic steps |
+| `ReplaceAll` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Rest` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
-| `Reverse` | fixed | 6 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
+| `Reverse` | fixed | 10 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
 | `Select` | fixed | 15 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
-| `Sort` | fixed | 9 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
-| `StringJoin` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringLength` | kernel | 7 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringQ` | kernel | 2 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `Sort` | fixed | 15 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
+| `StringJoin` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `StringLength` | kernel | 8 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `StringQ` | kernel | 5 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Take` | fixed | 9 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Thread` | fixed | 3 | kernel builtin extended in batch 1: Thread[f[...], h] and Thread[expr, h, n]; rules thread |
-| `Times` | kernel | 4 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `ToString` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `Times` | kernel | 6 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `ToString` | kernel | 399 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Together` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Total` | fixed | 18 | kernel builtin extended in batch 1: Total[list, n], {n}, {n1, n2}, Infinity; associations |
+| `Total` | fixed | 24 | kernel builtin extended in batch 1: Total[list, n], {n}, {n1, n2}, Infinity; associations |
 | `Transpose` | fixed | 9 | kernel builtin extended in batch 1: permutation specifications (including repeated levels for diagonals) |
 | `Unequal` | fixed | 5 | kernel builtin extended in batch 1: more than two arguments need all pairs distinct |
 
@@ -826,13 +965,13 @@ Cases = number of differential test cases in which the head occurs.
 |---|---|---|---|
 | `Composition` | added | 3 | f @* g; Composition[f, g][x] = f[g[x]] |
 | `EqualTo` | added | 3 | operator x == y |
-| `Except` | added | 5 | Except[c] and Except[c, p] in patterns |
+| `Except` | added | 7 | Except[c] and Except[c, p] in patterns |
 | `GreaterEqualThan` | added | 3 | operator x >= y |
 | `GreaterThan` | added | 3 | operator GreaterThan[y][x] = x > y |
 | `Key` | added | 4 | Key[k] in Part and as an operator on associations |
 | `LessEqualThan` | added | 3 | operator x <= y |
 | `LessThan` | added | 3 | operator x < y |
-| `Missing` | added | 8 | inert; Missing["KeyAbsent", k] for absent keys |
+| `Missing` | added | 19 | inert; Missing["KeyAbsent", k] for absent keys |
 | `Nothing` | added | 6 | removed from lists |
 | `Optional` | added | 3 | x_:d and x_. (Plus/Times/Power defaults) |
 | `Repeated` | added | 3 | p.. and Repeated[p, n \| {m, n}] in sequences |
@@ -892,7 +1031,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SpectralNorm` | fixed | 3 | largest singular value, exact for exact matrices (legacy always returned a float via NumPy) |
 | `SymmetricMatrixQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
 | `Tr` | promoted | 5 | trace of a matrix (sum of the diagonal); Tr[list] sums a vector |
-| `Trace` | fixed | 12 | Wolfram evaluation trace: Trace[expr] evaluates expr and returns the chain of forms as HoldForm[...] with subevaluations as nested lists (Trace[1 + 2 3] -> {{2 3, 6}, 1 + 6, 7}); Trace[expr, form] keeps only forms matching the pattern. Internal evaluations made by library functions can add extra steps that Wolfram would not show. For the matrix trace use Tr (legacy Trace[m] meant Tr[m]) |
+| `Trace` | fixed | 36 | Wolfram evaluation trace: Trace[expr] evaluates expr and returns the chain of forms as HoldForm[...] with subevaluations as nested lists (Trace[1 + 2 3] -> {{2 3, 6}, 1 + 6, 7}); Trace[expr, form] keeps only forms matching the pattern. Internal evaluations made by library functions can add extra steps that Wolfram would not show. For the matrix trace use Tr (legacy Trace[m] meant Tr[m]); options TraceDepth, TraceForward, TraceBackward, TraceAbove, TraceOn, TraceOff (W01) |
 | `TransposeList` | fixed | 3 | transpose of a rectangular list of lists (MikoshiLang); ragged input now raises (legacy zip-truncated) |
 | `UpperTriangularMatrixQ` | fixed | 3 | False for non-matrices (legacy raised); exact test on the entries |
 | `VectorAngle` | fixed | 4 | ArcCos[u.Conjugate[v]/(\|u\| \|v\|)]; zero vectors and different lengths raise |
@@ -927,7 +1066,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LeastSquares` | added | 6 | the x minimising Norm[m.x - b] (minimum-norm solution when several exist, = PseudoInverse[m].b); b a vector or matrix; exact for exact input, LAPACK lstsq for machine input |
 | `LeviCivitaTensor` | added | 10 | the rank-d totally antisymmetric tensor (Signature of the index list), as a dense array: LeviCivitaTensor[d] (Wolfram returns the equivalent SparseArray; Normal gives this array) and LeviCivitaTensor[d, List] |
 | `LowerTriangularize` | added | 4 | zeros above the k-th diagonal (keeps m[[i,j]] with j - i <= k; default k = 0); rectangular matrices |
-| `MatrixForm` | added | 3 | display wrapper: MatrixForm[expr] stays as MatrixForm[expr] and does not affect evaluation of expr (as in Wolfram, it is not a matrix); the text REPL prints it as an aligned grid (matrix_form_text) |
+| `MatrixForm` | added | 4 | display wrapper: MatrixForm[expr] stays as MatrixForm[expr] and does not affect evaluation of expr (as in Wolfram, it is not a matrix); the text REPL prints it as an aligned grid (matrix_form_text) |
 | `MatrixFunction` | added | 7 | MatrixFunction[f, m] for a square matrix and any scalar function f (symbol or pure function): exact via the Jordan form (SymPy analytic_func, derivatives of f on Jordan blocks); machine matrices via the eigendecomposition, which must be well-conditioned (else raises); f is evaluated by MikoshiLang |
 | `MatrixMinimalPolynomial` | added | 6 | the monic polynomial p of least degree with p(m) == 0 (exact; Krylov dependence of I, m, m^2, ...); inexact matrices raise |
 | `Minors` | added | 9 | Minors[m, k]: determinants of all k x k submatrices, rows and columns subsets in lexicographic order (Wolfram); Minors[m] = Minors[m, Min[Dimensions[m]] - 1]; Minors[m, k, f] applies f instead of Det; Minors[m, 0] = {{1}} |
@@ -962,11 +1101,11 @@ Cases = number of differential test cases in which the head occurs.
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `AllMatch` | added | 3 | True if every element (or association value) matches the pattern; operator form |
-| `AllTrue` | added | 3 | test[e] is True for every element (stops at the first failure); optional level |
+| `AllTrue` | added | 4 | test[e] is True for every element (stops at the first failure); optional level |
 | `AnyMatch` | added | 3 | True if some element matches the pattern; operator form |
 | `AnyTrue` | added | 3 | test[e] is True for some element (stops at the first success); optional level |
-| `AppendTo` | added | 3 | AppendTo[s, e] sets s = Append[s, e] and returns the new value (s must have a value) |
-| `Array` | added | 10 | Array[f, n], Array[f, {n1, n2, ...}], origin r or {r1, ...}, {a, b} ranges and head h |
+| `AppendTo` | added | 6 | AppendTo[s, e] sets s = Append[s, e] and returns the new value (s must have a value) |
+| `Array` | added | 11 | Array[f, n], Array[f, {n1, n2, ...}], origin r or {r1, ...}, {a, b} ranges and head h |
 | `ArrayDepth` | added | 3 | depth to which expr is a full array of lists (0 for non-lists) |
 | `ArrayFlatten` | added | 3 | ArrayFlatten[{{m11, m12, ...}, ...}] builds a block matrix; scalar blocks (e.g. 0) become constant blocks of the matching size |
 | `ArrayQ` | added | 6 | ArrayQ[expr], ArrayQ[expr, n] (n may be a pattern) and ArrayQ[expr, n, test] for the elements |
@@ -980,7 +1119,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Comap` | added | 3 | Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys) |
 | `ComapApply` | added | 3 | ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...} |
 | `ComposeList` | added | 3 | ComposeList[{f1, f2, ...}, x] = {x, f1[x], f2[f1[x]], ...} |
-| `ConstantArray` | added | 5 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
+| `ConstantArray` | added | 6 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
 | `Construct` | added | 3 | Construct[f, x, y, ...] = f[x, y, ...] |
 | `ContainsAll` | added | 3 | every element of e2 occurs in e1 (SameQ or SameTest) |
 | `ContainsAny` | added | 3 | some element of e2 occurs in e1 |
@@ -996,7 +1135,7 @@ Cases = number of differential test cases in which the head occurs.
 | `DeleteDuplicatesBy` | added | 3 | keeps the first element for each distinct (SameQ) value of f |
 | `DeleteElements` | added | 3 | DeleteElements[list, elems] removes every occurrence of the elements; DeleteElements[list, n -> elems] at most n of each |
 | `Depth` | added | 4 | 1 for atoms, else 1 + the maximum depth of the elements (heads ignored; an association is one level) |
-| `Dimensions` | added | 18 | dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, Dimensions[{f[a], f[b]}] = {2}); Dimensions[expr, n] at most n levels |
+| `Dimensions` | added | 20 | dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, Dimensions[{f[a], f[b]}] = {2}); Dimensions[expr, n] at most n levels |
 | `DisjointQ` | added | 3 | the lists have no element in common |
 | `DuplicateFreeQ` | added | 3 | no two elements are SameQ (or equivalent under the given test) |
 | `Extract` | added | 3 | Extract[expr, pos], Extract[expr, {pos1, pos2, ...}] and Extract[expr, pos, h] |
@@ -1041,8 +1180,8 @@ Cases = number of differential test cases in which the head occurs.
 | `PowerRange` | added | 3 | PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r] |
 | `PrependTo` | added | 3 | PrependTo[s, e] sets s = Prepend[s, e] and returns the new value |
 | `Ratios` | added | 3 | successive ratios a[i+1]/a[i]; Ratios[list, n] for n-th ratios |
-| `Reap` | added | 10 | Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list] |
-| `Replace` | added | 6 | Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives a list of results |
+| `Reap` | added | 21 | Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list] |
+| `Replace` | added | 7 | Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives a list of results |
 | `ReplaceList` | added | 5 | all results of applying the rules to the whole expression in every way they match (sequence patterns give one result per split; Orderless heads give each distinct binding once, in matcher order rather than Wolfram's); ReplaceList[expr, rules, n] keeps at most n |
 | `ReplacePart` | added | 3 | ReplacePart[expr, pos -> new], lists of rules, lists of positions, position patterns such as {i_, i_} -> 0 and pos :> new (evaluated per position) |
 | `ReverseApplied` | added | 3 | ReverseApplied[f][a, b, c] = f[c, b, a] |
@@ -1056,7 +1195,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SequenceReplace` | added | 3 | replaces non-overlapping runs matching a list pattern -> rhs (rhs is one element) |
 | `SequenceSplit` | added | 3 | splits at runs matching a list pattern (empty pieces at the ends dropped, as Wolfram); patt -> rhs keeps rhs between the pieces |
 | `SortBy` | added | 4 | sorts by canonical order of f[e] (ties by the canonical order of e); SortBy[list, {f1, f2, ...}] lexicographic; SortBy[list, f, p] uses ordering p; associations are sorted by value |
-| `Sow` | added | 10 | Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap (outside Reap, Sow just returns e) |
+| `Sow` | added | 21 | Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap (outside Reap, Sow just returns e) |
 | `Split` | added | 3 | runs of identical (SameQ) adjacent elements; Split[list, test] tests adjacent pairs |
 | `SplitBy` | added | 3 | runs with identical f values; SplitBy[list, {f1, f2, ...}] splits recursively |
 | `Subdivide` | added | 3 | Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values |
@@ -1087,11 +1226,11 @@ Cases = number of differential test cases in which the head occurs.
 | `Intersection` | fixed | 5 | variadic; canonical order (legacy sorted by string form); SameTest -> f |
 | `Partition` | fixed | 7 | Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n |
 | `Riffle` | fixed | 3 | Riffle[list, x] and Riffle[list, {y1, ...}] (interleaves when the second list has n or n - 1 elements; legacy inserted the whole list each time) |
-| `RotateLeft` | verified | 3 | RotateLeft[list] and RotateLeft[list, n] (n may be negative) |
-| `RotateRight` | verified | 3 | RotateRight[list] and RotateRight[list, n] |
+| `RotateLeft` | verified | 4 | RotateLeft[list] and RotateLeft[list, n] (n may be negative) |
+| `RotateRight` | verified | 4 | RotateRight[list] and RotateRight[list, n] |
 | `SetDifference` | fixed | 3 | alias of Complement[a, b] (canonical order) |
 | `SlidingWindow` | verified | 3 | overlapping windows = Partition[list, n, 1] (MikoshiLang) |
-| `SubsetQ` | fixed | 3 | SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse) |
+| `SubsetQ` | fixed | 4 | SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse) |
 | `SymmetricDifference` | fixed | 3 | elements in exactly one of the two lists, canonical order (legacy sorted by string form) |
 | `Tally` | promoted | 4 | {{elem, count}, ...} in order of first appearance (SameQ); Tally[list, test] uses the first representative of each class |
 | `Union` | promoted | 9 | variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9}) |
@@ -1135,6 +1274,91 @@ Cases = number of differential test cases in which the head occurs.
 | `SatisfiabilityInstances` | added | 8 | SatisfiabilityInstances[expr, vars], [expr, vars, m], [expr, vars, All] and pure-function forms: lists of truth values that make expr True, enumerated with False before True (lexicographic); {} if unsatisfiable. Wolfram does not document which instances it returns first; every returned instance is valid |
 | `SatisfiableQ` | added | 6 | True if some assignment of the variables makes the expression True (exact truth table up to 22 variables, SymPy SAT solver beyond) |
 | `TautologyQ` | added | 22 | True if every assignment of the variables makes the expression True |
+
+### messages, exceptions & testing (W02)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$Aborted` | added | 4 | inert symbol: the result of an aborted computation (MemoryConstrained, TimeConstrained, CheckAbort); FailureQ[$Aborted] is True |
+| `$AssertFunction` | added | 5 | if set, $AssertFunction[HoldComplete[Assert[test, ...]]] is evaluated when an enabled assertion fails, instead of issuing Assert::asrtf |
+| `$Canceled` | added | 3 | inert symbol for a canceled input; Confirm treats it as a failure |
+| `$Failed` | added | 12 | inert symbol returned when an operation cannot be done; FailureQ[$Failed] is True |
+| `$MessageGroups` | added | 3 | {"name" :> {s::t, ...}, ...} named message groups used by On, Off, Quiet and Check (assignable; the predefined groups list the messages MikoshiLang can issue) |
+| `$MessageList` | added | 5 | list of HoldForm[s::t] for messages printed in the session ({} initially; assignable and Block-able; Quiet-ed and switched-off messages are not added) |
+| `$MessagePrePrint` | added | 3 | Automatic by default; if set to a function f, message arguments are rendered as f[HoldForm[arg]] |
+| `$Messages` | added | 4 | output channels for messages: {OutputStream["stdout", 1]} by default; assign {} to silence messages or OutputStream["stderr", 2] to redirect them |
+| `$NewMessage` | added | 3 | if set, $NewMessage[s, "t"] is evaluated when the text of s::t is not defined, and the lookup is retried |
+| `$TestFileName` | added | 4 | "" interactively; the absolute file name while TestReport[file] runs the file's tests |
+| `$TimedOut` | added | 3 | inert symbol for an operation that timed out |
+| `Abort` | added | 10 | Abort[] aborts the computation: it raises AbortSignal ($Aborted), caught by CheckAbort; inside AbortProtect the abort takes effect when the AbortProtect finishes |
+| `AbortProtect` | added | 3 | AbortProtect[expr] (HoldAll) evaluates expr completely, saving any Abort[] or TimeConstrained / MemoryConstrained abort until it finishes (a CheckAbort inside still catches them) |
+| `AbsoluteTiming` | added | 4 | AbsoluteTiming[expr] (HoldAll) gives {real seconds elapsed while evaluating expr, result} (time.perf_counter) |
+| `Assert` | added | 5 | Assert[test] / Assert[test, tag] (HoldAll): disabled by default (returns Null without evaluating test); after On[Assert] a test that is not True issues Assert::asrtf (Assert::asrtfl for a {line, file} tag) or evaluates $AssertFunction[HoldComplete[Assert[...]]] when that is set; returns Null |
+| `ByteCount` | added | 4 | ByteCount[expr] gives the bytes MikoshiLang uses to store expr (Python object sizes, every part counted separately, no sharing); symbols (including True, False, Null) are shared and count 0. Values differ from Wolfram's own memory layout, as the documentation allows between systems |
+| `CatchExceptions` | added | 8 | CatchExceptions[expr, spec] (HoldFirst) returns expr's value, or for a thrown exception matching spec (All, tag, {tags}, tag -> handler, {tagspec -> handler, ...}; first matching clause; subtypes match their parents) handler[exceptionData] or, without a handler, the exception's Failure; other exceptions propagate. The operator form CatchExceptions[spec][expr] holds expr |
+| `Check` | added | 20 | Check[expr, failexpr] / Check[expr, failexpr, msgs] (HoldAll): returns failexpr if expr generated a matching message that is not switched off and not quieted inside the Check; a raised MikoshiLang error counts as the message f::evalerr |
+| `CheckAbort` | added | 14 | CheckAbort[expr, failexpr] (HoldAll) returns failexpr if an abort occurs in expr; option PropagateAborts: Automatic (default: absorb Abort[], propagate constraint aborts after failexpr), True (propagate all), False (absorb all) |
+| `ClearSystemCache` | added | 4 | ClearSystemCache[] clears MikoshiLang's internal caches (SymPy's cache and the evaluator memo table); ClearSystemCache["Symbolic"] / ["Numeric"] clear the symbolic (SymPy) / numeric (mpmath) caches; returns Null |
+| `Confirm` | added | 10 | Confirm[expr] returns expr unless it is a Failure, Missing, $Failed, $Canceled or $Aborted, in which case Failure["ConfirmationFailed", <\|...\|>] is thrown to the lexically enclosing Enclose (info is evaluated only on failure; a ConfirmationFailed failure with Null info is rethrown unchanged); Confirm[expr, info, tag] is caught dynamically by Enclose[..., f, tag]; with no tag and no Enclose: message confirmnotag |
+| `ConfirmAssert` | added | 3 | ConfirmAssert[test] returns Null if test is True, else throws Failure["ConfirmationFailed", <\|"MessageTemplate" -> "Assertion failed.", ..., "Test" -> value\|>] to the enclosing Enclose |
+| `ConfirmBy` | added | 3 | ConfirmBy[expr, f] returns expr if f[expr] is True, else throws Failure["ConfirmationFailed", ...] with "Expression" and "Function" to the enclosing Enclose; info/tag as for Confirm |
+| `ConfirmMatch` | added | 3 | ConfirmMatch[expr, form] returns expr if it matches form, else throws Failure["ConfirmationFailed", ...] with "Expression" and "Pattern" to the enclosing Enclose; info/tag as for Confirm |
+| `ConfirmQuiet` | added | 4 | ConfirmQuiet[expr, mspec] evaluates expr and returns it unless a matching message is generated (not switched off and not quieted inside); evaluation stops at the first such message, which is quieted, and Failure["ConfirmationFailed", ...] with "HeldExpression", "HeldMessageName" and "HeldMessageCall" is thrown to the enclosing Enclose; a raised MikoshiLang error counts as f::evalerr |
+| `Echo` | added | 5 | Echo[expr] prints >> expr and returns expr; Echo[expr, label] prints >> label  expr; Echo[expr, label, f] prints f[expr]; output is suppressed inside QuietEcho |
+| `EchoEvaluation` | added | 4 | EchoEvaluation[expr] (HoldFirst) prints << expr before and >> result after evaluating (nested calls use <<<< / >>>>); EchoEvaluation[expr, l1 -> l2], EchoEvaluation[expr, labels, f] and EchoEvaluation[expr, labels, g -> f] as documented; returns the result |
+| `EchoFunction` | added | 3 | operator form: EchoFunction[f][expr] prints >> f[expr], EchoFunction[label, f][expr] prints >> label  f[expr]; both return expr; EchoFunction[][expr] is Echo[expr] |
+| `EchoLabel` | added | 3 | operator form: EchoLabel[label][expr] prints >> label  expr and returns expr; EchoLabel[][expr] is Echo[expr] |
+| `EchoTiming` | added | 3 | EchoTiming[expr] / EchoTiming[expr, label] (HoldFirst) evaluates expr, prints >> [label  ]seconds and returns the result; Method -> AbsoluteTiming (default), Timing, RepeatedTiming or a holding function returning {timing, result} |
+| `Enclose` | added | 23 | Enclose[expr] (HoldAll) evaluates expr; an untagged confirmation lexically inside throws its Failure to it (untagged confirmations are rewritten with a private tag, inner untagged Enclose blocks keep their own); Enclose[expr, f] gives f[failure] (f a string: failure[f]); Enclose[expr, f, form] catches only confirmations whose tag matches form, dynamically |
+| `Exception` | added | 9 | Exception[spec] / Exception[spec, payload] builds the validated object Exception[{tags...}, <\|data..., "ExceptionValidated" -> True, "ExceptionAPIVersion" -> "1"\|>] with tag expansion through registered parent types; spec may be a tag, a list of tags, an Exception, a Failure carrying "ExceptionTagList" or an association; malformed input issues Exception::untagged / Exception::invargs and stays unevaluated; exc["prop"] gives the documented properties |
+| `ExceptionQ` | added | 7 | ExceptionQ[expr] is True for a validated Exception object; ExceptionQ[expr, tag \| {tags}] also requires one of the tags in its (expanded) tag list |
+| `ExceptionTypeRegisteredQ` | added | 4 | ExceptionTypeRegisteredQ[sym] is True if sym is a registered exception type; with a second argument, True if it is registered and one of the given types is among its ancestors |
+| `ExceptionTypes` | added | 4 | ExceptionTypes[] / ExceptionTypes[All] lists the registered exception types in registration order; ExceptionTypes[tag \| {tags}] lists the registered types that are the given types or their descendants |
+| `Failsafe` | added | 8 | operator form: Failsafe[f][x1, ...] gives f[x1, ...] unless some xi is a failure (Failure, Missing, $Failed, $Canceled, $Aborted), then the first such xi; Failsafe[f, test][...] gives Failure["FailsafeFailed", ...] when test[x1, ...] is not True; Failsafe[f, test, failf] gives failf[...] |
+| `Failure` | added | 8 | Failure["tag", assoc] is inert; failure["prop"] gives assoc values and the derived properties "Message" (template applied to "MessageParameters"), "MessageTemplate", "MessageName", "HeldMessageTemplate", "Tag" and "Properties" (sorted); failure[{p1, p2}] gives a list |
+| `FailureQ` | added | 6 | FailureQ[expr] is True for Failure[...], $Failed and $Aborted, False otherwise |
+| `HandlerFunctions` | added | 7 | option of TestReport: <\|event -> f, ...\|> handlers for the report's events; inert as an expression |
+| `HandlerFunctionsKeys` | added | 4 | option of TestReport: the keys of the association passed to the handler functions (Automatic or a list); inert as an expression |
+| `IntermediateTest` | added | 6 | IntermediateTest[input, expected, messages, opts] (HoldAllComplete) evaluates a test (without printing messages) and returns the evaluated input; inside VerificationTest / TestEvaluate a failing intermediate test makes the enclosing test fail (IntermediateTestFailure / IntermediateTestMessagesFailure) |
+| `Interrupt` | added | 3 | Interrupt[] generates an interactive interrupt: in MikoshiLang (Python) that is KeyboardInterrupt, the same effect as pressing Ctrl-C at that point |
+| `MaxMemoryUsed` | added | 3 | MaxMemoryUsed[] gives the peak resident memory (bytes) of the process (getrusage); MaxMemoryUsed[expr] (HoldAll) gives the peak additional Python heap bytes (tracemalloc) used while evaluating expr |
+| `MemoryAvailable` | added | 3 | MemoryAvailable[] gives the bytes the operating system reports as available (MemAvailable in /proc/meminfo on Linux, psutil elsewhere) |
+| `MemoryConstrained` | added | 5 | MemoryConstrained[expr, b] / MemoryConstrained[expr, b, failexpr] (HoldAll) evaluates expr, aborting it when the additional Python heap memory it allocates (tracemalloc) exceeds b bytes, and returns $Aborted (or failexpr); b may be Infinity or a byte Quantity |
+| `MemoryConstraint` | added | 6 | option of the test functions: bytes a test may allocate (default Infinity; exceeding it gives MemoryConstraintFailure); inert as an expression |
+| `MemoryInUse` | added | 3 | MemoryInUse[] gives the resident memory (bytes) of the MikoshiLang process (/proc/self/statm on Linux, psutil elsewhere); MemoryInUse[$FrontEnd] raises because there is no front end |
+| `Message` | added | 34 | Message[s::t, e1, ...] prints s::t: text (StringForm of the message text with the ei) on $Messages unless switched off or quieted, appends HoldForm[s::t] to $MessageList and returns Null; the text is looked up as s::t, then General::t, then via $NewMessage, else '-- Message text not found --' |
+| `MessageName` | added | 4 | s::t (parsed as MessageName[s, "t"], HoldFirst) evaluates to the message text assigned with s::t = "text" or to MikoshiLang's built-in text; otherwise it stays unevaluated |
+| `Messages` | added | 4 | Messages[s] gives {HoldPattern[s::t] :> text, ...} for the messages assigned to s (sorted by tag); messages switched off are given as HoldPattern[s::t] :> $Off[text] |
+| `Monitor` | added | 3 | Monitor[expr, mon] (HoldAll) evaluates and returns expr; the monitor display is a notebook feature, so in MikoshiLang's text interface nothing is shown (as in a Wolfram text-based session) |
+| `Off` | added | 9 | Off[s::t, ...] switches messages off (Off[General::t] switches off every s::t that has not been switched on explicitly); Off["group"] uses $MessageGroups; Off[Assert] disables assertions; Off[s] (tracing) and Off[] are accepted and change nothing because symbol tracing is never on |
+| `On` | added | 7 | On[s::t, ...] and On["group"] switch messages back on; On[Assert] enables assertions.  On[s] for symbol tracing is not supported (the evaluator has no per-symbol trace printing) and raises |
+| `Pause` | added | 16 | Pause[n] waits at least n seconds (n a non-negative real number or a Quantity of time) and returns Null |
+| `Print` | added | 5 | Print[e1, e2, ...] writes the ei concatenated (OutputForm: strings without quotes) and a newline to $Output (stdout) and returns Null |
+| `PrintTemporary` | added | 3 | text interface: PrintTemporary[e1, ...] prints like Print (there are no notebook cells to delete afterwards) and returns Null |
+| `PropagateAborts` | added | 5 | option name for CheckAbort (Automatic, True or False); used as a function it stays unevaluated |
+| `Quiet` | added | 20 | Quiet[expr] / Quiet[expr, moff] / Quiet[expr, moff, mon] (HoldAll): messages in moff are not printed, those in mon are; the innermost Quiet specification for a message wins; Check outside is unaffected. A raised MikoshiLang error is not a message and still propagates |
+| `QuietEcho` | added | 3 | QuietEcho[expr] (HoldFirst) evaluates expr without Echo, EchoLabel, EchoFunction, EchoEvaluation or EchoTiming printing anything; messages and Print are not affected |
+| `RegisterExceptionType` | added | 9 | RegisterExceptionType[sym] / [sym, parent \| {parents}] (HoldFirst) registers the symbol sym as an exception type in this session and returns Success["RegisteredExceptionType", <\|"ExceptionType" -> sym, "ParentExceptionTypes" -> {...}, "OwnerContext" -> "Global`"\|>]; registering twice issues RegisterExceptionType::regd and returns $Failed |
+| `RepeatedTiming` | added | 3 | RepeatedTiming[expr] / RepeatedTiming[expr, t] (HoldFirst) evaluates expr at least 4 times and for at least t seconds (default 1) and gives {trimmed mean of the timings without the lower and upper quartiles, result of the first evaluation} |
+| `SameTest` | added | 11 | option of TestCreate / VerificationTest / IntermediateTest / TestReport giving the function that compares the actual and expected outputs (default SameQ); inert as an expression |
+| `SessionTime` | added | 3 | SessionTime[] gives the real seconds since the MikoshiLang (Python) process started (procfs on Linux; elsewhere since the library was loaded) |
+| `Success` | added | 5 | Success["tag", assoc] is inert; success["prop"] gives assoc values, "Message", "Tag" and "Properties" (the association keys in order) |
+| `TerminatedEvaluation` | added | 4 | TerminatedEvaluation["reason"] is the inert representation of an evaluation stopped by a session limit ("IterationLimit", "RecursionLimit", ...); a non-string reason raises |
+| `TestCreate` | added | 46 | TestCreate[input] / [input, expected] / [input, expected, messages] (HoldAllComplete) creates an unevaluated TestObject; options MemoryConstraint, MetaInformation, SameTest, TestID (Automatic = hash of the test), TimeConstraint |
+| `TestEvaluate` | added | 8 | TestEvaluate[test] runs a TestObject (messages are recorded, not printed) and gives the evaluated TestObject with "ActualOutput", "ActualMessages", timings and the "Outcome" / "FailureType"; TestEvaluate[<\|"Input" :> ..., "ExpectedOutput" -> ..., ...\|>] builds the test from an association |
+| `TestEvaluationFunction` | added | 4 | option of TestReport: the function used to evaluate each created test (default TestEvaluate); inert as an expression |
+| `TestID` | added | 8 | option of TestCreate / VerificationTest / IntermediateTest: the test's identifier (Automatic = a hash of the test); inert as an expression |
+| `TestObject` | added | 4 | TestObject[<\|...\|>] is the inert test result (from TestCreate / TestEvaluate / VerificationTest); test["prop"] for "Outcome" (Success, Failure, MessagesFailure, NotEvaluated), "FailureType", "Input", "ExpectedOutput", "ActualOutput", "ActualMessages", "TestID", "TestKey", "TestCreate", "Created", timings, ...; test[{p1, ...}] gives an association; "Properties" |
+| `TestReport` | added | 30 | TestReport[{tests}] / TestReport[test] evaluates the NotEvaluated TestObjects and gives a TestReportObject; TestReport[{reports}] merges reports; TestReport["file.wl"] evaluates a plain-text test file with $TestFileName set (notebooks raise). Options HandlerFunctions (events ReportStarted, TestCreated, TestEvaluated, RuntimeFailure, FileStarted, FileCompleted, ReportCompleted, UnhandledEvent), HandlerFunctionsKeys, TestEvaluationFunction, SameTest, TimeConstraint, MemoryConstraint |
+| `TestReportObject` | added | 4 | TestReportObject[<\|...\|>] is the inert result of TestReport; report["prop"] for "Results", "ResultsByOutcome", "ResultsByTestID", "ResultsByTestFileName", "ResultsDataset", "ReportSucceeded", "RuntimeFailures", "Title", timings, "TestsSucceededCount", the key lists ... |
+| `ThrowException` | added | 9 | ThrowException[args] throws Exception[args] (to CatchExceptions; Catch[..., _] also intercepts it); malformed arguments throw an "ErrorHandlingException" exception after an Exception:: message; uncaught exceptions reach the top level as an Uncaught Throw error |
+| `TimeConstrained` | added | 11 | TimeConstrained[expr, t] / TimeConstrained[expr, t, failexpr] (HoldAll) evaluates expr, aborting it after t seconds of real time and returning $Aborted (or failexpr, evaluated only then); t may be Infinity or a Quantity in seconds; AbortProtect postpones the abort |
+| `TimeConstraint` | added | 6 | option of the test functions: seconds a test may run (default Infinity; exceeding it gives TimeConstraintFailure); inert as an expression |
+| `TimeRemaining` | added | 3 | TimeRemaining[] gives the seconds (real time) left before the earliest enclosing TimeConstrained aborts, or Infinity outside TimeConstrained |
+| `TimeUsed` | added | 4 | TimeUsed[] gives the CPU seconds used so far by the MikoshiLang (Python) process (time.process_time); Pause is not counted |
+| `Timing` | added | 4 | Timing[expr] (HoldAll) gives {CPU seconds used by this process while evaluating expr, result} (time.process_time); time spent in Pause is not counted |
+| `VerificationTest` | added | 27 | VerificationTest[input, expected, messages, opts] (HoldAllComplete) = TestEvaluate[TestCreate[...]]: evaluates the test immediately without printing messages and gives the evaluated TestObject |
+| `WithCleanup` | added | 5 | WithCleanup[expr, cleanup] / WithCleanup[init, expr, cleanup] (HoldAll) returns expr's value and always evaluates cleanup, also after an abort, Throw, Confirm or error in expr; aborts during init and cleanup are postponed until cleanup is done (an abort in init skips expr) |
 
 ### ml
 
@@ -1278,6 +1502,116 @@ Cases = number of differential test cases in which the head occurs.
 | `SetAccuracy` | added | 3 | SetAccuracy[expr, a]: each number gets precision a + Log10[Abs[x]] (an arbitrary-precision zero keeps accuracy a) |
 | `SetPrecision` | added | 10 | SetPrecision[expr, p] sets every number in expr (and the numeric constants Pi, E, ...) to precision p: machine numbers keep their exact binary value padded with binary zeros (SetPrecision[0.1, 20] = 0.10000000000000000555), p = Infinity converts approximate numbers to the exact rationals they represent, p = MachinePrecision gives machine numbers; the result is re-evaluated |
 | `Unitize` | added | 4 | Unitize[x] is 0 for x == 0 and 1 otherwise (exact integers, also for 0.); Unitize[x, dx] is 0 when Abs[x] < dx; threads over lists |
+
+### output forms & formatting (W04)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$CharacterEncoding` | added | 3 | system variable: default raw character encoding, "UTF-8" |
+| `$NumberMarks` | added | 3 | system variable: default NumberMarks setting, Automatic |
+| `$OutputSizeLimit` | added | 3 | system variable: maximum output size in bytes before eliding, 2^20 |
+| `$SystemCharacterEncoding` | added | 3 | system variable: the operating system's encoding, "UTF-8" |
+| `Above` | added | 4 | inert symbol: position symbol: Labeled/Placed position, same as Top |
+| `AccountingForm` | added | 5 | AccountingForm[expr, n \| {n, f}, opts]: no exponents, negative numbers in parentheses |
+| `After` | added | 4 | inert symbol: position symbol: Labeled/Placed position, same as Right |
+| `Alignment` | added | 13 | inert symbol: option of Column, Grid, Item, Multicolumn: Left, Center, Right or {h, v} (honoured in text) |
+| `AlignmentPoint` | added | 4 | inert symbol: option of Inset and related: alignment point of an object (inert) |
+| `Background` | added | 7 | inert symbol: option of Style, Grid, Framed, Item, ...: background colour; no effect on plain text |
+| `BaseForm` | added | 15 | BaseForm[expr, b] inert wrapper (2 <= b <= 36): integers and approximate reals in expr show as digits in base b with subscript _b (e.g. 100001_2); reals keep as many base-b digits as their decimal precision (6 digits for machine numbers) and drop trailing zeros |
+| `Baseline` | added | 3 | inert symbol: alignment symbol: vertical alignment on the text baseline (top line in plain text) |
+| `BaselinePosition` | added | 4 | inert symbol: option of Grid, Row, Column, Framed, ...: baseline for alignment with text (accepted) |
+| `Before` | added | 4 | inert symbol: position symbol: Labeled/Placed position, same as Left |
+| `Below` | added | 4 | inert symbol: position symbol: Labeled/Placed position, same as Bottom |
+| `Bold` | added | 6 | inert symbol: style directive for Style (FontWeight -> "Bold"); no effect on plain text |
+| `Bottom` | added | 7 | inert symbol: position/alignment symbol: Labeled position (default, label below), vertical alignment |
+| `CForm` | added | 11 | CForm[expr] inert: C source for expr (Power(x,2), Sin(x), rationals as decimals, 1.5e10) |
+| `Center` | added | 13 | inert symbol: position/alignment symbol: centred alignment in Column, Grid, Item, TableForm |
+| `CharacterEncoding` | added | 11 | option of ToString and other output functions: the raw character encoding ("ASCII" writes other characters as \[Name] or \:xxxx escapes) |
+| `Column` | added | 23 | Column[{e1, e2, ...}, alignment, spacing, opts] inert layout: elements one per line (spacing blank lines between), aligned Left, Center or Right |
+| `ColumnAlignments` | added | 7 | inert symbol: option of Grid (GridBox): per-column horizontal alignment (honoured in text) |
+| `ColumnLines` | added | 8 | inert symbol: option of Grid (GridBox): draw \| between columns (honoured in text) |
+| `ColumnSpacings` | added | 8 | inert symbol: option of Grid (GridBox): spaces between columns (honoured in text) |
+| `ColumnWidths` | added | 6 | inert symbol: option of Grid (GridBox): minimum column widths in characters (honoured in text) |
+| `DecimalForm` | added | 5 | DecimalForm[expr, n \| {n, f}, opts]: approximate reals always in decimal notation (no exponent) |
+| `DefaultPrintPrecision` | added | 6 | option of NumberForm and related number forms (inert symbol; default Automatic) |
+| `Delimiters` | added | 4 | inert symbol: option of various functions: the delimiters to use or look for (inert) |
+| `DigitBlock` | added | 9 | option of NumberForm and related number forms (inert symbol; default Infinity) |
+| `DisableFormatting` | added | 3 | DisableFormatting[expr] gives expr as soon as it is evaluated (it only matters inside held expressions) |
+| `EngineeringForm` | added | 5 | EngineeringForm[expr, n \| {n, f}, opts]: exponents that are multiples of 3 |
+| `ExponentFunction` | added | 12 | option of NumberForm and related number forms (inert symbol; default Automatic) |
+| `ExponentStep` | added | 8 | option of NumberForm and related number forms (inert symbol; default 1) |
+| `FontFamily` | added | 5 | inert symbol: option of Style: font family name (a string); validated, no effect on plain text |
+| `FontSize` | added | 7 | inert symbol: option of Style: font size (positive number, Scaled[s], Tiny/Small/Medium/Large); validated, no effect on plain text |
+| `FormatType` | added | 10 | option of ToString and Text: the format type (InputForm, OutputForm, TeXForm, ...) |
+| `FortranForm` | added | 6 | FortranForm[expr] inert: Fortran source for expr (x**2, Sin(x), rationals as decimals) |
+| `Framed` | added | 4 | Framed[expr, opts] inert display wrapper; text draws an ASCII box (+---+ / \| expr \|) around expr |
+| `Grid` | added | 57 | Grid[{{a, b}, ...}, opts] inert layout object; text: columns 3 spaces apart, rows separated by a blank line, left aligned (Wolfram's OutputForm), with Alignment, Spacings, Frame, Dividers and the GridBox options ColumnAlignments, ColumnSpacings, ColumnWidths, ColumnLines, RowAlignments, RowSpacings, RowLines, RowMinHeight honoured |
+| `GridDefaultElement` | added | 4 | inert symbol: option of GridBox: element inserted for a new grid entry (accepted) |
+| `HeaderAlignment` | added | 4 | inert symbol: option of Dataset: alignment of headers (inert) |
+| `HeaderBackground` | added | 4 | inert symbol: option of Dataset: header background colour (inert) |
+| `HeaderDisplayFunction` | added | 4 | inert symbol: option of Dataset: function applied to headers before display (inert) |
+| `HeaderLines` | added | 4 | inert symbol: option of SemanticImport and related import functions: number of header rows (inert) |
+| `HeaderSize` | added | 4 | inert symbol: option of Dataset: widths and heights of headers (inert) |
+| `HeaderStyle` | added | 5 | inert symbol: option of Dataset: style of headers (inert) |
+| `HiddenItems` | added | 4 | inert symbol: option of Dataset: positions of items to hide (inert) |
+| `InsertLinebreaks` | added | 8 | InsertLinebreaks[s, n] (default 78) replaces whitespace by newlines so no line exceeds n characters; words longer than n are broken every n characters |
+| `Italic` | added | 5 | inert symbol: style directive for Style (FontSlant -> "Italic"); no effect on plain text |
+| `Item` | added | 8 | Item[expr, opts] inert: an entry of Grid, Column, ... with its own options (Alignment honoured in text) |
+| `ItemAspectRatio` | added | 5 | inert symbol: option of GraphicsGrid: aspect ratio of each item's region (inert) |
+| `ItemDisplayFunction` | added | 4 | inert symbol: option of Dataset: function applied to items before display (inert) |
+| `Labeled` | added | 20 | Labeled[expr, lbl, pos] inert display wrapper (pos Bottom by default; Top, Left, Right, Before, After, Above, Below, a list of positions, or All for {bottom, left, top, right}); text places the label blocks around expr, centred above/below |
+| `Left` | added | 11 | inert symbol: position/alignment symbol: Column/Grid/Item alignment, Labeled position (label to the left) |
+| `ListFormat` | added | 7 | option of TextString: {"left", "sep", "right"} for lists (Automatic: {"{", ", ", "}"}) |
+| `MathMLForm` | added | 6 | MathMLForm[expr] inert: presentation MathML for expr (<math> with mi, mn, mo, msup, mfrac, msqrt, mrow) |
+| `MissingString` | added | 7 | option of TextString: the string for Missing[...] (default ""; Automatic: the reason; None: unchanged) |
+| `MissingStyle` | added | 4 | inert symbol: option of GeoRegionValuePlot and related: style for missing data (inert) |
+| `Multicolumn` | added | 11 | Multicolumn[list, cols \| {rows, Automatic} \| {rows, cols}] evaluates to the corresponding Grid, filling the first column first (Appearance -> "Horizontal" fills by rows); Multicolumn[list] uses about Sqrt[n] columns; {rows, cols} drops elements beyond rows*cols |
+| `NumberForm` | added | 104 | NumberForm[expr, n \| {n, f}, opts] inert display wrapper; ToString/REPL show approximate reals to n significant digits (f decimals), with DigitBlock, ExponentFunction, ExponentStep, NumberFormat, NumberMultiplier, NumberPadding, NumberPoint, NumberSeparator, NumberSigns, ScientificNotationThreshold, SignPadding, DefaultPrintPrecision |
+| `NumberFormat` | added | 6 | option of NumberForm and related number forms (inert symbol; default Automatic) |
+| `NumberMarks` | added | 12 | option of ToString[..., InputForm]: whether approximate numbers carry ` marks (True: all; Automatic: arbitrary-precision numbers; False: none) |
+| `NumberMultiplier` | added | 3 | option of NumberForm and related number forms (inert symbol; default "×") |
+| `NumberPadding` | added | 16 | option of NumberForm and related number forms (inert symbol; default {"", "0"}) |
+| `NumberPoint` | added | 7 | option of NumberForm and related number forms (inert symbol; default ".") |
+| `NumberSeparator` | added | 3 | option of NumberForm and related number forms (inert symbol; default {",", " "}) |
+| `NumberSigns` | added | 8 | option of NumberForm and related number forms (inert symbol; default {"-", ""}) |
+| `OutputForm` | added | 7 | OutputForm[expr] inert: shows expr in linear OutputForm text (strings without quotes) |
+| `Overlay` | added | 6 | Overlay[{e1, e2, ...}, {i, j, ...}] inert: the expressions drawn on top of each other (top-left aligned); text superimposes the blocks, later ones overwriting earlier ones where they are not blank |
+| `PaddedForm` | added | 5 | PaddedForm[expr, n \| {n, f}, opts]: numbers left-padded with spaces to n digits (room for a sign) |
+| `PageWidth` | added | 7 | option of ToString: lines longer than n characters are broken at spaces |
+| `Pagination` | added | 4 | inert symbol: option of Multicolumn/GalleryView: items per page (accepted; plain text shows every item) |
+| `PercentForm` | added | 7 | PercentForm[expr, n \| {n, f}, opts]: numbers shown as percentages (x 100, then %) |
+| `Placed` | added | 6 | Placed[expr, pos] / Placed[{e1, ...}, pos, f] inert: an annotation at relative position pos (Top, Bottom, Left, Right, Center, Above, Below, Before, After, {x, y}, ...); text shows expr (f applied to each ei when given) |
+| `Right` | added | 16 | inert symbol: position/alignment symbol: Column/Grid/Item alignment, Labeled position (label to the right) |
+| `Row` | added | 12 | Row[{e1, e2, ...}] / Row[list, sep] inert layout: the elements' text concatenated (with sep between); multi-line elements are placed side by side |
+| `RowAlignments` | added | 8 | inert symbol: option of Grid (GridBox): vertical alignment of multi-line rows (honoured in text) |
+| `RowLines` | added | 6 | inert symbol: option of Grid (GridBox): draw a line between rows (honoured in text) |
+| `RowMinHeight` | added | 6 | inert symbol: option of Grid (GridBox): minimum row height in lines (honoured in text) |
+| `RowSpacings` | added | 13 | inert symbol: option of Grid (GridBox): blank lines between rows (honoured in text) |
+| `ScientificForm` | added | 7 | ScientificForm[expr, n \| {n, f}, opts]: one digit before the point and an explicit exponent |
+| `ScientificNotationThreshold` | added | 7 | option of NumberForm and related number forms (inert symbol; default {-5, 6}) |
+| `ScriptLevel` | added | 5 | inert symbol: option of Style: script nesting level (non-negative integer); validated, no effect on text |
+| `Short` | added | 8 | Short[expr, n] inert wrapper: shows expr in about n lines (n * 78 characters), omitted runs of k elements written <<k>> (Skeleton[k]) and long strings elided with an ellipsis |
+| `SignPadding` | added | 9 | option of NumberForm and related number forms (inert symbol; default False) |
+| `Skeleton` | added | 3 | Skeleton[k] inert: k omitted elements, shown as <<k>> (what Short inserts) |
+| `StandardForm` | added | 3 | StandardForm[expr] inert: shows expr in standard (linear) text |
+| `StringForm` | added | 12 | StringForm["... `` ... `n` ...", e1, e2, ...] inert: shows the template with `` replaced by successive ei and `n` by en (\` is a literal backquote); out-of-range or unmatched placeholders raise |
+| `StringSkeleton` | added | 3 | StringSkeleton[k] inert: k omitted characters of a string, shown as an ellipsis |
+| `Style` | added | 22 | Style[expr, styles...] inert display wrapper (Bold, Italic, colours, font size n, "stylename", FontSize -> n, FontFamily -> "name", Background -> c, ...); plain text shows expr unchanged |
+| `SurdForm` | added | 4 | inert symbol: option of RadicalBox/SqrtBox: whether the radical is a Surd (inert) |
+| `TableAlignments` | added | 7 | inert symbol: option of TableForm: Left, Center, Right (honoured in text) |
+| `TableDepth` | added | 7 | inert symbol: option of TableForm: levels laid out as a table; deeper levels shown as lists |
+| `TableDirections` | added | 7 | inert symbol: option of TableForm: Column/Row for successive dimensions (Column: first dimension down) |
+| `TableForm` | added | 31 | TableForm[list, opts] inert display wrapper; text: rows separated by a blank line and columns by 3 spaces (Wolfram's OutputForm), with TableDepth, TableDirections, TableSpacing, TableAlignments and TableHeadings |
+| `TableHeadings` | added | 7 | inert symbol: option of TableForm: {row headings, column headings} (None, Automatic or lists) |
+| `TableSpacing` | added | 10 | inert symbol: option of TableForm: {blank lines between rows, spaces between columns} (default {1, 3}) |
+| `TeXForm` | added | 27 | TeXForm[expr] inert: shows the LaTeX of expr (TraditionalForm conventions: \frac, \sqrt, \sin (x), x^2+1); ToString[TeXForm[expr]] gives the TeX string |
+| `Text` | added | 7 | Text[expr] shows expr as plain text; Text[expr, coords, offset, dir] is an inert graphics primitive (coordinates a list of 2 or 3 numbers, Scaled[...] or Offset[...]) |
+| `TextElement` | added | 4 | TextElement[text, props] / TextElement[{e1, e2, ...}, props] inert: an element of text with a property association; text shows the elements' strings concatenated |
+| `TextString` | added | 22 | TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default ""), lists per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings |
+| `Top` | added | 9 | inert symbol: position/alignment symbol: Labeled position (label above), vertical alignment in Grid rows |
+| `TotalWidth` | added | 7 | option of ToString: output longer than n characters is shortened with <<k>> skeletons |
+| `TraditionalForm` | added | 8 | TraditionalForm[expr] inert: shows expr in traditional mathematical notation (f(x), sin(x), e^x, π, i, polynomials in decreasing degree) |
+| `Visible` | added | 5 | inert symbol: option of Style and notebooks: whether shown (True/False); validated |
 
 ### physics
 
@@ -1489,7 +1823,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LinearRegression` | fixed | 4 | {slope, intercept, r_squared} exact least squares plus p_value and std_error of the slope (t-test, as scipy.stats.linregress; no SciPy needed); legacy rounded |
 | `MAD` | fixed | 3 | median absolute deviation Median[Abs[x - Median[x]]] (Wolfram MedianDeviation), exact for exact data (legacy converted to floats and rounded to 10 digits) |
 | `MannWhitneyU` | fixed | 3 | {U -> statistic, p_value -> two-sided p} (SciPy), unrounded |
-| `Mean` | fixed | 60 | matrix data: the statistic of each column (Wolfram); Mean[dist] for the batch 5 distributions (Indeterminate when the moment does not exist); exact for exact data (legacy converted to floats and rounded to 10 digits); Mean[dist] gives the distribution mean |
+| `Mean` | fixed | 62 | matrix data: the statistic of each column (Wolfram); Mean[dist] for the batch 5 distributions (Indeterminate when the moment does not exist); exact for exact data (legacy converted to floats and rounded to 10 digits); Mean[dist] gives the distribution mean |
 | `Median` | fixed | 17 | matrix data: the statistic of each column (Wolfram); Median[dist] for every supported distribution (Indeterminate when undefined; Kurtosis is the non-excess kurtosis, 3 for the normal distribution); exact for exact data (legacy converted to floats and rounded to 10 digits); even length averages the two middle values |
 | `Mode` | fixed | 3 | the unique most frequent value (MikoshiLang); multimodal data now raises (legacy returned the first mode silently) - use Commonest |
 | `NormalDistribution` | verified | 37 | inert distribution object NormalDistribution[mu, sigma] (NormalDistribution[] = [0, 1]) |
@@ -1570,7 +1904,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Quartiles` | added | 4 | Quantile[data, {1/4, 1/2, 3/4}, {{1/2, 0}, {0, 1}}] (Wolfram's definition); Quartiles[dist] = InverseCDF at 1/4, 1/2, 3/4 |
 | `RandomChoice` | added | 4 | RandomChoice[list], [list, n] (with replacement), [{w...} -> list, n] weighted; reproducible with SeedRandom |
 | `RandomInteger` | added | 5 | RandomInteger[] (0 or 1), [imax] (0..imax), [{imin, imax}], with a count n or dimensions {n, m}; reproducible with SeedRandom (stream differs from Wolfram's) |
-| `RandomReal` | added | 5 | RandomReal[] in [0, 1), [xmax], [{xmin, xmax}], with a count n or dimensions; machine reals; reproducible with SeedRandom |
+| `RandomReal` | added | 6 | RandomReal[] in [0, 1), [xmax], [{xmin, xmax}], with a count n or dimensions; machine reals; reproducible with SeedRandom |
 | `RayleighDistribution` | added | 20 | inert distribution object RayleighDistribution; parameters validated |
 | `RootMeanSquare` | added | 4 | Sqrt[Mean[data^2]] (Abs[x]^2 for complex), exact |
 | `SpearmanRho` | added | 7 | Pearson correlation of the (average) ranks, exact; SpearmanRho[matrix] the rank-correlation matrix |
@@ -1592,7 +1926,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Capitalize` | added | 4 | upper-cases the first character and leaves the rest; Capitalize[s, "AllWords"] does that for every word, "LongWords" for words longer than three characters, "FirstWord" = default ("TitleCase" with its small-word rules is not supported) |
 | `CharacterRange` | added | 3 | characters from c1 to c2 by code point (strings or integer codes); empty when c2 < c1 |
 | `Decapitalize` | added | 3 | lower-cases the first character only |
-| `DigitCharacter` | added | 13 | string pattern object / option interpreted by the batch-1 string functions |
+| `DigitCharacter` | added | 14 | string pattern object / option interpreted by the batch-1 string functions |
 | `DigitQ` | added | 3 | True when every character of the string satisfies the test (so True for ""); non-strings False |
 | `EditDistance` | added | 32 | Levenshtein distance (insertions, deletions, substitutions) between strings or lists; IgnoreCase |
 | `EndOfLine` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
@@ -1601,7 +1935,7 @@ Cases = number of differential test cases in which the head occurs.
 | `FromRomanNumeral` | added | 13 | integer value of a Roman numeral string ("N" -> 0) |
 | `HammingDistance` | added | 4 | number of differing positions between equal-length strings or lists (unequal lengths raise); IgnoreCase |
 | `HexadecimalCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
-| `IgnoreCase` | added | 9 | string pattern object / option interpreted by the batch-1 string functions |
+| `IgnoreCase` | added | 10 | string pattern object / option interpreted by the batch-1 string functions |
 | `IntegerString` | added | 10 | digits of \|n\| (the sign is dropped, as Wolfram) in base 2-36 with lower-case letters, padded with zeros or truncated to the last len digits; IntegerString[n, "Roman"]; threads over lists |
 | `LetterCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `LetterNumber` | added | 3 | position of a letter in the English alphabet (either case), 0 for other characters; a string of several characters gives a list; threads over lists |
@@ -1611,7 +1945,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LongestCommonSubsequence` | added | 3 | longest contiguous common run of two strings or lists (Wolfram's meaning; the non-contiguous one is LongestCommonSequence); ties go to the earliest position in the first argument |
 | `LowerCaseQ` | added | 4 | True when every character of the string satisfies the test (so True for ""); non-strings False |
 | `NumberString` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
-| `Overlaps` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `Overlaps` | added | 5 | string pattern object / option interpreted by the batch-1 string functions |
 | `PalindromeQ` | added | 5 | True for a string, list or non-negative integer (decimal digits) equal to its reverse; other expressions False |
 | `PrintableASCIIQ` | added | 3 | True when every character of the string satisfies the test (so True for ""); non-strings False |
 | `PunctuationCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
@@ -1629,10 +1963,10 @@ Cases = number of differential test cases in which the head occurs.
 | `StringExpression` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `StringExtract` | added | 5 | StringExtract[s, n] gives the n-th whitespace-separated piece (spans, lists and negative n allowed); StringExtract[s, sep -> n] splits at sep |
 | `StringFreeQ` | added | 3 | not StringContainsQ; string patterns; IgnoreCase |
-| `StringMatchQ` | added | 17 | whole-string match against a string pattern; literal patterns use the metacharacters * (any characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists |
+| `StringMatchQ` | added | 18 | whole-string match against a string pattern; literal patterns use the metacharacters * (any characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists |
 | `StringPartition` | added | 3 | substrings of length n (incomplete final piece dropped), offset d, or UpTo[n] keeping the remainder |
 | `StringPosition` | added | 4 | {{start, end}, ...} 1-based; Overlaps -> True by default (one match per start position), StringPosition[s, p, n]; IgnoreCase |
-| `StringReplace` | fixed | 20 | StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts substitute into the right-hand side; RegularExpression rules accept "$1" group references; non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises |
+| `StringReplace` | fixed | 21 | StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts substitute into the right-hand side; RegularExpression rules accept "$1" group references; non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises |
 | `StringReplaceList` | added | 3 | every string obtained by replacing a single match of the rules (one result per match position and rule, left to right); StringReplaceList[s, rules, n] keeps at most n |
 | `StringReplacePart` | added | 3 | StringReplacePart[s, new, {m, n}], a list of ranges with one new string, or a list of new strings matched to the ranges; negative positions count from the end |
 | `StringRiffle` | added | 7 | StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per level above), StringRiffle[list, sep], StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings are converted with ToString |
@@ -1642,10 +1976,10 @@ Cases = number of differential test cases in which the head occurs.
 | `StringStartsQ` | fixed | 6 | string patterns (legacy: literal prefix only); IgnoreCase |
 | `StringTakeDrop` | added | 3 | {StringTake[s, spec], StringDrop[s, spec]} |
 | `StringTrim` | fixed | 7 | StringTrim[s] removes leading and trailing whitespace; StringTrim[s, p] removes a leading and a trailing match of the string pattern p |
-| `Symbol` | added | 8 | Symbol["name"] gives the symbol (evaluated); invalid names raise |
-| `SymbolName` | added | 3 | name of a symbol as a string (no context prefix) |
+| `Symbol` | added | 10 | Symbol["name"] gives the symbol (evaluated); invalid names raise |
+| `SymbolName` | added | 4 | name of a symbol as a string (no context prefix) |
 | `TextWords` | added | 3 | words of the text: runs of letters/digits, keeping internal apostrophes and hyphens (rule-based; Wolfram's tokenizer may differ on unusual punctuation) |
-| `ToExpression` | added | 5 | parses and evaluates InputForm text; ToExpression[s, InputForm, h] wraps the unevaluated parse in h (e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated |
+| `ToExpression` | added | 14 | parses and evaluates InputForm text; ToExpression[s, InputForm, h] wraps the unevaluated parse in h (e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated |
 | `ToLowerCase` | added | 3 | lower-cases every letter; threads over lists |
 | `ToUpperCase` | added | 6 | upper-cases every letter; threads over lists |
 | `UpperCaseQ` | added | 4 | True when every character of the string satisfies the test (so True for ""); non-strings False |
@@ -1694,6 +2028,74 @@ Cases = number of differential test cases in which the head occurs.
 | `UnixTime` | fixed | 3 | UnixTime[] = whole seconds since 1970-01-01 00:00 UTC; UnixTime[{y, m, d, ...}] interprets the date in UTC; legacy only had a 1-argument form that ignored its argument |
 | `XORCipher` | fixed | 3 | hex string of UTF-8 bytes XOR the repeated key; empty key raises |
 
+### structural (W03)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `AllSameBy` | added | 4 | True when f[e] is the same (SameQ) for every element (short-circuits; lists of length 0 or 1 give True); AllSameBy[f] operator form |
+| `AlphabeticOrder` | added | 9 | 1 / -1 / 0 for alphabetical (dictionary) order of two strings: punctuation < digits < letters, letters by base letter, then diacritics, then case (CaseOrdering "LowerFirst" default or "UpperFirst"); options IgnoreCase, IgnoreDiacritics, IgnorePunctuation; English collation only (other languages raise); AlphabeticOrder[] / AlphabeticOrder["English"] / AlphabeticOrder[opts] operator forms |
+| `AlphabeticSort` | added | 5 | sorts strings into alphabetical order (the AlphabeticOrder collation; stable); AlphabeticSort[list, "English"] and the CaseOrdering / IgnoreCase / IgnoreDiacritics / IgnorePunctuation options |
+| `AnySubset` | added | 5 | AnySubset[{c1, ...} \| {lab -> c, ...} \| EntityClass[...]], AnySubset[choices, max \| {min, max}]: an inert interpreter/form specification (arguments are validated) |
+| `ArrayFilter` | added | 6 | ArrayFilter[f, array, r \| {r1, r2, ...} \| template] applies f to the range-r blocks around every element (template 0s become Missing[]); Padding -> "Fixed" (default), None (smaller result), a constant, "Periodic", "Reflected" or "Reversed" |
+| `ArrayPad` | added | 9 | ArrayPad[array, m \| {m, n} \| {{m1, n1}, ...}, padding]: constant padding (default 0) or "Fixed", "Periodic", "Reflected", "Reversed"; negative amounts trim; any depth of full array (cyclic constant lists and the differences / extrapolated paddings raise) |
+| `ArrayReduce` | added | 4 | ArrayReduce[f, array, n \| n1 ;; n2 \| {n1, n2, ...} \| {{...}, {...}}]: f applied to the vectors (or arrays) along the given dimensions, which are removed; f's result takes the place of each vector |
+| `ArrayResample` | added | 18 | ArrayResample[array, n \| Scaled[s] \| All \| {d1, d2, ...}] and ArrayResample[array, dspec, "Point"]: point sampling on 1..m (n samples at 1 + (k-1)(m-1)/(n-1); Scaled[s] gives Round[s (m-1)] + 1 samples), separably along each dimension, exact for exact data; Resampling -> "Linear" (default), "Nearest" (halfway averages), "NearestLeft", "NearestRight". "Bin" schemes, subranges, Automatic dimensions, DataRange, Antialiasing -> True and other kernels raise |
+| `AssociationComap` | added | 3 | AssociationComap[{f1, f2, ...}, x] = <\|f1 -> f1[x], ...\|> (a repeated key keeps its last value); AssociationComap[fs] operator form |
+| `CaseOrdering` | added | 3 | option of AlphabeticOrder and AlphabeticSort: "LowerFirst" (default), "UpperFirst" or Automatic |
+| `CenterArray` | added | 4 | CenterArray[a, n \| {n1, n2, ...}, pad]: a centred in an array of the given dimensions (extra padding on the right; Inherited keeps a dimension; a lower-rank a is centred at the deepest levels); CenterArray[n] has a single 1; non-list a means {a}; trimming by an odd amount raises; padding as in ArrayPad |
+| `ColumnsEqual` | added | 3 | option for GridBox (equal column widths); an inert option name |
+| `ComponentKeys` | added | 3 | option naming the data components of a time or event series; an inert option name |
+| `Cyclic` | added | 4 | Cyclic[{x1, ..., xn}] cyclic specification; Cyclic[{...}][k] = x[[Mod[k, n, 1]]] |
+| `DeleteContents` | added | 3 | option for DeleteDirectory (whether to delete the directory contents); an inert option name |
+| `Discard` | added | 4 | removes the elements for which crit is True (opposite of Select); Discard[data, crit, n] removes only the first n; data may be a list, any expression or an association; crit -> "Element" \| "Index" \| {props}; Discard[crit] operator form |
+| `Dispatch` | added | 5 | Dispatch[rules] is an optimised rule set usable wherever the rule list is (ReplaceAll, Replace, ReplaceRepeated, ...); Normal[Dispatch[rules]] gives the rules; Dispatch[<\|...\|>] takes the association's rules |
+| `Elementwise` | added | 3 | Elementwise[f][args...] threads f over all lists among the arguments to the deepest common level (makes non-listable functions behave as listable) |
+| `FoldWhile` | added | 4 | folds f over the list while test of the most recent m (default 1, or All) results is True; returns the first result failing the test (or the last one); FoldWhile[f, list, test]; extra n / -n steps; FoldWhile[f, test] operator form |
+| `FoldWhileList` | added | 3 | the list of FoldWhile results, starting with x |
+| `IncrementalFunction` | added | 15 | IncrementalFunction[f] is an inert function that can pause; IncrementalFunction[f][args] creates a running instance DataStructure["IncrementalFunction", ...] (no FunctionCompile step is needed). ds["Next"] runs to the next IncrementalYield (giving its value) or IncrementalReceive (giving Null); ds["Send", x] resumes, making the pending IncrementalReceive return x; once the code ends the call gives Failure["IncrementalFunctionTerminated", ...]. Errors inside the function are raised to the caller |
+| `IncrementalObject` | added | 20 | IncrementalObject["name"][args] for "Identity" [expr], "Range" [Range args], "Select" [src, crit], "Take" [src, n], "Map" [f, src], "FoldList" [f, x, src], "Permutations" [list], "Subsets" [list], "Tuples" [list, n \| {lists}]: a lazy stateful iterator; sources may be expressions, incremental objects or incremental function instances (consumed, not copied). Values are taken with NextValue; Table/Do iteration over an incremental object is not supported |
+| `IncrementalReceive` | added | 6 | IncrementalReceive[] / IncrementalReceive[default] pauses the enclosing running IncrementalFunction; when resumed with "Send" it returns the sent value, with "Next" the default (Null if none); outside one it raises |
+| `IncrementalYield` | added | 12 | IncrementalYield[e] pauses the enclosing running IncrementalFunction, which then gives e; outside one it raises |
+| `KeyCollisionFunction` | added | 3 | option for JoinAcross (how to handle same-key elements not being joined); an inert option name |
+| `KeyValuePattern` | added | 5 | an association or list of rules with a different element matching each pi, in any order; KeyValuePattern[p] = KeyValuePattern[{p}] |
+| `LexicographicOrder` | added | 5 | Order of the first differing pair of elements (canonical Order or ordering function p); if one list is a prefix of the other the shorter comes first; strings compare by Characters; any common head; LexicographicOrder[p] operator form |
+| `Nearest` | added | 17 | Nearest[data, x] all elements at the smallest distance; Nearest[data, x, n \| {n, r} \| {All, r}]; data as a list, {e1 -> v1, ...}, {e1, ...} -> {v1, ...}, {e1, ...} -> "Element" \| "Index" \| "Distance" \| {props} \| All, or an association; lists of query points thread; distances: \|x - y\| for numbers, the Euclidean norm for vectors, EditDistance for strings, Jaccard dissimilarity for Boolean vectors, or DistanceFunction -> f; Nearest[data] gives a NearestFunction |
+| `NearestFunction` | added | 3 | NearestFunction[data] (made by Nearest[data]) applied as nf[x], nf[{x1, ...}], nf[x, n], nf[x, {n, r}] |
+| `NearestTo` | added | 3 | operator form: NearestTo[x][elems] = Nearest[elems, x]; NearestTo[x, n \| {n, r}]; applied to a NearestFunction nf it gives nf[x, ...] |
+| `NextValue` | added | 20 | NextValue[obj] gives the next value of an incremental object (Failure["IncrementalObjectTerminated", ...] when exhausted) or of a running incremental function instance (as ds["Next"]) |
+| `NumericArray` | added | 14 | NumericArray[array, type, method] typed numeric array (types Integer8 ... UnsignedInteger64, Real32, Real64, ComplexReal32, ComplexReal64; methods ClipAndRound (default), Round, Check, ClipAndCheck; Coerce methods raise); stored as NumericArray[values, type]; Normal, Length and Dimensions read it; NumericArray[array] without a type raises |
+| `NumericArrayQ` | added | 5 | True for a valid NumericArray; NumericArrayQ[expr, tpatt] also tests the type against a pattern, NumericArrayQ[expr, tpatt, dpatt] the array depth |
+| `NumericArrayType` | added | 3 | the element type string of a NumericArray |
+| `NumericalOrder` | added | 5 | 1 if e1 < e2, -1 if e1 > e2, 0 if numerically equal (no tolerance); complex numbers by real part then \|imaginary part\|; numeric expressions precede non-numeric ones; otherwise canonical Order (dates and quantities raise) |
+| `OrderlessPatternSequence` | added | 3 | matches a sequence of arguments matching p1, p2, ... in any order (the order of the matched arguments is preserved; at most 8 patterns) |
+| `Padding` | added | 3 | option of ArrayFilter (and CenterArray-style padding values): a constant, "Fixed", "Periodic", "Reflected", "Reversed" or None |
+| `PaddingSize` | added | 3 | option of AudioDelay and other functions giving the amount of padding; an inert option name |
+| `PartBehavior` | added | 3 | option of Query and related functions for nonexistent parts; an inert option name |
+| `PatternSequence` | added | 6 | PatternSequence[p1, p2, ...] matches a sequence of arguments (also inside Alternatives and Repeated, and named x : PatternSequence[...]); PatternSequence[] matches the empty sequence |
+| `RangeSpace` | added | 4 | basis of the range (column space) of a matrix: for exact and symbolic matrices the nonzero rows of RowReduce[Transpose[a]] (generic values for symbols); for approximate matrices the left singular vectors of the nonzero singular values (Tolerance option) |
+| `RepeatingElement` | added | 5 | RepeatingElement[spec], RepeatingElement[spec, max \| {min, max} \| {n, {min, max}} \| {{i, n}, {min, max}}]: an inert interpreter/form specification (count specifications are validated; Interpreter and forms are not available) |
+| `ReplaceAt` | added | 6 | ReplaceAt[expr, rules, n \| {i, j, ...} \| {{...}, ...}]: Replace (level 0, first matching rule) at the given parts; negative indices, All, Span, keys; repeated positions apply the rules repeatedly; ReplaceAt[rules, pos] operator form |
+| `RowsEqual` | added | 3 | option for GridBox (equal row heights); an inert option name |
+| `SequenceFold` | added | 3 | SequenceFold[f, {x1, ..., xn}, list]: f of the last n results and the next element (a recurrence); {x} gives Fold, {} applies f to each element; k = n (f of the last n results only, len + 1 steps); k > n + 1 raises |
+| `SequenceFoldList` | added | 3 | the seeds followed by the successive results of SequenceFold |
+| `SortedBy` | added | 3 | option specifying a function by which to sort the results of a computation; an inert option name (functions accepting it validate it) |
+| `SubsetCases` | added | 4 | sublists (in any order, not necessarily contiguous) matching a list pattern, given in the pattern's order; longest matches first, non-overlapping by default (Overlaps -> True gives all); patt -> rhs; n matches; Alternatives tried in order |
+| `SubsetCount` | added | 3 | number of sublists matching patt in any order (non-overlapping by default; Overlaps -> True counts all) |
+| `SubsetMap` | added | 5 | SubsetMap[f, list, {i, j, ...}] replaces the elements at the given positions by the elements of f[{e_i, e_j, ...}] (f must return a list of the same length); positions {pos1, ...}, i ;; j or part specs with All / Span; SubsetMap[f, pos] operator form |
+| `SubsetPosition` | added | 3 | positions {i, j, ...} (in the pattern's order) of sublists matching patt in any order; overlapping by default (Overlaps -> False excludes); first n |
+| `SubsetReplace` | added | 3 | replaces sublists matching a rule's pattern (in any order) by its right-hand side, inserted at the position of the element matched first; rules applied in order to untransformed elements; first n replacements; SubsetReplace[rules] operator form |
+| `SuchThat` | added | 3 | x \[SuchThat] y: an operator with no built-in meaning (stays unevaluated) |
+| `SymmetrizedArray` | added | 7 | SymmetrizedArray[{pos -> val, ...}, dims, sym] with sym Symmetric[slots], Antisymmetric[slots], {} or {{perm, phase}, ...}: stored as SymmetrizedArray[StructuredData[dims, {independent rules, sym}]] (the lexicographically smallest member of each orbit is independent; dependent positions are converted with their phase; pattern positions evaluated per independent component; unspecified entries 0); SymmetrizedArray[list] detects the slot-permutation symmetry; Normal gives the full array |
+| `SymmetrizedArrayRules` | added | 3 | independent nonzero rules of a SymmetrizedArray followed by {_, _, ...} -> 0; for an ordinary array, the rules of the array symmetrized with sym (Symmetrize: the phase-weighted group average); without sym the array's own nonzero rules |
+| `SymmetrizedDependentComponents` | added | 3 | sorted list of the components related to comp by the symmetry sym (its orbit, including comp) |
+| `SymmetrizedIndependentComponents` | added | 4 | independent components (lexicographically smallest orbit members, vanishing orbits excluded) of an array with dimensions dims and symmetry sym, in lexicographic order |
+| `SymmetrizedReplacePart` | added | 3 | SymmetrizedReplacePart[sa, {pos -> val, ...}] replaces independent values (dependent positions are mapped to their independent component); SymmetrizedReplacePart[array, rules, sym] symmetrizes first |
+| `UniqueElements` | added | 3 | for each list, the elements (without repeats, in order) that are not in any other list; UniqueElements[lists, test] uses test for equivalence |
+| `UnitVector` | added | 4 | UnitVector[n, k]: length-n vector with 1 at position k; UnitVector[k] = UnitVector[2, k] |
+| `Verbatim` | added | 4 | Verbatim[expr] matches expr literally (blanks inside are not patterns) |
+| `Wedge` | added | 3 | x \[Wedge] y: an operator with no built-in meaning (stays unevaluated) |
+| `WrapAround` | added | 3 | option for NotebookFind (continue past the end of a document); an inert option name |
+
 ### transforms
 
 | Function | Status | Cases | Notes |
@@ -1723,6 +2125,65 @@ Cases = number of differential test cases in which the head occurs.
 | `MellinTransform` | added | 6 | MellinTransform[f, x, s] = ∫_0^∞ x^(s-1) f dx (Wolfram); convergence strip dropped (generic value), checked numerically at two real s inside the strip; unevaluated if SymPy has no closed form |
 | `WaveletTransform` | fixed | 4 | WaveletTransform[list] or [list, "Haar"\|"db1"]: full Haar decomposition {cA_n, cD_n, ..., cD_1} (PyWavelets wavedec ordering, orthonormal 1/√2 scaling), exact; length must be a power of 2; other wavelets raise (legacy needed PyWavelets, which is not a dependency) |
 | `ZTransform` | fixed | 5 | Wolfram ZTransform[f, n, z] = Σ_{n=0}^∞ f(n) z^(-n) via symbolic summation (convergence conditions dropped); unevaluated when the sum has no closed form; legacy always returned itself |
+
+### trees (W03)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `ExpressionTree` | added | 8 | ExpressionTree[expr, struct] with struct "Heads" (default), "Subexpressions", "Atoms", Null, None, "List", "Association", "Rules"; Heads -> True and the XML/JSON/held forms raise |
+| `GraphTree` | added | 3 | GraphTree[g, root] converts a tree graph (TreeGraphQ) into a Tree rooted at root (default: the vertex with the largest out-component, i.e. the source of a directed tree, else the first vertex); siblings follow VertexList order; GraphTree[g, root, h] with h[v] = {data, sortkey} |
+| `NestGraph` | added | 3 | NestGraph[f, expr \| {exprs} \| graph, n] breadth-first graph with directed edges x -> y for y in f[x], n levels (default 1; Infinity allowed when finite); DirectedEdges -> False gives undirected edges |
+| `NestTree` | added | 6 | NestTree[f, tree \| expr, n, h] grows every leaf Tree[x, None] with children f[x] (list, association, None or {} ; other results r give {r}) for n levels (default 1, Infinity allowed); h maps the data of the leaves including the new ones |
+| `ParentEdgeLabel` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `ParentEdgeLabelFunction` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `ParentEdgeLabelStyle` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `ParentEdgeShapeFunction` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `ParentEdgeStyle` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `ParentEdgeStyleFunction` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `RandomTree` | added | 4 | RandomTree[n \| {e1, ..., en}, k \| {k1, ...}] uniformly random ordered rooted trees with n nodes (via a random Dyck word and the cycle lemma); the data 1..n (or the ei) are assigned in pre-order |
+| `RootTree` | added | 3 | RootTree[tree] = Tree[data, {}] (leaves unchanged); RootTree[tree, n] keeps levels 0..n (n >= 0) |
+| `RulesTree` | added | 4 | RulesTree[data -> {rules}] / [data -> <\|k -> rule\|>] / [data -> None]; other expressions are leaves |
+| `Tree` | added | 144 | Tree[data, {subtrees}] / Tree[data, <\|k -> subtree\|>] / Tree[data, None] (leaf); Tree[{...}] = Tree[Null, {...}]; non-Tree children become leaves; presentation options are kept |
+| `TreeCases` | added | 3 | TreeCases[tree, pattern, levelspec, n] subtrees whose data match (default levels {0, Infinity}) |
+| `TreeChildren` | added | 3 | the children (list, association or None) of the root |
+| `TreeCount` | added | 3 | TreeCount[tree, pattern, levelspec] number of matching subtrees |
+| `TreeData` | added | 5 | the data at the root of a tree |
+| `TreeDelete` | added | 3 | TreeDelete[tree, pos \| {pos1, ...}] removes subtrees (deleting the only child leaves Tree[d, {}]) |
+| `TreeDepth` | added | 4 | maximum level (empty child lists add a level; a leaf has depth 0); TreeDepth[tree, patt] maximum level of a subtree whose data matches patt |
+| `TreeElementCoordinates` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementLabel` | added | 4 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementLabelFunction` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementLabelStyle` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementShape` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementShapeFunction` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementSize` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementSizeFunction` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementStyle` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeElementStyleFunction` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeExpression` | added | 5 | TreeExpression[tree, struct] with struct "Heads" (default: data[children...]), "HeadTrees", "List", "Association", "Rules"; other structures raise |
+| `TreeExtract` | added | 4 | TreeExtract[tree, pos \| {pos1, ...}, h] subtrees at positions (integer parts, negative parts, "key"/Key[k]); h is applied to each |
+| `TreeFold` | added | 6 | TreeFold[f, tree] folds bottom-up: f[data, {results of children}] (leaves give their data); TreeFold[{f, g}, tree] applies g to leaf data; TreeFold[f, tree, h] uses h[subtree] instead of the data |
+| `TreeForm` | added | 3 | TreeForm[expr] / TreeForm[expr, n] is an inert display wrapper (no tree drawing in the terminal) |
+| `TreeGame` | added | 20 | TreeGame[{player, action1, ...}] (end nodes {payoff1, ...}; actions annotated action -> label \| prob \| {label, prob}; information sets player -> ilabel) or TreeGame[Tree[<\|"Player" -> p\|>, {...}]] with "Payoffs", "Label", "Probability", "InformationSet" keys: validated (consistent payoff counts, complete probability distributions) and kept as the inert game object TreeGame[spec] |
+| `TreeGamePayoff` | added | 14 | TreeGamePayoff[tgame, strat] expected payoff list for a strategy profile <\|player -> <\|node -> {pr, ...}\|>, ...\|> or <\|node -> {pr, ...}, ...\|> (nodes are child-index paths, {} the root); actions with probabilities in the game use them unless the strategy overrides them; TreeGamePayoff[tgame, strat, "RandomExpectation"] averages unspecified nodes uniformly; "Perfect", "PerfectExpectation" and "Random" raise; an incomplete strategy without an adversary type raises |
+| `TreeGraph` | added | 4 | TreeGraph[{edges or rules}] / TreeGraph[{vertices}, {edges}] gives the Graph after checking it is a tree (DirectedEdges -> False makes rules undirected); the predecessor-list form and Tree objects raise |
+| `TreeInsert` | added | 3 | TreeInsert[tree, child, pos \| {pos1, ...}] inserts child (non-trees become leaves) so that it is at position pos (negative indices count from the end, like Insert); list children only |
+| `TreeLayout` | added | 3 | presentation option of Tree (and the tree constructors); kept on the Tree expression and ignored by computations |
+| `TreeLeafCount` | added | 3 | number of leaves; Tree[d, {}] has 0 |
+| `TreeLeafQ` | added | 5 | True for a leaf Tree[data, None]; False for anything else |
+| `TreeLeaves` | added | 3 | the leaves (level -1) in depth-first order |
+| `TreeLevel` | added | 11 | TreeLevel[tree, levelspec] subtrees on the levels (children before parents); levelspec -> "Data" \| "Subtree" \| "Position" \| "Level" ...; "Leaves", "NonLeaves"; TreeTraversalOrder option |
+| `TreeMap` | added | 23 | TreeMap[f, tree, levelspec -> elem] applies f to the data (or "Subtree", "Position", "Level", "NegativeLevel", "LevelPair", "Children", "ChildrenData", or a list of these as arguments) of the subtrees on the levels (default All); the result becomes the new data |
+| `TreeMapAt` | added | 3 | TreeMapAt[f, tree, pos \| {pos1, ...}] applies f to the data at the positions (repeatedly for repeated positions) |
+| `TreePosition` | added | 3 | TreePosition[tree, pattern, levelspec, n] positions (children before parents; {} is the root; association children are addressed by Key[k]) |
+| `TreeQ` | added | 3 | True for a valid Tree object |
+| `TreeReplacePart` | added | 3 | TreeReplacePart[tree, pos -> new \| {pos1 -> new1, ...} \| {pos1, pos2} -> new] replaces subtrees (non-trees become leaves); explicit positions only (no patterns) |
+| `TreeRules` | added | 5 | TreeRules[tree]: data -> {rules of children} (or an association); leaves give their data (data -> None when the data itself looks like such a rule) |
+| `TreeScan` | added | 3 | TreeScan[f, tree, levelspec -> elem] evaluates f on the data (or elements) of each subtree in traversal order; returns Null |
+| `TreeSelect` | added | 3 | TreeSelect[tree, crit], [tree, crit, n], [tree, crit, levelspec, n] subtrees with crit[subtree] True |
+| `TreeSize` | added | 24 | number of subtrees (nodes) |
+| `TreeTraversalOrder` | added | 6 | option of TreeMap, TreeScan, TreeLevel, TreeCases, TreePosition, TreeSelect: Automatic/"DepthFirst"/"PostOrder"/"BottomUp" (children before parents, default), "PreOrder"/"TopDown", "BreadthFirst"/"LevelOrder" (top-down); other orders raise |
+| `UnlabeledTree` | added | 3 | a tree of the same shape with Null as every node's data |
 
 ## Quarantine decision for the remaining names
 
