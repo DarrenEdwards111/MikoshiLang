@@ -2270,3 +2270,603 @@ def _filetemplateapply(t, *rest):
     with open(os.path.expanduser(path), "w", encoding="utf-8") as fh:
         fh.write(text)
     return path
+
+
+# ═════════════════════════════════════════════════════════════════ biological sequences ══
+_NUC_DEGEN = {"R": "AG", "Y": "CT", "S": "CG", "W": "AT", "K": "GT", "M": "AC", "B": "CGT", "D": "AGT",
+              "H": "ACT", "V": "ACG", "N": "ACGT", "X": "ACGT"}
+_DNA_FULL = set("ACGT")
+_RNA_FULL = set("ACGU")
+_DNA_ALPHA = _DNA_FULL | set(_NUC_DEGEN)
+_RNA_ALPHA = _RNA_FULL | set(_NUC_DEGEN)
+_AA_STD = "ACDEFGHIKLMNPQRSTVWY"
+_PEP_DEGEN = {"B": "DN", "Z": "EQ", "J": "IL", "X": _AA_STD}
+_PEP_FULL = set(_AA_STD) | set("UO.")
+_PEP_ALPHA = _PEP_FULL | set(_PEP_DEGEN)
+_BIO_TYPES = ("DNA", "RNA", "Peptide", "CircularDNA", "CircularRNA", "CircularPeptide")
+_AA3 = {"Ala": "A", "Arg": "R", "Asn": "N", "Asp": "D", "Cys": "C", "Gln": "Q", "Glu": "E", "Gly": "G",
+        "His": "H", "Ile": "I", "Leu": "L", "Lys": "K", "Met": "M", "Phe": "F", "Pro": "P", "Ser": "S",
+        "Thr": "T", "Trp": "W", "Tyr": "Y", "Val": "V", "Sec": "U", "Pyl": "O", "Asx": "B", "Glx": "Z",
+        "Xle": "J", "Xaa": "X"}
+_AA3_INV = {v: k for k, v in _AA3.items()}
+_COMPLEMENT = {"A": "T", "T": "A", "U": "A", "C": "G", "G": "C", "R": "Y", "Y": "R", "K": "M", "M": "K",
+               "S": "S", "W": "W", "B": "V", "V": "B", "D": "H", "H": "D", "N": "N", "X": "X"}
+
+
+def _base_type(t):
+    return t[8:] if isinstance(t, str) and t.startswith("Circular") else t
+
+
+def _alphabet(t):
+    b = _base_type(t)
+    return {"DNA": _DNA_ALPHA, "RNA": _RNA_ALPHA, "Peptide": _PEP_ALPHA}.get(b)
+
+
+def _full_alphabet(t):
+    b = _base_type(t)
+    return {"DNA": _DNA_FULL, "RNA": _RNA_FULL, "Peptide": _PEP_FULL}.get(b)
+
+
+def _infer_bio_type(s):
+    for t in ("DNA", "RNA", "Peptide"):
+        if s and set(s) <= _alphabet(t):
+            return t
+    return None
+
+
+def _aa3_convert(s):
+    if len(s) >= 3 and len(s) % 3 == 0 and re.fullmatch("(?:%s)+" % "|".join(_AA3), s):
+        return "".join(_AA3[s[i:i + 3]] for i in range(0, len(s), 3))
+    return None
+
+
+def _pattern_letters(p, t):
+    """Letter string from a StringExpression/Alternatives pattern of single letters."""
+    def letter(x):
+        if isinstance(x, str) and len(x) >= 1:
+            return x
+        if isinstance(x, Expr) and x.head == "Alternatives" and all(isinstance(a, str) and len(a) == 1
+                                                                     for a in x.args):
+            return _degenerate_code(set(x.args), t)
+        raise ValueError(f"BioSequence: cannot make a sequence letter from {x!r}")
+    parts = p.args if isinstance(p, Expr) and p.head == "StringExpression" else [p]
+    return "".join(letter(x) for x in parts)
+
+
+def _degenerate_code(letters, t):
+    if len(letters) == 1:
+        return next(iter(letters))
+    b = _base_type(t)
+    table = _PEP_DEGEN if b == "Peptide" else _NUC_DEGEN
+    if b == "RNA":
+        letters = {"T" if c == "U" else c for c in letters}
+    for code, members in table.items():
+        if code != "X" and set(members) == letters:
+            return code
+    raise ValueError(f"BioSequence: no single letter stands for {sorted(letters)}")
+
+
+def _dot_bracket(s, n):
+    pairs = {")": "(", ">": "<", "]": "[", "}": "{"}
+    stacks = {o: [] for o in pairs.values()}
+    bonds = []
+    if len(s) != n:
+        raise ValueError("BioSequence: the dot-bracket structure must have one character per letter")
+    for i, c in enumerate(s, 1):
+        if c in stacks:
+            stacks[c].append(i)
+        elif c in pairs:
+            if not stacks[pairs[c]]:
+                raise ValueError("BioSequence: unbalanced dot-bracket structure")
+            bonds.append(Expr("Bond", L(stacks[pairs[c]].pop(), i)))
+        elif c != ".":
+            raise ValueError(f"BioSequence: invalid dot-bracket character {c!r}")
+    if any(stacks.values()):
+        raise ValueError("BioSequence: unbalanced dot-bracket structure")
+    return L(*bonds)
+
+
+def _bonds_arg(b, fname="BioSequence"):
+    if isinstance(b, Expr) and b.head == "Bond":
+        return L(b)
+    if is_list(b) and all(isinstance(x, Expr) and x.head == "Bond" for x in b.args):
+        return b
+    raise ValueError(f"{fname}: bonds must be Bond[...] or a list of them")
+
+
+def _strand(x):
+    """Normalise a strand inside HybridStrand/collections to BioSequence[type, s, bonds]."""
+    if isinstance(x, str):
+        return Expr("BioSequence", _infer_bio_type(x) or Symbol("None"), x, L())
+    x = ev(x) if isinstance(x, Expr) and x.head == "InputForm" else x
+    if isinstance(x, Expr) and x.head == "InputForm" and x.args:
+        x = x.args[0]
+    if isinstance(x, Expr) and x.head == "BioSequence":
+        if len(x.args) == 2 and isinstance(x.args[1], str):
+            return Expr("BioSequence", x.args[0], x.args[1], L())
+        return x
+    raise ValueError(f"BioSequence: {x!r} is not a sequence")
+
+
+@fn("BioSequence", area=AREA, status="added",
+    notes="BioSequence[type, \"letters\" (, bonds)] for DNA, RNA, Peptide, their Circular forms and None; "
+          "BioSequence[\"letters\"] infers DNA, then RNA, then Peptide (else None); three-letter amino-acid "
+          "codes, letter patterns (\"A\" | \"G\" ~~ ...), dot-bracket structures and Bond lists; HybridStrand "
+          "and sequence collections; properties SequenceString, SequenceLength, SequenceType, SequenceBondList, "
+          "SequenceBondCount, SequencePattern, AbbreviationSequence, ChemicalList, ChemicalPatternList, HELM. "
+          "Masses, molecules and entity-backed sequences are not available")
+def _biosequence(*args):
+    if len(args) == 1:
+        a = args[0]
+        if isinstance(a, str):
+            conv = _aa3_convert(a)
+            if conv is not None:
+                return Expr("BioSequence", "Peptide", conv, L())
+            t = _infer_bio_type(a)
+            return Expr("BioSequence", t if t else Symbol("None"), a, *([] if t else [L()]))
+        if is_list(a):
+            return Expr("BioSequence", L(*(_strand(x) for x in a.args)), L())
+        raise Unevaluated()
+    t, s = args[0], args[1]
+    rest = args[2:]
+    if len(rest) > 1:
+        raise ValueError("BioSequence called with too many arguments")
+    if is_list(t):
+        if len(args) != 2:
+            raise ValueError("BioSequence: a collection takes a list of sequences and a list of bonds")
+        strands = L(*(_strand(x) for x in t.args))
+        bonds = _bonds_arg(s)
+        if K.tag(strands) == K.tag(t) and K.tag(bonds) == K.tag(s):
+            raise Unevaluated()
+        return Expr("BioSequence", strands, bonds)
+    if isinstance(t, Expr) and t.head == "Entity" and len(t.args) == 2 and t.args[0] == "BioSequenceType":
+        t = t.args[1]
+    if t == "HybridStrand":
+        if not is_list(s):
+            raise ValueError("BioSequence: a HybridStrand takes a list of strands")
+        strands = L(*(_strand(x) for x in s.args))
+        bonds = _bonds_arg(rest[0]) if rest else L()
+        new = Expr("BioSequence", "HybridStrand", strands, bonds)
+        if rest and K.tag(strands) == K.tag(s) and K.tag(bonds) == K.tag(rest[0]):
+            raise Unevaluated()
+        return new
+    if not (isinstance(t, str) or is_sym(t, "None")):
+        raise Unevaluated()
+    if isinstance(s, Expr) and s.head in ("StringExpression", "Alternatives"):
+        return Expr("BioSequence", t, _pattern_letters(s, t), *rest)
+    if not isinstance(s, str):
+        raise Unevaluated()
+    if _base_type(t) == "Peptide" and not set(s) <= _PEP_ALPHA:
+        conv = _aa3_convert(s)
+        if conv is not None:
+            return Expr("BioSequence", t, conv, *(rest or [L()]))
+    if rest:
+        b = rest[0]
+        if isinstance(b, str):
+            return Expr("BioSequence", t, s, _dot_bracket(b, len(s)))
+        nb = _bonds_arg(b)
+        if nb is not b:
+            return Expr("BioSequence", t, s, nb)
+    raise Unevaluated()
+
+
+def _bio_parts(x):
+    """(type, string, bonds or None) of a simple BioSequence, else None."""
+    if isinstance(x, Expr) and x.head == "BioSequence" and len(x.args) in (2, 3) and isinstance(x.args[1], str) \
+            and (isinstance(x.args[0], str) or is_sym(x.args[0], "None")) and x.args[0] != "HybridStrand":
+        return x.args[0], x.args[1], (x.args[2] if len(x.args) == 3 else None)
+    return None
+
+
+def _bio_valid(x):
+    p = _bio_parts(x)
+    if p is not None:
+        t, s, b = p
+        if is_sym(t, "None"):
+            return True
+        a = _alphabet(t)
+        return a is not None and set(s) <= a and (b is None or is_list(b))
+    if isinstance(x, Expr) and x.head == "BioSequence":
+        if len(x.args) == 3 and x.args[0] == "HybridStrand" and is_list(x.args[1]):
+            return all(_bio_valid(y) and _bio_parts(y) and not str(_bio_parts(y)[0]).startswith("Circular")
+                       for y in x.args[1].args)
+        if len(x.args) == 2 and is_list(x.args[0]) and is_list(x.args[1]):
+            return all(_bio_valid(y) for y in x.args[0].args)
+    return False
+
+
+def _bio_kind(x):
+    p = _bio_parts(x)
+    if p is not None:
+        return p[0] if isinstance(p[0], str) else "None"
+    if len(x.args) == 3 and x.args[0] == "HybridStrand":
+        return "HybridStrand"
+    return "SequenceCollection"
+
+
+def _fully_specified(x):
+    p = _bio_parts(x)
+    if p is not None:
+        t, s, _ = p
+        f = _full_alphabet(t) if isinstance(t, str) else None
+        return f is not None and set(s) <= f
+    strands = x.args[1].args if _bio_kind(x) == "HybridStrand" else x.args[0].args
+    return all(_fully_specified(y) for y in strands)
+
+
+@fn("BioSequenceQ", area=AREA, status="added",
+    notes="True for a valid BioSequence (letters in the type's alphabet); BioSequenceQ[x, type] also checks "
+          "the type (a string pattern such as \"DNA\" | \"RNA\", \"HybridStrand\", \"SequenceCollection\"), "
+          "\"FullySpecified\" or \"FullySpecifiedtype\" (no degenerate letters)")
+def _biosequenceq(x, *rest):
+    if len(rest) > 1:
+        raise ValueError("BioSequenceQ called with too many arguments")
+    if not _bio_valid(x):
+        return False
+    if not rest:
+        return True
+    spec = rest[0]
+    kind = _bio_kind(x)
+    if isinstance(spec, str) and spec.startswith("FullySpecified"):
+        sub = spec[len("FullySpecified"):]
+        if sub and sub != kind:
+            return False
+        return _fully_specified(x)
+    return ev(Expr("MatchQ", kind, spec)) is True
+
+
+def _bio_rebuild(x, t, s, bonds):
+    if bonds is None:
+        return Expr("BioSequence", t, s)
+    return Expr("BioSequence", t, s, bonds)
+
+
+def _nucleic(x, fname):
+    p = _bio_parts(x)
+    if p is None or not _bio_valid(x) or _base_type(p[0]) not in ("DNA", "RNA"):
+        raise Unevaluated()
+    return p
+
+
+def _complement_str(s, t):
+    rna = _base_type(t) == "RNA"
+    return "".join(("U" if rna and _COMPLEMENT[c] == "T" else _COMPLEMENT[c]) for c in s)
+
+
+@fn("BioSequenceComplement", area=AREA, status="added",
+    notes="complementary DNA/RNA strand letter by letter (degenerate letters too: R<->Y, K<->M, B<->V, D<->H); "
+          "unevaluated for peptides and invalid sequences")
+def _biocomp(x):
+    if isinstance(x, str):
+        x = ev(Expr("BioSequence", x))
+    t, s, b = _nucleic(x, "BioSequenceComplement")
+    return _bio_rebuild(x, t, _complement_str(s, t), b)
+
+
+@fn("BioSequenceReverseComplement", area=AREA, status="added",
+    notes="reverse of the complementary DNA/RNA strand (bond positions mirrored); unevaluated for peptides and "
+          "invalid sequences")
+def _biorevcomp(x):
+    if isinstance(x, str):
+        x = ev(Expr("BioSequence", x))
+    t, s, b = _nucleic(x, "BioSequenceReverseComplement")
+    n = len(s)
+    if b is not None and b.args:
+        b = L(*(_mirror_bond(bd, n) for bd in b.args))
+    return _bio_rebuild(x, t, _complement_str(s, t)[::-1], b)
+
+
+def _mirror_bond(bd, n):
+    pos = bd.args[0]
+    if is_list(pos) and all(isinstance(i, int) for i in pos.args):
+        return Expr("Bond", L(*sorted(n + 1 - i for i in pos.args)), *bd.args[1:])
+    raise ValueError("BioSequenceReverseComplement: cannot mirror bond " + repr(bd))
+
+
+@fn("BioSequenceTranscribe", area=AREA, status="added",
+    notes="DNA -> RNA (T -> U) and RNA -> DNA (U -> T), circular forms kept; unevaluated for peptides and "
+          "invalid sequences")
+def _biotranscribe(x):
+    if isinstance(x, str):
+        x = ev(Expr("BioSequence", x))
+    t, s, b = _nucleic(x, "BioSequenceTranscribe")
+    circ = "Circular" if t.startswith("Circular") else ""
+    if _base_type(t) == "DNA":
+        return _bio_rebuild(x, circ + "RNA", s.replace("T", "U"), b)
+    return _bio_rebuild(x, circ + "DNA", s.replace("U", "T"), b)
+
+
+_GENETIC_CODES = {
+    1: ("FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG", {"TTG", "CTG", "ATG"}),
+    2: ("FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIMMTTTTNNKKSS**VVVVAAAADDEEGGGG",
+        {"ATT", "ATC", "ATA", "ATG", "GTG"}),
+    3: ("FFLLSSSSYY**CCWWTTTTPPPPHHQQRRRRIIMMTTTTNNKKSSRRVVVVAAAADDEEGGGG", None),
+    4: ("FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG", None),
+    5: ("FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSSSVVVVAAAADDEEGGGG", None),
+    11: ("FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+         {"TTG", "CTG", "ATT", "ATC", "ATA", "ATG", "GTG"}),
+}
+_CODE_NAMES = {"Standard": 1, "VertebrateMitochondrial": 2, "YeastMitochondrial": 3,
+               "MoldMitochondrial": 4, "InvertebrateMitochondrial": 5, "Bacterial": 11,
+               "BacterialArchaealAndPlantPlastid": 11}
+_TCAG = "TCAG"
+_CODONS = [a + b + c for a in _TCAG for b in _TCAG for c in _TCAG]
+
+
+def _code_table(spec, fname):
+    """(dict codon -> letter, start codon set or None)."""
+    if spec is None or is_sym(spec, "Automatic"):
+        spec = 1
+    if isinstance(spec, Expr) and spec.head == "Entity" and len(spec.args) == 2 \
+            and spec.args[0] == "GeneticTranslationTable":
+        spec = spec.args[1]
+    if isinstance(spec, str) and spec in _CODE_NAMES:
+        spec = _CODE_NAMES[spec]
+    if isinstance(spec, int) and not isinstance(spec, bool):
+        if spec not in _GENETIC_CODES:
+            raise NotImplementedError(f"{fname}: genetic code {spec} is not available "
+                                      f"(available: {sorted(_GENETIC_CODES)})")
+        aa, starts = _GENETIC_CODES[spec]
+        return dict(zip(_CODONS, aa)), starts
+    if isinstance(spec, str) and len(spec) == 64:
+        return dict(zip(_CODONS, spec)), None
+    if is_assoc(spec) or (is_list(spec) and all(is_rule(r) for r in spec.args)):
+        tab = {}
+        for r in spec.args:
+            k, v = r.args[0], ev(r.args[1])
+            if not (isinstance(k, str) and isinstance(v, str) and len(k) == 3 and len(v) == 1):
+                raise ValueError(f"{fname}: invalid codon rule {r!r}")
+            tab[k.upper().replace("U", "T")] = v
+        return tab, None
+    raise ValueError(f"{fname}: invalid translation table {spec!r}")
+
+
+def _translate_codon(c, tab):
+    choices = set()
+    for inst in itertools.product(*[_NUC_DEGEN.get(ch, ch) for ch in c]):
+        k = "".join(inst)
+        if k not in tab:
+            return None
+        choices.add(tab[k])
+    if len(choices) == 1:
+        v = choices.pop()
+        return "." if v == "*" else v
+    return "X"
+
+
+@fn("BioSequenceTranslate", area=AREA, status="added",
+    notes="translates DNA/RNA codons to a Peptide (stop codons give \".\", incomplete final codons dropped, a "
+          "degenerate codon gives its amino acid if all its instances agree, else X); genetic codes 1-5 and 11 "
+          "by number or name, a 64-letter TCAG-ordered string or codon rules; third argument True (start codons "
+          "of codes 1, 2, 11 give M), a table, or rules for the first codon")
+def _biotranslate(x, table=None, start=None):
+    if isinstance(x, str):
+        x = ev(Expr("BioSequence", x))
+    t, s, _ = _nucleic(x, "BioSequenceTranslate")
+    s = s.replace("U", "T")
+    tab, starts = _code_table(table, "BioSequenceTranslate")
+    codons = [s[i:i + 3] for i in range(0, len(s) - len(s) % 3, 3)]
+    out = []
+    for k, c in enumerate(codons):
+        use = tab
+        if k == 0 and start is not None and start is not False:
+            if start is True:
+                if starts is None:
+                    raise NotImplementedError("BioSequenceTranslate: start codons are only known for genetic "
+                                              "codes 1, 2 and 11")
+                if c in starts:
+                    out.append("M")
+                    continue
+            else:
+                st, _ = _code_table(start, "BioSequenceTranslate")
+                use = dict(tab)
+                use.update(st)
+        r = _translate_codon(c, use)
+        if r is None:
+            raise ValueError(f"BioSequenceTranslate: no translation for codon {c!r}")
+        out.append(r)
+    circ = "Circular" if t.startswith("Circular") else ""
+    return Expr("BioSequence", circ + "Peptide", "".join(out))
+
+
+def _instances_of(s, t):
+    b = _base_type(t)
+    choices = []
+    for c in s:
+        if b == "Peptide":
+            opts = _PEP_DEGEN.get(c, c)
+        else:
+            opts = _NUC_DEGEN.get(c, c)
+            if b == "RNA":
+                opts = opts.replace("T", "U")
+        choices.append(sorted(opts))
+    return choices
+
+
+@fn("BioSequenceInstances", area=AREA, status="added",
+    notes="all fully specified sequences matching a degenerate BioSequence, sorted; BioSequenceInstances[seq, n] "
+          "gives at most n of them (the first n in sorted order)")
+def _bioinstances(x, n=None):
+    p = _bio_parts(x)
+    if p is None or not _bio_valid(x) or not isinstance(p[0], str):
+        raise Unevaluated()
+    t, s, b = p
+    if n is not None:
+        n = _int(n, "BioSequenceInstances", "count", 0)
+    choices = _instances_of(s, t)
+    out = []
+    for combo in itertools.product(*choices):
+        if n is not None and len(out) >= n:
+            break
+        out.append(_bio_rebuild(x, t, "".join(combo), b))
+    return L(*out)
+
+
+def _bonds_of(x):
+    if _bio_parts(x) is not None:
+        b = x.args[2] if len(x.args) == 3 else L()
+        return b
+    return x.args[2] if _bio_kind(x) == "HybridStrand" else x.args[1]
+
+
+def _set_bonds(x, bonds):
+    if _bio_parts(x) is not None:
+        return Expr("BioSequence", x.args[0], x.args[1], bonds)
+    if _bio_kind(x) == "HybridStrand":
+        return Expr("BioSequence", "HybridStrand", x.args[1], bonds)
+    return Expr("BioSequence", x.args[0], bonds)
+
+
+@fn("BioSequenceModify", area=AREA, status="added",
+    notes="\"MakeCircular\", \"MakeLinear\", \"DropIncompleteCodons\", \"DropToStartCodon\" (standard start "
+          "codons TTG/CTG/ATG), \"DropFromStopLetter\", {\"DeleteBond\", bond} and {\"AddToCollection\", seqs}; "
+          "\"AddBond\" (which validates base pairing chemistry) and the bond-representation conversions are not "
+          "supported")
+def _biomodify(x, op):
+    if not _bio_valid(x):
+        raise Unevaluated()
+    p = _bio_parts(x)
+    if isinstance(op, str):
+        if p is None:
+            raise NotImplementedError(f"BioSequenceModify: {op!r} on strands/collections is not supported")
+        t, s, b = p
+        if op in ("MakeCircular", "MakeLinear"):
+            if not isinstance(t, str):
+                raise ValueError("BioSequenceModify: the sequence has no type")
+            base = _base_type(t)
+            return _bio_rebuild(x, ("Circular" + base) if op == "MakeCircular" else base, s, b)
+        if op == "DropIncompleteCodons":
+            if _base_type(t) not in ("DNA", "RNA"):
+                raise Unevaluated()
+            return _bio_rebuild(x, t, s[:len(s) - len(s) % 3], b)
+        if op == "DropToStartCodon":
+            if _base_type(t) not in ("DNA", "RNA"):
+                raise Unevaluated()
+            dna = s.replace("U", "T")
+            idx = [dna.find(c) for c in ("TTG", "CTG", "ATG")]
+            idx = [i for i in idx if i >= 0]
+            if not idx:
+                raise ValueError("BioSequenceModify: the sequence has no start codon")
+            return _bio_rebuild(x, t, s[min(idx):], None if b is None else L())
+        if op == "DropFromStopLetter":
+            if _base_type(t) != "Peptide":
+                raise Unevaluated()
+            k = s.find(".")
+            return x if k < 0 else _bio_rebuild(x, t, s[:k], None if b is None else L())
+        raise NotImplementedError(f"BioSequenceModify: modification {op!r} is not supported")
+    if is_list(op) and len(op.args) == 2 and isinstance(op.args[0], str):
+        name, arg = op.args
+        if name == "DeleteBond":
+            bonds = _bonds_of(x)
+            gone = {K.tag(bd) for bd in _bonds_arg(arg, "BioSequenceModify").args}
+            return _set_bonds(x, L(*(bd for bd in bonds.args if K.tag(bd) not in gone)))
+        if name == "AddToCollection":
+            new = [_strand(y) for y in (arg.args if is_list(arg) else [arg])]
+            if _bio_kind(x) == "SequenceCollection":
+                return Expr("BioSequence", L(*x.args[0].args, *new), x.args[1])
+            return Expr("BioSequence", L(_strand(x), *new), L())
+        raise NotImplementedError(f"BioSequenceModify: modification {name!r} is not supported")
+    raise ValueError(f"BioSequenceModify: invalid modification {op!r}")
+
+
+_CHEM = {"A": "Adenine", "C": "Cytosine", "G": "Guanine", "T": "Thymine", "U": "Uracil"}
+_BIO_PROPS = ("AbbreviationSequence", "ChemicalList", "ChemicalPatternList", "HELM", "MetaInformation",
+              "MolarMass", "MolecularMass", "Properties", "SequenceBondCount", "SequenceBondList",
+              "SequenceLength", "SequencePattern", "SequenceString", "SequenceType")
+
+
+def _letter_options(c, t):
+    return _instances_of(c, t)[0]
+
+
+def _bio_property(x, prop):
+    if not isinstance(prop, str):
+        raise Unevaluated()
+    if prop == "Properties":
+        return L(*_BIO_PROPS)
+    p = _bio_parts(x)
+    if p is None:
+        kind = _bio_kind(x)
+        strands = x.args[1].args if kind == "HybridStrand" else x.args[0].args
+        if prop in ("SequenceType", "SequenceString", "SequenceLength"):
+            vals = [_bio_property(y, prop) for y in strands]
+            if kind == "HybridStrand":
+                return L(*vals)
+            return L(*(v if is_list(v) else L(v) for v in vals))
+        if prop == "SequenceBondList":
+            return _bonds_of(x)
+        if prop == "SequenceBondCount":
+            return len(_bonds_of(x).args)
+        if prop in ("MolecularMass", "MolarMass", "MetaInformation"):
+            raise NotImplementedError(f"BioSequence: property {prop!r} is not available")
+        raise NotImplementedError(f"BioSequence: property {prop!r} is not available for strands and collections")
+    t, s, b = p
+    if prop == "SequenceString":
+        return s
+    if prop == "SequenceLength":
+        return len(s)
+    if prop == "SequenceType":
+        return Expr("Entity", "BioSequenceType", t) if isinstance(t, str) else Symbol("None")
+    if prop == "SequenceBondList":
+        return b if b is not None else L()
+    if prop == "SequenceBondCount":
+        return len(b.args) if b is not None else 0
+    if not _bio_valid(x) or not isinstance(t, str):
+        raise ValueError(f"BioSequence: property {prop!r} needs a valid typed sequence")
+    base = _base_type(t)
+    if prop == "SequencePattern":
+        parts, buf = [], []
+        for c in s:
+            opts = _letter_options(c, t)
+            if len(opts) == 1:
+                buf.append(opts[0])
+            else:
+                if buf:
+                    parts.append("".join(buf))
+                    buf = []
+                parts.append(Expr("Alternatives", *opts))
+        if buf:
+            parts.append("".join(buf))
+        return parts[0] if len(parts) == 1 else Expr("StringExpression", *parts)
+    if prop == "AbbreviationSequence":
+        if base != "Peptide":
+            return Expr("Missing", "NotApplicable")
+        if "." in s:
+            raise ValueError("BioSequence: AbbreviationSequence of a sequence with stop letters")
+        return "".join(_AA3_INV[c] for c in s)
+    if prop in ("ChemicalList", "ChemicalPatternList"):
+        if base == "Peptide":
+            raise NotImplementedError("BioSequence: chemical entities for amino acids are not available")
+        out = []
+        for c in s:
+            opts = _letter_options(c, t)
+            ents = [Expr("Entity", "Chemical", _CHEM[o]) for o in opts]
+            if len(ents) > 1 and prop == "ChemicalList":
+                raise ValueError("BioSequence: ChemicalList needs a fully specified sequence; use "
+                                 "ChemicalPatternList")
+            out.append(ents[0] if len(ents) == 1 else Expr("Alternatives", *ents))
+        return L(*out)
+    if prop == "HELM":
+        if t.startswith("Circular") or not _fully_specified(x) or (b is not None and b.args):
+            raise NotImplementedError("BioSequence: HELM is only available for linear, fully specified "
+                                      "sequences without bonds")
+        if base == "Peptide":
+            if "." in s:
+                raise ValueError("BioSequence: HELM of a peptide with stop letters")
+            return "PEPTIDE1{" + ".".join(s) + "}$$$$V2.0"
+        sugar = "D" if base == "DNA" else "R"
+        return "RNA1{" + ".".join(f"{sugar}({c})" + ("P" if i < len(s) - 1 else "") for i, c in enumerate(s)) \
+            + "}$$$$V2.0"
+    if prop in ("MolecularMass", "MolarMass", "MetaInformation"):
+        raise NotImplementedError(f"BioSequence: property {prop!r} is not available")
+    raise ValueError(f"BioSequence: unknown property {prop!r}")
+
+
+def _bio_hook(head, args, ev_):
+    if head.head == "BioSequence" and len(args) == 1 and isinstance(args[0], str) and \
+            (_bio_parts(head) is not None or _bio_valid(head)):
+        return _bio_property(head, args[0])
+    return K.UNHANDLED
+
+
+KL.COMPOUND_HEAD_HOOKS["BioSequence"] = _bio_hook
