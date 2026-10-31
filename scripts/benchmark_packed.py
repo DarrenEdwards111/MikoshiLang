@@ -34,7 +34,7 @@ def main():
                "v = RandomReal[1, 100000]; w = RandomReal[1, 100000];")
     try:
         s.evaluate("p200 = ToPackedArray[a200]; pv = ToPackedArray[v]; pw = ToPackedArray[w];")
-        packed = bool(s.evaluate("PackedArrayQ[p200]"))
+        packed = str(s.evaluate("PackedArrayQ[p200]")) == "True"
     except Exception:          # older checkouts: no ToPackedArray
         packed = False
     A = np.random.default_rng(1).random((200, 200))
