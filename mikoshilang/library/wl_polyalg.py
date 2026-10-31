@@ -3254,3 +3254,167 @@ def _is_poly_deg1(g, x):
     s = sym(g, "FunctionPoles")
     xs = sp.Symbol(x.name)
     return s.is_polynomial(xs) and sp.Poly(s, xs).degree() == 1
+
+
+# ───────────────────────────── PiecewiseExpand ─────────────────────────────
+
+def _pw(cases, default=0):
+    return Expr("Piecewise", L(*(L(v, c) for v, c in cases)), default)
+
+
+def _pw_pre(e, reals, D, xvar, fname):
+    """Rewrite piecewise-defined heads as Piecewise (bottom-up)."""
+    if not isinstance(e, Expr):
+        return e
+    if not isinstance(e.head, str):
+        return e
+    h = e.head
+    if h == "If" and len(e.args) in (2, 3):
+        c, a = _pw_pre(e.args[0], reals, D, xvar, fname), _pw_pre(e.args[1], reals, D, xvar, fname)
+        b = _pw_pre(e.args[2], reals, D, xvar, fname) if len(e.args) == 3 else Symbol("Null")
+        return _pw([(a, c)], b)
+    a = [_pw_pre(t, reals, D, xvar, fname) for t in e.args]
+    if h == "UnitStep":
+        return _pw([(1, Expr("And", *(Expr("GreaterEqual", t, 0) for t in a)))], 0)
+    if h == "Boole" and len(a) == 1:
+        return _pw([(1, a[0])], 0)
+    if h == "Ramp" and len(a) == 1:
+        return _pw([(a[0], Expr("GreaterEqual", a[0], 0))], 0)
+    if h == "KroneckerDelta":
+        return _pw([(1, Expr("Equal", *a))], 0) if len(a) > 1 else _pw([(1, Expr("Equal", a[0], 0))], 0)
+    if h == "Clip" and len(a) == 1:
+        return _pw([(-1, Expr("Less", a[0], -1)), (1, Expr("Greater", a[0], 1))], a[0])
+    if h in ("Max", "Min") and len(a) >= 1:
+        flat = []
+        for t in a:
+            flat += list(t.args) if is_list(t) else [t]
+        if len(flat) == 1:
+            return flat[0]
+        op = "GreaterEqual" if h == "Max" else "LessEqual"
+        cases = []
+        for i, t in enumerate(flat[:-1]):
+            cases.append((t, Expr("And", *(Expr(op, Expr("Plus", t, Expr("Times", -1, u)), 0)
+                                           for u in flat[i + 1:]))))
+        return _pw(cases, flat[-1])
+    if reals and h == "Abs" and len(a) == 1:
+        return _pw([(Expr("Times", -1, a[0]), Expr("Less", a[0], 0))], a[0])
+    if reals and h == "Sign" and len(a) == 1:
+        return _pw([(1, Expr("Greater", a[0], 0)), (-1, Expr("Less", a[0], 0))], 0)
+    if h in ("Floor", "Ceiling", "Round") and len(a) == 1 and D is not None:
+        r = _pw_int_parts(h, a[0], D, xvar, fname)
+        if r is not None:
+            return r
+    return Expr(h, *a)
+
+
+def _pw_int_parts(h, g, D, xvar, fname):
+    from sympy.calculus.util import function_range
+    try:
+        gs = _sp_real(g, [xvar], fname)
+        x = sp.Symbol(xvar.name, real=True)
+        if gs.free_symbols - {x}:
+            return None
+        rng = function_range(gs, x, D)
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(rng, sp.Interval) or not rng.start.is_finite or not rng.end.is_finite:
+        return None
+    lo, hi = int(sp.floor(rng.start)) - 1, int(sp.ceiling(rng.end)) + 1
+    maxc = _SYSC.get("$MaxPiecewiseCases", 100)
+    if hi - lo > maxc:
+        return None
+    cases = []
+    for n in range(lo, hi + 1):
+        half = sp.Rational(1, 2)
+        if h == "Floor":
+            r1, r2 = gs >= n, gs < n + 1
+        elif h == "Ceiling":
+            r1, r2 = gs > n - 1, gs <= n
+        elif n % 2 == 0:
+            r1, r2 = gs >= n - half, gs <= n + half
+        else:
+            r1, r2 = gs > n - half, gs < n + half
+        S = sp.Intersection(sp.solveset(r1, x, D), sp.solveset(r2, x, D))
+        if isinstance(S, sp.ConditionSet):
+            return None
+        if S.is_empty:
+            continue
+        cases.append((n, fromsp(S.as_relational(x))))
+    return _pw(cases, 0)
+
+
+@fn("PiecewiseExpand", area=AREA, status="added",
+    notes="PiecewiseExpand[expr] / [expr, cond] / [expr, Reals]: nested Piecewise, If, Max, Min, UnitStep, Boole, "
+          "Ramp, Clip, KroneckerDelta (and Abs, Sign over Reals) become one Piecewise (SymPy piecewise_fold plus "
+          "condition simplification; cases are equivalent to Wolfram's, conditions may be written differently); "
+          "Floor/Ceiling/Round of a univariate expression are expanded when the condition bounds its range (at "
+          "most $MaxPiecewiseCases cases); inequalities with piecewise sides are expanded to conditions")
+def _pwexpand(e, *rest):
+    fname = "PiecewiseExpand"
+    rest, opts = _opts(rest, ("Assumptions", "Method"), fname)
+    reals = False
+    cond = True
+    for r in rest:
+        if isinstance(r, Symbol) and r.name in ("Reals", "Complexes"):
+            reals = r.name == "Reals"
+        else:
+            cond = r if cond is True else Expr("And", cond, r)
+    asm = opts.get("Assumptions")
+    if asm is not None and asm is not True:
+        cond = asm if cond is True else Expr("And", cond, asm)
+    D, xvar = None, None
+    if cond is not True:
+        fv = [v for v in ev(Expr("Variables", Expr("List", cond))).args] if False else None
+        syms = sorted({s.name for s in _atoms_sym(cond)})
+        if len(syms) == 1:
+            xvar = Symbol(syms[0])
+            try:
+                D = _real_set(_sp_real(cond, [xvar], fname), sp.Symbol(syms[0], real=True), fname)
+            except NotImplementedError:
+                D = None
+    pre = _pw_pre(e, reals, D, xvar, fname)
+    if not _contains(pre, lambda s: _is_head(s, "Piecewise")):
+        return pre
+    s = tosp(pre, fname)
+    s = s.xreplace({v: sp.Symbol(v.name, real=True) for v in s.free_symbols})
+    from sympy.functions.elementary.piecewise import piecewise_fold
+    if isinstance(s, sp.logic.boolalg.Boolean) and not isinstance(s, sp.Piecewise):
+        s = _fold_rel(s)
+        try:
+            s = sp.simplify_logic(s) if len(s.atoms(sp.core.relational.Relational)) <= 6 else s
+        except Exception:  # noqa: BLE001
+            pass
+        return ev(fromsp(s.xreplace({v: sp.Symbol(v.name) for v in s.free_symbols})))
+    s = piecewise_fold(s)      # (SymPy's piecewise_simplify is not used: it can merge cases incorrectly)
+    if isinstance(s, sp.Piecewise) and len(s.args) - 1 > _SYSC.get("$MaxPiecewiseCases", 100):
+        raise ValueError(f"{fname}: more than $MaxPiecewiseCases cases")
+    s = s.xreplace({v: sp.Symbol(v.name) for v in s.free_symbols})
+    return ev(fromsp(s))
+
+
+def _fold_rel(b):
+    """Relations whose sides are Piecewise -> Or of (case condition && relation of the case values)."""
+    from sympy.functions.elementary.piecewise import piecewise_fold
+    if isinstance(b, sp.core.relational.Relational):
+        d = piecewise_fold(b.lhs - b.rhs)
+        if isinstance(d, sp.Piecewise):
+            terms, prev = [], sp.true
+            for val, c in d.args:
+                terms.append(sp.And(prev, c, type(b)(val, 0)))
+                prev = sp.And(prev, sp.Not(c))
+            return sp.Or(*terms)
+        return b
+    if isinstance(b, (sp.And, sp.Or, sp.Not)):
+        return type(b)(*(_fold_rel(a) for a in b.args))
+    return b
+
+
+def _atoms_sym(e):
+    out_ = []
+    if isinstance(e, Symbol):
+        if e.name not in ("True", "False", "Pi", "E", "I", "Infinity"):
+            out_.append(e)
+    elif isinstance(e, Expr):
+        for a in e.args:
+            out_ += _atoms_sym(a)
+    return out_
