@@ -2,8 +2,8 @@
 
 Discrete transforms (Fourier, InverseFourier, FourierDCT, FourierDST and their matrices, DiscreteHadamardTransform,
 DiscreteHilbertTransform, DiscreteChirpZTransform, ListZTransform, ListFourierSequenceTransform), spectra
-(PeriodogramArray, CepstrumArray, CepstrogramArray, ShortTimeFourier), list filters and convolution (ListConvolve,
-ListCorrelate, MovingAverage, MovingMedian, MovingMap, ExponentialMovingAverage, FindPeaks, WienerFilter, FIR
+(PeriodogramArray, CepstrumArray, CepstrogramArray), list filters and convolution (ListConvolve,
+ListCorrelate, MovingAverage, MovingMedian, MovingMap, ExponentialMovingAverage, FindPeaks, FIR
 filters), symbolic transforms and convolutions (FourierSequenceTransform, BilateralLaplaceTransform,
 BilateralZTransform, HankelTransform, DiscreteConvolve, ...) and kernel matrices (GaussianMatrix, DiskMatrix,
 SavitzkyGolayMatrix, ...).  Wavelets live in ``wl_signal_wavelets``.
