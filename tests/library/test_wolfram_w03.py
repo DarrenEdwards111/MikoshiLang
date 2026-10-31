@@ -1,0 +1,624 @@
+"""Differential tests for Wolfram coverage batch W03 (patterns, structural & functional extras, ordering,
+arrays, Nearest, NumericArray, SymmetrizedArray, data structures and trees).
+
+Expected values are Wolfram Language results: examples from the reference pages
+(reference.wolfram.com/language/ref/<Name>.html) or results derived from their Details sections
+(e.g. TreeSize[Tree[{t1, t2}]] = 1 + TreeSize[t1] + TreeSize[t2], TreeRules ~ TreeFold[{Rule, Identity}]).
+Some expectations are cross-checked against independent Python computations in this file.
+"""
+import itertools
+
+import numpy as np
+import pytest
+
+from _harness import Pred, Raises, check, ids
+from mikoshilang.expr import Expr
+
+
+def _is_tree(x):
+    return isinstance(x, Expr) and x.head == "Tree"
+
+
+PATTERNS = [
+    ("MatchQ[f[a, b, c], f[PatternSequence[a, b], c]]", "True"),
+    ("MatchQ[f[a, b, c], f[PatternSequence[a, c], b]]", "False"),
+    ("f[a, b, a, b, a, b] /. f[x : PatternSequence[a, b] ..] :> {x}", "{a, b, a, b, a, b}"),
+    ("Cases[{f[1, 2], f[1, 2, 3]}, f[PatternSequence[1, 2] | PatternSequence[1, 2, 3]]]", "{f[1, 2], f[1, 2, 3]}"),
+    ("ReplaceAll[f[a, b, c], f[x : PatternSequence[_, _], c] :> {x}]", "{a, b}"),
+    ("MatchQ[f[], f[PatternSequence[]]]", "True"),
+    ("MatchQ[f[b, a], f[OrderlessPatternSequence[a, b]]]", "True"),
+    ("MatchQ[f[b, a, c], f[OrderlessPatternSequence[a, b]]]", "False"),
+    ("f[1, x, 2] /. f[OrderlessPatternSequence[x, r__]] :> {r}", "{1, 2}"),
+    ("MatchQ[_, Verbatim[_]]", "True"),
+    ("MatchQ[x, Verbatim[_]]", "False"),
+    ("Cases[{x_, y, _}, Verbatim[_]]", "{_}"),
+    ("{f[x_], f[y]} /. Verbatim[f[x_]] -> z", "{z, f[y]}"),
+    ("MatchQ[<|a -> 1, b -> 2|>, KeyValuePattern[a -> _]]", "True"),
+    ("MatchQ[<|a -> 1, b -> 2|>, KeyValuePattern[{b -> 2, a -> 1}]]", "True"),
+    ("MatchQ[<|a -> 1, b -> 2|>, KeyValuePattern[c -> _]]", "False"),
+    ("MatchQ[{a -> 1, b -> 2}, KeyValuePattern[{b -> _Integer}]]", "True"),
+    ("Cases[{<|x -> 1|>, <|x -> 2, y -> 3|>}, KeyValuePattern[y -> _]]", "{<|x -> 2, y -> 3|>}"),
+]
+
+ORDER = [
+    ("Cyclic[{a, b, c}][5]", "b"),
+    ("Cyclic[{a, b, c}][-3]", "c"),
+    ("Cyclic[{a, b, c}][0]", "c"),
+    ("Cyclic[{a, b, c}][1]", "a"),
+    ("{a, b, c, d, e} /. Dispatch[{a -> b, b -> c, c -> a, d -> e, e -> d}]", "{b, c, a, e, d}"),
+    ("Replace[x, Dispatch[{x -> 1, y -> 2}]]", "1"),
+    ("Normal[Dispatch[{a -> b, c -> d}]]", "{a -> b, c -> d}"),
+    ("Normal[Dispatch[<|a -> b|>]]", "{a -> b}"),
+    ("Dispatch[{1, 2}]", Raises()),
+    ("AlphabeticOrder[\"a\", \"b\"]", "1"),
+    ("AlphabeticOrder[\"cat\", \"cart\"]", "-1"),
+    ("AlphabeticOrder[\"A\", \"c\"]", "1"),
+    ("AlphabeticOrder[\"apple\", \"apple\"]", "0"),
+    ("AlphabeticOrder[][\"b\", \"a\"]", "-1"),
+    ("AlphabeticOrder[\"a\", \"A\"]", "1"),
+    ("AlphabeticOrder[\"a\", \"A\", CaseOrdering -> \"UpperFirst\"]", "-1"),
+    ("AlphabeticOrder[\"a\", \"A\", CaseOrdering -> \"LowerFirst\"]", "1"),
+    ("AlphabeticSort[{\"a\", \"A\", \"b\", \"B\"}, CaseOrdering -> \"UpperFirst\"]", "{\"A\", \"a\", \"B\", \"b\"}"),
+    ("AlphabeticOrder[\"a\", \"A\", IgnoreCase -> True]", "0"),
+    ("AlphabeticSort[{\"cat\", \"Cat\", \"apple\", \"Banana\"}]", "{\"apple\", \"Banana\", \"cat\", \"Cat\"}"),
+    ("AlphabeticSort[{\"e\", \"\u00e9\", \"d\", \"f\"}]", "{\"d\", \"e\", \"\u00e9\", \"f\"}"),
+    ("AlphabeticSort[{\"b\", \"a\", \"c\"}]", "{\"a\", \"b\", \"c\"}"),
+    ("AlphabeticSort[{\"10\", \"9\", \"a\"}]", "{\"10\", \"9\", \"a\"}"),
+    ("LexicographicOrder[{a, b, c, d}, {c, d}]", "1"),
+    ("LexicographicOrder[{1, 2}, {1, 2, 3}]", "1"),
+    ("LexicographicOrder[{1, 3}, {1, 2}]", "-1"),
+    ("LexicographicOrder[{3, 1}, {2, 5}, NumericalOrder]", "-1"),
+    ("Sort[{{2, 1}, {1, 3}, {1, 2, 0}}, LexicographicOrder]", "{{1, 2, 0}, {1, 3}, {2, 1}}"),
+    ("NumericalOrder[3/2, 1]", "-1"),
+    ("NumericalOrder[1, 1.]", "0"),
+    ("NumericalOrder[Pi, 22/7]", "1"),
+    ("Sort[{3, Pi, 1/2, 2.5}, NumericalOrder]", "{1/2, 2.5, 3, Pi}"),
+]
+
+FUNCTIONAL = [
+    ("FoldWhile[Divide, 5!, Range[10], IntegerQ]", "1/6"),
+    ("FoldWhile[Divide, 5!, Range[10], IntegerQ, 1, -1]", "1"),
+    ("FoldWhile[Subtract, 12, {1, 2, 3, 4, 5, 6}, Positive]", "-3"),
+    ("FoldWhile[Plus, IntegerQ][{1, 2, 3}]", "6"),
+    ("FoldWhileList[Divide, 5!, Range[10], IntegerQ]", "{120, 120, 60, 20, 5, 1, 1/6}"),
+    ("FoldWhileList[Plus, 0, {1, 2, -3, 3, 1}, UnsameQ, All]", "{0, 1, 3, 0}"),
+    ("FoldWhileList[Plus, 0, {1, 2, 3}, # < 100 &]", "{0, 1, 3, 6}"),
+    ("UnsameQ[1, 2, 1]", "False"),
+    ("UnsameQ[x]", "True"),
+    ("SequenceFold[f, {x, y}, {a, b}]", "f[y, f[x, y, a], b]"),
+    ("SequenceFold[f, {x}, {a, b, c}]", "f[f[f[x, a], b], c]"),
+    ("SequenceFold[f, {x, y, z}, {a, b, c}, 2]", Raises()),
+    ("SequenceFoldList[f, {x, y}, {a, b}]", "{x, y, f[x, y, a], f[y, f[x, y, a], b]}"),
+    ("SequenceFoldList[Plus, {1, 1}, ConstantArray[0, 6]]", "{1, 1, 2, 3, 5, 8, 13, 21}"),
+    ("SequenceFoldList[Plus, {0}, {1, 2, 3}]", "{0, 1, 3, 6}"),
+    ("ReplaceAt[{a, a, a, a}, a -> xx, 2]", "{a, xx, a, a}"),
+    ("ReplaceAt[{a, a, a, a}, a -> xx, {{1}, {4}}]", "{xx, a, a, xx}"),
+    ("ReplaceAt[{{a, a}, {a, a}}, a -> xx, {2, 1}]", "{{a, a}, {xx, a}}"),
+    ("ReplaceAt[a -> xx, 2][{a, a, a, a}]", "{a, xx, a, a}"),
+    ("ReplaceAt[{1, 2, 3, 4}, x_ :> 2 x - 1, {{2}, {4}}]", "{1, 3, 3, 7}"),
+    ("ReplaceAt[<|\"x\" -> 1, \"y\" -> 2|>, 2 -> 5, \"y\"]", "<|\"x\" -> 1, \"y\" -> 5|>"),
+    ("SubsetMap[Reverse, {x1, x2, x3, x4, x5, x6}, {2, 4}]", "{x1, x4, x3, x2, x5, x6}"),
+    ("SubsetMap[RotateLeft, {x1, x2, x3, x4, x5, x6}, {2, 4, 5}]", "{x1, x4, x3, x5, x2, x6}"),
+    ("SubsetMap[RotateRight, {x1, x2, x3, x4, x5, x6}, 2 ;; 5]", "{x1, x5, x2, x3, x4, x6}"),
+    ("SubsetMap[Reverse, {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}, {{1, 1}, {2, 2}, {3, 3}}]", "{{9, 2, 3}, {4, 5, 6}, {7, 8, 1}}"),
+    ("SubsetMap[Reverse, {2, 3}][{a, b, c}]", "{a, c, b}"),
+    ("AssociationComap[{f, g, h}, x]", "<|f -> f[x], g -> g[x], h -> h[x]|>"),
+    ("AssociationComap[{Sin, Cos, Tan}][Pi/3]", "<|Sin -> Sqrt[3]/2, Cos -> 1/2, Tan -> Sqrt[3]|>"),
+    ("AssociationComap[{f, g, g}, x]", "<|f -> f[x], g -> g[x]|>"),
+    ("AllSameBy[{1, 3, 7, 5}, Mod[#, 2] &]", "True"),
+    ("AllSameBy[Length][{{1, 2, 3}, {4, 5, 6}, {7, 8}}]", "False"),
+    ("AllSameBy[{-5, 5, 3 + 4 I}, Abs]", "True"),
+    ("AllSameBy[{}, f]", "True"),
+    ("UniqueElements[{{1, 2, 2, b, b, a}, {4, 3, 2, 1}}]", "{{b, a}, {4, 3}}"),
+    ("UniqueElements[{{1, 2, 3, 4}, {2, 3, 4, 5}, {3, 4, 5, 6}}]", "{{1}, {}, {6}}"),
+    ("UniqueElements[{{a, b}, {b, c}, {c, d}}]", "{{a}, {}, {d}}"),
+    ("Discard[{1, 2, 4, 7, 6, 2}, EvenQ]", "{1, 7}"),
+    ("Discard[{1, 2, 4, 7, 6, 2}, EvenQ, 2]", "{1, 7, 6, 2}"),
+    ("Discard[EvenQ][{1, 2, 3}]", "{1, 3}"),
+    ("Discard[<|a -> 1, b -> 2|>, OddQ]", "<|b -> 2|>"),
+    ("Elementwise[Max][{1, -1, 3, -4, 5}, 0]", "{1, 0, 3, 0, 5}"),
+    ("Elementwise[Less][{1, 0, 2, -1}, 1]", "{False, True, False, True}"),
+    ("Elementwise[Min][2, {-4, 2}, {{8, 5}, {-1, 6}}]", "{{-4, -4}, {-1, 2}}"),
+    ("Wedge[a, b]", "Wedge[a, b]"),
+    ("Head[Wedge[a, b, c]]", "Wedge"),
+    ("Length[Wedge[a, b, c]]", "3"),
+    ("SuchThat[x, x > 0]", "SuchThat[x, x > 0]"),
+    ("Head[SuchThat[x, y]]", "SuchThat"),
+    ("SuchThat[x, y][[2]]", "y"),
+]
+
+SUBSETS = [
+    ("SubsetCases[{1, 2, 3, a, a, b, c}, {a, _Integer}]", "{{a, 1}, {a, 2}}"),
+    ("SubsetCases[{1, 2, 3, a, a, b, c}, {a, i_Integer} :> f[i]]", "{f[1], f[2]}"),
+    ("SubsetCases[{a, b, c, 1, 2}, {_Symbol, _Integer}, Overlaps -> True]",
+     "{{a, 1}, {a, 2}, {b, 1}, {b, 2}, {c, 1}, {c, 2}}"),
+    ("SubsetCases[{a, a, b, b, c}, {__}]", "{{a, a, b, b, c}}"),
+    ("SubsetCount[{a, a, b, b, b, c, c, d}, {a, b, c}]", "2"),
+    ("SubsetCount[{1, 2, a, b, 3, c, d, 4, 5, 6}, {_Integer, _Symbol}]", "4"),
+    ("SubsetCount[{1, 2, 3}, {_, _}, Overlaps -> True]", "3"),
+    ("SubsetPosition[{1, 2, 3, 4, 1, 3}, {1, 3}]", "{{1, 3}, {1, 6}, {5, 3}, {5, 6}}"),
+    ("SubsetPosition[{1, 2, 3}, {_}]", "{{1}, {2}, {3}}"),
+    ("SubsetPosition[{1, 2, 3, 4}, {_, 1}]", "{{2, 1}, {3, 1}, {4, 1}}"),
+    ("SubsetReplace[{1, 2, 3, 4, 5, 6}, {2, 4} -> x]", "{1, x, 3, 5, 6}"),
+    ("SubsetReplace[{1, 2, 3, a, a, b, c}, {a, x_Integer} :> f[x]]", "{3, f[1], f[2], b, c}"),
+    ("SubsetReplace[{a, x_Integer} :> f[x]][{1, 2, 3, a, a, b, c}]", "{3, f[1], f[2], b, c}"),
+]
+
+ARRAYS = [
+    ("ArrayPad[{1, 2, 3}, 1]", "{0, 1, 2, 3, 0}"),
+    ("ArrayPad[{{1, 2}, {3, 4}}, 1]", "{{0, 0, 0, 0}, {0, 1, 2, 0}, {0, 3, 4, 0}, {0, 0, 0, 0}}"),
+    ("ArrayPad[{1, 2, 3}, {2, 4}]", "{0, 0, 1, 2, 3, 0, 0, 0, 0}"),
+    ("ArrayPad[{1, 2, 3}, 2, x]", "{x, x, 1, 2, 3, x, x}"),
+    ("ArrayPad[{1, 2, 3}, 2, \"Fixed\"]", "{1, 1, 1, 2, 3, 3, 3}"),
+    ("ArrayPad[{1, 2, 3}, 2, \"Periodic\"]", "{2, 3, 1, 2, 3, 1, 2}"),
+    ("ArrayPad[{1, 2, 3}, 2, \"Reflected\"]", "{3, 2, 1, 2, 3, 2, 1}"),
+    ("ArrayPad[{1, 2, 3}, 2, \"Reversed\"]", "{2, 1, 1, 2, 3, 3, 2}"),
+    ("ArrayPad[Range[10], -2]", "{3, 4, 5, 6, 7, 8}"),
+    ("CenterArray[5]", "{0, 0, 1, 0, 0}"),
+    ("CenterArray[x, 5]", "{0, 0, x, 0, 0}"),
+    ("CenterArray[x, {3, 3}]", "{{0, 0, 0}, {0, x, 0}, {0, 0, 0}}"),
+    ("CenterArray[{1, 2, 3}, 7]", "{0, 0, 1, 2, 3, 0, 0}"),
+    ("ArrayFilter[f, Range[5], 1]", "{f[{1, 1, 2}], f[{1, 2, 3}], f[{2, 3, 4}], f[{3, 4, 5}], f[{4, 5, 5}]}"),
+    ("ArrayFilter[Total, {1, 2, 3, 4}, 1, Padding -> None]", "{6, 9}"),
+    ("ArrayFilter[Total, {1, 2, 3, 4}, 1, Padding -> 0]", "{3, 6, 9, 7}"),
+    ("ArrayFilter[Total, {1, 2, 3, 4}, 1, Padding -> \"Periodic\"]", "{7, 6, 9, 8}"),
+    ("ArrayFilter[Max, {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}, 1]", "{{5, 6, 6}, {8, 9, 9}, {8, 9, 9}}"),
+    ("ArrayFilter[f, {1, 2, 3}, {1, 0, 1}]", "{f[{1, Missing[], 2}], f[{1, Missing[], 3}], f[{2, Missing[], 3}]}"),
+    ("ArrayReduce[Mean, {{1, 2, 3, 4, 5}, {6, 7, 8, 9, 10}, {11, 12, 13, 14, 15}}, 2]", "{3, 8, 13}"),
+    ("ArrayReduce[Mean, {{1, 2, 3, 4, 5}, {6, 7, 8, 9, 10}, {11, 12, 13, 14, 15}}, 1]", "{6, 7, 8, 9, 10}"),
+    ("ArrayReduce[Total, {{{1, 2}, {3, 4}}, {{5, 6}, {7, 8}}}, {1, 3}]", "{14, 22}"),
+    ("ArrayReduce[f, {{1, 2}, {3, 4}}, -1]", "{f[{1, 2}], f[{3, 4}]}"),
+    ("UnitVector[3, 2]", "{0, 1, 0}"),
+    ("UnitVector[2]", "{0, 1}"),
+    ("UnitVector[4, 4]", "{0, 0, 0, 1}"),
+    ("UnitVector[2, 3]", Raises()),
+    ("RangeSpace[{{1, 2}, {2, 4}}]", "{{1, 2}}"),
+    ("RangeSpace[{{1, 2}, {3, 4}}]", "{{1, 0}, {0, 1}}"),
+    ("RangeSpace[{{1, 0, 1}, {0, 1, 1}, {1, 1, 2}}]", "{{1, 0, 1}, {0, 1, 1}}"),
+    ("Length[RangeSpace[{{1., 2.}, {2., 4.}}]]", "1"),
+]
+
+NEAREST = [
+    ("Nearest[{1, 2, 4, 8, 16, 32}, 20]", "{16}"),
+    ("Nearest[{1, 2, 4, 8, 16, 32}, 20, 3]", "{16, 8, 32}"),
+    ("Nearest[{1, 2, 3}, 2.5]", "{2, 3}"),
+    ("Nearest[{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}, {2, 3}]", "{{1, 1}}"),
+    ("Nearest[{1, 5, 10} -> {x, y, z}, 6]", "{y}"),
+    ("Nearest[{1, 5, 10} -> \"Index\", 6]", "{2}"),
+    ("Nearest[{1, 5, 10} -> {\"Element\", \"Index\", \"Distance\"}, 6]", "{{5, 2, 1}}"),
+    ("Nearest[<|a -> 1, b -> 5|>, 4]", "{b}"),
+    ("Nearest[{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 5, {All, 2}]", "{5, 4, 6, 3, 7}"),
+    ("Nearest[{1, 2, 10}, 4, DistanceFunction -> (Abs[#1 - #2]^2 &)]", "{2}"),
+    ("Nearest[{\"apple\", \"apply\", \"ample\", \"maple\"}, \"appel\"]", "{\"apple\", \"apply\"}"),
+    ("Nearest[{1, 3, 6, 10}][5]", "{6}"),
+    ("Nearest[{1, 3, 6, 10}][5, 3]", "{6, 3, 1}"),
+    ("Head[Nearest[{1, 3, 6, 10}]]", "NearestFunction"),
+    ("Nearest[{1, 3, 6, 10}][{1, 7}]", "{{1}, {6}}"),
+    ("NearestFunction[{1, 3, 6, 10}][5]", "{6}"),
+    ("Head[Nearest[{1, 2}]] === NearestFunction", "True"),
+    ("NearestFunction[{{0, 0}, {5, 5}}][{1, 1}]", "{{0, 0}}"),
+    ("NearestTo[20][{1, 2, 4, 8, 16, 32}]", "{16}"),
+    ("NearestTo[20, 3][{1, 2, 4, 8, 16, 32}]", "{16, 8, 32}"),
+    ("NearestTo[5][Nearest[{1, 3, 6, 10}]]", "{6}"),
+]
+
+NUMERIC_ARRAY = [
+    ("Normal[NumericArray[Range[5], \"UnsignedInteger8\"]]", "{1, 2, 3, 4, 5}"),
+    ("Normal[NumericArray[{1, 2, 300, -4}, \"UnsignedInteger8\"]]", "{1, 2, 255, 0}"),
+    ("Normal[NumericArray[{1.5, 2.5, -0.5}, \"Integer8\"]]", "{2, 2, 0}"),
+    ("NumericArray[{1, 2, 300}, \"UnsignedInteger8\", \"Check\"]", Raises()),
+    ("Normal[NumericArray[{{1, 2}, {3, 4}}, \"Real64\"]]", "{{1., 2.}, {3., 4.}}"),
+    ("Length[NumericArray[{1, 2, 3}, \"Integer16\"]]", "3"),
+    ("Dimensions[NumericArray[{{1, 2, 3}, {4, 5, 6}}, \"Integer16\"]]", "{2, 3}"),
+    ("NumericArrayQ[NumericArray[Range[16], \"UnsignedInteger8\"]]", "True"),
+    ("NumericArrayQ[NumericArray[{1., 2.}, \"Real64\"], \"Real64\"]", "True"),
+    ("NumericArrayQ[NumericArray[{1., 2.}, \"Real64\"], \"Real32\"]", "False"),
+    ("NumericArrayQ[NumericArray[{{1., 2.}}, \"Real64\"], _, 2]", "True"),
+    ("NumericArrayQ[{1, 2}]", "False"),
+    ("NumericArrayType[NumericArray[{-128, 0, 1, 127}, \"Integer8\"]]", "\"Integer8\""),
+    ("NumericArrayType[NumericArray[{1., 2.}, \"Real32\"]]", "\"Real32\""),
+    ("NumericArrayType[NumericArray[{1 + I}, \"ComplexReal64\"]]", "\"ComplexReal64\""),
+]
+
+SYMMETRIZED = [
+    ("Normal[SymmetrizedArray[{{1, 2} -> a, {2, 3} -> b}, {3, 3}, Antisymmetric[{1, 2}]]]",
+     "{{0, a, 0}, {-a, 0, b}, {0, -b, 0}}"),
+    ("Normal[SymmetrizedArray[{{a, b}, {b, c}}]]", "{{a, b}, {b, c}}"),
+    ("Normal[SymmetrizedArray[{i_, j_} :> i + j, {3, 3}, Symmetric[{1, 2}]]]", "{{2, 3, 4}, {3, 4, 5}, {4, 5, 6}}"),
+    ("Dimensions[SymmetrizedArray[{{1, 2} -> a}, {3, 3}, Symmetric[{1, 2}]]]", "{3, 3}"),
+    ("SymmetrizedArrayRules[SymmetrizedArray[{{1, 1, 1} -> 3, {1, 2, 2} -> -2}, {2, 2, 2}, Symmetric[All]]]",
+     "{{1, 1, 1} -> 3, {1, 2, 2} -> -2, {_, _, _} -> 0}"),
+    ("SymmetrizedArrayRules[{{a, b}, {c, d}}, Antisymmetric[{1, 2}]]", "{{1, 2} -> b/2 - c/2, {_, _} -> 0}"),
+    ("SymmetrizedArrayRules[{{a, b}, {c, d}}, Symmetric[{1, 2}]]",
+     "{{1, 1} -> a, {1, 2} -> b/2 + c/2, {2, 2} -> d, {_, _} -> 0}"),
+    ("SymmetrizedIndependentComponents[{4, 4, 4}, Antisymmetric[{1, 2, 3}]]",
+     "{{1, 2, 3}, {1, 2, 4}, {1, 3, 4}, {2, 3, 4}}"),
+    ("SymmetrizedIndependentComponents[{2, 2, 2}, Symmetric[All]]", "{{1, 1, 1}, {1, 1, 2}, {1, 2, 2}, {2, 2, 2}}"),
+    ("Length[SymmetrizedIndependentComponents[{3, 3, 3, 3}, {{{2, 1, 3, 4}, 1}, {{3, 4, 1, 2}, 1}}]]", "21"),
+    ("Length[SymmetrizedIndependentComponents[{5, 5, 5}, Symmetric[All]]]", str(len(list(itertools.combinations_with_replacement(range(5), 3))))),
+    ("SymmetrizedDependentComponents[{1, 3, 5}, Antisymmetric[{1, 2, 3}]]",
+     "{{1, 3, 5}, {1, 5, 3}, {3, 1, 5}, {3, 5, 1}, {5, 1, 3}, {5, 3, 1}}"),
+    ("SymmetrizedDependentComponents[{1, 3, 3}, Symmetric[{1, 2, 3}]]", "{{1, 3, 3}, {3, 1, 3}, {3, 3, 1}}"),
+    ("SymmetrizedDependentComponents[{1, 3}, {}]", "{{1, 3}}"),
+    ("Normal[SymmetrizedReplacePart[SymmetrizedArray[{{a, b}, {b, c}}], {{2, 1} -> x}]]", "{{a, x}, {x, c}}"),
+    ("SymmetrizedReplacePart[{{a, b}, {c, d}}, {{2, 1} -> x}, Symmetric[{1, 2}]]", "{{a, x}, {x, d}}"),
+    ("Normal[SymmetrizedReplacePart[SymmetrizedArray[{{1, 2} -> a}, {2, 2}, Antisymmetric[{1, 2}]], {{1, 2} -> y}]]",
+     "{{0, y}, {-y, 0}}"),
+]
+
+DATA_STRUCTURES = [
+    ("Module[{s = CreateDataStructure[\"Stack\"]}, {s[\"EmptyQ\"], s[\"Push\", f[1]], s[\"Push\", f[2]], s[\"Peek\"], "
+     "s[\"Length\"], s[\"Pop\"], s[\"Elements\"]}]", "{True, Null, Null, f[2], 2, f[2], {f[1]}}"),
+    ("Module[{q = CreateDataStructure[\"Queue\", {1, 2, 3}]}, {q[\"Pop\"], q[\"Push\", 4], q[\"Elements\"], "
+     "q[\"Fold\", Plus], q[\"Fold\", f, x]}]", "{1, Null, {2, 3, 4}, 9, f[f[f[x, 2], 3], 4]}"),
+    ("Module[{d = CreateDataStructure[\"Deque\"]}, d[\"PushBack\", 1]; d[\"PushFront\", 0]; "
+     "d[\"PushBackList\", {2, 3}]; {d[\"Elements\"], d[\"PopBack\"], d[\"PopFront\"], d[\"PeekFront\"], d[\"PeekBack\"]}]",
+     "{{0, 1, 2, 3}, 3, 0, 1, 2}"),
+    ("Module[{r = CreateDataStructure[\"RingBuffer\", 3]}, Do[r[\"PushBack\", i], {i, 5}]; {r[\"Elements\"], r[\"Capacity\"]}]",
+     "{{3, 4, 5}, 3}"),
+    ("Module[{a = CreateDataStructure[\"DynamicArray\", {x, y, z}]}, a[\"Append\", w]; a[\"Insert\", v, 2]; "
+     "{a[\"Elements\"], a[\"Part\", -1], a[\"Drop\", 1], Normal[a]}]", "{{x, v, y, z, w}, w, Null, {v, y, z, w}}"),
+    ("Module[{a = CreateDataStructure[\"FixedArray\", 0, 3]}, a[\"SetPart\", 2, 7]; {Normal[a], a[\"Length\"]}]",
+     "{{0, 7, 0}, 3}"),
+    ("Module[{a = CreateDataStructure[\"LinkedList\", {1, 2}]}, a[\"Prepend\", 0]; a[\"JoinBack\", {3}]; Normal[a]]",
+     "{0, 1, 2, 3}"),
+    ("Module[{a = CreateDataStructure[\"DoublyLinkedList\", {1, 2, 3}]}, a[\"DropLast\"]; a[\"DropFirst\"]; Normal[a]]",
+     "{2}"),
+    ("Module[{p = CreateDataStructure[\"PriorityQueue\", {3, 1, 4, 1, 5}]}, {p[\"Pop\"], p[\"Peek\"], p[\"Push\", 9], "
+     "p[\"Pop\"], p[\"Length\"]}]", "{5, 4, Null, 9, 4}"),
+    ("Module[{h = CreateDataStructure[\"HashSet\", {x, y, z}]}, {h[\"Insert\", x], h[\"Insert\", w], h[\"MemberQ\", w], "
+     "h[\"Delete\", y], h[\"Delete\", y], Sort[h[\"Elements\"]]}]", "{False, True, True, True, False, {w, x, z}}"),
+    ("Module[{h = CreateDataStructure[\"OrderedHashSet\", {c, a, b}]}, h[\"Union\", {d, a}]; h[\"Complement\", {c}]; "
+     "h[\"Elements\"]]", "{a, b, d}"),
+    ("Module[{h = CreateDataStructure[\"HashTable\", <|\"a\" -> 1, \"b\" -> 2|>]}, {h[\"Insert\", \"c\" -> 3], "
+     "h[\"Lookup\", \"a\"], h[\"Lookup\", \"z\"], h[\"Lookup\", \"z\", f], h[\"KeyExistsQ\", \"b\"], h[\"Length\"]}]",
+     "{True, 1, Missing[\"KeyAbsent\", \"z\"], f[\"z\"], True, 3}"),
+    ("Module[{h = CreateDataStructure[\"OrderedHashTable\", <|\"x\" -> 1|>]}, h[\"Insert\", \"y\" -> 2]; Normal[h]]",
+     "<|\"x\" -> 1, \"y\" -> 2|>"),
+    ("Module[{c = CreateDataStructure[\"LeastRecentlyUsedCache\", 2]}, {c[\"Insert\", a -> 1], c[\"Insert\", b -> 2], "
+     "c[\"Lookup\", a], c[\"Insert\", e -> 3], c[\"KeyExistsQ\", b], c[\"KeyExistsQ\", a]}]",
+     "{False, False, 1, True, False, True}"),
+    ("Module[{v = CreateDataStructure[\"Value\", 5]}, {v[\"Get\"], v[\"Set\", 7], v[\"Get\"]}]", "{5, 7, 7}"),
+    ("Module[{c = CreateDataStructure[\"Counter\", 0]}, {c[\"Increment\"], c[\"Get\"], c[\"PreIncrement\"], "
+     "c[\"Decrement\"], c[\"PreDecrement\"], c[\"AddTo\", 10], c[\"SubtractFrom\", 3], c[\"Get\"]}]",
+     "{0, 1, 2, 2, 0, 10, 7, 7}"),
+    ("Module[{m = CreateDataStructure[\"SortedMultiset\", {3, 1, 2, 3}]}, {m[\"Elements\"], m[\"Count\", 3], "
+     "m[\"Delete\", 3], m[\"Elements\"], m[\"Cases\", _?OddQ]}]", "{{1, 2, 3, 3}, 2, True, {1, 2, 3}, {1, 3}}"),
+    ("Module[{s = CreateDataStructure[\"DisjointSet\"]}, s[\"InsertAll\", {1, 2, 3, 4}]; s[\"Unify\", 1, 3]; "
+     "{s[\"CommonSubsetQ\", 1, 3], s[\"CommonSubsetQ\", 1, 2], s[\"Length\"]}]", "{True, False, 4}"),
+    ("Module[{b = CreateDataStructure[\"BitVector\", 8]}, b[\"BitSet\", 2]; b[\"BitSet\", 0]; "
+     "{b[\"BitList\"], b[\"BitCount\"], b[\"BitTest\", 3], b[\"Length\"]}]", "{{0, 2}, 2, False, 8}"),
+    ("Module[{s = CreateDataStructure[\"Stack\", {1}], t}, t = s[\"Copy\"]; t[\"Push\", 2]; {s[\"Elements\"], t[\"Elements\"]}]",
+     "{{1}, {1, 2}}"),
+    ("CreateDataStructure[\"Stack\"][\"Pop\"]", Raises()),
+    ("CreateDataStructure[\"NoSuchStructure\"]", Raises()),
+    ("Head[CreateDataStructure[\"HashSet\"]]", "DataStructure"),
+    ("DataStructure[\"Stack\", {1, 2}][\"Elements\"]", "{1, 2}"),
+    ("Head[DataStructure[\"Queue\", {1, 2}]] === DataStructure", "True"),
+    ("DataStructureQ[DataStructure[\"Queue\", {1}], \"Queue\"]", "True"),
+    ("DataStructureQ[CreateDataStructure[\"HashSet\"]]", "True"),
+    ("DataStructureQ[CreateDataStructure[\"HashSet\"], \"OrderedHashSet\"]", "False"),
+    ("DataStructureQ[{1, 2}]", "False"),
+    ("MemberQ[$DataStructures, \"HashTable\"]", "True"),
+    ("SubsetQ[$DataStructures, {\"Stack\", \"Queue\", \"Deque\"}]", "True"),
+    ("AllTrue[$DataStructures, StringQ]", "True"),
+]
+
+T = "Tree[1, {Tree[2, {3, 4}], Tree[5, {6, Tree[7, {}]}]}]"
+
+TREES = [
+    (T, "Tree[1, {Tree[2, {Tree[3, None], Tree[4, None]}], Tree[5, {Tree[6, None], Tree[7, {}]}]}]"),
+    ("Tree[{a, b}]", "Tree[Null, {Tree[a, None], Tree[b, None]}]"),
+    ("Tree[x, <|\"a\" -> 1|>]", "Tree[x, <|\"a\" -> Tree[1, None]|>]"),
+    ("Tree[a, b]", Raises()),
+    ("Tree[a, {b}, TreeElementLabel -> All -> None]", "Tree[a, {Tree[b, None]}, TreeElementLabel -> All -> None]"),
+    ("TreeQ[" + T + "]", "True"),
+    ("TreeQ[Tree[a, None]]", "True"),
+    ("TreeQ[f[x]]", "False"),
+    ("TreeData[" + T + "]", "1"),
+    ("TreeData[Tree[{a}]]", "Null"),
+    ("TreeData[Tree[x, None]]", "x"),
+    ("TreeChildren[Tree[a, {b, c}]]", "{Tree[b, None], Tree[c, None]}"),
+    ("TreeChildren[Tree[a, {}]]", "{}"),
+    ("TreeChildren[Tree[a, None]]", "None"),
+    ("TreeLeafQ[Tree[a, None]]", "True"),
+    ("TreeLeafQ[Tree[a, {}]]", "False"),
+    ("TreeLeafQ[x]", "False"),
+    ("TreeLeaves[" + T + "]", "{Tree[3, None], Tree[4, None], Tree[6, None]}"),
+    ("TreeLeaves[Tree[a, None]]", "{Tree[a, None]}"),
+    ("TreeLeaves[Tree[a, {}]]", "{}"),
+    ("TreeLeafCount[" + T + "]", "3"),
+    ("TreeLeafCount[Tree[a, {}]]", "0"),
+    ("TreeLeafCount[Tree[a, None]]", "1"),
+    ("TreeSize[" + T + "]", "7"),
+    ("TreeSize[Tree[a, {}]]", "1"),
+    ("TreeSize[Tree[{Tree[a, {b}], c}]] == 1 + TreeSize[Tree[a, {b}]] + TreeSize[Tree[c, None]]", "True"),
+    ("TreeDepth[" + T + "]", "3"),
+    ("TreeDepth[Tree[a, {}]]", "1"),
+    ("TreeDepth[Tree[a, None]]", "0"),
+    ("TreeDepth[" + T + ", 7]", "2"),
+    ("TreeLevel[" + T + ", {2} -> \"Data\"]", "{3, 4, 6, 7}"),
+    ("TreeLevel[" + T + ", All -> \"Data\"]", "{3, 4, 2, 6, 7, 5, 1}"),
+    ("TreeLevel[" + T + ", \"Leaves\" -> \"Data\"]", "{3, 4, 6}"),
+    ("TreeLevel[" + T + ", \"NonLeaves\" -> \"Data\"]", "{2, 7, 5, 1}"),
+    ("TreeLevel[" + T + ", All -> \"Data\", TreeTraversalOrder -> \"BreadthFirst\"]", "{1, 2, 5, 3, 4, 6, 7}"),
+    ("TreeLevel[" + T + ", All -> \"Data\", TreeTraversalOrder -> \"PreOrder\"]", "{1, 2, 3, 4, 5, 6, 7}"),
+    ("TreeLevel[" + T + ", All -> \"Data\", TreeTraversalOrder -> \"DepthFirst\"]", "{3, 4, 2, 6, 7, 5, 1}"),
+    ("TreeLevel[{1} -> \"Data\"][" + T + "]", "{2, 5}"),
+    ("TreeCases[" + T + ", _?EvenQ]", "{Tree[4, None], Tree[2, {Tree[3, None], Tree[4, None]}], Tree[6, None]}"),
+    ("TreeCases[" + T + ", _?OddQ, {0, -2}]",
+     "{Tree[7, {}], Tree[5, {Tree[6, None], Tree[7, {}]}], " + T + "}"),
+    ("TreeCases[_?PrimeQ][Tree[1, {2, 3, 4}]]", "{Tree[2, None], Tree[3, None]}"),
+    ("TreeCount[" + T + ", _?OddQ]", "4"),
+    ("TreeCount[" + T + ", _?OddQ, {-1}]", "1"),
+    ("TreeCount[_][" + T + "] == TreeSize[" + T + "]", "True"),
+    ("TreePosition[" + T + ", _?EvenQ]", "{{1, 2}, {1}, {2, 1}}"),
+    ("TreePosition[" + T + ", _?PrimeQ, All, 2]", "{{1, 1}, {1}}"),
+    ("TreePosition[5][" + T + "]", "{{2}}"),
+    ("TreeSelect[" + T + ", TreeLeafQ]", "{Tree[3, None], Tree[4, None], Tree[6, None]}"),
+    ("TreeSelect[" + T + ", TreeLeafQ, 2]", "{Tree[3, None], Tree[4, None]}"),
+    ("TreeSelect[EvenQ @* TreeData][Tree[1, {2, 3}]]", "{Tree[2, None]}"),
+    ("TreeMap[f, Tree[a, {b, c}]]", "Tree[f[a], {Tree[f[b], None], Tree[f[c], None]}]"),
+    ("TreeMap[f, " + T + ", {1}]",
+     "Tree[1, {Tree[f[2], {Tree[3, None], Tree[4, None]}], Tree[f[5], {Tree[6, None], Tree[7, {}]}]}]"),
+    ("TreeMap[f, Tree[a, {b, c}], All -> {\"Data\", \"Position\"}]",
+     "Tree[f[a, {}], {Tree[f[b, {1}], None], Tree[f[c, {2}], None]}]"),
+    ("TreeMap[f][Tree[a, {b}]]", "Tree[f[a], {Tree[f[b], None]}]"),
+    ("TreeMap[f, Tree[a, {b, c}], \"Leaves\"]", "Tree[a, {Tree[f[b], None], Tree[f[c], None]}]"),
+    ("Module[{n = 0}, TreeScan[(n += #) &, " + T + "]; n]", "28"),
+    ("Module[{l = {}}, TreeScan[AppendTo[l, #] &, " + T + "]; l]", "{3, 4, 2, 6, 7, 5, 1}"),
+    ("TreeScan[f, Tree[a, None]]", "Null"),
+    ("TreeFold[f, Tree[a, {b, Tree[c, {d}]}]]", "f[a, {b, f[c, {d}]}]"),
+    ("TreeFold[{f, g}, Tree[a, {b, Tree[c, {d}]}]]", "f[a, {g[b], f[c, {g[d]}]}]"),
+    ("TreeFold[# + Total[#2] &, " + T + "]", "28"),
+    ("TreeFold[f, Tree[a, None]]", "a"),
+    ("TreeFold[f][Tree[a, {b}]]", "f[a, {b}]"),
+    ("TreeFold[{1 + Total@#2 &, 1 &}, " + T + "] == TreeSize[" + T + "]", "True"),
+    ("TreeExtract[" + T + ", {2}]", "Tree[5, {Tree[6, None], Tree[7, {}]}]"),
+    ("TreeExtract[" + T + ", {{1}, {2, 1}}]", "{Tree[2, {Tree[3, None], Tree[4, None]}], Tree[6, None]}"),
+    ("TreeExtract[" + T + ", {-1, -1}, TreeData]", "7"),
+    ("TreeExtract[" + T + ", {2, 3}]", Raises()),
+    ("TreeDelete[" + T + ", {1}]", "Tree[1, {Tree[5, {Tree[6, None], Tree[7, {}]}]}]"),
+    ("TreeDelete[Tree[a, {b}], {1}]", "Tree[a, {}]"),
+    ("TreeDelete[Tree[a, {b, c, d}], {{1}, {3}}]", "Tree[a, {Tree[c, None]}]"),
+    ("TreeInsert[Tree[a, {b, c}], x, {2}]", "Tree[a, {Tree[b, None], Tree[x, None], Tree[c, None]}]"),
+    ("TreeInsert[Tree[a, {b, c}], x, {-1}]", "Tree[a, {Tree[b, None], Tree[c, None], Tree[x, None]}]"),
+    ("TreeInsert[x, {1}][Tree[a, {b}]]", "Tree[a, {Tree[x, None], Tree[b, None]}]"),
+    ("TreeReplacePart[Tree[a, {b, c}], {1} -> x]", "Tree[a, {Tree[x, None], Tree[c, None]}]"),
+    ("TreeReplacePart[Tree[a, {b, c}], {{1}, {2}} -> x]", "Tree[a, {Tree[x, None], Tree[x, None]}]"),
+    ("TreeReplacePart[Tree[a, {b, c}], {} -> Tree[r, {s}]]", "Tree[r, {Tree[s, None]}]"),
+    ("TreeMapAt[f, Tree[a, {b, c}], {2}]", "Tree[a, {Tree[b, None], Tree[f[c], None]}]"),
+    ("TreeMapAt[f, Tree[a, {b, c}], {{2}, {2}, {}}]", "Tree[f[a], {Tree[b, None], Tree[f[f[c]], None]}]"),
+    ("TreeMapAt[f, {1}][Tree[a, {b}]]", "Tree[a, {Tree[f[b], None]}]"),
+    ("TreeRules[Tree[a, {b, Tree[c, {d, e}]}]]", "a -> {b, c -> {d, e}}"),
+    ("TreeRules[Tree[a, {}]]", "a -> {}"),
+    ("TreeRules[Tree[1 -> {2, 3}, None]]", "(1 -> {2, 3}) -> None"),
+    ("TreeRules[Tree[1, None]]", "1"),
+    ("RulesTree[a -> {b, c -> {}, d -> {e, f}}]",
+     "Tree[a, {Tree[b, None], Tree[c, {}], Tree[d, {Tree[e, None], Tree[f, None]}]}]"),
+    ("TreeRules[RulesTree[a -> {b, c -> {}, d -> {e, f}}]]", "a -> {b, c -> {}, d -> {e, f}}"),
+    ("RulesTree[x]", "Tree[x, None]"),
+    ("RulesTree[a -> <|\"k\" -> b|>]", "Tree[a, <|\"k\" -> Tree[b, None]|>]"),
+    ("RootTree[" + T + "]", "Tree[1, {}]"),
+    ("RootTree[Tree[a, None]]", "Tree[a, None]"),
+    ("RootTree[" + T + ", 1]", "Tree[1, {Tree[2, {}], Tree[5, {}]}]"),
+    ("UnlabeledTree[Tree[a, {b, c}]]", "Tree[Null, {Tree[Null, None], Tree[Null, None]}]"),
+    ("UnlabeledTree[Tree[a, None]]", "Tree[Null, None]"),
+    ("TreeSize[UnlabeledTree[" + T + "]]", "7"),
+    ("NestTree[{2 #, 2 # + 1} &, 1, 2]",
+     "Tree[1, {Tree[2, {Tree[4, None], Tree[5, None]}], Tree[3, {Tree[6, None], Tree[7, None]}]}]"),
+    ("NestTree[f, x, 2]", "Tree[x, {Tree[f[x], {Tree[f[f[x]], None]}]}]"),
+    ("NestTree[None &, x]", "Tree[x, None]"),
+    ("NestTree[{} &, x]", "Tree[x, {}]"),
+    ("NestTree[Range[# - 1] &, 3, Infinity]", "Tree[3, {Tree[1, {}], Tree[2, {Tree[1, {}]}]}]"),
+    ("NestTree[<|\"Even\" -> 2 #, \"Odd\" -> 2 # + 1|> &, 1, 1]",
+     "Tree[1, <|\"Even\" -> Tree[2, None], \"Odd\" -> Tree[3, None]|>]"),
+    ("ExpressionTree[f[a, b, c[p, q, r]]]",
+     "Tree[f, {Tree[a, None], Tree[b, None], Tree[c, {Tree[p, None], Tree[q, None], Tree[r, None]}]}]"),
+    ("ExpressionTree[f[g[1, 2], x], \"Subexpressions\"]",
+     "Tree[f[g[1, 2], x], {Tree[g[1, 2], {Tree[1, None], Tree[2, None]}], Tree[x, None]}]"),
+    ("ExpressionTree[{1, {2, 3}}, \"List\"]", "Tree[Null, {Tree[1, None], Tree[Null, {Tree[2, None], Tree[3, None]}]}]"),
+    ("ExpressionTree[f[a, b], None]", "Tree[f[a, b], None]"),
+    ("ExpressionTree[1, \"Atoms\"]", "Tree[1, None]"),
+    ("TreeExpression[ExpressionTree[f[a, b, c[p, q, r]]]]", "f[a, b, c[p, q, r]]"),
+    ("TreeExpression[Tree[f, {1, 2}]]", "f[1, 2]"),
+    ("TreeExpression[Tree[x, None]]", "x"),
+    ("TreeExpression[ExpressionTree[{1, {2, 3}}, \"List\"], \"List\"]", "{1, {2, 3}}"),
+    ("TreeExpression[ExpressionTree[<|a -> 1, b -> <|c -> 2|>|>, \"Association\"], \"Association\"]",
+     "<|a -> 1, b -> <|c -> 2|>|>"),
+    ("TreeForm[a + b]", "TreeForm[a + b]"),
+    ("TreeForm[f[x], 2][[2]]", "2"),
+    ("Head[TreeForm[{1, {2}}]]", "TreeForm"),
+    ("TreeGraph[{1 -> 2, 1 -> 3, 1 -> 4}]", "Graph[{1, 2, 3, 4}, {1 -> 2, 1 -> 3, 1 -> 4}]"),
+    ("TreeGraph[{1 <-> 2, 1 <-> 3, 2 <-> 3}]", Raises()),
+    ("VertexList[TreeGraph[{1, 2, 3, 4}, {1 <-> 2, 1 <-> 3, 1 <-> 4}]]", "{1, 2, 3, 4}"),
+    ("GraphTree[TreeGraph[{1 -> 2, 1 -> 3, 1 -> 4, 4 -> 5, 4 -> 6}]]",
+     "Tree[1, {Tree[2, None], Tree[3, None], Tree[4, {Tree[5, None], Tree[6, None]}]}]"),
+    ("GraphTree[Graph[{1 <-> 2, 2 <-> 3}], 2]", "Tree[2, {Tree[1, None], Tree[3, None]}]"),
+    ("GraphTree[Graph[{1 <-> 2, 2 <-> 3, 3 <-> 1}]]", Raises()),
+    ("NestGraph[{# + 1, 2 #} &, 1, 2]", "Graph[{1, 2, 3, 4}, {1 -> 2, 2 -> 3, 2 -> 4}]"),
+    ("EdgeList[NestGraph[{Mod[# + 1, 3]} &, 0, Infinity]]", "{DirectedEdge[0, 1], DirectedEdge[1, 2], DirectedEdge[2, 0]}"),
+    ("VertexCount[NestGraph[{2 #} &, 1, 5]]", "6"),
+    ("TreeSize[RandomTree[6]]", "6"),
+    ("Sort[TreeLevel[RandomTree[5], All -> \"Data\"]]", "{1, 2, 3, 4, 5}"),
+    ("Length[RandomTree[4, 3]]", "3"),
+    ("Sort[TreeLevel[RandomTree[{a, b, c}], All -> \"Data\"]]", "{a, b, c}"),
+    ("TreeTraversalOrder", "TreeTraversalOrder"),
+    ("TreeMap[f, Tree[a, {b}], TreeTraversalOrder -> \"PreOrder\"]", "Tree[f[a], {Tree[f[b], None]}]"),
+    ("TreeLevel[Tree[a, {b}], All, TreeTraversalOrder -> \"Nonsense\"]", Raises()),
+]
+
+_OPTION_NAMES = ["TreeElementCoordinates", "TreeElementLabel", "TreeElementLabelFunction", "TreeElementLabelStyle",
+                 "TreeElementShape", "TreeElementShapeFunction", "TreeElementSize", "TreeElementSizeFunction",
+                 "TreeElementStyle", "TreeElementStyleFunction", "TreeLayout", "ParentEdgeLabel",
+                 "ParentEdgeLabelFunction", "ParentEdgeLabelStyle", "ParentEdgeShapeFunction", "ParentEdgeStyle",
+                 "ParentEdgeStyleFunction"]
+
+TREE_OPTIONS = []
+for _o in _OPTION_NAMES:
+    TREE_OPTIONS += [
+        (f"Tree[a, {{b}}, {_o} -> v]", f"Tree[a, {{Tree[b, None]}}, {_o} -> v]"),
+        (f"TreeSize[Tree[a, {{b, c}}, {_o} -> v]]", "3"),
+        (f"TreeMap[f, Tree[a, None, {_o} -> v]]", f"Tree[f[a], None, {_o} -> v]"),
+    ]
+
+def _lerp_ref(vals, n):
+    """Independent point-sampling reference: n samples at 1 + k (m - 1)/(n - 1), linear interpolation."""
+    from fractions import Fraction
+    m, out = len(vals), []
+    for k in range(n):
+        p = Fraction(k * (m - 1), n - 1)
+        i = int(p)
+        t = p - i
+        v = vals[i] if t == 0 else vals[i] + t * (vals[i + 1] - vals[i])
+        out.append(v.numerator if isinstance(v, Fraction) and v.denominator == 1 else v)
+    return out
+
+
+_OPTION_SYMBOLS = ["SortedBy", "ComponentKeys", "DeleteContents", "KeyCollisionFunction", "PaddingSize", "PartBehavior",
+                   "WrapAround", "RowsEqual", "ColumnsEqual"]
+OPTION_SYMBOLS = []
+for _o in _OPTION_SYMBOLS:
+    OPTION_SYMBOLS += [
+        (_o, _o),
+        (f"Head[{_o}]", "Symbol"),
+        (f"f[x, {_o} -> v]", f"f[x, {_o} -> v]"),
+    ]
+
+FORM_SPECS = [
+    ("RepeatingElement[\"Integer\"]", "RepeatingElement[\"Integer\"]"),
+    ("RepeatingElement[\"String\", {2, 5}]", "RepeatingElement[\"String\", {2, 5}]"),
+    ("RepeatingElement[\"String\", {3, {1, Infinity}}]", "RepeatingElement[\"String\", {3, {1, Infinity}}]"),
+    ("RepeatingElement[\"String\", {5, 2}]", Raises()),
+    ("RepeatingElement[\"String\", {7, {1, 3}}]", Raises()),
+    ("AnySubset[{1, 2, 3}]", "AnySubset[{1, 2, 3}]"),
+    ("AnySubset[{\"a\" -> 1, \"b\" -> 2}, 1]", "AnySubset[{\"a\" -> 1, \"b\" -> 2}, 1]"),
+    ("AnySubset[{1, 2, 3}, {2, Infinity}]", "AnySubset[{1, 2, 3}, {2, Infinity}]"),
+    ("AnySubset[5]", Raises()),
+    ("AnySubset[{1, 2}, {3, 1}]", Raises()),
+]
+
+RESAMPLE = [
+    # reference examples (Resampling option section) and the point-sampling positions 1 + (k-1)(m-1)/(n-1)
+    ("ArrayResample[{1, 2, 3}, 6]", "{1, 7/5, 9/5, 11/5, 13/5, 3}"),
+    ("ArrayResample[{1, 2, 3}, 6, Resampling -> \"Nearest\"]", "{1, 1, 2, 2, 3, 3}"),
+    ("ArrayResample[{1, 2, 3}, 5, Resampling -> \"Nearest\"]", "{1, 3/2, 2, 5/2, 3}"),
+    ("ArrayResample[{1, 2, 3}, 5, Resampling -> \"NearestLeft\"]", "{1, 1, 2, 2, 3}"),
+    ("ArrayResample[{1, 2, 3}, 5, Resampling -> \"NearestRight\"]", "{1, 2, 2, 3, 3}"),
+    ("ArrayResample[Range[9], Scaled[1/2]]", "{1, 3, 5, 7, 9}"),
+    ("Length[ArrayResample[{2, 1, 3, 4, 2, 5}, Scaled[3]]]", "16"),
+    ("ArrayResample[{2, 1, 3, 4, 2, 5}, Scaled[3]]", Pred(lambda r: [str(v) for v in r.args] == [str(v) for v in _lerp_ref([2, 1, 3, 4, 2, 5], 16)], "piecewise-linear reference")),
+    ("ArrayResample[{1, 2, 3}, 6, \"Point\"]", "{1, 7/5, 9/5, 11/5, 13/5, 3}"),
+    ("ArrayResample[{1, 2, 3}, All]", "{1, 2, 3}"),
+    ("ArrayResample[{{1, 2}, {3, 4}}, {3, 3}]", "{{1, 3/2, 2}, {2, 5/2, 3}, {3, 7/2, 4}}"),
+    ("ArrayResample[{{1, 2}, {3, 4}}, {3}]", "{{1, 2}, {2, 3}, {3, 4}}"),
+    ("ArrayResample[{1., 2.}, 3]", "{1., 1.5, 2.}"),
+    ("ArrayResample[{a, b}, 3]", "{a, a/2 + b/2, b}"),
+    ("ArrayResample[{1, 2, 3}, 9, \"Bin\"]", Raises()),
+    ("ArrayResample[{{1, 2}, {3, 4}}, 3]", Raises()),
+    ("ArrayResample[{1, 2, 3}, 6, Resampling -> \"Cubic\"]", Raises()),
+    ("ArrayResample[{1, 2, 3}, 6, DataRange -> {0, 1}]", Raises()),
+]
+
+INCREMENTAL = [
+    # IncrementalFunction reference examples (without the FunctionCompile step)
+    ("Module[{ds = IncrementalFunction[Function[{arg}, IncrementalYield[arg + 1];]][10]}, ds[\"Next\"]]", "11"),
+    ("Module[{ds = IncrementalFunction[Function[{arg}, IncrementalYield[arg + 1];]][10]}, ds[\"Next\"]; "
+     "First[ds[\"Next\"]]]", "\"IncrementalFunctionTerminated\""),
+    ("Module[{ds = IncrementalFunction[Function[{arg}, IncrementalYield[arg + 1];]][10]}, ds[\"Next\"]; "
+     "Head[ds[\"Next\"]]]", "Failure"),
+    ("Module[{ds = IncrementalFunction[Function[{num}, Module[{mul = num}, While[True, IncrementalYield[mul += num]]]]][7]}, "
+     "Table[ds[\"Next\"], 5]]", "{14, 21, 28, 35, 42}"),
+    ("Module[{f = IncrementalFunction[Function[{num}, Module[{mul = num}, While[True, IncrementalYield[mul += num]]]]], a, b}, "
+     "a = f[7]; b = f[17]; {a[\"Next\"], b[\"Next\"], a[\"Next\"], b[\"Next\"]}]", "{14, 34, 21, 51}"),
+    ("IncrementalFunction[Function[{x}, x]]", "IncrementalFunction[Function[{x}, x]]"),
+    ("DataStructureQ[IncrementalFunction[Function[{}, 1]][], \"IncrementalFunction\"]", "True"),
+    ("IncrementalYield[1]", Raises()),
+    ("Module[{ds = IncrementalFunction[Function[{}, IncrementalYield[IncrementalReceive[0] + 1]]][]}, "
+     "{ds[\"Next\"], ds[\"Send\", 5]}]", "{Null, 6}"),
+    ("Module[{ds = IncrementalFunction[Function[{}, IncrementalYield[IncrementalReceive[0] + 1]]][]}, "
+     "{ds[\"Next\"], ds[\"Next\"]}]", "{Null, 1}"),
+    ("Module[{ds = IncrementalFunction[Function[{}, While[True, IncrementalYield[{IncrementalReceive[none]}]]]][]}, "
+     "{ds[\"Next\"], ds[\"Send\", x], ds[\"Next\"], ds[\"Next\"]}]", "{Null, {x}, Null, {none}}"),
+    ("Module[{ds = IncrementalFunction[Function[{}, IncrementalReceive[0]]][]}, ds[\"Next\"]; "
+     "First[ds[\"Send\", 101]]]", "\"IncrementalFunctionTerminated\""),
+    ("IncrementalReceive[0]", Raises()),
+    ("Module[{ds = IncrementalFunction[Function[{}, IncrementalReceive[0]]][]}, ds[\"Send\", 1]]", Raises()),
+    # IncrementalObject reference examples
+    ("Module[{obj = IncrementalObject[\"Identity\"][{1, 2}]}, {NextValue[obj], NextValue[obj], First[NextValue[obj]]}]",
+     "{1, 2, \"IncrementalObjectTerminated\"}"),
+    ("Module[{obj = IncrementalObject[\"Permutations\"][{1, 2, 3}]}, Table[NextValue[obj], 6]]",
+     "Permutations[{1, 2, 3}]"),
+    ("Module[{obj = IncrementalObject[\"Permutations\"][{2, 1, 2}]}, Table[NextValue[obj], 3]]",
+     "Permutations[{2, 1, 2}]"),
+    ("Module[{obj = IncrementalObject[\"Permutations\"][Range[100]]}, Do[NextValue[obj], {5}]; NextValue[obj]]",
+     "Join[Range[97], {100, 99, 98}]"),
+    ("Module[{obj = IncrementalObject[\"FoldList\"][Plus, 0, Range[10]]}, Table[NextValue[obj], 11]]",
+     "FoldList[Plus, 0, Range[10]]"),
+    ("Module[{obj = IncrementalObject[\"FoldList\"][Plus, 0, IncrementalObject[\"Range\"][2^50]]}, Table[NextValue[obj], 6]]",
+     "{0, 1, 3, 6, 10, 15}"),
+    ("Module[{obj = IncrementalObject[\"Range\"][2^20], obj1}, NextValue[obj]; obj1 = IncrementalObject[\"Select\"][obj, PrimeQ]; "
+     "{Table[NextValue[obj1], 10], NextValue[obj]}]", "{{2, 3, 5, 7, 11, 13, 17, 19, 23, 29}, 30}"),
+    ("Module[{fib = IncrementalFunction[Function[{}, Module[{a = 0, b = 1}, While[True, IncrementalYield[a]; {a, b} = {b, a + b}]]]]}, "
+     "Table[NextValue[IncrementalObject[\"Select\"][fib[], EvenQ]], 1]]", "{0}"),
+    ("Module[{fib = IncrementalFunction[Function[{}, Module[{a = 0, b = 1}, While[True, IncrementalYield[a]; {a, b} = {b, a + b}]]]], o}, "
+     "o = IncrementalObject[\"Select\"][fib[], EvenQ]; Table[NextValue[o], 8]]",
+     "Select[Fibonacci[Range[0, 30]], EvenQ][[;; 8]]"),
+    ("Module[{fib = IncrementalFunction[Function[{}, Module[{a = 0, b = 1}, While[True, IncrementalYield[a]; {a, b} = {b, a + b}]]]], ds}, "
+     "ds = fib[]; Table[NextValue[ds], 10]]", "Fibonacci[Range[0, 9]]"),
+    ("Module[{obj = IncrementalObject[\"Map\"][First, IncrementalObject[\"FoldList\"][Function[{p}, {p[[2]], p[[1]] + p[[2]]}], "
+     "{0, 1}, IncrementalObject[\"Range\"][10^6]]]}, Do[NextValue[obj], {1000}]; NextValue[obj]]", "Fibonacci[1000]"),
+    ("Module[{obj = IncrementalObject[\"Subsets\"][{a, b, c}]}, Table[NextValue[obj], 8]]", "Subsets[{a, b, c}]"),
+    ("Module[{obj = IncrementalObject[\"Tuples\"][{0, 1}, 3]}, Table[NextValue[obj], 8]]", "Tuples[{0, 1}, 3]"),
+    ("Module[{obj = IncrementalObject[\"Tuples\"][{{a, b}, {1, 2, 3}}]}, Table[NextValue[obj], 6]]", "Tuples[{{a, b}, {1, 2, 3}}]"),
+    ("Module[{obj = IncrementalObject[\"Take\"][{a, b, c}, 2]}, {NextValue[obj], NextValue[obj], Head[NextValue[obj]]}]",
+     "{a, b, Failure}"),
+    ("Module[{obj = IncrementalObject[\"Map\"][f, {1, 2}]}, {NextValue[obj], NextValue[obj]}]", "{f[1], f[2]}"),
+    ("Module[{obj = IncrementalObject[\"Range\"][1, 2, 1/2]}, Table[NextValue[obj], 3]]", "{1, 3/2, 2}"),
+    ("Module[{obj = IncrementalObject[\"Identity\"][f[x, y]]}, {NextValue[obj], NextValue[obj]}]", "{x, y}"),
+    ("IncrementalObject[\"Identity\"]", "IncrementalObject[\"Identity\"]"),
+    ("IncrementalObject[\"NoSuchName\"]", Raises()),
+    ("IncrementalObject[\"Take\"][{1, 2}]", Raises()),
+    ("NextValue[{1, 2}]", Raises()),
+    ("NextValue[x]", "NextValue[x]"),
+]
+
+_G1 = ("TreeGame[{\"A\", {\"B\", {\"C\", {1, 2, 3} -> \"C1\", {5, 5, 1} -> \"C2\"} -> \"B1\", {1, 3, 2} -> \"B2\"} -> \"A1\", "
+       "{2, 5, 5} -> \"A2\"}]")
+_G2 = "TreeGame[{\"A\", {\"B\", {1, 1}, {2, 2}}, {\"B\", {3, 3}, {4, 4}}}]"
+_G3 = "TreeGame[{\"A\", {\"B\", {0, 1}, {1, 2}} -> 0.3, {\"B\", {3, 4}, {5, 4}} -> 0.7}]"
+TREE_GAMES = [
+    # TreeGamePayoff reference examples
+    (f"TreeGamePayoff[{_G1}, <|\"A\" -> <|{{}} -> {{1/2, 1/2}}|>, \"B\" -> <|{{1}} -> {{0, 1}}|>, \"C\" -> <|{{1, 1}} -> {{1, 0}}|>|>]",
+     "{3/2, 4, 7/2}"),
+    (f"TreeGamePayoff[{_G2}, <|\"A\" -> <|{{}} -> {{1, 0}}|>, \"B\" -> <|{{1}} -> {{0, 1}}, {{2}} -> {{0, 1}}|>|>]", "{2, 2}"),
+    (f"TreeGamePayoff[{_G3}, <|\"A\" -> <||>, \"B\" -> <|{{1}} -> {{0, 1}}, {{2}} -> {{0, 1}}|>|>]", "{3.8, 3.4}"),
+    # derived: uniform random play; node-keyed strategies; Tree notation
+    (f"TreeGamePayoff[{_G2}, <||>, \"RandomExpectation\"]", "{5/2, 5/2}"),
+    (f"TreeGamePayoff[{_G2}, <|{{}} -> {{0, 1}}|>, \"RandomExpectation\"]", "{7/2, 7/2}"),
+    (f"Max[Abs[TreeGamePayoff[{_G3}, <||>, \"RandomExpectation\"] - {{2.95, 3.25}}]] < 10^-12", "True"),
+    (f"TreeGamePayoff[{_G1}, <|{{}} -> {{0, 1}}|>]", "{2, 5, 5}"),
+    ("TreeGamePayoff[TreeGame[Tree[<|\"Player\" -> \"A\"|>, {Tree[<|\"Payoffs\" -> {1, 0}, \"Label\" -> \"L\"|>, {}], "
+     "Tree[<|\"Payoffs\" -> {0, 1}|>, {}]}]], <|{} -> {1/4, 3/4}|>]", "{1/4, 3/4}"),
+    ("TreeGamePayoff[TreeGame[{\"A\" -> \"i1\", {\"B\" -> \"j\", {1, 0}, {0, 1}}, {\"B\" -> \"j\", {2, 2}, {0, 0}}}], "
+     "<|{} -> {1/2, 1/2}, {1} -> {1, 0}, {2} -> {1, 0}|>]", "{3/2, 1}"),
+    (_G2, _G2),
+    (f"Head[{_G1}]", "TreeGame"),
+    ("TreeGame[{\"A\", {1, 1}, {2}}]", Raises()),
+    ("TreeGame[{\"A\", {1, 1} -> 0.5, {2, 2}}]", Raises()),
+    ("TreeGame[{\"A\", {1, 1} -> 1/2, {2, 2} -> 1/3}]", Raises()),
+    ("TreeGame[{1, 2, 3}]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <||>]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <|{{}} -> {{1, 0, 0}}|>, \"RandomExpectation\"]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <|{{}} -> {{1, 1}}|>, \"RandomExpectation\"]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <|{{5}} -> {{1, 0}}|>, \"RandomExpectation\"]", Raises()),
+    (f"TreeGamePayoff[{_G2}, <||>, \"Perfect\"]", Raises()),
+]
+
+CASES = (PATTERNS + ORDER + FUNCTIONAL + SUBSETS + ARRAYS + NEAREST + NUMERIC_ARRAY + SYMMETRIZED + DATA_STRUCTURES
+         + TREES + TREE_OPTIONS + OPTION_SYMBOLS + FORM_SPECS + RESAMPLE + INCREMENTAL + TREE_GAMES)
+
+
+@pytest.mark.parametrize("case", CASES, ids=ids(CASES))
+def test_wolfram_w03(case):
+    check(case)

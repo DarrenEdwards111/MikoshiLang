@@ -89,6 +89,10 @@ INFEASIBLE_NAMES = [
      "Wolfram Cloud / external services"),
 ]
 
+# Individually reviewed symbols (symbol -> reason) that need curated data, the front end, the cloud, ML models,
+# or other Wolfram infrastructure even though their guide pages sit in feasible areas.
+INFEASIBLE_SYMBOLS = json.loads((DATA / "infeasible_names.json").read_text())
+
 # Guide pages whose functions are the most-used core of the language (with EIWL usage, priority 1).
 CORE_GUIDES = set("""ListManipulation ConstructingLists ElementsOfLists RearrangingAndRestructuringLists
 ApplyingFunctionsToLists MathematicalAndCountingOperationsOnLists Associations StringManipulation StringOperations
@@ -122,6 +126,8 @@ def feasibility(sym):
     for rx, why in INFEASIBLE_NAMES:
         if rx.match(sym):
             return why
+    if sym in INFEASIBLE_SYMBOLS:
+        return INFEASIBLE_SYMBOLS[sym]
     guides = SYMBOL_GUIDES.get(sym) or []
     areas = {GUIDE_AREA[g] for g in guides}
     if areas and all(a in INFEASIBLE_AREAS for a in areas):
@@ -203,7 +209,9 @@ def render(rows, extra):
       "(geographic, scientific, engineering, financial, cultural and linguistic data, entities, natural-language "
       "understanding), the front end or notebooks (documents, UI construction), audio or video, trained ML models "
       "or LLM services, or the Wolfram Cloud; plus name-based overrides for such symbols listed in other areas "
-      "(`*Data` functions, `Entity*`, `Cloud*`, `Notebook*`, `*Box`, `Audio*`, `Net*`, `LLM*`, ...). "
+      "(`*Data` functions, `Entity*`, `Cloud*`, `Notebook*`, `*Box`, `Audio*`, `Net*`, `LLM*`, ...), and "
+      f"{len(INFEASIBLE_SYMBOLS)} individually reviewed symbols listed with their reasons in "
+      "`scripts/wolfram_data/infeasible_names.json`. "
       "Infeasible does not mean impossible: a local substitute (e.g. a small bundled dataset) could be added "
       "later, but it would not reproduce Wolfram's results.\n"
       "* **Implemented**: the head has a `verified`, `fixed`, `promoted`, `kernel` or `added` status in "

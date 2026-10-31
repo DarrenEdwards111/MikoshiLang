@@ -86,20 +86,25 @@ def main():
             continue
 
         try:
-            expr = parse(line)
-            result = session.evaluate(expr)
-            history_out[counter] = result
-            if result is not None:  # Null output is not printed, as in Wolfram
-                from .formatting import input_form
-                shown = result if isinstance(result, str) else input_form(result)
-                print(f"Out[{counter}]= {shown}")
+            # the Wolfram main loop: In[n], Out[n] (%), $Line, $Pre, $Post, $PrePrint
+            for n, result in session.evaluate_input(line):
+                history_out[n] = result
+                if result is not None:  # Null output is not printed, as in Wolfram
+                    from .library.wl_forms import display_text   # display wrappers (NumberForm, Grid, ...) as text
+                    result = session.output_form(result)
+                    shown = result if isinstance(result, str) else display_text(result)
+                    print(f"Out[{n}]= {shown}")
         except ParseError as ex:
             print(f"  Parse error: {ex}")
         except Exception as ex:
             print(f"  Error: {ex}")
 
-        counter += 1
+        counter = session.state.own.get("$Line", counter + 1)
         print()
+    try:
+        session.end()
+    except Exception as ex:
+        print(f"  Error in $Epilog: {ex}")
 
 
 if __name__ == "__main__":
