@@ -470,7 +470,175 @@ CONT = [
     ("HotellingTSquareDistribution[5, 2]", Raises(ValueError)),
 ]
 
-GROUPS = [CONT]
+
+def _landau_pdf(x):
+    """standard Landau density from the integral in the LandauDistribution Details"""
+    return mpmath.quad(lambda t: mpmath.exp(-t * x - 2 / mpmath.pi * t * mpmath.log(t)) * mpmath.sin(2 * t),
+                       [0, mpmath.inf]) / mpmath.pi
+
+
+def _rayleigh_mix(f):
+    """E over s ~ LogNormal(1/2, 1/4) of f(s) (SuzukiDistribution[1/2, 1/4])"""
+    return mpmath.quad(lambda z: f(mpmath.exp(0.5 + 0.25 * z)) * mpmath.npdf(z), [-mpmath.inf, 0, mpmath.inf])
+
+
+def _polya_aeppli(theta, p, k):
+    """P(X = k), X = sum of N ~ Poisson(theta) geometric(1 - p) counts on {1, 2, ...}, by direct convolution"""
+    from math import comb
+    if k == 0:
+        return mpmath.exp(-theta)
+    return sum(mpmath.exp(-theta) * mpmath.mpf(theta) ** n / mpmath.factorial(n)
+               * comb(k - 1, n - 1) * (1 - mpmath.mpf(p)) ** n * mpmath.mpf(p) ** (k - n) for n in range(1, k + 1))
+
+
+SPECIAL = [
+    # StableDistribution: SciPy levy_stable uses Nolan's S1 parametrisation (Wolfram type 1)
+    ("StableDistribution[1, w17a, w17b, w17m, w17s]", "StableDistribution[1, w17a, w17b, w17m, w17s]"),
+    ("PDF[StableDistribution[1, 1.5, 0.5, 0, 1], 0.7]", S(lambda st: st.levy_stable.pdf(0.7, 1.5, 0.5), 1e-6)),
+    ("CDF[StableDistribution[1, 1.5, 0.5, 0, 1], 0.7]", S(lambda st: st.levy_stable.cdf(0.7, 1.5, 0.5), 1e-6)),
+    ("PDF[StableDistribution[1, 2, 0, 0, 1], 0.5]", M(lambda: mpmath.npdf(0.5, 0, mpmath.sqrt(2)))),  # alpha = 2: N(0, Sqrt[2] s)
+    ("Mean[StableDistribution[1, 1.5, 0.5, 2, 1]]", "2."),
+    ("Mean[StableDistribution[1, 1/2, 0, 0, 1]]", "Indeterminate"),
+    ("PDF[StableDistribution[1, 3/2, 1/2, 0, 1], 7/10]", Raises(NotImplementedError)),
+    ("StableDistribution[1, 3, 0, 0, 1]", Raises(ValueError)),
+    ("StableDistribution[2, 1, 0, 0, 1]", Raises(ValueError)),
+    # LandauDistribution: the documented integral; SciPy landau (1.15+)
+    ("LandauDistribution[]", "LandauDistribution[0, 1]"),
+    ("LandauDistribution[w17m, w17s]", "LandauDistribution[w17m, w17s]"),
+    ("PDF[LandauDistribution[], 0.5]", M(lambda: _landau_pdf(0.5))),
+    ("PDF[LandauDistribution[1, 2], 2.]", M(lambda: _landau_pdf(0.5) / 2)),
+    ("PDF[LandauDistribution[], 0.5]", S(lambda st: st.landau.pdf(0.5), 1e-7)),
+    ("CDF[LandauDistribution[], 0.5]", S(lambda st: st.landau.cdf(0.5), 1e-6)),
+    ("Mean[LandauDistribution[]]", "Indeterminate"),
+    ("LandauDistribution[0, -1]", Raises(ValueError)),
+    # SuzukiDistribution[mu, nu]: RayleighDistribution[s] with s ~ LogNormalDistribution[mu, nu]
+    ("SuzukiDistribution[w17m, w17n]", "SuzukiDistribution[w17m, w17n]"),
+    ("Mean[SuzukiDistribution[w17m, w17n]]", "Sqrt[Pi/2] E^(w17m + w17n^2/2)"),
+    ("PDF[SuzukiDistribution[1/2, 1/4], 1.5]", M(lambda: _rayleigh_mix(lambda sg: 1.5 / sg ** 2 * mpmath.exp(-1.5 ** 2 / (2 * sg ** 2))))),
+    ("CDF[SuzukiDistribution[1/2, 1/4], 1.5]", M(lambda: _rayleigh_mix(lambda sg: 1 - mpmath.exp(-1.5 ** 2 / (2 * sg ** 2))))),
+    ("Variance[SuzukiDistribution[0, 1]]", "2 E^2 - Pi E/2"),
+    ("SuzukiDistribution[0, -1]", Raises(ValueError)),
+    # BeckmannDistribution: Norm of a binormal vector; rho = 0, equal sigmas, zero means = Rayleigh; mu != 0 = Rice
+    ("BeckmannDistribution[w17a, w17b, w17c, w17d]", "BeckmannDistribution[w17a, w17b, w17c, w17d]"),
+    ("PDF[BeckmannDistribution[0, 0, 1, 1], 1.2]", M(lambda: 1.2 * mpmath.exp(-0.72))),
+    ("CDF[BeckmannDistribution[1, 0, 1, 1], 1.2]", S(lambda st: st.rice.cdf(1.2, 1), 1e-8)),
+    ("PDF[BeckmannDistribution[1, 1, 1, 2], 1.5]", M(lambda: mpmath.quad(
+        lambda t: 1.5 * mpmath.npdf(1.5 * mpmath.cos(t), 1, 1) * mpmath.npdf(1.5 * mpmath.sin(t), 1, 2), [0, mpmath.pi, 2 * mpmath.pi]))),
+    ("Mean[BeckmannDistribution[0, 0, 1, 1]]", near(math.sqrt(math.pi / 2), 1e-8)),
+    ("Variance[BeckmannDistribution[0, 0, 1, 1]] + Mean[BeckmannDistribution[0, 0, 1, 1]]^2", "2"),
+    ("BeckmannDistribution[0, 0, -1, 1]", Raises(ValueError)),
+    # phase-type distributions (exact)
+    ("HyperexponentialDistribution[{w17p, 1 - w17p}, {w17a, w17b}]", "HyperexponentialDistribution[{w17p, 1 - w17p}, {w17a, w17b}]"),
+    ("PDF[HyperexponentialDistribution[{1/3, 2/3}, {1, 2}], w17x]", "Piecewise[{{E^(-w17x)/3 + 4 E^(-2 w17x)/3, w17x >= 0}}, 0]"),
+    ("Mean[HyperexponentialDistribution[{1/3, 2/3}, {1, 2}]]", "2/3"),
+    ("CDF[HyperexponentialDistribution[{1/3, 2/3}, {1, 2}], 1]", "1 - 1/(3 E) - 2/(3 E^2)"),
+    ("HyperexponentialDistribution[{1/2, 1/3}, {1, 2}]", Raises(ValueError)),
+    ("HypoexponentialDistribution[{w17a, w17b}]", "HypoexponentialDistribution[{w17a, w17b}]"),
+    ("CDF[HypoexponentialDistribution[{1, 2}], 1]", "1 - 2/E + 1/E^2"),
+    ("PDF[HypoexponentialDistribution[{2, 2}], 1]", "4/E^2"),  # = ErlangDistribution[2, 2]
+    ("Variance[HypoexponentialDistribution[{1, 2, 4}]]", "1 + 1/4 + 1/16"),
+    ("HypoexponentialDistribution[{1, -2}]", Raises(ValueError)),
+    ("CoxianDistribution[{w17p}, {w17a, w17b}]", "CoxianDistribution[{w17p}, {w17a, w17b}]"),
+    ("Mean[CoxianDistribution[{1/2}, {1, 2}]]", "5/4"),
+    ("CDF[CoxianDistribution[{1}, {1, 2}], 1]", "1 - 2/E + 1/E^2"),
+    ("PDF[CoxianDistribution[{1/2}, {1, 2}], 1]", "1/(2 E) + (2/E - 2/E^2)/2"),
+    ("CoxianDistribution[{1/2, 1/2}, {1, 2}]", Raises(ValueError)),
+    # JohnsonDistribution: SciPy johnsonsu / johnsonsb (a = gamma, b = delta, loc = mu, scale = sigma)
+    ("JohnsonDistribution[\"SU\", w17g, w17d, w17m, w17s]", "JohnsonDistribution[\"SU\", w17g, w17d, w17m, w17s]"),
+    ("PDF[JohnsonDistribution[\"SU\", 1, 2, 0.5, 1.5], 0.3]", S(lambda st: st.johnsonsu.pdf(0.3, 1, 2, 0.5, 1.5))),
+    ("CDF[JohnsonDistribution[\"SB\", 1, 2, 0, 3], 1.2]", S(lambda st: st.johnsonsb.cdf(1.2, 1, 2, 0, 3))),
+    ("CDF[JohnsonDistribution[\"SN\", 0, 1, 0, 1], 0]", "1/2"),
+    ("CDF[JohnsonDistribution[\"SL\", 0, 1, 0, 1], 1]", "1/2"),
+    ("Mean[JohnsonDistribution[\"SL\", 0, 1, 0, 1]]", "Sqrt[E]"),
+    ("JohnsonDistribution[\"SX\", 0, 1, 0, 1]", Raises(ValueError)),
+    ("JohnsonDistribution[\"SU\", 0, -1, 0, 1]", Raises(ValueError)),
+]
+
+DISC = [
+    ("BenfordDistribution[w17b]", "BenfordDistribution[w17b]"),
+    ("PDF[BenfordDistribution[10], 1]", "Log[2]/Log[10]"),
+    ("CDF[BenfordDistribution[10], 3]", "Log[4]/Log[10]"),
+    ("Mean[BenfordDistribution[10.]]", M(lambda: sum(k * mpmath.log10(1 + 1 / mpmath.mpf(k)) for k in range(1, 10)))),
+    ("BenfordDistribution[1]", Raises(ValueError)),
+    # BetaBinomialDistribution[alpha, beta, n]: SciPy betabinom(n, alpha, beta)
+    ("BetaBinomialDistribution[w17a, w17b, w17n]", "BetaBinomialDistribution[w17a, w17b, w17n]"),
+    ("Mean[BetaBinomialDistribution[w17a, w17b, w17n]]", "w17n w17a/(w17a + w17b)"),
+    ("PDF[BetaBinomialDistribution[2, 3, 5], 2]", S(lambda st: st.betabinom.pmf(2, 5, 2, 3))),
+    ("PDF[BetaBinomialDistribution[1, 1, 4], 3]", "1/5"),
+    ("CDF[BetaBinomialDistribution[2, 3, 5], 2.5]", S(lambda st: st.betabinom.cdf(2, 5, 2, 3))),
+    ("BetaBinomialDistribution[2, 3, -5]", Raises(ValueError)),
+    # BetaNegativeBinomialDistribution[alpha, beta, n]: SciPy betanbinom(n, alpha, beta)
+    ("BetaNegativeBinomialDistribution[w17a, w17b, w17n]", "BetaNegativeBinomialDistribution[w17a, w17b, w17n]"),
+    ("PDF[BetaNegativeBinomialDistribution[3, 2, 4], 2]", S(lambda st: st.betanbinom.pmf(2, 4, 3, 2))),
+    ("Mean[BetaNegativeBinomialDistribution[3, 2, 4]]", "4"),
+    ("PDF[BetaNegativeBinomialDistribution[1, 1, 1], 1]", "1/6"),
+    ("BetaNegativeBinomialDistribution[-3, 2, 4]", Raises(ValueError)),
+    # BorelTannerDistribution[alpha, n]
+    ("BorelTannerDistribution[w17a, w17n]", "BorelTannerDistribution[w17a, w17n]"),
+    ("PDF[BorelTannerDistribution[1/2, 2], 3]", "2/3 E^(-3/2) (3/2)"),
+    ("Mean[BorelTannerDistribution[w17a, w17n]]", "w17n/(1 - w17a)"),
+    ("Total[Table[PDF[BorelTannerDistribution[0.3, 2], w17k], {w17k, 2, 80}]]", near(1.0, 1e-12)),
+    ("BorelTannerDistribution[2, 1]", Raises(ValueError)),
+    # Fisher / Wallenius noncentral hypergeometric: SciPy nchypergeom_fisher / nchypergeom_wallenius (M, n, N, odds)
+    ("FisherHypergeometricDistribution[w17n, w17s, w17t, w17w]", "FisherHypergeometricDistribution[w17n, w17s, w17t, w17w]"),
+    ("PDF[FisherHypergeometricDistribution[4, 5, 12, 2], 2]", S(lambda st: st.nchypergeom_fisher.pmf(2, 12, 5, 4, 2))),
+    ("Mean[FisherHypergeometricDistribution[4, 5, 12, 2.]]", S(lambda st: st.nchypergeom_fisher.mean(12, 5, 4, 2))),
+    ("PDF[FisherHypergeometricDistribution[2, 2, 4, 1], 1]", "2/3"),
+    ("FisherHypergeometricDistribution[4, 13, 12, 2]", Raises(ValueError)),
+    ("WalleniusHypergeometricDistribution[w17n, w17s, w17t, w17w]", "WalleniusHypergeometricDistribution[w17n, w17s, w17t, w17w]"),
+    ("PDF[WalleniusHypergeometricDistribution[4, 5, 12, 2.], 2]", S(lambda st: st.nchypergeom_wallenius.pmf(2, 12, 5, 4, 2), 1e-8)),
+    ("CDF[WalleniusHypergeometricDistribution[4, 5, 12, 2.], 2]", S(lambda st: st.nchypergeom_wallenius.cdf(2, 12, 5, 4, 2), 1e-8)),
+    ("PDF[WalleniusHypergeometricDistribution[2, 2, 4, 1], 1]", "2/3"),
+    ("WalleniusHypergeometricDistribution[4, 5, 12, -2]", Raises(ValueError)),
+    # LogSeriesDistribution[theta]: SciPy logser
+    ("LogSeriesDistribution[w17t]", "LogSeriesDistribution[w17t]"),
+    ("PDF[LogSeriesDistribution[1/2], 2]", "1/(8 Log[2])"),
+    ("Mean[LogSeriesDistribution[0.4]]", S(lambda st: st.logser.mean(0.4))),
+    ("CDF[LogSeriesDistribution[0.4], 3]", S(lambda st: st.logser.cdf(3, 0.4))),
+    ("LogSeriesDistribution[1]", Raises(ValueError)),
+    # PascalDistribution[n, p]: number of trials = SciPy nbinom(n, p) + n
+    ("PascalDistribution[w17n, w17p]", "PascalDistribution[w17n, w17p]"),
+    ("Mean[PascalDistribution[w17n, w17p]]", "w17n/w17p"),
+    ("PDF[PascalDistribution[3, 0.4], 7]", S(lambda st: st.nbinom.pmf(4, 3, 0.4))),
+    ("CDF[PascalDistribution[3, 2/5], 3]", "8/125"),
+    ("PascalDistribution[3, 2]", Raises(ValueError)),
+    # PoissonConsulDistribution[mu, lambda] (generalised Poisson)
+    ("PoissonConsulDistribution[w17m, w17l]", "PoissonConsulDistribution[w17m, w17l]"),
+    ("PDF[PoissonConsulDistribution[2, 1/2], 2]", "2 3 E^-3/2"),
+    ("Mean[PoissonConsulDistribution[w17m, w17l]]", "w17m/(1 - w17l)"),
+    ("Total[Table[PDF[PoissonConsulDistribution[1.5, 0.3], w17k], {w17k, 0, 100}]]", near(1.0, 1e-12)),
+    ("PoissonConsulDistribution[2, 3/2]", Raises(ValueError)),
+    # PolyaAeppliDistribution[theta, p]: Poisson sum of geometrics (direct convolution)
+    ("PolyaAeppliDistribution[w17t, w17p]", "PolyaAeppliDistribution[w17t, w17p]"),
+    ("PDF[PolyaAeppliDistribution[2, 1/3], 3]", M(lambda: _polya_aeppli(2, mpmath.mpf(1) / 3, 3))),
+    ("PDF[PolyaAeppliDistribution[2.5, 0.4], 5]", M(lambda: _polya_aeppli(2.5, 0.4, 5))),
+    ("Mean[PolyaAeppliDistribution[w17t, w17p]]", "w17t/(1 - w17p)"),
+    ("PDF[PolyaAeppliDistribution[2, 1/3], 0]", "E^-2"),
+    ("PolyaAeppliDistribution[2, 1]", Raises(ValueError)),
+    # SkellamDistribution: SciPy skellam
+    ("SkellamDistribution[w17a, w17b]", "SkellamDistribution[w17a, w17b]"),
+    ("Mean[SkellamDistribution[w17a, w17b]]", "w17a - w17b"),
+    ("PDF[SkellamDistribution[2, 3], -1]", S(lambda st: st.skellam.pmf(-1, 2, 3))),
+    ("CDF[SkellamDistribution[2., 3.], 1]", S(lambda st: st.skellam.cdf(1, 2, 3))),
+    ("PDF[SkellamDistribution[2, 3], 1.]", S(lambda st: st.skellam.pmf(1, 2, 3))),
+    ("SkellamDistribution[-2, 3]", Raises(ValueError)),
+    # WaringYuleDistribution[alpha] = SciPy yulesimon(alpha) shifted by -1
+    ("WaringYuleDistribution[w17a]", "WaringYuleDistribution[w17a]"),
+    ("PDF[WaringYuleDistribution[2.5], 3]", S(lambda st: st.yulesimon.pmf(4, 2.5))),
+    ("PDF[WaringYuleDistribution[2, 3], 0]", "2/5"),
+    ("Mean[WaringYuleDistribution[3]]", "1/2"),
+    ("Mean[WaringYuleDistribution[1]]", "Infinity"),
+    ("WaringYuleDistribution[-1]", Raises(ValueError)),
+    # ZipfDistribution[rho] = SciPy zipf(rho + 1); [n, rho] = zipfian(rho + 1, n)
+    ("ZipfDistribution[w17r]", "ZipfDistribution[w17r]"),
+    ("PDF[ZipfDistribution[1], 2]", "6/(8 Pi^2)"),
+    ("PDF[ZipfDistribution[1.5], 3]", S(lambda st: st.zipf.pmf(3, 2.5))),
+    ("CDF[ZipfDistribution[5, 1.5], 3]", S(lambda st: st.zipfian.cdf(3, 2.5, 5))),
+    ("Mean[ZipfDistribution[1]]", "Infinity"),
+    ("ZipfDistribution[0]", Raises(ValueError)),
+]
+
+GROUPS = [CONT, SPECIAL, DISC]
 
 
 def _resolve(cases):
