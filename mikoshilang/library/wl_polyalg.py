@@ -1053,3 +1053,507 @@ def _coefarrays(polys, vs, *rest):
         a = [arr(k, P) for P in exprs]
         res.append(out(a[0]) if single else out(a))
     return L(*res)
+
+
+# ───────────────────────────── Padé approximants ─────────────────────────────
+
+def _pade_core(c, m, n, t):
+    """[m/n] Padé approximant of the power series Σ c_k t^k (k <= m + n) by the extended Euclidean algorithm on
+    (t^(m+n+1), T); returns (P, Q) with Q(0) = 1, or None if no approximant with Q(0) != 0 exists."""
+    T = sp.Poly(sum(ci * t ** k for k, ci in enumerate(c)), t)
+    r0, r1 = sp.Poly(t ** (m + n + 1), t), T
+    t0, t1 = sp.Poly(0, t), sp.Poly(1, t)
+    if r1.is_zero:
+        return sp.Integer(0), sp.Integer(1)
+    while r1.degree() > m:
+        q, r = r0.div(r1)
+        r0, r1 = r1, r
+        t0, t1 = t1, t0 - q * t1
+        if r1.is_zero:
+            break
+    P, Q = r1, t1
+    # linearised Padé condition Q T - P = O(t^(m+n+1)) (exact check)
+    chk = (Q * T - P).as_expr()
+    if any(sp.degree(term, t) < m + n + 1 for term in sp.Add.make_args(sp.expand(chk)) if term != 0):
+        raise ArithmeticError("PadeApproximant: result failed verification")
+    g = P.gcd(Q) if not P.is_zero else Q
+    if not P.is_zero:
+        P, Q = P.quo(g), Q.quo(g)
+    else:
+        return sp.Integer(0), sp.Integer(1)
+    q0 = Q.eval(0)
+    if q0 == 0:
+        return None
+    return sp.expand(P.as_expr() / q0), sp.expand(Q.as_expr() / q0)
+
+
+@fn("PadeApproximant", area=AREA, status="added",
+    notes="PadeApproximant[f, {x, x0, {m, n}}] / {x, x0, n} (= {n, n}): the rational function P/Q with deg P <= m, "
+          "deg Q <= n, Q(x0) = 1 whose series agrees with f to the highest possible order (extended Euclidean "
+          "algorithm, so degenerate cases such as PadeApproximant[Cos[x], {x, 0, 1}] -> 1 are handled); a pole or "
+          "zero (x - x0)^k of f is factored out as Wolfram does (Exp[x]/x); x0 may be symbolic or Infinity "
+          "(series in 1/x); fractional powers (Puiseux series) raise; the result's series is checked")
+def _pade(f, spec):
+    if not (is_list(spec) and len(spec.args) == 3):
+        raise ValueError("PadeApproximant: expected {x, x0, {m, n}} or {x, x0, n}")
+    xv, x0e, mn = spec.args
+    x = _var1(xv, "PadeApproximant")
+    if is_list(mn):
+        if len(mn.args) != 2:
+            raise ValueError("PadeApproximant: the order must be n or {m, n}")
+        m, n = mn.args
+    else:
+        m = n = mn
+    if not (K.is_int(m) and K.is_int(n) and int(m) >= 0 and int(n) >= 0):
+        raise ValueError("PadeApproximant: the orders must be non-negative integers")
+    m, n = int(m), int(n)
+    F = _S(f, "PadeApproximant")
+    inf = _is_sym(x0e, "Infinity")
+    t = sp.Dummy("t")
+    if inf:
+        G = F.subs(x, 1 / t)
+        back = 1 / x
+    else:
+        x0 = _S(x0e, "PadeApproximant")
+        G = F.subs(x, x0 + t)
+        back = x - x0
+    N = m + n + 1
+    try:
+        ser = sp.series(G, t, 0, N + 8).removeO()
+    except Exception as exc:
+        raise NotImplementedError(f"PadeApproximant: cannot expand the function in a series ({exc})")
+    ser = sp.expand(ser)
+    exps = set()
+    for term in sp.Add.make_args(ser):
+        c, e = term.as_coeff_exponent(t)
+        e = sp.sympify(e)
+        if c.has(t):
+            raise NotImplementedError("PadeApproximant: the series has logarithmic terms")
+        exps.add(e)
+    if any(not e.is_Integer for e in exps):
+        raise NotImplementedError("PadeApproximant: fractional powers (Puiseux series) are not supported")
+    if ser == 0:
+        return 0
+    k = int(min(exps))
+    h = sp.expand(ser * t ** (-k))
+    mm, nn = (m, n + k) if k < 0 else (m - k, n)
+    if mm < 0 or nn < 0:
+        raise ValueError("PadeApproximant: the order is too low for the pole or zero of f at the expansion point")
+    coeffs = [h.coeff(t, i) for i in range(mm + nn + 1)]
+    pq = _pade_core(coeffs, mm, nn, t)
+    if pq is None:
+        raise ArithmeticError("PadeApproximant: no Padé approximant of this order exists")
+    P, Q = pq
+    P = sp.expand(P * t ** k) if k > 0 else P
+    Q = sp.expand(Q * t ** (-k)) if k < 0 else Q
+    num = P.subs(t, back)
+    den = Q.subs(t, back)
+    if den == 1:
+        return out(num)
+    return ev(Expr("Times", out(num), Expr("Power", out(den), -1)))
+
+
+# ───────────────────────────── root isolation ─────────────────────────────
+
+def _maxdeg_check(P, fname):
+    lim = _SYSC.get("$MaxRootDegree", 1024)
+    st = K.state().own.get("$MaxRootDegree")
+    if K.is_int(st):
+        lim = int(st)
+    if P.degree() > lim:
+        raise ValueError(f"{fname}: the degree {P.degree()} exceeds $MaxRootDegree = {lim}")
+
+
+def _rat_approx(r, prec_bits):
+    """Certified rational approximation of a CRootOf r (error below 2^-prec_bits in each part)."""
+    tol = sp.Rational(1, 2 ** prec_bits)
+    v = r.eval_rational(dx=tol, dy=tol) if not r.is_real else r.eval_rational(tol)
+    return sp.nsimplify(v) if not isinstance(v, sp.Basic) else v
+
+
+def _isolate(roots_all, complexes):
+    """roots_all: list of distinct exact roots (CRootOf or rationals) of a square-free polynomial.
+    Returns {root: interval} with rational (real) or Gaussian-rational (complex) corners, each containing
+    exactly that root and no other (real intervals open, unless the root is rational)."""
+    num = [complex(sp.N(r, 40)) for r in roots_all]
+    res = {}
+    for i, r in enumerate(roots_all):
+        others = [abs(num[i] - num[j]) for j in range(len(num)) if j != i]
+        sep = min(others) if others else 4.0
+        # δ: a power of 2 below sep/4 (so rectangles of half-width δ/... cannot reach another root)
+        e = max(1, int(math.ceil(-math.log2(sep / 4)))) if sep < 4 else -1
+        delta = sp.Rational(1, 2 ** e) if e >= 0 else sp.Integer(2)
+        if r.is_Rational:
+            res[i] = (r, r)
+            continue
+        bits = (e if e > 0 else 0) + 4
+        a = _rat_approx(r, bits)              # |a - r| < 2^-bits <= δ/16
+        if r.is_real or (not complexes and r.is_real is not False):
+            lo, hi = _round_down(a - delta / 2, e + 2), _round_up(a + delta / 2, e + 2)
+            res[i] = (lo, hi)
+        else:
+            ar, ai = sp.re(a), sp.im(a)
+            lo = _round_down(ar - delta / 2, e + 2) + sp.I * _round_down(ai - delta / 2, e + 2)
+            hi = _round_up(ar + delta / 2, e + 2) + sp.I * _round_up(ai + delta / 2, e + 2)
+            res[i] = (lo, hi)
+    return res
+
+
+def _round_down(q, bits):
+    s = 2 ** max(bits, 0)
+    return sp.Rational(sp.floor(q * s), s)
+
+
+def _round_up(q, bits):
+    s = 2 ** max(bits, 0)
+    return sp.Rational(sp.ceiling(q * s), s)
+
+
+def _exact_roots(P):
+    """Distinct roots of a SymPy Poly over QQ with the irreducible factor each belongs to."""
+    out_ = []
+    _, facs = P.factor_list()
+    for fac, _m in facs:
+        if fac.degree() == 1:
+            out_.append((-fac.nth(0) / fac.nth(1), fac))
+        else:
+            for k in range(fac.degree()):
+                out_.append((sp.CRootOf(fac, k), fac))
+    return out_
+
+
+def _sort_roots(items):
+    def key(it):
+        r = it[0]
+        v = complex(sp.N(r, 30))
+        real = r.is_real if not r.is_Rational else True
+        return (0, v.real, 0.0) if real else (1, v.real, v.imag)
+    return sorted(items, key=key)
+
+
+def _q_poly(e, fname):
+    v = sp.expand(_S(e, fname))
+    fs = sorted(v.free_symbols, key=str)
+    if len(fs) > 1:
+        raise ValueError(f"{fname}: {e!r} must be a univariate polynomial")
+    x = fs[0] if fs else sp.Symbol("x")
+    if not v.is_polynomial(x) or any(isinstance(a, sp.Float) for a in sp.preorder_traversal(v)):
+        raise ValueError(f"{fname}: {e!r} must be a polynomial with exact rational coefficients")
+    P = sp.Poly(v, x)
+    if P.domain not in (sp.ZZ, sp.QQ):
+        raise NotImplementedError(f"{fname}: only rational coefficients are supported")
+    return P, x
+
+
+@fn("RootIntervals", area=AREA, status="added",
+    notes="RootIntervals[{p1, p2, ...}] / RootIntervals[p] / RootIntervals[polys, Complexes] -> {intervals, "
+          "which}: disjoint isolating intervals with rational endpoints for all distinct real roots (with "
+          "Complexes, also rectangles {lower-left, upper-right} with Gaussian-rational corners for the non-real "
+          "roots), and for each interval the positions of the polynomials having that root. Each real interval "
+          "contains exactly one root in its interior, or is {r, r} for a rational root; isolation is certified "
+          "from exact root separation; the interval endpoints differ from Wolfram's (they are not unique)")
+def _rootintervals(ps, *dom):
+    if len(dom) > 1:
+        raise ValueError("RootIntervals called with too many arguments")
+    complexes = False
+    if dom:
+        if not (_is_sym(dom[0], "Complexes") or _is_sym(dom[0], "Reals")):
+            raise ValueError("RootIntervals: the domain must be Reals or Complexes")
+        complexes = dom[0].name == "Complexes"
+    polys = list(ps.args) if is_list(ps) else [ps]
+    PP = [_q_poly(p, "RootIntervals") for p in polys]
+    gens = {x for _, x in PP}
+    if len(gens) > 1:
+        raise ValueError("RootIntervals: all polynomials must be in the same variable")
+    items = []
+    seen = []
+    for i, (P, x) in enumerate(PP):
+        if P.is_zero:
+            raise ValueError("RootIntervals: the zero polynomial has no isolated roots")
+        _maxdeg_check(P, "RootIntervals")
+        for r, fac in _exact_roots(P):
+            if not complexes and not (r.is_Rational or r.is_real):
+                continue
+            key = None
+            for j, (r2, f2, _) in enumerate(seen):
+                if f2 == fac.monic() and (r2 == r):
+                    key = j
+                    break
+            if key is None:
+                seen.append((r, fac.monic(), [i + 1]))
+            elif i + 1 not in seen[key][2]:
+                seen[key][2].append(i + 1)
+    seen = _sort_roots([(r, f, w) for r, f, w in seen])
+    iv = _isolate([r for r, _, _ in seen], complexes)
+    return L(L(*(L(out(iv[k][0]), out(iv[k][1])) for k in range(len(seen)))),
+             L(*(L(*w) for _, _, w in seen)))
+
+
+@fn("IsolatingInterval", area=AREA, status="added",
+    notes="IsolatingInterval[a] / IsolatingInterval[a, dx]: for an exact algebraic number a, an interval {lo, hi} "
+          "with rational endpoints (Gaussian-rational corners {lower-left, upper-right} for a non-real a) "
+          "containing a and no other root of its minimal polynomial, of width below dx when given; a rational "
+          "number gives {a, a}; endpoints are certified but differ from Wolfram's choice")
+def _isolinterval(a, *dx):
+    if len(dx) > 1:
+        raise ValueError("IsolatingInterval called with too many arguments")
+    v = _S(a, "IsolatingInterval")
+    if not v.is_number or v.has(sp.Float):
+        raise ValueError("IsolatingInterval: the argument must be an exact algebraic number")
+    if v.is_Rational:
+        return L(out(v), out(v))
+    if dx:
+        w = _S(dx[0], "IsolatingInterval")
+        if not (w.is_number and w.is_positive):
+            raise ValueError("IsolatingInterval: the width must be a positive number")
+    t = sp.Dummy("t")
+    try:
+        mp = sp.minimal_polynomial(v, t)
+    except Exception:
+        raise ValueError("IsolatingInterval: the argument must be an algebraic number")
+    P = sp.Poly(mp, t)
+    _maxdeg_check(P, "IsolatingInterval")
+    roots = [sp.CRootOf(P, k) for k in range(P.degree())]
+    vn = complex(sp.N(v, 50))
+    idx = min(range(len(roots)), key=lambda k: abs(complex(sp.N(roots[k], 50)) - vn))
+    iv = _isolate(roots, True)
+    lo, hi = iv[idx]
+    if dx:
+        w = sp.nsimplify(_S(dx[0], "IsolatingInterval"))
+        if sp.re(hi - lo) >= w or sp.im(hi - lo) >= w:
+            r = roots[idx]
+            b = int(math.ceil(-math.log2(float(w)))) + 3          # grid 2^-b <= w/8
+            q = _rat_approx(r, b + 2)                              # |q - r| < 2^-(b+2)
+            if r.is_real:
+                lo, hi = _round_down(q - sp.Rational(1, 2 ** b), b), _round_up(q + sp.Rational(1, 2 ** b), b)
+            else:
+                g = sp.Rational(1, 2 ** b)
+                lo = _round_down(sp.re(q) - g, b) + sp.I * _round_down(sp.im(q) - g, b)
+                hi = _round_up(sp.re(q) + g, b) + sp.I * _round_up(sp.im(q) + g, b)
+    return L(out(lo), out(hi))
+
+
+@fn("NSolveValues", area=AREA, status="added",
+    notes="NSolveValues[eqns, vars] / NSolveValues[eqns, vars, dom]: the values of the NSolve solutions ({v1, "
+          "...} for one variable, {{x1, y1, ...}, ...} for several), with NSolve's options (WorkingPrecision) and "
+          "MaxRoots -> n (at most n solutions, Wolfram order)")
+def _nsolvevalues(eqs, vs, *rest):
+    rest, opts = _opts(rest, {"MaxRoots", "WorkingPrecision"}, "NSolveValues")
+    if len(rest) > 1:
+        raise ValueError("NSolveValues called with too many arguments")
+    args = [eqs, vs] + rest + ([rule(_sym("WorkingPrecision"), opts["WorkingPrecision"])]
+                               if "WorkingPrecision" in opts else [])
+    sols = ev(Expr("NSolve", *args))
+    if not is_list(sols):
+        raise Unevaluated()
+    one = not is_list(vs)
+    V = [vs] if one else list(vs.args)
+    vals = []
+    for s in sols.args:
+        row = []
+        for v in V:
+            hit = [r.args[1] for r in s.args if _is_head(r, "Rule") and K.same(r.args[0], v)]
+            if not hit:
+                raise NotImplementedError("NSolveValues: a solution leaves a variable free")
+            row.append(hit[0])
+        vals.append(row[0] if one else L(*row))
+    if "MaxRoots" in opts:
+        mr = opts["MaxRoots"]
+        if not (_is_sym(mr, "Infinity") or (K.is_int(mr) and int(mr) >= 0)):
+            raise ValueError("NSolveValues: MaxRoots must be a non-negative integer or Infinity")
+        if K.is_int(mr):
+            vals = vals[:int(mr)]
+    return L(*vals)
+
+
+record("MaxRoots", AREA, "added",
+       "option of NSolveValues (and Solve/NSolve in Wolfram): the maximum number of roots returned; MaxRoots -> n "
+       "keeps the first n solutions, Infinity keeps all")
+
+
+# ───────────────────────────── SolveAlways ─────────────────────────────
+
+@fn("SolveAlways", area=AREA, status="added",
+    notes="SolveAlways[eqns, vars]: values of the parameters for which the equations (and inequations) hold for "
+          "all values of vars: every coefficient of the numerators as polynomials in vars must vanish (an "
+          "inequation p != 0 needs p to be a nonzero constant); the parameter system is solved exactly and each "
+          "solution is substituted back. Non-polynomial dependence on vars and Or raise")
+def _solvealways(eqs, vs, *rest):
+    if rest:
+        raise NotImplementedError("SolveAlways: options are not supported")
+    V = [_var1(v, "SolveAlways") for v in (vs.args if is_list(vs) else [vs])]
+    conds = _flat_and(eqs)
+    zero_eqs, nonzero = [], []
+    for c in conds:
+        t = _tf(c)
+        if t is True:
+            continue
+        if t is False:
+            return L()
+        if not (_is_head(c, "Equal", "Unequal") and len(c.args) == 2):
+            raise NotImplementedError("SolveAlways: only equations, inequations and their conjunctions are "
+                                      "supported")
+        f = sp.together(_S(c.args[0], "SolveAlways") - _S(c.args[1], "SolveAlways"))
+        n, d = sp.fraction(f)
+        n = sp.expand(n)
+        if not n.is_polynomial(*V):
+            raise NotImplementedError("SolveAlways: only equations polynomial (or rational) in the variables are "
+                                      "supported")
+        P = sp.Poly(n, *V)
+        coeffs = [cc for mon, cc in P.terms()]
+        if c.head == "Equal":
+            zero_eqs.extend(coeffs)
+        else:
+            nonconst = [cc for mon, cc in P.terms() if any(mon)]
+            const = P.coeff_monomial(1)
+            zero_eqs.extend(nonconst)
+            nonzero.append(const)
+    zero_eqs = [e for e in zero_eqs if e != 0]
+    params = sorted(set().union(*(e.free_symbols for e in zero_eqs + nonzero)) - set(V), key=str)
+    if any(e.is_number and e != 0 for e in zero_eqs):
+        return L()
+    if not zero_eqs:
+        sols = [{}]
+    else:
+        if not params:
+            return L()
+        sols = sp.solve(zero_eqs, params, dict=True)
+    good = []
+    for s in sols:
+        if any(sp.simplify(e.subs(s)) != 0 for e in zero_eqs):
+            raise ArithmeticError("SolveAlways: a solution failed verification")
+        nz = [sp.simplify(e.subs(s)) for e in nonzero]
+        if any(v == 0 for v in nz):
+            continue
+        if any(not v.is_number for v in nz):
+            raise NotImplementedError("SolveAlways: the solution needs extra conditions on free parameters")
+        good.append(s)
+    from .wl_algebra import _wl_order_key
+    good.sort(key=lambda s: tuple(_wl_order_key(s[p]) if p in s else (9,) for p in params))
+    return L(*(L(*(rule(Symbol(p.name), out(s[p])) for p in params if p in s)) for s in good))
+
+
+def _flat_and(e):
+    if is_list(e) or _is_head(e, "And"):
+        return [x for a in e.args for x in _flat_and(a)]
+    return [e]
+
+
+# ───────────────────────────── TrigFactorList, MatrixPolynomialValue ─────────────────────────────
+
+def _trig_gens_rewrite(v):
+    v = v.rewrite(sp.cos, sp.sin) if False else v
+    rep = {sp.tan: lambda a: sp.sin(a) / sp.cos(a), sp.cot: lambda a: sp.cos(a) / sp.sin(a),
+           sp.sec: lambda a: 1 / sp.cos(a), sp.csc: lambda a: 1 / sp.sin(a),
+           sp.tanh: lambda a: sp.sinh(a) / sp.cosh(a), sp.coth: lambda a: sp.cosh(a) / sp.sinh(a),
+           sp.sech: lambda a: 1 / sp.cosh(a), sp.csch: lambda a: 1 / sp.sinh(a)}
+    for f, g in rep.items():
+        v = v.replace(lambda e, f=f: isinstance(e, f), lambda e, g=g: g(e.args[0]))
+    return v
+
+
+def _pyth_variants(g):
+    outs = []
+    for f, h, sgn in ((sp.cos, sp.sin, -1), (sp.sin, sp.cos, -1), (sp.cosh, sp.sinh, 1), (sp.sinh, sp.cosh, -1)):
+        args = {a.args[0] for a in g.atoms(f)}
+        for a in args:
+            if sgn == 1:      # cosh^2 = 1 + sinh^2
+                outs.append(sp.expand(g.subs(f(a) ** 2, 1 + h(a) ** 2)))
+            elif f is sp.sinh:  # sinh^2 = cosh^2 - 1
+                outs.append(sp.expand(g.subs(f(a) ** 2, h(a) ** 2 - 1)))
+            else:             # cos^2 = 1 - sin^2, sin^2 = 1 - cos^2
+                outs.append(sp.expand(g.subs(f(a) ** 2, 1 - h(a) ** 2)))
+    return outs
+
+
+@fn("TrigFactorList", area=AREA, status="added",
+    notes="TrigFactorList[expr]: {{c, 1}, {f1, e1}, ...} with expr == c Π fi^ei, after writing Tan, Cot, Sec, Csc "
+          "(and hyperbolic analogues) in Sin and Cos, factoring as polynomials in the trigonometric functions and "
+          "simplifying each factor with the Pythagorean identities (TrigFactorList[Cosh[x]^2 - Cosh[x]^4] -> "
+          "{{-1, 1}, {Sinh[x], 2}, {Cosh[x], 2}}); the product is checked to equal expr; the chosen factors can "
+          "differ from Wolfram's sum-to-product forms")
+def _trigfactorlist(e):
+    v = _S(e, "TrigFactorList")
+    w = sp.together(_trig_gens_rewrite(v))
+    facs = {}
+    const = sp.Integer(1)
+
+    def add(f, k):
+        nonlocal const
+        if f.is_number:
+            const *= f ** k
+            return
+        c, ff = sp.factor_list(f)
+        const *= c ** k
+        for g, m in ff:
+            g2 = sp.trigsimp(g)
+            if g2 != g and isinstance(g2, (sp.Mul, sp.Pow)) and not g2.is_Add:
+                add(g2, k * m)
+                continue
+            if isinstance(g2, sp.Pow) and g2.exp.is_Integer:
+                add(g2.base, k * m * int(g2.exp))
+                continue
+            gg = g2 if (not g2.is_Add or sp.count_ops(g2) < sp.count_ops(g)) else g
+            if (-gg).could_extract_minus_sign() is False and gg.could_extract_minus_sign():
+                gg = -gg
+                const *= (-1) ** (k * m)
+            facs[gg] = facs.get(gg, 0) + k * m
+    n, d = sp.fraction(w)
+    add(n, 1)
+    add(d, -1)
+    facs = {f: k for f, k in facs.items() if k != 0}
+    # Pythagorean identities: combine pairs of factors (c - 1)(c + 1) etc. into a single power when possible
+    changed = True
+    while changed:
+        changed = False
+        keys = [f for f in facs if f.is_Add]
+        for f1, f2 in itertools.combinations(keys, 2):
+            if facs.get(f1) != facs.get(f2) or f1 not in facs or f2 not in facs:
+                continue
+            g = sp.expand(f1 * f2)
+            for h in _pyth_variants(g):
+                c_, ff = sp.factor_list(h)
+                if len(ff) == 1 and not ff[0][0].is_Add:
+                    k = facs.pop(f1)
+                    facs.pop(f2)
+                    const *= c_ ** k
+                    base, mexp = ff[0]
+                    facs[base] = facs.get(base, 0) + mexp * k
+                    changed = True
+                    break
+            if changed:
+                break
+    prod = const * sp.Mul(*(f ** k for f, k in facs.items()))
+    from .wl_algebra import _numeric_equal
+    if not (sp.simplify(prod - v) == 0 or _numeric_equal(prod, v)):
+        raise ArithmeticError("TrigFactorList: factorisation failed verification")
+    items = sorted(facs.items(), key=lambda t: sp.default_sort_key(t[0]))
+    return L(L(out(const), 1), *(L(out(f), k) for f, k in items))
+
+
+@fn("MatrixPolynomialValue", area=AREA, status="added",
+    notes="MatrixPolynomialValue[poly, m, x] -> poly with x replaced by the square matrix m (constant term times "
+          "the identity, powers as MatrixPower); MatrixPolynomialValue[{c0, c1, ...}, m] -> Σ ck m^k (Horner "
+          "scheme, exact or numeric)")
+def _matpolyval(p, m, *x):
+    from .core import matrix_arg
+    if len(x) > 1:
+        raise ValueError("MatrixPolynomialValue called with too many arguments")
+    M = sp.Matrix(matrix_arg(m, "MatrixPolynomialValue", square=True))
+    nrow = M.rows
+    if x:
+        xs = _var1(x[0], "MatrixPolynomialValue")
+        f = sp.expand(_S(p, "MatrixPolynomialValue"))
+        if not f.is_polynomial(xs):
+            raise ValueError("MatrixPolynomialValue: the first argument must be a polynomial in the variable")
+        coeffs = list(reversed(sp.Poly(f, xs).all_coeffs())) if f != 0 else [0]
+    else:
+        if not is_list(p):
+            raise ValueError("MatrixPolynomialValue[{c0, c1, ...}, m] needs a coefficient list")
+        coeffs = [_S(c, "MatrixPolynomialValue") for c in p.args]
+    R_ = sp.zeros(nrow, nrow)
+    for c in reversed(coeffs):
+        R_ = R_ * M + c * sp.eye(nrow)
+    R_ = R_.applyfunc(sp.expand)
+    from .core import numeric_out
+    return numeric_out(out(R_), p, m) if False else out(R_)
