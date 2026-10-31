@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, Set
 from .expr import Expr, Symbol
 from .rules import SIMPLIFICATION_RULES, replace
+from .symbol_values import SYMBOL_VALUES
 
 # The reviewed function library (mikoshilang.library) replaces the legacy
 # extended/extended2/extended3/visualization rule tables, which are no longer
@@ -220,6 +221,9 @@ def _evaluate_body(expr, depth: int) -> Any:
         own = st.own
         if expr.name in own:
             return evaluate(own[expr.name], depth + 1)
+        sv = SYMBOL_VALUES.get(expr.name)
+        if sv is not None:                                   # built-in symbol values (Red -> RGBColor[1, 0, 0])
+            return sv
         if expr.name == "Null":
             return None
         if st.ext and STUB_HOOK is not None and expr.name in st.ext.get("Stub", ()):
