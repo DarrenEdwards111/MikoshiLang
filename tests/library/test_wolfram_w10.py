@@ -11,7 +11,7 @@ import sympy as sp
 
 from _harness import Pred, Raises, check, ids, to_complex
 
-mp.mp.dps = 20
+
 
 
 def HP(ref, digits):
@@ -158,9 +158,9 @@ NUMBERS = [
     ("MultipleHarmonicNumber[4, {1, 1}, {1/2, 2}]", "25/48"),
     ("MultipleHarmonicNumber[Infinity, {2, 1}]", "Zeta[3]"),
     ("MultipleHarmonicNumber[6, {3}]", str(sp.harmonic(6, 3))), ("MultipleHarmonicNumber[3.5, {1}]", Raises()),
-    ("BellY[4, 2, {x1, x2, x3}]", "3 x2^2 + 4 x1 x3"), ("BellY[6, 2, {1, 1, 1, 1, 1}]", "31"),
+    ("BellY[4, 2, {s1, s2, s3}]", "3 s2^2 + 4 s1 s3"), ("BellY[6, 2, {1, 1, 1, 1, 1}]", "31"),
     ("BellY[6, 3, {1, 1, 1, 1}]", "90"),
-    ("BellY[{{x1, x2, x3}, {y1, y2, y3}}]", "x1 y3 + 3 x2 y1 y2 + x3 y1^3"),
+    ("BellY[{{s1, s2, s3}, {t1, t2, t3}}]", "s1 t3 + 3 s2 t1 t2 + s3 t1^3"),
     ("BellY[3, 1, {a}]", Raises()),
     ("Total[Table[BellY[5, k, {1, 1, 1, 1, 1}], {k, 0, 5}]]", "52"),
     ("NorlundB[2, a]", "-a/12 + a^2/4"), ("NorlundB[4, 1, x]", "-1/30 + x^2 - 2 x^3 + x^4"),
