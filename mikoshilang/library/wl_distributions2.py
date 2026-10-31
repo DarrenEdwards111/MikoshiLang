@@ -3829,3 +3829,1320 @@ _uni("WaringYuleDistribution", WaringYule,
 _uni("ZipfDistribution", Zipf,
      "ZipfDistribution[rho] (PDF k^(-rho - 1)/Zeta[rho + 1], k >= 1) and the truncated [n, rho] (HarmonicNumber "
      "normalisation); CDF, moments. Check: exact; SciPy zipf (a = rho + 1) reference values.")
+
+
+# ─────────────────────────── derived and data-based univariate distributions ───────────────────────────
+
+def _base(d, fname):
+    """D instance of a univariate component distribution"""
+    if isinstance(d, Expr) and isinstance(d.head, str) and (d.head in W.MULTI or d.head in W.MULTI_BUILDERS):
+        raise NotImplementedError(f"{fname}: multivariate component distributions are not supported")
+    if not W.is_dist(d):
+        if isinstance(d, Symbol):
+            raise Unevaluated()
+        if isinstance(d, Expr) and isinstance(d.head, str) and d.head.endswith("Distribution"):
+            raise NotImplementedError(f"{fname}: {d.head} is not supported as a component")
+        raise TypeError(f"{fname}: {d} is not a distribution")
+    if d.head == "TransformedDistribution":
+        raise NotImplementedError(f"{fname}: TransformedDistribution components are not supported")
+    return W.dist_of(d, fname)
+
+
+def _bounds_arg(v, fname):
+    if isinstance(v, Symbol) and v.name == "None":
+        return -sp.oo, sp.oo
+    if not (is_list(v) and len(v.args) == 2):
+        raise TypeError(f"{fname}: expected {{xmin, xmax}}")
+    if any(is_list(a) for a in v.args):
+        raise NotImplementedError(f"{fname}: multivariate truncation/censoring is not supported")
+    a, b = (sym(t, fname) for t in v.args)
+    if _num(a) and _num(b) and not a < b:
+        raise ValueError(f"{fname}: need xmin < xmax")
+    return a, b
+
+
+def _integrate(e, x, lo, hi, what, numeric_ok):
+    """exact integral; numeric (mpmath) when the input was inexact; NotImplementedError when neither works"""
+    r = sp.integrate(e, (x, lo, hi), conds="none")
+    if not r.has(sp.Integral):
+        return sp.simplify(r)
+    if numeric_ok:
+        import mpmath
+        g = sp.lambdify(x, e, "mpmath")
+        return sp.Float(mpmath.quad(g, [-mpmath.inf if lo == -sp.oo else _mp(lo), mpmath.inf if hi == sp.oo else _mp(hi)]))
+    raise NotImplementedError(f"{what}: no closed form found; use machine-number parameters")
+
+
+class DerivedC(UD):
+    """continuous derived distribution: subclasses give pdf/cdf/bounds; moments by integration"""
+
+    def numeric(self):
+        return all(c.numeric() for c in self.parts()) and all(_num(v) for v in self.flat())
+
+    def parts(self):
+        return []
+
+    def inexact(self):
+        return any(any(_inexact(v) for v in c.flat()) if hasattr(c, "flat") else False for c in self.parts()) or \
+            any(_inexact(v) for v in self.flat())
+
+    def raw(self, r):
+        lo, hi = self.bounds()
+        x = sp.Dummy("x", real=True)
+        return _integrate(x ** r * self.pdf(x), x, lo, hi, "Moment", self.inexact())
+
+    def mean(self):
+        return self.raw(1)
+
+    def var(self):
+        return sp.simplify(self.raw(2) - self.raw(1) ** 2)
+
+
+def _cdf_of(dd, x):
+    """CDF expression of a component on its support (no Piecewise outside it)"""
+    if dd.discrete:
+        return W.cdf_value(dd, x)
+    lo, hi = dd.bounds()
+    if _num(x) and dd.numeric():
+        return W.cdf_value(dd, x)
+    return dd.cdf(x)
+
+
+class Truncated(DerivedC):
+    def __init__(self, name, a, raw_arg=None):
+        (lo, hi), base = raw_arg
+        self.base = base
+        blo, bhi = base.bounds()
+        self.lo_, self.hi_ = (sp.Max(lo, blo) if blo != -sp.oo else lo), (sp.Min(hi, bhi) if bhi != sp.oo else hi)
+        self.cut = (lo, hi)
+        D.__init__(self, name, [])
+        z = self.mass()
+        if _num(z) and z == 0:
+            raise ValueError("TruncatedDistribution: the truncation interval has zero probability")
+
+    def parts(self):
+        return [self.base]
+
+    def bounds(self):
+        return self.lo_, self.hi_
+
+    def mass(self):
+        lo, hi = self.cut
+        b = self.base
+        F = lambda t: sp.Integer(1) if t == sp.oo else (sp.Integer(0) if t == -sp.oo else W.cdf_value(b, t))  # noqa: E731
+        return sp.simplify(F(hi) - F(lo))
+
+    def pdf(self, x):
+        return self.base.pdf(x) / self.mass()
+
+    def cdf(self, x):
+        lo, hi = self.cut
+        F0 = sp.Integer(0) if lo == -sp.oo else W.cdf_value(self.base, lo)
+        return (_cdf_of(self.base, x) - F0) / self.mass()
+
+    def q(self, p):
+        if not hasattr(self.base, "q"):
+            raise Unevaluated()
+        lo, hi = self.cut
+        F0 = sp.Integer(0) if lo == -sp.oo else W.cdf_value(self.base, lo)
+        return self.base.q(F0 + p * self.mass())
+
+    def sample(self, rng):
+        if hasattr(self.base, "q"):
+            return _f(self.q(sp.Float(rng.random())))
+        return _invert(self, rng.random())
+
+
+class TruncatedDisc(UDisc):
+    def __init__(self, name, a, raw_arg=None):
+        (lo, hi), base = raw_arg
+        self.base = base
+        blo, bhi = base.bounds()
+        lo_i = sp.ceiling(lo) if lo != -sp.oo else blo
+        hi_i = sp.floor(hi) if hi != sp.oo else bhi
+        self.lo_, self.hi_ = sp.Max(lo_i, blo), (sp.Min(hi_i, bhi) if bhi != sp.oo else hi_i)
+        D.__init__(self, name, [])
+        if self.numeric() and _num(self.mass()) and self.mass() == 0:
+            raise ValueError("TruncatedDistribution: the truncation interval has zero probability")
+
+    def numeric(self):
+        return self.base.numeric()
+
+    def bounds(self):
+        return self.lo_, self.hi_
+
+    def mass(self):
+        lo, hi = self.bounds()
+        up = sp.Integer(1) if hi == sp.oo else W.cdf_value(self.base, hi)
+        return sp.simplify(up - W.cdf_value(self.base, lo - 1))
+
+    def pdf(self, k):
+        return self.base.pdf(k) / self.mass()
+
+    def mean(self):
+        return W.raw_moment(self, 1) if self.hi_ != sp.oo else self._sum(1)
+
+    def raw(self, r):
+        lo, hi = self.bounds()
+        if hi != sp.oo and self.numeric():
+            return sp.Add(*(sp.Integer(k) ** r * self.pdf(sp.Integer(k)) for k in range(int(lo), int(hi) + 1)))
+        return self._sum(r)
+
+    def _sum(self, r):
+        k = sp.Dummy("k", integer=True, nonnegative=True)
+        lo, hi = self.bounds()
+        s = sp.summation(k ** r * self.pdf(k), (k, lo, hi))
+        if s.has(sp.Sum):
+            raise NotImplementedError("TruncatedDistribution: no closed form for this moment")
+        return sp.simplify(s)
+
+    def mean(self):  # noqa: F811
+        return self.raw(1)
+
+    def var(self):
+        return sp.simplify(self.raw(2) - self.raw(1) ** 2)
+
+
+def _truncated(d, fname):
+    if len(d.args) != 2:
+        raise ValueError("TruncatedDistribution: expected TruncatedDistribution[{xmin, xmax}, dist]")
+    ab = _bounds_arg(d.args[0], "TruncatedDistribution")
+    base = _base(d.args[1], "TruncatedDistribution")
+    if base.discrete:
+        return TruncatedDisc("TruncatedDistribution", [], (ab, base))
+    return Truncated("TruncatedDistribution", [], (ab, base))
+
+
+class Censored(DerivedC):
+    """censoring of a continuous distribution: atoms at xmin and xmax, so PDF raises; CDF, moments, sampling"""
+
+    def __init__(self, name, a, raw_arg=None):
+        (lo, hi), base = raw_arg
+        self.base, self.cut = base, (lo, hi)
+        D.__init__(self, name, [])
+
+    def parts(self):
+        return [self.base]
+
+    def bounds(self):
+        lo, hi = self.cut
+        blo, bhi = self.base.bounds()
+        return (lo if lo != -sp.oo else blo), (hi if hi != sp.oo else bhi)
+
+    def pdf_value(self, x):
+        lo, hi = self.cut
+        if lo == -sp.oo and hi == sp.oo:
+            return W.pdf_value(self.base, x)
+        raise NotImplementedError("PDF: a censored continuous distribution has atoms at the censoring points; "
+                                  "use CDF or Probability")
+
+    def pdf(self, x):
+        return self.pdf_value(x)
+
+    def cdf_value(self, x):
+        lo, hi = self.cut
+        F = W.cdf_value(self.base, x)
+        if _num(x):
+            if lo != -sp.oo and x < lo:
+                return sp.Integer(0)
+            if hi != sp.oo and x >= hi:
+                return sp.Integer(1)
+            return F
+        conds = []
+        if lo != -sp.oo:
+            conds.append((0, x < lo))
+        if hi != sp.oo:
+            conds.append((1, x >= hi))
+        return sp.Piecewise(*conds, (F, True))
+
+    def raw(self, r):
+        lo, hi = self.cut
+        b = self.base
+        x = sp.Dummy("x", real=True)
+        blo, bhi = b.bounds()
+        a_ = lo if lo != -sp.oo else blo
+        c_ = hi if hi != sp.oo else bhi
+        mid = _integrate(x ** r * b.pdf(x), x, sp.Max(a_, blo) if blo != -sp.oo else a_,
+                         sp.Min(c_, bhi) if bhi != sp.oo else c_, "Moment", self.inexact())
+        out = mid
+        if lo != -sp.oo:
+            out += lo ** r * W.cdf_value(b, lo)
+        if hi != sp.oo:
+            out += hi ** r * (1 - W.cdf_value(b, hi))
+        return sp.simplify(out)
+
+    def expect(self, f, v, numeric):
+        lo, hi = self.cut
+        b = self.base
+        x = sp.Dummy("x", real=True)
+        blo, bhi = b.bounds()
+        a_ = lo if lo != -sp.oo else blo
+        c_ = hi if hi != sp.oo else bhi
+        out = _integrate(f.subs(v, x) * b.pdf(x), x, a_, c_, "Expectation", numeric or self.inexact())
+        if lo != -sp.oo:
+            out += f.subs(v, lo) * W.cdf_value(b, lo)
+        if hi != sp.oo:
+            out += f.subs(v, hi) * (1 - W.cdf_value(b, hi))
+        return out
+
+    def sample(self, rng):
+        lo, hi = self.cut
+        v = self.base.sample(rng)
+        if lo != -sp.oo:
+            v = max(v, _f(lo))
+        if hi != sp.oo:
+            v = min(v, _f(hi))
+        return v
+
+
+class CensoredDisc(UDisc):
+    def __init__(self, name, a, raw_arg=None):
+        (lo, hi), base = raw_arg
+        self.base, self.cut = base, (lo, hi)
+        D.__init__(self, name, [])
+
+    def numeric(self):
+        return self.base.numeric()
+
+    def bounds(self):
+        lo, hi = self.cut
+        blo, bhi = self.base.bounds()
+        return (sp.Max(sp.ceiling(lo), blo) if lo != -sp.oo else blo), (sp.floor(hi) if hi != sp.oo else bhi)
+
+    def pdf(self, k):
+        a, b = self.bounds()
+        base = self.base
+        if not _num(k):
+            raise Unevaluated()
+        if k == a and self.cut[0] != -sp.oo:
+            return W.cdf_value(base, a)
+        if k == b and self.cut[1] != sp.oo:
+            return 1 - W.cdf_value(base, b - 1)
+        return W.pdf_value(base, k)
+
+    def raw(self, r):
+        a, b = self.bounds()
+        if b == sp.oo or not self.numeric():
+            raise NotImplementedError("CensoredDistribution: moments need a finite censored range and numeric "
+                                      "parameters")
+        return sp.Add(*(sp.Integer(k) ** r * self.pdf(sp.Integer(k)) for k in range(int(a), int(b) + 1)))
+
+    def mean(self):
+        return self.raw(1)
+
+    def var(self):
+        return sp.simplify(self.raw(2) - self.raw(1) ** 2)
+
+    def sample(self, rng):
+        a, b = self.bounds()
+        v = self.base.sample(rng)
+        return int(min(max(v, int(a)), int(b) if b != sp.oo else v))
+
+
+def _censored(d, fname):
+    if len(d.args) != 2:
+        raise ValueError("CensoredDistribution: expected CensoredDistribution[{xmin, xmax}, dist]")
+    ab = _bounds_arg(d.args[0], "CensoredDistribution")
+    base = _base(d.args[1], "CensoredDistribution")
+    if base.discrete:
+        return CensoredDisc("CensoredDistribution", [], (ab, base))
+    return Censored("CensoredDistribution", [], (ab, base))
+
+
+class _MixtureMixin:
+    def setup(self, ws, parts):
+        tot = sp.Add(*ws)
+        self.w = [w / tot for w in ws]
+        self.ps = parts
+
+    def parts(self):
+        return self.ps
+
+    def flat(self):
+        return list(self.w)
+
+    def numeric(self):
+        return all(_num(w) for w in self.w) and all(p.numeric() for p in self.ps)
+
+    def bounds(self):
+        los = [p.bounds()[0] for p in self.ps]
+        his = [p.bounds()[1] for p in self.ps]
+        lo = -sp.oo if any(v == -sp.oo for v in los) else sp.Min(*los)
+        hi = sp.oo if any(v == sp.oo for v in his) else sp.Max(*his)
+        return lo, hi
+
+    def pdf_value(self, x):
+        return sp.Add(*(w * W.pdf_value(p, x) for w, p in zip(self.w, self.ps)))
+
+    def cdf_value(self, x):
+        return sp.Add(*(w * W.cdf_value(p, x) for w, p in zip(self.w, self.ps)))
+
+    def pdf(self, x):
+        return sp.Add(*(w * p.pdf(x) for w, p in zip(self.w, self.ps)))
+
+    def raw(self, r):
+        vals = [W.raw_moment(p, r) for p in self.ps]
+        if any(v is sp.nan for v in vals):
+            return sp.nan
+        return sp.Add(*(w * v for w, v in zip(self.w, vals)))
+
+    def mean(self):
+        return self.raw(1)
+
+    def var(self):
+        m2, m1 = self.raw(2), self.raw(1)
+        if sp.nan in (m1, m2):
+            return sp.nan
+        return sp.simplify(m2 - m1 ** 2)
+
+    def mgf(self, t):
+        return sp.Add(*(w * W.mgf_value(p, t) for w, p in zip(self.w, self.ps)))
+
+    def cf(self, t):
+        return sp.Add(*(w * W.cf_value(p, t) for w, p in zip(self.w, self.ps)))
+
+    def expect(self, f, v, numeric):
+        return sp.Add(*(w * W._expect(f, [(v, p.expr_)], "Expectation", numeric) for w, p in zip(self.w, self.ps)))
+
+    def sample(self, rng):
+        u, acc = rng.random(), 0.0
+        for w, p in zip(self.w, self.ps):
+            acc += _f(w)
+            if u < acc:
+                return p.sample(rng)
+        return self.ps[-1].sample(rng)
+
+
+class Mixture(_MixtureMixin, DerivedC):
+    def __init__(self, name, a, raw_arg=None):
+        D.__init__(self, name, [])
+        self.setup(*raw_arg)
+
+    def cdf(self, x):
+        return self.cdf_value(x)
+
+
+class MixtureDisc(_MixtureMixin, UDisc):
+    def __init__(self, name, a, raw_arg=None):
+        D.__init__(self, name, [])
+        self.setup(*raw_arg)
+
+    def pdf_value(self, x):
+        return sp.Add(*(w * W.pdf_value(p, x) for w, p in zip(self.w, self.ps)))
+
+
+def _weights(v, fname, n=None):
+    ws = [sym(w, fname) for w in W.list_arg(v, fname, "weights", 1)]
+    if n is not None and len(ws) != n:
+        raise ValueError(f"{fname}: the weight and distribution lists must have the same length")
+    if all(_num(w) for w in ws):
+        if any(w < 0 for w in ws) or sp.Add(*ws) <= 0:
+            raise ValueError(f"{fname}: weights must be non-negative with a positive total")
+    return ws
+
+
+def _with_expr(dd, e):
+    dd.expr_ = e
+    return dd
+
+
+def _mixture(d, fname):
+    if len(d.args) != 2 or not is_list(d.args[1]):
+        raise ValueError("MixtureDistribution: expected MixtureDistribution[{w1, ...}, {dist1, ...}]")
+    ds = list(d.args[1].args)
+    ws = _weights(d.args[0], "MixtureDistribution", len(ds))
+    parts = [_with_expr(_base(x, "MixtureDistribution"), x) for x in ds]
+    kinds = {p.discrete for p in parts}
+    if len(kinds) != 1:
+        raise ValueError("MixtureDistribution: the components must be all continuous or all discrete")
+    cls = MixtureDisc if parts[0].discrete else Mixture
+    return cls("MixtureDistribution", [], (ws, parts))
+
+
+class Order(DerivedC):
+    def __init__(self, name, a, raw_arg=None):
+        base, n, k = raw_arg
+        self.base, self.n, self.k = base, n, k
+        D.__init__(self, name, [n, k])
+
+    def parts(self):
+        return [self.base]
+
+    def bounds(self):
+        return self.base.bounds()
+
+    def pdf(self, x):
+        n, k = self.n, self.k
+        F, f = _cdf_of(self.base, x), self.base.pdf(x)
+        return sp.factorial(n) / (sp.factorial(k - 1) * sp.factorial(n - k)) * F ** (k - 1) * (1 - F) ** (n - k) * f
+
+    def cdf(self, x):
+        n, k = self.n, self.k
+        F = _cdf_of(self.base, x)
+        return sp.Add(*(sp.binomial(n, j) * F ** j * (1 - F) ** (n - j) for j in range(int(k), int(n) + 1)))
+
+    def sample(self, rng):
+        return sorted(self.base.sample(rng) for _ in range(int(self.n)))[int(self.k) - 1]
+
+
+class OrderDisc(UDisc):
+    def __init__(self, name, a, raw_arg=None):
+        base, n, k = raw_arg
+        self.base, self.n, self.k = base, n, k
+        D.__init__(self, name, [n, k])
+
+    def bounds(self):
+        return self.base.bounds()
+
+    def numeric(self):
+        return self.base.numeric()
+
+    def _G(self, x):
+        n, k = int(self.n), int(self.k)
+        F = W.cdf_value(self.base, x)
+        return sp.Add(*(sp.binomial(n, j) * F ** j * (1 - F) ** (n - j) for j in range(k, n + 1)))
+
+    def pdf(self, x):
+        if not _num(x):
+            raise Unevaluated()
+        return sp.simplify(self._G(x) - self._G(x - 1))
+
+    def cdf_value(self, x):
+        if not (_num(x) and self.numeric()):
+            raise Unevaluated()
+        return sp.simplify(self._G(sp.floor(x)))
+
+    def sample(self, rng):
+        return sorted(self.base.sample(rng) for _ in range(int(self.n)))[int(self.k) - 1]
+
+
+def _order(d, fname):
+    if len(d.args) != 2:
+        raise ValueError("OrderDistribution: expected OrderDistribution[{dist, n}, k]")
+    spec, k = d.args
+    if not (is_list(spec) and len(spec.args) == 2 and W.is_dist(spec.args[0])):
+        raise NotImplementedError("OrderDistribution: only the form OrderDistribution[{dist, n}, k] is supported")
+    if is_list(k):
+        raise NotImplementedError("OrderDistribution: joint order statistics are not supported")
+    base = _base(spec.args[0], "OrderDistribution")
+    n, kk = sym(spec.args[1], "OrderDistribution"), sym(k, "OrderDistribution")
+    if not (_num(n) and _num(kk)):
+        raise Unevaluated()
+    if not (n.is_Integer and kk.is_Integer and 1 <= kk <= n):
+        raise ValueError("OrderDistribution: need integers 1 <= k <= n")
+    return (OrderDisc if base.discrete else Order)("OrderDistribution", [], (base, n, kk))
+
+
+class ParameterMixture(DerivedC):
+    """ParameterMixtureDistribution[dist[theta], theta ~ wdist]: PDF = Expectation[PDF[dist[theta], x], theta ~ wdist];
+    moments by the law of total expectation"""
+
+    def __init__(self, name, a, raw_arg=None):
+        self.base, self.pairs = raw_arg
+        D.__init__(self, name, [])
+        thetas = {v for v, _ in self.pairs}
+        lo, hi = self.base.bounds()
+        if any(isinstance(b, sp.Basic) and b.free_symbols & thetas for b in (lo, hi)):
+            raise NotImplementedError("ParameterMixtureDistribution: a support that depends on the mixed parameter "
+                                      "is not supported")
+        self.discrete = self.base.discrete
+
+    def numeric(self):
+        return True
+
+    def bounds(self):
+        return self.base.bounds()
+
+    def _E(self, e):
+        r = W._expect(e, self.pairs, "ParameterMixtureDistribution")
+        return sp.simplify(r)
+
+    def pdf(self, x):
+        return self._E(self.base.pdf(x))
+
+    def pdf_value(self, x):
+        lo, hi = self.bounds()
+        if _num(x):
+            if (lo != -sp.oo and x < lo) or (hi != sp.oo and x > hi) or (self.discrete and x != sp.floor(x)):
+                return sp.Integer(0)
+            return self._E(self.base.pdf(x))
+        cond = self.base.support_cond(x)
+        return sp.Piecewise((self.pdf(x), cond), (0, True)) if cond is not sp.true else self.pdf(x)
+
+    def cdf_value(self, x):
+        if self.discrete:
+            if not _num(x):
+                raise Unevaluated()
+            lo, hi = self.bounds()
+            if x < lo:
+                return sp.Integer(0)
+            return sp.simplify(sp.Add(*(self.pdf(sp.Integer(k)) for k in range(int(lo), int(sp.floor(x)) + 1))))
+        return self._E(W.cdf_value(self.base, x))
+
+    def cdf(self, x):
+        return self.cdf_value(x)
+
+    def raw(self, r):
+        return self._E(W.raw_moment(self.base, r))
+
+    def mean(self):
+        return self._E(self.base.mean())
+
+    def var(self):
+        m = self.mean()
+        return sp.simplify(self._E(self.base.var() + self.base.mean() ** 2) - m ** 2)
+
+    def sample(self, rng):
+        sub = {}
+        for v, dexpr in self.pairs:
+            sub[v] = sp.Float(W.dist_of(dexpr, "RandomVariate").sample(rng))
+        name = self.base.name
+        cls = W.TABLE[name]
+        b = cls(name, [x.subs(sub) if isinstance(x, sp.Basic) else [y.subs(sub) for y in x] for x in self.base.a])
+        return b.sample(rng)
+
+
+def _param_mixture(d, fname):
+    if len(d.args) != 2:
+        raise ValueError("ParameterMixtureDistribution: expected ParameterMixtureDistribution[dist[theta], theta ~ wdist]")
+    base = _base(d.args[0], "ParameterMixtureDistribution")
+    pairs = W._distributed(d.args[1], "ParameterMixtureDistribution")
+    return ParameterMixture("ParameterMixtureDistribution", [], (base, pairs))
+
+
+class CompoundPoisson(UDisc):
+    def __init__(self, name, a, raw_arg=None):
+        lam, base = raw_arg
+        self.lam, self.base = lam, base
+        D.__init__(self, name, [lam])
+        self.discrete = base.discrete
+        if base.discrete and _num(base.bounds()[0]) and base.bounds()[0] < 0:
+            raise NotImplementedError("CompoundPoissonDistribution: jump distributions with negative values are not "
+                                      "supported")
+
+    def numeric(self):
+        return _num(self.lam) and self.base.numeric()
+
+    def bounds(self):
+        return (sp.Integer(0), sp.oo) if self.discrete else (-sp.oo, sp.oo)
+
+    def _pmf(self, kmax):
+        lam, b = self.lam, self.base
+        f = [W.pdf_value(b, sp.Integer(j)) for j in range(kmax + 1)]
+        g = [sp.exp(-lam * (1 - f[0]))]
+        for k in range(1, kmax + 1):
+            g.append(sp.simplify(lam / k * sp.Add(*(j * f[j] * g[k - j] for j in range(1, k + 1)))))
+        return g
+
+    def pdf_value(self, k):
+        if not self.discrete:
+            raise NotImplementedError("PDF: a compound Poisson distribution of continuous jumps has an atom at 0")
+        if not (_num(k) and self.numeric()):
+            raise Unevaluated()
+        if k < 0 or k != sp.floor(k):
+            return sp.Integer(0)
+        return self._pmf(int(k))[-1]
+
+    def pdf(self, k):
+        return self.pdf_value(k)
+
+    def cdf_value(self, x):
+        if not self.discrete:
+            raise NotImplementedError("CDF: compound Poisson distributions of continuous jumps are not supported")
+        if not (_num(x) and self.numeric()):
+            raise Unevaluated()
+        if x < 0:
+            return sp.Integer(0)
+        return sp.simplify(sp.Add(*self._pmf(int(sp.floor(x)))))
+
+    def mean(self):
+        return self.lam * self.base.mean()
+
+    def var(self):
+        b = self.base
+        return sp.simplify(self.lam * (b.var() + b.mean() ** 2))
+
+    def mgf(self, t):
+        return sp.exp(self.lam * (W.mgf_value(self.base, t) - 1))
+
+    def cf(self, t):
+        return sp.exp(self.lam * (W.cf_value(self.base, t) - 1))
+
+    def raw(self, r):
+        s = sp.series(self.mgf(W.t_), W.t_, 0, r + 1).removeO()
+        return sp.simplify(sp.factorial(r) * s.coeff(W.t_, r))
+
+    def sample(self, rng):
+        n = W.Poisson("PoissonDistribution", [sp.Float(_f(self.lam))]).sample(rng)
+        return sum(self.base.sample(rng) for _ in range(n)) if n else 0
+
+
+def _compound_poisson(d, fname):
+    if len(d.args) != 2:
+        raise ValueError("CompoundPoissonDistribution: expected CompoundPoissonDistribution[lambda, dist]")
+    lam = sym(d.args[0], "CompoundPoissonDistribution")
+    _pos(lam, "lambda", "CompoundPoissonDistribution")
+    base = _base(d.args[1], "CompoundPoissonDistribution")
+    return CompoundPoisson("CompoundPoissonDistribution", [], (lam, base))
+
+
+# ── data-based ──
+
+def _data_vals(v, fname):
+    items = W.list_arg(v, fname, "data", 1)
+    if any(is_list(t) for t in items):
+        raise NotImplementedError(f"{fname}: multivariate data is not supported")
+    return [W.number(t, fname, "data value") for t in items], items
+
+
+class Histogram(DerivedC):
+    def __init__(self, name, a, raw_arg=None):
+        edges, counts, n, items = raw_arg
+        self.e, self.c, self.n, self.items = edges, counts, n, items
+        D.__init__(self, name, [])
+
+    def numeric(self):
+        return True
+
+    def inexact(self):
+        return any(has_float(i) for i in self.items)
+
+    def bounds(self):
+        return self.e[0], self.e[-1]
+
+    def pdf_value(self, x):
+        if not _num(x):
+            return sp.Piecewise(*[(c / (self.n * (b - a)), (x >= a) & (x < b)) for a, b, c in
+                                  zip(self.e, self.e[1:], self.c)], (0, True))
+        for a, b, c in zip(self.e, self.e[1:], self.c):
+            if a <= x < b:
+                return c / (self.n * (b - a))
+        return sp.Integer(0)
+
+    def pdf(self, x):
+        return self.pdf_value(x)
+
+    def cdf_value(self, x):
+        if not _num(x):
+            raise Unevaluated()
+        acc = sp.Integer(0)
+        for a, b, c in zip(self.e, self.e[1:], self.c):
+            if x >= b:
+                acc += sp.Rational(c, self.n)
+            elif x > a:
+                acc += sp.Rational(c, self.n) * (x - a) / (b - a)
+        return acc
+
+    def cdf(self, x):
+        return self.cdf_value(x)
+
+    def raw(self, r):
+        return sp.Add(*(sp.Rational(c, self.n) * (b ** (r + 1) - a ** (r + 1)) / ((r + 1) * (b - a))
+                        for a, b, c in zip(self.e, self.e[1:], self.c)))
+
+    def expect(self, f, v, numeric):
+        x = sp.Dummy("x", real=True)
+        return sp.Add(*(sp.Rational(c, self.n) / (b - a) * _integrate(f.subs(v, x), x, a, b, "Expectation", True)
+                        for a, b, c in zip(self.e, self.e[1:], self.c) if c))
+
+    def quantile_value(self, p, inputs, fname):
+        if not _num(p):
+            raise Unevaluated()
+        acc = sp.Integer(0)
+        for a, b, c in zip(self.e, self.e[1:], self.c):
+            w = sp.Rational(c, self.n)
+            if c and acc + w >= p:
+                return a + (p - acc) / w * (b - a)
+            acc += w
+        return self.e[-1]
+
+    def sample(self, rng):
+        u, acc = rng.random(), 0.0
+        for a, b, c in zip(self.e, self.e[1:], self.c):
+            acc += c / self.n
+            if u < acc:
+                return _f(a) + (_f(b) - _f(a)) * rng.random()
+        return _f(self.e[-1])
+
+
+def _histogram(d, fname):
+    if len(d.args) not in (1, 2):
+        raise ValueError("HistogramDistribution: expected HistogramDistribution[data] or [data, bspec]")
+    vals, items = _data_vals(d.args[0], "HistogramDistribution")
+    if len(d.args) == 1:
+        raise NotImplementedError("HistogramDistribution: automatic binning is not supported; give the bins as "
+                                  "{w}, {min, max, w} or {{b1, b2, ...}}")
+    spec = d.args[1]
+    if not is_list(spec):
+        raise NotImplementedError("HistogramDistribution: only the bin specifications {w}, {min, max, w} and "
+                                  "{{b1, b2, ...}} are supported")
+    sa = list(spec.args)
+    if len(sa) == 1 and is_list(sa[0]):
+        edges = [W.number(b, "HistogramDistribution", "bin delimiter") for b in sa[0].args]
+        if len(edges) < 2 or any(not a < b for a, b in zip(edges, edges[1:])):
+            raise ValueError("HistogramDistribution: bin delimiters must be increasing")
+    elif len(sa) == 1:
+        w = W.number(sa[0], "HistogramDistribution", "bin width")
+        if not w > 0:
+            raise ValueError("HistogramDistribution: the bin width must be positive")
+        k0, k1 = sp.floor(min(vals) / w), sp.floor(max(vals) / w) + 1
+        edges = [k * w for k in range(int(k0), int(k1) + 1)]
+    elif len(sa) == 3:
+        lo, hi, w = (W.number(t, "HistogramDistribution", "bin specification") for t in sa)
+        if not (w > 0 and lo < hi):
+            raise ValueError("HistogramDistribution: need min < max and a positive width")
+        m = int(sp.ceiling((hi - lo) / w))
+        edges = [lo + j * w for j in range(m + 1)]
+    else:
+        raise NotImplementedError("HistogramDistribution: unsupported bin specification")
+    counts = [sum(1 for v in vals if a <= v < b) for a, b in zip(edges, edges[1:])]
+    n = sum(counts)
+    if n == 0:
+        raise ValueError("HistogramDistribution: no data falls inside the bins")
+    return Histogram("HistogramDistribution", [], (edges, counts, n, items))
+
+
+_KERNELS = {
+    # name: (K(u), K integrated from -1 (or -oo) to u, support half-width or None, variance of K)
+    "Gaussian": None,
+    "Epanechnikov": (lambda u: sp.Rational(3, 4) * (1 - u ** 2), sp.Rational(1, 5)),
+    "Rectangular": (lambda u: sp.Rational(1, 2), sp.Rational(1, 3)),
+    "Triangular": (lambda u: 1 - sp.Abs(u), sp.Rational(1, 6)),
+    "Biweight": (lambda u: sp.Rational(15, 16) * (1 - u ** 2) ** 2, sp.Rational(1, 7)),
+    "Triweight": (lambda u: sp.Rational(35, 32) * (1 - u ** 2) ** 3, sp.Rational(1, 9)),
+    "Cosine": (lambda u: sp.pi / 4 * sp.cos(sp.pi * u / 2), 1 - 8 / sp.pi ** 2),
+}
+
+
+class KernelMixture(DerivedC):
+    def __init__(self, name, a, raw_arg=None):
+        vals, items, h, ker = raw_arg
+        self.v, self.items, self.h, self.ker = vals, items, h, ker
+        D.__init__(self, name, [])
+
+    def numeric(self):
+        return True
+
+    def inexact(self):
+        return any(has_float(i) for i in self.items) or _inexact(self.h)
+
+    def bounds(self):
+        if self.ker == "Gaussian":
+            return -sp.oo, sp.oo
+        return min(self.v) - self.h, max(self.v) + self.h
+
+    def _K(self, u):
+        if self.ker == "Gaussian":
+            return sp.exp(-u ** 2 / 2) / sp.sqrt(2 * sp.pi)
+        k = _KERNELS[self.ker][0]
+        return sp.Piecewise((k(u), (u >= -1) & (u <= 1)), (0, True))
+
+    def _Kc(self, u):
+        if self.ker == "Gaussian":
+            return sp.erfc(-u / sp.sqrt(2)) / 2
+        t = sp.Dummy("t", real=True)
+        k = _KERNELS[self.ker][0]
+        prim = sp.integrate(k(t), (t, -1, u))
+        return sp.Piecewise((0, u < -1), (prim, u <= 1), (1, True))
+
+    def pdf(self, x):
+        n, h = len(self.v), self.h
+        return sp.Add(*(self._K((x - xi) / h) for xi in self.v)) / (n * h)
+
+    def pdf_value(self, x):
+        return self.pdf(x)
+
+    def cdf_value(self, x):
+        return sp.Add(*(self._Kc((x - xi) / self.h) for xi in self.v)) / len(self.v)
+
+    def cdf(self, x):
+        return self.cdf_value(x)
+
+    def mean(self):
+        return sp.Add(*self.v) / len(self.v)
+
+    def var(self):
+        m = self.mean()
+        kv = sp.Integer(1) if self.ker == "Gaussian" else _KERNELS[self.ker][1]
+        return sp.Add(*((xi - m) ** 2 for xi in self.v)) / len(self.v) + self.h ** 2 * kv
+
+    def raw(self, r):
+        if r <= 2:
+            m = self.mean()
+            return m if r == 1 else self.var() + m ** 2
+        u = sp.Dummy("u", real=True)
+        lo = -sp.oo if self.ker == "Gaussian" else -1
+        hi = sp.oo if self.ker == "Gaussian" else 1
+        kd = self._K(u) if self.ker == "Gaussian" else _KERNELS[self.ker][0](u)
+        return sp.simplify(sp.Add(*(sp.integrate((xi + self.h * u) ** r * kd, (u, lo, hi)) for xi in self.v)) / len(self.v))
+
+    def sample(self, rng):
+        xi = _f(self.v[int(rng.random() * len(self.v))])
+        h = _f(self.h)
+        if self.ker == "Gaussian":
+            return xi + h * rng.gauss(0, 1)
+        k = _KERNELS[self.ker][0]
+        # rejection sampling from K on [-1, 1]
+        top = 1.25
+        while True:
+            u = 2 * rng.random() - 1
+            if rng.random() * top <= _f(k(sp.Float(u))):
+                return xi + h * u
+
+
+def _kernel_mixture(d, fname):
+    head = d.head
+    if not 1 <= len(d.args) <= 3:
+        raise ValueError(f"{head}: expected {head}[data], [data, bw] or [data, bw, kernel]")
+    vals, items = _data_vals(d.args[0], head)
+    if len(vals) < 1:
+        raise ValueError(f"{head}: need data")
+    bw = d.args[1] if len(d.args) > 1 else None
+    if bw is None or (isinstance(bw, Symbol) and bw.name == "Automatic") or isinstance(bw, str):
+        raise NotImplementedError(f"{head}: automatic and named bandwidths are not supported; give a numeric "
+                                  "bandwidth h or {\"Standardized\", h}")
+    if is_list(bw) and len(bw.args) == 2 and bw.args[0] == "Standardized":
+        if len(vals) < 2:
+            raise ValueError(f"{head}: a standardized bandwidth needs at least two data points")
+        m = sp.Add(*vals) / len(vals)
+        sd = sp.sqrt(sp.Add(*((v - m) ** 2 for v in vals)) / (len(vals) - 1))
+        h = W.number(bw.args[1], head, "bandwidth") * sd
+    elif is_list(bw):
+        raise NotImplementedError(f"{head}: this bandwidth specification is not supported")
+    else:
+        h = W.number(bw, head, "bandwidth")
+    if not h > 0:
+        raise ValueError(f"{head}: the bandwidth must be positive")
+    ker = d.args[2] if len(d.args) == 3 else "Gaussian"
+    if not isinstance(ker, str):
+        raise NotImplementedError(f"{head}: only named kernels are supported")
+    if ker not in _KERNELS:
+        raise ValueError(f"{head}: unknown kernel {ker!r}")
+    return KernelMixture(head, [], (vals, items, h, ker))
+
+
+def _survival(d, fname):
+    if len(d.args) != 1:
+        raise NotImplementedError("SurvivalDistribution: options and censor weights are not supported")
+    a = d.args[0]
+    if not is_list(a) or any(is_list(t) for t in a.args) or (isinstance(a, Expr) and a.head == "Rule"):
+        raise NotImplementedError("SurvivalDistribution: censored event data is not supported (uncensored event "
+                                  "times only)")
+    dd = W._empirical(Expr("EmpiricalDistribution", a), fname)
+    dd.name = "SurvivalDistribution"
+    return dd
+
+
+class ProbDist(DerivedC):
+    def __init__(self, name, a, raw_arg=None):
+        self.f, self.var_, lo, hi, self.items = raw_arg
+        self.lo_, self.hi_ = lo, hi
+        D.__init__(self, name, [])
+
+    def numeric(self):
+        return not (self.f.free_symbols - {self.var_}) and all(_num(b) or b in (sp.oo, -sp.oo) for b in (self.lo_, self.hi_))
+
+    def inexact(self):
+        return any(has_float(i) for i in self.items)
+
+    def bounds(self):
+        return self.lo_, self.hi_
+
+    def pdf(self, x):
+        return self.f.subs(self.var_, x)
+
+    def cdf(self, x):
+        t = sp.Dummy("t", real=True)
+        r = sp.integrate(self.f.subs(self.var_, t), (t, self.lo_, x))
+        if r.has(sp.Integral):
+            if _num(x) and self.numeric() and (_inexact(x) or self.inexact()):
+                return _integrate(self.f.subs(self.var_, t), t, self.lo_, x, "CDF", True)
+            raise NotImplementedError("CDF: no closed form for this ProbabilityDistribution")
+        return sp.simplify(r)
+
+
+class ProbDistDisc(UDisc):
+    def __init__(self, name, a, raw_arg=None):
+        self.f, self.var_, lo, hi, self.items = raw_arg
+        self.lo_, self.hi_ = lo, hi
+        D.__init__(self, name, [])
+
+    def numeric(self):
+        return not (self.f.free_symbols - {self.var_})
+
+    def bounds(self):
+        return self.lo_, self.hi_
+
+    def pdf(self, k):
+        return self.f.subs(self.var_, k)
+
+    def raw(self, r):
+        lo, hi = self.bounds()
+        if hi != sp.oo and self.numeric():
+            return sp.Add(*(sp.Integer(k) ** r * self.pdf(sp.Integer(k)) for k in range(int(lo), int(hi) + 1)))
+        k = sp.Dummy("k", integer=True)
+        s = sp.summation(k ** r * self.pdf(k), (k, lo, hi))
+        if s.has(sp.Sum):
+            raise NotImplementedError("Moment: no closed form for this ProbabilityDistribution")
+        return sp.simplify(s)
+
+    def mean(self):
+        return self.raw(1)
+
+    def var(self):
+        return sp.simplify(self.raw(2) - self.raw(1) ** 2)
+
+
+def _prob_dist(d, fname):
+    args = list(d.args)
+    opts = [a for a in args if isinstance(a, Expr) and a.head == "Rule"]
+    args = [a for a in args if a not in opts]
+    normalize = False
+    for o in opts:
+        k, v = o.args
+        if isinstance(k, Symbol) and k.name == "Method" and v == "Normalize":
+            normalize = True
+        elif isinstance(k, Symbol) and k.name in ("Method", "Assumptions"):
+            if not (isinstance(v, Symbol) and v.name in ("Automatic", "True")):
+                raise NotImplementedError(f"ProbabilityDistribution: option {k.name} -> {v} is not supported")
+        else:
+            raise ValueError(f"ProbabilityDistribution: unknown option {k}")
+    if len(args) != 2:
+        if len(args) > 2:
+            raise NotImplementedError("ProbabilityDistribution: multivariate definitions are not supported")
+        raise ValueError("ProbabilityDistribution: expected ProbabilityDistribution[pdf, {x, xmin, xmax}]")
+    pdf, spec = args
+    if is_list(pdf):
+        raise NotImplementedError("ProbabilityDistribution: {\"CDF\" | \"SF\" | \"HF\", f} definitions are not supported")
+    if not (is_list(spec) and len(spec.args) in (3, 4) and isinstance(spec.args[0], Symbol)):
+        raise ValueError("ProbabilityDistribution: the domain must be {x, xmin, xmax} or {x, xmin, xmax, 1}")
+    v = sp.Symbol(spec.args[0].name)
+    lo, hi = (sym(t, "ProbabilityDistribution") for t in spec.args[1:3])
+    discrete = len(spec.args) == 4
+    if discrete and spec.args[3] != 1:
+        raise NotImplementedError("ProbabilityDistribution: only unit steps are supported for discrete domains")
+    f = sym(pdf, "ProbabilityDistribution")
+    raw = (f, v, lo, hi, [pdf])
+    dd = (ProbDistDisc if discrete else ProbDist)("ProbabilityDistribution", [], raw)
+    if not dd.numeric():
+        if normalize:
+            raise Unevaluated()
+        return dd
+    # self-check / normalisation: the total mass must be 1
+    if discrete:
+        k = sp.Dummy("k", integer=True)
+        z = sp.summation(f.subs(v, k), (k, lo, hi)) if hi == sp.oo or not _num(hi) else \
+            sp.Add(*(f.subs(v, sp.Integer(j)) for j in range(int(lo), int(hi) + 1)))
+    else:
+        t = sp.Dummy("t", real=True)
+        z = sp.integrate(f.subs(v, t), (t, lo, hi))
+    if isinstance(z, sp.Basic) and z.has(sp.Integral, sp.Sum):
+        raise NotImplementedError("ProbabilityDistribution: the normalisation of this density could not be verified")
+    z = sp.simplify(z)
+    if normalize:
+        dd.f = f / z
+    elif not (abs(sp.N(z) - 1) < 1e-10):
+        raise ValueError(f"ProbabilityDistribution: the density integrates to {z}, not 1 (use Method -> \"Normalize\")")
+    return dd
+
+
+# ── reliability ──
+
+def _bool_vars(e, names):
+    """evaluate a Boolean expression in the given indicator symbols to a Python function of a dict"""
+    def ev(x, env):
+        if isinstance(x, Symbol):
+            if x.name in env:
+                return env[x.name]
+            if x.name == "True":
+                return True
+            if x.name == "False":
+                return False
+            raise ValueError(f"unknown variable {x.name}")
+        if x is True or x is False:
+            return x
+        if isinstance(x, Expr) and isinstance(x.head, str):
+            h, a = x.head, x.args
+            if h == "And":
+                return all(ev(t, env) for t in a)
+            if h == "Or":
+                return any(ev(t, env) for t in a)
+            if h == "Not":
+                return not ev(a[0], env)
+            if h == "Xor":
+                return sum(bool(ev(t, env)) for t in a) % 2 == 1
+            if h == "Nand":
+                return not all(ev(t, env) for t in a)
+            if h == "Nor":
+                return not any(ev(t, env) for t in a)
+            if h == "Implies":
+                return (not ev(a[0], env)) or ev(a[1], env)
+            if h == "Equivalent":
+                vals = [bool(ev(t, env)) for t in a]
+                return all(v == vals[0] for v in vals)
+        raise NotImplementedError(f"the Boolean structure function {x} is not supported")
+    return lambda env: ev(e, env)
+
+
+class Reliability(DerivedC):
+    lo = sp.Integer(0)
+
+    def __init__(self, name, a, raw_arg=None):
+        self.f, self.names, self.ds, self.failure = raw_arg
+        D.__init__(self, name, [])
+        for dd in self.ds:
+            lo, hi = dd.bounds()
+            if _num(lo) and lo < 0:
+                raise ValueError(f"{name}: component lifetimes must be non-negative")
+
+    def parts(self):
+        return self.ds
+
+    def bounds(self):
+        return sp.Integer(0), sp.oo
+
+    def surv(self, t):
+        import itertools
+        S = [sp.simplify(1 - _cdf_of(dd, t)) for dd in self.ds]
+        tot = sp.Integer(0)
+        for bits in itertools.product((True, False), repeat=len(self.ds)):
+            env = dict(zip(self.names, bits))
+            if self.failure:
+                # bits are "event occurred" indicators; the system fails when f is True
+                if not self.f(env):
+                    tot += sp.Mul(*((1 - s) if b else s for b, s in zip(bits, S)))
+            elif self.f(env):
+                tot += sp.Mul(*(s if b else (1 - s) for b, s in zip(bits, S)))
+        return sp.expand(tot)
+
+    def cdf(self, x):
+        return sp.simplify(1 - self.surv(x))
+
+    def pdf(self, x):
+        t = sp.Dummy("t", positive=True)
+        return sp.simplify(-sp.diff(self.surv(t), t)).subs(t, x)
+
+    def raw(self, r):
+        t = sp.Dummy("t", positive=True)
+        return _integrate(r * t ** (r - 1) * self.surv(t), t, 0, sp.oo, "Moment", self.inexact())
+
+    def sample(self, rng):
+        lifetimes = [dd.sample(rng) for dd in self.ds]
+        times = sorted(set(lifetimes))
+        for t in times:
+            if self.failure:
+                env = {n: lt <= t for n, lt in zip(self.names, lifetimes)}
+                if self.f(env):
+                    return t
+            else:
+                env = {n: lt > t for n, lt in zip(self.names, lifetimes)}
+                if not self.f(env):
+                    return t
+        return times[-1]
+
+
+def _reliability(d, fname):
+    head = d.head
+    if len(d.args) != 2 or not is_list(d.args[1]):
+        raise ValueError(f"{head}: expected {head}[bexpr, {{{{x1, dist1}}, ...}}]")
+    names, ds = [], []
+    for c in d.args[1].args:
+        if not (is_list(c) and len(c.args) == 2 and isinstance(c.args[0], Symbol)):
+            raise ValueError(f"{head}: each component must be {{x, dist}}")
+        names.append(c.args[0].name)
+        ds.append(_base(c.args[1], head))
+    f = _bool_vars(d.args[0], names)
+    return Reliability(head, [], (f, names, ds, head == "FailureDistribution"))
+
+
+class Standby(DerivedC):
+    """cold standby with perfect switching: lifetime = sum of the component lifetimes"""
+
+    def __init__(self, name, a, raw_arg=None):
+        self.ds = raw_arg
+        D.__init__(self, name, [])
+
+    def parts(self):
+        return self.ds
+
+    def bounds(self):
+        return sp.Integer(0), sp.oo
+
+    def _conv(self, what):
+        x = sp.Dummy("x", positive=True)
+        s = sp.Dummy("s", positive=True)
+        f = self.ds[0].pdf(x)
+        for dd in self.ds[1:]:
+            g = dd.pdf(x - s)
+            h = sp.integrate(f.subs(x, s) * g, (s, 0, x), conds="none")
+            if h.has(sp.Integral):
+                raise NotImplementedError("StandbyDistribution: the convolution has no closed form here")
+            f = sp.simplify(h)
+        return f, x
+
+    def pdf(self, x):
+        f, v = self._conv("PDF")
+        return f.subs(v, x)
+
+    def cdf(self, x):
+        f, v = self._conv("CDF")
+        t = sp.Dummy("t", positive=True)
+        r = sp.integrate(f.subs(v, t), (t, 0, x), conds="none")
+        if r.has(sp.Integral):
+            raise NotImplementedError("StandbyDistribution: no closed-form CDF here")
+        return sp.simplify(r)
+
+    def mean(self):
+        return sp.Add(*(dd.mean() for dd in self.ds))
+
+    def var(self):
+        return sp.Add(*(dd.var() for dd in self.ds))
+
+    def mgf(self, t):
+        return sp.Mul(*(W.mgf_value(dd, t) for dd in self.ds))
+
+    def raw(self, r):
+        if r <= 2:
+            m = self.mean()
+            return m if r == 1 else self.var() + m ** 2
+        return super().raw(r)
+
+    def sample(self, rng):
+        return sum(dd.sample(rng) for dd in self.ds)
+
+
+def _standby(d, fname):
+    if len(d.args) == 3:
+        raise NotImplementedError("StandbyDistribution: imperfect switching is not supported")
+    if len(d.args) != 2 or not is_list(d.args[1]):
+        raise ValueError("StandbyDistribution: expected StandbyDistribution[dist1, {dist2, ...}]")
+    ds = [_base(d.args[0], "StandbyDistribution")]
+    for c in d.args[1].args:
+        if is_list(c):
+            raise NotImplementedError("StandbyDistribution: warm standby components are not supported")
+        ds.append(_base(c, "StandbyDistribution"))
+    if any(dd.discrete for dd in ds):
+        raise NotImplementedError("StandbyDistribution: discrete lifetimes are not supported")
+    for dd in ds:
+        lo = dd.bounds()[0]
+        if _num(lo) and lo < 0:
+            raise ValueError("StandbyDistribution: component lifetimes must be non-negative")
+    return Standby("StandbyDistribution", [], ds)
+
+
+def _spliced(d, fname):
+    if len(d.args) != 3 or not all(is_list(a) for a in d.args):
+        raise ValueError("SplicedDistribution: expected SplicedDistribution[{w1, ...}, {c0, ..., cn}, {dist1, ...}]")
+    ds = list(d.args[2].args)
+    ws = _weights(d.args[0], "SplicedDistribution", len(ds))
+    cs = [sym(c, "SplicedDistribution") for c in d.args[1].args]
+    if len(cs) != len(ds) + 1:
+        raise ValueError("SplicedDistribution: need n + 1 cut points for n distributions")
+    if all(_num(c) or c in (sp.oo, -sp.oo) for c in cs) and any(not a < b for a, b in zip(cs, cs[1:])):
+        raise ValueError("SplicedDistribution: cut points must be increasing")
+    parts = []
+    for c0, c1, x in zip(cs, cs[1:], ds):
+        b = _base(x, "SplicedDistribution")
+        if b.discrete:
+            raise ValueError("SplicedDistribution: the distributions must be continuous")
+        t = Truncated("TruncatedDistribution", [], ((c0, c1), b))
+        t.expr_ = Expr("TruncatedDistribution", L(R(c0), R(c1)), x)
+        parts.append(t)
+    m = Mixture("SplicedDistribution", [], (ws, parts))
+    return m
+
+
+def _johnson(d, fname):
+    if not d.args or not isinstance(d.args[0], str):
+        if d.args and isinstance(d.args[0], Symbol):
+            raise Unevaluated()
+        raise TypeError("JohnsonDistribution: the first argument must be one of \"SN\", \"SL\", \"SU\", \"SB\"")
+    if len(d.args) != 5:
+        raise ValueError("JohnsonDistribution: expected JohnsonDistribution[type, gamma, delta, mu, sigma]")
+    params = [W._param(v, fname) for v in d.args[1:]]
+    W._POS[:] = []
+    dd = Johnson("JohnsonDistribution", params, d.args[0])
+    dd.pos = list(W._POS)
+    return dd
+
+
+def _builder(name, build, notes):
+    W.BUILDERS[name] = build
+    W.NEW_DISTS.add(name)
+
+    def impl(*args: Expr) -> Expr:
+        build(Expr(name, *args), name)
+        raise Unevaluated()
+    impl.__name__ = "_" + name
+    fn(name, area=AREA, status="added", notes=notes)(impl)
+
+
+_builder("JohnsonDistribution", _johnson,
+         "JohnsonDistribution[\"SN\" | \"SL\" | \"SU\" | \"SB\", gamma, delta, mu, sigma]: Phi(gamma + delta g((x - mu)/"
+         "sigma)) with g = identity, Log, ArcSinh, Log[u/(1 - u)]; PDF, CDF, quantile, mean and variance (SB moments "
+         "numeric for machine-number parameters). Check: exact; SciPy johnsonsu/johnsonsb reference values.")
+_builder("TruncatedDistribution", _truncated,
+         "TruncatedDistribution[{xmin, xmax}, dist] for univariate dist: PDF f/(F[xmax] - F[xmin]) on the interval, "
+         "CDF, quantile (when dist has one), moments by exact integration/summation, RandomVariate; multivariate "
+         "truncation raises NotImplementedError. Check: exact; PDF normalisation and SciPy truncnorm in tests.")
+_builder("CensoredDistribution", _censored,
+         "CensoredDistribution[{xmin, xmax}, dist] = TransformedDistribution[Clip[x, {xmin, xmax}], x ~ dist]: CDF, "
+         "moments, Expectation and RandomVariate; for continuous dist the PDF (atoms at the censoring points) raises "
+         "NotImplementedError; discrete dist has a full PDF. Check: exact; mean of Clip by direct integration in tests.")
+_builder("MixtureDistribution", _mixture,
+         "MixtureDistribution[{w1, ...}, {dist1, ...}] of univariate distributions (all continuous or all discrete; "
+         "weights normalised): PDF, CDF, moments, MGF/CF, Expectation, RandomVariate; multivariate mixtures raise "
+         "NotImplementedError. Check: exact; weighted sums verified against the components in tests.")
+_builder("OrderDistribution", _order,
+         "OrderDistribution[{dist, n}, k]: k-th order statistic of n iid draws; PDF n!/((k - 1)! (n - k)!) F^(k - 1) "
+         "(1 - F)^(n - k) f, CDF, moments by integration, RandomVariate (discrete dist: PDF/CDF by differences); joint "
+         "order statistics raise NotImplementedError. Check: exact; Beta order statistics of the uniform in tests.")
+_builder("ParameterMixtureDistribution", _param_mixture,
+         "ParameterMixtureDistribution[dist[theta], theta ~ wdist] (and lists of parameters): PDF = Expectation[PDF"
+         "[dist[theta], x], theta ~ wdist] by exact integration/summation, moments by total expectation, "
+         "RandomVariate by two-stage sampling; supports that depend on theta raise. Check: exact; Poisson-Gamma = "
+         "NegativeBinomial identity in tests.")
+_builder("CompoundPoissonDistribution", _compound_poisson,
+         "CompoundPoissonDistribution[lambda, dist]: PDF/CDF by the Panjer recursion for non-negative integer jumps "
+         "(exact), mean, variance, moments, MGF/CF, RandomVariate for any jump distribution; PDF/CDF with "
+         "continuous jumps (an atom at 0) raise NotImplementedError. Check: exact; Poisson jumps reproduce the "
+         "Neyman type A probabilities and mean lambda E[X] in tests.")
+_builder("HistogramDistribution", _histogram,
+         "HistogramDistribution[data, bspec] with bspec {w} (bins at multiples of w), {min, max, w} or {{b1, b2, ...}}: "
+         "piecewise-constant PDF c_j/(n w_j), piecewise-linear CDF, moments, quantile, RandomVariate; automatic and "
+         "named binning (undocumented algorithms) and multivariate data raise NotImplementedError; stays an inert "
+         "HistogramDistribution[...] instead of a DataDistribution object. Check: exact.")
+_builder("KernelMixtureDistribution", _kernel_mixture,
+         "KernelMixtureDistribution[data, h, ker] (kernels Gaussian, Epanechnikov, Rectangular, Triangular, Biweight, "
+         "Triweight, Cosine; bandwidth h or {\"Standardized\", h}): PDF (1/(n h)) Sum K((x - x_i)/h), CDF, mean, "
+         "variance, moments, RandomVariate; automatic/named bandwidths and multivariate data raise "
+         "NotImplementedError. Check: exact; Var = population variance + h^2 Var[K] in tests.")
+_builder("SmoothKernelDistribution", _kernel_mixture,
+         "SmoothKernelDistribution[data, h, ker]: the kernel density estimate computed exactly (Wolfram evaluates a "
+         "linearly interpolated version of the same estimate, so its values agree up to that interpolation error); "
+         "same forms and restrictions as KernelMixtureDistribution. Check: exact.")
+_builder("SurvivalDistribution", _survival,
+         "SurvivalDistribution[{t1, t2, ...}] for uncensored event times (the Kaplan-Meier estimate is then the "
+         "empirical distribution); censored data and censor weights raise NotImplementedError. Check: exact; agrees "
+         "with EmpiricalDistribution in tests.")
+_builder("ProbabilityDistribution", _prob_dist,
+         "ProbabilityDistribution[pdf, {x, xmin, xmax}] (continuous) and [pdf, {x, xmin, xmax, 1}] (discrete), with "
+         "Method -> \"Normalize\": PDF, CDF, moments, Expectation, RandomVariate; a numeric density whose total mass "
+         "is not 1 raises ValueError (self-check); {\"CDF\" | \"SF\" | \"HF\", f} and multivariate forms raise "
+         "NotImplementedError. Check: self-check (normalisation verified exactly).")
+_builder("FailureDistribution", _reliability,
+         "FailureDistribution[bexpr, {{x1, dist1}, ...}] (fault tree: the top event occurs when bexpr is True): "
+         "survival by exact enumeration of the Boolean structure function over independent components, PDF, CDF, "
+         "moments, RandomVariate. Check: exact; Or-gate = minimum of exponentials in tests.")
+_builder("ReliabilityDistribution", _reliability,
+         "ReliabilityDistribution[bexpr, {{x1, dist1}, ...}] (block diagram: the system works while bexpr is True): "
+         "survival by exact enumeration of the structure function, PDF, CDF, moments, RandomVariate. Check: exact; "
+         "series/parallel systems of exponentials in tests.")
+_builder("StandbyDistribution", _standby,
+         "StandbyDistribution[dist1, {dist2, ...}] (cold standby, perfect switching): lifetime = sum of the component "
+         "lifetimes; PDF/CDF by exact convolution, mean, variance, MGF, RandomVariate; imperfect switching and warm "
+         "standby raise NotImplementedError. Check: exact; exponential components give HypoexponentialDistribution.")
+_builder("SplicedDistribution", _spliced,
+         "SplicedDistribution[{w1, ...}, {c0, ..., cn}, {dist1, ...}] = MixtureDistribution[{w...}, {Truncated"
+         "Distribution[{c0, c1}, dist1], ...}] for continuous dist_i: PDF, CDF, moments, RandomVariate. Check: exact; "
+         "equals the documented mixture in tests.")
