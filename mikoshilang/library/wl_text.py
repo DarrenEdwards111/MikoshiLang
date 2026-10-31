@@ -540,37 +540,14 @@ def _hash_format(digest: bytes, bits, fmt, fname):
     raise ValueError(f"{fname}: unknown hash format {fmt!r}")
 
 
-def _fullform_safe(x):
-    """True if ToString[FullForm[x]] here is known to equal Wolfram's text (integers, rationals, plain symbols,
-    printable-ASCII strings and compound expressions of them)."""
-    if isinstance(x, bool):
-        return True
-    if isinstance(x, int):
-        return True
-    if isinstance(x, str):
-        return all(32 <= ord(c) < 127 and c not in '"\\' for c in x)
-    if isinstance(x, Symbol):
-        return x.name not in ("I",) and re.fullmatch(r"\$?[A-Za-z][A-Za-z0-9`$]*", x.name) is not None
-    if isinstance(x, Expr):
-        if x.head in ("Complex", "Association", "ByteArray"):
-            return False
-        h = x.head
-        if not (isinstance(h, str) or _fullform_safe(h)):
-            return False
-        return all(_fullform_safe(a) for a in x.args)
-    return False
-
-
 def _hash_bytes(x, fname):
     if isinstance(x, str):
         return x.encode("utf-8")
     if is_bytearray(x):
         return ba_bytes(x, fname)
-    if not _fullform_safe(x):
-        raise NotImplementedError(f"{fname}: hashing this expression needs Wolfram's exact FullForm text, which is "
-                                  "only reproduced for integers, rationals, symbols, ASCII strings and expressions "
-                                  "built from them")
-    return ev(Expr("ToString", Expr("FullForm", x))).encode("utf-8")
+    raise NotImplementedError(f"{fname}: cryptographic hashes of expressions other than strings and ByteArrays "
+                              "use Wolfram's internal expression serialization, which is not reproduced; hash "
+                              "a string or ByteArray instead")
 
 
 def _expression_hash(x):
@@ -584,8 +561,8 @@ def _expression_hash(x):
 @fn("Hash", area=AREA, status="added",
     notes="Hash[expr, type, format]: Adler32, CRC32, MD4, MD5, RIPEMD160, RIPEMD160SHA256, SHA (SHA-1), SHA224/256/"
           "384/512, SHA256SHA256, SHA3-*, Keccak*, BLAKE2b/BLAKE2s ({type, bits}); strings hash their UTF-8 bytes, "
-          "ByteArrays their bytes, other expressions the bytes of ToString[FullForm[expr]] (only where that text "
-          "matches Wolfram's; otherwise an error). The default \"Expression\" type is a deterministic 63-bit hash "
+          "ByteArrays their bytes; other expressions raise (Wolfram hashes an internal serialization that "
+          "is not reproduced). The default \"Expression\" type is a deterministic 63-bit hash "
           "of the expression (Wolfram documents its value as implementation-dependent). Formats Integer, "
           "DecimalString, HexString, HexStringLittleEndian, Base36String, Base64Encoding, ByteArray. MD2 and "
           "the BLAKE2 parallel/XOF variants raise.")
@@ -4195,14 +4172,14 @@ def _doc_weight(doc, rules):
 def _text_search(src, q, o):
     _check_search_opts(o, "TextSearch")
     results = []
-    for ix, iopts in _search_sources(src, "TextSearch"):
+    for si, (ix, iopts) in enumerate(_search_sources(src, "TextSearch")):
         oo = dict(iopts)
         oo.update(o)
         S = _Searcher(ix, _field_weights(oo))
         r = _positive(_q_eval(q, S), S)
         for d, h in r.items():
             score = h.score * _doc_weight(ix.docs[d], oo.get("DocumentWeightingRules"))
-            results.append((score, len(results), ix.docs[d], h.tf))
+            results.append((score, (si, d), ix.docs[d], h.tf))
     results.sort(key=lambda t: (-round(t[0], 9), t[1]))
     mx = o.get("MaxItems")
     if mx is not None and not is_sym(mx, "All") and not is_sym(mx, "Infinity"):
@@ -4307,3 +4284,63 @@ record("FixedOrder", AREA, "added",
        "(GrammarRules is not available)")
 record("Containing", AREA, "added", "inert symbol: Containing[outer, inner] entity/region containment "
                                     "specification (no evaluation semantics here)")
+
+
+# ═════════════════════════════════════════════════════════════════ string-pattern extensions ══
+from . import wl_strings as _WS  # noqa: E402
+
+_ws_compile = _WS._compile
+
+
+def _compile_w11(p, ctx, lazy=False):
+    if isinstance(p, Expr) and p.head == "CaseSensitive" and len(p.args) == 1:
+        return "(?-i:" + _compile_w11(p.args[0], ctx, lazy) + ")"
+    if isinstance(p, Expr) and p.head == "AnyOrder" and p.args:
+        if len(p.args) > 6:
+            raise NotImplementedError("string pattern: AnyOrder with more than 6 elements is not supported")
+        if any(isinstance(a, Expr) and a.head == "Pattern" for a in p.args):
+            raise NotImplementedError("string pattern: named patterns inside AnyOrder are not supported")
+        alts = ["".join(_compile_w11(x, ctx, lazy) for x in perm) for perm in itertools.permutations(p.args)]
+        return "(?:" + "|".join(alts) + ")"
+    return _ws_compile(p, ctx, lazy)
+
+
+_WS._compile = _compile_w11
+
+record("CaseSensitive", AREA, "added",
+       "string pattern wrapper: CaseSensitive[p] matches p with case respected even under IgnoreCase -> True")
+record("AnyOrder", AREA, "added",
+       "string pattern: AnyOrder[p1, p2, ...] matches the patterns in sequence in any order (at most 6); "
+       "GrammarRules is not available")
+record("GapPenalty", AREA, "added",
+       "alignment option (SequenceAlignment, NeedlemanWunschSimilarity, SmithWatermanSimilarity): subtracted "
+       "once per run of insertions or deletions")
+record("SimilarityRules", AREA, "added",
+       "alignment option: Automatic or {{e1, e2} -> score, ...} with \"\" for insertions/deletions; patterns "
+       "allowed; named matrices raise")
+for _n, _note in (
+        ("CompoundElement", "form/interpreter specification for several fields (Interpreter and forms are not "
+                            "available)"),
+        ("DelimitedSequence", "Interpreter specification for a delimited sequence (Interpreter is not "
+                              "available)"),
+        ("OptionalElement", "grammar pattern for an optional element (GrammarRules is not available)"),
+        ("NoWhitespace", "grammar pattern for the absence of whitespace (GrammarRules is not available)"),
+        ("RectangularRepeatingElement", "form/interpreter specification of a rectangular array (forms are not "
+                                        "available)"),
+        ("SquareRepeatingElement", "form/interpreter specification of a square array (forms are not available)"),
+        ("WordOrientation", "WordCloud option (WordCloud graphics are not available)"),
+        ("WordSpacings", "WordCloud option (WordCloud graphics are not available)"),
+        ("WordSelectionFunction", "WordCloud option (WordCloud graphics are not available)"),
+        ("ContentLocationFunction", "CreateSearchIndex option; only the default is accepted"),
+        ("ValuePreprocessingFunction", "PersistentSymbol option; accepted by CreateSearchIndex/TextSearch only "
+                                       "with its default"),
+        ("PreprocessingRules", "input preprocessing option; only the default is accepted by the search functions"),
+        ("SpecificityGoal", "ImageIdentify option; only the default is accepted by the search functions"),
+        ("IgnoreDiacritics", "string/grammar option; not used by the functions in this library"),
+        ("IgnorePunctuation", "AlphabeticSort option; not used by the functions in this library"),
+        ("MatchLocalNames", "Trace option (Trace is not part of this library)"),
+        ("NullRecords", "Read option (stream reading belongs to the stream I/O batch)"),
+        ("NullWords", "Read option (stream reading belongs to the stream I/O batch)"),
+        ("TokenWords", "Read option (stream reading belongs to the stream I/O batch)"),
+        ("ShowContents", "Style/Cell display option")):
+    _inert(_n, _note)
