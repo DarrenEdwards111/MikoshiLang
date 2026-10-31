@@ -78,6 +78,7 @@ _TOKEN_SPEC = [
     ("DECREMENT", r'--'),
     ("SUBTRACTFROM", r'-='),
     ("MINUS",     r'-'),
+    ("NCMULT",    r'\*\*'),
     ("TIMESBY",   r'\*='),
     ("TIMES",     r'\*'),
     ("RIGHTCOMPOSITION", r'/\*'),
@@ -506,14 +507,25 @@ class Parser:
 
     def parse_dot(self) -> Any:
         """Handle a . b . c (Dot, precedence 490: between Times and Power/Map), flat."""
-        expr = self.parse_map()
+        expr = self.parse_ncmult()
         if not self.at("DOT"):
             return expr
         args = [expr]
         while self.at("DOT"):
             self.advance()
-            args.append(self.parse_map())
+            args.append(self.parse_ncmult())
         return Expr("Dot", *args)
+
+    def parse_ncmult(self) -> Any:
+        """Handle a ** b ** c (NonCommutativeMultiply, precedence 510: above Dot, below Power), flat."""
+        expr = self.parse_map()
+        if not self.at("NCMULT"):
+            return expr
+        args = [expr]
+        while self.at("NCMULT"):
+            self.advance()
+            args.append(self.parse_map())
+        return Expr("NonCommutativeMultiply", *args)
 
     def parse_map(self) -> Any:
         expr = self.parse_power()

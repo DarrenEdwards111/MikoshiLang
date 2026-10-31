@@ -4171,3 +4171,727 @@ def _sci(*args):
                 pts.append(L(rule(X[0], fromsp(sp.nsimplify(x0) if x0.is_Rational else x0)),
                              rule(X[1], fromsp(sp.simplify(yv)))))
     return L(*pts)
+
+
+# ───────────────────────────── noncommutative polynomial algebra ─────────────────────────────
+#
+# Polynomials in a free associative algebra over the field of rational functions in the scalar variables.  A
+# polynomial is a dict {word (tuple of generator keys): SymPy coefficient}.  Algebras (NonCommutativeAlgebra,
+# CliffordAlgebra, GrassmannAlgebra, WeylAlgebra) give the multiplication/addition heads, unity, zero, scalar and
+# commutative variables and relations; relations are completed to a Groebner basis (Buchberger-Mora with a
+# degree bound; a basis that does not close within the bound raises).
+
+_NC_DEFAULT_MULT = "NonCommutativeMultiply"
+
+
+class _NCAlg:
+    def __init__(self):
+        self.mult = Symbol(_NC_DEFAULT_MULT)
+        self.add = Symbol("Plus")
+        self.unity = None
+        self.zero = None
+        self.scalars = []
+        self.commutative = []
+        self.gens = None          # list of blocks of generators (ML)
+        self.relations = []       # ML polynomials (== 0)
+        self.kind = None
+        self._gb = None
+
+    def is_mult(self, e):
+        return isinstance(e, Expr) and (K.same(e.head, self.mult) if not isinstance(self.mult, Symbol) else
+                                        e.head == self.mult.name)
+
+    def is_add(self, e):
+        return isinstance(e, Expr) and (e.head == self.add.name if isinstance(self.add, Symbol) else
+                                        K.same(e.head, self.add))
+
+
+def _assoc_items(a):
+    if isinstance(a, Expr) and a.head == "Association":
+        return [(r.args[0], r.args[1]) for r in a.args]
+    if is_list(a) and all(_is_head(r, "Rule", "RuleDelayed") for r in a.args):
+        return [(r.args[0], r.args[1]) for r in a.args]
+    return None
+
+
+_NC_KEYS = ("Multiplication", "Addition", "Unity", "Zero", "ScalarVariables", "CommutativeVariables",
+            "Generators", "Relations", "CommutationRelations", "Kind")
+
+
+def _nc_alg(a, fname):
+    alg = _NCAlg()
+    if a is None:
+        return alg
+    if _is_head(a, "NonCommutativeAlgebra"):
+        if not a.args:
+            return alg
+        a = a.args[0]
+    items = _assoc_items(a)
+    if items is None:
+        raise NotImplementedError(f"{fname}: only NonCommutativeAlgebra[<|...|>] algebras are supported")
+    for k, v in items:
+        if not isinstance(k, str) or k not in _NC_KEYS:
+            raise NotImplementedError(f"{fname}: unsupported algebra property {k!r}")
+        if k == "Multiplication":
+            alg.mult = v
+        elif k == "Addition":
+            alg.add = v
+        elif k == "Unity":
+            alg.unity = v
+        elif k == "Zero":
+            alg.zero = v
+        elif k == "ScalarVariables":
+            alg.scalars = list(v.args) if is_list(v) else [v]
+        elif k == "CommutativeVariables":
+            alg.commutative = list(v.args) if is_list(v) else [v]
+        elif k == "Generators":
+            gl = list(v.args) if is_list(v) else [v]
+            alg.gens = [list(b.args) if is_list(b) else [b] for b in gl]
+        elif k in ("Relations", "CommutationRelations"):
+            alg.relations += list(v.args) if is_list(v) else [v]
+        elif k == "Kind":
+            alg.kind = v
+    return alg
+
+
+def _nc_key(g):
+    return repr(g)
+
+
+from .wl_algebra import _wl_order_key   # noqa: E402
+
+
+class _NCCtx:
+    """Parsing / printing context: algebra plus generator registry and monomial order."""
+
+    def __init__(self, alg, blocks=None):
+        self.alg = alg
+        self.gmap = {}            # key -> ML generator
+        self.blocks = blocks      # list of lists of keys (order), or None
+        self.scal_keys = {_nc_key(s) for s in alg.scalars}
+        self.comm_keys = [_nc_key(c) for c in alg.commutative]
+
+    def gen(self, g):
+        k = _nc_key(g)
+        self.gmap.setdefault(k, g)
+        return k
+
+    # ---- parsing
+    def is_scalar(self, e):
+        if K.is_number(e) or (isinstance(e, Expr) and e.head in ("Rational", "Complex")):
+            return True
+        if isinstance(e, Symbol):
+            return _nc_key(e) in self.scal_keys or e.name in ("Pi", "E", "I")
+        if isinstance(e, Expr) and e.head in ("Plus", "Times", "Power") and not self.alg.is_mult(e):
+            return all(self.is_scalar(a) for a in e.args)
+        return False
+
+    def parse(self, e, fname):
+        al = self.alg
+        if self.is_scalar(e):
+            c = sym(e, fname)
+            return {(): c} if c != 0 else {}
+        if al.unity is not None and K.same(e, al.unity):
+            return {(): sp.Integer(1)}
+        if al.zero is not None and K.same(e, al.zero):
+            return {}
+        if al.is_add(e):
+            r = {}
+            for a in e.args:
+                r = _nc_addp(r, self.parse(a, fname))
+            return r
+        if al.is_mult(e):
+            r = {(): sp.Integer(1)}
+            for a in e.args:
+                r = self.mul(r, self.parse(a, fname))
+            return r
+        if isinstance(e, Expr) and e.head == "Plus":
+            r = {}
+            for a in e.args:
+                r = _nc_addp(r, self.parse(a, fname))
+            return r
+        if isinstance(e, Expr) and e.head == "Times":
+            sc = [a for a in e.args if self.is_scalar(a)]
+            nc = [a for a in e.args if not self.is_scalar(a)]
+            comm = [a for a in nc if _nc_key(a) in self.comm_keys]
+            other = [a for a in nc if _nc_key(a) not in self.comm_keys]
+            if len(other) > 1:
+                raise NotImplementedError(f"{fname}: a commutative product of noncommutative factors "
+                                          f"({e!r}); use ** for noncommutative products")
+            r = {(): sym(Expr("Times", *sc), fname) if sc else sp.Integer(1)}
+            for a in comm + other:
+                r = self.mul(r, self.parse(a, fname))
+            return r
+        if isinstance(e, Expr) and e.head == "Power" and len(e.args) == 2 and K.is_int(e.args[1]) \
+                and int(e.args[1]) >= 0:
+            b = self.parse(e.args[0], fname)
+            r = {(): sp.Integer(1)}
+            for _ in range(int(e.args[1])):
+                r = self.mul(r, b)
+            return r
+        return {(self.gen(e),): sp.Integer(1)}
+
+    def mul(self, p, q):
+        r = {}
+        for w1, c1 in p.items():
+            for w2, c2 in q.items():
+                w = self.normal_word(w1 + w2)
+                r[w] = sp.expand(r.get(w, 0) + c1 * c2)
+                if r[w] == 0:
+                    del r[w]
+        return r
+
+    def normal_word(self, w):
+        """Commutative variables move to the front (in their declaration order)."""
+        if not self.comm_keys:
+            return w
+        cs = sorted([g for g in w if g in self.comm_keys], key=self.comm_keys.index)
+        return tuple(cs) + tuple(g for g in w if g not in self.comm_keys)
+
+    # ---- order
+    def key(self, w):
+        """Sort key (larger = bigger monomial): block degrees from the last block, then the word."""
+        blocks = self.blocks or [sorted(self.gmap, key=lambda k: _wl_order_key(self.gmap[k]))]
+        idx = {}
+        for bi, b in enumerate(blocks):
+            for j, g in enumerate(b):
+                idx[g] = (bi, j)
+        extra = [g for g in w if g not in idx]
+        degs = tuple(sum(1 for g in w if g in idx and idx[g][0] == bi) for bi in reversed(range(len(blocks))))
+        word = tuple((idx[g][0], idx[g][1]) if g in idx else (-1, 0) for g in w)
+        return (degs, len(extra), word)
+
+    def lead(self, p):
+        w = max(p, key=self.key)
+        return w, p[w]
+
+    # ---- printing
+    def term(self, w, c):
+        al = self.alg
+        gens = [self.gmap[g] for g in w]
+        if not gens:
+            m = None
+        elif len(gens) == 1:
+            m = gens[0]
+        else:
+            m = Expr(al.mult.name if isinstance(al.mult, Symbol) else al.mult, *gens)
+        cm = fromsp(c)
+        if m is None:
+            if al.unity is not None and c != 1:
+                return Expr("Times", cm, al.unity) if c != 1 else al.unity
+            return cm if al.unity is None else (al.unity if c == 1 else Expr("Times", cm, al.unity))
+        return m if c == 1 else Expr("Times", cm, m)
+
+    def out(self, p):
+        al = self.alg
+        if not p:
+            return al.zero if al.zero is not None else 0
+        ws = sorted(p, key=self.key)
+        terms = [self.term(w, p[w]) for w in ws]
+        if len(terms) == 1:
+            return ev(terms[0])
+        head = al.add.name if isinstance(al.add, Symbol) else al.add
+        return ev(Expr(head, *terms))
+
+
+def _nc_addp(p, q, s=1):
+    r = dict(p)
+    for w, c in q.items():
+        r[w] = sp.expand(r.get(w, 0) + s * c)
+        if r[w] == 0:
+            del r[w]
+    return r
+
+
+def _nc_find(w, sub):
+    n, m = len(w), len(sub)
+    for i in range(n - m + 1):
+        if w[i:i + m] == sub:
+            return i
+    return -1
+
+
+def _nc_reduce(ctx, p, basis, track=False):
+    """Full reduction of p modulo basis [(lw, lc, poly)]; with track returns (remainder, [list of (c, u, v)])."""
+    r = {}
+    p = dict(p)
+    hist = [[] for _ in basis] if track else None
+    while p:
+        w, c = ctx.lead(p)
+        for bi, (lw, lc, q) in enumerate(basis):
+            i = _nc_find(w, lw)
+            if i >= 0:
+                u, v = w[:i], w[i + len(lw):]
+                f = sp.cancel(c / lc)
+                prod = {}
+                for qw, qc in q.items():
+                    ww = ctx.normal_word(u + qw + v)
+                    prod[ww] = sp.expand(prod.get(ww, 0) + f * qc)
+                p = _nc_addp(p, prod, -1)
+                p = {k: sp.cancel(vv) for k, vv in p.items() if sp.cancel(vv) != 0}
+                if track:
+                    hist[bi].append((f, u, v))
+                break
+        else:
+            r[w] = c
+            del p[w]
+    return (r, hist) if track else r
+
+
+def _nc_monic(ctx, p):
+    w, c = ctx.lead(p)
+    return {k: sp.cancel(v / c) for k, v in p.items()}
+
+
+def _nc_groebner(ctx, polys, fname, maxdeg=12, maxpairs=4000):
+    G = [_nc_monic(ctx, p) for p in polys if p]
+    G = _nc_interreduce(ctx, G)
+    pairs = [(i, j) for i in range(len(G)) for j in range(len(G))]
+    seen = 0
+    while pairs:
+        i, j = pairs.pop(0)
+        seen += 1
+        if seen > maxpairs:
+            raise NotImplementedError(f"{fname}: the Groebner basis computation did not finish (it may be infinite)")
+        if i >= len(G) or j >= len(G):
+            continue
+        for s in _nc_spolys(ctx, G[i], G[j], maxdeg, fname):
+            basis = [(ctx.lead(g)[0], ctx.lead(g)[1], g) for g in G]
+            r = _nc_reduce(ctx, s, basis)
+            if r:
+                G.append(_nc_monic(ctx, r))
+                n = len(G) - 1
+                pairs += [(n, k) for k in range(n + 1)] + [(k, n) for k in range(n)]
+    return _nc_interreduce(ctx, G)
+
+
+def _nc_spolys(ctx, f, g, maxdeg, fname):
+    lf, cf = ctx.lead(f)
+    lg, cg = ctx.lead(g)
+    out_ = []
+    # overlaps: suffix of lf == prefix of lg
+    for k in range(1, min(len(lf), len(lg))):
+        if lf[-k:] == lg[:k] and (f is not g or k < len(lf)):
+            u = lg[k:]
+            v = lf[:-k]
+            if len(lf) + len(u) > maxdeg:
+                raise NotImplementedError(f"{fname}: the Groebner basis exceeds the degree bound {maxdeg}")
+            s = _nc_addp(_nc_shift(ctx, f, (), u, 1 / cf), _nc_shift(ctx, g, v, (), 1 / cg), -1)
+            out_.append(s)
+    # inclusion: lg inside lf (f != g)
+    if f is not g:
+        i = _nc_find(lf, lg)
+        if i >= 0:
+            s = _nc_addp(_nc_shift(ctx, f, (), (), 1 / cf), _nc_shift(ctx, g, lf[:i], lf[i + len(lg):], 1 / cg), -1)
+            out_.append(s)
+    return [s for s in out_ if s]
+
+
+def _nc_shift(ctx, p, u, v, c):
+    r = {}
+    for w, a in p.items():
+        ww = ctx.normal_word(tuple(u) + w + tuple(v))
+        r[ww] = sp.expand(r.get(ww, 0) + c * a)
+    return {k: x for k, x in r.items() if x != 0}
+
+
+def _nc_interreduce(ctx, G):
+    G = [g for g in G if g]
+    changed = True
+    while changed:
+        changed = False
+        for i, g in enumerate(G):
+            others = [h for j, h in enumerate(G) if j != i]
+            basis = [(ctx.lead(h)[0], ctx.lead(h)[1], h) for h in others]
+            r = _nc_reduce(ctx, g, basis)
+            if r != g:
+                G = others[:i] + ([_nc_monic(ctx, r)] if r else []) + others[i:]
+                changed = True
+                break
+    return sorted(G, key=lambda p: ctx.key(ctx.lead(p)[0]))
+
+
+def _nc_setup(args, fname, need_vars=False):
+    """-> (exprs, ctx, extra args) for f[expr(s), vars?, alg?, ...]."""
+    args = list(args)
+    alg_e = None
+    for i, a in enumerate(args[1:], 1):
+        if _is_head(a, "NonCommutativeAlgebra"):
+            alg_e = args.pop(i)
+            break
+    alg = _nc_alg(alg_e, fname)
+    blocks_ml = None
+    if alg.gens is not None:
+        blocks_ml = alg.gens
+    if len(args) >= 2 and is_list(args[1]):
+        v = args[1]
+        if all(is_list(b) for b in v.args):
+            blocks_ml = [list(b.args) for b in v.args]
+        else:
+            blocks_ml = [[x] for x in v.args]
+    ctx = _NCCtx(alg)
+    if blocks_ml is not None:
+        ctx.blocks = [[ctx.gen(g) for g in b] for b in blocks_ml]
+    return args, alg, ctx, blocks_ml
+
+
+def _nc_alg_basis(ctx, alg, fname):
+    if not alg.relations:
+        return []
+    rels = [ctx.parse(ev(r), fname) for r in alg.relations]
+    return _nc_groebner(ctx, rels, fname)
+
+
+def _nc_normal(ctx, alg, p, fname):
+    G = _nc_alg_basis(ctx, alg, fname)
+    if not G:
+        return p
+    return _nc_reduce(ctx, p, [(ctx.lead(g)[0], ctx.lead(g)[1], g) for g in G])
+
+
+@fn("NonCommutativeMultiply", area=AREA, status="added",
+    notes="a ** b ** c (parsed with precedence between Dot and Power): associative (Flat) noncommutative product "
+          "that otherwise stays symbolic; NonCommutativeExpand and the NonCommutative* functions expand and reduce "
+          "it")
+def _ncm(*args):
+    if any(_is_head(a, "NonCommutativeMultiply") for a in args):
+        flat = []
+        for a in args:
+            flat += list(a.args) if _is_head(a, "NonCommutativeMultiply") else [a]
+        return Expr("NonCommutativeMultiply", *flat)
+    raise Unevaluated()
+
+
+@fn("NonCommutativeAlgebra", area=AREA, status="added",
+    notes="NonCommutativeAlgebra[] / NonCommutativeAlgebra[<|prop -> val, ...|>] with \"Multiplication\", "
+          "\"Addition\", \"Unity\", \"Zero\", \"ScalarVariables\", \"CommutativeVariables\", \"Generators\", "
+          "\"Relations\", \"CommutationRelations\": an inert algebra description used by the NonCommutative* "
+          "functions (validated; unknown properties raise). The {mult, n} shorthand is not supported")
+def _ncalg(*args):
+    if len(args) > 1:
+        raise ValueError("NonCommutativeAlgebra takes at most one argument")
+    if args:
+        if _assoc_items(args[0]) is None:
+            raise NotImplementedError("NonCommutativeAlgebra: only the association form is supported")
+        _nc_alg(Expr("NonCommutativeAlgebra", *args), "NonCommutativeAlgebra")
+    raise Unevaluated()
+
+
+def _alg_from(kind, gens_blocks, rels, mult, extra):
+    items = [rule("Kind", kind), rule("Generators", L(*(L(*b) for b in gens_blocks))),
+             rule("Relations", L(*rels)), rule("Multiplication", mult)]
+    items += extra
+    return Expr("NonCommutativeAlgebra", Expr("Association", *items))
+
+
+def _alg_opts(rest, fname):
+    mult = Symbol(_NC_DEFAULT_MULT)
+    extra = []
+    for r in rest:
+        items = _assoc_items(r) if not _is_head(r, "Rule") else [(r.args[0], r.args[1])]
+        if items is None:
+            raise ValueError(f"{fname}: invalid option {r!r}")
+        for k, v in items:
+            if k == "Multiplication":
+                mult = v
+            elif k in ("ScalarVariables", "CommutativeVariables", "Unity", "Zero", "Addition"):
+                extra.append(rule(k, v))
+            else:
+                raise NotImplementedError(f"{fname}: unsupported property {k!r}")
+    return mult, extra
+
+
+def _m(mult, *xs):
+    return Expr(mult.name if isinstance(mult, Symbol) else mult, *xs)
+
+
+@fn("CliffordAlgebra", area=AREA, status="added",
+    notes="CliffordAlgebra[{{p1, ...}, {n1, ...}, {z1, ...}}] (generators squaring to 1, -1 and 0, all pairwise "
+          "anticommuting) -> a NonCommutativeAlgebra with those relations (\"Multiplication\" and scalar options "
+          "accepted); used by NonCommutativeExpand etc.")
+def _clifford(spec, *rest):
+    fname = "CliffordAlgebra"
+    if not is_list(spec) or not all(is_list(b) for b in spec.args) or not 1 <= len(spec.args) <= 3:
+        raise ValueError(f"{fname}: expected {{{{positive generators}}, {{negative}}, {{null}}}}")
+    mult, extra = _alg_opts(rest, fname)
+    sq = []
+    for b, val in zip(spec.args, (1, -1, 0)):
+        sq += [(g, val) for g in b.args]
+    gens = [g for g, _ in sq]
+    rels = [ev(Expr("Plus", _m(mult, g, g), -v)) if v else _m(mult, g, g) for g, v in sq]
+    for i, j in itertools.combinations(range(len(gens)), 2):
+        rels.append(Expr("Plus", _m(mult, gens[j], gens[i]), _m(mult, gens[i], gens[j])))
+    return _alg_from("Clifford", [gens], rels, mult, extra)
+
+
+@fn("GrassmannAlgebra", area=AREA, status="added",
+    notes="GrassmannAlgebra[{x1, ...}] (anticommuting generators with xi^2 == 0; default multiplication Wedge, or "
+          "\"Multiplication\" -> NonCommutativeMultiply) -> a NonCommutativeAlgebra with those relations")
+def _grassmann(gens, *rest):
+    fname = "GrassmannAlgebra"
+    if not is_list(gens):
+        raise ValueError(f"{fname}: expected a list of generators")
+    mult, extra = _alg_opts(rest, fname)
+    if not any(_is_head(r, "Rule") and r.args[0] == "Multiplication" for r in rest):
+        mult = Symbol("Wedge")
+    g = list(gens.args)
+    rels = [_m(mult, a, a) for a in g]
+    for i, j in itertools.combinations(range(len(g)), 2):
+        rels.append(Expr("Plus", _m(mult, g[j], g[i]), _m(mult, g[i], g[j])))
+    return _alg_from("Grassmann", [g], rels, mult, extra)
+
+
+@fn("WeylAlgebra", area=AREA, status="added",
+    notes="WeylAlgebra[{{x1, ...}, {d1, ...}}]: di ** xi == xi ** di + 1, all other pairs commute -> a "
+          "NonCommutativeAlgebra (normal order: variables before derivations)")
+def _weyl(spec, *rest):
+    fname = "WeylAlgebra"
+    if not (is_list(spec) and len(spec.args) == 2 and all(is_list(b) for b in spec.args)
+            and len(spec.args[0].args) == len(spec.args[1].args)):
+        raise ValueError(f"{fname}: expected {{{{x1, ...}}, {{dx1, ...}}}}")
+    mult, extra = _alg_opts(rest, fname)
+    xs, ds = list(spec.args[0].args), list(spec.args[1].args)
+    gens = xs + ds
+    rels = []
+    for i, j in itertools.combinations(range(len(gens)), 2):
+        a, b = gens[i], gens[j]
+        r = Expr("Plus", _m(mult, b, a), Expr("Times", -1, _m(mult, a, b)))
+        if i < len(xs) and j == i + len(xs):
+            r = Expr("Plus", r, -1)
+        rels.append(r)
+    return _alg_from("Weyl", [gens], rels, mult, extra)
+
+
+def _nc_expand_impl(e, ctx, alg, fname):
+    p = ctx.parse(ev(e), fname)
+    return _nc_normal(ctx, alg, p, fname)
+
+
+@fn("NonCommutativeExpand", area=AREA, status="added",
+    notes="NonCommutativeExpand[expr] / [expr, alg]: expands ** (or the algebra's multiplication/addition) "
+          "products over sums, moving scalars (numbers, ScalarVariables) to coefficients and CommutativeVariables "
+          "to the front of each word, and reduces modulo the algebra relations (Groebner basis). Repeated factors "
+          "are written out (a ** a) where Wolfram displays a power")
+def _ncexpand(*args):
+    fname = "NonCommutativeExpand"
+    args, alg, ctx, _ = _nc_setup(args, fname)
+    if len(args) != 1:
+        raise ValueError(f"{fname} expects an expression and optionally an algebra")
+    if is_list(args[0]):
+        return L(*(ctx.out(_nc_expand_impl(a, ctx, alg, fname)) for a in args[0].args))
+    return ctx.out(_nc_expand_impl(args[0], ctx, alg, fname))
+
+
+@fn("NonCommutativeVariables", area=AREA, status="added",
+    notes="NonCommutativeVariables[expr] / [expr, alg]: sorted list of the noncommutative generators in expr "
+          "(scalars, ScalarVariables, CommutativeVariables and the unity excluded); lists are searched elementwise")
+def _ncvars(*args):
+    fname = "NonCommutativeVariables"
+    args, alg, ctx, _ = _nc_setup(args, fname)
+    if len(args) != 1:
+        raise NotImplementedError(f"{fname}: only NonCommutativeVariables[expr] and [expr, alg] are supported")
+    exprs = list(args[0].args) if is_list(args[0]) else [args[0]]
+    keys = set()
+    for e in exprs:
+        p = ctx.parse(ev(e), fname)
+        for w in p:
+            keys |= set(w)
+    vs = [ctx.gmap[k] for k in keys if k not in ctx.comm_keys]
+    return ev(Expr("Sort", L(*vs)))
+
+
+@fn("NonCommutativePolynomialQ", area=AREA, status="added",
+    notes="NonCommutativePolynomialQ[expr, vars] / [expr, vars, alg]: True if expr is a noncommutative polynomial "
+          "in vars with scalar (or commutative-variable) coefficients")
+def _ncpq(*args):
+    fname = "NonCommutativePolynomialQ"
+    args, alg, ctx, blocks = _nc_setup(args, fname)
+    if len(args) != 2:
+        raise ValueError(f"{fname} expects an expression and variables")
+    vk = {ctx.gen(v) for b in (blocks or []) for v in b} if blocks else {ctx.gen(v) for v in _vars(args[1], fname)}
+    try:
+        p = ctx.parse(ev(args[0]), fname)
+    except NotImplementedError:
+        return False
+    for w, c in p.items():
+        for g in w:
+            if g not in vk and g not in ctx.comm_keys:
+                return False
+        fs = {s.name for s in c.free_symbols}
+        if fs & {str(ctx.gmap[k]) for k in vk}:
+            return False
+    return True
+
+
+@fn("NonCommutativeMonomialList", area=AREA, status="added",
+    notes="NonCommutativeMonomialList[poly, vars] / [poly, alg] / [poly, vars, alg]: the terms (coefficient "
+          "times word) in decreasing monomial order: {x, y} is an elimination order (degree in the last variable "
+          "first, then the word, later variables larger), {{x, y}} degree-lexicographic; reduced modulo the "
+          "algebra relations first")
+def _ncml(*args):
+    fname = "NonCommutativeMonomialList"
+    args, alg, ctx, blocks = _nc_setup(args, fname)
+    if len(args) not in (1, 2):
+        raise ValueError(f"{fname} expects a polynomial and variables or an algebra")
+    p = _nc_expand_impl(args[0], ctx, alg, fname)
+    ws = sorted(p, key=ctx.key, reverse=True)
+    return L(*(ev(ctx.term(w, p[w])) for w in ws))
+
+
+def _nc_basis_args(args, fname):
+    args, alg, ctx, blocks = _nc_setup(args, fname)
+    side = None
+    if args and isinstance(args[-1], Symbol) and args[-1].name in ("Left", "Right"):
+        side = args.pop().name
+    return args, alg, ctx, blocks, side
+
+
+@fn("NonCommutativeGroebnerBasis", area=AREA, status="added",
+    notes="NonCommutativeGroebnerBasis[{p1, ...}, vars] / [polys, alg]: reduced two-sided Groebner basis "
+          "(Buchberger-Mora with overlap S-polynomials; monic, sorted by leading word) for the monomial order of "
+          "vars ({x, y} elimination, {{x, y}} degree-lexicographic), together with the algebra relations; "
+          "computations that do not close within degree 12 raise (noncommutative bases can be infinite); "
+          "one-sided (Left/Right) bases are not supported")
+def _ncgb(*args):
+    fname = "NonCommutativeGroebnerBasis"
+    args, alg, ctx, blocks, side = _nc_basis_args(args, fname)
+    if side is not None:
+        raise NotImplementedError(f"{fname}: one-sided ideals are not supported")
+    if not args or not is_list(args[0]):
+        raise ValueError(f"{fname} expects a list of polynomials")
+    polys = [ctx.parse(ev(p), fname) for p in args[0].args]
+    rels = [ctx.parse(ev(r), fname) for r in alg.relations]
+    G = _nc_groebner(ctx, rels + polys, fname)
+    if rels:
+        R = _nc_groebner(ctx, rels, fname)
+        rk = {tuple(sorted(r.items(), key=str)) for r in R}
+        G = [g for g in G if tuple(sorted(g.items(), key=str)) not in rk]
+    return L(*(ctx.out(g) for g in G))
+
+
+def _nc_reduce_main(args, fname):
+    args, alg, ctx, blocks, side = _nc_basis_args(args, fname)
+    if side is not None:
+        raise NotImplementedError(f"{fname}: one-sided reduction is not supported")
+    if len(args) < 2 or not is_list(args[1]):
+        raise ValueError(f"{fname} expects a polynomial and a list of polynomials")
+    p = _nc_expand_impl(args[0], ctx, alg, fname)
+    qs = [_nc_expand_impl(q, ctx, alg, fname) for q in args[1].args]
+    basis = [(ctx.lead(q)[0], ctx.lead(q)[1], q) for q in qs]
+    G = _nc_alg_basis(ctx, alg, fname)
+    r, hist = _nc_reduce(ctx, p, basis + [(ctx.lead(g)[0], ctx.lead(g)[1], g) for g in G], track=True)
+    return ctx, alg, qs, r, hist[:len(qs)]
+
+
+@fn("NonCommutativePolynomialReduce", area=AREA, status="added",
+    notes="NonCommutativePolynomialReduce[p, {q1, ...}, vars] / [..., alg]: {{f1, ...}, r} with pure functions "
+          "fi (sums of c u ** #1 ** v) so that p == f1[q1] + ... + r and no word of r contains a leading word of "
+          "a qi (reduction in the monomial order of vars); verified by re-expansion")
+def _ncpr(*args):
+    fname = "NonCommutativePolynomialReduce"
+    ctx, alg, qs, r, hist = _nc_reduce_main(args, fname)
+    fns = []
+    mult = alg.mult.name if isinstance(alg.mult, Symbol) else alg.mult
+    for h in hist:
+        terms = []
+        for c, u, v in h:
+            parts = [ctx.gmap[g] for g in u] + [Expr("Slot", 1)] + [ctx.gmap[g] for g in v]
+            m = parts[0] if len(parts) == 1 else Expr(mult, *parts)
+            terms.append(Expr("Times", fromsp(c), m))
+        body = ev(Expr("Plus", *terms)) if terms else 0
+        fns.append(Expr("Function", body))
+    return L(L(*fns), ctx.out(r))
+
+
+@fn("NonCommutativePolynomialReduction", area=AREA, status="added",
+    notes="NonCommutativePolynomialReduction[p, {q1, ...}, vars] / [..., alg]: the remainder of "
+          "NonCommutativePolynomialReduce")
+def _ncprn(*args):
+    ctx, alg, qs, r, hist = _nc_reduce_main(args, "NonCommutativePolynomialReduction")
+    return ctx.out(r)
+
+
+@fn("NonCommutativeCollect", area=AREA, status="added",
+    notes="NonCommutativeCollect[poly, x] / [poly, {x, Left}] / [poly, {x, Right}] / [..., alg]: groups the "
+          "expanded terms by the pattern of x-factors (default: x-runs with one varying gap between them; Left: "
+          "leading x power; Right: trailing x power) and factors the varying part, e.g. x**(3y + 4z)**x**x; "
+          "terms whose patterns differ in more than one gap are left separate")
+def _nccollect(*args):
+    fname = "NonCommutativeCollect"
+    args, alg, ctx, blocks = _nc_setup(args, fname)
+    if len(args) != 2:
+        raise ValueError(f"{fname} expects a polynomial and a variable spec")
+    spec = args[1]
+    side = None
+    if is_list(spec) and len(spec.args) == 2 and isinstance(spec.args[1], Symbol) and \
+            spec.args[1].name in ("Left", "Right"):
+        side = spec.args[1].name
+        spec = spec.args[0]
+    xs = {ctx.gen(v) for v in (spec.args if is_list(spec) else [spec])}
+    p = _nc_expand_impl(args[0], ctx, alg, fname)
+    groups = {}
+    order = []
+    for w, c in sorted(p.items(), key=lambda t: ctx.key(t[0]), reverse=True):
+        if side == "Left":
+            k = 0
+            while k < len(w) and w[k] in xs:
+                k += 1
+            skel, gap = ("L", w[:k]), w[k:]
+            gk = (skel, ())
+        elif side == "Right":
+            k = len(w)
+            while k > 0 and w[k - 1] in xs:
+                k -= 1
+            skel, gap = ("R", w[k:]), w[:k]
+            gk = (skel, ())
+        else:
+            # runs: x-runs and gaps; key = all x runs plus all but the first non-empty gap
+            runs, cur, isx = [], [], None
+            for g in w:
+                gx = g in xs
+                if isx is None or gx == isx:
+                    cur.append(g)
+                else:
+                    runs.append((isx, tuple(cur)))
+                    cur = [g]
+                isx = gx
+            if cur:
+                runs.append((isx, tuple(cur)))
+            gaps = [i for i, (gx, _) in enumerate(runs) if not gx]
+            if len(gaps) != 1:
+                gk = ("whole", w)
+                gap = None
+            else:
+                gi = gaps[0]
+                gk = ("one", tuple(r if i != gi else (False, None) for i, r in enumerate(runs)))
+                gap = runs[gi][1]
+        if gk not in groups:
+            groups[gk] = []
+            order.append(gk)
+        groups[gk].append((w, c, gap))
+    mult = alg.mult.name if isinstance(alg.mult, Symbol) else alg.mult
+    terms = []
+    for gk in order:
+        items = groups[gk]
+        if gk[0] == "whole" or len(items) == 1 and (gk[0] == "one" and items[0][2] is None):
+            terms += [ctx.term(w, c) for w, c, _ in items]
+            continue
+        inner = {}
+        for w, c, gap in items:
+            inner[gap] = inner.get(gap, 0) + c
+        inner_e = ctx.out({g: c for g, c in inner.items()})
+        if gk[0] == "one":
+            parts = []
+            for gx, r in gk[1]:
+                if r is None:
+                    parts.append(inner_e)
+                else:
+                    parts += [ctx.gmap[g] for g in r]
+        elif gk[0][0] == "L":
+            parts = [ctx.gmap[g] for g in gk[0][1]] + [inner_e]
+        else:
+            parts = [inner_e] + [ctx.gmap[g] for g in gk[0][1]]
+        parts = [q for q in parts if not (q == 1)]
+        terms.append(parts[0] if len(parts) == 1 else Expr(mult, *parts))
+    head = alg.add.name if isinstance(alg.add, Symbol) else alg.add
+    return ev(terms[0]) if len(terms) == 1 else ev(Expr(head, *terms))
