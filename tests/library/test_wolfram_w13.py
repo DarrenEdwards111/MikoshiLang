@@ -767,6 +767,6 @@ CASES = (SERIALISATION + FORMATS + REGISTRY + FILES + MISC + HASHES_AND_CIPHERS 
          + SIGNATURES + PEM + CONVENTIONS)
 
 
-@pytest.mark.parametrize("case", CASES, ids=ids(CASES))
+@pytest.mark.parametrize("case", CASES, ids=[c[0].replace(D, "TMP")[:80] for c in CASES])
 def test_wolfram_w13(case):
     check(case)
