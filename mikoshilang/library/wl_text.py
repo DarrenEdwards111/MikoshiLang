@@ -1640,3 +1640,633 @@ def _findtransient(x, n, *rest):
         if p is not None:
             return L(_wrap(items[:t], kind), _wrap(rest_[:p], kind))
     return L(_wrap(items, kind), _wrap([], kind))
+
+
+# ═════════════════════════════════════════════════════════════════ templates ══
+_TEMPLATE_HEADS = ("TemplateSlot", "TemplateExpression", "TemplateIf", "TemplateSequence", "TemplateWith",
+                   "TemplateObject")
+_hold("TemplateIf", "TemplateWith")
+_hold_first("TemplateExpression")
+
+
+class _TCtx:
+    def __init__(self, positional, named, string_mode=False):
+        self.positional = positional      # list of expressions
+        self.named = named                # list of associations / dicts, searched in order
+        self.string_mode = string_mode
+
+    def lookup(self, key):
+        if isinstance(key, int) and not isinstance(key, bool):
+            if 1 <= key <= len(self.positional):
+                return True, self.positional[key - 1]
+            return False, None
+        for a in self.named:
+            if isinstance(a, dict):
+                if key in a:
+                    return True, a[key]
+                continue
+            for r in a.args:
+                if is_rule(r) and K.tag(r.args[0]) == K.tag(key):
+                    return True, r.args[1]
+        return False, None
+
+
+def _t_opts(args, fname, allowed=("InsertionFunction", "CombinerFunction", "DefaultValue", "Delimiters",
+                                   "\0slot", "\0index")):
+    pos, opts = [], {}
+    for a in args:
+        if is_rule(a) and (isinstance(a.args[0], str) or isinstance(a.args[0], Symbol)):
+            k = a.args[0] if isinstance(a.args[0], str) else a.args[0].name
+            if k in allowed:
+                opts[k] = a.args[1]
+                continue
+        pos.append(a)
+    return pos, opts
+
+
+def _insert(ins, v):
+    if ins is None or is_sym(ins, "Identity") or is_sym(ins, "Inherited") or is_sym(ins, "Automatic"):
+        return v
+    if isinstance(ins, str):
+        name = ins.lower()
+        if name in ("htmlfragment", "html"):
+            v = ev(v)
+            if isinstance(v, str) or not isinstance(v, Expr):
+                return _html.escape(v if isinstance(v, str) else _text_string(v), quote=False)
+            return _html.escape(_text_string(v), quote=False)
+        if name in ("text", "string"):
+            return Expr("TextString", v)
+        if name == "json":
+            return _to_json(ev(v))
+        raise NotImplementedError(f"InsertionFunction -> {ins!r} is not supported")
+    return Expr(K.as_head(ins), v)
+
+
+def _text_string(v):
+    r = ev(Expr("TextString", v))
+    return r if isinstance(r, str) else str(r)
+
+
+def _slot_absent(key, ctx):
+    return Expr("Missing", "TemplateSlotAbsent", key)
+
+
+def _twalk(e, ctx, ins):
+    """Substitute template constructs in e (not evaluated)."""
+    if isinstance(e, Expr):
+        h = e.head
+        if h == "TemplateSlot" and e.args:
+            pos, o = _t_opts(e.args[1:], "TemplateSlot")
+            key = e.args[0]
+            if is_sym(key, "Automatic") or isinstance(key, Expr):
+                raise ValueError(f"TemplateSlot: invalid slot {key!r}")
+            found, v = ctx.lookup(key)
+            if not found:
+                if "DefaultValue" in o:
+                    return o["DefaultValue"]
+                return _insert(o.get("InsertionFunction", ins), _slot_absent(key, ctx))
+            return _insert(o.get("InsertionFunction", ins), v)
+        if h == "TemplateExpression" and e.args:
+            pos, o = _t_opts(e.args[1:], "TemplateExpression")
+            return _insert(o.get("InsertionFunction", ins), _twalk(e.args[0], ctx, None))
+        if h == "TemplateIf" and len(e.args) >= 2:
+            pos, o = _t_opts(e.args, "TemplateIf")
+            if len(pos) not in (2, 3):
+                raise ValueError("TemplateIf takes a condition and one or two branches")
+            c = ev(_twalk(pos[0], ctx, None))
+            sub_ins = o.get("InsertionFunction", ins)
+            if c is True:
+                return _twalk(pos[1], ctx, sub_ins)
+            if c is False:
+                return _twalk(pos[2], ctx, sub_ins) if len(pos) == 3 else Expr("Sequence")
+            raise ValueError(f"TemplateIf: the condition evaluated to {c!r}, not True or False")
+        if h == "TemplateWith" and len(e.args) == 2:
+            spec, body = e.args
+            rules = spec.args if is_list(spec) else [spec]
+            bind = {}
+            for r in rules:
+                if not is_rule(r):
+                    raise ValueError(f"TemplateWith: {r!r} is not a rule")
+                bind[r.args[0]] = ev(_twalk(r.args[1], ctx, None))
+            assoc = Expr("Association", *(Expr("Rule", k, v) for k, v in bind.items()))
+            return _twalk(body, _TCtx(ctx.positional, [assoc] + ctx.named, ctx.string_mode), ins)
+        if h == "TemplateSequence" and e.args:
+            pos, o = _t_opts(e.args, "TemplateSequence")
+            if len(pos) != 2:
+                raise ValueError("TemplateSequence takes a body and a list of values")
+            body, vals = pos
+            vals = ev(_twalk(vals, ctx, None))
+            if isinstance(vals, int) and not isinstance(vals, bool):
+                vals = L(*range(1, vals + 1))
+            if not is_list(vals):
+                raise ValueError(f"TemplateSequence: the values {vals!r} must be a list")
+            sub_ins = o.get("InsertionFunction", ins)
+            out = []
+            for k, v in enumerate(vals.args):
+                if k and "Delimiters" in o:
+                    out.append(o["Delimiters"])
+                p = list(v.args) if is_list(v) else [v]
+                extra = {"SequenceIndex": k + 1}
+                if "\0slot" in o:
+                    extra[o["\0slot"]] = v
+                if "\0index" in o:
+                    extra[o["\0index"]] = k + 1
+                named = [extra] + ([v] if is_assoc(v) else []) + ctx.named
+                out.append(_twalk(body, _TCtx(p, named, ctx.string_mode), sub_ins))
+            if not out and "DefaultValue" in o:
+                return _twalk(o["DefaultValue"], ctx, sub_ins)
+            return Expr("Sequence", *out)
+        if h in ("StringTemplate", "XMLTemplate", "FileTemplate"):
+            e2 = ev(e)
+            if isinstance(e2, Expr) and e2.head == "TemplateObject":
+                return _twalk(e2, ctx, ins)
+            return e2
+        if h == "TemplateObject" and e.args:
+            return _template_apply(e, ctx, ins)
+        head = _twalk(e.head, ctx, ins) if isinstance(e.head, Expr) else e.head
+        return Expr(head, *(_twalk(a, ctx, ins) for a in e.args))
+    return e
+
+
+def _tobj_parts(t):
+    """(body, bound data list, insertion, combiner) of a TemplateObject."""
+    pos, o = _t_opts(t.args[1:], "TemplateObject")
+    data = [p for p in pos if is_assoc(p)]
+    if len(data) != len(pos):
+        raise ValueError(f"TemplateObject: unexpected arguments {pos!r}")
+    return t.args[0], data, o.get("InsertionFunction"), o.get("CombinerFunction")
+
+
+def _template_apply(t, ctx, inherited=None):
+    body, data, ins, comb = _tobj_parts(t)
+    if ins is None or is_sym(ins, "Inherited"):
+        ins = inherited
+    string_mode = is_sym(comb, "StringJoin") or ctx.string_mode and comb is None
+    inner = _TCtx(ctx.positional, ctx.named + data, string_mode)
+    r = _twalk(body, inner, ins)
+    if comb is not None and not is_sym(comb, "Identity") and not is_sym(comb, "Inherited"):
+        r = Expr(K.as_head(comb), r)
+    r = ev(r)
+    if isinstance(r, str) and is_sym(comb, "StringJoin") and _XML_BODIES and K.tag(body) in _XML_BODIES:
+        r = re.sub(r"\n[ \t]*(?=\n)", "", r)
+    return r
+
+
+def _as_template(t):
+    if isinstance(t, str):
+        return ev(Expr("StringTemplate", t))
+    if isinstance(t, Expr) and t.head == "File":
+        return ev(Expr("FileTemplate", t))
+    if isinstance(t, Expr) and t.head == "TemplateObject":
+        return t
+    return Expr("TemplateObject", t)
+
+
+def _template_ctx(args):
+    if not args:
+        return _TCtx([], [])
+    if len(args) > 1:
+        raise ValueError("TemplateApply: too many arguments")
+    a = args[0]
+    pos = list(a.args) if is_list(a) else [a]
+    return _TCtx(pos, [p for p in pos if is_assoc(p)])
+
+
+@fn("TemplateApply", area=AREA, status="added",
+    notes="applies a template (TemplateObject, string, File or any expression containing TemplateSlot, "
+          "TemplateExpression, TemplateIf, TemplateSequence, TemplateWith or nested TemplateObject) to "
+          "positional arguments (a list, or a single non-list value) and named values from associations; "
+          "the template's own bound association is searched first; :> values are inserted unevaluated; a "
+          "missing slot without \"DefaultValue\" inserts Missing[\"TemplateSlotAbsent\", key] (\"\" in string "
+          "templates)")
+def _templateapply(t, *args):
+    return _template_apply(_as_template(t), _template_ctx(args))
+
+
+def _template_obj_hook(head, args, ev_):
+    if head.head == "TemplateObject" and head.args:
+        return _template_apply(head, _template_ctx([L(*args)] if len(args) != 1 else [args[0]]))
+    return K.UNHANDLED
+
+
+def _template_obj_hook_multi(head, args, ev_):
+    if not head.args:
+        return K.UNHANDLED
+    ctx = _TCtx(list(args), [a for a in args if is_assoc(a)])
+    return _template_apply(head, ctx)
+
+
+KL.COMPOUND_HEAD_HOOKS["TemplateObject"] = _template_obj_hook_multi
+
+
+def _parse_string_template(s, fname="StringTemplate"):
+    from ..parser import parse
+    pieces, buf, auto, i, n = [], [], 0, 0, len(s)
+
+    def flush():
+        if buf:
+            pieces.append("".join(buf))
+            buf.clear()
+    while i < n:
+        c = s[i]
+        if c == "\\" and i + 1 < n and s[i + 1] in "`<*\\":
+            buf.append(s[i + 1])
+            i += 2
+            continue
+        if c == "`":
+            j = s.find("`", i + 1)
+            if j < 0:
+                raise ValueError(f"{fname}: unmatched ` in template string")
+            name = s[i + 1:j]
+            flush()
+            if name == "":
+                auto += 1
+                pieces.append(Expr("TemplateSlot", auto))
+            elif name.isdigit():
+                pieces.append(Expr("TemplateSlot", int(name)))
+            else:
+                pieces.append(Expr("TemplateSlot", name))
+            i = j + 1
+            continue
+        if s.startswith("<*", i):
+            j = s.find("*>", i + 2)
+            if j < 0:
+                raise ValueError(f"{fname}: unmatched <* in template string")
+            code = s[i + 2:j]
+            try:
+                ex = parse(code)
+            except Exception as err:  # noqa: BLE001
+                raise ValueError(f"{fname}: cannot parse template expression {code!r}: {err}")
+            flush()
+            pieces.append(Expr("TemplateExpression", _slots_to_template(ex)))
+            i = j + 2
+            continue
+        buf.append(c)
+        i += 1
+    flush()
+    return pieces
+
+
+def _slots_to_template(e):
+    if isinstance(e, Expr):
+        if e.head == "Slot" and len(e.args) == 1:
+            return Expr("TemplateSlot", e.args[0])
+        if e.head == "Function":
+            return e
+        head = _slots_to_template(e.head) if isinstance(e.head, Expr) else e.head
+        return Expr(head, *(_slots_to_template(a) for a in e.args))
+    return e
+
+
+def _template_source(src, fname):
+    if isinstance(src, str):
+        return src
+    if isinstance(src, Expr) and src.head == "File" and src.args and isinstance(src.args[0], str):
+        p = _find_template_file(src.args[0])
+        with open(p, encoding="utf-8") as fh:
+            return fh.read()
+    if isinstance(src, Symbol):
+        raise Unevaluated()
+    raise ValueError(f"{fname}: the template source must be a string or File[...]")
+
+
+def _find_template_file(name):
+    p = os.path.expanduser(name)
+    if os.path.isabs(p) or os.path.exists(p):
+        if not os.path.exists(p):
+            raise ValueError(f"template file {name!r} not found")
+        return p
+    paths = ev(Symbol("$TemplatePath"))
+    for d in (paths.args if is_list(paths) else []):
+        if isinstance(d, str) and os.path.exists(os.path.join(d, p)):
+            return os.path.join(d, p)
+    raise ValueError(f"template file {name!r} not found (searched the working directory and $TemplatePath)")
+
+
+@fn("StringTemplate", area=AREA, status="added",
+    notes="TemplateObject[{pieces}, InsertionFunction -> TextString, CombinerFunction -> StringJoin] from a "
+          "string or File: `` sequential slots, `n` positional, `name` named, <* expr *> template expressions "
+          "with #name/#n slots; \\` escapes; an optional association of default values")
+def _stringtemplate(src, *rest):
+    pos, o = _t_opts(rest, "StringTemplate", ("InsertionFunction", "CombinerFunction"))
+    if any(not is_assoc(p) for p in pos) or len(pos) > 1:
+        raise ValueError("StringTemplate: the optional second argument must be an association")
+    text = _template_source(src, "StringTemplate")
+    return Expr("TemplateObject", L(*_parse_string_template(text)), *pos,
+                Expr("Rule", Symbol("InsertionFunction"), o.get("InsertionFunction", Symbol("TextString"))),
+                Expr("Rule", Symbol("CombinerFunction"), o.get("CombinerFunction", Symbol("StringJoin"))))
+
+
+_PATH_DEFAULT = None
+
+
+def _template_path_default():
+    return L(os.path.join(os.path.expanduser("~"), ".mikoshilang", "Templates"), os.getcwd())
+
+
+import importlib as _il  # noqa: E402
+_EV = _il.import_module("mikoshilang.evaluate")
+_EV.SYSTEM_VARIABLES["$TemplatePath"] = _template_path_default
+record("$TemplatePath", AREA, "added",
+       "directories searched (after the working directory) by FileTemplate/StringTemplate[File[...]]: "
+       "{~/.mikoshilang/Templates, Directory[]} by default; assignable")
+record("TemplateObject", AREA, "added",
+       "TemplateObject[body, (assoc), InsertionFunction -> f, CombinerFunction -> g] is applied with "
+       "TemplateApply or t[args]; defaults Identity")
+for _n, _note in (("TemplateSlot", "slot n or \"name\" with InsertionFunction and \"DefaultValue\" options"),
+                  ("TemplateExpression", "HoldFirst; the expression is filled in and evaluated on application"),
+                  ("TemplateIf", "HoldAll; TemplateIf[cond, t, f] chooses a branch at application time"),
+                  ("TemplateSequence", "TemplateSequence[body, values] splices one copy of body per value, "
+                                       "with Delimiters, InsertionFunction and \"DefaultValue\""),
+                  ("TemplateWith", "HoldAll; TemplateWith[\"name\" -> value or list, body] binds named slots"),
+                  ("CombinerFunction", "template option: function applied to the whole filled-in body"),
+                  ("InsertionFunction", "template option: function applied to each inserted value")):
+    record(_n, AREA, "added", "template construct: " + _note)
+
+
+# ── JSON insertion ──
+def _json_value(e):
+    if e is True or e is False:
+        return e
+    if is_sym(e, "Null"):
+        return None
+    if isinstance(e, (int, float, str)):
+        return e
+    if is_assoc(e):
+        return {_json_key(r.args[0]): _json_value(r.args[1]) for r in e.args}
+    if is_list(e):
+        if e.args and all(is_rule(r) for r in e.args):
+            return {_json_key(r.args[0]): _json_value(r.args[1]) for r in e.args}
+        return [_json_value(a) for a in e.args]
+    from fractions import Fraction  # noqa: F401
+    try:
+        v = ev(Expr("N", e))
+        if isinstance(v, float):
+            return v
+    except Exception:  # noqa: BLE001
+        pass
+    raise ValueError(f"cannot export {e!r} as JSON")
+
+
+def _json_key(k):
+    if isinstance(k, str):
+        return k
+    raise ValueError(f"JSON object keys must be strings, not {k!r}")
+
+
+def _to_json(e):
+    import json
+    return json.dumps(_json_value(e), indent=4)
+
+
+# ── XMLTemplate ──
+_XML_TAG = re.compile(r"<(/?)wolfram:([A-Za-z]+)((?:\s+[\w:.-]+\s*=\s*(?:'[^']*'|\"[^\"]*\"|[^\s/>]+))*)\s*(/?)>")
+_XML_ATTR = re.compile(r"([\w:.-]+)\s*=\s*(?:'([^']*)'|\"([^\"]*)\"|([^\s/>]+))")
+_XML_BODIES = set()    # bodies of XML templates with block elements: blank lines are dropped from their output
+_XML_BLOCK = {"sequence", "with", "template", "comment", "which", "if", "else", "get", "verbatim"}
+
+
+def _xml_tokens(s):
+    """Tokens: ('text', str) | ('open', name, attrs, selfclosing) | ('close', name)."""
+    toks, pos = [], 0
+    for m in _XML_TAG.finditer(s):
+        a, b = m.start(), m.end()
+        name = m.group(2)
+        if a > pos:
+            toks.append(("text", s[pos:a]))
+        attrs = {}
+        for am in _XML_ATTR.finditer(m.group(3) or ""):
+            attrs[am.group(1)] = next(g for g in am.groups()[1:] if g is not None)
+        if m.group(1):
+            toks.append(("close", name))
+        else:
+            toks.append(("open", name, attrs, bool(m.group(4))))
+        pos = b
+    if pos < len(s):
+        toks.append(("text", s[pos:]))
+    return toks
+
+
+def _xml_code(code, what):
+    from ..parser import parse
+    try:
+        return _slots_to_template(parse(_html.unescape(code).strip()))
+    except Exception as err:  # noqa: BLE001
+        raise ValueError(f"XMLTemplate: cannot parse {what} {code!r}: {err}")
+
+
+def _xml_fn(v):
+    if v is None:
+        return None
+    if re.fullmatch(r"\"[^\"]*\"", v.strip()):
+        return v.strip()[1:-1]
+    return ev(_xml_code(v, "function"))
+
+
+def _xml_parse(toks, i, end_name=None):
+    """Parse tokens from i until </wolfram:end_name>; returns (pieces, i_after)."""
+    pieces = []
+    while i < len(toks):
+        t = toks[i]
+        if t[0] == "text":
+            pieces.extend(_parse_string_template(t[1], "XMLTemplate"))
+            i += 1
+            continue
+        if t[0] == "close":
+            if t[1] != end_name:
+                raise ValueError(f"XMLTemplate: unexpected </wolfram:{t[1]}>")
+            return pieces, i + 1
+        _, name, attrs, selfc = t
+        i += 1
+        content, raw = [], ""
+        if not selfc:
+            if name in ("verbatim", "comment"):
+                j, depth = i, 0
+                buf = []
+                while j < len(toks):
+                    tj = toks[j]
+                    if tj[0] == "close" and tj[1] == name and depth == 0:
+                        break
+                    if tj[0] == "open" and tj[1] == name and not tj[3]:
+                        depth += 1
+                    if tj[0] == "close" and tj[1] == name:
+                        depth -= 1
+                    buf.append(_xml_untok(tj))
+                    j += 1
+                else:
+                    raise ValueError(f"XMLTemplate: missing </wolfram:{name}>")
+                raw = "".join(buf)
+                i = j + 1
+            elif name == "expr":
+                buf = []
+                while i < len(toks) and not (toks[i][0] == "close" and toks[i][1] == "expr"):
+                    buf.append(_xml_untok(toks[i]))
+                    i += 1
+                if i >= len(toks):
+                    raise ValueError("XMLTemplate: missing </wolfram:expr>")
+                raw = "".join(buf)
+                i += 1
+            else:
+                content, i = _xml_parse(toks, i, name)
+        pieces.extend(_xml_element(name, attrs, content, raw, selfc))
+    if end_name is not None:
+        raise ValueError(f"XMLTemplate: missing </wolfram:{end_name}>")
+    return pieces, i
+
+
+def _xml_untok(t):
+    if t[0] == "text":
+        return t[1]
+    if t[0] == "close":
+        return f"</wolfram:{t[1]}>"
+    attrs = "".join(f" {k}='{v}'" for k, v in t[2].items())
+    return f"<wolfram:{t[1]}{attrs}{'/' if t[3] else ''}>"
+
+
+def _rule(k, v):
+    return Expr("Rule", Symbol(k) if k[0].isupper() and not k.startswith("\0") else k, v)
+
+
+def _xml_element(name, attrs, content, raw, selfc):
+    ins = _xml_fn(attrs.get("inserter"))
+    insopt = [_rule("InsertionFunction", ins)] if ins is not None else []
+    if name == "slot":
+        sid = attrs.get("id", "1")
+        key = int(sid) if sid.isdigit() else sid
+        opts = list(insopt)
+        if content:
+            d = [c.strip() if isinstance(c, str) else c for c in content]
+            d = [c for c in d if c != ""]
+            opts.append(Expr("Rule", "DefaultValue", d[0] if len(d) == 1 else L(*d)))
+        return [Expr("TemplateSlot", key, *opts)]
+    if name == "expr":
+        return [Expr("TemplateExpression", _xml_code(raw, "expression"), *insopt)]
+    if name == "comment":
+        return []
+    if name == "verbatim":
+        return [raw]
+    if name == "if":
+        if "test" not in attrs:
+            raise ValueError("XMLTemplate: <wolfram:if> needs a test attribute")
+        return [Expr("TemplateIf", Expr("TrueQ", _xml_code(attrs["test"], "test")), L(*content), "", *insopt)]
+    if name == "else":
+        return [Expr("\0else", L(*content))]
+    if name == "which":
+        branches = [c for c in content if isinstance(c, Expr) and c.head in ("TemplateIf", "\0else")]
+        res = ""
+        for b in reversed(branches):
+            if b.head == "\0else":
+                res = b.args[0]
+            else:
+                res = Expr("TemplateIf", b.args[0], b.args[1], res, *b.args[3:])
+        return [res]
+    if name == "sequence":
+        if "values" not in attrs:
+            raise ValueError("XMLTemplate: <wolfram:sequence> needs a values attribute")
+        opts = list(insopt)
+        if "delimiters" in attrs:
+            opts.append(Expr("Rule", Symbol("Delimiters"), attrs["delimiters"]))
+        if "default" in attrs:
+            d = _parse_string_template(attrs["default"], "XMLTemplate")
+            opts.append(Expr("Rule", "DefaultValue", d[0] if len(d) == 1 else L(*d)))
+        if "slot" in attrs:
+            opts.append(Expr("Rule", "\0slot", attrs["slot"]))
+        if "index" in attrs:
+            opts.append(Expr("Rule", "\0index", attrs["index"]))
+        return [Expr("TemplateSequence", L(*content), Expr("TemplateExpression", _xml_code(attrs["values"], "values")),
+                     *opts)]
+    if name == "with":
+        rules = [Expr("Rule", k, Expr("TemplateExpression", _xml_code(v, "value"))) for k, v in attrs.items()]
+        return [Expr("TemplateWith", L(*rules), L(*content))]
+    if name == "template":
+        comb = _xml_fn(attrs.get("combiner"))
+        opts = list(insopt) + ([_rule("CombinerFunction", comb)] if comb is not None else [])
+        return [Expr("TemplateObject", L(*content), *opts)]
+    if name == "get":
+        if "path" not in attrs:
+            raise ValueError("XMLTemplate: <wolfram:get> needs a path attribute")
+        p = _find_template_file(attrs["path"])
+        with open(p, encoding="utf-8") as fh:
+            sub = _xml_parse(_xml_tokens(fh.read()), 0)[0]
+        comb = _xml_fn(attrs.get("combiner"))
+        opts = list(insopt) + ([_rule("CombinerFunction", comb)] if comb is not None else [])
+        defaults = [c for c in content if isinstance(c, Expr) and c.head == "TemplateSlot"]
+        if defaults:
+            bind = [Expr("Rule", d.args[0], next((r.args[1] for r in d.args[1:] if is_rule(r)
+                                                  and r.args[0] == "DefaultValue"), "")) for d in defaults]
+            return [Expr("TemplateWith", L(*bind), Expr("TemplateObject", L(*sub), *opts))]
+        return [Expr("TemplateObject", L(*sub), *opts)]
+    raise ValueError(f"XMLTemplate: unknown element <wolfram:{name}>")
+
+
+def _xml_template(text, rest, fname="XMLTemplate"):
+    pos, o = _t_opts(rest, fname, ("InsertionFunction", "CombinerFunction"))
+    if any(not is_assoc(p) for p in pos) or len(pos) > 1:
+        raise ValueError(f"{fname}: the optional second argument must be an association")
+    toks = _xml_tokens(text)
+    pieces, _ = _xml_parse(toks, 0)
+    body = L(*pieces)
+    if any(t[0] != "text" and t[1] in _XML_BLOCK for t in toks):
+        _XML_BODIES.add(K.tag(body))
+    return Expr("TemplateObject", body, *pos,
+                Expr("Rule", Symbol("InsertionFunction"), o.get("InsertionFunction", "HTMLFragment")),
+                Expr("Rule", Symbol("CombinerFunction"), o.get("CombinerFunction", Symbol("StringJoin"))))
+
+
+@fn("XMLTemplate", area=AREA, status="added",
+    notes="TemplateObject from XML/HTML text or File with <wolfram:slot id= inserter=>default</wolfram:slot>, "
+          "expr, if test=, which/else, sequence (values, slot, index, delimiters, default, inserter), with, "
+          "template (inserter, combiner), get path=, comment and verbatim, plus `slot` and <* expr *>; "
+          "InsertionFunction \"HTMLFragment\" (escapes & < >) by default, \"JSON\" supported; block tags alone on "
+          "a line drop that line")
+def _xmltemplate(src, *rest):
+    return _xml_template(_template_source(src, "XMLTemplate"), rest)
+
+
+_XML_EXT = {".html", ".htm", ".xml", ".xhtml", ".svg"}
+
+
+@fn("FileTemplate", area=AREA, status="added",
+    notes="template from a file (string path or File, searched in the working directory then $TemplatePath): "
+          ".html/.htm/.xml/.xhtml/.svg files are XMLTemplates, anything else a StringTemplate")
+def _filetemplate(src, *rest):
+    if isinstance(src, Expr) and src.head == "File" and src.args:
+        path = src.args[0]
+    elif isinstance(src, str):
+        path = src
+    elif isinstance(src, Symbol):
+        raise Unevaluated()
+    else:
+        raise ValueError("FileTemplate: the source must be a file name or File[...]")
+    p = _find_template_file(path)
+    with open(p, encoding="utf-8") as fh:
+        text = fh.read()
+    if os.path.splitext(p)[1].lower() in _XML_EXT:
+        return _xml_template(text, rest, "FileTemplate")
+    return ev(Expr("StringTemplate", text, *rest))
+
+
+@fn("FileTemplateApply", area=AREA, status="added",
+    notes="applies a template (TemplateObject, string or File) and writes the result (strings as is, other "
+          "results as TextString) to the given file, or a new temporary .txt file; returns the file name")
+def _filetemplateapply(t, *rest):
+    if len(rest) > 2:
+        raise ValueError("FileTemplateApply called with too many arguments")
+    args = list(rest[:1])
+    out = rest[1] if len(rest) == 2 else None
+    tmpl = ev(Expr("FileTemplate", t)) if isinstance(t, Expr) and t.head == "File" else _as_template(t)
+    r = _template_apply(tmpl, _template_ctx(args))
+    text = r if isinstance(r, str) else _text_string(r)
+    if out is None:
+        import tempfile
+        fd, path = tempfile.mkstemp(prefix="template_", suffix=".txt")
+        os.close(fd)
+    elif isinstance(out, str):
+        path = out
+    elif isinstance(out, Expr) and out.head == "File" and out.args and isinstance(out.args[0], str):
+        path = out.args[0]
+    else:
+        raise ValueError("FileTemplateApply: the output must be a file name or File[...]")
+    with open(os.path.expanduser(path), "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return path
