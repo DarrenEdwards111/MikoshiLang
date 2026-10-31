@@ -2731,3 +2731,562 @@ for _n, _note in [
         ("IncludeRelatedTables", "option of RelationalDatabase: include tables referenced by foreign keys "
                                  "(default False)")]:
     _added(_n, _note)
+
+
+# ─────────────────────────── shared wrappers for existing functions ───────────────────────────
+
+_PASS = object()
+
+
+def wrap_registry(name, pre):
+    """Let ``pre(args)`` handle a call of the library function ``name`` first (return _PASS to fall through)."""
+    e = REGISTRY.get(name)
+    if e is None:
+        return
+    old = list(e.impls)
+
+    def call(*a):
+        r = pre(a)
+        if r is not _PASS:
+            return r
+        n = len(a)
+        for f_, lo, hi in old:
+            if n >= lo and (hi is None or n <= hi):
+                return f_(*a)
+        raise ValueError(f"{name} called with {n} argument(s)")
+    e.impls[:] = [(call, 0, None)]
+
+
+def wrap_builtin(name, pre):
+    """Same for a kernel builtin (signature (args, ev, expr))."""
+    prev = K._BUILTINS.get(name)
+    if prev is None:
+        return
+
+    def call(a, ev_, expr):
+        r = pre(tuple(a))
+        if r is not _PASS:
+            return r
+        return prev(a, ev_, expr)
+    K._BUILTINS[name] = call
+
+
+# ─────────────────────────── categorical values: Nominal, Ordinal, scales ───────────────────────────
+
+class Cat:
+    """A categorical scale (kind 'Nominal' or 'Ordinal') with categories, labels and scores."""
+
+    def __init__(self, kind, cats, labels=None, scores=None):
+        self.kind = kind
+        self.cats = list(cats)
+        self.labels = list(labels) if labels is not None else list(cats)
+        self.scores = list(scores) if scores is not None else list(range(1, len(cats) + 1))
+        if not (len(self.cats) == len(self.labels) == len(self.scores)):
+            raise ValueError(f"{kind}: the category, label and score lists must have the same length")
+        if len(set(map(repr, self.cats))) != len(self.cats):
+            raise ValueError(f"{kind}: the categories must be distinct")
+        for s in self.scores:
+            if not (K.is_number(s) and not isinstance(s, bool) and not isinstance(s, complex)):
+                raise ValueError(f"{kind}: scores must be real numbers")
+
+    def assoc(self):
+        return assoc(("CategoryList", L(*self.cats)), ("LabelList", L(*self.labels)),
+                     ("ScoreList", L(*self.scores)))
+
+    def expr(self, i=None):
+        return Expr(self.kind, self.assoc()) if i is None else Expr(self.kind, self.assoc(), i + 1)
+
+    def index(self, c):
+        for i, x in enumerate(self.cats):
+            if x == c:
+                return i
+        raise ValueError(f"{self.kind}: {c!r} is not one of the categories {L(*self.cats)!r}")
+
+
+def _assoc_get(a, k):
+    for r in a.args:
+        if r.args[0] == k:
+            return r.args[1]
+    return None
+
+
+def parse_scale(x, kind, fname=None):
+    """A Cat from a category list, association, NominalScale/OrdinalScale or a Nominal/Ordinal expression."""
+    fname = fname or kind
+    if is_list(x):
+        return Cat(kind, x.args)
+    if is_assoc(x):
+        cl = _assoc_get(x, "CategoryList")
+        if cl is None or not is_list(cl):
+            raise ValueError(f"{fname}: a scale association needs a \"CategoryList\" list")
+        ll, sl = _assoc_get(x, "LabelList"), _assoc_get(x, "ScoreList")
+        if ll is not None and not is_list(ll) or sl is not None and not is_list(sl):
+            raise ValueError(f"{fname}: \"LabelList\" and \"ScoreList\" must be lists")
+        return Cat(kind, cl.args, ll.args if ll is not None else None, sl.args if sl is not None else None)
+    if isinstance(x, Expr) and x.head in ("NominalScale", "OrdinalScale"):
+        s = _scale_from_scaleexpr(x)
+        return Cat(kind, s.cats, s.labels, s.scores)
+    if isinstance(x, Expr) and x.head in ("Nominal", "Ordinal") and len(x.args) >= 1:
+        s = parse_scale(x.args[0], x.head, fname)
+        return Cat(kind, s.cats, s.labels, s.scores)
+    raise ValueError(f"{fname}: {x!r} is not a list of categories or a scale specification")
+
+
+def _category(x):
+    """(Cat, index) for a canonical single category Nominal[assoc, i] / Ordinal[assoc, i], else None."""
+    if isinstance(x, Expr) and x.head in ("Nominal", "Ordinal") and len(x.args) == 2 and is_assoc(x.args[0]) \
+            and K.is_int(x.args[1]):
+        try:
+            s = parse_scale(x.args[0], x.head)
+        except ValueError:
+            return None
+        i = int(x.args[1]) - 1
+        if 0 <= i < len(s.cats):
+            return s, i
+    return None
+
+
+def _scale_of(x):
+    if isinstance(x, Expr) and x.head in ("Nominal", "Ordinal") and len(x.args) == 1 and is_assoc(x.args[0]):
+        try:
+            return parse_scale(x.args[0], x.head)
+        except ValueError:
+            return None
+    return None
+
+
+def _make_categorical(kind):
+    def impl(scale, *c):
+        if len(c) > 1:
+            raise ValueError(f"{kind}: expected {kind}[scale] or {kind}[scale, category]")
+        if not c and isinstance(scale, Expr) and scale.head == kind and len(scale.args) == 1 \
+                and is_assoc(scale.args[0]) and _scale_of(scale) is not None:
+            if scale.args[0] == _scale_of(scale).assoc():
+                raise Unevaluated()
+        if c and K.is_int(c[0]) and is_assoc(scale) and _category(Expr(kind, scale, c[0])) is not None:
+            if scale == parse_scale(scale, kind).assoc():
+                raise Unevaluated()
+        s = parse_scale(scale, kind)
+        return s.expr(s.index(c[0])) if c else s.expr()
+    return impl
+
+
+_CATNOTE = ("{kind}[{{c1, ...}}] gives the scale {kind}[<|\"CategoryList\" -> ..., \"LabelList\" -> ..., \"ScoreList\" "
+            "-> {{1, 2, ...}}|>] and {kind}[scale, c] (or scale[c]) the category {kind}[<|...|>, i]; scales may be "
+            "lists, associations, {kind}Scale or {kind} expressions; Normal gives the underlying expression(s); "
+            "CategoricalValue reads properties")
+fn("Nominal", **ADDED, notes=_CATNOTE.format(kind="Nominal") + "; Sort orders Nominal categories canonically by "
+   "their expressions; Min/Max/Less stay unevaluated")(_make_categorical("Nominal"))
+fn("Ordinal", **ADDED, notes=_CATNOTE.format(kind="Ordinal") + "; Sort, Min, Max, Less, Greater, LessEqual and "
+   "GreaterEqual use the \"Score\" values")(_make_categorical("Ordinal"))
+
+
+def _cat_hook(head, args, ev_):
+    s = _scale_of(head)
+    if s is None or len(args) != 1:
+        return K.UNHANDLED
+    return s.expr(s.index(args[0]))
+
+
+KL.COMPOUND_HEAD_HOOKS["Nominal"] = _cat_hook
+KL.COMPOUND_HEAD_HOOKS["Ordinal"] = _cat_hook
+
+_CAT_PROPS = ("Expression", "Category", "Index", "Label", "Scale", "Score")
+
+
+def _catvalue(obj, prop="Expression"):
+    if prop not in _CAT_PROPS:
+        raise ValueError(f"CategoricalValue: {prop!r} is not a property; use one of {', '.join(_CAT_PROPS)}")
+    if is_list(obj):
+        return L(*(_catvalue(o, prop) for o in obj.args))
+    c = _category(obj)
+    if c is not None:
+        s, i = c
+        return {"Expression": s.cats[i], "Category": s.expr(i), "Index": i + 1, "Label": s.labels[i],
+                "Scale": s.expr(), "Score": s.scores[i]}[prop]
+    s = _scale_of(obj)
+    if s is None and isinstance(obj, Expr) and obj.head in ("NominalScale", "OrdinalScale"):
+        sc = _scale_from_scaleexpr(obj)
+        s = Cat("Ordinal" if obj.head == "OrdinalScale" else "Nominal", sc.cats, sc.labels, sc.scores)
+        if prop == "Scale":
+            return obj
+    if s is not None:
+        n = range(len(s.cats))
+        return {"Expression": L(*s.cats), "Category": L(*(s.expr(i) for i in n)), "Index": L(*(i + 1 for i in n)),
+                "Label": L(*s.labels), "Scale": s.expr(), "Score": L(*s.scores)}[prop]
+    raise ValueError(f"CategoricalValue: {obj!r} is not a Nominal or Ordinal category or scale")
+
+
+fn("CategoricalValue", **ADDED,
+   notes="CategoricalValue[obj] and CategoricalValue[obj, prop] for Nominal/Ordinal categories and scales and "
+         "NominalScale/OrdinalScale (threads over lists): \"Expression\" (default), \"Category\", \"Index\", "
+         "\"Label\", \"Scale\", \"Score\"")(_catvalue)
+
+
+class _Scale:
+    def __init__(self, cats, labels, scores):
+        self.cats, self.labels, self.scores = cats, labels, scores
+
+
+def _labels_from(spec, cats, fname):
+    if spec is None or is_sym(spec, "Automatic"):
+        return list(cats)
+    if is_list(spec):
+        if len(spec.args) != len(cats):
+            raise ValueError(f"{fname}: the label list must have one label per category")
+        return list(spec.args)
+    if is_assoc(spec):
+        labs = list(cats)
+        for r in spec.args:
+            k = r.args[0]
+            if k not in cats:
+                raise ValueError(f"{fname}: {k!r} is not a category")
+            labs[cats.index(k)] = r.args[1]
+        return labs
+    raise ValueError(f"{fname}: labels must be a list or an association")
+
+
+def _scale_from_scaleexpr(x):
+    fname, a = x.head, list(x.args)
+    if fname == "NominalScale":
+        if not a or len(a) > 2:
+            raise ValueError("NominalScale: expected NominalScale[cats] or NominalScale[cats, labels]")
+        if is_sym(a[0], "Automatic"):
+            raise ValueError("NominalScale[Automatic] has no categories until it is used in a plot")
+        if is_assoc(a[0]):
+            if len(a) > 1:
+                raise ValueError("NominalScale: labels are given twice")
+            cats = [r.args[0] for r in a[0].args]
+            return _Scale(cats, [r.args[1] for r in a[0].args], list(range(1, len(cats) + 1)))
+        if not is_list(a[0]):
+            raise ValueError("NominalScale: the categories must be a list")
+        cats = list(a[0].args)
+        return _Scale(cats, _labels_from(a[1] if len(a) > 1 else None, cats, fname), list(range(1, len(cats) + 1)))
+    if not a or len(a) > 3:
+        raise ValueError("OrdinalScale: expected OrdinalScale[cats], OrdinalScale[cats, vals] or "
+                         "OrdinalScale[cats, vals, labels]")
+    if is_sym(a[0], "Automatic"):
+        raise ValueError("OrdinalScale[Automatic] has no categories until it is used in a plot")
+    if is_assoc(a[0]):
+        cats = [r.args[0] for r in a[0].args]
+        vals = [r.args[1] for r in a[0].args]
+        labs = _labels_from(a[1] if len(a) > 1 else None, cats, fname)
+        if len(a) > 2:
+            raise ValueError("OrdinalScale: too many arguments after an association")
+    else:
+        if not is_list(a[0]):
+            raise ValueError("OrdinalScale: the categories must be a list")
+        cats = list(a[0].args)
+        v = a[1] if len(a) > 1 else AUTOMATIC
+        if is_sym(v, "Automatic"):
+            vals = list(range(1, len(cats) + 1))
+        elif is_list(v) and len(v.args) == len(cats):
+            vals = list(v.args)
+        else:
+            raise ValueError("OrdinalScale: the values must be Automatic or a list with one value per category")
+        labs = _labels_from(a[2] if len(a) > 2 else None, cats, fname)
+    for v in vals:
+        if not (K.is_number(v) and not isinstance(v, (bool, complex))):
+            raise ValueError("OrdinalScale: category values must be real numbers")
+    return _Scale(cats, labs, vals)
+
+
+def _scale_validate(*a, head):
+    _scale_from_scaleexpr(Expr(head, *a))
+    raise Unevaluated()
+
+
+fn("NominalScale", **ADDED,
+   notes="NominalScale[{c...}], NominalScale[<|c -> lab, ...|>], NominalScale[cats, labels]: inert scale for "
+         "ScalingFunctions and Nominal, validated; scale[prop] and scale[prop, arg] give \"CategoryList\", "
+         "\"LabelAssociation\", \"LabelList\", \"Label\", \"Labels\", \"Properties\"")(
+    lambda *a: _scale_validate(*a, head="NominalScale"))
+fn("OrdinalScale", **ADDED,
+   notes="OrdinalScale[{c...}], OrdinalScale[cats, vals], OrdinalScale[<|c -> v|>], OrdinalScale[..., labels]: "
+         "inert, validated; scale[prop] / scale[prop, arg] give \"CategoryAssociation\" (<|v -> c|>), "
+         "\"CategoryList\", \"LabelAssociation\", \"LabelList\", \"ValueAssociation\", \"ValueList\", \"Category\", "
+         "\"Categories\", \"Label\", \"Labels\", \"Value\", \"Values\", \"Properties\"")(
+    lambda *a: _scale_validate(*a, head="OrdinalScale"))
+
+_NS_PROPS = ["CategoryList", "LabelAssociation", "LabelList", "Label", "Labels", "Properties"]
+_OS_PROPS = ["CategoryAssociation", "CategoryList", "LabelAssociation", "LabelList", "ValueAssociation", "ValueList",
+             "Category", "Categories", "Label", "Labels", "Value", "Values", "Properties"]
+
+
+def _scale_hook(head, args, ev_):
+    if not isinstance(head, Expr) or not args or not isinstance(args[0], str):
+        return K.UNHANDLED
+    s = _scale_from_scaleexpr(head)
+    props = _NS_PROPS if head.head == "NominalScale" else _OS_PROPS
+    p = args[0]
+    if p not in props:
+        raise ValueError(f"{head.head}: {p!r} is not a property; use one of {', '.join(props)}")
+    if len(args) > 2:
+        raise ValueError(f"{head.head}: expected scale[prop] or scale[prop, arg]")
+
+    def lookup(keys, vals, x, what):
+        for k, v in zip(keys, vals):
+            if k == x:
+                return v
+        raise ValueError(f"{head.head}: {x!r} is not a {what} of the scale")
+
+    plain = {"CategoryList": lambda: L(*s.cats), "LabelList": lambda: L(*s.labels),
+             "ValueList": lambda: L(*s.scores), "Properties": lambda: L(*props),
+             "LabelAssociation": lambda: assoc(*zip(s.cats, s.labels)),
+             "ValueAssociation": lambda: assoc(*zip(s.cats, s.scores)),
+             "CategoryAssociation": lambda: assoc(*zip(s.scores, s.cats))}
+    one = {"Category": lambda x: lookup(s.scores, s.cats, x, "value"),
+           "Label": lambda x: lookup(s.cats, s.labels, x, "category"),
+           "Value": lambda x: lookup(s.cats, s.scores, x, "category")}
+    many = {"Categories": "Category", "Labels": "Label", "Values": "Value"}
+    if p in plain:
+        if len(args) != 1:
+            raise ValueError(f"{head.head}: the property {p!r} takes no argument")
+        return plain[p]()
+    if len(args) == 1:
+        return Expr("Function", Expr(head, p, Expr("Slot", 1)))
+    x = args[1]
+    if p in many:
+        if not is_list(x):
+            raise ValueError(f"{head.head}: the property {p!r} needs a list")
+        return L(*(one[many[p]](v) for v in x.args))
+    return one[p](x)
+
+
+KL.COMPOUND_HEAD_HOOKS["NominalScale"] = _scale_hook
+KL.COMPOUND_HEAD_HOOKS["OrdinalScale"] = _scale_hook
+
+
+def _ord_scores(args):
+    """Scores of Ordinal categories of one common scale, or None."""
+    cs = [_category(a) for a in args]
+    if not cs or any(c is None or c[0].kind != "Ordinal" for c in cs):
+        return None
+    if any(c[0].assoc() != cs[0][0].assoc() for c in cs):
+        raise ValueError("Ordinal categories from different scales cannot be compared")
+    return [float(_num(c[0].scores[c[1]], "Ordinal", "score")) for c in cs]
+
+
+def _cat_sort(a):
+    if len(a) != 1 or not is_list(a[0]) or not a[0].args:
+        return _PASS
+    items = a[0].args
+    cs = [_category(x) for x in items]
+    if any(c is None for c in cs):
+        return _PASS
+    if all(c[0].kind == "Ordinal" for c in cs):
+        sc = _ord_scores(items)
+        order = sorted(range(len(items)), key=lambda i: (sc[i], cs[i][1]))
+    else:
+        order = sorted(range(len(items)), key=lambda i: K.order_key(cs[i][0].cats[cs[i][1]]))
+    return L(*(items[i] for i in order))
+
+
+def _flat_args(a):
+    out = []
+    for x in a:
+        if is_list(x):
+            out.extend(_flat_args(x.args))
+        else:
+            out.append(x)
+    return out
+
+
+def _cat_extreme(pick):
+    def pre(a):
+        xs = _flat_args(a)
+        sc = _ord_scores(xs) if xs else None
+        if sc is None:
+            if xs and all(_category(x) is not None for x in xs):
+                raise Unevaluated()          # Nominal categories have no order
+            return _PASS
+        return xs[pick(range(len(xs)), key=lambda i: sc[i])]
+    return pre
+
+
+def _cat_compare(op):
+    def pre(a):
+        sc = _ord_scores(a) if len(a) >= 2 else None
+        if sc is None:
+            return _PASS
+        return all(op(x, y) for x, y in zip(sc, sc[1:]))
+    return pre
+
+
+def _cat_normal(a):
+    if len(a) == 1:
+        c = _category(a[0])
+        if c is not None:
+            return c[0].cats[c[1]]
+        s = _scale_of(a[0])
+        if s is not None:
+            return L(*s.cats)
+    return _PASS
+
+
+wrap_builtin("Sort", _cat_sort)
+wrap_registry("Min", _cat_extreme(min))
+wrap_registry("Max", _cat_extreme(max))
+wrap_builtin("Less", _cat_compare(lambda x, y: x < y))
+wrap_builtin("Greater", _cat_compare(lambda x, y: x > y))
+wrap_builtin("LessEqual", _cat_compare(lambda x, y: x <= y))
+wrap_builtin("GreaterEqual", _cat_compare(lambda x, y: x >= y))
+wrap_builtin("Normal", _cat_normal)
+
+
+def _cat_randomchoice(a):
+    if a and isinstance(a[0], Expr) and a[0].head in ("Nominal", "Ordinal"):
+        s = _scale_of(a[0])
+        if s is not None:
+            from .core import dispatch
+            idx = dispatch("RandomChoice", (L(*range(len(s.cats))),) + tuple(a[1:]))
+            if K.is_int(idx):
+                return s.expr(int(idx))
+            return Expr("Map", Expr("Function", s.expr(Expr("Slot", 1))), idx) if False else \
+                _map_idx(s, idx)
+    return _PASS
+
+
+def _map_idx(s, x):
+    if is_list(x):
+        return L(*(_map_idx(s, v) for v in x.args))
+    return s.expr(int(x))
+
+
+wrap_registry("RandomChoice", _cat_randomchoice)
+
+
+# ─────────────────────────── Cast ───────────────────────────
+
+import struct as _struct  # noqa: E402
+
+_INT_TYPES = {f"{u}Integer{b}": (b, u == "") for u in ("", "Unsigned") for b in (8, 16, 32, 64)}
+_REAL_TYPES = {"Real32": 32, "Real64": 64}
+_CPLX_TYPES = {"ComplexReal32": 64, "ComplexReal64": 128}
+
+
+def _type_size(t):
+    if t in _INT_TYPES:
+        return _INT_TYPES[t][0]
+    if t in _REAL_TYPES:
+        return _REAL_TYPES[t]
+    if t in _CPLX_TYPES:
+        return _CPLX_TYPES[t]
+    if t == "Boolean":
+        return 8
+    return None
+
+
+def _wrap_int(v, bits, signed):
+    v %= 1 << bits
+    if signed and v >= 1 << (bits - 1):
+        v -= 1 << bits
+    return v
+
+
+def _cast_scalar(v, t, method):
+    if t in ("InertExpression", "Expression"):
+        return v
+    if t == "String":
+        if isinstance(v, str):
+            return v
+        raise ValueError(f"Cast: cannot convert {v!r} to \"String\"")
+    if t == "Boolean":
+        if isinstance(v, bool):
+            return v
+        raise ValueError(f"Cast: cannot convert {v!r} to \"Boolean\"")
+    if t not in _INT_TYPES and t not in _REAL_TYPES and t not in _CPLX_TYPES:
+        raise ValueError(f"Cast: {t!r} is not a supported type")
+    if isinstance(v, bool) or not K.is_number(v):
+        raise ValueError(f"Cast: {v!r} is not a number and cannot be converted to {t!r}")
+    if t in _INT_TYPES:
+        bits, signed = _INT_TYPES[t]
+        if K.is_int(v):
+            iv = int(v)
+        elif method == "CCast" and not isinstance(v, complex):
+            iv = int(float(_num(v, "Cast", "value")))       # C truncation
+        else:
+            raise ValueError(f"Cast: {v!r} cannot be converted to the integer type {t!r}")
+        if method == "CCast":
+            return _wrap_int(iv, bits, signed)
+        lo, hi = (-(1 << (bits - 1)), (1 << (bits - 1)) - 1) if signed else (0, (1 << bits) - 1)
+        if not lo <= iv <= hi:
+            raise ValueError(f"Cast: {iv} is out of the range of {t!r}")
+        return iv
+    if t in _REAL_TYPES:
+        if isinstance(v, complex):
+            raise ValueError(f"Cast: the complex number {v!r} cannot be converted to {t!r}")
+        f = float(_num(v, "Cast", "value"))
+        if t == "Real32":
+            f = _struct.unpack("<f", _struct.pack("<f", f))[0]
+        return f
+    c = complex(v) if isinstance(v, complex) else complex(float(_num(v, "Cast", "value")))
+    return c
+
+
+_PACK = {"Integer8": "b", "Integer16": "h", "Integer32": "i", "Integer64": "q", "UnsignedInteger8": "B",
+         "UnsignedInteger16": "H", "UnsignedInteger32": "I", "UnsignedInteger64": "Q", "Real32": "f", "Real64": "d"}
+
+
+def _bitcast(v, src, t):
+    if src not in _PACK or t not in _PACK:
+        raise ValueError("Cast: \"BitCast\" supports the fixed-size integer and real types")
+    if _type_size(src) != _type_size(t):
+        raise ValueError(f"Cast: \"BitCast\" needs types of the same size ({src} has {_type_size(src)} bits, "
+                         f"{t} has {_type_size(t)})")
+    return _struct.unpack("<" + _PACK[t], _struct.pack("<" + _PACK[src], v))[0]
+
+
+def _type_name(t):
+    if isinstance(t, str):
+        return t, None
+    # TypeSpecifier["PackedArray"][elem, rank]  (the parsed form of "PackedArray"::[elem, rank])
+    if isinstance(t, Expr) and isinstance(t.head, Expr) and t.head.head == "TypeSpecifier" \
+            and list(t.head.args) == ["PackedArray"]:
+        if len(t.args) != 2 or not isinstance(t.args[0], str) or not K.is_int(t.args[1]) or int(t.args[1]) < 1:
+            raise ValueError("Cast: a packed array type is TypeSpecifier[\"PackedArray\"][elem, rank]")
+        return "PackedArray", (t.args[0], int(t.args[1]))
+    raise ValueError(f"Cast: {t!r} is not a type specification")
+
+
+def _cast_array(v, elem, rank, method):
+    if rank == 0:
+        if is_list(v):
+            raise ValueError("Cast: the array is deeper than the packed array rank")
+        return _cast_scalar(v, elem, method)
+    if not is_list(v):
+        raise ValueError(f"Cast: {v!r} cannot be converted to a packed array")
+    out = [_cast_array(x, elem, rank - 1, method) for x in v.args]
+    if rank > 1 and len({len(x.args) for x in out}) > 1:
+        raise ValueError("Cast: a packed array must be rectangular")
+    return L(*out)
+
+
+@fn("Cast", **ADDED,
+    notes="Cast[val, type] and Cast[val, type, method] performed directly (there is no compiler, so this is what "
+          "compiled code would compute): \"ConversionCast\" (default; checks ranges and refuses lossy real -> "
+          "integer conversions), \"CCast\" (C semantics: wraps integers, truncates reals; numeric types only), "
+          "\"BitCast\" (reinterprets the bits between same-size integer/real types; the source type is inferred "
+          "as Integer64 / Real64, or give {val, srcType}); types Integer8-64, UnsignedInteger8-64, Real32, Real64, "
+          "ComplexReal32/64, Boolean, String, InertExpression and TypeSpecifier[\"PackedArray\"][elem, rank]")
+def _cast(val, typ, method="ConversionCast"):
+    if method not in ("ConversionCast", "CCast", "BitCast"):
+        raise ValueError(f"Cast: {method!r} is not a casting method (ConversionCast, CCast or BitCast)")
+    name, pa = _type_name(typ)
+    if pa is not None:
+        if method == "BitCast":
+            raise ValueError("Cast: \"BitCast\" cannot produce a packed array")
+        return _cast_array(val, pa[0], pa[1], method)
+    if method == "CCast" and _type_size(name) is None:
+        raise ValueError("Cast: \"CCast\" only supports numeric types")
+    if method == "BitCast":
+        if is_list(val) and len(val.args) == 2 and isinstance(val.args[1], str):
+            v, src = val.args
+        else:
+            v = val
+            src = "Integer64" if K.is_int(val) else "Real64"
+        v = _cast_scalar(v, src, "ConversionCast")
+        return _bitcast(v, src, name)
+    if is_list(val):
+        raise ValueError("Cast: use a \"PackedArray\" type to convert a list")
+    return _cast_scalar(val, name, method)

@@ -318,6 +318,70 @@ DATEGRANULARITY = [
 ]
 
 
+NS3 = '<|"CategoryList" -> {"a", "b", "c"}, "LabelList" -> {"a", "b", "c"}, "ScoreList" -> {1, 2, 3}|>'
+NOMINAL = [
+    ('Nominal[{"a", "b", "c"}]', f"Nominal[{NS3}]"),
+    ('Nominal[{"a", "b", "c"}, "a"]', f"Nominal[{NS3}, 1]"),
+    ('Nominal[{"a", "b", "c"}] /@ {"c", "b"}', f"{{Nominal[{NS3}, 3], Nominal[{NS3}, 2]}}"),
+    ('Nominal[NominalScale[{"a", "b", "c"}]]["b"]', f"Nominal[{NS3}, 2]"),
+    ('CategoricalValue[Sort[Nominal[{"b", "c", "a"}] /@ {"b", "c", "a"}]]', '{"a", "b", "c"}'),
+    ('Head[Min[Nominal[{"b", "a"}] /@ {"a", "b"}]]', "Min"),
+    ('Nominal[{"a", "b"}, "z"]', Raises()),
+]
+ORDINAL = [
+    ('Ordinal[{"a", "b", "c"}, "b"]', f"Ordinal[{NS3}, 2]"),
+    ('Ordinal[OrdinalScale[{"a", "b", "c"}], "b"]', f"Ordinal[{NS3}, 2]"),
+    ('CategoricalValue[Sort[Ordinal[{"b", "c", "a"}] /@ {"a", "b", "c"}]]', '{"b", "c", "a"}'),
+    ('CategoricalValue[Min[Ordinal[{"b", "c", "a"}] /@ {"a", "b", "c"}]]', '"b"'),
+    T('Less @@ {Ordinal[{w12a, w12b}, w12a], Ordinal[{w12a, w12b}, w12b]}'),
+    F('Greater @@ {Ordinal[{w12a, w12b}, w12a], Ordinal[{w12a, w12b}, w12b]}'),
+    ('Ordinal[<|"CategoryList" -> {"x", "y"}, "ScoreList" -> {1, "q"}|>]', Raises()),
+]
+HT = '<|"CategoryList" -> {"Heads", "Tails"}, "LabelList" -> {"Heads", "Tails"}, "ScoreList" -> {1, 2}|>'
+SUIT = ('<|"CategoryList" -> {"NS", "S3", "S2", "S1"}, "LabelList" -> {"Not Suitable", "Marginally Suitable", '
+        '"Moderately Suitable", "Highly Suitable"}, "ScoreList" -> {0, 0.5, 0.75, 1}|>')
+CATEGORICALVALUE = [
+    (f"CategoricalValue[Nominal[{HT}, 2]]", '"Tails"'),
+    (f'CategoricalValue[Nominal[{HT}, 2], "Index"]', "2"),
+    (f'CategoricalValue[Ordinal[{SUIT}], "Score"]', "{0, 0.5, 0.75, 1}"),
+    (f'CategoricalValue[Ordinal[{SUIT}], "Label"]',
+     '{"Not Suitable", "Marginally Suitable", "Moderately Suitable", "Highly Suitable"}'),
+    (f'CategoricalValue[Ordinal[{SUIT}], "Scale"]', f"Ordinal[{SUIT}]"),
+    ('CategoricalValue[Nominal[{"male", "female"}, "male"], "Scale"]',
+     'Nominal[<|"CategoryList" -> {"male", "female"}, "LabelList" -> {"male", "female"}, "ScoreList" -> {1, 2}|>]'),
+    ('Normal[CategoricalValue[Nominal[{"male", "female"}, "male"], "Scale"]]', '{"male", "female"}'),
+    ('SeedRandom[1]; Union[CategoricalValue[RandomChoice[Nominal[{"Heads", "Tails"}], 20]]]', '{"Heads", "Tails"}'),
+    (f'CategoricalValue[Nominal[{HT}, 2], "Bogus"]', Raises()),
+]
+NOMINALSCALE = [
+    ('NominalScale[{"x", "y"}]', 'NominalScale[{"x", "y"}]'),
+    ('NominalScale[<|"a" -> "A", "b" -> "B"|>]["LabelList"]', '{"A", "B"}'),
+    ('NominalScale[{"a", "b"}, <|"b" -> "Bee"|>]["Labels", {"a", "b"}]', '{"a", "Bee"}'),
+    ('NominalScale[{"a", "b"}]["CategoryList"]', '{"a", "b"}'),
+    ('NominalScale[{"a", "b"}, {"x"}]', Raises()),
+]
+OS5 = 'OrdinalScale[<|"A" -> 5, "B" -> 4, "C" -> 3, "D" -> 2, "F" -> 1|>, <|"F" -> "Failed"|>]'
+ORDINALSCALE = [
+    (OS5 + '["LabelList"]', '{"A", "B", "C", "D", "Failed"}'),
+    (OS5 + '["Value", "C"]', "3"),
+    (OS5 + '["Categories", {5, 1}]', '{"A", "F"}'),
+    ('OrdinalScale[{"x", "y"}, {-1, 3}]["CategoryAssociation"]', '<|-1 -> "x", 3 -> "y"|>'),
+    ('OrdinalScale[{"x", "y"}]["ValueList"]', "{1, 2}"),
+    ('OrdinalScale[{"x", "y"}, {1, "a"}]', Raises()),
+]
+CAST = [
+    ('Cast[2, "Real64"]', "2."),
+    ('Cast[{1, 2, 3}, TypeSpecifier["PackedArray"]["Real64", 1]]', "{1., 2., 3.}"),
+    ('Cast["test", TypeSpecifier["PackedArray"]["Real64", 1]]', Raises()),
+    ('Cast[100, "Integer32", "CCast"]', "100"),
+    ('Cast[2^32, "Integer32", "CCast"]', "0"),
+    ('Cast[2^32, "Integer32"]', Raises()),
+    ('Cast[-1, "UnsignedInteger8", "CCast"]', "255"),
+    ('Cast[1.5, "Integer64", "BitCast"]', "4609434218613702656"),
+    ('Cast[4609434218613702656, "Real64", "BitCast"]', "1.5"),
+]
+
+
 GROUPS = [v for k, v in list(globals().items()) if k.isupper() and k != "GROUPS" and isinstance(v, list)
           and v and isinstance(v[0], tuple)]
 CASES = [c for g in GROUPS for c in g]
