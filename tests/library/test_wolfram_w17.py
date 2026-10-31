@@ -740,7 +740,161 @@ MULTI = [
     ("MarginalDistribution[MultinormalDistribution[{1, 2}, {{1, 0}, {0, 4}}], 3]", Raises(ValueError)),
 ]
 
-GROUPS = [CONT, SPECIAL, DISC, MULTI]
+
+# ───────────────────────────── matrix distributions ─────────────────────────────
+
+def _np(e):
+    """a MikoshiLang matrix (list of lists) as a complex NumPy array"""
+    import numpy as np
+    from _harness import to_complex
+    return np.array([[to_complex(v) for v in row.args] for row in e.args])
+
+
+def mat(prop, what):
+    """a predicate on a sampled matrix, e.g. unitarity"""
+    def ok(g):
+        try:
+            return bool(prop(_np(g)))
+        except (AssertionError, AttributeError, TypeError):
+            return False
+    return Pred(ok, what)
+
+
+def _J(n):
+    import numpy as np
+    return np.kron(np.array([[0, -1], [1, 0]]), np.eye(n))
+
+
+def _close(a, b):
+    import numpy as np
+    return a.shape == b.shape and np.allclose(a, b, atol=1e-9)
+
+
+def _unitary(u):
+    import numpy as np
+    return _close(u @ u.conj().T, np.eye(len(u)))
+
+
+def _matrix_t_pdf(x, sr, sc, nu):
+    """Gupta & Nagar (2000) Def. 4.2.1 matrix-variate t density, written out with mpmath"""
+    X, Sr, Sc = mpmath.matrix(x), mpmath.matrix(sr), mpmath.matrix(sc)
+    n, m = X.rows, X.cols
+
+    def mgamma(p, a):
+        return mpmath.pi ** (p * (p - 1) / mpmath.mpf(4)) * mpmath.fprod(mpmath.gamma(a - mpmath.mpf(j) / 2)
+                                                                        for j in range(p))
+    c = mgamma(n, (nu + n + m - 1) / mpmath.mpf(2)) / (mpmath.pi ** (n * m / mpmath.mpf(2))
+                                                         * mgamma(n, (nu + n - 1) / mpmath.mpf(2)))
+    c *= mpmath.det(Sr) ** (-m / mpmath.mpf(2)) * mpmath.det(Sc) ** (-n / mpmath.mpf(2))
+    d = mpmath.det(mpmath.eye(n) + Sr ** -1 * X * Sc ** -1 * X.T)
+    return float(c * d ** (-(nu + n + m - 1) / mpmath.mpf(2)))
+
+
+MATRIX = [
+    # WishartMatrixDistribution: SciPy wishart; at nu = 3, Sigma = I: 1/(2^3 Gamma_2(3/2) E) = 1/(4 Pi E)
+    ("WishartMatrixDistribution[w17n, {{1, 0}, {0, 1}}]", "WishartMatrixDistribution[w17n, {{1, 0}, {0, 1}}]"),
+    ("PDF[WishartMatrixDistribution[3, {{1, 0}, {0, 1}}], {{1, 0}, {0, 1}}]", "1/(4 Pi E)"),
+    ("PDF[WishartMatrixDistribution[4, {{2, 1/2}, {1/2, 1}}], {{3., 1.}, {1., 2.}}]",
+     S(lambda st: st.wishart.pdf([[3.0, 1.0], [1.0, 2.0]], df=4, scale=[[2, 0.5], [0.5, 1]]))),
+    ("Mean[WishartMatrixDistribution[4, {{2, 1/2}, {1/2, 1}}]]", "{{8, 2}, {2, 4}}"),
+    ("Variance[WishartMatrixDistribution[4, {{2, 1/2}, {1/2, 1}}]]", "{{32, 9}, {9, 8}}"),  # nu (S_ij^2 + S_ii S_jj)
+    ("WishartMatrixDistribution[1/2, {{1, 0}, {0, 1}}]", Raises(ValueError)),
+    ("WishartMatrixDistribution[3, {{1, 2}, {2, 1}}]", Raises(ValueError)),
+    ("RandomVariate[WishartMatrixDistribution[3, {{1, 0}, {0, 1}}]]",
+     mat(lambda x: _close(x, x.T) and min(__import__("numpy").linalg.eigvalsh(x.real)) > 0, "SPD sample")),
+    # InverseWishartMatrixDistribution: SciPy invwishart; Mean Sigma/(nu - p - 1)
+    ("InverseWishartMatrixDistribution[w17n, {{1, 0}, {0, 1}}]", "InverseWishartMatrixDistribution[w17n, {{1, 0}, {0, 1}}]"),
+    ("PDF[InverseWishartMatrixDistribution[5, {{2, 1/2}, {1/2, 1}}], {{1., 0.2}, {0.2, 0.5}}]",
+     S(lambda st: st.invwishart.pdf([[1.0, 0.2], [0.2, 0.5]], df=5, scale=[[2, 0.5], [0.5, 1]]))),
+    ("Mean[InverseWishartMatrixDistribution[5, {{2, 1/2}, {1/2, 1}}]]", "{{1, 1/4}, {1/4, 1/2}}"),
+    ("InverseWishartMatrixDistribution[0, {{1, 0}, {0, 1}}]", Raises(ValueError)),
+    # MatrixNormalDistribution: SciPy matrix_normal; Var[X_ij] = Sr_ii Sc_jj
+    ("MatrixNormalDistribution[{{w17a, 0}, {0, 1}}, {{1, 0}, {0, 1}}]",
+     "MatrixNormalDistribution[{{w17a, 0}, {0, 1}}, {{1, 0}, {0, 1}}]"),
+    ("PDF[MatrixNormalDistribution[{{1, 0}, {0, 2}}, {{1, 1/2}, {1/2, 1}}], {{0.3, -0.2}, {0.5, 1.}}]",
+     S(lambda st: st.matrix_normal.pdf([[0.3, -0.2], [0.5, 1.0]], rowcov=[[1, 0], [0, 2]], colcov=[[1, 0.5], [0.5, 1]]))),
+    ("Mean[MatrixNormalDistribution[{{1, 2}, {3, 4}}, {{1, 0}, {0, 2}}, {{1, 1/2}, {1/2, 1}}]]", "{{1, 2}, {3, 4}}"),
+    ("Variance[MatrixNormalDistribution[{{1, 0}, {0, 2}}, {{1, 1/2}, {1/2, 1}}]]", "{{1, 1}, {2, 2}}"),
+    ("MatrixNormalDistribution[{{1, 2}, {2, 1}}, {{1, 0}, {0, 1}}]", Raises(ValueError)),
+    # MatrixTDistribution: Gupta-Nagar density (mpmath) and SciPy matrix_t; 1 x 1 = StudentTDistribution[0, 1/Sqrt[nu], nu]
+    ("MatrixTDistribution[{{1}}, {{1}}, w17n]", "MatrixTDistribution[{{1}}, {{1}}, w17n]"),
+    ("PDF[MatrixTDistribution[{{1}}, {{1}}, 3], {{1/2}}]", "PDF[StudentTDistribution[0, 1/Sqrt[3], 3], 1/2]"),
+    ("PDF[MatrixTDistribution[{{1}}, {{1}}, 3], {{1/2}}]", "32/(25 Pi)"),
+    ("PDF[MatrixTDistribution[{{1, 0}, {0, 2}}, {{1, 1/2}, {1/2, 1}}, 4], {{0.3, -0.2}, {0.5, 1.}}]",
+     _matrix_t_pdf([[0.3, -0.2], [0.5, 1.0]], [[1, 0], [0, 2]], [[1, 0.5], [0.5, 1]], 4)),
+    ("PDF[MatrixTDistribution[{{1, 0}, {0, 2}}, {{1, 1/2}, {1/2, 1}}, 4], {{0.3, -0.2}, {0.5, 1.}}]",
+     S(lambda st: st.matrix_t.pdf([[0.3, -0.2], [0.5, 1.0]], row_spread=[[1, 0], [0, 2]],
+                                  col_spread=[[1, 0.5], [0.5, 1]], df=4))),
+    ("Mean[MatrixTDistribution[{{1, 0}, {0, 2}}, {{1, 1/2}, {1/2, 1}}, 4]]", "{{0, 0}, {0, 0}}"),
+    ("MatrixTDistribution[{{1}}, {{1}}, -1]", Raises(ValueError)),
+    # GaussianOrthogonalMatrixDistribution: diagonal N(0, s), off-diagonal N(0, s/Sqrt[2]); density = product
+    ("GaussianOrthogonalMatrixDistribution[w17s, 3]", "GaussianOrthogonalMatrixDistribution[w17s, 3]"),
+    ("PDF[GaussianOrthogonalMatrixDistribution[1, 2], {{1, 0}, {0, 1}}]",
+     "PDF[NormalDistribution[], 1]^2 PDF[NormalDistribution[0, 1/Sqrt[2]], 0]"),
+    ("PDF[GaussianOrthogonalMatrixDistribution[1, 2], {{1, 2}, {0, 1}}]", "0"),  # not symmetric
+    ("Variance[GaussianOrthogonalMatrixDistribution[2, 2]]", "{{4, 2}, {2, 4}}"),
+    ("Mean[GaussianOrthogonalMatrixDistribution[2, 2]]", "{{0, 0}, {0, 0}}"),
+    ("RandomVariate[GaussianOrthogonalMatrixDistribution[3]]", mat(lambda x: _close(x, x.T) and _close(x.imag, 0 * x.imag),
+                                                                   "real symmetric")),
+    ("GaussianOrthogonalMatrixDistribution[-1, 2]", Raises(ValueError)),
+    ("GaussianOrthogonalMatrixDistribution[1, 0]", Raises(ValueError)),
+    # GaussianUnitaryMatrixDistribution: diagonal N(0, s); off-diagonal real and imaginary parts N(0, s/Sqrt[2])
+    ("GaussianUnitaryMatrixDistribution[w17s, 3]", "GaussianUnitaryMatrixDistribution[w17s, 3]"),
+    ("PDF[GaussianUnitaryMatrixDistribution[1, 2], {{1, 0}, {0, 1}}]",
+     "PDF[NormalDistribution[], 1]^2 PDF[NormalDistribution[0, 1/Sqrt[2]], 0]^2"),
+    ("PDF[GaussianUnitaryMatrixDistribution[1, 2], {{1, I}, {I, 1}}]", "0"),  # not Hermitian
+    ("Variance[GaussianUnitaryMatrixDistribution[2, 2]]", "{{4, 4}, {4, 4}}"),
+    ("RandomVariate[GaussianUnitaryMatrixDistribution[3]]", mat(lambda x: _close(x, x.conj().T), "Hermitian")),
+    ("GaussianUnitaryMatrixDistribution[1, 2.5]", Raises(ValueError)),
+    # GaussianSymplecticMatrixDistribution (2n x 2n): Hermitian and self-dual X.J == J.X^T
+    ("GaussianSymplecticMatrixDistribution[w17s, 2]", "GaussianSymplecticMatrixDistribution[w17s, 2]"),
+    ("PDF[GaussianSymplecticMatrixDistribution[1, 1], IdentityMatrix[2]]", "1/Sqrt[2 Pi E]"),  # n = 1: N(0, 1) at 1
+    ("Variance[GaussianSymplecticMatrixDistribution[1, 2]]",
+     "{{1, 1, 0, 1}, {1, 1, 1, 0}, {0, 1, 1, 1}, {1, 0, 1, 1}}"),
+    ("RandomVariate[GaussianSymplecticMatrixDistribution[2]]",
+     mat(lambda x: _close(x, x.conj().T) and _close(x @ _J(2), _J(2) @ x.T), "Hermitian self-dual 4 x 4")),
+    ("GaussianSymplecticMatrixDistribution[0, 2]", Raises(ValueError)),
+    # circular ensembles (Haar measure): the defining group property of samples
+    ("CircularUnitaryMatrixDistribution[w17n]", "CircularUnitaryMatrixDistribution[w17n]"),
+    ("RandomVariate[CircularUnitaryMatrixDistribution[3]]", mat(_unitary, "unitary 3 x 3")),
+    ("Abs[Det[RandomVariate[CircularUnitaryMatrixDistribution[4]]]]", near(1.0, 1e-9)),
+    ("PDF[CircularUnitaryMatrixDistribution[2], IdentityMatrix[2]]", Raises(NotImplementedError)),
+    ("CircularRealMatrixDistribution[w17n]", "CircularRealMatrixDistribution[w17n]"),
+    ("RandomVariate[CircularRealMatrixDistribution[3]]",
+     mat(lambda x: _unitary(x) and _close(x.imag, 0 * x.imag), "real orthogonal")),
+    ("Union[Round[RandomVariate[MatrixPropertyDistribution[Det[w17x], w17x \\[Distributed] "
+     "CircularRealMatrixDistribution[3]], 60]]]", "{-1, 1}"),  # Haar on O(n), not SO(n): P(miss a sign) = 2^-59
+    ("CircularRealMatrixDistribution[0]", Raises(ValueError)),
+    ("CircularOrthogonalMatrixDistribution[w17n]", "CircularOrthogonalMatrixDistribution[w17n]"),
+    ("RandomVariate[CircularOrthogonalMatrixDistribution[3]]", mat(lambda x: _unitary(x) and _close(x, x.T),
+                                                                   "symmetric unitary")),
+    ("Dimensions[RandomVariate[CircularOrthogonalMatrixDistribution[4]]]", "{4, 4}"),
+    ("CircularOrthogonalMatrixDistribution[1.5]", Raises(ValueError)),
+    ("CircularQuaternionMatrixDistribution[w17n]", "CircularQuaternionMatrixDistribution[w17n]"),
+    ("RandomVariate[CircularQuaternionMatrixDistribution[2]]",
+     mat(lambda x: _unitary(x) and _close(x.T @ _J(2) @ x, _J(2)), "unitary symplectic 4 x 4")),
+    ("Dimensions[RandomVariate[CircularQuaternionMatrixDistribution[2]]]", "{4, 4}"),
+    ("PDF[CircularQuaternionMatrixDistribution[2], IdentityMatrix[4]]", Raises(NotImplementedError)),
+    ("CircularSymplecticMatrixDistribution[w17n]", "CircularSymplecticMatrixDistribution[w17n]"),
+    ("RandomVariate[CircularSymplecticMatrixDistribution[2]]",
+     mat(lambda x: _unitary(x) and _close(_J(2) @ x.T @ _J(2).T, x), "self-dual unitary 4 x 4")),
+    ("Dimensions[RandomVariate[CircularSymplecticMatrixDistribution[2]]]", "{4, 4}"),
+    ("CircularSymplecticMatrixDistribution[-2]", Raises(ValueError)),
+    # MatrixPropertyDistribution
+    ("MatrixPropertyDistribution[Tr[w17x], w17x \\[Distributed] GaussianOrthogonalMatrixDistribution[3]]",
+     "MatrixPropertyDistribution[Tr[w17x], Distributed[w17x, GaussianOrthogonalMatrixDistribution[3]]]"),
+    ("RandomVariate[MatrixPropertyDistribution[Abs[Det[w17x]], w17x \\[Distributed] "
+     "CircularUnitaryMatrixDistribution[3]], 3]", vnear([1.0, 1.0, 1.0], 1e-9)),
+    ("RandomVariate[MatrixPropertyDistribution[Tr[w17x] + Tr[w17y], {w17x \\[Distributed] "
+     "GaussianOrthogonalMatrixDistribution[2], w17y \\[Distributed] GaussianOrthogonalMatrixDistribution[2]}], 4]",
+     nums(4)),
+    ("Mean[MatrixPropertyDistribution[Tr[w17x], w17x \\[Distributed] GaussianOrthogonalMatrixDistribution[3]]]",
+     Raises(NotImplementedError)),
+    ("MatrixPropertyDistribution[Tr[w17x], w17x \\[Distributed] NormalDistribution[]]", Raises(TypeError)),
+    ("MatrixPropertyDistribution[Tr[w17x], 3]", Raises(ValueError)),
+]
+
+GROUPS = [CONT, SPECIAL, DISC, MULTI, MATRIX]
 
 
 def _resolve(cases):
