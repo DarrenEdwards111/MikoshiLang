@@ -1484,6 +1484,69 @@ def _hill_size(r, q):
     return int(abs(r) / 2) + 12 + int(3 * mpmath.sqrt(abs(q))) + mpmath.mp.dps // 3
 
 
+def _tri_parts(M):
+    n = M.rows
+    return [M[i, i] for i in range(n)], [M[i, i + 1] for i in range(n - 1)]
+
+
+def _sturm_count(d, e, x):
+    """Number of eigenvalues < x of the symmetric tridiagonal matrix (d, e)."""
+    cnt = 0
+    tiny = mpmath.mpf(2) ** (-2 * mpmath.mp.prec)
+    qv = d[0] - x
+    for i in range(len(d)):
+        if i:
+            qv = d[i] - x - e[i - 1] ** 2 / qv
+        if qv == 0:
+            qv = tiny
+        if qv < 0:
+            cnt += 1
+    return cnt
+
+
+def _tri_kth(d, e, idx):
+    """idx-th smallest eigenvalue (0-based) of a real symmetric tridiagonal matrix, by Sturm bisection."""
+    n = len(d)
+    rad = [(abs(e[i - 1]) if i else 0) + (abs(e[i]) if i < n - 1 else 0) for i in range(n)]
+    lo = min(d[i] - rad[i] for i in range(n)) - 1
+    hi = max(d[i] + rad[i] for i in range(n)) + 1
+    eps = mpmath.mpf(2) ** (-mpmath.mp.prec + 2)
+    while hi - lo > eps * (1 + abs(lo) + abs(hi)):
+        mid = (lo + hi) / 2
+        if _sturm_count(d, e, mid) > idx:
+            hi = mid
+        else:
+            lo = mid
+    return (lo + hi) / 2
+
+
+def _tri_vec(d, e, lam):
+    """Eigenvector for the eigenvalue lam (inverse iteration with a tridiagonal LU solve), unit 2-norm."""
+    n = len(d)
+    shift = lam + mpmath.mpf(2) ** (-mpmath.mp.prec + 4) * (1 + abs(lam))
+    v = [mpmath.mpf(1)] * n
+    tiny = mpmath.mpf(2) ** (-2 * mpmath.mp.prec)
+    for _ in range(3):
+        # Thomas algorithm for (T - shift) x = v
+        cp, dp = [mpmath.mpf(0)] * n, [mpmath.mpf(0)] * n
+        piv = d[0] - shift
+        piv = piv if piv != 0 else tiny
+        cp[0] = (e[0] / piv) if n > 1 else 0
+        dp[0] = v[0] / piv
+        for i in range(1, n):
+            piv = d[i] - shift - e[i - 1] * cp[i - 1]
+            piv = piv if piv != 0 else tiny
+            cp[i] = e[i] / piv if i < n - 1 else 0
+            dp[i] = (v[i] - e[i - 1] * dp[i - 1]) / piv
+        x = [mpmath.mpf(0)] * n
+        x[-1] = dp[-1]
+        for i in range(n - 2, -1, -1):
+            x[i] = dp[i] - cp[i] * x[i + 1]
+        nrm = mpmath.sqrt(mpmath.fsum(t * t for t in x))
+        v = [t / nrm for t in x]
+    return v
+
+
 def _sym_eigs(M, real):
     if real:
         return sorted(mpmath.eigsy(M, eigvals_only=True))
@@ -1539,8 +1602,8 @@ def _char_value(kind, r, q):
             raise ValueError("MathieuCharacteristicB: r must be a positive integer (there is no odd solution with r = 0)")
         par = n % 2
         idx = n // 2 if kind == "a" or par == 1 else n // 2 - 1
-        return _sym_eigs(_mathieu_int_matrix(kind, par, q, N + idx), True)[idx]
-    return _sym_eigs(_floquet_matrix(r, q, N + int(r)), True)[int(mpmath.floor(r))]
+        return _tri_kth(*_tri_parts(_mathieu_int_matrix(kind, par, q, N + idx)), idx)
+    return _tri_kth(*_tri_parts(_floquet_matrix(r, q, N + int(r))), int(mpmath.floor(r)))
 
 
 def _char_values_below(a, q):
@@ -1548,8 +1611,11 @@ def _char_values_below(a, q):
     count = 0
     N = int(mpmath.sqrt(abs(a)) / 2) + 12 + int(3 * mpmath.sqrt(abs(q))) + mpmath.mp.dps // 3
     for kind, par in (("a", 0), ("a", 1), ("b", 0), ("b", 1)):
-        ev = _sym_eigs(_mathieu_int_matrix(kind, par, q, N), True)
-        count += sum(1 for x in ev[:-4] if x < a)
+        d_, e_ = _tri_parts(_mathieu_int_matrix(kind, par, q, N))
+        c = _sturm_count(d_, e_, a)
+        if c > N - 4:
+            raise ArithmeticError("Mathieu: characteristic-value matrix truncated too early")
+        count += c
     return count
 
 
@@ -1902,12 +1968,15 @@ def _sph_g2(g, name):
     return g2
 
 
-def _sph_system(n, m, g2):
-    """Return (lambda, {l: b_l}) with Ps_n^m = Sum_l b_l P_l^m (m >= 0), Meixner-Schaefke normalised."""
+def _sph_system(n, m, g2, nbig=0):
+    """Return (lambda, {l: b_l}) with Ps_n^m = Sum_l b_l P_l^m (m >= 0), Meixner-Schaefke normalised.
+    The eigenvalue comes from a basis of nb Legendre functions; the coefficient vector is computed on a basis of
+    max(nb, nbig) functions (needed by the slowly convergent Neumann series of SpheroidalS2)."""
     m = abs(m)
     p = (n - m) % 2
     idx = (n - m) // 2
-    nb = idx + 20 + int(mpmath.sqrt(abs(g2))) + mpmath.mp.prec // 6
+    nb0 = idx + 20 + int(mpmath.sqrt(abs(g2))) + mpmath.mp.prec // 6
+    nb = max(nb0, nbig)
     ls = [m + p + 2 * i for i in range(nb)]
 
     def N(l):
@@ -1926,33 +1995,57 @@ def _sph_system(n, m, g2):
             # symmetric element in the orthonormal basis P_l/sqrt(N_l):  <l+2| x^2 |l> = alpha(l) sqrt(N_{l+2}/N_l)
             e = g2 * alpha(l) * mpmath.sqrt(N(l + 2) / N(l))
             M[i, i + 1] = M[i + 1, i] = e
-    ev, U = mpmath.eigsy(M)
-    order = sorted(range(nb), key=lambda i: ev[i])
-    i = order[idx]
-    lam = ev[i]
-    vec = [U[r, i] for r in range(nb)]
+    d_, e_ = _tri_parts(M)
+    lam = _tri_kth(d_[:nb0], e_[:nb0 - 1], idx)
+    vec = _tri_vec(d_, e_, lam)
+    # the tail of the eigenvector decays super-exponentially; recompute it from the anchor (largest component)
+    # by the backward continued fraction for the minimal solution, so each coefficient has full relative accuracy
+    anchor = max(range(nb), key=lambda i: abs(vec[i]))
+    if anchor < nb - 2:
+        rho = [mpmath.mpf(0)] * nb
+        rho[nb - 2] = -e_[nb - 2] / (d_[nb - 1] - lam)
+        for i in range(nb - 3, anchor - 1, -1):
+            den = (d_[i + 1] - lam) + e_[i + 1] * rho[i + 1]
+            rho[i] = -e_[i] / den if den != 0 else mpmath.mpf(0)
+        for i in range(anchor, nb - 1):
+            vec[i + 1] = rho[i] * vec[i]
     if abs(vec[-1]) > mpmath.mpf(2) ** (-mpmath.mp.prec):
         raise ArithmeticError("Spheroidal: Legendre expansion truncated too early")
     scale = mpmath.sqrt(N(n))
     b = {l: scale * v / mpmath.sqrt(N(l)) for l, v in zip(ls, vec)}
     # sign: continuous from gamma = 0 -> compare with LegendreP_n^m at 0 (n - m even) or its derivative (odd)
     if p == 0:
-        ref = mpmath.fsum(bl * mpmath.legenp(l, m, 0) for l, bl in b.items())
-        ref0 = mpmath.legenp(n, m, 0)
+        P0 = _legP_table(max(b) + 1, m, mpmath.mpf(0))
+        ref = mpmath.fsum(bl * P0[l] for l, bl in b.items())
+        ref0 = P0[n]
     else:
-        ref = mpmath.fsum(bl * mpmath.diff(lambda x: mpmath.legenp(l, m, x), 0) for l, bl in b.items())
-        ref0 = mpmath.diff(lambda x: mpmath.legenp(n, m, x), 0)
+        # d/dx P_l^m(0) = -(l - m + 1) P_{l+1}^m(0)  (DLMF 14.10.5 at x = 0)
+        P0 = _legP_table(max(b) + 2, m, mpmath.mpf(0))
+        ref = mpmath.fsum(-bl * (l - m + 1) * P0[l + 1] for l, bl in b.items())
+        ref0 = -(n - m + 1) * P0[n + 1]
     if ref * ref0 < 0:
         b = {l: -v for l, v in b.items()}
     return lam, b
 
 
-def _legP(l, m, x, deriv=False):
-    """Ferrers / LegendreP type-1 P_l^m(x) (Condon-Shortley phase), analytically continued off [-1, 1]."""
+def _legP_table(L, m, x):
+    """{l: P_l^m(x)} for l = m..L (Ferrers / LegendreP type 2, Condon-Shortley phase, analytically continued off
+    [-1, 1] as mpmath legenp type 2), by the stable upward recurrence in l."""
+    out = {m: (-1) ** m * mpmath.fac2(2 * m - 1) * mpmath.power(1 - x * x, mpmath.mpf(m) / 2)}
+    if L > m:
+        out[m + 1] = x * (2 * m + 1) * out[m]
+    for l in range(m + 1, L):
+        out[l + 1] = ((2 * l + 1) * x * out[l] - (l + m) * out[l - 1]) / (l - m + 1)
+    return out
+
+
+def _legP(l, m, x, deriv=False, table=None):
+    """P_l^m(x) or its x-derivative, from a _legP_table (built here if not given)."""
+    t = table if table is not None else _legP_table(l + 1, m, x)
     if not deriv:
-        return mpmath.legenp(l, m, x, type=2)
+        return t[l]
     # (1 - x^2) P' = (l + 1) x P_l - (l - m + 1) P_{l+1}   ... (DLMF 14.10.5 with mu = m)
-    return ((l + 1) * x * mpmath.legenp(l, m, x, type=2) - (l - m + 1) * mpmath.legenp(l + 1, m, x, type=2)) / (1 - x * x)
+    return ((l + 1) * x * t[l] - (l - m + 1) * t[l + 1]) / (1 - x * x)
 
 
 def _sph_eig(n, m, g):
@@ -1987,7 +2080,8 @@ def _sph_ps(deriv):
             else:
                 b = _sph_system(n, m, g2)[1]
             am = abs(m)
-            out = mpmath.fsum(bl * _legP(l, am, x, deriv) for l, bl in b.items())
+            tab = _legP_table(max(b) + 1, am, x)
+            out = mpmath.fsum(bl * _legP(l, am, x, deriv, tab) for l, bl in b.items())
             if m < 0:
                 out *= (-1) ** am * mpmath.factorial(n - am) / mpmath.factorial(n + am)
             return out
@@ -2002,10 +2096,10 @@ _sph_ps(False)
 _sph_ps(True)
 
 
-def _sph_radial_coeffs(n, m, g2):
+def _sph_radial_coeffs(n, m, g2, nbig=0):
     """a_{n,k}^{-m} up to a common factor, keyed by l = n + 2k, and A_n^{-m}."""
     m = abs(m)
-    b = _sph_system(n, m, g2)[1] if g2 != 0 else {n: mpmath.mpf(1)}
+    b = _sph_system(n, m, g2, nbig)[1] if g2 != 0 else {n: mpmath.mpf(1)}
     # Ps^m = Sum (-1)^k a^m_k P^m_l, b_l = (-1)^k a^m_k;  a^{-m}_k  ~  a^m_k (l+m)!/(l-m)!
     a = {}
     for l, bl in b.items():
@@ -2038,8 +2132,15 @@ def _sph_radial(j, deriv):
         if j == 2 and abs(z) <= 1:
             raise NotImplementedError(f"{name}: only |z| > 1 is supported (the Bessel series diverges for |z| <= 1)")
 
+        nbig = 0
+        if j == 2:
+            # the Neumann series converges like |z|^(-2k): enough terms for the working precision
+            nbig = (n - abs(m)) // 2 + 30 + int((mpmath.mp.prec + 200) * mpmath.log(2) / (2 * mpmath.log(abs(z))))
+            if nbig > 4000:
+                raise NotImplementedError(f"{name}: z is too close to the unit circle for the Neumann series")
+
         def run():
-            a, A = _sph_radial_coeffs(n, m, g2)
+            a, A = _sph_radial_coeffs(n, m, g2, nbig)
             am = abs(m)
             fac = (1 - 1 / (z * z)) ** (mpmath.mpf(am) / 2)
             ser = mpmath.fsum(al * _sph_bessel(j, l, g * z, False) for l, al in a.items())
@@ -2110,7 +2211,8 @@ def _sph_joining(n, m, g):
         out = []
         for z in (mpmath.mpf(2), mpmath.mpf(3)):
             s1 = mpmath.fsum(al * _sph_bessel(1, l, g * z, False) for l, al in a.items()) / A
-            ps = mpmath.fsum(bl * mpmath.legendre(l, z) for l, bl in b.items())
+            tab = _legP_table(max(b), 0, z)
+            ps = mpmath.fsum(bl * tab[l] for l, bl in b.items())
             out.append(s1 / ps)
         if abs(out[0] - out[1]) > mpmath.mpf(2) ** (-mpmath.mp.prec // 2) * (1 + abs(out[0])):
             raise ArithmeticError("SpheroidalJoiningFactor: inconsistent ratio (numerical failure)")
