@@ -545,7 +545,18 @@ CHANGE = [
 ]
 
 
-CASES = ARRAYS + COORDS + ASYMPTOTIC + DISCRETE + DYNAMICS + OPTIONS + INTERP + INTEGRALS + FRACTIONAL + CHANGE
+# Integrate GenerateConditions -> True keeps the genericity condition of an indefinite integral (n != -1);
+# assumptions that rule the generic case out keep the special case instead of a silently wrong antiderivative.
+GENCOND = [
+    ("Integrate[x^n, x, GenerateConditions -> True]", S("ConditionalExpression[x^(1 + n)/(1 + n), n != -1]")),
+    ("Integrate[x^n, x]", S("x^(1 + n)/(1 + n)")),
+    ("Integrate[x^n, x, GenerateConditions -> True, Assumptions -> n > 0]", S("x^(1 + n)/(1 + n)")),
+    ("Integrate[Exp[a x], x, GenerateConditions -> True]", S("ConditionalExpression[E^(a x)/a, a != 0]")),
+    ("Integrate[x^n, x, Assumptions -> n == -1]", S("Piecewise[{{x^(1 + n)/(1 + n), n != -1}}, Log[x]]")),
+]
+
+
+CASES = ARRAYS + COORDS + ASYMPTOTIC + DISCRETE + DYNAMICS + OPTIONS + INTERP + INTEGRALS + FRACTIONAL + CHANGE + GENCOND
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
