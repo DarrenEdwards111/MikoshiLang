@@ -270,8 +270,8 @@ RANDOMDATE = [
     T('DateWithinQ[DateObject[{1999}, "Year"], RandomDate[DateObject[{1999}, "Year"], TimeZone -> 0]]'),
     ('Length[RandomDate[DateObject[{1999}, "Year"], 5]]', "5"),
     ('Dimensions[RandomDate[DateObject[{1999}, "Year"], {2, 3}]]', "{2, 3}"),
-    T('SeedRandom[3]; w12a = RandomDate[DateObject[{1999}, "Year"]]; SeedRandom[3]; '
-      'w12a === RandomDate[DateObject[{1999}, "Year"]]'),
+    T('Module[{w12r}, SeedRandom[3]; w12r = RandomDate[DateObject[{1999}, "Year"]]; SeedRandom[3]; '
+      'w12r === RandomDate[DateObject[{1999}, "Year"]]]'),
     T('Module[{d = RandomDate[DateObject[{1985, 8}, "Month"], DateGranularity -> "Day"]}, '
       'd[[2]] === "Day" && d[[1, 1 ;; 2]] === {1985, 8}]'),
     ("RandomDate[DateObject[{2000, 1, 1, 0, 0, 0}]]", Raises()),
