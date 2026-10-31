@@ -695,7 +695,8 @@ if HAVE_MPL:
          Pred(lambda g: all(abs(int(v) - 127) <= 1 for v in g.args), "~{127, 127, 127}")),
         ("Rasterize[Graphics[{Disk[]}], \"Data\", RasterSize -> -1]", Raises(ValueError)),
         ("Rasterize[Graphics3D[{Sphere[]}], \"Data\"]", Raises(NotImplementedError)),
-        ("Rasterize[Graphics[{Disk[]}, Axes -> True], \"Data\"]", Raises(NotImplementedError)),
+        # axes are drawn since W15; an option still without a renderer raises
+        ("Rasterize[Graphics[{Disk[]}, ImagePadding -> 20], \"Data\"]", Raises(NotImplementedError)),
         ("Rasterize[Graphics[{LinearGradientFilling[{Red, Blue}], Rectangle[]}], \"Data\"]", Raises(NotImplementedError)),
     ]
 else:
