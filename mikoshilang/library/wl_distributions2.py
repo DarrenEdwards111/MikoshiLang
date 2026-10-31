@@ -5369,7 +5369,7 @@ class MultivariateT(MultiD):
         try:
             import scipy.stats as st
         except ImportError:
-            raise NotImplementedError("CDF of a MultivariateTDistribution requires SciPy")
+            raise NotImplementedError("CDF: a MultivariateTDistribution CDF requires SciPy")
         v = st.multivariate_t(loc=[_f(t) for t in self.mu], shape=[[_f(self.S[i, j]) for j in range(self.S.cols)]
                                                                    for i in range(self.S.rows)], df=_f(self.nu))
         return float(v.cdf([_f(t) for t in pt]))
@@ -6599,10 +6599,14 @@ def _airy_np(z):
         a, ap, _, _ = airy(z)
         return a, ap
     except ImportError:
+        # mpmath's mp context (mpmath.fp.airyai loses up to 20% relative accuracy near x = 8.5)
         import mpmath
-        f = np.vectorize(lambda t: float(mpmath.fp.airyai(t)))
-        g = np.vectorize(lambda t: float(mpmath.fp.airyai(t, derivative=1)))
-        return f(z), g(z)
+        z = np.asarray(z, dtype=float)
+        u, inv = np.unique(z, return_inverse=True)
+        with mpmath.workdps(17):
+            a = np.array([float(mpmath.airyai(t)) for t in u])
+            ap = np.array([float(mpmath.airyai(t, derivative=1)) for t in u])
+        return a[inv].reshape(z.shape), ap[inv].reshape(z.shape)
 
 
 def _fredholm(s, kind, sign, m):
