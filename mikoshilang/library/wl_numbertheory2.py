@@ -181,6 +181,8 @@ def _n_pre(a, ev_, expr):
         elif isinstance(p, sp.Basic) and p.is_number:
             prec = int(p)
     new = _n_pre_walk(a[0], prec)
+    if new is a[0]:
+        raise _NotMine()
     return ev_(Expr("N", new, *a[1:]))
 
 
