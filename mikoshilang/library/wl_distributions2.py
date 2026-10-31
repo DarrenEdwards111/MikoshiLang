@@ -6180,9 +6180,10 @@ class MatrixT(MatrixD):
 
 
 class GaussianEnsemble(MatrixD):
-    """GOE / GUE / GSE. The density is E^(-Tr[X.X]/(2 sigma^2))/Z with respect to Lebesgue measure on the
-    independent real coordinates of X (upper-triangle entries, real and imaginary parts; for the GSE the
-    quaternion coordinates z0, z1, z2, z3 of the Wolfram Details block form)"""
+    """GOE / GUE / GSE. The density is E^(-Tr[X.X]/(2 sigma^2))/Z (GSE: E^(-Tr[X.X]/(4 sigma^2))/Z, i.e. the
+    quaternion trace) with respect to Lebesgue measure on the independent real coordinates of X (upper-triangle
+    entries, real and imaginary parts; for the GSE the quaternion coordinates z0, z1, z2, z3 of the Wolfram
+    Details block form)"""
 
     def __init__(self, expr, fname):
         super().__init__(expr)
@@ -6225,7 +6226,8 @@ class GaussianEnsemble(MatrixD):
         elif self.kind == "O":
             Z = (2 * sp.pi * s ** 2) ** sp.Rational(n, 2) * (sp.pi * s ** 2) ** sp.Rational(n * (n - 1), 4)
         else:
-            Z = (sp.pi * s ** 2) ** sp.Rational(n, 2) * (sp.pi * s ** 2 / 2) ** (n * (n - 1))
+            Z = (2 * sp.pi * s ** 2) ** sp.Rational(n, 2) * (sp.pi * s ** 2) ** (n * (n - 1))
+            return _out(sp.simplify(sp.exp(-sp.re((X_ * X_).trace()) / (4 * s ** 2)) / Z), self.expr, x)
         return _out(sp.simplify(sp.exp(-sp.re((X_ * X_).trace()) / (2 * s ** 2)) / Z), self.expr, x)
 
     def mean_m(self):
@@ -6243,7 +6245,7 @@ class GaussianEnsemble(MatrixD):
             return sp.Matrix(n, n, lambda i, j: s2 if i == j else s2 / 2)
         if self.kind == "U":
             return sp.Matrix(n, n, lambda i, j: s2)
-        return sp.Matrix(2 * n, 2 * n, lambda i, j: 0 if i != j and i % n == j % n else s2 / 2)
+        return sp.Matrix(2 * n, 2 * n, lambda i, j: 0 if i != j and i % n == j % n else s2)
 
     def sample(self, rng):
         if not self.numeric():
@@ -6254,11 +6256,12 @@ class GaussianEnsemble(MatrixD):
             x = g.normal(0, s, (n, n)) + 1j * g.normal(0, s, (n, n))
             return _mat_out((x + x.conj().T) / 2)
         if self.kind == "S":
-            # Wolfram Details: (x + x^H - J.(x + x^H)^T.J)/4 with complex Gaussian x (2n x 2n)
+            # the quaternion self-dual projection of the Details, (x + x^H - J.(x + x^H)^T.J), scaled so that
+            # E[|X_ij|^2] = sigma^2 (the scale Wolfram's worked examples use; see the notes)
             x = g.normal(0, s, (2 * n, 2 * n)) + 1j * g.normal(0, s, (2 * n, 2 * n))
             h = x + x.conj().T
             J = _jmat(n)
-            return _mat_out((h - J @ h.T @ J) / 4)
+            return _mat_out((h - J @ h.T @ J) / (2 * math.sqrt(2)))
         x = g.normal(0, s, (n, n))
         return _mat_out((x + x.T) / 2)
 
@@ -6451,12 +6454,16 @@ _multi("GaussianUnitaryMatrixDistribution", GaussianEnsemble,
        "the real and imaginary parts of the upper triangle), Mean 0, elementwise Variance E[|X_ij|^2] = sigma^2, "
        "RandomVariate. Check: exact normalisation in tests, and a Monte Carlo check of the variance.")
 _multi("GaussianSymplecticMatrixDistribution", GaussianEnsemble,
-       "GaussianSymplecticMatrixDistribution[sigma, n] and [n] (GSE, 2n x 2n): (x + x^H - J.(x + x^H)^T.J)/4 with "
-       "complex Gaussian x and J = KroneckerProduct[{{0, -1}, {1, 0}}, IdentityMatrix[n]] (Wolfram Details); PDF "
-       "E^(-Tr[X.X]/(2 sigma^2))/((Pi sigma^2)^(n/2) (Pi sigma^2/2)^(n (n - 1))) for Hermitian, quaternion self-dual "
-       "X (X.J == J.Transpose[X]; 0 otherwise), the measure being Lebesgue on the quaternion coordinates z0 (symmetric) "
-       "and z1, z2, z3 (antisymmetric); Mean 0; elementwise Variance E[|X_ij|^2] (sigma^2/2, and 0 at {i, i + n}); "
-       "RandomVariate. Check: self-duality and Hermiticity of samples, and a Monte Carlo variance check, in tests.")
+       "GaussianSymplecticMatrixDistribution[sigma, n] and [n] (GSE, 2n x 2n): Hermitian, quaternion self-dual X "
+       "(X.J == J.Transpose[X], J = KroneckerProduct[{{0, -1}, {1, 0}}, IdentityMatrix[n]]) built as the projection "
+       "(x + x^H - J.(x + x^H)^T.J) of a complex Gaussian x, scaled so that E[|X_ij|^2] = sigma^2 (0 at {i, i + n}). "
+       "Deviation note: Wolfram's Details write the projection divided by 4, which gives E[|X_ij|^2] = sigma^2/2, but "
+       "its own worked examples (spectral edge 2 Sqrt[2 n], Tracy-Widom scaling (Max[Eigenvalues] - 2 Sqrt[2 n]) "
+       "(n/4)^(1/6)) only hold at E[|X_ij|^2] = sigma^2, so that scale is used. PDF E^(-Tr[X.X]/(4 sigma^2))/((2 Pi "
+       "sigma^2)^(n/2) (Pi sigma^2)^(n (n - 1))) on such X (0 otherwise; Lebesgue measure on the quaternion "
+       "coordinates z0 (symmetric) and z1, z2, z3 (antisymmetric)); Mean 0; elementwise Variance; RandomVariate. "
+       "Check: Hermiticity and self-duality of samples, Monte Carlo variance and the TracyWidomDistribution[4] edge "
+       "scaling in tests.")
 for _h in ("CircularUnitaryMatrixDistribution", "CircularRealMatrixDistribution", "CircularOrthogonalMatrixDistribution",
            "CircularQuaternionMatrixDistribution", "CircularSymplecticMatrixDistribution"):
     _multi(_h, CircularEnsemble,
