@@ -1153,6 +1153,13 @@ TABLE = {
 }
 MULTI = {"MultinormalDistribution", "MultinomialDistribution"}
 NEW_DISTS = (set(TABLE) | MULTI | {"EmpiricalDistribution", "TransformedDistribution"}) - LEGACY
+# Extension points (used by wl_distributions2 and later batches; mutate in place, never rebind):
+# BUILDERS[head](expr, fname) -> D for univariate heads whose arguments are not plain parameter lists
+# (derived distributions, data-based ones, ...); MULTI_BUILDERS[head](expr, fname) -> an object with
+# pdf(x), cdf(x), moment(which) and sample(rng) returning MikoshiLang values, for multivariate and matrix heads
+# (their names are also added to MULTI and NEW_DISTS).
+BUILDERS = {}
+MULTI_BUILDERS = {}
 
 
 def _param(v, name):
@@ -1170,6 +1177,10 @@ def dist_of(d, fname):
     h = d.head
     if h == "EmpiricalDistribution":
         return _empirical(d, fname)
+    if h in BUILDERS:
+        return BUILDERS[h](d, fname)
+    if h in MULTI_BUILDERS:
+        raise NotImplementedError(f"{fname}: {h} is a multivariate distribution; not supported here")
     if h in TABLE:
         del _POS[:]
         dd = TABLE[h](h, [_param(v, fname) for v in d.args])
@@ -1203,6 +1214,7 @@ def _empirical(d, fname):
 
 def is_dist(x):
     return isinstance(x, Expr) and isinstance(x.head, str) and (x.head in TABLE or x.head in MULTI or
+                                                              x.head in BUILDERS or
                                                               x.head in ("EmpiricalDistribution", "TransformedDistribution"))
 
 
@@ -1265,6 +1277,8 @@ def _x(x, fname):
 
 
 def pdf_value(dd, x):
+    if hasattr(dd, "pdf_value"):
+        return dd.pdf_value(x)
     if dd.discrete:
         if _num(x):
             if isinstance(dd, Empirical):
@@ -1292,6 +1306,8 @@ def pdf_value(dd, x):
 
 
 def cdf_value(dd, x):
+    if hasattr(dd, "cdf_value"):
+        return dd.cdf_value(x)
     if isinstance(dd, Empirical):
         if not _num(x):
             raise Unevaluated()
@@ -1333,6 +1349,8 @@ def cdf_value(dd, x):
 def quantile_value(dd, p, inputs, fname):
     if _num(p) and not (0 <= p <= 1):
         raise ValueError(f"{fname}: the probability must be in [0, 1]")
+    if hasattr(dd, "quantile_value"):
+        return dd.quantile_value(p, inputs, fname)
     lo, hi = dd.bounds()
     if _num(p) and p == 0:
         if dd.discrete:
@@ -1408,6 +1426,8 @@ def cumulant(dd, r):
 
 
 def skewness(dd):
+    if hasattr(dd, "skewness"):
+        return dd.skewness()
     v = dd.var()
     if v is sp.nan or v == sp.oo:
         return sp.nan
@@ -1424,6 +1444,8 @@ def skewness(dd):
 
 
 def kurtosis(dd):
+    if hasattr(dd, "kurtosis"):
+        return dd.kurtosis()
     v = dd.var()
     if v is sp.nan or v == sp.oo:
         return sp.nan
@@ -2072,6 +2094,8 @@ def _vec(x, k, fname):
 
 
 def _multi_pdf(d, x):
+    if d.head in MULTI_BUILDERS:
+        return MULTI_BUILDERS[d.head](d, "PDF").pdf(x)
     if d.head == "MultinormalDistribution":
         m, S_ = _mvn(d, "PDF")
         xv = sp.Matrix(_vec(x, m.rows, "PDF"))
@@ -2089,6 +2113,8 @@ def _multi_pdf(d, x):
 
 
 def _multi_cdf(d, x):
+    if d.head in MULTI_BUILDERS:
+        return MULTI_BUILDERS[d.head](d, "CDF").cdf(x)
     if d.head == "MultinormalDistribution":
         m, S_ = _mvn(d, "CDF")
         xv = _vec(x, m.rows, "CDF")
@@ -2117,6 +2143,8 @@ def _multi_cdf(d, x):
 
 
 def _multi_moment(d, which):
+    if d.head in MULTI_BUILDERS:
+        return MULTI_BUILDERS[d.head](d, which).moment(which)
     if d.head == "MultinormalDistribution":
         m, S_ = _mvn(d, which)
         if which == "Mean":
@@ -2170,7 +2198,12 @@ def _fill(dims, one):
 
 def _rv(d, n=None):
     rng = _rng()
-    if d.head == "MultinormalDistribution":
+    if d.head in MULTI_BUILDERS:
+        md = MULTI_BUILDERS[d.head](d, "RandomVariate")
+
+        def one():
+            return md.sample(rng)
+    elif d.head == "MultinormalDistribution":
         m, S_ = _mvn(d, "RandomVariate")
         if not (all(v.is_number for v in m) and all(v.is_number for v in S_)):
             raise ValueError("RandomVariate: distribution parameters must be numeric")
@@ -2293,7 +2326,8 @@ def _distributed(spec, fname):
         v, d = s.args
         if not isinstance(v, Symbol):
             raise NotImplementedError(f"{fname}: only scalar random variables are supported")
-        if not (isinstance(d, Expr) and isinstance(d.head, str) and (d.head in TABLE or d.head == "EmpiricalDistribution")):
+        if not (isinstance(d, Expr) and isinstance(d.head, str) and (d.head in TABLE or d.head in BUILDERS or
+                                                                     d.head == "EmpiricalDistribution")):
             if isinstance(d, Expr) and isinstance(d.head, str) and d.head.endswith("Distribution"):
                 raise NotImplementedError(f"{fname}: {d.head} is not supported")
             raise ValueError(f"{fname}: {d} is not a distribution")
@@ -2307,6 +2341,8 @@ def _expect(f, pairs, fname, numeric=False):
     (v, d), rest = pairs[0], pairs[1:]
     dd = dist_of(d, fname)
     inner = _expect(f, rest, fname, numeric) if rest else f
+    if hasattr(dd, "expect"):
+        return dd.expect(inner, v, numeric)
     if isinstance(dd, Empirical):
         return sp.Add(*(dd.w[p] * inner.subs(v, p) for p in dd.pts))
     lo, hi = dd.bounds()
