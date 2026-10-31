@@ -672,52 +672,33 @@ def _quadratic_d(P):
 
 
 def _fund_unit(d):
-    """Fundamental unit (x + y Sqrt[d])/2-form as a SymPy number, d > 1 square-free."""
-    D = d if d % 4 == 1 else 4 * d
-    # continued fraction of w = (1 + Sqrt[d])/2 (d = 1 mod 4) or Sqrt[d]
-    if d % 4 == 1:
-        # Use Pell-type search via continued fraction of Sqrt[D]: minimal t, u with t^2 - D u^2 = +-4
-        pass
-    # solve t^2 - D u^2 = -4 or 4 with minimal t via continued fraction of Sqrt[d]
-    best = None
+    """Fundamental unit > 1 of the ring of integers of Q(Sqrt[d]) (d > 1 square-free), as a SymPy number."""
     sq = sp.sqrt(d)
-    m, dd, a0 = 0, 1, math.isqrt(d)
-    a = a0
+    # least solution of p^2 - d q^2 = +-1 from the continued fraction of Sqrt[d]
+    a0 = math.isqrt(d)
+    m, dd, a = 0, 1, a0
     p_prev, p = 1, a0
     q_prev, q = 0, 1
-    for _ in range(10 ** 7):
-        # convergent p/q of Sqrt[d]
-        for val in (p * p - d * q * q,):
-            if val in (1, -1):
-                best = (p, q)
-                break
-        if best:
-            break
+    while p * p - d * q * q not in (1, -1):
         m = dd * a - m
         dd = (d - m * m) // dd
         a = (a0 + m) // dd
         p_prev, p = p, a * p + p_prev
         q_prev, q = q, a * q + q_prev
-    eps = best[0] + best[1] * sq
-    if d % 4 == 1:
-        # the unit may be a half-integer combination: search (t + u Sqrt[d])/2 with t^2 - d u^2 = +-4, u minimal
-        cands = []
-        u = 1
-        while True:
-            for s in (4, -4):
-                t2 = s + d * u * u
-                if t2 > 0:
-                    t = math.isqrt(t2)
-                    if t * t == t2:
-                        cands.append((t + u * sq) / 2)
-            if cands:
-                break
-            if (u * u) * d > (best[0] + best[1] * math.sqrt(d)) ** 2 * 4:
-                break
-            u += 1
-        if cands:
-            eps = min(cands, key=lambda e: float(e))
-    return sp.nsimplify(sp.expand(eps)) if False else sp.expand(eps)
+    eps0 = p + q * sq
+    if d % 8 != 5:
+        return eps0
+    # for d = 5 mod 8 the fundamental unit may be (t + u Sqrt[d])/2 with cube eps0
+    digits = len(str(p)) + 30
+    e = sp.N(eps0, digits) ** (sp.Rational(1, 3))
+    for sgn in (1, -1):
+        t = int(sp.Integer(sp.floor(sp.N(e + sgn / e, digits) + sp.Rational(1, 2))))
+        u = int(sp.Integer(sp.floor(sp.N((e - sgn / e) / sq, digits) + sp.Rational(1, 2))))
+        if t * t - d * u * u in (4, -4) and u > 0:
+            cand = (t + u * sq) / 2
+            if sp.expand(cand ** 3 - eps0) == 0:
+                return sp.expand(cand)
+    return eps0
 
 
 def _real_quadratic(a, fname):
@@ -776,45 +757,59 @@ def _class_number_imag(D):
     return h
 
 
-def _kronecker(D, n):
-    return sp.jacobi_symbol(D % n, n) if n % 2 else None
+def _narrow_class_number_real(D):
+    """h+(D) for a positive fundamental discriminant: the number of cycles of reduced primitive forms."""
+    r = math.isqrt(D)
+    if r * r == D:
+        raise ValueError("not a field discriminant")
+    sq = math.sqrt(D)
+    forms = set()
+    for b in range(1 if D % 2 else 2, r + 1, 2):
+        if b * b >= D:
+            break
+        N = (D - b * b) // 4
+        for a0 in sp.divisors(N):
+            for a in (a0, -a0):
+                c = -N // a
+                if sq - b < 2 * abs(a) < sq + b and math.gcd(math.gcd(abs(a), b), abs(c)) == 1:
+                    forms.add((a, b, c))
+    seen = set()
+    cycles = 0
+    for f in forms:
+        if f in seen:
+            continue
+        cycles += 1
+        g = f
+        while g not in seen:
+            seen.add(g)
+            a, b, c = g
+            m = 2 * abs(c)
+            # b' = -b mod 2|c| with sqrt(D) - 2|c| < b' < sqrt(D)
+            t = (-b) % m
+            lo = sq - m
+            k = math.floor((sq - t) / m)
+            bp = t + k * m
+            if bp >= sq:
+                bp -= m
+            while bp <= lo:
+                bp += m
+            ap = (bp * bp - D) // (4 * c)
+            g = (c, bp, ap)
+            if g not in forms:
+                raise ArithmeticError("NumberFieldClassNumber: form reduction failed")
+    return cycles
 
 
 def _class_number_real(d):
-    """h for Q(Sqrt[d]), d > 1 square-free, from the analytic class number formula."""
-    import numpy as np
+    """h for Q(Sqrt[d]), d > 1 square-free: narrow class number from cycles of reduced forms, halved when the
+    fundamental unit has norm +1."""
     D = d if d % 4 == 1 else 4 * d
-    if D > 4 * 10 ** 7:
+    if D > 10 ** 12:
         raise NotImplementedError("NumberFieldClassNumber: the discriminant is too large")
+    hp = _narrow_class_number_real(D)
     eps = _fund_unit(d)
-    ln_eps = float(sp.log(sp.N(eps, 50)))
-    a = np.arange(1, D)
-    chi = np.array([int(sp.kronecker_symbol(D, int(x))) for x in a]) if D < 2000 else _kron_vec(D)
-    s = -np.sum(chi * np.log(np.sin(np.pi * a / D)))
-    h = s / (2 * ln_eps)
-    hr = int(round(h))
-    if abs(h - hr) > 1e-3 or hr < 1:
-        raise ArithmeticError("NumberFieldClassNumber: numerical class number formula failed")
-    return hr
-
-
-def _kron_vec(D):
-    """Kronecker symbol (D/a) for a = 1..D-1 (numpy, multiplicative sieve)."""
-    import numpy as np
-    n = D
-    chi = np.zeros(n, dtype=np.int64)
-    chi[1] = 1
-    spf = np.zeros(n, dtype=np.int64)
-    for p in sp.primerange(2, n):
-        if spf[p] == 0:
-            spf[p::p][spf[p::p] == 0] = p
-    vals_p = {}
-    for a in range(2, n):
-        p = int(spf[a])
-        if p not in vals_p:
-            vals_p[p] = int(sp.kronecker_symbol(D, p))
-        chi[a] = vals_p[p] * chi[a // p]
-    return chi[1:]
+    nrm = sp.expand(eps * eps.subs(sp.sqrt(d), -sp.sqrt(d)))
+    return hp if nrm == -1 else hp // 2
 
 
 @fn("NumberFieldClassNumber", **ADDED, notes="class number of Q(a) for quadratic fields: reduced binary quadratic "
