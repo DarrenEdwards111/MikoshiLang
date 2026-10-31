@@ -5705,3 +5705,16 @@ def _dsolve_w05(a, ev_, expr):
 
 
 K._BUILTINS["DSolve"] = _dsolve_w05
+
+
+# Normal[CylindricalDecompositionFunction[cond, vars]] -> cond (all other Normal calls are unchanged)
+_orig_normal_w05 = K._BUILTINS["Normal"]
+
+
+def _normal_w05(a, ev_, expr):
+    if len(a) == 1 and _is_head(a[0], "CylindricalDecompositionFunction") and len(a[0].args) == 2:
+        return a[0].args[0]
+    return _orig_normal_w05(a, ev_, expr)
+
+
+K._BUILTINS["Normal"] = _normal_w05
