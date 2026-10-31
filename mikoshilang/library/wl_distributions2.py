@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import inspect
 import math
+import mpmath
 
 import sympy as sp
 
@@ -2324,8 +2325,6 @@ class Wakeby(_QuantileDefined):
         for v, w in ((al, "alpha"), (be, "beta"), (ga, "gamma"), (de, "delta")):
             _real(v, w, name)
         if all(_num(v) for v in a):
-            if not (be + de > 0 or (be == 0 and de == 0 and ga == 0)) and not (al == 0 or ga == 0):
-                pass
             if al + ga < 0 or ga < 0 or de >= 1:
                 raise ValueError(f"{name}: need gamma >= 0, alpha + gamma >= 0 and delta < 1")
         super().__init__(name, a)
@@ -2340,11 +2339,9 @@ class Wakeby(_QuantileDefined):
         al, be, ga, de, m = self.a
         if not self.numeric():
             raise Unevaluated()
-        if de < 0 and ga > 0 or (ga == 0 and be > 0):
-            hi = m + (al / be if be != 0 else 0) - (ga / de if de != 0 else 0)
-            if ga == 0 and be > 0:
-                hi = m + al / be
-            return m, hi
+        # finite upper end iff both quantile terms stay bounded as p -> 1
+        if (ga == 0 or de < 0) and (al == 0 or be > 0):
+            return m, m + (al / be if al != 0 else 0) - (ga / de if ga != 0 else 0)
         return m, sp.oo
 
     def mean(self):
@@ -5146,3 +5143,1413 @@ _builder("SplicedDistribution", _spliced,
          "SplicedDistribution[{w1, ...}, {c0, ..., cn}, {dist1, ...}] = MixtureDistribution[{w...}, {Truncated"
          "Distribution[{c0, c1}, dist1], ...}] for continuous dist_i: PDF, CDF, moments, RandomVariate. Check: exact; "
          "equals the documented mixture in tests.")
+
+
+# ─────────────────────────── multivariate and matrix distributions ───────────────────────────
+
+def _out(v, *inputs):
+    if v is sp.nan or v == sp.nan:
+        return W.INDET
+    return numeric_out(sp.simplify(v) if isinstance(v, sp.Basic) and not has_float(v) else v, *inputs)
+
+
+def _vlist(v, fname, what):
+    if not is_list(v):
+        if isinstance(v, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: {what} must be a list")
+    if any(is_list(t) for t in v.args):
+        raise TypeError(f"{fname}: {what} must be a vector")
+    return [sym(t, fname) for t in v.args]
+
+
+def _matrix(v, fname, what="matrix", square=True):
+    if not (is_list(v) and v.args and all(is_list(r) for r in v.args)):
+        if isinstance(v, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: {what} must be a matrix")
+    rows = [[sym(t, fname) for t in r.args] for r in v.args]
+    if len({len(r) for r in rows}) != 1:
+        raise ValueError(f"{fname}: {what} must be rectangular")
+    M = sp.Matrix(rows)
+    if square and M.rows != M.cols:
+        raise ValueError(f"{fname}: {what} must be square")
+    return M
+
+
+def _posdef(S, fname, what="the covariance matrix"):
+    if S.is_symmetric() is False:
+        raise ValueError(f"{fname}: {what} must be symmetric")
+    if all(_num(v) for v in S):
+        try:
+            ok = all(sp.N(m) > 0 for m in [S[:k, :k].det() for k in range(1, S.rows + 1)])
+        except TypeError:
+            ok = False
+        if not ok:
+            raise ValueError(f"{fname}: {what} must be positive definite")
+
+
+def _mlist(M):
+    return L(*(L(*(R(M[i, j]) for j in range(M.cols))) for i in range(M.rows)))
+
+
+def _vout(vals, *inputs):
+    return L(*(_out(v, *inputs) for v in vals))
+
+
+def _mout(M, *inputs):
+    return L(*(L(*(_out(M[i, j], *inputs) for j in range(M.cols))) for i in range(M.rows)))
+
+
+def _point(x, k, fname):
+    if not is_list(x) or len(x.args) != k or any(is_list(t) for t in x.args):
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: expected a point with {k} coordinates")
+    return [sym(t, fname) for t in x.args]
+
+
+def _mpoint(x, r, c, fname):
+    M = _matrix(x, fname, "the point", square=False)
+    if (M.rows, M.cols) != (r, c):
+        raise ValueError(f"{fname}: expected a {r} x {c} matrix")
+    return M
+
+
+def _rng_np(rng):
+    import numpy as np
+    return np.random.default_rng(rng.getrandbits(64))
+
+
+class MultiD:
+    """base for multivariate distributions in wl_stats.MULTI_BUILDERS"""
+    discrete = False
+
+    def __init__(self, expr):
+        self.expr = expr
+
+    def dim(self):
+        raise NotImplementedError
+
+    def pdf(self, x):
+        raise NotImplementedError(f"PDF: not supported for {self.expr.head}")
+
+    def cdf(self, x):
+        raise NotImplementedError(f"CDF: not supported for {self.expr.head}")
+
+    def mean_v(self):
+        raise NotImplementedError
+
+    def cov_m(self):
+        raise NotImplementedError(f"Covariance: not supported for {self.expr.head}")
+
+    def var_v(self):
+        C = self.cov_m()
+        return [C[i, i] for i in range(C.rows)]
+
+    def moment(self, which):
+        e = self.expr
+        if which == "Mean":
+            return _vout(self.mean_v(), e)
+        if which == "Variance":
+            return _vout(self.var_v(), e)
+        if which == "StandardDeviation":
+            return _vout([v if v in (sp.oo, sp.nan) else sp.sqrt(v) for v in self.var_v()], e)
+        if which == "Covariance":
+            return _mout(self.cov_m(), e)
+        raise NotImplementedError(f"{which}: not supported for {e.head}")
+
+    def marginal(self, k):
+        raise NotImplementedError(f"MarginalDistribution: not supported for {self.expr.head}")
+
+    def numeric(self):
+        return all(_num(v) for v in self.params())
+
+    def params(self):
+        return []
+
+    def need_numeric(self, fname):
+        if not self.numeric():
+            raise Unevaluated() if fname != "RandomVariate" else ValueError(
+                "RandomVariate: distribution parameters must be numeric")
+
+
+def _mvn_expr(mu, S):
+    return Expr("MultinormalDistribution", L(*(R(v) for v in mu)), _mlist(S))
+
+
+class Binormal(MultiD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        a = list(expr.args)
+        if len(a) == 1:
+            mu, sig, rho = [sp.Integer(0)] * 2, [sp.Integer(1)] * 2, sym(a[0], fname)
+        elif len(a) == 2:
+            mu, sig, rho = [sp.Integer(0)] * 2, _vlist(a[0], fname, "{sigma1, sigma2}"), sym(a[1], fname)
+        elif len(a) == 3:
+            mu, sig, rho = _vlist(a[0], fname, "{mu1, mu2}"), _vlist(a[1], fname, "{sigma1, sigma2}"), sym(a[2], fname)
+        else:
+            raise ValueError("BinormalDistribution: expected [{mu1, mu2}, {sigma1, sigma2}, rho], [{sigma1, sigma2}, rho] "
+                             "or [rho]")
+        if len(mu) != 2 or len(sig) != 2:
+            raise ValueError("BinormalDistribution: means and standard deviations must have two components")
+        for s in sig:
+            _pos(s, "the standard deviations", "BinormalDistribution")
+        if _num(rho) and not (-1 < rho < 1):
+            raise ValueError("BinormalDistribution: rho must be in (-1, 1)")
+        self.mu, self.sig, self.rho = mu, sig, rho
+        s1, s2 = sig
+        self.S = sp.Matrix([[s1 ** 2, rho * s1 * s2], [rho * s1 * s2, s2 ** 2]])
+
+    def params(self):
+        return self.mu + self.sig + [self.rho]
+
+    def dim(self):
+        return 2
+
+    def _mvn(self):
+        return _mvn_expr(self.mu, self.S)
+
+    def pdf(self, x):
+        p = _point(x, 2, "PDF")
+        m = sp.Matrix(self.mu)
+        d = sp.Matrix(p) - m
+        val = sp.exp(-(d.T * self.S.inv() * d)[0] / 2) / (2 * sp.pi * sp.sqrt(self.S.det()))
+        return _out(sp.simplify(val), self.expr, x)
+
+    def cdf(self, x):
+        return W._multi_cdf(self._mvn(), x)
+
+    def mean_v(self):
+        return self.mu
+
+    def cov_m(self):
+        return self.S
+
+    def marginal(self, k):
+        return Expr("NormalDistribution", R(self.mu[k]), R(self.sig[k]))
+
+    def sample(self, rng):
+        return W._rv(self._mvn())
+
+
+class MultivariateT(MultiD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        a = list(expr.args)
+        if len(a) == 2:
+            S = _matrix(a[0], fname, "the scale matrix")
+            mu = [sp.Integer(0)] * S.rows
+            nu = sym(a[1], fname)
+        elif len(a) == 3:
+            mu = _vlist(a[0], fname, "the location")
+            S = _matrix(a[1], fname, "the scale matrix")
+            nu = sym(a[2], fname)
+        else:
+            raise ValueError("MultivariateTDistribution: expected [Sigma, nu] or [mu, Sigma, nu]")
+        if len(mu) != S.rows:
+            raise ValueError("MultivariateTDistribution: mu and Sigma dimensions differ")
+        _posdef(S, "MultivariateTDistribution", "the scale matrix")
+        _pos(nu, "nu", "MultivariateTDistribution")
+        self.mu, self.S, self.nu = mu, S, nu
+
+    def params(self):
+        return list(self.mu) + list(self.S) + [self.nu]
+
+    def dim(self):
+        return self.S.rows
+
+    def pdf(self, x):
+        p = self.S.rows
+        v = self.nu
+        d = sp.Matrix(_point(x, p, "PDF")) - sp.Matrix(self.mu)
+        q = (d.T * self.S.inv() * d)[0]
+        val = (sp.gamma((v + p) / 2) / (sp.gamma(v / 2) * (v * sp.pi) ** sp.Rational(p, 2) * sp.sqrt(self.S.det()))
+               * (1 + q / v) ** (-(v + p) / 2))
+        return _out(sp.simplify(val), self.expr, x)
+
+    def cdf(self, x):
+        pt = _point(x, self.S.rows, "CDF")
+        if not (self.numeric() and all(_num(t) for t in pt)):
+            raise Unevaluated()
+        if self.S.rows == 1:
+            return _out(W.cdf_value(W.StudentT("StudentTDistribution", [self.mu[0], sp.sqrt(self.S[0, 0]), self.nu]),
+                                    pt[0]), self.expr, x)
+        try:
+            import scipy.stats as st
+        except ImportError:
+            raise NotImplementedError("CDF of a MultivariateTDistribution requires SciPy")
+        v = st.multivariate_t(loc=[_f(t) for t in self.mu], shape=[[_f(self.S[i, j]) for j in range(self.S.cols)]
+                                                                   for i in range(self.S.rows)], df=_f(self.nu))
+        return float(v.cdf([_f(t) for t in pt]))
+
+    def mean_v(self):
+        if _num(self.nu) and not self.nu > 1:
+            return [sp.nan] * len(self.mu)
+        return self.mu
+
+    def cov_m(self):
+        v = self.nu
+        if _num(v) and not v > 2:
+            return sp.Matrix(self.S.rows, self.S.cols, lambda i, j: sp.oo if v > 1 else sp.nan)
+        return self.S * v / (v - 2)
+
+    def marginal(self, k):
+        return Expr("StudentTDistribution", R(self.mu[k]), R(sp.sqrt(self.S[k, k])), R(self.nu))
+
+    def sample(self, rng):
+        self.need_numeric("RandomVariate")
+        z = W._rv(_mvn_expr([0] * self.S.rows, self.S))
+        w = math.sqrt(rng.gammavariate(_f(self.nu) / 2, 2.0) / _f(self.nu))
+        return L(*(_f(m) + float(R(t) if not isinstance(t, float) else t) / w for m, t in zip(self.mu, z.args)))
+
+
+class Dirichlet(MultiD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 1:
+            raise ValueError("DirichletDistribution: expected DirichletDistribution[{a1, ..., a(k+1)}]")
+        al = _vlist(expr.args[0], fname, "the shape parameters")
+        if len(al) < 2:
+            raise ValueError("DirichletDistribution: need at least two shape parameters")
+        for a in al:
+            _pos(a, "the shape parameters", "DirichletDistribution")
+        self.al = al
+
+    def params(self):
+        return self.al
+
+    def dim(self):
+        return len(self.al) - 1
+
+    def pdf(self, x):
+        k = len(self.al) - 1
+        p = _point(x, k, "PDF")
+        last = 1 - sp.Add(*p)
+        if all(_num(t) for t in p) and not (all(t > 0 for t in p) and last > 0):
+            return 0
+        a0 = sp.Add(*self.al)
+        val = sp.gamma(a0) / sp.Mul(*(sp.gamma(a) for a in self.al)) * sp.Mul(
+            *(t ** (a - 1) for t, a in zip(p + [last], self.al)))
+        if all(_num(t) for t in p):
+            return _out(val, self.expr, x)
+        cond = sp.And(*(t > 0 for t in p), last > 0)
+        return _out(sp.Piecewise((val, cond), (0, True)), self.expr, x)
+
+    def cdf(self, x):
+        k = len(self.al) - 1
+        p = _point(x, k, "CDF")
+        if k == 1:
+            return _out(W.cdf_value(W.Beta("BetaDistribution", [self.al[0], self.al[1]]), p[0]), self.expr, x)
+        raise NotImplementedError("CDF: DirichletDistribution CDFs are only supported in one dimension")
+
+    def mean_v(self):
+        a0 = sp.Add(*self.al)
+        return [a / a0 for a in self.al[:-1]]
+
+    def cov_m(self):
+        a0 = sp.Add(*self.al)
+        k = len(self.al) - 1
+        return sp.Matrix(k, k, lambda i, j: (self.al[i] * (a0 if i == j else 0) - self.al[i] * self.al[j])
+                         / (a0 ** 2 * (a0 + 1)))
+
+    def marginal(self, k):
+        a0 = sp.Add(*self.al)
+        return Expr("BetaDistribution", R(self.al[k]), R(a0 - self.al[k]))
+
+    def sample(self, rng):
+        self.need_numeric("RandomVariate")
+        g = [rng.gammavariate(_f(a), 1.0) for a in self.al]
+        s = sum(g)
+        return L(*(v / s for v in g[:-1]))
+
+
+class LogMultinormal(MultiD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 2:
+            raise ValueError("LogMultinormalDistribution: expected LogMultinormalDistribution[mu, Sigma]")
+        self.mu = _vlist(expr.args[0], fname, "mu")
+        self.S = _matrix(expr.args[1], fname, "Sigma")
+        if len(self.mu) != self.S.rows:
+            raise ValueError("LogMultinormalDistribution: mu and Sigma dimensions differ")
+        _posdef(self.S, "LogMultinormalDistribution", "Sigma")
+
+    def params(self):
+        return self.mu + list(self.S)
+
+    def dim(self):
+        return len(self.mu)
+
+    def pdf(self, x):
+        p = _point(x, len(self.mu), "PDF")
+        if all(_num(t) for t in p) and not all(t > 0 for t in p):
+            return 0
+        d = sp.Matrix([sp.log(t) for t in p]) - sp.Matrix(self.mu)
+        k = len(p)
+        val = sp.exp(-(d.T * self.S.inv() * d)[0] / 2) / (sp.sqrt((2 * sp.pi) ** k * self.S.det()) * sp.Mul(*p))
+        if all(_num(t) for t in p):
+            return _out(val, self.expr, x)
+        return _out(sp.Piecewise((val, sp.And(*(t > 0 for t in p))), (0, True)), self.expr, x)
+
+    def cdf(self, x):
+        p = _point(x, len(self.mu), "CDF")
+        if all(_num(t) for t in p) and not all(t > 0 for t in p):
+            return 0
+        return W._multi_cdf(_mvn_expr(self.mu, self.S), L(*(R(sp.log(t)) for t in p)))
+
+    def mean_v(self):
+        return [sp.exp(m + self.S[i, i] / 2) for i, m in enumerate(self.mu)]
+
+    def cov_m(self):
+        m, S = self.mu, self.S
+        return sp.Matrix(S.rows, S.cols, lambda i, j: sp.exp(m[i] + m[j] + (S[i, i] + S[j, j]) / 2) * (sp.exp(S[i, j]) - 1))
+
+    def marginal(self, k):
+        return Expr("LogNormalDistribution", R(self.mu[k]), R(sp.sqrt(self.S[k, k])))
+
+    def sample(self, rng):
+        self.need_numeric("RandomVariate")
+        z = W._rv(_mvn_expr(self.mu, self.S))
+        return L(*(math.exp(float(t)) for t in z.args))
+
+
+class _MultiDiscrete(MultiD):
+    discrete = True
+
+    def _ints(self, x, fname):
+        p = _point(x, self.dim(), fname)
+        if not all(_num(t) for t in p) or not self.numeric():
+            raise Unevaluated()
+        return p
+
+    def pdf(self, x):
+        p = self._ints(x, "PDF")
+        if not all(t == sp.floor(t) and t >= 0 for t in p):
+            return _out(sp.Integer(0), self.expr, x)
+        return _out(self.pmf([int(t) for t in p]), self.expr, x)
+
+    def cdf(self, x):
+        import itertools
+        p = self._ints(x, "CDF")
+        lim = [int(sp.floor(t)) for t in p]
+        if any(t < 0 for t in lim):
+            return 0
+        cap = self.cap()
+        lim = [min(l, c) if c is not None else l for l, c in zip(lim, cap)]
+        if math.prod(l + 1 for l in lim) > 10 ** 6:
+            raise NotImplementedError("CDF: too many lattice points")
+        tot = sp.Add(*(self.pmf(list(c)) for c in itertools.product(*(range(l + 1) for l in lim))))
+        return _out(tot, self.expr, x)
+
+    def cap(self):
+        return [None] * self.dim()
+
+
+class MultivariateHypergeometric(_MultiDiscrete):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 2:
+            raise ValueError("MultivariateHypergeometricDistribution: expected [n, {m1, ..., mk}]")
+        self.n = sym(expr.args[0], fname)
+        self.m = _vlist(expr.args[1], fname, "the counts")
+        _posint(self.n, "n", "MultivariateHypergeometricDistribution")
+        for v in self.m:
+            _nonnegint(v, "the counts m_i", "MultivariateHypergeometricDistribution")
+        if self.numeric() and self.n > sp.Add(*self.m):
+            raise ValueError("MultivariateHypergeometricDistribution: n must not exceed the total count")
+
+    def params(self):
+        return [self.n] + self.m
+
+    def dim(self):
+        return len(self.m)
+
+    def cap(self):
+        return [int(v) for v in self.m]
+
+    def pmf(self, ks):
+        if sum(ks) != self.n:
+            return sp.Integer(0)
+        N = sp.Add(*self.m)
+        return sp.Mul(*(sp.binomial(m, k) for m, k in zip(self.m, ks))) / sp.binomial(N, self.n)
+
+    def mean_v(self):
+        N = sp.Add(*self.m)
+        return [self.n * m / N for m in self.m]
+
+    def cov_m(self):
+        N, n, m = sp.Add(*self.m), self.n, self.m
+        k = len(m)
+        return sp.Matrix(k, k, lambda i, j: n * (N - n) / (N - 1) * m[i] / N * ((1 if i == j else 0) - m[j] / N))
+
+    def marginal(self, k):
+        return Expr("HypergeometricDistribution", R(self.n), R(self.m[k]), R(sp.Add(*self.m)))
+
+    def sample(self, rng):
+        self.need_numeric("RandomVariate")
+        pool = [i for i, m in enumerate(self.m) for _ in range(int(m))]
+        pick = rng.sample(pool, int(self.n))
+        return L(*(pick.count(i) for i in range(len(self.m))))
+
+
+class MultivariatePoisson(_MultiDiscrete):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 2:
+            raise ValueError("MultivariatePoissonDistribution: expected [mu0, {mu1, ..., muk}]")
+        self.m0 = sym(expr.args[0], fname)
+        self.m = _vlist(expr.args[1], fname, "the means")
+        for v in [self.m0] + self.m:
+            _pos(v, "the means", "MultivariatePoissonDistribution")
+
+    def params(self):
+        return [self.m0] + self.m
+
+    def dim(self):
+        return len(self.m)
+
+    def pmf(self, ks):
+        tot = sp.Integer(0)
+        for j in range(min(ks) + 1):
+            tot += self.m0 ** j / sp.factorial(j) * sp.Mul(*(m ** (k - j) / sp.factorial(k - j) for m, k in zip(self.m, ks)))
+        return sp.exp(-self.m0 - sp.Add(*self.m)) * tot
+
+    def mean_v(self):
+        return [self.m0 + m for m in self.m]
+
+    def cov_m(self):
+        k = len(self.m)
+        return sp.Matrix(k, k, lambda i, j: self.m0 + (self.m[i] if i == j else 0))
+
+    def marginal(self, k):
+        return Expr("PoissonDistribution", R(self.m0 + self.m[k]))
+
+    def sample(self, rng):
+        self.need_numeric("RandomVariate")
+        P = lambda mu: W.Poisson("PoissonDistribution", [mu]).sample(rng)  # noqa: E731
+        y0 = P(self.m0)
+        return L(*(y0 + P(m) for m in self.m))
+
+
+class NegativeMultinomial(_MultiDiscrete):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 2:
+            raise ValueError("NegativeMultinomialDistribution: expected [n, {p1, ..., pk}]")
+        self.n = sym(expr.args[0], fname)
+        self.p = _vlist(expr.args[1], fname, "the failure probabilities")
+        _pos(self.n, "n", "NegativeMultinomialDistribution")
+        if all(_num(v) for v in self.p) and (any(v < 0 for v in self.p) or not sp.Add(*self.p) < 1):
+            raise ValueError("NegativeMultinomialDistribution: probabilities must be non-negative with total < 1")
+
+    def params(self):
+        return [self.n] + self.p
+
+    def dim(self):
+        return len(self.p)
+
+    def p0(self):
+        return 1 - sp.Add(*self.p)
+
+    def pmf(self, ks):
+        n = self.n
+        return (sp.gamma(n + sum(ks)) / (sp.gamma(n) * sp.Mul(*(sp.factorial(k) for k in ks))) * self.p0() ** n
+                * sp.Mul(*(p ** k for p, k in zip(self.p, ks))))
+
+    def mean_v(self):
+        return [self.n * p / self.p0() for p in self.p]
+
+    def cov_m(self):
+        n, p, p0 = self.n, self.p, self.p0()
+        k = len(p)
+        return sp.Matrix(k, k, lambda i, j: n * p[i] * p[j] / p0 ** 2 + (n * p[i] / p0 if i == j else 0))
+
+    def marginal(self, k):
+        p0 = self.p0()
+        return Expr("NegativeBinomialDistribution", R(self.n), R(sp.simplify(p0 / (p0 + self.p[k]))))
+
+    def sample(self, rng):
+        self.need_numeric("RandomVariate")
+        # Poisson-gamma mixture: X_i | G ~ Poisson(G p_i/p0), G ~ Gamma(n, 1)
+        g = rng.gammavariate(_f(self.n), 1.0)
+        p0 = _f(self.p0())
+        return L(*(W.Poisson("PoissonDistribution", [sp.Float(g * _f(p) / p0)]).sample(rng) if _f(p) > 0 else 0
+                   for p in self.p))
+
+
+class Product(MultiD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        comps = []
+        for a in expr.args:
+            if is_list(a) and len(a.args) == 2 and W.is_dist(a.args[0]):
+                n = sym(a.args[1], fname)
+                if not (_num(n) and n.is_Integer and n > 0):
+                    if not _num(n):
+                        raise Unevaluated()
+                    raise ValueError("ProductDistribution: the repetition count must be a positive integer")
+                comps += [a.args[0]] * int(n)
+            else:
+                comps.append(a)
+        if not comps:
+            raise ValueError("ProductDistribution: expected at least one distribution")
+        self.exprs = comps
+        self.ds = [_base(c, "ProductDistribution") for c in comps]
+
+    def numeric(self):
+        return all(d.numeric() for d in self.ds)
+
+    def dim(self):
+        return len(self.ds)
+
+    def pdf(self, x):
+        p = _point(x, len(self.ds), "PDF")
+        return _out(sp.Mul(*(W.pdf_value(d, t) for d, t in zip(self.ds, p))), self.expr, x)
+
+    def cdf(self, x):
+        p = _point(x, len(self.ds), "CDF")
+        return _out(sp.Mul(*(W.cdf_value(d, t) for d, t in zip(self.ds, p))), self.expr, x)
+
+    def mean_v(self):
+        return [d.mean() for d in self.ds]
+
+    def var_v(self):
+        return [d.var() for d in self.ds]
+
+    def cov_m(self):
+        return sp.diag(*self.var_v())
+
+    def moment(self, which):
+        if which in ("Skewness", "Kurtosis"):
+            return _vout([W.skewness(d) if which == "Skewness" else W.kurtosis(d) for d in self.ds], self.expr)
+        return super().moment(which)
+
+    def marginal(self, k):
+        return self.exprs[k]
+
+    def sub(self, ks):
+        return Expr("ProductDistribution", *(self.exprs[k] for k in ks))
+
+    def sample(self, rng):
+        out = []
+        for d in self.ds:
+            if not d.numeric():
+                raise ValueError("RandomVariate: distribution parameters must be numeric")
+            v = d.sample(rng)
+            out.append(R(v) if not isinstance(v, (int, float)) else v)
+        return L(*out)
+
+
+# ── copulas ──
+
+class Copula(MultiD):
+    KERNELS = ("Product", "Maximal", "Minimal", "Frank", "Clayton", "GumbelHougaard", "FGM", "AMH", "Binormal",
+               "Multinormal", "MultivariateT")
+
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 2 or not is_list(expr.args[1]):
+            raise ValueError("CopulaDistribution: expected CopulaDistribution[ker, {dist1, dist2, ...}]")
+        ker = expr.args[0]
+        if isinstance(ker, str):
+            name, kp = ker, []
+        elif is_list(ker) and ker.args and isinstance(ker.args[0], str):
+            name, kp = ker.args[0], list(ker.args[1:])
+        else:
+            raise TypeError("CopulaDistribution: the kernel must be a name or {name, parameters}")
+        if name not in self.KERNELS:
+            raise ValueError(f"CopulaDistribution: unknown kernel {name!r}")
+        self.exprs = list(expr.args[1].args)
+        self.ds = [_base(c, "CopulaDistribution") for c in self.exprs]
+        n = len(self.ds)
+        if n < 2:
+            raise ValueError("CopulaDistribution: need at least two marginal distributions")
+        self.name = name
+        need = {"Product": 0, "Maximal": 0, "Minimal": 0, "MultivariateT": 2}.get(name, 1)
+        if len(kp) != need:
+            raise ValueError(f"CopulaDistribution: kernel {name} expects {need} parameter(s)")
+        if name in ("Multinormal", "MultivariateT"):
+            S = _matrix(kp[0], "CopulaDistribution", "the kernel matrix")
+            if S.rows != n:
+                raise ValueError("CopulaDistribution: the kernel matrix size must match the number of marginals")
+            _posdef(S, "CopulaDistribution", "the kernel matrix")
+            Dm = sp.diag(*[1 / sp.sqrt(S[i, i]) for i in range(n)])
+            self.Rm = sp.simplify(Dm * S * Dm)
+            self.nu = sym(kp[1], "CopulaDistribution") if name == "MultivariateT" else None
+            if self.nu is not None:
+                _pos(self.nu, "nu", "CopulaDistribution")
+            self.a = None
+        else:
+            self.a = sym(kp[0], "CopulaDistribution") if kp else None
+            if name == "Binormal":
+                if n != 2:
+                    raise ValueError("CopulaDistribution: the Binormal kernel is bivariate")
+                if _num(self.a) and not (-1 <= self.a <= 1):
+                    raise ValueError("CopulaDistribution: rho must be in [-1, 1]")
+                self.Rm = sp.Matrix([[1, self.a], [self.a, 1]])
+            if _num(self.a):
+                if name == "Clayton" and not self.a > 0:
+                    raise ValueError("CopulaDistribution: the Clayton parameter must be positive")
+                if name == "Frank" and not self.a > 0:
+                    raise ValueError("CopulaDistribution: the Frank parameter must be positive")
+                if name == "GumbelHougaard" and not self.a >= 1:
+                    raise ValueError("CopulaDistribution: the Gumbel-Hougaard parameter must be at least 1")
+                if name in ("FGM", "AMH") and not (-1 <= self.a <= 1):
+                    raise ValueError(f"CopulaDistribution: the {name} parameter must be in [-1, 1]")
+
+    def numeric(self):
+        return all(d.numeric() for d in self.ds) and (self.a is None or _num(self.a))
+
+    def dim(self):
+        return len(self.ds)
+
+    def C(self, u):
+        n, a, k = len(u), self.a, self.name
+        if k == "Product":
+            return sp.Mul(*u)
+        if k == "Maximal":
+            return sp.Min(*u)
+        if k == "Minimal":
+            return sp.Max(sp.Add(*u) - n + 1, 0)
+        if k == "Frank":
+            return -sp.log(1 + sp.Mul(*(sp.exp(-a * t) - 1 for t in u)) / (sp.exp(-a) - 1) ** (n - 1)) / a
+        if k == "Clayton":
+            return (sp.Add(*(t ** (-a) for t in u)) - n + 1) ** (-1 / a)
+        if k == "GumbelHougaard":
+            return sp.exp(-sp.Add(*((-sp.log(t)) ** a for t in u)) ** (1 / a))
+        if k == "FGM":
+            return sp.Mul(*u) * (1 + a * sp.Mul(*(1 - t for t in u)))
+        if k == "AMH":
+            return sp.Mul(*u) / (1 - a * sp.Mul(*(1 - t for t in u)))
+        raise NotImplementedError(f"CDF: the {k} copula CDF has no closed form")
+
+    def density(self, u):
+        k = self.name
+        if k in ("Maximal", "Minimal"):
+            raise NotImplementedError(f"PDF: the {k} copula is singular (no density)")
+        if k in ("Binormal", "Multinormal"):
+            z = sp.Matrix([sp.sqrt(2) * sp.erfinv(2 * t - 1) for t in u])
+            Rm = self.Rm
+            return sp.exp(-(z.T * (Rm.inv() - sp.eye(Rm.rows)) * z)[0] / 2) / sp.sqrt(Rm.det())
+        if k == "MultivariateT":
+            raise NotImplementedError("PDF: the MultivariateT copula density is not supported")
+        us = sp.symbols(f"u0:{len(u)}", positive=True)
+        c = self.C(list(us))
+        for s in us:
+            c = sp.diff(c, s)
+        return c.subs(dict(zip(us, u)))
+
+    def pdf(self, x):
+        p = _point(x, len(self.ds), "PDF")
+        F = [W.cdf_value(d, t) for d, t in zip(self.ds, p)]
+        f = [W.pdf_value(d, t) for d, t in zip(self.ds, p)]
+        if all(_num(t) for t in p) and any(v == 0 for v in f):
+            return 0
+        return _out(sp.simplify(self.density(F) * sp.Mul(*f)), self.expr, x)
+
+    def cdf(self, x):
+        p = _point(x, len(self.ds), "CDF")
+        F = [W.cdf_value(d, t) for d, t in zip(self.ds, p)]
+        if self.name in ("Binormal", "Multinormal"):
+            if not all(_num(v) for v in F) or not all(_num(v) for v in self.Rm):
+                raise Unevaluated()
+            z = [sp.sqrt(2) * sp.erfinv(2 * v - 1) for v in F]
+            return W._multi_cdf(_mvn_expr([0] * len(F), self.Rm), L(*(R(sp.N(t)) for t in z)))
+        return _out(self.C(F), self.expr, x)
+
+    def mean_v(self):
+        return [d.mean() for d in self.ds]
+
+    def var_v(self):
+        return [d.var() for d in self.ds]
+
+    def cov_m(self):
+        if self.name == "Product":
+            return sp.diag(*self.var_v())
+        raise NotImplementedError(f"Covariance: not supported for the {self.name} copula")
+
+    def marginal(self, k):
+        return self.exprs[k]
+
+    def sample(self, rng):
+        if not self.numeric():
+            raise ValueError("RandomVariate: distribution parameters must be numeric")
+        n, k = len(self.ds), self.name
+        if k == "Product":
+            u = [rng.random() for _ in range(n)]
+        elif k == "Maximal":
+            u = [rng.random()] * n
+        elif k == "Minimal" and n == 2:
+            v = rng.random()
+            u = [v, 1 - v]
+        elif k in ("Binormal", "Multinormal", "MultivariateT"):
+            z = W._rv(_mvn_expr([0] * n, self.Rm))
+            zs = [float(t) for t in z.args]
+            if k == "MultivariateT":
+                nu = _f(self.nu)
+                w = math.sqrt(rng.gammavariate(nu / 2, 2.0) / nu)
+                tdist = W.StudentT("StudentTDistribution", [sp.Float(nu)])
+                u = [_f(W.cdf_value(tdist, sp.Float(t / w))) for t in zs]
+            else:
+                u = [0.5 * math.erfc(-t / math.sqrt(2)) for t in zs]
+        elif k == "Clayton":
+            a = _f(self.a)
+            g = rng.gammavariate(1 / a, 1.0)
+            u = [(1 + rng.expovariate(1.0) / g) ** (-1 / a) for _ in range(n)]
+        elif n == 2:
+            u = self._conditional_sample(rng)
+        else:
+            raise NotImplementedError(f"RandomVariate: the {k} copula is only sampled in two dimensions")
+        out = []
+        for d, ui in zip(self.ds, u):
+            ui = min(max(ui, 1e-300), 1 - 1e-16)
+            try:
+                qv = W.quantile_value(d, sp.Float(ui), (sp.Float(ui),), "RandomVariate")
+                qv = sym(qv, "RandomVariate") if isinstance(qv, Expr) else sp.sympify(qv)
+                out.append(int(qv) if d.discrete else float(sp.re(sp.N(qv))))
+            except (NotImplementedError, Unevaluated, TypeError):
+                out.append(_invert(d, ui))
+        return L(*out)
+
+    def _conditional_sample(self, rng):
+        # u ~ U(0, 1), then v from the conditional CDF dC/du (u, v) = w by bisection
+        u0, v0 = sp.symbols("u0 v0", positive=True)
+        h = sp.lambdify((u0, v0), sp.diff(self.C([u0, v0]), u0), "mpmath")
+        u, w = rng.random(), rng.random()
+        a, b = 1e-12, 1 - 1e-12
+        for _ in range(60):
+            m = (a + b) / 2
+            if float(mpmath.re(h(u, m))) < w:
+                a = m
+            else:
+                b = m
+        return [u, (a + b) / 2]
+
+
+# ── categorical ──
+
+class CategoricalD(MultiD):
+    discrete = True
+
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        a = list(expr.args)
+        if len(a) not in (1, 2) or not is_list(a[0]):
+            raise ValueError("CategoricalDistribution: expected [{c1, ...}] or [{c1, ...}, {w1, ...}]")
+        cs = list(a[0].args)
+        if any(isinstance(c, Expr) and c.head == "Rule" for c in cs):
+            raise NotImplementedError("CategoricalDistribution: the {c1 -> w1, ...} form is not supported")
+        if any(is_list(c) for c in cs):
+            raise NotImplementedError("CategoricalDistribution: multivariate domains are not supported")
+        if not cs:
+            raise ValueError("CategoricalDistribution: need at least one class")
+        ws = _weights(a[1], "CategoricalDistribution", len(cs)) if len(a) == 2 else [sp.Integer(1)] * len(cs)
+        tot = sp.Add(*ws)
+        self.cats, self.w = cs, [w / tot for w in ws]
+
+    def numeric(self):
+        return all(_num(w) for w in self.w)
+
+    def pdf(self, x):
+        from ..evaluate import evaluate
+        for c, w in zip(self.cats, self.w):
+            if c == x:
+                return _out(w, self.expr)
+        if isinstance(x, Symbol) and not any(isinstance(c, Symbol) for c in self.cats):
+            raise Unevaluated()
+        return 0
+
+    def cdf(self, x):
+        raise TypeError("CDF: CategoricalDistribution is not a numeric distribution")
+
+    def moment(self, which):
+        raise TypeError(f"{which}: CategoricalDistribution is not a numeric distribution")
+
+    def sample(self, rng):
+        if not self.numeric():
+            raise ValueError("RandomVariate: the weights must be numeric")
+        u, acc = rng.random(), 0.0
+        for c, w in zip(self.cats, self.w):
+            acc += _f(w)
+            if u < acc:
+                return c
+        return self.cats[-1]
+
+
+# ── matrix distributions ──
+
+def _mvgamma(p, a):
+    return sp.pi ** (sp.Rational(p * (p - 1), 4)) * sp.Mul(*(sp.gamma(a - sp.Rational(j, 2)) for j in range(p)))
+
+
+class MatrixD(MultiD):
+    def moment(self, which):
+        e = self.expr
+        if which == "Mean":
+            return _mout(self.mean_m(), e)
+        if which == "Variance":
+            return _mout(self.var_m(), e)
+        if which == "StandardDeviation":
+            V = self.var_m()
+            return _mout(V.applyfunc(lambda v: v if v in (sp.oo, sp.nan) else sp.sqrt(v)), e)
+        raise NotImplementedError(f"{which}: not supported for {e.head}")
+
+    def mean_m(self):
+        raise NotImplementedError(f"Mean: not supported for {self.expr.head}")
+
+    def var_m(self):
+        raise NotImplementedError(f"Variance: not supported for {self.expr.head}")
+
+    def params(self):
+        return []
+
+    def nmat(self, M):
+        import numpy as np
+        return np.array([[complex(sp.N(M[i, j])) if M[i, j].is_real is False else float(sp.N(M[i, j]))
+                          for j in range(M.cols)] for i in range(M.rows)])
+
+
+def _mat_out(a):
+    import numpy as np
+    a = np.asarray(a)
+    if np.iscomplexobj(a) and np.allclose(a.imag, 0):
+        a = a.real
+    return R(a)
+
+
+class Wishart(MatrixD):
+    inverse = False
+
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 2:
+            raise ValueError(f"{expr.head}: expected {expr.head}[nu, Sigma]")
+        self.nu = sym(expr.args[0], fname)
+        self.S = _matrix(expr.args[1], fname, "Sigma")
+        _posdef(self.S, expr.head, "Sigma")
+        p = self.S.rows
+        if _num(self.nu) and not self.nu > p - 1:
+            raise ValueError(f"{expr.head}: nu must be greater than {p - 1}")
+
+    def params(self):
+        return [self.nu] + list(self.S)
+
+    def pdf(self, x):
+        p = self.S.rows
+        X_ = _mpoint(x, p, p, "PDF")
+        if X_.is_symmetric() is False:
+            return 0
+        if all(_num(v) for v in X_) and not all(sp.N(X_[:k, :k].det()) > 0 for k in range(1, p + 1)):
+            return 0
+        v, S = self.nu, self.S
+        if self.inverse:
+            val = (S.det() ** (v / 2) * X_.det() ** (-(v + p + 1) / 2) * sp.exp(-(S * X_.inv()).trace() / 2)
+                   / (2 ** (v * p / 2) * _mvgamma(p, v / 2)))
+        else:
+            val = (X_.det() ** ((v - p - 1) / 2) * sp.exp(-(S.inv() * X_).trace() / 2)
+                   / (2 ** (v * p / 2) * S.det() ** (v / 2) * _mvgamma(p, v / 2)))
+        return _out(sp.simplify(val), self.expr, x)
+
+    def mean_m(self):
+        v, S, p = self.nu, self.S, self.S.rows
+        if self.inverse:
+            if _num(v) and not v > p + 1:
+                return S.applyfunc(lambda _: sp.oo)
+            return S / (v - p - 1)
+        return v * S
+
+    def var_m(self):
+        v, S, p = self.nu, self.S, self.S.rows
+        if self.inverse:
+            if _num(v) and not v > p + 3:
+                return S.applyfunc(lambda _: sp.oo)
+            return sp.Matrix(p, p, lambda i, j: ((v - p + 1) * S[i, j] ** 2 + (v - p - 1) * S[i, i] * S[j, j])
+                             / ((v - p) * (v - p - 1) ** 2 * (v - p - 3)))
+        return sp.Matrix(p, p, lambda i, j: v * (S[i, j] ** 2 + S[i, i] * S[j, j]))
+
+    def _wishart_sample(self, rng, S, nu):
+        import numpy as np
+        g = _rng_np(rng)
+        p = S.shape[0]
+        Lc = np.linalg.cholesky(S)
+        A = np.zeros((p, p))
+        for i in range(p):
+            A[i, i] = math.sqrt(g.chisquare(nu - i))
+            for j in range(i):
+                A[i, j] = g.standard_normal()
+        M = Lc @ A
+        return M @ M.T
+
+    def sample(self, rng):
+        import numpy as np
+        if not self.numeric():
+            raise ValueError("RandomVariate: distribution parameters must be numeric")
+        S = self.nmat(self.S)
+        if self.inverse:
+            Wm = self._wishart_sample(rng, np.linalg.inv(S), _f(self.nu))
+            out = np.linalg.inv(Wm)
+        else:
+            out = self._wishart_sample(rng, S, _f(self.nu))
+        return _mat_out((out + out.T) / 2)
+
+
+class InverseWishart(Wishart):
+    inverse = True
+
+
+class MatrixNormal(MatrixD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        a = list(expr.args)
+        if len(a) == 2:
+            U, V = _matrix(a[0], fname, "the row covariance"), _matrix(a[1], fname, "the column covariance")
+            M = sp.zeros(U.rows, V.rows)
+        elif len(a) == 3:
+            M = _matrix(a[0], fname, "the mean", square=False)
+            U, V = _matrix(a[1], fname, "the row covariance"), _matrix(a[2], fname, "the column covariance")
+        else:
+            raise ValueError(f"{expr.head}: expected [Sigma_row, Sigma_col] or [mu, Sigma_row, Sigma_col]")
+        if (M.rows, M.cols) != (U.rows, V.rows):
+            raise ValueError(f"{expr.head}: the mean must be {U.rows} x {V.rows}")
+        _posdef(U, expr.head, "the row covariance")
+        _posdef(V, expr.head, "the column covariance")
+        self.M, self.U, self.V = M, U, V
+
+    def params(self):
+        return list(self.M) + list(self.U) + list(self.V)
+
+    def pdf(self, x):
+        n, p = self.M.rows, self.M.cols
+        X_ = _mpoint(x, n, p, "PDF")
+        Dm = X_ - self.M
+        val = (sp.exp(-(self.V.inv() * Dm.T * self.U.inv() * Dm).trace() / 2)
+               / ((2 * sp.pi) ** sp.Rational(n * p, 2) * self.V.det() ** sp.Rational(n, 2) * self.U.det() ** sp.Rational(p, 2)))
+        return _out(sp.simplify(val), self.expr, x)
+
+    def mean_m(self):
+        return self.M
+
+    def var_m(self):
+        return sp.Matrix(self.M.rows, self.M.cols, lambda i, j: self.U[i, i] * self.V[j, j])
+
+    def sample(self, rng):
+        import numpy as np
+        if not self.numeric():
+            raise ValueError("RandomVariate: distribution parameters must be numeric")
+        g = _rng_np(rng)
+        A, B = np.linalg.cholesky(self.nmat(self.U)), np.linalg.cholesky(self.nmat(self.V))
+        Z = g.standard_normal((self.M.rows, self.M.cols))
+        return _mat_out(self.nmat(self.M) + A @ Z @ B.T)
+
+
+class MatrixT(MatrixD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        a = list(expr.args)
+        if len(a) == 3:
+            U, V = _matrix(a[0], fname, "the row covariance"), _matrix(a[1], fname, "the column covariance")
+            M, nu = sp.zeros(U.rows, V.rows), sym(a[2], fname)
+        elif len(a) == 4:
+            M = _matrix(a[0], fname, "the mean", square=False)
+            U, V, nu = _matrix(a[1], fname, "the row covariance"), _matrix(a[2], fname, "the column covariance"), sym(a[3], fname)
+        else:
+            raise ValueError(f"{expr.head}: expected [Sigma_row, Sigma_col, nu] or [mu, Sigma_row, Sigma_col, nu]")
+        if (M.rows, M.cols) != (U.rows, V.rows):
+            raise ValueError(f"{expr.head}: the mean must be {U.rows} x {V.rows}")
+        _posdef(U, expr.head, "the row covariance")
+        _posdef(V, expr.head, "the column covariance")
+        _pos(nu, "nu", expr.head)
+        self.M, self.U, self.V, self.nu = M, U, V, nu
+
+    def params(self):
+        return list(self.M) + list(self.U) + list(self.V) + [self.nu]
+
+    def pdf(self, x):
+        n, m = self.M.rows, self.M.cols
+        v = self.nu
+        X_ = _mpoint(x, n, m, "PDF")
+        Dm = X_ - self.M
+        k = (v + n + m - 1) / 2
+        val = (_mvgamma(n, k) / (sp.pi ** sp.Rational(n * m, 2) * _mvgamma(n, (v + n - 1) / 2))
+               * self.V.det() ** sp.Rational(-n, 2) * self.U.det() ** sp.Rational(-m, 2)
+               * (sp.eye(n) + self.U.inv() * Dm * self.V.inv() * Dm.T).det() ** (-k))
+        return _out(sp.simplify(val), self.expr, x)
+
+    def mean_m(self):
+        if _num(self.nu) and not self.nu > 1:
+            return self.M.applyfunc(lambda _: sp.nan)
+        return self.M
+
+    def var_m(self):
+        v = self.nu
+        if _num(v) and not v > 2:
+            return self.M.applyfunc(lambda _: sp.oo if v > 1 else sp.nan)
+        return sp.Matrix(self.M.rows, self.M.cols, lambda i, j: self.U[i, i] * self.V[j, j] / (v - 2))
+
+    def sample(self, rng):
+        import numpy as np
+        if not self.numeric():
+            raise ValueError("RandomVariate: distribution parameters must be numeric")
+        n = self.M.rows
+        iw = InverseWishart(Expr("InverseWishartMatrixDistribution", R(self.nu + n - 1), _mlist(self.U)), "RandomVariate")
+        Sg = np.array([[float(t) for t in r.args] for r in iw.sample(rng).args])
+        g = _rng_np(rng)
+        A, B = np.linalg.cholesky(Sg), np.linalg.cholesky(self.nmat(self.V))
+        Z = g.standard_normal((n, self.M.cols))
+        return _mat_out(self.nmat(self.M) + A @ Z @ B.T)
+
+
+class GaussianEnsemble(MatrixD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        a = list(expr.args)
+        if len(a) == 1:
+            s, n = sp.Integer(1), sym(a[0], fname)
+        elif len(a) == 2:
+            s, n = sym(a[0], fname), sym(a[1], fname)
+        else:
+            raise ValueError(f"{expr.head}: expected {expr.head}[n] or [sigma, n]")
+        _pos(s, "sigma", expr.head)
+        _posint(n, "n", expr.head)
+        self.s, self.n = s, n
+        self.unitary = expr.head == "GaussianUnitaryMatrixDistribution"
+
+    def params(self):
+        return [self.s, self.n]
+
+    def pdf(self, x):
+        n, s = self.n, self.s
+        if not _num(n):
+            raise Unevaluated()
+        n = int(n)
+        X_ = _mpoint(x, n, n, "PDF")
+        herm = X_.H if self.unitary else X_.T
+        if any(sp.simplify(v) != 0 for v in (X_ - herm)):
+            return 0
+        if self.unitary:
+            Z = (2 * sp.pi * s ** 2) ** sp.Rational(n, 2) * (sp.pi * s ** 2) ** sp.Rational(n * (n - 1), 2)
+        else:
+            Z = (2 * sp.pi * s ** 2) ** sp.Rational(n, 2) * (sp.pi * s ** 2) ** sp.Rational(n * (n - 1), 4)
+        return _out(sp.simplify(sp.exp(-sp.re((X_ * X_).trace()) / (2 * s ** 2)) / Z), self.expr, x)
+
+    def mean_m(self):
+        n = int(self.n)
+        return sp.zeros(n, n)
+
+    def var_m(self):
+        n = int(self.n)
+        return sp.Matrix(n, n, lambda i, j: self.s ** 2 if i == j else self.s ** 2 / 2)
+
+    def sample(self, rng):
+        import numpy as np
+        if not self.numeric():
+            raise ValueError("RandomVariate: distribution parameters must be numeric")
+        g = _rng_np(rng)
+        n, s = int(self.n), _f(self.s)
+        if self.unitary:
+            x = g.normal(0, s, (n, n)) + 1j * g.normal(0, s, (n, n))
+            return _mat_out((x + x.conj().T) / 2)
+        x = g.normal(0, s, (n, n))
+        return _mat_out((x + x.T) / 2)
+
+
+def _haar_unitary(g, n):
+    import numpy as np
+    z = (g.standard_normal((n, n)) + 1j * g.standard_normal((n, n))) / math.sqrt(2)
+    q, r = np.linalg.qr(z)
+    d = np.diag(r)
+    return q * (d / np.abs(d))
+
+
+def _haar_orthogonal(g, n):
+    import numpy as np
+    q, r = np.linalg.qr(g.standard_normal((n, n)))
+    return q * np.sign(np.diag(r))
+
+
+def _jmat(n):
+    import numpy as np
+    return np.kron(np.array([[0, -1], [1, 0]]), np.eye(n))
+
+
+def _haar_symplectic(g, n):
+    """Haar unitary symplectic matrix in USp(2n) (x^T J x = J): QR of a random quaternionic Ginibre matrix"""
+    import numpy as np
+    a = (g.standard_normal((n, n)) + 1j * g.standard_normal((n, n))) / math.sqrt(2)
+    b = (g.standard_normal((n, n)) + 1j * g.standard_normal((n, n))) / math.sqrt(2)
+    z = np.block([[a, -b.conj()], [b, a.conj()]])
+    # Gram-Schmidt on quaternionic columns: process column k together with its partner k + n
+    q = np.zeros_like(z)
+    for k in range(n):
+        v = z[:, k].copy()
+        for j in range(k):
+            for c in (j, j + n):
+                v -= q[:, c] * (q[:, c].conj() @ v)
+        v /= np.linalg.norm(v)
+        q[:, k] = v
+        q[:, k + n] = np.concatenate([-v[n:].conj(), v[:n].conj()])
+    return q
+
+
+class CircularEnsemble(MatrixD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 1:
+            raise ValueError(f"{expr.head}: expected {expr.head}[n]")
+        self.n = sym(expr.args[0], fname)
+        _posint(self.n, "n", expr.head)
+
+    def params(self):
+        return [self.n]
+
+    def pdf(self, x):
+        raise NotImplementedError(f"PDF: {self.expr.head} is a Haar measure on a matrix group (no density in "
+                                  "matrix entries); use RandomVariate or MatrixPropertyDistribution")
+
+    def sample(self, rng):
+        import numpy as np
+        if not self.numeric():
+            raise ValueError("RandomVariate: n must be a positive integer")
+        g = _rng_np(rng)
+        n, h = int(self.n), self.expr.head
+        if h == "CircularUnitaryMatrixDistribution":
+            return R(_haar_unitary(g, n))
+        if h == "CircularRealMatrixDistribution":
+            return R(_haar_orthogonal(g, n))
+        if h == "CircularOrthogonalMatrixDistribution":
+            u = _haar_unitary(g, n)
+            return R(u.T @ u)
+        if h == "CircularQuaternionMatrixDistribution":
+            return R(_haar_symplectic(g, n))
+        # CSE: J u^T J^T u with u Haar unitary of size 2n (self-dual unitary)
+        u = _haar_unitary(g, 2 * n)
+        J = _jmat(n)
+        return R(J @ u.T @ J.T @ u)
+
+
+class MatrixProperty(MultiD):
+    def __init__(self, expr, fname):
+        super().__init__(expr)
+        if len(expr.args) != 2:
+            raise ValueError("MatrixPropertyDistribution: expected MatrixPropertyDistribution[expr, x ~ mdist]")
+        specs = list(expr.args[1].args) if is_list(expr.args[1]) else [expr.args[1]]
+        self.vars = []
+        for s in specs:
+            if not (isinstance(s, Expr) and s.head == "Distributed" and len(s.args) == 2 and isinstance(s.args[0], Symbol)):
+                raise ValueError("MatrixPropertyDistribution: expected x \\[Distributed] mdist")
+            d = s.args[1]
+            if not (isinstance(d, Expr) and d.head in W.MULTI_BUILDERS):
+                raise TypeError("MatrixPropertyDistribution: the random variables must follow matrix distributions")
+            self.vars.append((s.args[0], d))
+        self.body = expr.args[0]
+
+    def moment(self, which):
+        raise NotImplementedError(f"{which}: MatrixPropertyDistribution only supports RandomVariate")
+
+    def pdf(self, x):
+        raise NotImplementedError("PDF: MatrixPropertyDistribution only supports RandomVariate")
+
+    def sample(self, rng):
+        from ..evaluate import evaluate
+        env = {}
+        for v, d in self.vars:
+            env[v.name] = W.MULTI_BUILDERS[d.head](d, "RandomVariate").sample(rng)
+
+        def subst(e):
+            if isinstance(e, Symbol) and e.name in env:
+                return env[e.name]
+            if isinstance(e, Expr):
+                return Expr(subst(e.head) if not isinstance(e.head, str) else e.head, *(subst(a) for a in e.args))
+            return e
+        return evaluate(subst(self.body))
+
+
+def _multi(name, cls, notes):
+    W.MULTI_BUILDERS[name] = cls
+    W.MULTI.add(name)
+    W.NEW_DISTS.add(name)
+
+    def impl(*args: Expr) -> Expr:
+        cls(Expr(name, *args), name)
+        raise Unevaluated()
+    impl.__name__ = "_" + name
+    fn(name, area=AREA, status="added", notes=notes)(impl)
+
+
+_multi("BinormalDistribution", Binormal,
+       "BinormalDistribution[{mu1, mu2}, {sigma1, sigma2}, rho], [{sigma1, sigma2}, rho] and [rho]: bivariate normal "
+       "with covariance {{s1^2, rho s1 s2}, {rho s1 s2, s2^2}}; PDF (exact), CDF (numeric, SciPy), Mean, Variance, "
+       "Covariance, MarginalDistribution, RandomVariate. Check: exact; agrees with MultinormalDistribution in tests.")
+_multi("MultivariateTDistribution", MultivariateT,
+       "MultivariateTDistribution[Sigma, nu] and [mu, Sigma, nu]: PDF Gamma[(nu + p)/2]/(Gamma[nu/2] (nu Pi)^(p/2) "
+       "Sqrt[Det[Sigma]]) (1 + (x - mu).Inverse[Sigma].(x - mu)/nu)^(-(nu + p)/2), Mean (nu > 1), Covariance nu/(nu - 2) "
+       "Sigma, CDF (numeric, SciPy), marginals, RandomVariate. Check: SciPy multivariate_t reference values.")
+_multi("DirichletDistribution", Dirichlet,
+       "DirichletDistribution[{a1, ..., a(k+1)}] (k-dimensional, x_(k+1) = 1 - Total[x]): PDF, Mean, Covariance, "
+       "Beta marginals, RandomVariate, CDF for k = 1 (higher-dimensional CDFs raise NotImplementedError). Check: "
+       "exact; SciPy dirichlet reference values.")
+_multi("LogMultinormalDistribution", LogMultinormal,
+       "LogMultinormalDistribution[mu, Sigma] = Exp of a MultinormalDistribution[mu, Sigma] vector: PDF, CDF (numeric), "
+       "Mean E^(mu_i + Sigma_ii/2), Covariance, LogNormal marginals, RandomVariate. Check: exact moments.")
+_multi("MultivariateHypergeometricDistribution", MultivariateHypergeometric,
+       "MultivariateHypergeometricDistribution[n, {m1, ..., mk}]: PDF Product[Binomial[m_i, x_i]]/Binomial[Total[m], n] "
+       "(Total[x] = n), CDF (finite sum), Mean, Covariance, Hypergeometric marginals, RandomVariate. Check: exact.")
+_multi("MultivariatePoissonDistribution", MultivariatePoisson,
+       "MultivariatePoissonDistribution[mu0, {mu1, ...}] = {Y0 + Y1, Y0 + Y2, ...} with independent Poisson Y_i: PDF "
+       "(finite sum), CDF, Mean, Covariance (mu0 off the diagonal), Poisson marginals, RandomVariate. Check: exact.")
+_multi("NegativeMultinomialDistribution", NegativeMultinomial,
+       "NegativeMultinomialDistribution[n, {p1, ...}] (failure probabilities p_i, success 1 - Total[p]): PDF "
+       "Gamma[n + Total[x]]/(Gamma[n] Product[x_i!]) p0^n Product[p_i^x_i], CDF, Mean, Covariance, NegativeBinomial "
+       "marginals, RandomVariate. Check: exact.")
+_multi("ProductDistribution", Product,
+       "ProductDistribution[dist1, dist2, ..., {dist, n}, ...] of univariate components: PDF and CDF as products, "
+       "Mean, Variance, Covariance (diagonal), marginals, RandomVariate; multivariate components raise "
+       "NotImplementedError. Check: exact.")
+_multi("CopulaDistribution", Copula,
+       "CopulaDistribution[ker, {dist1, ...}] with kernels \"Product\", \"Maximal\", \"Minimal\", {\"Frank\", a}, "
+       "{\"Clayton\", c}, {\"GumbelHougaard\", a}, {\"FGM\", a}, {\"AMH\", a}, {\"Binormal\", rho}, {\"Multinormal\", "
+       "Sigma}, {\"MultivariateT\", Sigma, nu}: CDF C[F1[x1], ...] (closed form for the Archimedean/FGM/AMH kernels, "
+       "numeric for Gaussian), PDF c[F...] Product[f_i] (singular Maximal/Minimal and the t kernel raise), Mean and "
+       "Variance from the marginals, RandomVariate. Check: exact; the Product kernel equals ProductDistribution.")
+_multi("CategoricalDistribution", CategoricalD,
+       "CategoricalDistribution[{c1, ...}] (uniform) and [{c1, ...}, {w1, ...}] (weights normalised): PDF and "
+       "RandomVariate over arbitrary classes; CDF and moments raise TypeError (not a numeric distribution); "
+       "multivariate domains and the rule form raise NotImplementedError. Check: exact.")
+_multi("WishartMatrixDistribution", Wishart,
+       "WishartMatrixDistribution[nu, Sigma] (nu > p - 1): PDF Det[X]^((nu - p - 1)/2) E^(-Tr[Inverse[Sigma].X]/2)/(2^"
+       "(nu p/2) Det[Sigma]^(nu/2) MultivariateGamma), Mean nu Sigma, elementwise Variance nu (S_ij^2 + S_ii S_jj), "
+       "RandomVariate (Bartlett). Check: exact; SciPy wishart reference values.")
+_multi("InverseWishartMatrixDistribution", InverseWishart,
+       "InverseWishartMatrixDistribution[nu, Sigma] (Inverse[X] ~ WishartMatrixDistribution[nu, Inverse[Sigma]]): PDF "
+       "Det[Sigma]^(nu/2) Det[X]^(-(nu + p + 1)/2) E^(-Tr[Sigma.Inverse[X]]/2)/(2^(nu p/2) MultivariateGamma), Mean "
+       "Sigma/(nu - p - 1), Variance, RandomVariate. Check: SciPy invwishart reference values.")
+_multi("MatrixNormalDistribution", MatrixNormal,
+       "MatrixNormalDistribution[Sigma_row, Sigma_col] and [mu, Sigma_row, Sigma_col]: PDF E^(-Tr[Inverse[Sc].(X - mu)^T."
+       "Inverse[Sr].(X - mu)]/2)/((2 Pi)^(n m/2) Det[Sc]^(n/2) Det[Sr]^(m/2)), Mean, Variance, RandomVariate. Check: "
+       "SciPy matrix_normal reference values.")
+_multi("MatrixTDistribution", MatrixT,
+       "MatrixTDistribution[Sigma_row, Sigma_col, nu] and [mu, ...]: PDF proportional to Det[I + Inverse[Sr].(X - mu)."
+       "Inverse[Sc].(X - mu)^T]^(-(nu + n + m - 1)/2) with the multivariate-gamma normalisation, Mean (nu > 1), "
+       "Variance (nu > 2), RandomVariate (matrix normal with an InverseWishart[nu + n - 1, Sr] row covariance). "
+       "Check: the n = m = 1 case equals a scaled StudentTDistribution in tests.")
+_multi("GaussianOrthogonalMatrixDistribution", GaussianEnsemble,
+       "GaussianOrthogonalMatrixDistribution[sigma, n] and [n] (GOE): (x + x^T)/2 with iid NormalDistribution[0, sigma] "
+       "entries; PDF E^(-Tr[X.X]/(2 sigma^2))/Z for symmetric X (0 otherwise), Mean 0, elementwise Variance, "
+       "RandomVariate. Check: exact normalisation (product of the entry densities) in tests.")
+_multi("GaussianUnitaryMatrixDistribution", GaussianEnsemble,
+       "GaussianUnitaryMatrixDistribution[sigma, n] and [n] (GUE): (x + x^H)/2 with iid NormalDistribution[0, sigma] "
+       "real and imaginary parts; PDF E^(-Tr[X.X]/(2 sigma^2))/Z for Hermitian X, Mean 0, Variance, RandomVariate. "
+       "Check: exact normalisation in tests.")
+for _h in ("CircularUnitaryMatrixDistribution", "CircularRealMatrixDistribution", "CircularOrthogonalMatrixDistribution",
+           "CircularQuaternionMatrixDistribution", "CircularSymplecticMatrixDistribution"):
+    _multi(_h, CircularEnsemble,
+           f"{_h}[n]: Haar-measure matrix ensemble (CUE: unitary; CRE: orthogonal; COE: U^T U; CQE: unitary "
+           "symplectic, x^T J x = J; CSE: self-dual J U^T J^T U, 2n x 2n); RandomVariate only (PDF raises "
+           "NotImplementedError: no density in matrix entries). Check: self-check of the defining group property "
+           "(unitarity, symmetry, symplecticity) in tests.")
+_multi("MatrixPropertyDistribution", MatrixProperty,
+       "MatrixPropertyDistribution[expr, x ~ mdist] (and lists of matrix variables): RandomVariate evaluates expr on "
+       "a sampled matrix; other properties raise NotImplementedError. Check: reference identities (e.g. Tr of a GOE "
+       "sample is real) in tests.")
+
+
+# ── MarginalDistribution ──
+
+@fn("MarginalDistribution", area=AREA, status="added",
+    notes="MarginalDistribution[dist, k] gives the named k-th marginal of the W17 multivariate distributions and of "
+          "MultinormalDistribution (NormalDistribution), MultinomialDistribution (BinomialDistribution), "
+          "ProductDistribution and CopulaDistribution (the k-th component); MarginalDistribution[dist, {k1, ...}] for "
+          "MultinormalDistribution and ProductDistribution; other cases raise NotImplementedError. Check: exact; "
+          "marginal means agree with Mean[dist] in tests.")
+def _marginal(d: Expr, k: PosInteger | ListOf[PosInteger]) -> Expr:  # noqa: F821
+    if not (isinstance(d, Expr) and isinstance(d.head, str) and (d.head in W.MULTI)):
+        if isinstance(d, Symbol):
+            raise Unevaluated()
+        if W.is_dist(d):
+            raise ValueError("MarginalDistribution: the distribution must be multivariate")
+        raise TypeError(f"MarginalDistribution: {d} is not a distribution")
+    ks = list(k.args) if is_list(k) else [k]
+    for v in ks:
+        if isinstance(v, bool) or not isinstance(v, int):
+            if isinstance(v, Symbol):
+                raise Unevaluated()
+            raise TypeError("MarginalDistribution: coordinates must be positive integers")
+    h = d.head
+    if h == "MultinormalDistribution":
+        m, S = W._mvn(d, "MarginalDistribution")
+        n = m.rows
+    elif h == "MultinomialDistribution":
+        nn, ps = W._multinomial(d, "MarginalDistribution")
+        n = len(ps)
+    else:
+        obj = W.MULTI_BUILDERS[h](d, "MarginalDistribution")
+        n = obj.dim() if hasattr(obj, "dim") and not isinstance(obj, MatrixD) else None
+        if n is None or isinstance(obj, (CategoricalD, MatrixProperty)):
+            raise NotImplementedError(f"MarginalDistribution: not supported for {h}")
+    if any(not 1 <= v <= n for v in ks):
+        raise ValueError(f"MarginalDistribution: coordinates must be between 1 and {n}")
+    idx = [v - 1 for v in ks]
+    if is_list(k):
+        if h == "MultinormalDistribution":
+            return Expr("MultinormalDistribution", L(*(R(m[i]) for i in idx)),
+                        L(*(L(*(R(S[i, j]) for j in idx)) for i in idx)))
+        if h == "ProductDistribution":
+            return obj.sub(idx)
+        raise NotImplementedError(f"MarginalDistribution: multivariate marginals of {h} are not supported")
+    i = idx[0]
+    if h == "MultinormalDistribution":
+        return Expr("NormalDistribution", R(m[i]), R(sp.sqrt(S[i, i])))
+    if h == "MultinomialDistribution":
+        return Expr("BinomialDistribution", R(nn), R(ps[i]))
+    return obj.marginal(i)
+
+
+class HotellingTSquare(UD):
+    """HotellingTSquareDistribution[p, m] = (p m/(m - p + 1)) FRatioDistribution[p, m - p + 1]"""
+    lo = sp.Integer(0)
+
+    def __init__(self, name, a):
+        _nargs(a, (2,), name, "HotellingTSquareDistribution[p, m]")
+        _pos(a[0], "p", name)
+        _pos(a[1], "m", name)
+        if _num(a[0]) and _num(a[1]) and not a[1] > a[0] - 1:
+            raise ValueError(f"{name}: m must be greater than p - 1")
+        super().__init__(name, a)
+
+    def _fc(self):
+        p, m = self.a
+        return W.FRatio("FRatioDistribution", [p, m - p + 1]), p * m / (m - p + 1)
+
+    def pdf(self, x):
+        f, c = self._fc()
+        return f.pdf(x / c) / c
+
+    def cdf(self, x):
+        f, c = self._fc()
+        return f.cdf(x / c)
+
+    def mean(self):
+        f, c = self._fc()
+        v = f.mean()
+        return v if v is sp.nan else c * v
+
+    def var(self):
+        f, c = self._fc()
+        v = f.var()
+        return v if v is sp.nan else c ** 2 * v
+
+    def raw(self, r):
+        f, c = self._fc()
+        v = f.raw(r)
+        return v if v is sp.nan else c ** r * v
+
+    def sample(self, rng):
+        f, c = self._fc()
+        return _f(c) * f.sample(rng)
+
+
+_uni("HotellingTSquareDistribution", HotellingTSquare,
+     "HotellingTSquareDistribution[p, m] (m > p - 1) = (p m/(m - p + 1)) FRatioDistribution[p, m - p + 1]: PDF, CDF "
+     "(BetaRegularized), Mean p m/(m - p - 1), Variance, moments, RandomVariate. Check: exact; the scaled-F identity "
+     "and SciPy f reference values in tests.")
