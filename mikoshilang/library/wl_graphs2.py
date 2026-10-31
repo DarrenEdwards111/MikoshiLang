@@ -3063,3 +3063,484 @@ record("Direction", AREA, "added",
        "Direction: option name for one-sided limits and series (Limit[f, x -> a, Direction -> \"FromAbove\" | "
        "\"FromBelow\" | 1 | -1]), interpreted by Limit in the calculus modules; inert on its own. Check: exact (tests: "
        "Limit[1/x, x -> 0, Direction -> \"FromAbove\"] is Infinity).")
+
+
+# ═══════════════════════════════════════ isomorphism and symmetry ═══════════════════════════════════════
+
+def _sym_graph(g, fname):
+    gr = _g(g, fname)
+    gr.require_pure(fname)
+    if gr.multi():
+        raise NotImplementedError(f"{fname}: multigraphs are not supported")
+    return gr
+
+
+def _arc_sets(gr):
+    out = [set() for _ in range(gr.n)]
+    inn = [set() for _ in range(gr.n)]
+    for i, j, d in gr.edges:
+        out[i].add(j)
+        inn[j].add(i)
+        if not d:
+            out[j].add(i)
+            inn[i].add(j)
+    return out, inn
+
+
+def _refine(colors, out, inn):
+    k = len(set(colors))
+    while True:
+        sig = [(colors[v], tuple(sorted(colors[w] for w in out[v])), tuple(sorted(colors[w] for w in inn[v])))
+               for v in range(len(colors))]
+        ranks = {s: r for r, s in enumerate(sorted(set(sig)))}
+        colors = [ranks[s] for s in sig]
+        if len(ranks) == k:
+            return colors
+        k = len(ranks)
+
+
+def _canonical_labelling(gr, fname):
+    """Individualisation-refinement search for the labelling with the smallest edge certificate; automorphisms
+    found on the way prune equivalent branches.  Returns (labelling v -> position, certificate)."""
+    n = gr.n
+    out, inn = _arc_sets(gr)
+    directed = gr.directed
+    state = {"best": None, "first": None, "leaves": 0}
+    autos = []
+
+    def cert(lab):
+        es = set()
+        for i in range(n):
+            for j in out[i]:
+                a, b = lab[i], lab[j]
+                es.add((a, b) if directed else (min(a, b), max(a, b)))
+        return tuple(sorted(es))
+
+    def auto(l1, l2):
+        inv = [0] * n
+        for v, p in enumerate(l2):
+            inv[p] = v
+        a = [inv[l1[v]] for v in range(n)]
+        if a != list(range(n)):
+            autos.append(a)
+
+    def orbit_closure(seed, gens):
+        orb, stack = set(seed), list(seed)
+        while stack:
+            u = stack.pop()
+            for a in gens:
+                if a[u] not in orb:
+                    orb.add(a[u])
+                    stack.append(a[u])
+        return orb
+
+    def search(colors, prefix):
+        cells = {}
+        for v, c in enumerate(colors):
+            cells.setdefault(c, []).append(v)
+        multi = [(len(vs), c) for c, vs in cells.items() if len(vs) > 1]
+        if not multi:
+            state["leaves"] += 1
+            if state["leaves"] > 200_000:
+                raise NotImplementedError(f"{fname}: the canonical labelling search is too large for this graph")
+            c = cert(colors)
+            if state["first"] is None:
+                state["first"] = (c, colors)
+            elif c == state["first"][0]:
+                auto(colors, state["first"][1])
+            if state["best"] is None or c < state["best"][0]:
+                state["best"] = (c, colors)
+            elif c == state["best"][0] and colors != state["best"][1]:
+                auto(colors, state["best"][1])
+            return
+        cell = cells[min(multi)[1]]
+        done = set()
+        explored = []
+        for v in cell:
+            if v in done:
+                continue
+            nc = [2 * c for c in colors]
+            nc[v] -= 1
+            search(_refine(nc, out, inn), prefix + [v])
+            explored.append(v)
+            gens = [a for a in autos if all(a[p] == p for p in prefix)]
+            done = orbit_closure(explored, gens)
+    if n:
+        search(_refine([0] * n, out, inn), [])
+        return state["best"][1], state["best"][0], autos
+    return [], (), autos
+
+
+@fn("CanonicalGraph", area=AREA, status="added",
+    notes="CanonicalGraph[g]: Graph[{1, ..., n}, edges] with the canonical labelling of smallest edge certificate "
+          "(colour refinement plus individualisation, branches pruned by discovered automorphisms; limit 2*10^5 "
+          "leaves), edges sorted; isomorphic graphs give identical results, direction-aware, self-loops allowed, "
+          "multigraphs and mixed graphs raise NotImplementedError; options are dropped. Vertex numbering differs from "
+          "Wolfram's canonical form. Check: self-check (tests: relabelled copies give the same result, "
+          "non-isomorphic graphs with equal degree sequences differ, IsomorphicGraphQ[g, CanonicalGraph[g]]).")
+def _canon(g: Expr) -> Expr:
+    gr = _sym_graph(g, "CanonicalGraph")
+    lab, c, _ = _canonical_labelling(gr, "CanonicalGraph")
+    h = "DirectedEdge" if gr.directed else "UndirectedEdge"
+    return _new(list(range(1, gr.n + 1)), [Expr(h, a + 1, b + 1) for a, b in c])
+
+
+def _automorphisms(gr, fname):
+    """Strong generating set of Aut(g) along the base 0, 1, ..., n-1 (VF2 searches via NetworkX); returns
+    (generators as position lists, group order)."""
+    nx = _nx()
+    from networkx.algorithms import isomorphism as iso
+    X = _to_nx(gr)
+    n = gr.n
+    out, inn = _arc_sets(gr)
+    col = _refine([0] * n, out, inn)
+    gens, order = [], 1
+    fixed = []
+    for b in range(n):
+        level = []
+        orbit = {b}
+        for x in range(n):
+            if x in orbit or col[x] != col[b]:
+                continue
+            A, B = X.copy(), X.copy()
+            for v in range(n):
+                A.nodes[v]["c"] = B.nodes[v]["c"] = col[v]
+            for t, f in enumerate(fixed):
+                A.nodes[f]["c"] = B.nodes[f]["c"] = ("fixed", t)
+            A.nodes[b]["c"] = ("target",)
+            B.nodes[x]["c"] = ("target",)
+            M = (iso.DiGraphMatcher if X.is_directed() else iso.GraphMatcher)(
+                A, B, node_match=lambda p, q: p["c"] == q["c"])
+            m = next(M.isomorphisms_iter(), None)
+            if m is None:
+                continue
+            a = [m[v] for v in range(n)]
+            level.append(a)
+            # orbit of b under this level's generators
+            stack = [b]
+            orbit = {b}
+            while stack:
+                u = stack.pop()
+                for p in level:
+                    if p[u] not in orbit:
+                        orbit.add(p[u])
+                        stack.append(p[u])
+        order *= len(orbit)
+        gens += level
+        fixed.append(b)
+    for a in gens:
+        if any(a[j] not in out[a[i]] for i in range(n) for j in out[i]):
+            raise ArithmeticError(f"{fname}: internal check failed (a generator is not an automorphism)")
+    if gens:
+        from sympy.combinatorics import Permutation, PermutationGroup
+        if PermutationGroup([Permutation(a) for a in gens]).order() != order:
+            raise ArithmeticError(f"{fname}: internal check failed (group order differs from the orbit product)")
+    return gens, order
+
+
+def _cycles_expr(a):
+    seen, cyc = set(), []
+    for s in range(len(a)):
+        if s in seen or a[s] == s:
+            continue
+        c, u = [], s
+        while u not in seen:
+            seen.add(u)
+            c.append(u + 1)
+            u = a[u]
+        cyc.append(L(*c))
+    return Expr("Cycles", L(*cyc))
+
+
+@fn("GraphAutomorphismGroup", area=AREA, status="added",
+    notes="GraphAutomorphismGroup[g]: PermutationGroup[{Cycles[...], ...}] acting on vertex positions 1..n "
+          "(VertexList order), from a strong generating set along the base 1, ..., n (VF2 via NetworkX; generators may "
+          "differ from Wolfram's but generate the same group); direction-aware; multigraphs raise "
+          "NotImplementedError. Check: self-check (every generator is verified to be an automorphism and the SymPy "
+          "group order equals the product of basic orbit sizes; tests: GroupOrder 120 for Petersen, 2n for C_n, n! "
+          "for K_n).")
+def _autgroup(g: Expr) -> Expr:
+    gr = _sym_graph(g, "GraphAutomorphismGroup")
+    gens, _ = _automorphisms(gr, "GraphAutomorphismGroup")
+    return Expr("PermutationGroup", L(*(_cycles_expr(a) for a in gens)))
+
+
+def _orbit(seed, gens, act):
+    orb, stack = {seed}, [seed]
+    while stack:
+        u = stack.pop()
+        for a in gens:
+            w = act(a, u)
+            if w not in orb:
+                orb.add(w)
+                stack.append(w)
+    return orb
+
+
+@fn("VertexTransitiveGraphQ", area=AREA, status="added",
+    notes="VertexTransitiveGraphQ[g]: True when the automorphism group has a single orbit on the vertices (the empty "
+          "graph and a single vertex are vertex-transitive); non-graphs give False; needs NetworkX. Check: exact "
+          "(tests: Petersen, cycles, cubes True; paths with 3+ vertices, stars False).")
+def _vtq(g: Expr) -> Boolean:
+    if isinstance(g, Symbol):
+        raise Unevaluated()
+    if not is_graph_like(g):
+        return False
+    gr = _sym_graph(g, "VertexTransitiveGraphQ")
+    if gr.n <= 1:
+        return True
+    gens, _ = _automorphisms(gr, "VertexTransitiveGraphQ")
+    return len(_orbit(0, gens, lambda a, u: a[u])) == gr.n
+
+
+@fn("EdgeTransitiveGraphQ", area=AREA, status="added",
+    notes="EdgeTransitiveGraphQ[g]: True when the automorphism group has a single orbit on the edges (ordered pairs "
+          "for directed graphs; a graph without edges counts as edge-transitive); non-graphs give False; needs "
+          "NetworkX. Check: exact (tests: stars and complete bipartite graphs True although not vertex-transitive, "
+          "paths with 4+ vertices False).")
+def _etq(g: Expr) -> Boolean:
+    if isinstance(g, Symbol):
+        raise Unevaluated()
+    if not is_graph_like(g):
+        return False
+    gr = _sym_graph(g, "EdgeTransitiveGraphQ")
+    if not gr.edges:
+        return True
+    gens, _ = _automorphisms(gr, "EdgeTransitiveGraphQ")
+    key = (lambda i, j: (i, j)) if gr.directed else (lambda i, j: (min(i, j), max(i, j)))
+    allk = {key(i, j) for i, j, _ in gr.edges}
+    i0, j0, _ = gr.edges[0]
+    return len(_orbit(key(i0, j0), gens, lambda a, e: key(a[e[0]], a[e[1]]))) == len(allk)
+
+
+def _monos(g1, g2, fname):
+    """Monomorphisms of the pattern g1 into g2 (non-induced subgraph isomorphisms, VF2 via NetworkX)."""
+    a, b = _sym_graph(g1, fname), _sym_graph(g2, fname)
+    if a.edges and b.edges and a.directed != b.directed:
+        return a, b, iter(())
+    nx = _nx()
+    from networkx.algorithms import isomorphism as iso
+    X, Y = _to_nx(a), _to_nx(b)
+    if X.is_directed() != Y.is_directed():
+        X, Y = (X.to_directed(), Y) if Y.is_directed() else (X, Y.to_directed())
+    M = (iso.DiGraphMatcher if Y.is_directed() else iso.GraphMatcher)(Y, X)
+    return a, b, ({v: k for k, v in m.items()} for m in M.subgraph_monomorphisms_iter())
+
+
+@fn("IsomorphicSubgraphQ", area=AREA, status="added",
+    notes="IsomorphicSubgraphQ[g1, g2]: True when g1 is isomorphic to a (not necessarily induced) subgraph of g2 "
+          "(VF2 subgraph monomorphism via NetworkX); direction-aware; multigraphs raise NotImplementedError. Check: "
+          "exact (tests: C5 in Petersen True, K4 in Petersen False, a path in any longer path True).")
+def _isosubq(g1: Expr, g2: Expr) -> Boolean:
+    _, _, it = _monos(g1, g2, "IsomorphicSubgraphQ")
+    return next(it, None) is not None
+
+
+@fn("FindSubgraphIsomorphism", area=AREA, status="added",
+    notes="FindSubgraphIsomorphism[g1, g2]: {<|v1 -> w1, ...|>} mapping g1 injectively onto a (not necessarily "
+          "induced) subgraph of g2, keys in VertexList order of g1; {} when none; [g1, g2, n] (or All) for at most n; "
+          "VF2 via NetworkX, order of results may differ from Wolfram's. Check: exact (tests: every mapped edge is an "
+          "edge of g2; C4 into K4 has 24 maps).")
+def _fsubiso(g1: Expr, g2: Expr, n: NonNegInteger | Expr = None) -> ListOf[Expr]:
+    from ..kernel_lists import make_assoc
+    lim = _count_spec(n, "FindSubgraphIsomorphism")
+    a, b, it = _monos(g1, g2, "FindSubgraphIsomorphism")
+    out = []
+    if lim == 0:
+        return L()
+    for m in it:
+        out.append(make_assoc([(a.vertices[i], b.vertices[m[i]]) for i in range(a.n)]))
+        if lim is not None and len(out) >= lim:
+            break
+    return L(*out)
+
+
+@fn("FindIsomorphicSubgraph", area=AREA, status="added",
+    notes="FindIsomorphicSubgraph[g1, g2]: {h} with a (not necessarily induced) subgraph h of g1 isomorphic to g2 "
+          "(vertices and edges of g1, in its VertexList/EdgeList order); {} when none; [g1, g2, n] (or All) for at "
+          "most n distinct subgraphs; VF2 via NetworkX. Check: exact (tests: IsomorphicGraphQ[h, g2] and h is a "
+          "subgraph of g1; K3 occurs 4 times in K4).")
+def _fisosub(g1: Expr, g2: Expr, n: NonNegInteger | Expr = None) -> ListOf[Expr]:
+    lim = _count_spec(n, "FindIsomorphicSubgraph")
+    b, a, it = _monos(g2, g1, "FindIsomorphicSubgraph")
+    seen, out = set(), []
+    if lim == 0:
+        return L()
+    for m in it:
+        vs = sorted(m.values())
+        ks = []
+        for i, j, _ in b.edges:
+            p, q = m[i], m[j]
+            k = next(k for k, (x, y, d) in enumerate(a.edges)
+                     if (x, y) == (p, q) or (not d and (y, x) == (p, q)))
+            ks.append(k)
+        key = (tuple(vs), tuple(sorted(ks)))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(_new([a.vertices[v] for v in vs], [a.edge_exprs[k] for k in sorted(ks)]))
+        if lim is not None and len(out) >= lim:
+            break
+    return L(*out)
+
+
+# ═══════════════════════════════════════ Tutte and flow polynomials ═══════════════════════════════════════
+
+def _tutte(gr, x, y, fname):
+    _need_undirected(gr, fname)
+    es = [(i, j) for i, j, _ in gr.edges]
+    if len(es) > 24:
+        raise NotImplementedError(f"{fname}: graphs with more than 24 edges are not supported")
+    memo = {}
+
+    def comps(n_edges):
+        par = {}
+
+        def find(u):
+            while par.setdefault(u, u) != u:
+                par[u] = par[par[u]]
+                u = par[u]
+            return u
+        for i, j in n_edges:
+            par[find(i)] = find(j)
+        return find
+
+    def is_bridge(edges, k):
+        i, j = edges[k]
+        rest = edges[:k] + edges[k + 1:]
+        f = comps(rest)
+        return f(i) != f(j)
+
+    def T(edges):
+        key = tuple(sorted(edges))
+        if key in memo:
+            return memo[key]
+        if not edges:
+            return sp.Integer(1)
+        i, j = edges[0]
+        rest = edges[1:]
+        if i == j:
+            r = y * T(rest)
+        else:
+            lo, hi = min(i, j), max(i, j)
+            contracted = [(lo if a == hi else a, lo if b == hi else b) for a, b in rest]
+            contracted = [(min(a, b), max(a, b)) for a, b in contracted]
+            if is_bridge(edges, 0):
+                r = x * T(contracted)
+            else:
+                r = T(rest) + T(contracted)
+        r = sp.expand(r)
+        memo[key] = r
+        return r
+    res = T([(min(i, j), max(i, j)) for i, j in es])
+    # self-check: T(1, 1) is the number of spanning forests with one tree per component (matrix-tree theorem)
+    if isinstance(x, sp.Symbol) and isinstance(y, sp.Symbol) and x != y:
+        trees = 1
+        for c in _weak_components(gr):
+            if len(c) < 2:
+                continue
+            idx = {v: t for t, v in enumerate(c)}
+            Lm = sp.zeros(len(c), len(c))
+            for i, j in es:
+                if i != j and i in idx:
+                    a, b = idx[i], idx[j]
+                    Lm[a, a] += 1
+                    Lm[b, b] += 1
+                    Lm[a, b] -= 1
+                    Lm[b, a] -= 1
+            trees *= Lm[1:, 1:].det()
+        if res.subs({x: 1, y: 1}) != trees:
+            raise ArithmeticError(f"{fname}: internal check failed (T(1, 1) differs from the spanning tree count)")
+    return res
+
+
+@fn("TuttePolynomial", area=AREA, status="added",
+    notes="TuttePolynomial[g, {x, y}]: the Tutte polynomial (deletion-contraction with memoisation: loops give y, "
+          "bridges x), expanded; multigraphs and self-loops allowed; undirected graphs with at most 24 edges "
+          "(NotImplementedError otherwise). Check: self-check (T(1, 1) is verified against the matrix-tree spanning "
+          "tree count; tests: trees give x^(n-1), C_n gives x^(n-1) + ... + x + y, K4 the classical polynomial).")
+def _tuttepoly(g: Expr, xy: ListOf[Expr]) -> Expr:
+    gr = _g(g, "TuttePolynomial")
+    if not (is_list(xy) and len(xy.args) == 2):
+        raise TypeError("TuttePolynomial: the variables must be given as a list {x, y}")
+    sx, sy = S(xy.args[0]), S(xy.args[1])
+    if all(isinstance(v, sp.Symbol) for v in (sx, sy)) and sx != sy:
+        return R(_tutte(gr, sx, sy, "TuttePolynomial"))
+    X, Y = sp.Dummy("x"), sp.Dummy("y")
+    return R(sp.expand(_tutte(gr, X, Y, "TuttePolynomial").subs({X: sx, Y: sy})))
+
+
+@fn("FlowPolynomial", area=AREA, status="added",
+    notes="FlowPolynomial[g, k]: the number of nowhere-zero Z_k flows, (-1)^(m - n + c) T(0, 1 - k) from the Tutte "
+          "polynomial (same limits as TuttePolynomial); expanded in k, or evaluated for a number. Check: self-check "
+          "(via TuttePolynomial; tests: C_n gives k - 1, a bridge gives 0, K4 gives (k-1)(k-2)(k-3)).")
+def _flowpoly(g: Expr, k: Expr) -> Expr:
+    gr = _g(g, "FlowPolynomial")
+    X, Y = sp.Dummy("x"), sp.Dummy("y")
+    t = _tutte(gr, X, Y, "FlowPolynomial")
+    kk = S(k)
+    c = len(_weak_components(gr))
+    sign = (-1) ** (len(gr.edges) - gr.n + c)
+    return R(sp.expand(sign * t.subs({X: 0, Y: 1 - kk})))
+
+
+# ═══════════════════════════════════════ planar faces ═══════════════════════════════════════
+
+def _faces(gr, fname):
+    nx = _nx()
+    _need_simple_undirected(gr, fname)
+    if gr.n == 0 or len(_weak_components(gr)) > 1:
+        raise NotImplementedError(f"{fname}: only connected graphs are supported")
+    X = nx.Graph()
+    X.add_nodes_from(range(gr.n))
+    X.add_edges_from((i, j) for i, j, _ in gr.edges)
+    ok, emb = nx.check_planarity(X)
+    if not ok:
+        raise ValueError(f"{fname}: the graph is not planar")
+    seen, faces = set(), []
+    for u, v in emb.edges():
+        if (u, v) in seen:
+            continue
+        f = emb.traverse_face(u, v, mark_half_edges=seen)
+        faces.append(f)
+    if not gr.edges:
+        faces = [[0]]
+    out = []
+    for f in faces:
+        r = f.index(min(f))
+        out.append(f[r:] + f[:r])
+    out.sort(key=lambda f: (len(f), f))
+    if gr.edges and len(out) != len(gr.edges) - gr.n + 2:
+        raise ArithmeticError(f"{fname}: internal check failed (Euler's formula F = m - n + 2 fails)")
+    return out
+
+
+@fn("PlanarFaceList", area=AREA, status="added",
+    notes="PlanarFaceList[g]: the faces of a planar embedding of a connected simple undirected graph (NetworkX "
+          "left-right planarity embedding), each as a vertex cycle starting at its first vertex in VertexList order "
+          "and following the embedding's orientation, sorted by length; unique up to orientation for 3-connected "
+          "graphs, otherwise one valid embedding (may differ from Wolfram's); a bridge's face lists its ends twice; "
+          "non-planar graphs raise ValueError. Check: self-check (Euler's formula F = m - n + 2; tests: cube has 6 "
+          "4-faces, K4 four triangles).")
+def _pfl(g: Expr) -> ListOf[ListOf[Expr]]:
+    gr = _g(g, "PlanarFaceList")
+    return L(*(_verts(gr, f) for f in _faces(gr, "PlanarFaceList")))
+
+
+@fn("DualPlanarGraph", area=AREA, status="added",
+    notes="DualPlanarGraph[g]: the planar dual: vertices 1..F for the faces of PlanarFaceList[g] (same order), one "
+          "undirected edge per edge of g joining the faces on its two sides (bridges give self-loops, so the result "
+          "may be a multigraph); same embedding caveats as PlanarFaceList. Check: self-check (Euler's formula; tests: "
+          "dual of the cube is the octahedron, K4 is self-dual, edge count preserved).")
+def _dual(g: Expr) -> Expr:
+    gr = _g(g, "DualPlanarGraph")
+    faces = _faces(gr, "DualPlanarGraph")
+    side = {}
+    for fi, f in enumerate(faces):
+        for t in range(len(f)):
+            side.setdefault((f[t], f[(t + 1) % len(f)]), fi)
+    es = []
+    for i, j, _ in gr.edges:
+        a, b = side[(i, j)], side[(j, i)]
+        es.append(UE(a + 1, b + 1))
+    return _new(list(range(1, len(faces) + 1)), es)
