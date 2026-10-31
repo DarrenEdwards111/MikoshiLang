@@ -70,7 +70,7 @@ Each function gets one status: `pass`, `fail`, `not exercised` (it states a chec
 
 * The default mode runs the heads with a `Check:` line plus the tables, in about 15 seconds. The `Verification`
   workflow runs it on every push and pull request.
-* `--all` also runs every audited head's reference cases. That is the size of the test suite, so the workflow
+* `--all` also runs every audited head's reference cases. On main that is 2669 functions in about 6.5 minutes (2325 pass, 0 fail, 344 with no check), so the workflow
   runs it weekly and on demand (`workflow_dispatch`).
 
 `--markdown` and `--json` write the per-function report.
