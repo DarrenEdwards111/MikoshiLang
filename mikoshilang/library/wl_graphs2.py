@@ -194,3 +194,887 @@ record("DirectedEdges", AREA, "added",
        "them; accepted by Graph and the named graphs whose directed orientation is Wolfram's (PathGraph, CycleGraph, "
        "StarGraph, KaryTree, CompleteKaryTree; others raise NotImplementedError) and by RelationGraph. Check: exact "
        "(tests compare the resulting edge lists).")
+
+
+# ═══════════════════════════════════════ annotations ═══════════════════════════════════════
+
+_VERTEX_KEYS = {"VertexLabels", "VertexStyle", "VertexShape", "VertexShapeFunction", "VertexSize",
+                "VertexCoordinates", "VertexWeight", "VertexCapacity", "VertexLabelStyle"}
+_EDGE_KEYS = {"EdgeLabels", "EdgeStyle", "EdgeShapeFunction", "EdgeWeight", "EdgeCapacity", "EdgeCost",
+              "EdgeLabelStyle"}
+_LIST_KEYS = {"VertexWeight", "VertexCapacity", "VertexCoordinates", "EdgeWeight", "EdgeCapacity", "EdgeCost"}
+_GP = "GraphProperties"
+
+
+def _key_name(k, fname):
+    if isinstance(k, Symbol):
+        return k.name
+    if isinstance(k, str):
+        return k
+    raise TypeError(f"{fname}: annotation keys are symbols or strings, not {k!r}")
+
+
+def _is_rule(x):
+    return isinstance(x, Expr) and x.head in ("Rule", "RuleDelayed") and len(x.args) == 2
+
+
+def _item(gr, spec, fname):
+    """('vertex', index) or ('edge', index) for an item specification of gr."""
+    if _is_edge(spec):
+        for k in range(len(gr.edges)):
+            if _same_edge(gr, k, spec, fname):
+                return ("edge", k)
+        if K.tag(spec) not in gr.index:
+            raise ValueError(f"{fname}: {spec} is not an edge of the graph")
+    t = K.tag(spec)
+    if t in gr.index:
+        return ("vertex", gr.index[t])
+    raise ValueError(f"{fname}: {spec} is not a vertex or edge of the graph")
+
+
+def _item_matches(gr, item, lhs, fname):
+    kind, k = item
+    if kind == "edge":
+        return _is_edge(lhs) and len(lhs.args) == 2 and _same_edge(gr, k, lhs, fname)
+    return not _is_edge(lhs) and K.tag(lhs) == K.tag(gr.vertices[k])
+
+
+def _custom_rules(gr):
+    ar = gr.opts.get("AnnotationRules")
+    if ar is None:
+        return []
+    if not is_list(ar) or not all(_is_rule(r) for r in ar.args):
+        raise ValueError("AnnotationRules: expected {item -> {key -> value, ...}, ...}")
+    return list(ar.args)
+
+
+def _custom_for(gr, item, fname):
+    """[(key name, key expr, value)] custom annotations of an item (item None: graph properties)."""
+    out = []
+    for r in _custom_rules(gr):
+        lhs, rhs = r.args
+        hit = (lhs == _GP) if item is None else (lhs != _GP and _item_matches(gr, item, lhs, fname))
+        if hit:
+            for kv in (rhs.args if is_list(rhs) else [rhs]):
+                if not _is_rule(kv):
+                    raise ValueError(f"{fname}: annotation rules must be key -> value")
+                out.append((_key_name(kv.args[0], fname), kv.args[0], kv.args[1]))
+    return out
+
+
+_MISSING = object()
+
+
+def _item_value(gr, item, key, fname):
+    kind, k = item
+    if key in _VERTEX_KEYS | _EDGE_KEYS:
+        if (kind == "vertex") != (key in _VERTEX_KEYS):
+            return _MISSING
+        v = gr.opts.get(key)
+        if v is None:
+            if key in ("EdgeWeight", "EdgeCapacity", "VertexWeight") and gr.opts.get(key) is None:
+                return _MISSING
+            return _MISSING
+        if key in _LIST_KEYS and is_list(v) and not all(_is_rule(x) for x in v.args):
+            n = gr.n if kind == "vertex" else len(gr.edges)
+            if len(v.args) != n:
+                raise ValueError(f"{fname}: {key} must give one value per {kind}")
+            return v.args[k]
+        if is_list(v):
+            default = _MISSING
+            for x in v.args:
+                if _is_rule(x):
+                    if _item_matches(gr, item, x.args[0], fname):
+                        return x.args[1]
+                else:
+                    default = x
+            return default
+        return v
+    for name, _kx, val in _custom_for(gr, item, fname):
+        if name == key:
+            return val
+    return _MISSING
+
+
+def _graph_value(gr, key, fname):
+    if key in gr.opts:
+        return gr.opts[key]
+    for name, _kx, val in _custom_for(gr, None, fname):
+        if name == key:
+            return val
+    return _MISSING
+
+
+def _ann_spec(spec, fname):
+    """(gr, item or None) for obj or {obj, itemspec}."""
+    if is_list(spec) and len(spec.args) == 2 and is_graph_like(spec.args[0]) and not all(
+            _is_edge(e) for e in spec.args):
+        gr = _g(spec.args[0], fname)
+        return gr, _item(gr, spec.args[1], fname)
+    if is_graph_like(spec):
+        return _g(spec, fname), None
+    if isinstance(spec, Symbol) or (isinstance(spec, Expr) and not is_list(spec)):
+        raise Unevaluated()
+    raise NotImplementedError(f"{fname}: only Graph objects and {{graph, item}} specifications are supported "
+                              f"(got {spec!r})")
+
+
+@fn("AnnotationValue", area=AREA, status="added",
+    notes="AnnotationValue[g, key] graph-level annotation (a Graph option such as VertexLabels, or a custom key in "
+          "AnnotationRules -> {\"GraphProperties\" -> {...}}); AnnotationValue[{g, item}, key] for a vertex or edge: "
+          "list-valued options (VertexWeight, EdgeWeight, EdgeCapacity, EdgeCost, VertexCapacity, VertexCoordinates) "
+          "by position, rule lists {item -> value, default} by item, a single value for every item, custom keys from "
+          "AnnotationRules; a list of keys gives a list. Deviations: a missing annotation raises ValueError (Wolfram "
+          "returns $Failed), and the assignment form AnnotationValue[...] = v is not supported (use Annotate). "
+          "Objects other than graphs raise NotImplementedError. Check: exact (lookup; tests round-trip with Annotate).")
+def _annvalue(spec: Expr, key: Expr) -> Expr:
+    gr, item = _ann_spec(spec, "AnnotationValue")
+
+    def one(kx):
+        name = _key_name(kx, "AnnotationValue")
+        v = _graph_value(gr, name, "AnnotationValue") if item is None else _item_value(gr, item, name,
+                                                                                         "AnnotationValue")
+        if v is _MISSING:
+            raise ValueError(f"AnnotationValue: no {name} annotation is defined for {spec if item is None else spec.args[1]}")
+        return v
+    if is_list(key):
+        return L(*(one(k) for k in key.args))
+    return one(key)
+
+
+@fn("AnnotationKeys", area=AREA, status="added",
+    notes="AnnotationKeys[g] lists the graph's options and custom graph properties; AnnotationKeys[{g, item}] the "
+          "annotation keys with a value for that vertex or edge (standard keys as symbols, custom keys as given), in "
+          "option order. Objects other than graphs raise NotImplementedError. Check: exact (tests use MemberQ with "
+          "Annotate/AnnotationDelete round trips).")
+def _annkeys(spec: Expr) -> ListOf[Expr]:
+    gr, item = _ann_spec(spec, "AnnotationKeys")
+    keys, seen = [], set()
+
+    def add(name, kx):
+        if name not in seen:
+            seen.add(name)
+            keys.append(kx)
+    if item is None:
+        for k in gr.opts:
+            if k != "AnnotationRules":
+                add(k, Symbol(k))
+        for name, kx, _v in _custom_for(gr, None, "AnnotationKeys"):
+            add(name, kx)
+    else:
+        for k in gr.opts:
+            if k in _VERTEX_KEYS | _EDGE_KEYS and _item_value(gr, item, k, "AnnotationKeys") is not _MISSING:
+                add(k, Symbol(k))
+        for name, kx, _v in _custom_for(gr, item, "AnnotationKeys"):
+            add(name, kx)
+    return L(*keys)
+
+
+def _set_item(gr, item, name, kx, val, fname):
+    opts = dict(gr.opts)
+    kind, k = item
+    item_expr = gr.vertices[k] if kind == "vertex" else gr.edge_exprs[k]
+    if name in _VERTEX_KEYS | _EDGE_KEYS:
+        if (kind == "vertex") != (name in _VERTEX_KEYS):
+            raise ValueError(f"{fname}: {name} is a{'' if name in _EDGE_KEYS else ' vertex'} "
+                             f"{'edge' if name in _EDGE_KEYS else ''} annotation and cannot be set on a {kind}")
+        cur = opts.get(name)
+        if name in _LIST_KEYS and not (cur is not None and is_list(cur) and all(_is_rule(x) for x in cur.args)):
+            if cur is None or not is_list(cur):
+                raise NotImplementedError(f"{fname}: setting {name} on one {kind} of a graph without {name} values "
+                                          f"for every {kind} is not supported; give {name} -> {{...}} in Graph")
+            vals = list(cur.args)
+            vals[k] = val
+            opts[name] = L(*vals)
+        elif cur is None:
+            opts[name] = L(rule(item_expr, val))
+        elif is_list(cur):
+            rest = [x for x in cur.args if not (_is_rule(x) and _item_matches(gr, item, x.args[0], fname))]
+            opts[name] = L(rule(item_expr, val), *rest)
+        else:
+            opts[name] = L(rule(item_expr, val), cur)
+        return opts
+    rules = _custom_rules(gr)
+    out, done = [], False
+    for r in rules:
+        lhs, rhs = r.args
+        if lhs != _GP and _item_matches(gr, item, lhs, fname) and not done:
+            kvs = [kv for kv in (rhs.args if is_list(rhs) else [rhs]) if _key_name(kv.args[0], fname) != name]
+            out.append(rule(lhs, L(*kvs, rule(kx, val))))
+            done = True
+        else:
+            out.append(r)
+    if not done:
+        out.append(rule(item_expr, L(rule(kx, val))))
+    opts["AnnotationRules"] = L(*out)
+    return opts
+
+
+def _set_graph(gr, name, kx, val, fname):
+    opts = dict(gr.opts)
+    if name in _GRAPH_OPTS:
+        opts[name] = val
+        WG(gr.vertices, gr.edge_exprs, opts, fname)
+        return opts
+    rules = _custom_rules(gr)
+    out, done = [], False
+    for r in rules:
+        if r.args[0] == _GP and not done:
+            rhs = r.args[1]
+            kvs = [kv for kv in (rhs.args if is_list(rhs) else [rhs]) if _key_name(kv.args[0], fname) != name]
+            out.append(rule(_GP, L(*kvs, rule(kx, val))))
+            done = True
+        else:
+            out.append(r)
+    if not done:
+        out.append(rule(_GP, L(rule(kx, val))))
+    opts["AnnotationRules"] = L(*out)
+    return opts
+
+
+@fn("Annotate", area=AREA, status="added",
+    notes="Annotate[g, key -> value] sets a graph-level annotation (a Graph option, or a custom key stored under "
+          "AnnotationRules \"GraphProperties\"); Annotate[{g, item}, key -> value] or {key -> value, ...} annotates a "
+          "vertex or edge (rule-list options gain item -> value; list-valued options such as VertexWeight replace "
+          "the item's entry; custom keys go to AnnotationRules). The original graph is unchanged. Setting one entry "
+          "of a list-valued option the graph does not have yet, and objects other than graphs, raise "
+          "NotImplementedError. Check: exact (tests read every annotation back with AnnotationValue).")
+def _annotate(spec: Expr, rules: Rule | ListOf[Rule]) -> Expr:
+    gr, item = _ann_spec(spec, "Annotate")
+    rs = list(rules.args) if is_list(rules) else [rules]
+    if not all(_is_rule(r) for r in rs):
+        raise TypeError("Annotate: annotations must be key -> value rules")
+    for r in rs:
+        name = _key_name(r.args[0], "Annotate")
+        opts = (_set_graph(gr, name, r.args[0], r.args[1], "Annotate") if item is None
+                else _set_item(gr, item, name, r.args[0], r.args[1], "Annotate"))
+        gr = WG(gr.vertices, gr.edge_exprs, opts, "Annotate")
+    return gr.expr()
+
+
+@fn("AnnotationDelete", area=AREA, status="added",
+    notes="AnnotationDelete[g] removes every option and annotation; AnnotationDelete[g, key] one graph-level key; "
+          "AnnotationDelete[{g, item}] / [{g, item}, key] removes the item's entries from rule-list options and "
+          "AnnotationRules. Deleting one entry of a list-valued option (VertexWeight, EdgeWeight, ...) or of a value "
+          "shared by all items raises NotImplementedError. The original graph is unchanged. Check: exact (tests "
+          "check AnnotationKeys before and after).")
+def _anndelete(spec: Expr, key: Expr = None) -> Expr:
+    gr, item = _ann_spec(spec, "AnnotationDelete")
+    names = None if key is None else {_key_name(k, "AnnotationDelete") for k in _vlist_arg(key)}
+    opts = dict(gr.opts)
+    if item is None:
+        if names is None:
+            return WG(gr.vertices, gr.edge_exprs, {}).expr()
+        for n in names:
+            opts.pop(n, None)
+        rules = []
+        for r in _custom_rules(gr):
+            if r.args[0] == _GP:
+                kvs = [kv for kv in r.args[1].args if _key_name(kv.args[0], "AnnotationDelete") not in names]
+                if kvs:
+                    rules.append(rule(_GP, L(*kvs)))
+            else:
+                rules.append(r)
+        if "AnnotationRules" in opts:
+            opts["AnnotationRules"] = L(*rules)
+        return WG(gr.vertices, gr.edge_exprs, opts).expr()
+    for k in list(opts):
+        if k not in _VERTEX_KEYS | _EDGE_KEYS or (names is not None and k not in names):
+            continue
+        if _item_value(gr, item, k, "AnnotationDelete") is _MISSING:
+            continue
+        cur = opts[k]
+        if not is_list(cur) or not all(_is_rule(x) for x in cur.args):
+            if names is not None or k in _LIST_KEYS or not is_list(cur):
+                raise NotImplementedError(f"AnnotationDelete: {k} is given for every item at once; deleting it for "
+                                          "one item is not supported")
+        opts[k] = L(*(x for x in cur.args if not (_is_rule(x) and _item_matches(gr, item, x.args[0],
+                                                                               "AnnotationDelete"))))
+    rules = []
+    for r in _custom_rules(gr):
+        lhs, rhs = r.args
+        if lhs != _GP and _item_matches(gr, item, lhs, "AnnotationDelete"):
+            kvs = [] if names is None else [kv for kv in rhs.args
+                                             if _key_name(kv.args[0], "AnnotationDelete") not in names]
+            if kvs:
+                rules.append(rule(lhs, L(*kvs)))
+        else:
+            rules.append(r)
+    if "AnnotationRules" in opts:
+        opts["AnnotationRules"] = L(*rules)
+    return WG(gr.vertices, gr.edge_exprs, opts).expr()
+
+
+_tag_aware("AnnotationValue", "AnnotationKeys", "Annotate", "AnnotationDelete")
+
+
+# ═══════════════════════════════════════ constructions ═══════════════════════════════════════
+
+def _graph_opts(args, fname, extra=()):
+    pos, opts = split_options(list(args), _GRAPH_OPTS | {"DirectedEdges"} | set(extra), fname)
+    return pos, opts
+
+
+def _finish(vs, es, opts, fname):
+    de = opts.pop("DirectedEdges", None)
+    if de is not None:
+        es = WGM._directed_edges(es, de, fname)
+    return WG(vs, es, opts, fname).expr()
+
+
+def _de(e):
+    return Expr("DirectedEdge", *e)
+
+
+@fn("ExpressionGraph", area=AREA, status="added",
+    notes="ExpressionGraph[expr] is the expression tree as an undirected tree on 1, 2, ... (vertices in depth-first "
+          "preorder: the root is 1, then each argument's subtree in order; heads are not vertices, atoms are leaves); "
+          "ExpressionGraph[expr, n] stops at level n. Compound heads (f[a][b]) and the pattern form [expr, n, form] "
+          "raise NotImplementedError. Check: exact (tests compare with the documented tree and check VertexCount = "
+          "LeafCount-style counts).")
+def _exprgraph(expr: Expr, n: NonNegInteger | Expr = None, *opts: Option) -> Expr:
+    pos, o = _graph_opts(opts, "ExpressionGraph")
+    if pos:
+        raise NotImplementedError("ExpressionGraph: the pattern form ExpressionGraph[expr, n, form] is not supported")
+    lim = None
+    if n is not None and not (isinstance(n, Symbol) and n.name == "Infinity"):
+        lim = _int(n, "ExpressionGraph", 0, "the level")
+    vs, es = [], []
+
+    def walk(e, depth, parent):
+        vs.append(len(vs) + 1)
+        me = len(vs)
+        if parent is not None:
+            es.append(UE(parent, me))
+        if isinstance(e, Expr) and not KL.atomq(e) and (lim is None or depth < lim):
+            if not isinstance(e.head, str):
+                raise NotImplementedError("ExpressionGraph: compound heads are not supported")
+            for a in e.args:
+                walk(a, depth + 1, me)
+    walk(expr, 0, None)
+    return _finish(vs, es, o, "ExpressionGraph")
+
+
+@fn("TorusGraph", area=AREA, status="added",
+    notes="TorusGraph[{n1, ..., nk}] = Cartesian product of the cycles C_n1 ... C_nk on 1..n1*...*nk, numbered as "
+          "GridGraph (first coordinate fastest), each coordinate wrapping around; every ni >= 3 (smaller sizes "
+          "would need multi-edges and raise NotImplementedError). Check: exact (tests: IsomorphicGraphQ with "
+          "GraphProduct[CycleGraph[m], CycleGraph[n]], 2k-regularity and n1*...*nk*k edges).")
+def _torus(dims: ListOf[PosInteger], *opts: Option) -> Expr:
+    pos, o = _graph_opts(opts, "TorusGraph")
+    if pos:
+        raise ValueError("TorusGraph: expected TorusGraph[{n1, n2, ...}]")
+    if not is_list(dims) or not dims.args:
+        if isinstance(dims, Symbol):
+            raise Unevaluated()
+        raise TypeError("TorusGraph: expected a list of sizes {n1, n2, ...}")
+    ds = [_int(x, "TorusGraph", 1, "a size") for x in dims.args]
+    if any(d < 3 for d in ds):
+        raise NotImplementedError("TorusGraph: sizes below 3 are not supported")
+    total = math.prod(ds)
+    strides, s = [], 1
+    for d in ds:
+        strides.append(s)
+        s *= d
+    es = set()
+    for idx in range(total):
+        coords, r = [], idx
+        for d in ds:
+            coords.append(r % d)
+            r //= d
+        for k, d in enumerate(ds):
+            j = idx + ((coords[k] + 1) % d - coords[k]) * strides[k]
+            es.add((min(idx, j) + 1, max(idx, j) + 1))
+    return _finish(list(range(1, total + 1)), [UE(a, b) for a, b in sorted(es)], o, "TorusGraph")
+
+
+@fn("DeBruijnGraph", area=AREA, status="added",
+    notes="DeBruijnGraph[m, n]: directed graph on 1..m^n where vertex i (the base-m digits of i - 1, length n) has "
+          "an edge to each vertex whose digits are those shifted left with one new digit appended, i.e. i -> "
+          "Mod[m (i - 1), m^n] + d + 1 for d = 0..m-1 (constant words give self-loops); edges sorted. The type form "
+          "DeBruijnGraph[m, n, type] raises NotImplementedError. Check: exact (tests: m^(n+1) edges, in- and "
+          "out-degree m everywhere, LineGraph-style identity with DeBruijnGraph[m, n + 1] counts).")
+def _debruijn(m: PosInteger, n: PosInteger, *rest: Expr) -> Expr:
+    pos, o = _graph_opts(rest, "DeBruijnGraph")
+    if pos:
+        raise NotImplementedError("DeBruijnGraph: the type form DeBruijnGraph[m, n, type] is not supported")
+    m = _int(m, "DeBruijnGraph", 1, "the number of symbols")
+    n = _int(n, "DeBruijnGraph", 1, "the dimension")
+    N = m ** n
+    if N > 100000:
+        raise ValueError("DeBruijnGraph: the graph would have more than 100000 vertices")
+    es = [_de((i + 1, (m * i) % N + d + 1)) for i in range(N) for d in range(m)]
+    return _finish(list(range(1, N + 1)), es, o, "DeBruijnGraph")
+
+
+@fn("HararyGraph", area=AREA, status="added",
+    notes="HararyGraph[k, n] (1 < k < n): Harary's minimal k-connected graph H_{k,n} on 1..n with ceil(k n/2) edges: "
+          "i <-> i + j (mod n) for j = 1..floor(k/2), plus for odd k the diameters i <-> i + n/2 (n even) or the "
+          "edges i <-> i + (n+1)/2 for i = 1..(n+1)/2 (n odd); edges sorted. Check: exact (tests: edge count "
+          "Ceiling[k n/2] and VertexConnectivity = k).")
+def _harary(k: PosInteger, n: PosInteger, *opts: Option) -> Expr:
+    pos, o = _graph_opts(opts, "HararyGraph")
+    if pos:
+        raise ValueError("HararyGraph: expected HararyGraph[k, n]")
+    k = _int(k, "HararyGraph", 1, "k")
+    n = _int(n, "HararyGraph", 1, "n")
+    if not 1 < k < n:
+        raise ValueError("HararyGraph: requires 1 < k < n")
+    es = set()
+
+    def add(a, b):
+        a, b = a % n, b % n
+        if a != b:
+            es.add((min(a, b) + 1, max(a, b) + 1))
+    r = k // 2
+    for i in range(n):
+        for j in range(1, r + 1):
+            add(i, i + j)
+    if k % 2:
+        if n % 2 == 0:
+            for i in range(n // 2):
+                add(i, i + n // 2)
+        else:
+            add(0, (n - 1) // 2)
+            add(0, (n + 1) // 2)
+            for i in range(1, (n - 1) // 2 + 1):
+                add(i, i + (n + 1) // 2)
+    return _finish(list(range(1, n + 1)), [UE(a, b) for a, b in sorted(es)], o, "HararyGraph")
+
+
+@fn("KnightTourGraph", area=AREA, status="added",
+    notes="KnightTourGraph[m, n]: knight moves on an m x n board, vertex (i - 1) n + j for row i, column j "
+          "(Wolfram's numbering is not documented; the graph is the same up to isomorphism), edges sorted. "
+          "Check: exact (tests: edge count 4 m n - 6 (m + n) + 8 for m, n >= 2 and the 8 x 8 board's 168 edges).")
+def _knight(m: PosInteger, n: PosInteger, *opts: Option) -> Expr:
+    pos, o = _graph_opts(opts, "KnightTourGraph")
+    if pos:
+        raise ValueError("KnightTourGraph: expected KnightTourGraph[m, n]")
+    m = _int(m, "KnightTourGraph", 1, "the number of rows")
+    n = _int(n, "KnightTourGraph", 1, "the number of columns")
+    es = set()
+    for i in range(m):
+        for j in range(n):
+            for di, dj in ((1, 2), (2, 1), (1, -2), (2, -1)):
+                a, b = i + di, j + dj
+                if 0 <= a < m and 0 <= b < n:
+                    u, v = i * n + j + 1, a * n + b + 1
+                    es.add((min(u, v), max(u, v)))
+    return _finish(list(range(1, m * n + 1)), [UE(a, b) for a, b in sorted(es)], o, "KnightTourGraph")
+
+
+@fn("ButterflyGraph", area=AREA, status="added",
+    notes="ButterflyGraph[n, b] (default b = 2): vertices (level l = 0..n, word w = 0..b^n - 1) numbered "
+          "l b^n + w + 1; (l, w) <-> (l + 1, w') whenever w' differs from w at most in base-b digit l; (n + 1) b^n "
+          "vertices and n b^(n+1) edges (Wolfram's numbering is not documented; same graph up to isomorphism). "
+          "Check: exact (tests: counts and the degree sequence 2b inside, b on the outer levels).")
+def _butterfly(n: NonNegInteger, b: PosInteger = 2, *opts: Option) -> Expr:
+    if _is_rule(b):
+        opts, b = (b,) + opts, 2
+    pos, o = _graph_opts(opts, "ButterflyGraph")
+    if pos:
+        raise ValueError("ButterflyGraph: expected ButterflyGraph[n] or ButterflyGraph[n, b]")
+    n = _int(n, "ButterflyGraph", 1, "the order")
+    b = _int(b, "ButterflyGraph", 2, "the base")
+    W = b ** n
+    if (n + 1) * W > 100000:
+        raise ValueError("ButterflyGraph: the graph would be too large")
+    es = []
+    for l in range(n):
+        p = b ** l
+        for w in range(W):
+            digit = (w // p) % b
+            for d in range(b):
+                w2 = w + (d - digit) * p
+                es.append(UE(l * W + w + 1, (l + 1) * W + w2 + 1))
+    return _finish(list(range(1, (n + 1) * W + 1)), es, o, "ButterflyGraph")
+
+
+def _icosahedron():
+    phi = (1 + 5 ** 0.5) / 2
+    pts = []
+    for s1 in (1, -1):
+        for s2 in (1, -1):
+            pts += [(0, s1, s2 * phi), (s1, s2 * phi, 0), (s2 * phi, 0, s1)]
+    adj = {i: set() for i in range(12)}
+    for i in range(12):
+        for j in range(i + 1, 12):
+            if abs(sum((a - b) ** 2 for a, b in zip(pts[i], pts[j])) - 4) < 1e-9:
+                adj[i].add(j)
+                adj[j].add(i)
+    return adj
+
+
+@fn("BuckyballGraph", area=AREA, status="added",
+    notes="BuckyballGraph[] (= BuckyballGraph[1]): the C60 fullerene (truncated icosahedron) on 1..60, built from "
+          "the icosahedron (one vertex per directed edge u -> v, numbered in sorted (u, v) order); 90 edges, cubic, "
+          "12 pentagons and 20 hexagons (Wolfram's numbering is not documented; same graph up to isomorphism). Higher "
+          "orders and classes raise NotImplementedError. Check: exact (tests: counts, 3-regularity, girth 5, "
+          "120 automorphisms, planarity with 32 faces).")
+def _bucky(*args: Expr) -> Expr:
+    pos, o = _graph_opts(args, "BuckyballGraph")
+    if pos:
+        if len(pos) == 1 and K.is_int(pos[0]) and int(pos[0]) == 1:
+            pass
+        elif len(pos) == 1:
+            _int(pos[0], "BuckyballGraph", 1, "the order")
+            raise NotImplementedError("BuckyballGraph: orders above 1 are not supported")
+        else:
+            raise NotImplementedError("BuckyballGraph: the class form BuckyballGraph[n, class] is not supported")
+    adj = _icosahedron()
+    darts = sorted((u, v) for u in adj for v in adj[u])
+    idx = {d: k + 1 for k, d in enumerate(darts)}
+    es = set()
+    for (u, v) in darts:
+        a, b = idx[(u, v)], idx[(v, u)]
+        es.add((min(a, b), max(a, b)))
+        for w in adj[u]:
+            if w != v and w in adj[v]:
+                c = idx[(u, w)]
+                es.add((min(a, c), max(a, c)))
+    return _finish(list(range(1, 61)), [UE(a, b) for a, b in sorted(es)], o, "BuckyballGraph")
+
+
+def _same_vertex_count(grs, fname):
+    n = grs[0].n
+    if any(g.n != n for g in grs):
+        raise NotImplementedError(f"{fname}: graphs with different numbers of vertices are not supported")
+    return n
+
+
+@fn("GraphSum", area=AREA, status="added",
+    notes="GraphSum[g1, g2, ...] for graphs with the same number of vertices = AdjacencyGraph[AdjacencyMatrix[g1] + "
+          "AdjacencyMatrix[g2] + ...] on 1..n (Wolfram's documented identity; repeated edges become multi-edges); "
+          "graphs of different sizes raise NotImplementedError. Check: exact (tests: the documented identity, "
+          "g + complement = complete graph).")
+def _gsum(*args: Expr) -> Expr:
+    pos, o = _graph_opts(args, "GraphSum")
+    if len(pos) < 1:
+        raise ValueError("GraphSum: expected graphs")
+    grs = [_g(x, "GraphSum") for x in pos]
+    n = _same_vertex_count(grs, "GraphSum")
+    if n == 0:
+        return _finish([], [], o, "GraphSum")
+    m = [[0] * n for _ in range(n)]
+    for gr in grs:
+        gr.require_pure("GraphSum")
+        for i, j, d in gr.edges:
+            m[i][j] += 1
+            if not d and i != j:
+                m[j][i] += 1
+    out = _adjacency_graph(list(range(1, n + 1)), m, "GraphSum")
+    return _finish(list(out.args[0].args), list(out.args[1].args), o, "GraphSum")
+
+
+@fn("GraphJoin", area=AREA, status="added",
+    notes="GraphJoin[g1, g2, ...] = GraphDisjointUnion (vertices renumbered 1, 2, ...) plus an edge i <-> j between "
+          "every vertex of one graph and every vertex of each later graph (Wolfram's documented construction), join "
+          "edges in vertex order after the union's edges; directed and mixed graphs raise NotImplementedError. "
+          "Check: exact (tests: the documented identities GraphJoin[point, cycle] = wheel, joins of edgeless graphs "
+          "= complete multipartite graphs).")
+def _gjoin(*args: Expr) -> Expr:
+    pos, o = _graph_opts(args, "GraphJoin")
+    if len(pos) < 1:
+        raise ValueError("GraphJoin: expected graphs")
+    grs = [_g(x, "GraphJoin") for x in pos]
+    vs, es, blocks, off = [], [], [], 0
+    for gr in grs:
+        _need_undirected(gr, "GraphJoin")
+        block = list(range(off + 1, off + gr.n + 1))
+        vs += block
+        es += [UE(off + i + 1, off + j + 1) for i, j, _ in gr.edges]
+        blocks.append(block)
+        off += gr.n
+    for a, b in itertools.combinations(range(len(blocks)), 2):
+        es += [UE(u, v) for u in blocks[a] for v in blocks[b]]
+    return _finish(vs, es, o, "GraphJoin")
+
+
+_PRODUCTS = ("Cartesian", "Tensor", "Lexicographical", "Normal", "Conormal", "Rooted")
+
+
+@fn("GraphProduct", area=AREA, status="added",
+    notes="GraphProduct[g1, g2] (Cartesian) and GraphProduct[g1, g2, \"op\"] for op = \"Cartesian\", \"Tensor\", "
+          "\"Lexicographical\", \"Normal\", \"Conormal\", \"Rooted\" (root = first vertex of g2), with the "
+          "documented edge conditions on vertex pairs; undirected simple graphs; the product vertex (u_i, v_j) is "
+          "numbered (i - 1) n2 + j and edges are sorted (Wolfram's numbering is not documented; same graph up to "
+          "isomorphism). Directed/multi/mixed graphs and more than two factors raise NotImplementedError. "
+          "Check: exact (tests: the documented edge-count identities for every type).")
+def _gproduct(g1: Expr, g2: Expr, *rest: String | Option) -> Expr:
+    pos, o = _graph_opts(rest, "GraphProduct")
+    op = "Cartesian"
+    if pos:
+        if len(pos) > 1:
+            raise ValueError("GraphProduct: expected GraphProduct[g1, g2, \"op\"]")
+        if is_graph_like(pos[0]):
+            raise NotImplementedError("GraphProduct: products of more than two graphs are not supported")
+        if not isinstance(pos[0], str):
+            raise TypeError("GraphProduct: the product type must be a string")
+        op = pos[0]
+        if op not in _PRODUCTS:
+            raise ValueError(f"GraphProduct: unknown product type {op!r}; expected one of {', '.join(_PRODUCTS)}")
+    a, b = _g(g1, "GraphProduct"), _g(g2, "GraphProduct")
+    for gr in (a, b):
+        _need_simple_undirected(gr, "GraphProduct")
+    na, nb = _simple_nb(a), _simple_nb(b)
+    n1, n2 = a.n, b.n
+    es = []
+    for (u1, u2), (v1, v2) in itertools.combinations(itertools.product(range(n1), range(n2)), 2):
+        e1, e2 = v1 in na[u1], v2 in nb[u2]
+        s1, s2 = u1 == v1, u2 == v2
+        ok = {"Cartesian": (s1 and e2) or (s2 and e1), "Tensor": e1 and e2, "Lexicographical": e1 or (s1 and e2),
+              "Normal": (s1 and e2) or (s2 and e1) or (e1 and e2), "Conormal": e1 or e2,
+              "Rooted": (s1 and e2) or (e1 and s2 and u2 == 0)}[op]
+        if ok:
+            es.append(UE(u1 * n2 + u2 + 1, v1 * n2 + v2 + 1))
+    return _finish(list(range(1, n1 * n2 + 1)), es, o, "GraphProduct")
+
+
+@fn("GraphPower", area=AREA, status="added",
+    notes="GraphPower[g, n]: same vertices, an edge u <-> v (u -> v for directed graphs) whenever 0 < "
+          "GraphDistance[g, u, v] <= n, in VertexList order; unweighted, loop-free and multi-edge-free result; mixed "
+          "graphs raise. Check: exact (tests: GraphPower[CycleGraph[7], 2] = CirculantGraph[7, {1, 2}], "
+          "GraphPower[PathGraph, diameter] = complete graph).")
+def _gpower(g: Expr, n: NonNegInteger, *opts: Option) -> Expr:
+    pos, o = _graph_opts(opts, "GraphPower")
+    if pos:
+        raise ValueError("GraphPower: expected GraphPower[g, n]")
+    gr = _g(g, "GraphPower")
+    gr.require_pure("GraphPower")
+    k = _int(n, "GraphPower", 0, "the power")
+    plain = WG(gr.vertices, gr.edge_exprs, {}, "GraphPower")
+    es = []
+    for i in range(gr.n):
+        d, _ = plain.sssp(i)
+        for j in range(gr.n):
+            if j != i and j in d and 0 < d[j] <= k and (gr.directed or j > i):
+                es.append(gr.edge(i, j, gr.directed))
+    return _finish(gr.vertices, es, o, "GraphPower")
+
+
+@fn("SimpleGraph", area=AREA, status="added",
+    notes="SimpleGraph[g]: the underlying simple graph of an undirected graph (self-loops removed, multiple edges "
+          "merged at their first occurrence, vertices kept); directed and mixed graphs raise NotImplementedError. "
+          "Check: exact (tests: SimpleGraphQ of the result and edge counts).")
+def _simpleg(g: Expr, *opts: Option) -> Expr:
+    pos, o = _graph_opts(opts, "SimpleGraph")
+    if pos:
+        raise ValueError("SimpleGraph: expected SimpleGraph[g]")
+    gr = _g(g, "SimpleGraph")
+    _need_undirected(gr, "SimpleGraph")
+    seen, es = set(), []
+    for k, (i, j, _) in enumerate(gr.edges):
+        key = (min(i, j), max(i, j))
+        if i == j or key in seen:
+            continue
+        seen.add(key)
+        es.append(gr.edge_exprs[k])
+    return _finish(gr.vertices, es, o, "SimpleGraph")
+
+
+@fn("RelationGraph", area=AREA, status="added",
+    notes="RelationGraph[f, {v1, ...}]: an edge for every pair with f[vi, vj] True (self-loops when f[v, v] is "
+          "True); DirectedEdges -> Automatic gives an undirected graph when f[vi, vj] == f[vj, vi] for all pairs "
+          "(edges i <= j in list order) and a directed one otherwise (all ordered pairs, row by row); True/False "
+          "force the kind. f results other than True/False count as False. The two-list form RelationGraph[f, {v...}, "
+          "{w...}] raises NotImplementedError. Check: exact (tests: documented examples, e.g. a coprime graph and "
+          "Greater giving the transitive tournament).")
+def _relgraph(f: Fn, vs: ListOf[Expr], *rest: Option) -> Expr:
+    pos, o = _graph_opts(rest, "RelationGraph")
+    if pos:
+        raise NotImplementedError("RelationGraph: the two-list form RelationGraph[f, {v...}, {w...}] is not supported")
+    if not is_list(vs):
+        if isinstance(vs, Symbol):
+            raise Unevaluated()
+        raise TypeError("RelationGraph: the vertices must be a list")
+    vl = list(vs.args)
+    n = len(vl)
+    rel = [[apply(f, vl[i], vl[j]) is True for j in range(n)] for i in range(n)]
+    de = o.pop("DirectedEdges", Symbol("Automatic"))
+    if isinstance(de, Symbol) and de.name == "Automatic":
+        directed = any(rel[i][j] != rel[j][i] for i in range(n) for j in range(n))
+    elif de is True or de is False:
+        directed = de
+    else:
+        raise ValueError("RelationGraph: DirectedEdges must be True, False or Automatic")
+    es = []
+    for i in range(n):
+        for j in range(n):
+            if directed and rel[i][j]:
+                es.append(Expr("DirectedEdge", vl[i], vl[j]))
+            elif not directed and j >= i and (rel[i][j] or rel[j][i]):
+                es.append(UE(vl[i], vl[j]))
+    return WG(vl, es, o, "RelationGraph").expr()
+
+
+def _bool_value(f, vals):
+    r = apply(f, *vals)
+    if r is True or r is False:
+        return r
+    raise ValueError(f"BooleanGraph: the Boolean function gave {r!r}, not True or False")
+
+
+@fn("BooleanGraph", area=AREA, status="added",
+    notes="BooleanGraph[f, g1, ..., gn] for simple undirected graphs on the same vertex set (taken from g1): u <-> v "
+          "for every pair u != v with f[adjacent in g1, ..., adjacent in gn] True (edges in VertexList order); "
+          "BooleanGraph[Or, g1, g2] is the union, And the intersection, Xor the symmetric difference, Not[g] the "
+          "complement. Graphs with different vertex sets, directed and multigraphs raise NotImplementedError; a "
+          "non-Boolean f result raises ValueError. Check: exact (tests: Or/And/Xor/Not against GraphUnion, "
+          "GraphIntersection and GraphComplement).")
+def _boolgraph(f: Fn, *gs: Expr) -> Expr:
+    pos, o = _graph_opts(gs, "BooleanGraph")
+    if not pos:
+        raise ValueError("BooleanGraph: expected at least one graph")
+    grs = [_g(x, "BooleanGraph") for x in pos]
+    for gr in grs:
+        _need_simple_undirected(gr, "BooleanGraph")
+    base = grs[0]
+    for gr in grs[1:]:
+        if set(gr.index) != set(base.index):
+            raise NotImplementedError("BooleanGraph: graphs with different vertex sets are not supported")
+    nbs = [gr.neighbor_sets(undirected=True) for gr in grs]
+    pos_of = [[gr.index[K.tag(v)] for v in base.vertices] for gr in grs]
+    es = []
+    for i, j in itertools.combinations(range(base.n), 2):
+        vals = [pos_of[k][j] in nbs[k][pos_of[k][i]] for k in range(len(grs))]
+        if _bool_value(f, vals):
+            es.append(UE(base.vertices[i], base.vertices[j]))
+    return _finish(base.vertices, es, o, "BooleanGraph")
+
+
+def _weighted_matrix(m, fname):
+    if not is_list(m) or not m.args or not all(is_list(r) for r in m.args):
+        if isinstance(m, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: expected a square matrix")
+    n = len(m.args)
+    if any(len(r.args) != n for r in m.args):
+        raise ValueError(f"{fname}: expected a square matrix")
+    return [list(r.args) for r in m.args]
+
+
+@fn("WeightedAdjacencyGraph", area=AREA, status="added",
+    notes="WeightedAdjacencyGraph[wmat] / [{v...}, wmat]: an edge with weight w_ij for every entry that is not "
+          "Infinity (the default absent value) or the given val in WeightedAdjacencyGraph[{v...}, wmat, val]; "
+          "undirected when wmat is symmetric (edges i <= j), directed otherwise; EdgeWeight carries the weights. "
+          "Entries must be real numbers or Infinity. Check: exact (tests: WeightedAdjacencyMatrix round trip).")
+def _wadjgraph(a: Expr, b: Expr = None, c: Expr = None) -> Expr:
+    if b is None or (_is_rule(b)):
+        vs, m, absent = None, a, INF
+    else:
+        vs, m, absent = a, b, (INF if c is None else S(c))
+    rows = _weighted_matrix(m, "WeightedAdjacencyGraph")
+    n = len(rows)
+    if vs is None:
+        vl = list(range(1, n + 1))
+    else:
+        if not is_list(vs) or len(vs.args) != n:
+            raise ValueError("WeightedAdjacencyGraph: the vertex list and matrix sizes differ")
+        vl = list(vs.args)
+    vals = []
+    for r in rows:
+        row = []
+        for x in r:
+            if isinstance(x, Symbol) and x.name == "Infinity":
+                row.append(INF)
+                continue
+            if isinstance(x, (bool, str)) or not is_numeric_value(x):
+                raise TypeError(f"WeightedAdjacencyGraph: entries must be numbers or Infinity, not {x!r}")
+            v = S(x)
+            if not v.is_real:
+                raise ValueError("WeightedAdjacencyGraph: entries must be real")
+            row.append(v)
+        vals.append(row)
+    sym = all(vals[i][j] == vals[j][i] for i in range(n) for j in range(n))
+    es, ws = [], []
+    for i in range(n):
+        for j in range(n):
+            w = vals[i][j]
+            if w == absent or (sym and j < i):
+                continue
+            es.append(UE(vl[i], vl[j]) if sym else Expr("DirectedEdge", vl[i], vl[j]))
+            ws.append(R(w))
+    return WG(vl, es, {"EdgeWeight": L(*ws)} if es else {}, "WeightedAdjacencyGraph").expr()
+
+
+@fn("KirchhoffGraph", area=AREA, status="added",
+    notes="KirchhoffGraph[kmat] / [{v...}, kmat]: the undirected loop-free (multi)graph whose Kirchhoff matrix "
+          "D - A is kmat: -k off the diagonal gives k parallel edges; kmat must be symmetric with non-positive "
+          "integer off-diagonal entries and zero row sums. Check: self-check (KirchhoffMatrix of the result is "
+          "recomputed and compared; ArithmeticError on mismatch).")
+def _kirchgraph(a: Expr, b: Expr = None) -> Expr:
+    vs, m = (None, a) if b is None else (a, b)
+    rows = _weighted_matrix(m, "KirchhoffGraph")
+    n = len(rows)
+    ints = []
+    for r in rows:
+        row = []
+        for x in r:
+            if not K.is_int(x) or isinstance(x, bool):
+                raise ValueError("KirchhoffGraph: entries must be integers")
+            row.append(int(x))
+        ints.append(row)
+    for i in range(n):
+        if sum(ints[i]) != 0:
+            raise ValueError("KirchhoffGraph: every row of a Kirchhoff matrix sums to 0")
+        for j in range(n):
+            if ints[i][j] != ints[j][i] or (i != j and ints[i][j] > 0):
+                raise ValueError("KirchhoffGraph: the matrix must be symmetric with non-positive off-diagonal "
+                                 "entries")
+    vl = list(range(1, n + 1)) if vs is None else list(vs.args)
+    if len(vl) != n:
+        raise ValueError("KirchhoffGraph: the vertex list and matrix sizes differ")
+    es = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            es += [UE(vl[i], vl[j])] * (-ints[i][j])
+    out = _new(vl, es)
+    km = WGM._kirch(out) if n else L()
+    if n and [[int(x) for x in r.args] for r in km.args] != ints:
+        raise ArithmeticError("KirchhoffGraph: result failed verification")
+    return out
+
+
+@fn("IncidenceGraph", area=AREA, status="added",
+    notes="IncidenceGraph[m] / [{v...}, m]: one edge per column of the vertices x edges incidence matrix: two 1s "
+          "give an undirected edge, a single 2 a self-loop, -1 and 1 a directed edge from the -1 row to the 1 row; "
+          "other columns raise ValueError. Check: self-check (IncidenceMatrix of the result is compared with m; "
+          "ArithmeticError on mismatch).")
+def _incgraph(a: Expr, b: Expr = None) -> Expr:
+    vs, m = (None, a) if b is None else (a, b)
+    if not is_list(m) or not m.args or not all(is_list(r) for r in m.args):
+        if isinstance(m, Symbol):
+            raise Unevaluated()
+        raise TypeError("IncidenceGraph: expected a matrix")
+    rows = [list(r.args) for r in m.args]
+    n, cols = len(rows), len(rows[0])
+    if any(len(r) != cols for r in rows):
+        raise ValueError("IncidenceGraph: expected a rectangular matrix")
+    vl = list(range(1, n + 1)) if vs is None else list(vs.args)
+    if len(vl) != n:
+        raise ValueError("IncidenceGraph: the vertex list and matrix sizes differ")
+    es = []
+    for c in range(cols):
+        col = []
+        for i in range(n):
+            x = rows[i][c]
+            if not K.is_int(x) or isinstance(x, bool):
+                raise ValueError("IncidenceGraph: entries must be integers")
+            if int(x):
+                col.append((i, int(x)))
+        if len(col) == 1 and col[0][1] == 2:
+            es.append(UE(vl[col[0][0]], vl[col[0][0]]))
+        elif len(col) == 2 and col[0][1] == col[1][1] == 1:
+            es.append(UE(vl[col[0][0]], vl[col[1][0]]))
+        elif len(col) == 2 and sorted(v for _, v in col) == [-1, 1]:
+            t = next(i for i, v in col if v == -1)
+            h = next(i for i, v in col if v == 1)
+            es.append(Expr("DirectedEdge", vl[t], vl[h]))
+        else:
+            raise ValueError(f"IncidenceGraph: column {c + 1} is not the incidence vector of an edge")
+    out = _new(vl, es)
+    if es:
+        chk = WGM._incm(out)
+        if [[int(x) for x in r.args] for r in chk.args] != [[int(x) for x in r] for r in rows]:
+            raise ArithmeticError("IncidenceGraph: result failed verification")
+    return out
