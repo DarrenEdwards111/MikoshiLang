@@ -1024,3 +1024,1518 @@ def ed25519_verify(pub, msg, Rs, Ss):
     lhs, rhs = sB, _ed_add(R, hA)
     p = _ED_P
     return (lhs[0] * rhs[2] - rhs[0] * lhs[2]) % p == 0 and (lhs[1] * rhs[2] - rhs[1] * lhs[2]) % p == 0
+
+
+# ═══════════════════════════════════════ scrypt / DerivedKey ═══════════════════════════════════════
+
+def _b64n(b):
+    return base64.b64encode(b).decode("ascii").rstrip("=")
+
+
+def _unb64n(s):
+    return base64.b64decode(s + "=" * (-len(s) % 4))
+
+
+def _secret_bytes(x, fname, what="password"):
+    if isinstance(x, str):
+        return x.encode("utf-8")
+    if is_byte_array(x):
+        return ba_bytes(x, fname)
+    raise ValueError(f"{fname}: the {what} must be a string or a ByteArray")
+
+
+def scrypt(pw, salt, n, r, p, size, fname):
+    if n < 2 or n & (n - 1):
+        raise ValueError(f"{fname}: the scrypt parameter N must be a power of 2 greater than 1")
+    if r < 1 or p < 1 or size < 1:
+        raise ValueError(f"{fname}: the scrypt parameters r, p and KeySize must be positive integers")
+    try:
+        return hashlib.scrypt(pw, salt=salt, n=n, r=r, p=p, dklen=size, maxmem=128 * r * (n + p + 2) + (1 << 24))
+    except (ValueError, MemoryError) as e:
+        raise ValueError(f"{fname}: scrypt failed ({e})")
+
+
+def _pint(v, fname, what):
+    if K.is_int(v) and not isinstance(v, bool) and v > 0:
+        return int(v)
+    raise ValueError(f"{fname}: {what} must be a positive integer, not {F.input_form(v)}")
+
+
+def derived_key(pw, salt, method, fname):
+    params = {"KeySize": 64, "N": 2 ** 15, "r": 8, "p": 1}
+    func = "scrypt"
+    if method is not None and not is_sym(method, "Automatic"):
+        if isinstance(method, str):
+            func = method
+        elif KL.is_assoc(method):
+            m = IE.assoc_dict(method, fname)
+            func = m.pop("Function", "scrypt")
+            fp = m.pop("FunctionParameters", None)
+            if fp is not None:
+                m.update(IE.assoc_dict(fp, fname))
+            for k, v in m.items():
+                if k not in params:
+                    raise ValueError(f"{fname}: unknown Method key \"{k}\"")
+                params[k] = _pint(v, fname, k)
+        else:
+            raise ValueError(f"{fname}: invalid Method {F.input_form(method)}")
+    if func in ("Argon2d", "Argon2i", "Argon2id"):
+        raise NotImplementedError(f"{fname}: the {func} key derivation function is not available "
+                                  f"(use \"scrypt\")")
+    if func != "scrypt":
+        raise ValueError(f"{fname}: {F.input_form(func)} is not a supported key derivation function")
+    key = scrypt(pw, salt, params["N"], params["r"], params["p"], params["KeySize"], fname)
+    return Expr("DerivedKey", A([("Function", "scrypt"), ("DerivedKey", _ba(key)), ("Salt", _ba(salt)),
+                                 ("FunctionParameters", A([(k, params[k]) for k in ("KeySize", "N", "r", "p")]))]))
+
+
+def _dk_parts(dk, fname):
+    if not (isinstance(dk, Expr) and dk.head == "DerivedKey" and len(dk.args) == 1 and KL.is_assoc(dk.args[0])):
+        raise ValueError(f"{fname}: {F.input_form(dk)} is not a DerivedKey")
+    a = IE.assoc_dict(dk.args[0], fname)
+    fp = IE.assoc_dict(a["FunctionParameters"], fname)
+    return a["Function"], ba_bytes(a["DerivedKey"], fname), ba_bytes(a["Salt"], fname), fp
+
+
+def phc_string(dk):
+    func, key, salt, fp = _dk_parts(dk, "DerivedKey")
+    ln = int(fp["N"]).bit_length() - 1
+    return f"${func}$ln={ln},r={fp['r']},p={fp['p']}${_b64n(salt)}${_b64n(key)}"
+
+
+_PHC_RE = re.compile(r"\$scrypt\$ln=(\d+),r=(\d+),p=(\d+)\$([A-Za-z0-9+/]*)\$([A-Za-z0-9+/]+)")
+
+
+@fn("GenerateDerivedKey", area=AREA, status="added",
+    notes="GenerateDerivedKey[password] / [password, salt] derives a key with scrypt (RFC 7914; defaults KeySize 64, "
+          "N 2^15, r 8, p 1, random 16-byte salt) giving DerivedKey[<|\"Function\", \"DerivedKey\", \"Salt\", "
+          "\"FunctionParameters\"|>]; Method -> <|\"Function\" -> \"scrypt\", \"KeySize\", \"N\", \"r\", \"p\"|>. "
+          "Argon2 functions raise a clear error")
+def _generatederivedkey(pw, *rest):
+    rest, o = split_opts(rest, ("Method",), "GenerateDerivedKey")
+    if len(rest) > 1:
+        raise ValueError("GenerateDerivedKey called with too many arguments")
+    pwb = _secret_bytes(pw, "GenerateDerivedKey")
+    salt = _secret_bytes(rest[0], "GenerateDerivedKey", "salt") if rest else secrets.token_bytes(16)
+    return derived_key(pwb, salt, o.get("Method"), "GenerateDerivedKey")
+
+
+@fn("DerivedKey", area=AREA, status="added",
+    notes="DerivedKey[<|...|>] is the result of GenerateDerivedKey (properties \"Function\", \"DerivedKey\", "
+          "\"Salt\", \"FunctionParameters\", \"PHCString\", \"Properties\"); DerivedKey[\"$scrypt$ln=..$salt$hash\"] "
+          "rebuilds one from its PHC string")
+def _derivedkey(x):
+    if isinstance(x, str):
+        m = _PHC_RE.fullmatch(x.strip())
+        if not m:
+            raise ValueError("DerivedKey: the string is not a valid scrypt PHC string")
+        try:
+            salt, key = _unb64n(m.group(4)), _unb64n(m.group(5))
+        except Exception:
+            raise ValueError("DerivedKey: invalid Base64 in the PHC string")
+        return Expr("DerivedKey", A([("Function", "scrypt"), ("DerivedKey", _ba(key)), ("Salt", _ba(salt)),
+                                     ("FunctionParameters", A([("KeySize", len(key)), ("N", 2 ** int(m.group(1))),
+                                                               ("r", int(m.group(2))), ("p", int(m.group(3)))]))]))
+    if KL.is_assoc(x):
+        _dk_parts(Expr("DerivedKey", x), "DerivedKey")
+        raise Unevaluated
+    raise ValueError(f"DerivedKey: {F.input_form(x)} is not an association or a PHC string")
+
+
+@fn("VerifyDerivedKey", area=AREA, status="added",
+    notes="VerifyDerivedKey[key, password] gives True when password derives the DerivedKey key (same function, "
+          "salt and parameters; constant-time comparison), False otherwise")
+def _verifyderivedkey(dk, pw):
+    func, key, salt, fp = _dk_parts(dk, "VerifyDerivedKey")
+    got = scrypt(_secret_bytes(pw, "VerifyDerivedKey"), salt, int(fp["N"]), int(fp["r"]), int(fp["p"]), len(key),
+                 "VerifyDerivedKey")
+    return hmac.compare_digest(got, key)
+
+
+# ═══════════════════════════════════════ symmetric keys & encryption ═══════════════════════════════════════
+
+def _is_obj(x, head):
+    return isinstance(x, Expr) and x.head == head and len(x.args) == 1 and KL.is_assoc(x.args[0])
+
+
+def _cipher_spec(method, fname):
+    cipher, mode, iv, size = "AES256", None, None, None
+    if method is None or is_sym(method, "Automatic"):
+        pass
+    elif isinstance(method, str):
+        cipher = method
+    elif KL.is_assoc(method):
+        m = IE.assoc_dict(method, fname)
+        cipher = m.pop("Cipher", cipher)
+        mode = m.pop("BlockMode", None)
+        iv = m.pop("InitializationVector", None)
+        size = m.pop("KeySize", None)
+        if m:
+            raise ValueError(f"{fname}: unknown Method key \"{next(iter(m))}\"")
+    else:
+        raise ValueError(f"{fname}: invalid Method {F.input_form(method)}")
+    if cipher in UNSUPPORTED_CIPHERS:
+        raise NotImplementedError(f"{fname}: the {cipher} cipher is not available (use AES128, AES192, AES256, "
+                                  f"Blowfish or RC4)")
+    if cipher not in CIPHERS:
+        raise ValueError(f"{fname}: {F.input_form(cipher)} is not a supported cipher")
+    ksize, bsize, _ = CIPHERS[cipher]
+    if size is not None and not is_sym(size, "Automatic"):
+        size = _pint(size, fname, "KeySize")
+        if cipher.startswith("AES") and size != ksize * 8:
+            raise ValueError(f"{fname}: {cipher} keys have {ksize * 8} bits")
+        if cipher == "Blowfish" and not (32 <= size <= 448 and size % 8 == 0):
+            raise ValueError(f"{fname}: Blowfish keys have 32 to 448 bits")
+        if cipher == "RC4" and not (40 <= size <= 2048 and size % 8 == 0):
+            raise ValueError(f"{fname}: RC4 keys have 40 to 2048 bits")
+        ksize = size // 8
+    if cipher == "RC4":
+        if mode not in (None, "None") and not is_sym(mode, "None") and not is_sym(mode, "Automatic"):
+            raise ValueError(f"{fname}: RC4 is a stream cipher and has no block mode")
+        mode = None
+    else:
+        mode = _block_mode(mode, fname)
+    iv = _iv_arg(iv, cipher, fname)
+    return cipher, ksize, mode, iv
+
+
+def _block_mode(mode, fname):
+    if mode is None or is_sym(mode, "Automatic"):
+        return "CBC"
+    if mode in ("ECB", "CBC", "CFB", "OFB", "CTR"):
+        return mode
+    raise ValueError(f"{fname}: {F.input_form(mode)} is not a supported block mode (ECB, CBC, CFB, OFB, CTR)")
+
+
+def _iv_arg(iv, cipher, fname):
+    if iv is None or is_sym(iv, "None") or is_sym(iv, "Automatic"):
+        return None
+    b = bytes_arg(iv, fname, "initialization vector")
+    if cipher == "RC4" or len(b) != CIPHERS[cipher][1]:
+        raise ValueError(f"{fname}: the initialization vector for {cipher} must have {CIPHERS[cipher][1]} bytes")
+    return b
+
+
+def _sym_key(cipher, mode, key, iv):
+    return Expr("SymmetricKey", A([("Cipher", cipher), ("BlockMode", mode if mode else None), ("Key", _ba(key)),
+                                   ("InitializationVector", _ba(iv) if iv else None)]))
+
+
+def password_key(pw, size):
+    """The key GenerateSymmetricKey["password"] / Encrypt["password", ...] derive: scrypt(password, empty salt,
+    N 2^14, r 8, p 1) - deterministic, so the same password always gives the same key."""
+    return scrypt(pw, b"", 2 ** 14, 8, 1, size, "GenerateSymmetricKey")
+
+
+@fn("GenerateSymmetricKey", area=AREA, status="added",
+    notes="GenerateSymmetricKey[] (random AES256/CBC key), [\"password\"] (deterministic scrypt derivation), "
+          "[ByteArray] (the given key bytes), [DerivedKey[...]]; Method -> cipher | <|\"Cipher\", \"BlockMode\", "
+          "\"KeySize\", \"InitializationVector\"|>; ciphers AES128/192/256, Blowfish, RC4 (DES, CAST5, IDEA give a "
+          "clear error); gives SymmetricKey[<|\"Cipher\", \"BlockMode\", \"Key\", \"InitializationVector\"|>]")
+def _generatesymmetrickey(*args):
+    rest, o = split_opts(args, ("Method",), "GenerateSymmetricKey")
+    if len(rest) > 1:
+        raise ValueError("GenerateSymmetricKey called with too many arguments")
+    cipher, ksize, mode, iv = _cipher_spec(o.get("Method"), "GenerateSymmetricKey")
+    if not rest:
+        key = secrets.token_bytes(ksize)
+    else:
+        src = rest[0]
+        if isinstance(src, str):
+            key = password_key(src.encode("utf-8"), ksize)
+        elif _is_obj(src, "DerivedKey"):
+            dk = _dk_parts(src, "GenerateSymmetricKey")[1]
+            if len(dk) < ksize:
+                raise ValueError(f"GenerateSymmetricKey: the derived key is shorter than the {ksize}-byte key")
+            key = dk[:ksize]
+        else:
+            key = bytes_arg(src, "GenerateSymmetricKey", "key")
+            if len(key) != ksize and not (cipher in ("Blowfish", "RC4") and "KeySize" not in str(o.get("Method"))
+                                          and (4 <= len(key) <= 56 if cipher == "Blowfish" else 5 <= len(key) <= 256)):
+                raise ValueError(f"GenerateSymmetricKey: a {cipher} key must have {ksize} bytes, not {len(key)}")
+    return _sym_key(cipher, mode, key, iv)
+
+
+def sym_key_parts(k, fname):
+    a = IE.assoc_dict(k.args[0], fname)
+    cipher = a.get("Cipher", "AES256")
+    if cipher in UNSUPPORTED_CIPHERS:
+        raise NotImplementedError(f"{fname}: the {cipher} cipher is not available")
+    if cipher not in CIPHERS:
+        raise ValueError(f"{fname}: {F.input_form(cipher)} is not a supported cipher")
+    if "Key" not in a:
+        raise ValueError(f"{fname}: the SymmetricKey has no \"Key\"")
+    key = ba_bytes(a["Key"], fname)
+    mode = None if cipher == "RC4" else _block_mode(a.get("BlockMode"), fname)
+    iv = _iv_arg(a.get("InitializationVector"), cipher, fname)
+    return cipher, mode, key, iv
+
+
+@fn("SymmetricKey", area=AREA, status="added",
+    notes="SymmetricKey[<|\"Cipher\", \"BlockMode\", \"Key\", \"InitializationVector\"|>] represents a symmetric "
+          "key (properties by name and \"Properties\"); validated, otherwise inert")
+def _symmetrickey(a):
+    if not KL.is_assoc(a):
+        raise ValueError(f"SymmetricKey: {F.input_form(a)} is not an association")
+    sym_key_parts(Expr("SymmetricKey", a), "SymmetricKey")
+    raise Unevaluated
+
+
+def _payload(x, fname):
+    if isinstance(x, str):
+        return x.encode("utf-8"), "String"
+    if is_byte_array(x):
+        return ba_bytes(x, fname), "ByteArray"
+    return IE.compress_string(x).encode("ascii"), "Expression"
+
+
+def _unpayload(b, form, fname):
+    if form == "String":
+        try:
+            return b.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError(f"{fname}::failed: the data could not be decrypted (wrong key or corrupt data)")
+    if form == "ByteArray":
+        return _ba(b)
+    try:
+        return ev(IE.uncompress_string(b.decode("ascii"), fname))
+    except (UnicodeDecodeError, ValueError):
+        raise ValueError(f"{fname}::failed: the data could not be decrypted (wrong key or corrupt data)")
+
+
+def _padding_opt(v, fname, allowed):
+    if v is None or is_sym(v, "Automatic"):
+        return "Automatic"
+    if is_sym(v, "None") or v == "None":
+        return None
+    if v in allowed:
+        return v
+    if v == "X931":
+        raise NotImplementedError(f"{fname}: X9.31 padding is not available")
+    raise ValueError(f"{fname}: {F.input_form(v)} is not a supported padding")
+
+
+def _method_assoc(o, fname, allowed):
+    m = o.get("Method")
+    if m is None or is_sym(m, "Automatic"):
+        return {}
+    d = IE.assoc_dict(m, fname)
+    for k in d:
+        if k not in allowed:
+            raise ValueError(f"{fname}: unknown Method key \"{k}\"")
+    return d
+
+
+def _key_from_password(pw, fname):
+    return _sym_key("AES256", "CBC", password_key(pw.encode("utf-8"), 32), None)
+
+
+def encrypt(key, x, o, fname="Encrypt"):
+    if isinstance(key, str):
+        key = _key_from_password(key, fname)
+    data, form = _payload(x, fname)
+    if _is_obj(key, "SymmetricKey"):
+        m = _method_assoc(o, fname, ("Padding", "InitializationVector", "BlockMode"))
+        cipher, mode, k, iv = sym_key_parts(key, fname)
+        if "BlockMode" in m and cipher != "RC4":
+            mode = _block_mode(m["BlockMode"], fname)
+        if "InitializationVector" in m:
+            iv = _iv_arg(m["InitializationVector"], cipher, fname)
+        pad = _padding_opt(m.get("Padding"), fname, ("PKCS7",))
+        pad = mode in ("ECB", "CBC") if pad in ("Automatic", "PKCS7") else False
+        bs = CIPHERS[cipher][1]
+        if cipher != "RC4" and mode != "ECB" and iv is None:
+            iv = secrets.token_bytes(bs)
+        ct = sym_encrypt(cipher, k, data, mode, iv, pad)
+        items = [("Data", _ba(ct)), ("InitializationVector", _ba(iv) if iv and mode != "ECB" else None),
+                 ("OriginalForm", Symbol(form))]
+        if not pad and mode in ("ECB", "CBC"):
+            items.append(("Padding", None))
+        if cipher != "RC4" and mode != sym_key_parts(key, fname)[1]:
+            items.append(("BlockMode", mode))
+        return Expr("EncryptedObject", A(items))
+    if _is_obj(key, "PrivateKey") or _is_obj(key, "PublicKey"):
+        kd = asym_parts(key, fname)
+        if kd["Type"] != "RSA":
+            raise ValueError(f"{fname}: {kd['Type']} keys can only sign, not encrypt (use an RSA or a symmetric key)")
+        m = _method_assoc(o, fname, ("Padding",))
+        private = key.head == "PrivateKey"
+        pad = _padding_opt(m.get("Padding", kd.get("Padding")), fname, ("PKCS1", "OAEP"))
+        if pad == "Automatic":
+            pad = "PKCS1"
+        if private and pad == "OAEP":
+            raise ValueError(f"{fname}: OAEP padding needs a public key")
+        n = kd["PublicModulus"]
+        k = _modlen(n)
+        em = rsa_pad(data, k, pad, 1 if private else 2, fname)
+        mi = int.from_bytes(em, "big")
+        if mi >= n:
+            raise ValueError(f"{fname}: the data is too large for this RSA key")
+        c = pow(mi, kd["PrivateExponent"] if private else kd["PublicExponent"], n)
+        items = [("Data", _ba(_i2osp(c, k))), ("OriginalForm", Symbol(form))]
+        if pad != "PKCS1":
+            items.append(("Padding", pad))
+        return Expr("EncryptedObject", A(items))
+    raise ValueError(f"{fname}: {F.input_form(key)} is not a SymmetricKey, a PrivateKey, a PublicKey or a "
+                     f"password string")
+
+
+def decrypt(key, obj, o, fname="Decrypt"):
+    if not _is_obj(obj, "EncryptedObject"):
+        raise ValueError(f"{fname}: {F.input_form(obj)} is not an EncryptedObject")
+    a = IE.assoc_dict(obj.args[0], fname)
+    if "Data" not in a:
+        raise ValueError(f"{fname}: the EncryptedObject has no \"Data\"")
+    data = ba_bytes(a["Data"], fname)
+    form = a.get("OriginalForm", Symbol("Expression"))
+    form = form.name if isinstance(form, Symbol) else form
+    if form not in ("String", "ByteArray", "Expression"):
+        raise ValueError(f"{fname}: unknown OriginalForm {F.input_form(form)}")
+    if isinstance(key, str):
+        key = _key_from_password(key, fname)
+    if _is_obj(key, "SymmetricKey"):
+        m = _method_assoc(o, fname, ("Padding", "InitializationVector", "BlockMode"))
+        cipher, mode, k, iv = sym_key_parts(key, fname)
+        mode = _block_mode(m.get("BlockMode", a.get("BlockMode", mode)), fname) if cipher != "RC4" else None
+        ivv = m.get("InitializationVector", a.get("InitializationVector"))
+        if ivv is not None:
+            iv = _iv_arg(ivv, cipher, fname)
+        if cipher != "RC4" and mode != "ECB" and iv is None:
+            raise ValueError(f"{fname}: the initialization vector is missing")
+        pad = _padding_opt(m.get("Padding", a.get("Padding", Symbol("Automatic"))), fname, ("PKCS7",))
+        pad = mode in ("ECB", "CBC") if pad in ("Automatic", "PKCS7") else False
+        return _unpayload(sym_decrypt(cipher, k, data, mode, iv, pad), form, fname)
+    if _is_obj(key, "PrivateKey") or _is_obj(key, "PublicKey"):
+        kd = asym_parts(key, fname)
+        if kd["Type"] != "RSA":
+            raise ValueError(f"{fname}: {kd['Type']} keys cannot decrypt")
+        m = _method_assoc(o, fname, ("Padding",))
+        pad = _padding_opt(m.get("Padding", a.get("Padding", kd.get("Padding"))), fname, ("PKCS1", "OAEP"))
+        if pad == "Automatic":
+            pad = "PKCS1"
+        private = key.head == "PrivateKey"
+        n = kd["PublicModulus"]
+        k = _modlen(n)
+        c = int.from_bytes(data, "big")
+        if len(data) != k or c >= n:
+            raise ValueError(f"{fname}::failed: the data could not be decrypted (wrong key or corrupt data)")
+        em = _i2osp(pow(c, kd["PrivateExponent"] if private else kd["PublicExponent"], n), k)
+        return _unpayload(rsa_unpad(em, k, pad, 2 if private else 1, fname), form, fname)
+    raise ValueError(f"{fname}: {F.input_form(key)} is not a SymmetricKey, a PrivateKey, a PublicKey or a "
+                     f"password string")
+
+
+@fn("Encrypt", area=AREA, status="added",
+    notes="Encrypt[key, expr] with a SymmetricKey (random IV per call for CBC/CFB/OFB/CTR), a \"password\" "
+          "(AES256 key derived with scrypt), an RSA PublicKey (PKCS1 or OAEP) or an RSA PrivateKey (PKCS1 type 1, "
+          "decrypted with the public key); strings as UTF-8, ByteArrays literally, other expressions via Compress; "
+          "Method -> <|\"Padding\", \"InitializationVector\", \"BlockMode\"|>; operator form Encrypt[key]; gives "
+          "EncryptedObject[<|\"Data\", \"InitializationVector\", \"OriginalForm\"|>]. Elliptic-curve keys give a "
+          "clear error")
+def _encrypt(key, *rest):
+    rest, o = split_opts(rest, ("Method",), "Encrypt")
+    if not rest:
+        if o:
+            raise ValueError("Encrypt: the operator form takes no options")
+        raise Unevaluated
+    if len(rest) != 1:
+        raise ValueError("Encrypt called with too many arguments")
+    return encrypt(key, rest[0], o)
+
+
+@fn("Decrypt", area=AREA, status="added",
+    notes="Decrypt[key, EncryptedObject[...]] recovers the original string, ByteArray or expression; key is the "
+          "SymmetricKey or password used, the RSA PrivateKey for public-key encryption or the PublicKey for "
+          "private-key encryption; a wrong key raises Decrypt::failed rather than giving garbage when padding or "
+          "decoding detects it; operator form Decrypt[key]")
+def _decrypt(key, *rest):
+    rest, o = split_opts(rest, ("Method",), "Decrypt")
+    if not rest:
+        raise Unevaluated
+    if len(rest) != 1:
+        raise ValueError("Decrypt called with too many arguments")
+    return decrypt(key, rest[0], o)
+
+
+def _operator_hook(fn_name):
+    def hook(head, args, ev_):
+        if len(head.args) == 1 and len(args) == 1:
+            return ev_(Expr(fn_name, head.args[0], args[0]))
+        return K.UNHANDLED
+    return hook
+
+
+for _n in ("Encrypt", "Decrypt"):
+    KL.COMPOUND_HEAD_HOOKS[_n] = _operator_hook(_n)
+
+
+# ═══════════════════════════════════════ asymmetric keys ═══════════════════════════════════════
+
+def _quantity_bits(n):
+    return Expr("Quantity", n, "Bits")
+
+
+def _int_of(v, fname, what):
+    if K.is_int(v) and not isinstance(v, bool) and v >= 0:
+        return int(v)
+    raise ValueError(f"{fname}: {what} must be a non-negative integer, not {F.input_form(v)}")
+
+
+def _hex_bytes(v, fname, what):
+    if isinstance(v, str) and re.fullmatch(r"(?:[0-9A-Fa-f]{2})+", v):
+        return bytes.fromhex(v)
+    raise ValueError(f"{fname}: {what} must be a hexadecimal string")
+
+
+_COMMON_E = (65537, 3, 5, 17, 257, 37, 7, 11, 13)
+
+
+def _recover_e(n, d, fname):
+    for e in _COMMON_E:
+        if pow(pow(2, d, n), e, n) == 2 and pow(pow(3, d, n), e, n) == 3:
+            return e
+    raise ValueError(f"{fname}: the RSA key needs a \"PublicExponent\" (it is not one of the common exponents)")
+
+
+def rsa_private_expr(n, e, d, pad="PKCS1"):
+    return Expr("PrivateKey", A([("Type", "RSA"), ("Cipher", "RSA"), ("Padding", pad), ("PublicExponent", e),
+                                 ("PublicModulus", n), ("PrivateExponent", d)]))
+
+
+def rsa_public_expr(n, e, pad="PKCS1"):
+    return Expr("PublicKey", A([("Type", "RSA"), ("Cipher", "RSA"), ("Padding", pad), ("PublicExponent", e),
+                                ("PublicModulus", n)]))
+
+
+def ec_private_expr(curve, x, compressed=False):
+    P = curve.mul(x)
+    return Expr("PrivateKey", A([("Type", "EllipticCurve"), ("CurveName", curve.name), ("PrivateMultiplier", x),
+                                 ("PublicCurvePoint", L(*P)), ("Compressed", compressed)]))
+
+
+def ec_public_expr(curve, P, compressed=False):
+    return Expr("PublicKey", A([("Type", "EllipticCurve"), ("CurveName", curve.name), ("PublicCurvePoint", L(*P)),
+                                ("Compressed", compressed)]))
+
+
+def ed_private_expr(seed):
+    return Expr("PrivateKey", A([("Type", "EdwardsCurve"), ("CurveName", "ed25519"), ("PrivateByteArray", _ba(seed)),
+                                 ("PublicByteArray", _ba(ed25519_public(seed)))]))
+
+
+def ed_public_expr(pub):
+    return Expr("PublicKey", A([("Type", "EdwardsCurve"), ("CurveName", "ed25519"), ("PublicByteArray", _ba(pub))]))
+
+
+_KEY_FIELDS = {"Type", "Cipher", "Padding", "PublicExponent", "PublicModulus", "PrivateExponent", "CurveName",
+               "PrivateMultiplier", "PublicCurvePoint", "Compressed", "PrivateByteArray", "PublicByteArray",
+               "PrivateHexString", "PublicHexString", "PrivateKeySize", "PublicKeySize"}
+
+
+def asym_parts(key, fname):
+    """Validate a PrivateKey/PublicKey and return a dict with Python values (filling derivable fields)."""
+    private = key.head == "PrivateKey"
+    a = IE.assoc_dict(key.args[0], fname)
+    for k in a:
+        if k not in _KEY_FIELDS:
+            raise ValueError(f"{fname}: unknown key field \"{k}\"")
+    t = a.get("Type")
+    if t is None:
+        t = "RSA" if "PublicModulus" in a else ("EdwardsCurve" if a.get("CurveName") in EDWARDS_CURVES
+                                                 else "EllipticCurve")
+    if t in ("Bitcoin", "Ethereum"):
+        a.setdefault("CurveName", "secp256k1")
+        a.setdefault("Compressed", t == "Bitcoin")
+        t = "EllipticCurve"
+    out = {"Type": t, "Private": private}
+    if t == "RSA":
+        if "PublicModulus" not in a:
+            raise ValueError(f"{fname}: an RSA key needs a \"PublicModulus\"")
+        n = _int_of(a["PublicModulus"], fname, "PublicModulus")
+        if n < 3:
+            raise ValueError(f"{fname}: invalid RSA modulus")
+        out["PublicModulus"] = n
+        pad = a.get("Padding", "PKCS1")
+        out["Padding"] = None if is_sym(pad, "None") else pad
+        if private:
+            if "PrivateExponent" not in a:
+                raise ValueError(f"{fname}: an RSA private key needs a \"PrivateExponent\"")
+            d = _int_of(a["PrivateExponent"], fname, "PrivateExponent")
+            out["PrivateExponent"] = d
+            out["PublicExponent"] = _int_of(a["PublicExponent"], fname, "PublicExponent") \
+                if "PublicExponent" in a else _recover_e(n, d, fname)
+        else:
+            out["PublicExponent"] = _int_of(a.get("PublicExponent", 65537), fname, "PublicExponent")
+        return out
+    if t == "EllipticCurve":
+        curve = curve_of(a.get("CurveName", "secp256k1"), fname)
+        comp = a.get("Compressed", False)
+        if not isinstance(comp, bool):
+            raise ValueError(f"{fname}: \"Compressed\" must be True or False")
+        out.update(Curve=curve, CurveName=curve.name, Compressed=comp)
+        x = None
+        if private:
+            if "PrivateMultiplier" in a:
+                x = _int_of(a["PrivateMultiplier"], fname, "PrivateMultiplier")
+            elif "PrivateHexString" in a:
+                x = int.from_bytes(_hex_bytes(a["PrivateHexString"], fname, "PrivateHexString"), "big")
+            elif "PrivateByteArray" in a:
+                x = int.from_bytes(ba_bytes(a["PrivateByteArray"], fname), "big")
+            else:
+                raise ValueError(f"{fname}: an elliptic-curve private key needs a \"PrivateMultiplier\", "
+                                 f"\"PrivateHexString\" or \"PrivateByteArray\"")
+            if not 1 <= x < curve.n:
+                raise ValueError(f"{fname}: the private multiplier is out of range for {curve.name}")
+            out["PrivateMultiplier"] = x
+            P = curve.mul(x)
+            if "PublicCurvePoint" in a and _point_of(a["PublicCurvePoint"], curve, fname) != P:
+                raise ValueError(f"{fname}: the public curve point does not match the private multiplier")
+        elif "PublicCurvePoint" in a:
+            P = _point_of(a["PublicCurvePoint"], curve, fname)
+        elif "PublicByteArray" in a:
+            P = curve.decode(ba_bytes(a["PublicByteArray"], fname))
+        elif "PublicHexString" in a:
+            P = curve.decode(_hex_bytes(a["PublicHexString"], fname, "PublicHexString"))
+        else:
+            raise ValueError(f"{fname}: an elliptic-curve public key needs a \"PublicCurvePoint\", "
+                             f"\"PublicByteArray\" or \"PublicHexString\"")
+        out["PublicCurvePoint"] = P
+        return out
+    if t == "EdwardsCurve":
+        cn = a.get("CurveName", "ed25519")
+        if cn == "ed448":
+            raise NotImplementedError(f"{fname}: the Edwards curve ed448 is not available")
+        if cn != "ed25519":
+            raise ValueError(f"{fname}: {F.input_form(cn)} is not a supported Edwards curve")
+        out["CurveName"] = cn
+        if private:
+            if "PrivateByteArray" in a:
+                seed = ba_bytes(a["PrivateByteArray"], fname)
+            elif "PrivateHexString" in a:
+                seed = _hex_bytes(a["PrivateHexString"], fname, "PrivateHexString")
+            else:
+                raise ValueError(f"{fname}: an ed25519 private key needs a \"PrivateByteArray\" or "
+                                 f"\"PrivateHexString\"")
+            if len(seed) != 32:
+                raise ValueError(f"{fname}: ed25519 private keys have 32 bytes")
+            out["Seed"] = seed
+            pub = ed25519_public(seed)
+            if "PublicByteArray" in a and ba_bytes(a["PublicByteArray"], fname) != pub:
+                raise ValueError(f"{fname}: the public key does not match the private key")
+        elif "PublicByteArray" in a:
+            pub = ba_bytes(a["PublicByteArray"], fname)
+        elif "PublicHexString" in a:
+            pub = _hex_bytes(a["PublicHexString"], fname, "PublicHexString")
+        else:
+            raise ValueError(f"{fname}: an ed25519 public key needs a \"PublicByteArray\" or \"PublicHexString\"")
+        if len(pub) != 32 or _ed_decompress(pub) is None:
+            raise ValueError(f"{fname}: invalid ed25519 public key")
+        out["Public"] = pub
+        return out
+    raise ValueError(f"{fname}: {F.input_form(t)} is not a supported key type (RSA, EllipticCurve, EdwardsCurve)")
+
+
+def _point_of(v, curve, fname):
+    if is_list(v) and len(v.args) == 2 and all(K.is_int(c) for c in v.args):
+        P = (int(v.args[0]), int(v.args[1]))
+        if curve.on_curve(P):
+            return P
+        raise ValueError(f"{fname}: the public curve point is not on {curve.name}")
+    raise ValueError(f"{fname}: \"PublicCurvePoint\" must be a pair of integers")
+
+
+def key_expr(d, private):
+    t = d["Type"]
+    if t == "RSA":
+        if private:
+            return rsa_private_expr(d["PublicModulus"], d["PublicExponent"], d["PrivateExponent"], d["Padding"])
+        return rsa_public_expr(d["PublicModulus"], d["PublicExponent"], d["Padding"])
+    if t == "EllipticCurve":
+        if private:
+            return ec_private_expr(d["Curve"], d["PrivateMultiplier"], d["Compressed"])
+        return ec_public_expr(d["Curve"], d["PublicCurvePoint"], d["Compressed"])
+    return ed_private_expr(d["Seed"]) if private else ed_public_expr(d["Public"])
+
+
+def _key_props(d):
+    """Computed (derived) key properties."""
+    t, priv = d["Type"], d["Private"]
+    p = {}
+    if t == "RSA":
+        n = d["PublicModulus"]
+        pub = _i2osp(n, _modlen(n))
+        p["PublicKeySize"] = _quantity_bits(n.bit_length())
+        if priv:
+            p["PrivateByteArray"] = _ba(_i2osp(d["PrivateExponent"], _modlen(n)))
+            p["PrivateKeySize"] = _quantity_bits(n.bit_length())
+    elif t == "EllipticCurve":
+        c = d["Curve"]
+        pub = c.encode(d["PublicCurvePoint"], d["Compressed"])
+        p["PublicKeySize"] = _quantity_bits(c.n.bit_length())
+        if priv:
+            p["PrivateByteArray"] = _ba(d["PrivateMultiplier"].to_bytes(c.size, "big"))
+            p["PrivateKeySize"] = _quantity_bits(c.n.bit_length())
+    else:
+        pub = d["Public"]
+        p["PublicKeySize"] = _quantity_bits(256)
+        if priv:
+            p["PrivateByteArray"] = _ba(d["Seed"])
+            p["PrivateKeySize"] = _quantity_bits(256)
+    p["PublicByteArray"] = _ba(pub)
+    p["PublicHexString"] = pub.hex()
+    if priv:
+        p["PrivateHexString"] = ba_bytes(p["PrivateByteArray"]).hex()
+    return p
+
+
+def _key_ctor(head):
+    def f(a):
+        fname = head
+        if not KL.is_assoc(a):
+            raise ValueError(f"{fname}: {F.input_form(a)} is not an association")
+        key = Expr(head, a)
+        canon = key_expr(asym_parts(key, fname), head == "PrivateKey")
+        if K.same(canon, key):
+            raise Unevaluated
+        return canon
+    return f
+
+
+fn("PrivateKey", area=AREA, status="added",
+   notes="PrivateKey[<|...|>] is a private key (RSA: PublicModulus/PublicExponent/PrivateExponent; EllipticCurve: "
+         "CurveName and PrivateMultiplier | PrivateHexString | PrivateByteArray; EdwardsCurve ed25519: "
+         "PrivateByteArray | PrivateHexString); partial specifications are completed (public point, public key, "
+         "RSA exponent); properties: stored fields plus PrivateByteArray, PublicByteArray, Private/PublicHexString, "
+         "Private/PublicKeySize, \"Properties\"")(_key_ctor("PrivateKey"))
+fn("PublicKey", area=AREA, status="added",
+   notes="PublicKey[<|...|>] is a public key (RSA: PublicModulus, PublicExponent; EllipticCurve: CurveName and "
+         "PublicCurvePoint | PublicByteArray | PublicHexString (compressed or not); EdwardsCurve: PublicByteArray | "
+         "PublicHexString); validated (points must lie on the curve) and normalised; properties as for "
+         "PrivateKey")(_key_ctor("PublicKey"))
+
+
+def public_of(key, fname):
+    """The PublicKey for a PrivateKey or PublicKey (or a SecurityCertificate's key)."""
+    if _is_obj(key, "SecurityCertificate"):
+        key = assoc_get(key.args[0], "PublicKey")
+    if _is_obj(key, "PrivateKey") or _is_obj(key, "PublicKey"):
+        return asym_parts(key, fname)
+    raise ValueError(f"{fname}: {F.input_form(key)} is not a PublicKey, a PrivateKey or a SecurityCertificate")
+
+
+@fn("GenerateAsymmetricKeyPair", area=AREA, status="added",
+    notes="GenerateAsymmetricKeyPair[] (RSA 2048, exponent 65537), [type] or Method -> type | <|\"Type\", "
+          "\"KeySize\", \"PublicExponent\", \"CurveName\", \"Compressed\"|> with types \"RSA\", \"EllipticCurve\" "
+          "(default secp256k1), \"EdwardsCurve\" (ed25519), \"Bitcoin\" (secp256k1, compressed) and \"Ethereum\" "
+          "(secp256k1); gives <|\"PrivateKey\" -> ..., \"PublicKey\" -> ...|>")
+def _generateasymmetrickeypair(*args):
+    rest, o = split_opts(args, ("Method",), "GenerateAsymmetricKeyPair")
+    if len(rest) > 1:
+        raise ValueError("GenerateAsymmetricKeyPair called with too many arguments")
+    spec = rest[0] if rest else o.get("Method", Symbol("Automatic"))
+    fname = "GenerateAsymmetricKeyPair"
+    m = {}
+    if is_sym(spec, "Automatic"):
+        t = "RSA"
+    elif isinstance(spec, str):
+        t = spec
+    elif KL.is_assoc(spec):
+        m = IE.assoc_dict(spec, fname)
+        t = m.pop("Type", "RSA")
+    else:
+        raise ValueError(f"{fname}: invalid key specification {F.input_form(spec)}")
+    if t in CURVES or t in CURVE_ALIASES and t not in ("Bitcoin", "Ethereum"):
+        m.setdefault("CurveName", t)
+        t = "EllipticCurve"
+    if t == "ed25519":
+        t = "EdwardsCurve"
+    allowed = {"RSA": ("KeySize", "PublicExponent", "Padding"), "EllipticCurve": ("CurveName", "Compressed"),
+               "Bitcoin": ("Compressed",), "Ethereum": ("Compressed",), "EdwardsCurve": ("CurveName",)}
+    if t not in allowed:
+        raise ValueError(f"{fname}: {F.input_form(t)} is not a supported key type (RSA, EllipticCurve, "
+                         f"EdwardsCurve, Bitcoin, Ethereum)")
+    for k in m:
+        if k not in allowed[t]:
+            raise ValueError(f"{fname}: unknown Method key \"{k}\" for {t} keys")
+    if t == "RSA":
+        bits = _pint(m.get("KeySize", 2048), fname, "KeySize")
+        e = _pint(m.get("PublicExponent", 65537), fname, "PublicExponent")
+        pad = m.get("Padding", "PKCS1")
+        if pad not in ("PKCS1", "OAEP") and not is_sym(pad, "None"):
+            raise ValueError(f"{fname}: {F.input_form(pad)} is not a supported RSA padding")
+        if bits > 8192:
+            raise ValueError(f"{fname}: RSA keys of more than 8192 bits are not supported")
+        n, e, d = rsa_generate(bits, e)
+        pad = None if is_sym(pad, "None") else pad
+        priv, pub = rsa_private_expr(n, e, d, pad), rsa_public_expr(n, e, pad)
+    elif t == "EdwardsCurve":
+        cn = m.get("CurveName", "ed25519")
+        if cn == "ed448":
+            raise NotImplementedError(f"{fname}: the Edwards curve ed448 is not available")
+        if cn != "ed25519":
+            raise ValueError(f"{fname}: {F.input_form(cn)} is not a supported Edwards curve")
+        seed = secrets.token_bytes(32)
+        priv, pub = ed_private_expr(seed), ed_public_expr(ed25519_public(seed))
+    else:
+        curve = curve_of(m.get("CurveName", "secp256k1"), fname)
+        comp = m.get("Compressed", t == "Bitcoin")
+        if not isinstance(comp, bool):
+            raise ValueError(f"{fname}: \"Compressed\" must be True or False")
+        x = secrets.randbelow(curve.n - 1) + 1
+        priv, pub = ec_private_expr(curve, x, comp), ec_public_expr(curve, curve.mul(x), comp)
+    return A([("PrivateKey", priv), ("PublicKey", pub)])
+
+
+# ═══════════════════════════════════════ digital signatures ═══════════════════════════════════════
+
+def _der_sig(r, s):
+    return der_seq(der_int(r), der_int(s))
+
+
+_SIG_KEYS = ("Type", "CurveName", "HashingMethod", "SignatureType", "Padding", "Signature", "R", "S",
+             "RecoveryParameter")
+
+
+def _sig_method(o, kd, fname):
+    m = o.get("Method")
+    md = {}
+    if m is not None and not is_sym(m, "Automatic"):
+        md = IE.assoc_dict(m, fname)
+    for k in md:
+        if k not in ("Type", "HashingMethod", "SignatureType", "CurveName", "Padding", "HashName"):
+            raise ValueError(f"{fname}: unknown Method key \"{k}\"")
+    if "Type" in md and md["Type"] != kd["Type"] and not (md["Type"] in ("Bitcoin", "Ethereum")
+                                                         and kd["Type"] == "EllipticCurve"):
+        raise ValueError(f"{fname}: the Method type {md['Type']} does not match the {kd['Type']} key")
+    if "CurveName" in md and kd["Type"] != "RSA" and CURVE_ALIASES.get(md["CurveName"], md["CurveName"]) \
+            != kd["CurveName"]:
+        raise ValueError(f"{fname}: the Method curve does not match the key's curve")
+    hm = md.get("HashingMethod", md.get("HashName"))
+    if "HashName" in md and "HashingMethod" in md and md["HashName"] != md["HashingMethod"]:
+        raise ValueError(f"{fname}: \"HashName\" and \"HashingMethod\" differ")
+    return md, hm
+
+
+def sign(x, key, o, fname):
+    if not _is_obj(key, "PrivateKey"):
+        raise ValueError(f"{fname}: {F.input_form(key)} is not a PrivateKey")
+    kd = asym_parts(key, fname)
+    md, hm = _sig_method(o, kd, fname)
+    t = kd["Type"]
+    if t == "RSA":
+        pad = md.get("Padding", "PKCS1")
+        if pad == "X931":
+            raise NotImplementedError(f"{fname}: X9.31 signature padding is not available")
+        if pad != "PKCS1":
+            raise ValueError(f"{fname}: {F.input_form(pad)} is not a supported signature padding")
+        hm = "SHA256" if hm is None or is_sym(hm, "Automatic") else hm
+        if is_sym(hm, "None"):
+            raise ValueError(f"{fname}: RSA signatures need a HashingMethod")
+        h = message_digest(x, hm, fname)
+        sig = rsa_sign(kd["PublicModulus"], kd["PrivateExponent"], h, hm, fname)
+        return Expr("DigitalSignature", A([("Type", "RSA"), ("HashingMethod", hm), ("Padding", "PKCS1"),
+                                           ("Signature", _ba(sig))]))
+    if t == "EdwardsCurve":
+        if hm is not None and not is_sym(hm, "Automatic") and hm != "SHA512":
+            raise ValueError(f"{fname}: ed25519 signatures always use SHA512")
+        st = md.get("SignatureType", Symbol("Automatic"))
+        if not (is_sym(st, "Automatic") or st == "Deterministic"):
+            raise ValueError(f"{fname}: ed25519 signatures are deterministic")
+        R, S = ed25519_sign(kd["Seed"], expr_bytes(x, fname))
+        return Expr("DigitalSignature", A([("Type", "EdwardsCurve"), ("CurveName", "ed25519"),
+                                           ("HashingMethod", "SHA512"), ("SignatureType", "Deterministic"),
+                                           ("R", _ba(R)), ("S", _ba(S))]))
+    curve = kd["Curve"]
+    hm = "SHA256" if hm is None or is_sym(hm, "Automatic") else hm
+    h = message_digest(x, None if is_sym(hm, "None") else hm, fname)
+    hmv = None if is_sym(hm, "None") else hm
+    st = md.get("SignatureType", Symbol("Automatic"))
+    st = "Deterministic" if is_sym(st, "Automatic") else st
+    xk = kd["PrivateMultiplier"]
+    if st == "Schnorr":
+        if curve.name != "secp256k1" or len(h) != 32:
+            raise ValueError(f"{fname}: Schnorr (BIP-340) signatures need secp256k1 and a 32-byte digest")
+        R, S = schnorr_sign(xk, h, bytes(32))
+        return Expr("DigitalSignature", A([("Type", "EllipticCurve"), ("CurveName", curve.name),
+                                           ("HashingMethod", hmv), ("SignatureType", "Schnorr"),
+                                           ("R", _ba(R)), ("S", _ba(S))]))
+    if st == "Deterministic":
+        k = rfc6979_k(xk, h, curve, hmv or "SHA256")
+    elif st == "NonDeterministic":
+        k = secrets.randbelow(curve.n - 1) + 1
+    else:
+        raise ValueError(f"{fname}: {F.input_form(st)} is not a signature type (Deterministic, NonDeterministic, "
+                         f"Schnorr)")
+    r, s, rec = ecdsa_sign(curve, xk, h, k, low_s=curve.name == "secp256k1")
+    items = [("Type", "EllipticCurve"), ("CurveName", curve.name), ("HashingMethod", hmv), ("SignatureType", st),
+             ("R", _ba(r.to_bytes(curve.size, "big"))), ("S", _ba(s.to_bytes(curve.size, "big")))]
+    if curve.name == "secp256k1":
+        items.append(("RecoveryParameter", rec))
+    return Expr("DigitalSignature", A(items))
+
+
+def _sig_dict(sig, fname):
+    if not _is_obj(sig, "DigitalSignature"):
+        raise ValueError(f"{fname}: {F.input_form(sig)} is not a DigitalSignature")
+    a = IE.assoc_dict(sig.args[0], fname)
+    for k in a:
+        if k not in _SIG_KEYS:
+            raise ValueError(f"{fname}: unknown DigitalSignature field \"{k}\"")
+    return a
+
+
+def verify(x, sig, key, fname):
+    kd = public_of(key, fname)
+    a = _sig_dict(sig, fname)
+    t = a.get("Type", "RSA" if "Signature" in a else "EllipticCurve")
+    if t != kd["Type"]:
+        return False
+    hm = a.get("HashingMethod")
+    if t == "RSA":
+        h = message_digest(x, hm, fname)
+        return rsa_verify(kd["PublicModulus"], kd["PublicExponent"], h, hm, ba_bytes(a["Signature"], fname))
+    R, S = ba_bytes(a["R"], fname), ba_bytes(a["S"], fname)
+    if t == "EdwardsCurve":
+        return ed25519_verify(kd["Public"], expr_bytes(x, fname), R, S)
+    curve = kd["Curve"]
+    if CURVE_ALIASES.get(a.get("CurveName", curve.name), a.get("CurveName")) != curve.name:
+        return False
+    h = message_digest(x, Symbol("None") if hm is None or is_sym(hm, "None") else hm, fname)
+    if a.get("SignatureType") == "Schnorr":
+        return curve.name == "secp256k1" and len(h) == 32 and schnorr_verify(kd["PublicCurvePoint"][0], h, R, S)
+    return ecdsa_verify(curve, kd["PublicCurvePoint"], h, int.from_bytes(R, "big"), int.from_bytes(S, "big"))
+
+
+@fn("GenerateDigitalSignature", area=AREA, status="added",
+    notes="GenerateDigitalSignature[expr, privatekey] signs expr (strings as UTF-8, ByteArrays literally, other "
+          "expressions as their FullForm text): RSA PKCS#1 v1.5, ECDSA with RFC 6979 deterministic nonces (or "
+          "\"NonDeterministic\"; low-s on secp256k1) or BIP-340 \"Schnorr\", ed25519 (RFC 8032); Method -> "
+          "<|\"HashingMethod\" (default SHA256; None for a precomputed ByteArray/hex digest), \"SignatureType\", "
+          "\"Padding\" (PKCS1; X931 gives a clear error)|>; operator form GenerateDigitalSignature[key]")
+def _generatedigitalsignature(*args):
+    rest, o = split_opts(args, ("Method",), "GenerateDigitalSignature")
+    if len(rest) == 1:
+        if o:
+            raise ValueError("GenerateDigitalSignature: the operator form takes no options")
+        raise Unevaluated
+    if len(rest) != 2:
+        raise ValueError("GenerateDigitalSignature called with the wrong number of arguments")
+    return sign(rest[0], rest[1], o, "GenerateDigitalSignature")
+
+
+@fn("DigitalSignature", area=AREA, status="added",
+    notes="DigitalSignature[<|...|>] is a signature from GenerateDigitalSignature (RSA: Type, HashingMethod, "
+          "Padding, Signature; elliptic/Edwards curves: Type, CurveName, HashingMethod, SignatureType, R, S and "
+          "RecoveryParameter on secp256k1); properties by name plus \"DER\" (ECDSA) and \"Properties\"")
+def _digitalsignature(a):
+    if not KL.is_assoc(a):
+        raise ValueError(f"DigitalSignature: {F.input_form(a)} is not an association")
+    _sig_dict(Expr("DigitalSignature", a), "DigitalSignature")
+    raise Unevaluated
+
+
+def _pairs(spec, fname):
+    if is_list(spec) and len(spec.args) == 2 and _is_obj(spec.args[1], "DigitalSignature"):
+        return [spec.args], False
+    if is_list(spec) and spec.args and all(is_list(p) and len(p.args) == 2 for p in spec.args):
+        return [p.args for p in spec.args], True
+    raise ValueError(f"{fname}: expected {{expr, DigitalSignature[...]}} or a list of such pairs")
+
+
+@fn("VerifyDigitalSignature", area=AREA, status="added",
+    notes="VerifyDigitalSignature[{expr, sig}, key] gives True when sig is a valid signature of expr for the "
+          "public key (a PrivateKey or a SecurityCertificate also supplies it), False otherwise; a list of pairs "
+          "gives a list; operator form VerifyDigitalSignature[key]")
+def _verifydigitalsignature(*args):
+    if len(args) == 1:
+        raise Unevaluated
+    if len(args) != 2:
+        raise ValueError("VerifyDigitalSignature called with the wrong number of arguments")
+    pairs, many = _pairs(args[0], "VerifyDigitalSignature")
+    res = [verify(x, s, args[1], "VerifyDigitalSignature") for x, s in pairs]
+    return L(*res) if many else res[0]
+
+
+def _file_bytes(f, fname):
+    path = file_arg(f, fname)
+    if not os.path.isfile(path):
+        raise ValueError(f"{fname}::nffil: file {path} not found")
+    with open(path, "rb") as fh:
+        return fh.read()
+
+
+@fn("GenerateFileSignature", area=AREA, status="added",
+    notes="GenerateFileSignature[file, privatekey] gives the DigitalSignature of the bytes of file (same methods "
+          "and Method option as GenerateDigitalSignature); operator form GenerateFileSignature[key]")
+def _generatefilesignature(*args):
+    rest, o = split_opts(args, ("Method",), "GenerateFileSignature")
+    if len(rest) == 1:
+        raise Unevaluated
+    if len(rest) != 2:
+        raise ValueError("GenerateFileSignature called with the wrong number of arguments")
+    return sign(_ba(_file_bytes(rest[0], "GenerateFileSignature")), rest[1], o, "GenerateFileSignature")
+
+
+@fn("VerifyFileSignature", area=AREA, status="added",
+    notes="VerifyFileSignature[{file, sig}, key] verifies a GenerateFileSignature signature against the current "
+          "bytes of file; a list of pairs gives a list; operator form VerifyFileSignature[key]")
+def _verifyfilesignature(*args):
+    if len(args) == 1:
+        raise Unevaluated
+    if len(args) != 2:
+        raise ValueError("VerifyFileSignature called with the wrong number of arguments")
+    spec = args[0]
+    if is_list(spec) and len(spec.args) == 2 and _is_obj(spec.args[1], "DigitalSignature"):
+        pairs, many = [spec.args], False
+    else:
+        pairs, many = _pairs(spec, "VerifyFileSignature")
+    res = [verify(_ba(_file_bytes(f, "VerifyFileSignature")), s, args[1], "VerifyFileSignature") for f, s in pairs]
+    return L(*res) if many else res[0]
+
+
+def _swap_operator_hook(fn_name):
+    def hook(head, args, ev_):
+        if len(head.args) == 1 and len(args) == 1:
+            return ev_(Expr(fn_name, args[0], head.args[0]))
+        return K.UNHANDLED
+    return hook
+
+
+for _n in ("GenerateDigitalSignature", "VerifyDigitalSignature", "GenerateFileSignature", "VerifyFileSignature"):
+    KL.COMPOUND_HEAD_HOOKS[_n] = _swap_operator_hook(_n)
+
+
+# ═══════════════════════════════════════ DER / PEM ═══════════════════════════════════════
+
+def _der_len(n):
+    if n < 128:
+        return bytes([n])
+    b = n.to_bytes((n.bit_length() + 7) // 8, "big")
+    return bytes([0x80 | len(b)]) + b
+
+
+def der_tlv(tag, content):
+    return bytes([tag]) + _der_len(len(content)) + content
+
+
+def der_int(v):
+    b = v.to_bytes(max(1, (v.bit_length() + 8) // 8), "big", signed=True) if v >= 0 else \
+        v.to_bytes((v.bit_length() + 8) // 8, "big", signed=True)
+    return der_tlv(0x02, b)
+
+
+def der_seq(*items):
+    return der_tlv(0x30, b"".join(items))
+
+
+def der_oid(dotted):
+    parts = [int(p) for p in dotted.split(".")]
+    body = [40 * parts[0] + parts[1]] + parts[2:]
+    out = bytearray()
+    for v in body:
+        enc = [v & 0x7F]
+        v >>= 7
+        while v:
+            enc.append(0x80 | (v & 0x7F))
+            v >>= 7
+        out += bytes(reversed(enc))
+    return der_tlv(0x06, bytes(out))
+
+
+def der_octet(b):
+    return der_tlv(0x04, b)
+
+
+def der_bits(b):
+    return der_tlv(0x03, b"\x00" + b)
+
+
+DER_NULL = b"\x05\x00"
+
+
+class DerError(ValueError):
+    pass
+
+
+def der_read(b, i=0):
+    """(tag, content, raw_tlv, next index)."""
+    if i + 2 > len(b):
+        raise DerError("truncated DER data")
+    tag = b[i]
+    ln = b[i + 1]
+    j = i + 2
+    if ln & 0x80:
+        nb = ln & 0x7F
+        if nb == 0 or nb > 4 or j + nb > len(b):
+            raise DerError("invalid DER length")
+        ln = int.from_bytes(b[j:j + nb], "big")
+        j += nb
+    if j + ln > len(b):
+        raise DerError("truncated DER data")
+    return tag, b[j:j + ln], b[i:j + ln], j + ln
+
+
+def der_items(content):
+    out, i = [], 0
+    while i < len(content):
+        t, c, raw, i = der_read(content, i)
+        out.append((t, c, raw))
+    return out
+
+
+def der_to_int(c):
+    return int.from_bytes(c, "big", signed=True)
+
+
+def oid_text(c):
+    vals, v = [], 0
+    for byte in c:
+        v = (v << 7) | (byte & 0x7F)
+        if not byte & 0x80:
+            vals.append(v)
+            v = 0
+    if not vals:
+        raise DerError("empty OID")
+    first = vals[0]
+    head = [0, first] if first < 40 else ([1, first - 40] if first < 80 else [2, first - 80])
+    return ".".join(str(x) for x in head + vals[1:])
+
+
+OID_RSA, OID_EC, OID_ED25519 = "1.2.840.113549.1.1.1", "1.2.840.10045.2.1", "1.3.101.112"
+_CURVE_OID = {c.oid: c for c in CURVES.values()}
+
+
+def _rsa_factor(n, e, d):
+    import math
+    k = d * e - 1
+    t = 0
+    while k % 2 == 0:
+        k //= 2
+        t += 1
+    for g in range(2, 1000):
+        x = pow(g, k, n)
+        for _ in range(t):
+            y = pow(x, 2, n)
+            if y == 1 and x not in (1, n - 1):
+                p = math.gcd(x - 1, n)
+                return p, n // p
+            x = y
+    raise ValueError("Export: cannot factor the RSA modulus from the key")
+
+
+def _rsa_pkcs1_private(d):
+    n, e, dd = d["PublicModulus"], d["PublicExponent"], d["PrivateExponent"]
+    p, q = _rsa_factor(n, e, dd)
+    if p < q:
+        p, q = q, p
+    return der_seq(der_int(0), der_int(n), der_int(e), der_int(dd), der_int(p), der_int(q), der_int(dd % (p - 1)),
+                   der_int(dd % (q - 1)), der_int(pow(q, -1, p)))
+
+
+def key_to_der(d):
+    """(PEM label, DER) for a key dict (PKCS#8 for private keys, SubjectPublicKeyInfo for public keys)."""
+    t = d["Type"]
+    if d["Private"]:
+        if t == "RSA":
+            alg, inner = der_seq(der_oid(OID_RSA), DER_NULL), _rsa_pkcs1_private(d)
+        elif t == "EllipticCurve":
+            c = d["Curve"]
+            alg = der_seq(der_oid(OID_EC), der_oid(c.oid))
+            inner = der_seq(der_int(1), der_octet(d["PrivateMultiplier"].to_bytes(c.size, "big")),
+                            der_tlv(0xA1, der_bits(c.encode(d["PublicCurvePoint"], False))))
+        else:
+            alg, inner = der_seq(der_oid(OID_ED25519)), der_octet(d["Seed"])
+        return "PRIVATE KEY", der_seq(der_int(0), alg, der_octet(inner))
+    if t == "RSA":
+        alg, pub = der_seq(der_oid(OID_RSA), DER_NULL), der_seq(der_int(d["PublicModulus"]),
+                                                                 der_int(d["PublicExponent"]))
+    elif t == "EllipticCurve":
+        c = d["Curve"]
+        alg, pub = der_seq(der_oid(OID_EC), der_oid(c.oid)), c.encode(d["PublicCurvePoint"], d["Compressed"])
+    else:
+        alg, pub = der_seq(der_oid(OID_ED25519)), d["Public"]
+    return "PUBLIC KEY", der_seq(alg, der_bits(pub))
+
+
+def _curve_from_oid(oid, fname):
+    c = _CURVE_OID.get(oid)
+    if c is None:
+        raise ValueError(f"{fname}: unsupported elliptic curve (OID {oid})")
+    return c
+
+
+def _rsa_priv_from_pkcs1(der):
+    it = der_items(der_read(der)[1])
+    v = [der_to_int(c) for t, c, _ in it[:4]]
+    return rsa_private_expr(v[1], v[2], v[3])
+
+
+def _ec_priv_from_sec1(der, curve, fname):
+    it = der_items(der_read(der)[1])
+    x = int.from_bytes(it[1][1], "big")
+    for t, c, _ in it[2:]:
+        if t == 0xA0:
+            curve = _curve_from_oid(oid_text(der_read(c)[1]), fname)
+    if curve is None:
+        raise ValueError(f"{fname}: the EC private key does not name its curve")
+    return ec_private_expr(curve, x)
+
+
+def _spki_to_key(der, fname):
+    alg, bits = der_items(der_read(der)[1])[:2]
+    algi = der_items(alg[1])
+    oid = oid_text(algi[0][1])
+    pub = bits[1][1:]
+    if oid == OID_RSA:
+        n, e = (der_to_int(c) for t, c, _ in der_items(der_read(pub)[1])[:2])
+        return rsa_public_expr(n, e)
+    if oid == OID_EC:
+        c = _curve_from_oid(oid_text(algi[1][1]), fname)
+        return ec_public_expr(c, c.decode(pub), pub[0] in (2, 3))
+    if oid == OID_ED25519:
+        return ed_public_expr(pub)
+    raise ValueError(f"{fname}: unsupported public key algorithm (OID {oid})")
+
+
+def _pkcs8_to_key(der, fname):
+    it = der_items(der_read(der)[1])
+    algi = der_items(it[1][1])
+    oid = oid_text(algi[0][1])
+    inner = it[2][1]
+    if oid == OID_RSA:
+        return _rsa_priv_from_pkcs1(inner)
+    if oid == OID_EC:
+        return _ec_priv_from_sec1(inner, _curve_from_oid(oid_text(algi[1][1]), fname), fname)
+    if oid == OID_ED25519:
+        return ed_private_expr(der_read(inner)[1])
+    raise ValueError(f"{fname}: unsupported private key algorithm (OID {oid})")
+
+
+# ── X.509 certificates ──
+
+_SIG_ALGS = {"1.2.840.113549.1.1.4": ("md5WithRSAEncryption", "RSA", "MD5"),
+             "1.2.840.113549.1.1.5": ("sha1WithRSAEncryption", "RSA", "SHA1"),
+             "1.2.840.113549.1.1.11": ("sha256WithRSAEncryption", "RSA", "SHA256"),
+             "1.2.840.113549.1.1.12": ("sha384WithRSAEncryption", "RSA", "SHA384"),
+             "1.2.840.113549.1.1.13": ("sha512WithRSAEncryption", "RSA", "SHA512"),
+             "1.2.840.113549.1.1.14": ("sha224WithRSAEncryption", "RSA", "SHA224"),
+             "1.2.840.10045.4.1": ("ecdsa-with-SHA1", "EllipticCurve", "SHA1"),
+             "1.2.840.10045.4.3.1": ("ecdsa-with-SHA224", "EllipticCurve", "SHA224"),
+             "1.2.840.10045.4.3.2": ("ecdsa-with-SHA256", "EllipticCurve", "SHA256"),
+             "1.2.840.10045.4.3.3": ("ecdsa-with-SHA384", "EllipticCurve", "SHA384"),
+             "1.2.840.10045.4.3.4": ("ecdsa-with-SHA512", "EllipticCurve", "SHA512"),
+             "1.3.101.112": ("ED25519", "EdwardsCurve", "SHA512")}
+_NAME_ATTRS = {"2.5.4.3": "CommonName", "2.5.4.6": "CountryName", "2.5.4.7": "LocalityName",
+               "2.5.4.8": "StateOrProvinceName", "2.5.4.10": "OrganizationName",
+               "2.5.4.11": "OrganizationalUnitName", "2.5.4.5": "SerialNumber", "2.5.4.9": "StreetAddress",
+               "2.5.4.12": "Title", "2.5.4.42": "GivenName", "2.5.4.4": "Surname",
+               "1.2.840.113549.1.9.1": "EmailAddress", "0.9.2342.19200300.100.1.25": "DomainComponent"}
+_EXTENSIONS = {"2.5.29.14": "SubjectKeyIdentifier", "2.5.29.35": "AuthorityKeyIdentifier",
+               "2.5.29.19": "BasicConstraints", "2.5.29.15": "KeyUsage", "2.5.29.17": "SubjectAlternativeName",
+               "2.5.29.37": "ExtendedKeyUsage", "2.5.29.31": "CRLDistributionPoints",
+               "2.5.29.32": "CertificatePolicies", "1.3.6.1.5.5.7.1.1": "AuthorityInformationAccess"}
+
+
+def _der_string(t, c):
+    if t == 0x1E:
+        return c.decode("utf-16-be", "replace")
+    if t == 0x1C:
+        return c.decode("utf-32-be", "replace")
+    return c.decode("utf-8" if t == 0x0C else "latin-1", "replace")
+
+
+def _name(c):
+    out = []
+    for _, rdn, _ in der_items(c):
+        for _, atv, _ in der_items(rdn):
+            (ot, oc, _), (vt, vc, _) = der_items(atv)[:2]
+            o = oid_text(oc)
+            out.append((_NAME_ATTRS.get(o, o), _der_string(vt, vc)))
+    return A(out)
+
+
+def _der_time(t, c):
+    s = c.decode("ascii")
+    m = re.fullmatch((r"(\d\d)" if t == 0x17 else r"(\d{4})") + r"(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)?(?:\.\d+)?Z", s)
+    if not m:
+        raise DerError(f"unsupported certificate time {s!r}")
+    y = int(m.group(1))
+    if t == 0x17:
+        y += 2000 if y < 50 else 1900
+    vals = [y, int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)), int(m.group(6) or 0)]
+    return ev(Expr("DateObject", L(*vals), Expr("Rule", Symbol("TimeZone"), 0)))
+
+
+def _ecdsa_sig_from_der(b, curve, hm, fname):
+    r, s = (int.from_bytes(c, "big") for t, c, _ in der_items(der_read(b)[1])[:2])
+    size = curve.size if curve else max((r.bit_length() + 7) // 8, (s.bit_length() + 7) // 8)
+    return [("Type", "EllipticCurve"), ("CurveName", curve.name if curve else None), ("HashingMethod", hm),
+            ("SignatureType", "Deterministic"), ("R", _ba(r.to_bytes(size, "big"))), ("S", _ba(s.to_bytes(size,
+                                                                                                         "big")))]
+
+
+def certificate_from_der(der, fname):
+    try:
+        tbs, alg, sigbits = der_items(der_read(der)[1])[:3]
+        f = der_items(tbs[1])
+        i = 0
+        version = 1
+        if f[0][0] == 0xA0:
+            version = der_to_int(der_read(f[0][1])[1]) + 1
+            i = 1
+        serial = der_to_int(f[i][1])
+        issuer, validity, subject, spki = f[i + 2], f[i + 3], f[i + 4], f[i + 5]
+        exts = []
+        for t, c, _ in f[i + 6:]:
+            if t == 0xA3:
+                for _, ext, _ in der_items(der_read(c)[1]):
+                    parts = der_items(ext)
+                    o = oid_text(parts[0][1])
+                    crit = len(parts) == 3 and parts[1][1] != b"\x00"
+                    exts.append((_EXTENSIONS.get(o, o), A([("Critical", crit), ("Value", _ba(parts[-1][1]))])))
+        sig_oid = oid_text(der_items(alg[1])[0][1])
+        sname, stype, hm = _SIG_ALGS.get(sig_oid, (sig_oid, None, None))
+        start, end = (_der_time(t, c) for t, c, _ in der_items(validity[1])[:2])
+        pub = _spki_to_key(spki[2], fname)
+        sig = sigbits[1][1:]
+    except (DerError, IndexError, UnicodeDecodeError) as e:
+        raise ValueError(f"{fname}: invalid X.509 certificate ({e})")
+    if stype == "RSA":
+        dsig = Expr("DigitalSignature", A([("Type", "RSA"), ("HashingMethod", hm), ("Padding", "PKCS1"),
+                                           ("Signature", _ba(sig))]))
+    elif stype == "EllipticCurve":
+        curve = None
+        try:
+            curve = _CURVE_OID.get(oid_text(der_items(der_items(der_read(spki[2])[1])[0][1])[1][1]))
+        except (DerError, IndexError):
+            pass
+        dsig = Expr("DigitalSignature", A(_ecdsa_sig_from_der(sig, curve, hm, fname)))
+    elif stype == "EdwardsCurve":
+        dsig = Expr("DigitalSignature", A([("Type", "EdwardsCurve"), ("CurveName", "ed25519"),
+                                           ("HashingMethod", "SHA512"), ("SignatureType", "Deterministic"),
+                                           ("R", _ba(sig[:32])), ("S", _ba(sig[32:]))]))
+    else:
+        dsig = Expr("Missing", "NotAvailable")
+    return Expr("SecurityCertificate", A([
+        ("Version", version), ("SerialNumber", serial), ("SignatureAlgorithm", sname), ("Issuer", _name(issuer[1])),
+        ("ValidityStartDate", start), ("ValidityEndDate", end), ("Subject", _name(subject[1])), ("PublicKey", pub),
+        ("Extensions", A(exts)), ("DigitalSignature", dsig), ("SignedData", _ba(tbs[2])),
+        ("Certificate", _ba(der))]))
+
+
+_PEM_RE = re.compile(rb"-----BEGIN ([A-Z0-9 ]+)-----\s*(.*?)\s*-----END \1-----", re.S)
+
+
+def pem_entries(data, fname):
+    out = []
+    for m in _PEM_RE.finditer(data):
+        label = m.group(1).decode("ascii")
+        body = m.group(2)
+        if b":" in body.split(b"\n", 1)[0]:
+            out.append(Expr("ImportedObject", A([("OriginalFormat", "PEM"), ("Type", label),
+                                                 ("RawContent", m.group(0).decode("ascii", "replace"))])))
+            continue
+        try:
+            der = base64.b64decode(re.sub(rb"\s+", b"", body), validate=True)
+        except Exception:
+            raise ValueError(f"{fname}: invalid Base64 in the PEM entry {label}")
+        try:
+            if label == "CERTIFICATE":
+                out.append(certificate_from_der(der, fname))
+            elif label == "PUBLIC KEY":
+                out.append(_spki_to_key(der, fname))
+            elif label == "RSA PUBLIC KEY":
+                n, e = (der_to_int(c) for t, c, _ in der_items(der_read(der)[1])[:2])
+                out.append(rsa_public_expr(n, e))
+            elif label == "PRIVATE KEY":
+                out.append(_pkcs8_to_key(der, fname))
+            elif label == "RSA PRIVATE KEY":
+                out.append(_rsa_priv_from_pkcs1(der))
+            elif label == "EC PRIVATE KEY":
+                out.append(_ec_priv_from_sec1(der, None, fname))
+            else:
+                out.append(Expr("ImportedObject", A([("OriginalFormat", "PEM"), ("Type", label),
+                                                     ("RawContent", _ba(der))])))
+        except (DerError, IndexError) as e:
+            raise ValueError(f"{fname}: invalid {label} PEM entry ({e})")
+    if not out:
+        raise ValueError(f"{fname}: no PEM entries found")
+    return out
+
+
+def _pem_block(label, der):
+    b = base64.b64encode(der).decode("ascii")
+    return f"-----BEGIN {label}-----\n" + "\n".join(b[i:i + 64] for i in range(0, len(b), 64)) + \
+        f"\n-----END {label}-----\n"
+
+
+def to_pem(x, fname):
+    items = list(x.args) if is_list(x) else [x]
+    out = []
+    for it in items:
+        if _is_obj(it, "PrivateKey") or _is_obj(it, "PublicKey"):
+            out.append(_pem_block(*key_to_der(asym_parts(it, fname))))
+        elif _is_obj(it, "SecurityCertificate"):
+            raw = assoc_get(it.args[0], "Certificate")
+            if raw is None:
+                raise ValueError(f"{fname}: the SecurityCertificate has no encoded certificate")
+            out.append(_pem_block("CERTIFICATE", ba_bytes(raw, fname)))
+        elif _is_obj(it, "ImportedObject") and assoc_get(it.args[0], "OriginalFormat") == "PEM":
+            raw = assoc_get(it.args[0], "RawContent")
+            out.append(_pem_block(assoc_get(it.args[0], "Type"), ba_bytes(raw, fname)) if is_byte_array(raw)
+                       else raw.rstrip("\n") + "\n")
+        else:
+            raise ValueError(f"{fname}: PEM export needs PrivateKey, PublicKey or SecurityCertificate objects, not "
+                             f"{F.input_form(it)}")
+    return "".join(out).encode("ascii")
+
+
+_PEM_ELEMENTS = {"PrivateKey": "PrivateKey", "PublicKey": "PublicKey", "SecurityCertificate": "SecurityCertificate"}
+
+
+def _imp_pem(data, elem, subs, opts):
+    ents = pem_entries(data, "Import")
+    if elem in _PEM_ELEMENTS:
+        ents = [e for e in ents if e.head == elem]
+        if not ents:
+            return Expr("Missing", "NotAvailable")
+    return ents[0] if len(ents) == 1 else L(*ents)
+
+
+IE.register_format(IE.Format("PEM", ["pem", "cer", "crt", "key"], ["application/x-pem-file"],
+                             ["Data", "PrivateKey", "PublicKey", "SecurityCertificate"], "Data", _imp_pem,
+                             lambda x, opts: to_pem(x, "Export")))
+
+
+@fn("SecurityCertificate", area=AREA, status="added",
+    notes="SecurityCertificate[<|...|>] represents an X.509 certificate imported from PEM (properties Version, "
+          "SerialNumber, SignatureAlgorithm, Issuer, ValidityStartDate, ValidityEndDate, Subject, PublicKey, "
+          "Extensions, DigitalSignature, SignedData, Certificate, Properties); SecurityCertificate[\"PEM text\"] "
+          "or SecurityCertificate[ByteArray (DER)] parses one; VerifyDigitalSignature[{cert[\"SignedData\"], "
+          "cert[\"DigitalSignature\"]}, issuerKey] checks its signature")
+def _securitycertificate(x):
+    if isinstance(x, str):
+        certs = [e for e in pem_entries(x.encode("latin-1", "replace"), "SecurityCertificate")
+                 if e.head == "SecurityCertificate"]
+        if len(certs) != 1:
+            raise ValueError("SecurityCertificate: the text must contain exactly one PEM certificate")
+        return certs[0]
+    if is_byte_array(x):
+        return certificate_from_der(ba_bytes(x), "SecurityCertificate")
+    if KL.is_assoc(x):
+        raise Unevaluated
+    raise ValueError(f"SecurityCertificate: {F.input_form(x)} is not a PEM string, a DER ByteArray or an "
+                     f"association")
+
+
+# ═══════════════════════════════════════ files, objects, properties ═══════════════════════════════════════
+
+@fn("EncryptedObject", area=AREA, status="added",
+    notes="EncryptedObject[<|\"Data\", \"InitializationVector\", \"OriginalForm\", ...|>] is the result of "
+          "Encrypt (properties by name and \"Properties\"); validated, otherwise inert")
+def _encryptedobject(a):
+    if not KL.is_assoc(a) or assoc_get(a, "Data") is None or not is_byte_array(assoc_get(a, "Data")):
+        raise ValueError("EncryptedObject: expected an association with a ByteArray \"Data\"")
+    raise Unevaluated
+
+
+def _write_new(path, data, overwrite, fname):
+    if os.path.exists(path) and not overwrite:
+        raise ValueError(f"{fname}::exists: the file {path} already exists (use OverwriteTarget -> True)")
+    with open(path, "wb") as fh:
+        fh.write(data)
+    return os.path.abspath(path)
+
+
+def _overwrite(o, fname):
+    v = o.get("OverwriteTarget", False)
+    if not isinstance(v, bool):
+        raise ValueError(f"{fname}: OverwriteTarget must be True or False")
+    return v
+
+
+@fn("EncryptFile", area=AREA, status="added",
+    notes="EncryptFile[key, file] encrypts the bytes of file into file.mx (Import gives the EncryptedObject) and "
+          "EncryptFile[key, source, target] into target; key as for Encrypt; OverwriteTarget (default False); "
+          "returns the absolute output path")
+def _encryptfile(key, src, *rest):
+    rest, o = split_opts(rest, ("OverwriteTarget", "Method"), "EncryptFile")
+    if len(rest) > 1:
+        raise ValueError("EncryptFile called with too many arguments")
+    path = file_arg(src, "EncryptFile")
+    obj = encrypt(key, _ba(_file_bytes(path, "EncryptFile")), o, "EncryptFile")
+    target = file_arg(rest[0], "EncryptFile") if rest else path + ".mx"
+    return _write_new(target, IE.FORMATS["MX"].exp(obj, {}), _overwrite(o, "EncryptFile"), "EncryptFile")
+
+
+@fn("DecryptFile", area=AREA, status="added",
+    notes="DecryptFile[key, \"file.mx\"] decrypts an EncryptFile result into file and DecryptFile[key, source, "
+          "target] into target; OverwriteTarget (default False); returns the absolute output path")
+def _decryptfile(key, src, *rest):
+    rest, o = split_opts(rest, ("OverwriteTarget", "Method"), "DecryptFile")
+    if len(rest) > 1:
+        raise ValueError("DecryptFile called with too many arguments")
+    path = file_arg(src, "DecryptFile")
+    data = _file_bytes(path, "DecryptFile")
+    if not data.startswith(IE.MX_HEADER):
+        raise ValueError("DecryptFile: the file is not an EncryptFile result")
+    obj = IE.do_import(data, IE.FORMATS["MX"], "\x00default", [], None, {}, "DecryptFile")
+    if rest:
+        target = file_arg(rest[0], "DecryptFile")
+    elif path.endswith(".mx"):
+        target = path[:-3]
+    else:
+        raise ValueError("DecryptFile: give a target file (the source does not end in .mx)")
+    res = decrypt(key, obj, o, "DecryptFile")
+    if not is_byte_array(res):
+        raise ValueError("DecryptFile: the encrypted data is not a file")
+    return _write_new(target, ba_bytes(res), _overwrite(o, "DecryptFile"), "DecryptFile")
+
+
+def _props_hook(computed=None):
+    def hook(head, args, ev_):
+        if not (len(head.args) == 1 and KL.is_assoc(head.args[0]) and len(args) == 1 and isinstance(args[0], str)):
+            return K.UNHANDLED
+        a = head.args[0]
+        extra = {}
+        if computed is not None:
+            try:
+                extra = computed(head)
+            except (ValueError, NotImplementedError):
+                extra = {}
+        stored = [r.args[0] for r in a.args]
+        if args[0] == "Properties":
+            return L(*sorted(set(stored) | set(extra)))
+        v = assoc_get(a, args[0], K.UNHANDLED)
+        if v is K.UNHANDLED:
+            v = extra.get(args[0], K.UNHANDLED)
+        return Expr("Missing", "NotAvailable") if v is K.UNHANDLED else v
+    return hook
+
+
+def _key_computed(k):
+    return _key_props(asym_parts(k, k.head))
+
+
+def _sig_computed(s):
+    a = IE.assoc_dict(s.args[0], "DigitalSignature")
+    out = {}
+    if a.get("Type") == "EllipticCurve" and a.get("SignatureType") != "Schnorr":
+        r, s_ = (int.from_bytes(ba_bytes(a[k]), "big") for k in ("R", "S"))
+        out["DER"] = _ba(_der_sig(r, s_))
+    return out
+
+
+def _dk_computed(k):
+    return {"PHCString": phc_string(k)}
+
+
+for _h, _c in (("PrivateKey", _key_computed), ("PublicKey", _key_computed), ("DigitalSignature", _sig_computed),
+               ("DerivedKey", _dk_computed), ("SymmetricKey", None), ("EncryptedObject", None),
+               ("SecurityCertificate", None)):
+    KL.COMPOUND_HEAD_HOOKS[_h] = _props_hook(_c)
+
+CURVE_NAMES = sorted(set(CURVES) | {"prime256v1", "prime192v1"} | set(EDWARDS_CURVES))
+IE._sysvar("$CryptographicEllipticCurveNames", lambda: L(*CURVE_NAMES))
+record("$CryptographicEllipticCurveNames", AREA, "added",
+       "list of the elliptic and Edwards curves the cryptographic functions support")
