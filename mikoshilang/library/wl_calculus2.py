@@ -5100,6 +5100,19 @@ def _check_parts(val, parts, fname, extra_syms=()):
         raise NotImplementedError(f"{fname}: the symbolic result could not be verified numerically")
 
 
+def _register_fresnel():
+    # FresnelS/FresnelC already map MikoshiLang -> SymPy (extended10); add the reverse so results containing
+    # sympy.fresnels/fresnelc print as Wolfram heads.
+    from .. import math_ops as _mo
+    _mo._INV_FUNCS.setdefault(sp.fresnels, "FresnelS")
+    _mo._INV_FUNCS.setdefault(sp.fresnelc, "FresnelC")
+    _mo._FUNCS.setdefault("FresnelS", sp.fresnels)
+    _mo._FUNCS.setdefault("FresnelC", sp.fresnelc)
+
+
+_register_fresnel()
+
+
 def _wlf(v):
     """SymPy special functions without a MikoshiLang mapping -> the Wolfram heads."""
     v = sp.sympify(v)
@@ -5358,10 +5371,15 @@ def _rl_integral(f, beta, x, fname):
     """I^beta f (beta > 0, numeric) = 1/Gamma(beta) Integral_0^x (x - s)^(beta - 1) f(s) ds."""
     s_ = sp.Dummy("s", positive=True)
     xp = sp.Dummy("x", positive=True)
-    try:
-        v = sp.integrate((xp - s_) ** (beta - 1) * f.subs(x, s_), (s_, 0, xp), conds="none")
-    except Exception:
-        v = None
+    v = None
+    for integrand in ((s_ ** (beta - 1) * f.subs(x, xp - s_)), ((xp - s_) ** (beta - 1) * f.subs(x, s_))):
+        try:
+            v = sp.integrate(sp.expand_trig(integrand) if integrand.has(sp.sin, sp.cos) else integrand,
+                             (s_, 0, xp), conds="none")
+        except Exception:
+            v = None
+        if v is not None and not v.has(sp.Integral):
+            break
     if v is None or v.has(sp.Integral):
         raise NotImplementedError(f"{fname}: the fractional integral could not be computed in closed form")
     return (v / sp.gamma(beta)).subs(xp, x)
