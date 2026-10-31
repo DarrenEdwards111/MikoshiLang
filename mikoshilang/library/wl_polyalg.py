@@ -1557,3 +1557,306 @@ def _matpolyval(p, m, *x):
     R_ = R_.applyfunc(sp.expand)
     from .core import numeric_out
     return numeric_out(out(R_), p, m) if False else out(R_)
+
+
+# ───────────────────────────── Hermite and Smith normal forms ─────────────────────────────
+
+class _IntRing:
+    zero, one = 0, 1
+
+    @staticmethod
+    def size(a):
+        return abs(a)
+
+    @staticmethod
+    def quo(a, b):            # Euclidean quotient (remainder sign follows Python floor division)
+        return a // b
+
+    @staticmethod
+    def red_quo(a, b):        # quotient making the remainder lie in [0, b) for b > 0
+        return a // b
+
+    @staticmethod
+    def unit(a):
+        return -1 if a < 0 else 1
+
+    @staticmethod
+    def is_zero(a):
+        return a == 0
+
+    @staticmethod
+    def out(a):
+        return int(a)
+
+
+class _PolyRing:
+    def __init__(self, x, dom):
+        self.x, self.dom = x, dom
+        self.zero = sp.Poly(0, x, domain=dom)
+        self.one = sp.Poly(1, x, domain=dom)
+
+    def size(self, a):
+        return a.degree()
+
+    def quo(self, a, b):
+        return a.div(b)[0]
+
+    red_quo = quo
+
+    def unit(self, a):
+        return sp.Poly(1 / a.LC(), self.x, domain=self.dom)
+
+    @staticmethod
+    def is_zero(a):
+        return a.is_zero
+
+    @staticmethod
+    def out(a):
+        return out(sp.expand(a.as_expr()))
+
+
+def _rows_op(M, i, j, q, R):
+    """row_i -= q row_j"""
+    M[i] = [a - q * b for a, b in zip(M[i], M[j])]
+
+
+def _hnf(A, R):
+    m = len(A)
+    n = len(A[0]) if m else 0
+    A = [row[:] for row in A]
+    U = [[R.one if i == j else R.zero for j in range(m)] for i in range(m)]
+    r = 0
+    for c in range(n):
+        if r >= m:
+            break
+        while True:
+            rows = [i for i in range(r, m) if not R.is_zero(A[i][c])]
+            if not rows:
+                break
+            piv = min(rows, key=lambda i: R.size(A[i][c]))
+            A[r], A[piv] = A[piv], A[r]
+            U[r], U[piv] = U[piv], U[r]
+            done = True
+            for i in range(r + 1, m):
+                if not R.is_zero(A[i][c]):
+                    q = R.quo(A[i][c], A[r][c])
+                    _rows_op(A, i, r, q, R)
+                    _rows_op(U, i, r, q, R)
+                    if not R.is_zero(A[i][c]):
+                        done = False
+            if done:
+                break
+        if R.is_zero(A[r][c]):
+            continue
+        u = R.unit(A[r][c])
+        A[r] = [u * a for a in A[r]]
+        U[r] = [u * a for a in U[r]]
+        for i in range(r):
+            if not R.is_zero(A[i][c]):
+                q = R.red_quo(A[i][c], A[r][c])
+                _rows_op(A, i, r, q, R)
+                _rows_op(U, i, r, q, R)
+        r += 1
+    return U, A
+
+
+def _snf(A, R):
+    m = len(A)
+    n = len(A[0]) if m else 0
+    A = [row[:] for row in A]
+    U = [[R.one if i == j else R.zero for j in range(m)] for i in range(m)]
+    V = [[R.one if i == j else R.zero for j in range(n)] for i in range(n)]
+
+    def col_op(M, j, k, q):          # col_j -= q col_k
+        for row in M:
+            row[j] = row[j] - q * row[k]
+
+    def col_swap(M, j, k):
+        for row in M:
+            row[j], row[k] = row[k], row[j]
+
+    for k in range(min(m, n)):
+        while True:
+            cand = [(i, j) for i in range(k, m) for j in range(k, n) if not R.is_zero(A[i][j])]
+            if not cand:
+                break
+            i0, j0 = min(cand, key=lambda ij: R.size(A[ij[0]][ij[1]]))
+            A[k], A[i0] = A[i0], A[k]
+            U[k], U[i0] = U[i0], U[k]
+            col_swap(A, k, j0)
+            col_swap(V, k, j0)
+            clean = True
+            for i in range(k + 1, m):
+                if not R.is_zero(A[i][k]):
+                    q = R.quo(A[i][k], A[k][k])
+                    _rows_op(A, i, k, q, R)
+                    _rows_op(U, i, k, q, R)
+                    clean = clean and R.is_zero(A[i][k])
+            for j in range(k + 1, n):
+                if not R.is_zero(A[k][j]):
+                    q = R.quo(A[k][j], A[k][k])
+                    col_op(A, j, k, q)
+                    col_op(V, j, k, q)
+                    clean = clean and R.is_zero(A[k][j])
+            if not clean:
+                continue
+            bad = None
+            for i in range(k + 1, m):
+                for j in range(k + 1, n):
+                    if not R.is_zero(A[i][j]) and not R.is_zero(A[i][j] - R.quo(A[i][j], A[k][k]) * A[k][k]):
+                        bad = i
+                        break
+                if bad is not None:
+                    break
+            if bad is None:
+                break
+            A[k] = [a + b for a, b in zip(A[k], A[bad])]
+            U[k] = [a + b for a, b in zip(U[k], U[bad])]
+        if k < m and k < n and not R.is_zero(A[k][k]):
+            u = R.unit(A[k][k])
+            A[k] = [u * a for a in A[k]]
+            U[k] = [u * a for a in U[k]]
+    return U, A, V
+
+
+def _int_matrix(m, fname):
+    from .core import matrix_arg
+    M = matrix_arg(m, fname)
+    rows = []
+    for row in M.tolist():
+        r = []
+        for a in row:
+            v = _S(a, fname) if not isinstance(a, int) else sp.Integer(a)
+            if not v.is_Integer:
+                raise NotImplementedError(f"{fname}: only integer matrices are supported")
+            r.append(int(v))
+        rows.append(r)
+    return rows
+
+
+def _poly_matrix(m, xs, fname):
+    from .core import matrix_arg
+    M = matrix_arg(m, fname)
+    ents = [[sp.expand(a) for a in row] for row in M.tolist()]
+    allsym = set().union(*(e.free_symbols for row in ents for e in row))
+    if xs is None:
+        if len(allsym) != 1:
+            raise ValueError(f"{fname}: give the polynomial variable ({fname}[m, x])")
+        xs = allsym.pop()
+        allsym = set()
+    else:
+        allsym.discard(xs)
+    if any(isinstance(a, sp.Float) for row in ents for e in row for a in sp.preorder_traversal(e)):
+        raise NotImplementedError(f"{fname}: approximate coefficients are not supported")
+    params = sorted(allsym, key=str)
+    dom = sp.QQ.frac_field(*params) if params else sp.QQ
+    if any(not e.is_polynomial(xs) for row in ents for e in row):
+        raise ValueError(f"{fname}: the entries must be polynomials in {xs}")
+    if any(e.has(sp.I) for row in ents for e in row):
+        dom = sp.QQ_I if not params else None
+        if dom is None:
+            raise NotImplementedError(f"{fname}: complex symbolic coefficients are not supported")
+    R_ = _PolyRing(xs, dom)
+    return [[sp.Poly(e, xs, domain=dom) for e in row] for row in ents], R_
+
+
+def _check_um(U, A0, H, mult):
+    UM = sp.Matrix(U) * sp.Matrix(A0)
+    if any(sp.expand(a - b) != 0 for a, b in zip(UM, sp.Matrix(H))):
+        raise ArithmeticError("normal form failed verification")
+
+
+@fn("HermiteDecomposition", area=AREA, status="added",
+    notes="HermiteDecomposition[m] -> {u, r} for an integer matrix: u unimodular (Det = ±1), u.m == r, r the Hermite "
+          "normal form (row echelon, positive pivots, entries above a pivot reduced into [0, pivot)), unique; u is "
+          "unique when m is square and nonsingular (otherwise one valid u); non-integer entries raise")
+def _hermitedecomp(m):
+    A = _int_matrix(m, "HermiteDecomposition")
+    U, H = _hnf(A, _IntRing)
+    _check_um(U, A, H, None)
+    return L(out(sp.Matrix(U)), out(sp.Matrix(H)))
+
+
+@fn("HermiteReduce", area=AREA, status="added",
+    notes="HermiteReduce[m]: the Hermite normal form r of an integer matrix (the second element of "
+          "HermiteDecomposition)")
+def _hermitereduce(m):
+    A = _int_matrix(m, "HermiteReduce")
+    U, H = _hnf(A, _IntRing)
+    _check_um(U, A, H, None)
+    return out(sp.Matrix(H))
+
+
+def _poly_args(args, fname):
+    args, opts = _opts(args, {"Modulus", "Method"}, fname)
+    if opts.get("Modulus", 0) != 0:
+        raise NotImplementedError(f"{fname}: the Modulus option is not supported")
+    if not args or len(args) > 2:
+        raise ValueError(f"{fname} expects {fname}[m] or {fname}[m, x]")
+    xs = _var1(args[1], fname) if len(args) == 2 else None
+    return args[0], xs
+
+
+def _pm_out(M, R_):
+    return L(*(L(*(R_.out(a) for a in row)) for row in M))
+
+
+def _phd(*args):
+    m, xs = _poly_args(args, "PolynomialHermiteDecomposition")
+    A, R_ = _poly_matrix(m, xs, "PolynomialHermiteDecomposition")
+    U, H = _hnf(A, R_)
+    _check_um([[a.as_expr() for a in r] for r in U], [[a.as_expr() for a in r] for r in A],
+              [[a.as_expr() for a in r] for r in H], None)
+    return U, H, R_
+
+
+@fn("PolynomialHermiteDecomposition", area=AREA, status="added",
+    notes="PolynomialHermiteDecomposition[m] / [m, x] -> {u, h}: u.m == h with u unimodular (constant nonzero "
+          "determinant) and h upper triangular (row echelon) with every entry above a pivot of lower degree than "
+          "the pivot, over the rational numbers (or rational functions of other symbols). The Hermite form is "
+          "canonical only up to constant multiples of the rows; MikoshiLang makes the pivots monic (Wolfram's row "
+          "scaling differs). Modulus and approximate coefficients raise")
+def _polyhermitedecomp(*args):
+    U, H, R_ = _phd(*args)
+    return L(_pm_out(U, R_), _pm_out(H, R_))
+
+
+@fn("PolynomialHermiteReduce", area=AREA, status="added",
+    notes="PolynomialHermiteReduce[m] / [m, x]: the Hermite form h of a univariate polynomial matrix (second "
+          "element of PolynomialHermiteDecomposition; pivots monic)")
+def _polyhermitereduce(*args):
+    U, H, R_ = _phd(*args)
+    return _pm_out(H, R_)
+
+
+def _psd(*args, fname):
+    m, xs = _poly_args(args, fname)
+    A, R_ = _poly_matrix(m, xs, fname)
+    U, S, V = _snf(A, R_)
+    UM = sp.Matrix([[a.as_expr() for a in r] for r in U]) * sp.Matrix([[a.as_expr() for a in r] for r in A]) * \
+        sp.Matrix([[a.as_expr() for a in r] for r in V])
+    Sm = sp.Matrix([[a.as_expr() for a in r] for r in S])
+    if any(sp.expand(a - b) != 0 for a, b in zip(UM, Sm)):
+        raise ArithmeticError(f"{fname}: decomposition failed verification")
+    d = [S[i][i] for i in range(min(len(S), len(S[0]) if S else 0)) if not S[i][i].is_zero]
+    for a, b in zip(d, d[1:]):
+        if not b.rem(a).is_zero:
+            raise ArithmeticError(f"{fname}: invariant factors failed the divisibility check")
+    return U, S, V, R_
+
+
+@fn("PolynomialSmithDecomposition", area=AREA, status="added",
+    notes="PolynomialSmithDecomposition[m] / [m, x] -> {u, s, v}: u.m.v == s with u, v unimodular and s diagonal "
+          "with each diagonal entry dividing the next (the invariant factors), over the rationals or rational "
+          "functions of other symbols; invariant factors are unique up to constants and are made monic here "
+          "(Wolfram leaves constant multiples). Checked")
+def _polysmithdecomp(*args):
+    U, S, V, R_ = _psd(*args, fname="PolynomialSmithDecomposition")
+    return L(_pm_out(U, R_), _pm_out(S, R_), _pm_out(V, R_))
+
+
+@fn("PolynomialSmithReduce", area=AREA, status="added",
+    notes="PolynomialSmithReduce[m] / [m, x]: the Smith form s (monic invariant factors on the diagonal)")
+def _polysmithreduce(*args):
+    U, S, V, R_ = _psd(*args, fname="PolynomialSmithReduce")
+    return _pm_out(S, R_)
