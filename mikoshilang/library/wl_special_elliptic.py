@@ -109,6 +109,8 @@ def _chop(x):
         return type(x)(_chop(a) for a in x)
     if isinstance(x, mpmath.mpc) and abs(x.imag) <= abs(x) * mpmath.mpf(2) ** (-(3 * mpmath.mp.prec) // 4):
         return x.real
+    if isinstance(x, mpmath.mpc) and x.real != 0 and abs(x.real) <= abs(x) * mpmath.mpf(2) ** (-(3 * mpmath.mp.prec) // 4):
+        return mpmath.mpc(0, x.imag)
     return x
 
 
@@ -314,6 +316,11 @@ _G13 = sp.gamma(sp.Rational(1, 3))
 
 
 def _scorer_prime(z, hi=False):
+    # the formula cancels badly for large positive z (Bi' huge times a tiny tail integral): raise the precision
+    return _rel_stable(lambda: _scorer_prime0(z, hi), "Scorer" + ("Hi" if hi else "Gi") + "Prime")
+
+
+def _scorer_prime0(z, hi=False):
     # Gi'(z) = Bi'(z) Integral[Ai, {t, z, Infinity}] + Ai'(z) Integral[Bi, {t, 0, z}]  (DLMF 9.12.?, from Gi);
     # Hi = Bi - Gi (DLMF 9.12.15)
     ai_int = mpmath.airyai(z, derivative=-1)
@@ -384,9 +391,29 @@ def _agm_exact(a, b):
     return None
 
 
-mpfun("ArithmeticGeometricMean", 2, mpmath.agm, _agm_exact,
-      real=lambda a, b: _allreal(a, b) and a >= 0 and b >= 0,
-      notes="ArithmeticGeometricMean[a, b]; mpmath agm (principal branch, cut b/a on (-Infinity, 0])")
+def _agm(a, b):
+    """Wolfram's branch: AGM[a, b] = Pi (a + b) / (4 EllipticK[((a - b)/(a + b))^2]) (equals the limit of the
+    arithmetic-geometric iteration for a, b > 0; homogeneous, so AGM[-2, -5] = -AGM[2, 5])."""
+    if a + b == 0 or a == 0 or b == 0:
+        return mpmath.mpf(0)
+    if a == b:
+        return a
+    m = ((a - b) / (a + b)) ** 2
+    if m == 1:
+        return mpmath.mpf(0)
+    return mpmath.pi * (a + b) / (4 * mpmath.ellipk(m))
+
+
+def _agm_exact2(a, b):
+    if a + b == 0:
+        return sp.Integer(0)
+    return _agm_exact(a, b)
+
+
+mpfun("ArithmeticGeometricMean", 2, _agm, _agm_exact2,
+      real=lambda a, b: _allreal(a, b) and ((a >= 0 and b >= 0) or (a <= 0 and b <= 0)),
+      notes="ArithmeticGeometricMean[a, b] = Pi (a + b)/(4 EllipticK[((a - b)/(a + b))^2]) (Wolfram's branch; the "
+            "arithmetic-geometric iteration for positive a, b)")
 
 
 def _carlson(name, nargs, f, exact=None, notes="", pv=False):
@@ -585,8 +612,8 @@ def _neville(kind):
     def mpf(z, m):
         if m == 0:
             return {"S": mpmath.sin(z), "C": mpmath.cos(z), "D": mpmath.mpf(1), "N": mpmath.mpf(1)}[kind]
-        if m == 1:
-            raise NotImplementedError(f"{name}: m = 1 (infinite quarter period) is not supported numerically")
+        if m == 1:      # limits: theta_s -> Sinh, theta_n -> Cosh, theta_c, theta_d -> 1 (sn -> Tanh, cn = dn -> Sech)
+            return {"S": mpmath.sinh(z), "C": mpmath.mpf(1), "D": mpmath.mpf(1), "N": mpmath.cosh(z)}[kind]
         return _rel_stable(lambda: _nev(z, m), name)
 
     def _nev(z, m):
@@ -605,6 +632,8 @@ def _neville(kind):
     def ex(z, m):
         if m == 0:
             return {"S": sp.sin(z), "C": sp.cos(z), "D": sp.Integer(1), "N": sp.Integer(1)}[kind]
+        if m == 1:
+            return {"S": sp.sinh(z), "C": sp.Integer(1), "D": sp.Integer(1), "N": sp.cosh(z)}[kind]
         if z == 0:
             return {"S": sp.Integer(0), "C": sp.Integer(1), "D": sp.Integer(1), "N": sp.Integer(1)}[kind]
         return None
@@ -1641,22 +1670,39 @@ def _mathieu_exponent(a, q):
     return r
 
 
+def _tri_solve(d, off, rhs):
+    """Solve T x = rhs for the tridiagonal T with diagonal d and constant off-diagonal off (Thomas algorithm with
+    partial pivoting replaced by a tiny-pivot guard; T is diagonally dominant away from the null direction)."""
+    n = len(d)
+    tiny = mpmath.mpf(2) ** (-2 * mpmath.mp.prec)
+    cp, dp = [0] * n, [0] * n
+    piv = d[0] if d[0] != 0 else tiny
+    cp[0] = off / piv
+    dp[0] = rhs[0] / piv
+    for i in range(1, n):
+        piv = d[i] - off * cp[i - 1]
+        piv = piv if piv != 0 else tiny
+        cp[i] = off / piv
+        dp[i] = (rhs[i] - off * dp[i - 1]) / piv
+    x = [0] * n
+    x[-1] = dp[-1]
+    for i in range(n - 2, -1, -1):
+        x[i] = dp[i] - cp[i] * x[i + 1]
+    return x
+
+
 def _mathieu_coeffs(a, q, r):
     """Floquet coefficients c_k (k = -N..N) of the solution with exponent r, Sum c_k^2 = 1."""
     N = _hill_size(r, q) + int(mpmath.sqrt(abs(a)) / 2)
-    M = mpmath.matrix(2 * N + 1, 2 * N + 1)
-    for i, k in enumerate(range(-N, N + 1)):
-        M[i, i] = (r + 2 * k) ** 2 - a
-        if i > 0:
-            M[i, i - 1] = M[i - 1, i] = q
-    # inverse iteration for the null vector
+    # inverse iteration for the null vector of the tridiagonal matrix diag((r + 2k)^2 - a), off-diagonal q
     shift = mpmath.mpf(2) ** (-mpmath.mp.prec // 2) * (1 + abs(a) + abs(q))
-    A = M + shift * mpmath.eye(2 * N + 1)
-    v = mpmath.matrix([1] * (2 * N + 1))
+    dd = [(r + 2 * k) ** 2 - a + shift for k in range(-N, N + 1)]
+    v = [mpmath.mpf(1)] * (2 * N + 1)
     for _ in range(4):
-        v = mpmath.lu_solve(A, v)
-        v = v / mpmath.norm(v)
-    c = [v[i] for i in range(2 * N + 1)]
+        v = _tri_solve(dd, q, v)
+        nrm = mpmath.sqrt(mpmath.fsum(abs(t) ** 2 for t in v))
+        v = [t / nrm for t in v]
+    c = v
     s2 = mpmath.fsum(x * x for x in c)
     if s2 == 0:
         raise ArithmeticError("Mathieu: degenerate Floquet coefficients")
