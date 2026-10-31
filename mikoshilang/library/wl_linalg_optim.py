@@ -15,6 +15,14 @@
 Exact input is handled exactly where the problem allows it; inexact input gives machine (or input-precision)
 results.  Anything that cannot be computed correctly raises a clear error rather than returning an
 approximation silently.
+
+Batch symbols deliberately not implemented (no result could be checked against Wolfram's):
+
+* CanonicalWarpingDistance, CanonicalWarpingCorrespondence: canonical time warping alternates regularised
+  canonical correlation analysis with DTW; the regularisation ("Lambdas"), energy threshold, dimension choice and
+  normalisation of the projections are undocumented defaults, so distances would not match Wolfram's numbers.
+* FindCurvePath: an undocumented heuristic (how points are split into several curves and whether closed curves
+  repeat their first index are not specified), so its orderings cannot be reproduced or verified.
 """
 from __future__ import annotations
 
@@ -1455,6 +1463,187 @@ def _smithdecomposition(m, *rest):
           + _DENSE_NOTE)
 def _smithreduce(m, *rest):
     return _mout(_smith(m, rest, "SmithReduce")[1])
+
+
+# ── Popov form of a univariate polynomial matrix ──
+
+def _popov_pivot(row, ncols):
+    """(degree, column) of a row's pivot: the last entry of highest degree; None for a zero row."""
+    best = None
+    for c in range(ncols):
+        p = row[c]
+        if not p.is_zero:
+            d = p.degree()
+            if best is None or d >= best[0]:
+                best = (d, c)
+    return best
+
+
+def _popov_core(rows, ncols, fname):
+    """rows: lists of Polys over a field, the first ncols entries the matrix and the rest the transform.
+
+    Mulders-Storjohann reduction to weak Popov form, then normalisation to the (monic) Popov form."""
+    def sub(ri, rj, q):
+        return [a - q * b for a, b in zip(ri, rj)]
+
+    guard = 0
+    while True:
+        guard += 1
+        if guard > 100000:
+            raise RuntimeError(f"{fname}: the reduction did not terminate")
+        piv = [_popov_pivot(r, ncols) for r in rows]
+        clash = None
+        seen = {}
+        for i, pv in enumerate(piv):
+            if pv is None:
+                continue
+            j = seen.get(pv[1])
+            if j is not None:
+                clash = (i, j) if piv[i][0] >= piv[j][0] else (j, i)
+                break
+            seen[pv[1]] = i
+        if clash is None:
+            break
+        i, j = clash
+        (di, c), (dj, _) = piv[i], piv[j]
+        lead = rows[i][c].LC() / rows[j][c].LC()
+        x = rows[i][c].gens[0]
+        q = sp.Poly(x ** (di - dj), x, domain=rows[i][c].domain) * lead
+        rows[i] = sub(rows[i], rows[j], q)
+    piv = [_popov_pivot(r, ncols) for r in rows]
+    nonzero = sorted((i for i in range(len(rows)) if piv[i] is not None), key=lambda i: piv[i])
+    zero = [i for i in range(len(rows)) if piv[i] is None]
+    rows = [rows[i] for i in nonzero + zero]
+    piv = [piv[i] for i in nonzero] + [None] * len(zero)
+    for k, pv in enumerate(piv):
+        if pv is not None:
+            lc = rows[k][pv[1]].LC()
+            rows[k] = [a.quo_ground(lc) if hasattr(a, "quo_ground") else a * (1 / lc) for a in rows[k]]
+    changed, guard = True, 0
+    while changed:
+        changed = False
+        guard += 1
+        if guard > 10000:
+            raise RuntimeError(f"{fname}: the normalisation did not terminate")
+        for j, pv in enumerate(piv):
+            if pv is None:
+                continue
+            dj, cj = pv
+            for i in range(len(rows)):
+                if i == j:
+                    continue
+                e = rows[i][cj]
+                if not e.is_zero and e.degree() >= dj:
+                    q = e.quo(rows[j][cj])
+                    rows[i] = sub(rows[i], rows[j], q)
+                    changed = True
+    return rows, piv
+
+
+def _popov_check(rows, piv, ncols):
+    used = set()
+    last = None
+    for k, pv in enumerate(piv):
+        if pv is None:
+            if any(not a.is_zero for a in rows[k][:ncols]):
+                return False
+            continue
+        if _popov_pivot(rows[k], ncols) != pv or pv[1] in used:
+            return False
+        if last is not None and pv < last:
+            return False
+        last = pv
+        used.add(pv[1])
+        if rows[k][pv[1]].LC() != 1:
+            return False
+        for i in range(len(rows)):
+            if i != k and not rows[i][pv[1]].is_zero and rows[i][pv[1]].degree() >= pv[0]:
+                return False
+    return True
+
+
+@fn("PopovDecomposition", **ADDED,
+    notes="PopovDecomposition[m] or PopovDecomposition[m, x] gives {u, p} with u unimodular (Det[u] a nonzero "
+          "constant), u.m == p and p the Popov form of the univariate polynomial matrix m: each nonzero row's pivot "
+          "(last entry of highest degree) lies in its own column, pivot degrees increase (ties: leftmost pivot "
+          "first), other entries of a pivot column have lower degree, and zero rows come last.  The form is unique "
+          "up to row scaling; here pivots are made monic (Wolfram may normalise rows differently, e.g. to integer "
+          "coefficients).  Exact rational, complex-rational and symbolic coefficients (then x must be given) work "
+          "exactly; Modulus -> prime works over GF(p); approximate coefficients are converted to exact rationals, "
+          "decomposed exactly and returned as machine numbers.")
+def _popovdecomposition(m, *rest):
+    fname = "PopovDecomposition"
+    args, opts = split_options(rest, {"Modulus"}, fname)
+    M = _matrix(m, fname)
+    if len(args) > 1:
+        raise ValueError(f"{fname} called with too many arguments")
+    modulus = opts.get("Modulus", 0)
+    mod = None
+    if modulus not in (0, None):
+        if not (isinstance(modulus, int) and not isinstance(modulus, bool)) or not sp.isprime(modulus):
+            raise ValueError(f"{fname}: Modulus must be a prime integer (or 0)")
+        mod = int(modulus)
+    inexact = _inexact(M)
+    if inexact:
+        M = M.applyfunc(lambda v: sp.nsimplify(v, rational=True))
+    syms = set().union(*(v.free_symbols for v in M))
+    if args:
+        x = S(args[0])
+        if not isinstance(x, sp.Symbol):
+            raise ValueError(f"{fname}: {args[0]} is not a valid variable")
+    elif len(syms) == 1:
+        x = next(iter(syms))
+    elif not syms:
+        x = sp.Dummy("x")
+    else:
+        raise ValueError(f"{fname}: the matrix has several symbols {sorted(map(str, syms))}; give the variable "
+                         f"as {fname}[m, x]")
+    if inexact and syms - {x}:
+        raise NotImplementedError(f"{fname}: approximate coefficients together with symbolic parameters are not "
+                                  "supported")
+    if mod is not None and syms - {x}:
+        raise ValueError(f"{fname}: with Modulus the coefficients must be integers")
+    entries = list(M)
+    try:
+        if mod is not None:
+            polys = [sp.Poly(v, x, modulus=mod) for v in entries]
+        else:
+            polys, info = sp.parallel_poly_from_expr(entries, x)
+            dom = info["domain"]
+            if not dom.is_Field:
+                dom = dom.get_field()
+            polys = [p.set_domain(dom) for p in polys]
+    except (sp.PolynomialError, sp.polys.polyerrors.PolificationFailed, sp.polys.polyerrors.GeneratorsNeeded,
+            sp.polys.polyerrors.CoercionFailed, sp.polys.polyerrors.DomainError) as e:
+        raise ValueError(f"{fname}: the entries must be polynomials in {x} ({e})")
+    dom = polys[0].domain
+    if not dom.is_Field:
+        raise ValueError(f"{fname}: unsupported coefficient domain {dom}")
+    if any(not p.is_zero and p.degree() < 0 for p in polys):
+        raise ValueError(f"{fname}: the entries must be polynomials in {x}")
+    nr, nc = M.rows, M.cols
+    one, zero = sp.Poly(1, x, domain=dom), sp.Poly(0, x, domain=dom)
+    rows = [polys[i * nc:(i + 1) * nc] + [one if k == i else zero for k in range(nr)] for i in range(nr)]
+    rows, piv = _popov_core(rows, nc, fname)
+    if not _popov_check(rows, piv, nc):
+        raise RuntimeError(f"{fname}: internal error, the result is not in Popov form")
+
+    def out(p):
+        if mod is not None:
+            cs = [int(c) % mod for c in p.all_coeffs()]
+            e = sp.Add(*(c * x ** k for k, c in enumerate(reversed(cs))))
+        else:
+            e = sp.expand(p.as_expr())
+        if inexact:
+            e = sp.N(e)
+        return e
+
+    U = sp.Matrix([[out(p) for p in r[nc:]] for r in rows])
+    P = sp.Matrix([[out(p) for p in r[:nc]] for r in rows])
+    if mod is None and not inexact:
+        if (U * M - P).applyfunc(sp.expand) != sp.zeros(nr, nc):
+            raise RuntimeError(f"{fname}: internal error, u.m != p")
+    return L(_mout(U), _mout(P))
 
 
 # ── Frobenius (rational canonical) form ──

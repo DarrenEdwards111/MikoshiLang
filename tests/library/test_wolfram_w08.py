@@ -764,6 +764,37 @@ OPTION_HEADS_EXTRA = [
      Raises(ValueError, "GameActionLabels")),
 ]
 
+POPOV = [
+    # p is canonical up to row scaling (pivots monic here); u.m == p and Det[u] is a nonzero constant
+    ("Last[PopovDecomposition[{{5 + 4x, 10 + 6x}, {10 + 9x, 23 + 14x}}]]", "{{5 + x, 1}, {-5/2, 1 + x}}"),
+    T("m = {{5 + 4x, 10 + 6x}, {10 + 9x, 23 + 14x}}; {u, p} = PopovDecomposition[m]; "
+      "Expand[u.m - p] == {{0, 0}, {0, 0}} && FreeQ[Det[u], x] && Det[u] != 0"),
+    T("m = {{x^3 - 11, x^2 - 2x + 5, x^3 - 2x^2 + 3x - 7}, {x^2 + 4x + 9, x^2 - 19, x^3 + 5x - 6}}; "
+      "{u, p} = PopovDecomposition[m]; Expand[u.m - p] == {{0, 0, 0}, {0, 0, 0}} && Det[u] == 1"),
+    ("Last[PopovDecomposition[{{x^3 - 11, x^2 - 2x + 5, x^3 - 2x^2 + 3x - 7}, {x^2 + 4x + 9, x^2 - 19, x^3 + 5x - 6}}]]",
+     "{{x^3 - x^2 - 4x - 20, 24 - 2x, -2x^2 - 2x - 1}, {x^2 + 4x + 9, x^2 - 19, x^3 + 5x - 6}}"),
+    T("m = {{x^3 - I, x^2 - (2 - 3I)x + 5, (2 + I)x^3 - (2 + 3I)x^2 + 3x - 7 + I}, "
+      "{x^2 + (4 + 3I)x + 9, x^2 - 19, x^3 + (5 + 2I)x - 6}}; {u, p} = PopovDecomposition[m]; "
+      "FreeQ[Expand[Det[u]], x] && Expand[u.m - p] == {{0, 0, 0}, {0, 0, 0}}"),
+    T("m = {{x^3 - 11/5 a, x^2/7 - 2b x + 3/5}, {x^2 + 4/5 d x + 4/9, x^2 - 19/6 e}}; {u, p} = PopovDecomposition[m, x]; "
+      "FreeQ[Together[Det[u]], x] && (Together /@ Flatten[Expand[u.m - p]]) == {0, 0, 0, 0}"),
+    T("m = {{x^3 - 11, x^2 - 2x + 5, x^3 - 2x^2 + 3x - 7}, {x^2 + 4x + 9, x^2 - 19, x^3 + 5x - 6}}; "
+      "{u, p} = PopovDecomposition[m, Modulus -> 19]; "
+      "(PolynomialMod[#, 19] & /@ Flatten[Expand[u.m - p]]) == {0, 0, 0, 0, 0, 0} && PolynomialMod[Det[u], 19] == 1"),
+    T("m = N[{{x^3 - 11/5, x^2/7 - 2x + 3/5}, {x^2 + 4/5x + 4/9, x^2 - 19/6}}]; {u, p} = PopovDecomposition[m]; "
+      "Abs[Chop[Det[u]]] == 1. && Chop[Expand[u.m] - p] == {{0, 0}, {0, 0}}"),
+    # extended-GCD property: the first row of p is the gcd (monic) of a column of two polynomials
+    ("p1 = Expand[(-9 + 10x + 10x^2 - 9x^3 - 10x^4)(6 + 7x - 6x^2 - 5x^3 + 9x^4)]; "
+     "p2 = Expand[(-9 + 10x + 10x^2 - 9x^3 - 10x^4)(5 + 6x + 9x^2 - 8x^3 + 2x^4)]; "
+     "Last[PopovDecomposition[{{p1}, {p2}}]]", "{{9/10 - x - x^2 + 9/10 x^3 + x^4}, {0}}"),
+    # rank-deficient: zero rows last
+    ("PopovDecomposition[{{x, 1}, {x^2, x}}]", "{{{1, 0}, {-x, 1}}, {{x, 1}, {0, 0}}}"),
+    ("PopovDecomposition[{{x^2, x}, {x, 1}, {1, 0}}]", "{{{0, 0, 1}, {0, 1, -x}, {1, -x, 0}}, {{1, 0}, {0, 1}, {0, 0}}}"),
+    ("PopovDecomposition[{{x, y}}]", Raises(ValueError, "variable")),
+    ("PopovDecomposition[{{1/x, 1}}]", Raises(ValueError, "polynomials")),
+    ("PopovDecomposition[{{x, 1}}, Modulus -> 4]", Raises(ValueError, "prime")),
+]
+
 GROUPS = [v for k, v in list(globals().items()) if k.isupper() and k not in ("GROUPS", "N50") and isinstance(v, list)
           and v and isinstance(v[0], tuple)]
 CASES = [c for g in GROUPS for c in g
