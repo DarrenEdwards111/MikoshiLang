@@ -10,7 +10,7 @@ import mpmath as mp
 import pytest
 import sympy as sp
 
-from _harness import Pred, Raises, check, ids, to_complex
+from _harness import Pred, Raises, check, ev, ids, to_complex
 from mikoshilang.expr import Expr
 from mikoshilang.math_ops import to_sympy
 
@@ -564,7 +564,57 @@ SPHEROIDAL = [
      "4/(1 - x^2)) SpheroidalQS[3, 2, c, x]]", Zero(1e-6)),
 ]
 
-CASES = ZEROS + CARLSON + WAVES + THETA + JACOBI + WEIER + HEUN + MATHIEU + LAME + SPHEROIDAL
+def _ci_ok(pde, u, xs, nconst):
+    """A CompleteIntegral result: substituted back the PDE holds, with nconst distinct constants C[k]."""
+    def ok(g):
+        if not (isinstance(g, Expr) and g.head == "List" and g.args):
+            return False
+        for sol in g.args:
+            chk = ev(f"Simplify[({pde}) /. {sol}]")
+            if str(chk) not in ("True", "{True}"):
+                return False
+            if len(set(__import__("re").findall(r"C\[(\d+)\]", str(sol)))) != nconst:
+                return False
+        return True
+    return Pred(ok, f"complete integral of {pde}")
+
+
+def _str(want):
+    return Pred(lambda g: str(g) == want, want)
+
+
+COMPLETE = [
+    # documented outputs (reference.wolfram.com/language/ref/CompleteIntegral.html)
+    ("CompleteIntegral[D[u[x, y], x] - D[u[x, y], y]^2 == Cos[x], u[x, y], {x, y}]",
+     _str("{{u[x, y] -> x*C[1]^2 + y*C[1] + C[2] + Sin[x]}}")),
+    ("CompleteIntegral[D[u[x, y, z], x]^3 == D[u[x, y, z], y] + D[u[x, y, z], z], u[x, y, z], {x, y, z}]",
+     _str("{{u[x, y, z] -> x*C[1] + y*C[2] + z*(C[1]^3 - C[2]) + C[3]}}")),
+    ("CompleteIntegral[D[u[x, y, z], x]^3 == D[u[x, y, z], y] + D[u[x, y, z], z] && u[0, 1, 1] == 1 && "
+     "u[1, 0, 1] == 1 && u[0, 0, 1] == 1/2, u[x, y, z], {x, y, z}]",
+     Pred(lambda g: str(ev(f"Simplify[(u[x, y, z] /. {g}[[1]]) - (7 + 4 x + 4 y - 3 z)/8]")) == "0", "(7+4x+4y-3z)/8")),
+    ("CompleteIntegral[u[x, y] == x D[u[x, y], x] + y D[u[x, y], y] + (D[u[x, y], x]^2 + D[u[x, y], y]^2)/2, "
+     "u, {x, y}]", _str("{{u -> Function[{x, y}, x*C[1] + y*C[2] + C[1]^2/2 + C[2]^2/2]}}")),
+    # same family as the documented C[1] + x C[2] - t C[2]^2 and C[1] + y C[2] + x (1 - C[2]^2), constants renumbered
+    ("CompleteIntegral[D[u[t, x], t] + D[u[t, x], x]^2 == 0, u[t, x], {t, x}]",
+     _str("{{u[t, x] -> -t*C[1]^2 + x*C[1] + C[2]}}")),
+    ("CompleteIntegral[D[u[x, y], x] + D[u[x, y], y]^2 == 1, u, {x, y}]",
+     _ci_ok("D[u[x, y], x] + D[u[x, y], y]^2 == 1", "u", "{x, y}", 2)),
+    ("CompleteIntegral[D[u[x, y], x] - x D[u[x, y], y] == 0, u, {x, y}]",
+     _ci_ok("D[u[x, y], x] - x D[u[x, y], y] == 0", "u", "{x, y}", 2)),
+    ("CompleteIntegral[D[u[x, y], x] D[u[x, y], y] == 1, u, {x, y}]",
+     _ci_ok("D[u[x, y], x] D[u[x, y], y] == 1", "u", "{x, y}", 2)),
+    ("CompleteIntegral[D[u[x, y], x]^2 + D[u[x, y], y]^2 == 1, u, {x, y}]",
+     _ci_ok("D[u[x, y], x]^2 + D[u[x, y], y]^2 == 1", "u", "{x, y}", 2)),
+    # outside the supported classes it stays unevaluated (never a wrong answer)
+    ("CompleteIntegral[D[u[x, y], x] + D[u[x, y], y] == u[x, y]^2, u[x, y], {x, y}]",
+     Pred(lambda g: isinstance(g, Expr) and g.head == "CompleteIntegral", "unevaluated")),
+    ("CompleteIntegral[D[u[x, y], {x, 2}] == 0, u[x, y], {x, y}]",
+     Pred(lambda g: isinstance(g, Expr) and g.head == "CompleteIntegral", "unevaluated")),
+    ("CompleteIntegral[D[u[x, y], x] == 1, u[x, y], x]", R),
+]
+
+
+CASES = ZEROS + CARLSON + WAVES + THETA + JACOBI + WEIER + HEUN + MATHIEU + LAME + SPHEROIDAL + COMPLETE
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))

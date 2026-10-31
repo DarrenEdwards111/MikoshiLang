@@ -10,10 +10,11 @@ unevaluated.  Arguments outside the implemented domain raise a clear error inste
 """
 import mpmath
 import sympy as sp
+from sympy.core.function import AppliedUndef
 
 from ..expr import Expr, Symbol
 from ..precision import input_precision
-from .core import Unevaluated, fn, R, sym, is_list
+from .core import Unevaluated, fn, R, sym, is_list, L, rule
 from .wl_special import MP_NUMERIC, _dispatcher, from_mp, special, to_mp
 
 AREA = "special functions: elliptic, theta & ODE-defined (W07)"
@@ -2484,3 +2485,246 @@ mpfun("SiegelTheta", (2, 3), _siegel_dispatch, listable=False,
       notes="Siegel (Riemann) theta function Sum_n Exp[Pi I n.Omega.n + 2 Pi I n.s] over Z^p, with characteristics "
             "{nu1, nu2}; Omega symmetric with positive definite imaginary part (otherwise raises); numerical "
             "lattice sum (exact input stays unevaluated, N gives digits)")
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# CompleteIntegral[pde, u, {x1, ..., xn}]: a complete integral (n independent arbitrary constants) of a first-order
+# PDE F(x, u, Du) = 0.  Methods (each candidate is substituted back into the PDE and its constants are checked to be
+# independent -- rank n of the matrix (u_a, u_{x_i a}) -- before it is returned; otherwise the call stays
+# unevaluated):
+#   * Clairaut type u = x.Du + f(Du) (F free of x after u -> a.x + b, Du -> a): planes u = a.x + b(a);
+#   * equations without u that separate additively, F = Sum_i G_i(x_i, p_i) (possibly after dividing by a factor
+#     depending on one x_i), including F(Du) = 0: p_i = C[k] when G_i does not involve x_i, else G_i = C[k], and
+#     the remaining p_j (the last p_j in which F is linear) from F = 0; u = Sum Integrate[p_i, x_i] + C[n].
+# Conditions u[a1, ..., an] == v joined with && fix the constants (Solve).
+# ---------------------------------------------------------------------------------------------------------------
+
+def _ci_flatten(e):
+    if isinstance(e, Expr) and e.head in ("And", "List"):
+        return [y for a in e.args for y in _ci_flatten(a)]
+    return [e]
+
+
+def _ci_has_derivative(e):
+    if isinstance(e, Expr):
+        if isinstance(e.head, Expr):
+            return True
+        return any(_ci_has_derivative(a) for a in e.args)
+    return False
+
+
+def _complete_integral(pde, uspec, xs, *opts):
+    from ..math_ops import to_sympy, from_sympy
+    name = "CompleteIntegral"
+    if opts:
+        raise NotImplementedError(f"{name}: options are not supported")
+    if not is_list(xs) or not xs.args or not all(isinstance(v, Symbol) for v in xs.args):
+        raise ValueError(f"{name}: the independent variables must be a list of symbols")
+    xs_ = list(xs.args)
+    n = len(xs_)
+    if isinstance(uspec, Symbol):
+        uname, pure = uspec.name, True
+    elif isinstance(uspec, Expr) and isinstance(uspec.head, str) and list(uspec.args) == xs_:
+        uname, pure = uspec.head, False
+    else:
+        raise ValueError(f"{name}: the unknown must be u or u[x1, ..., xn] with the given variables")
+    parts = _ci_flatten(pde)
+    eqs = [e for e in parts if _ci_has_derivative(e)]
+    conds = [e for e in parts if not _ci_has_derivative(e)]
+    if len(eqs) != 1 or not (isinstance(eqs[0], Expr) and eqs[0].head == "Equal" and len(eqs[0].args) == 2):
+        raise Unevaluated()
+    for c in conds:
+        if not (isinstance(c, Expr) and c.head == "Equal" and len(c.args) == 2 and isinstance(c.args[0], Expr)
+                and c.args[0].head == uname and len(c.args[0].args) == n):
+            raise ValueError(f"{name}: conditions must have the form {uname}[a1, ..., an] == value")
+    X = [sp.Symbol(v.name) for v in xs_]
+    F0 = to_sympy(eqs[0].args[0]) - to_sympy(eqs[0].args[1])
+    ufun = sp.Function(uname)
+    U = sp.Dummy("U")
+    P = [sp.Dummy(f"p{i}") for i in range(n)]
+    rep = {sp.Derivative(ufun(*X), X[i]): P[i] for i in range(n)}
+    F = F0.xreplace(rep).xreplace({ufun(*X): U})
+    if any(isinstance(t, (sp.Derivative, sp.Subs)) for t in sp.preorder_traversal(F)) or \
+            any(isinstance(t, AppliedUndef) and t.func.__name__ == uname for t in sp.preorder_traversal(F)):
+        raise Unevaluated()     # higher-order derivatives or u at other points: not a first-order PDE
+    Cs = [sp.Dummy(f"C{k + 1}") for k in range(n)]
+
+    cands = []
+    if F.has(U):
+        cands += _ci_clairaut(F, U, P, X, Cs)
+    elif not (F.free_symbols & set(X)):
+        cands += _ci_planes(F, P, X, Cs)
+    else:
+        cands += _ci_separable(F, P, X, Cs)
+    for cand in cands:
+        if _ci_verify(F0, ufun, X, cand, Cs):
+            sols = [cand]
+            if conds:
+                sols = _ci_conditions(conds, cand, X, Cs, to_sympy)
+                if sols is None:
+                    continue
+            Cfun = sp.Function("C")
+            outl = []
+            for s_ in sols:
+                s_ = s_.xreplace({c: Cfun(k + 1) for k, c in enumerate(Cs)})
+                val = from_sympy(s_)
+                if pure:
+                    outl.append(L(rule(Symbol(uname), Expr("Function", L(*xs_), val))))
+                else:
+                    outl.append(L(rule(uspec, val)))
+            return L(*outl)
+    raise Unevaluated()
+
+
+def _ci_clairaut(F, U, P, X, Cs):
+    D = sp.Dummy("D")
+    G = sp.simplify(F.xreplace({U: sum(c * x for c, x in zip(Cs, X)) + D}).xreplace(dict(zip(P, Cs))))
+    if G.free_symbols & set(X) or not G.has(D):
+        return []
+    try:
+        roots = sp.solve(G, D, dict=False)
+    except Exception:
+        return []
+    return [sum(c * x for c, x in zip(Cs, X)) + r for r in roots if not (r.free_symbols & set(X))]
+
+
+def _ci_planes(F, P, X, Cs):
+    """F(Du) = 0: planes u = Sum_{i != j} C[k] x_i + p_j(C) x_j + C[n], p_j from F = 0."""
+    n = len(X)
+    lin = [i for i in range(n) if F.is_polynomial(P[i]) and sp.Poly(F, P[i]).degree() == 1]
+    order = ([lin[-1]] if lin else []) + [i for i in range(n) if not lin or i != lin[-1]]
+    for j in order:
+        others = [i for i in range(n) if i != j]
+        sub = {P[i]: Cs[k] for k, i in enumerate(others)}
+        try:
+            r = sp.solve(F.xreplace(sub), P[j])
+        except Exception:
+            continue
+        if r:
+            return [sum(Cs[k] * X[i] for k, i in enumerate(others)) + r[0] * X[j] + Cs[n - 1]]
+    return []
+
+
+def _ci_separable(F, P, X, Cs):
+    n = len(X)
+    divisors = [sp.Integer(1)]
+    for t in sp.Add.make_args(sp.expand(F)):
+        for fac in sp.Mul.make_args(t):
+            fs = fac.free_symbols
+            if fs and fs <= set(X) and len(fs) == 1 and fac not in divisors:
+                divisors.append(fac)
+    for d in divisors:
+        H = sp.expand(F / d)
+        groups = [sp.Integer(0)] * n
+        const = sp.Integer(0)
+        ok = True
+        for t in sp.Add.make_args(H):
+            owners = [i for i in range(n) if t.has(X[i]) or t.has(P[i])]
+            if len(owners) > 1:
+                ok = False
+                break
+            if owners:
+                groups[owners[0]] += t
+            else:
+                const += t
+        if not ok or any(g == 0 for g in groups):
+            continue
+        lin = [i for i in range(n) if sp.Poly(groups[i], P[i]).degree() == 1] if all(
+            groups[i].is_polynomial(P[i]) for i in range(n)) else \
+            [i for i in range(n) if groups[i].is_polynomial(P[i]) and sp.Poly(groups[i], P[i]).degree() == 1]
+        order = ([lin[-1]] if lin else []) + [i for i in range(n) if not lin or i != lin[-1]]
+        for j in order:
+            pvals, gvals, k = {}, {}, 0
+            good = True
+            for i in range(n):
+                if i == j:
+                    continue
+                c = Cs[k]
+                k += 1
+                if not groups[i].has(X[i]):
+                    pvals[i] = c
+                    gvals[i] = groups[i].xreplace({P[i]: c})
+                else:
+                    try:
+                        r = sp.solve(sp.Eq(groups[i], c), P[i])
+                    except Exception:
+                        r = []
+                    if not r:
+                        good = False
+                        break
+                    pvals[i] = r[0]
+                    gvals[i] = c
+            if not good:
+                continue
+            try:
+                rj = sp.solve(groups[j] + sum(gvals.values()) + const, P[j])
+            except Exception:
+                continue
+            if not rj:
+                continue
+            pvals[j] = rj[0]
+            u = Cs[n - 1]
+            for i in range(n):
+                part = sp.integrate(pvals[i], X[i], conds="none")
+                if part.has(sp.Integral) or part.has(sp.Piecewise):
+                    good = False
+                    break
+                u += part
+            if good:
+                return [sp.expand(u) if not u.has(sp.Pow) else u]
+    return []
+
+
+def _ci_verify(F0, ufun, X, cand, Cs):
+    import random
+    lam = sp.Lambda(tuple(X), cand)
+    try:
+        r = F0.replace(ufun, lam).doit()
+    except Exception:
+        return False
+    try:
+        if sp.simplify(r) != 0:
+            rnd = random.Random(7)
+            syms = sorted(r.free_symbols, key=str)
+            for _ in range(4):
+                vals = {s_: sp.Rational(rnd.randint(3, 29), 10) for s_ in syms}
+                z = complex(sp.N(r.subs(vals), 30))
+                if abs(z) > 1e-15:
+                    return False
+    except Exception:
+        return False
+    # independence of the n constants: rank of [u_a, u_{x1 a}, ..., u_{xn a}]_a must be n (checked at random points)
+    M = sp.Matrix([[sp.diff(cand, a)] + [sp.diff(cand, x, a) for x in X] for a in Cs])
+    rnd = random.Random(3)
+    for _ in range(3):
+        vals = {s_: sp.Rational(rnd.randint(3, 29), 7) for s_ in M.free_symbols}
+        try:
+            Mn = M.subs(vals).evalf(30)
+            if Mn.rank(iszerofunc=lambda e: abs(complex(e)) < 1e-20) == len(Cs):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _ci_conditions(conds, cand, X, Cs, to_sympy):
+    eqs = []
+    for c in conds:
+        pts = [to_sympy(a) for a in c.args[0].args]
+        eqs.append(sp.Eq(cand.xreplace(dict(zip(X, pts))), to_sympy(c.args[1])))
+    try:
+        sols = sp.solve(eqs, Cs, dict=True)
+    except Exception:
+        return None
+    if not sols:
+        return None
+    return [sp.simplify(cand.xreplace(s_)) for s_ in sols]
+
+
+@fn("CompleteIntegral", area=AREA, status="added",
+    notes="complete integral of a first-order PDE (n independent constants C[k]): Clairaut equations and equations "
+          "without u that separate additively (F(Du) = 0, Hamilton-Jacobi type, f(x, p) = g(y, q)); every result is "
+          "substituted back and its constants checked independent; conditions u[...] == v fix the constants; other "
+          "PDEs stay unevaluated. Constants may be numbered differently from Wolfram")
+def _complete_integral_3(pde, u, xs):
+    return _complete_integral(pde, u, xs)
