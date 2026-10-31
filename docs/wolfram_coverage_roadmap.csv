@@ -212,7 +212,7 @@ $SystemShell,Core Language & Structure,missing,2,,0,SystemInformation DirectCont
 $SystemTimeZone,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 $SystemWordLength,Core Language & Structure,missing,2,,0,SystemInformation
 $TargetSystems,"Options, system variables & unclassified",missing,3,,0,
-$TemplatePath,"Options, system variables & unclassified",missing,3,,0,
+$TemplatePath,"Options, system variables & unclassified",implemented,3,,0,
 $TemporaryDirectory,External Interfaces & Connections,missing,3,,0,DirectoriesAndDirectoryOperations
 $TestFileName,Core Language & Structure,implemented,2,,0,SystematicTestingAndVerification
 $TimeUnit,Core Language & Structure,infeasible,,depends on Quantity / curated unit data (already infeasible),0,SystemInformation TimeMeasurementAndOptimization
@@ -286,7 +286,7 @@ ActiveStyle,"Options, system variables & unclassified",infeasible,,front end / n
 AcyclicGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements GraphPredicates
 AddSides,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation ManipulatingEquations
 AddTo,Core Language & Structure,implemented,1,,1,ProceduralProgramming Assignments StructuredDataInTheCloud
-AddToSearchIndex,Strings & Text,missing,2,,0,TextSearch
+AddToSearchIndex,Strings & Text,implemented,2,,0,TextSearch
 AddToVectorDatabase,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions
 AddUsers,Higher Mathematical Computation,infeasible,,Wolfram Cloud / external services,0,CloudPermissionsControl ManagingContentInTheCloud
 AdjacencyGraph,Graphs & Networks,implemented,2,,1,GraphsAndNetworks GraphConstructionAndRepresentation GraphsAndMatrices GraphProgramming
@@ -358,7 +358,7 @@ AnatomyData,Geometry,infeasible,,curated data,0,GeometricComputation
 AnatomyPlot3D,Data Manipulation & Analysis,infeasible,,curated data,0,DataVisualization LifeSciencesAndMedicineDataAndComputation
 AnatomySkinStyle,Scientific and Medical Data & Computation,infeasible,,curated data,0,LifeSciencesAndMedicineDataAndComputation
 AnatomyStyling,Scientific and Medical Data & Computation,infeasible,,curated data,0,LifeSciencesAndMedicineDataAndComputation
-AnchoredSearch,"Options, system variables & unclassified",missing,3,,0,
+AnchoredSearch,"Options, system variables & unclassified",implemented,3,,0,
 And,Core Language & Structure,implemented,1,,10,LanguageOverview ProceduralProgramming Syntax DiscreteMathematics
 AndersonDarlingTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests RandomVariables
 AngerJ,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
@@ -399,7 +399,7 @@ Antisymmetric,Higher Mathematical Computation,implemented,2,,0,SymbolicTensors
 AntisymmetricMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
 Antonyms,Strings & Text,infeasible,,curated data,0,LinguisticData
 AnyMatch,Core Language & Structure,implemented,1,,0,ListManipulation TestingExpressions ElementsOfLists PatternMatchingFunctions
-AnyOrder,Core Language & Structure,missing,2,,0,ProgrammableLinguisticInterface
+AnyOrder,Core Language & Structure,implemented,2,,0,ProgrammableLinguisticInterface
 AnySubset,Strings & Text,implemented,2,,0,InterpretingStrings
 AnyTrue,Core Language & Structure,implemented,1,,0,ListManipulation BooleanComputation LogicAndBooleanAlgebra TestingExpressions
 Apart,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation RationalFunctions AlgebraicTransformations PolynomialFactoring
@@ -652,8 +652,8 @@ BarlowProschanImportance,Engineering Data & Computation,infeasible,,curated data
 BarnesG,Symbolic & Numeric Computation,implemented,2,,0,GammaFunctionsAndRelatedFunctions
 BartlettHannWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 BartlettWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
-BaseDecode,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting Cryptography NetworkProgramming SystemsRelatedStringOperations
-BaseEncode,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting Cryptography NetworkProgramming BinaryData
+BaseDecode,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting Cryptography NetworkProgramming SystemsRelatedStringOperations
+BaseEncode,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting Cryptography NetworkProgramming BinaryData
 BaseForm,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers NumberDigits
 BaseStyle,Visualization & Graphics,missing,3,,0,GraphVisualization GraphicsAnnotationAndAppearance GraphicsStylingInNotebooks GraphStylingAndLabeling
 Baseline,"Options, system variables & unclassified",implemented,3,,0,
@@ -733,16 +733,16 @@ BioMoleculeFoldingMethod,"Options, system variables & unclassified",infeasible,,
 BioMoleculePlot3D,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
 BioMoleculeQ,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
 BioMoleculeValue,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
-BioSequence,Strings & Text,missing,2,,0,SequenceAlignmentAndComparison LifeSciencesAndMedicineDataAndComputation BiomolecularSequences
+BioSequence,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison LifeSciencesAndMedicineDataAndComputation BiomolecularSequences
 BioSequenceBackTranslateList,Strings & Text,missing,2,,0,BiomolecularSequences
-BioSequenceComplement,Strings & Text,missing,2,,0,BiomolecularSequences
-BioSequenceInstances,Strings & Text,missing,2,,0,BiomolecularSequences
-BioSequenceModify,Strings & Text,missing,2,,0,BiomolecularSequences
+BioSequenceComplement,Strings & Text,implemented,2,,0,BiomolecularSequences
+BioSequenceInstances,Strings & Text,implemented,2,,0,BiomolecularSequences
+BioSequenceModify,Strings & Text,implemented,2,,0,BiomolecularSequences
 BioSequencePlot,Strings & Text,missing,2,,0,BiomolecularSequences
-BioSequenceQ,Strings & Text,missing,2,,0,BiomolecularSequences
-BioSequenceReverseComplement,Strings & Text,missing,2,,0,BiomolecularSequences
-BioSequenceTranscribe,Strings & Text,missing,2,,0,BiomolecularSequences
-BioSequenceTranslate,Strings & Text,missing,2,,0,BiomolecularSequences
+BioSequenceQ,Strings & Text,implemented,2,,0,BiomolecularSequences
+BioSequenceReverseComplement,Strings & Text,implemented,2,,0,BiomolecularSequences
+BioSequenceTranscribe,Strings & Text,implemented,2,,0,BiomolecularSequences
+BioSequenceTranslate,Strings & Text,implemented,2,,0,BiomolecularSequences
 BiorthogonalSplineWavelet,Data Manipulation & Analysis,missing,2,,0,Wavelets
 BipartiteGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements GraphPredicates
 BiquadraticFilterModel,Sound & Video,infeasible,,audio / video,0,SoundAndSonification SignalFilteringAndFilterDesign
@@ -874,11 +874,11 @@ ButtonMinHeight,"Options, system variables & unclassified",infeasible,,front end
 ButtonNotebook,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming
 ButtonSource,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 Byte,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
-ByteArray,Higher Mathematical Computation,missing,2,,0,Cryptography BinaryData CryptographicNumberTheory
-ByteArrayFormat,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting
-ByteArrayFormatQ,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting
-ByteArrayQ,Data Manipulation & Analysis,missing,2,,0,BinaryData
-ByteArrayToString,Core Language & Structure,missing,1,,0,Cryptography SpecialCharacters NetworkProgramming CharacterOperations
+ByteArray,Higher Mathematical Computation,implemented,2,,0,Cryptography BinaryData CryptographicNumberTheory
+ByteArrayFormat,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting
+ByteArrayFormatQ,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting
+ByteArrayQ,Data Manipulation & Analysis,implemented,2,,0,BinaryData
+ByteArrayToString,Core Language & Structure,implemented,1,,0,Cryptography SpecialCharacters NetworkProgramming CharacterOperations
 ByteCount,Core Language & Structure,implemented,1,,1,TuningAndDebugging GPUComputing ExpressionStructure MemoryMeasurementAndOptimization
 ByteOrdering,Data Manipulation & Analysis,missing,2,,0,BinaryData
 C,"Options, system variables & unclassified",implemented,2,,1,
@@ -932,7 +932,7 @@ CarlsonRK,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions Ellip
 CarlsonRM,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
 CarmichaelLambda,Symbolic & Numeric Computation,implemented,2,,0,NumberTheoreticFunctions CryptographicNumberTheory
 CaseOrdering,"Options, system variables & unclassified",implemented,3,,0,
-CaseSensitive,Core Language & Structure,missing,2,,0,ProgrammableLinguisticInterface
+CaseSensitive,Core Language & Structure,implemented,2,,0,ProgrammableLinguisticInterface
 Cases,Core Language & Structure,implemented,1,,6,LanguageOverview ListManipulation Expressions RulesAndPatterns
 Cashflow,Financial Data & Computation,infeasible,,curated data,0,Finance ActuarialComputation
 Casoratian,Higher Mathematical Computation,implemented,2,,0,DiscreteCalculus
@@ -1018,10 +1018,10 @@ ChannelReceiverFunction,Cloud & Deployment,infeasible,,Wolfram Cloud / external 
 ChannelSend,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,MailMessagesEtc NetworkProgramming
 ChannelSubscribers,Scientific and Medical Data & Computation,infeasible,,Wolfram Cloud / external services,0,UsingConnectedDevices
 Character,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
-CharacterCounts,Core Language & Structure,missing,1,,0,StringManipulation NaturalLanguageProcessing Cryptography ProcessingTextualData
+CharacterCounts,Core Language & Structure,implemented,1,,0,StringManipulation NaturalLanguageProcessing Cryptography ProcessingTextualData
 CharacterEncoding,Notebook Documents & Presentation,implemented,3,,0,ProcessingTextualData CharacterOperations TextNormalization InternationalCharacterSets
-CharacterName,Core Language & Structure,missing,1,,0,CharacterOperations
-CharacterNormalize,Machine Learning & LLMs,missing,3,,0,NaturalLanguageProcessing CharacterOperations TextNormalization
+CharacterName,Core Language & Structure,implemented,1,,0,CharacterOperations
+CharacterNormalize,Machine Learning & LLMs,implemented,3,,0,NaturalLanguageProcessing CharacterOperations TextNormalization
 CharacterRange,Core Language & Structure,implemented,1,,0,SpecialCharacters LocaleAndInternationalization ConstructingLists CharacterOperations
 CharacteristicFunction,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics FourierAnalysis StatisticalMomentsAndGeneratingFunctions StatisticalDistributionFunctions
 CharacteristicPolynomial,Core Language & Structure,implemented,2,,0,MatrixOperations FiniteFields
@@ -1194,7 +1194,7 @@ CombinatorS,"Options, system variables & unclassified",implemented,3,,0,
 CombinatorW,"Options, system variables & unclassified",implemented,3,,0,
 CombinatorY,"Options, system variables & unclassified",implemented,3,,0,
 CombinedEntityClass,Core Language & Structure,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),0,KnowledgeRepresentationAndAccess WorkingWithRelationalDatabases EntityTypes
-CombinerFunction,Strings & Text,missing,2,,0,XMLTemplates
+CombinerFunction,Strings & Text,implemented,2,,0,XMLTemplates
 CometData,"Options, system variables & unclassified",infeasible,,curated data,0,
 CommonName,Core Language & Structure,infeasible,,curated data,1,KnowledgeRepresentationAndAccess WDFWolframDataFramework GeographicData TextConstruction
 CommonUnits,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,Units
@@ -1251,7 +1251,7 @@ ComposeList,Core Language & Structure,implemented,1,,0,ApplyingFunctionsToLists
 ComposeSeries,Symbolic & Numeric Computation,implemented,2,,0,SeriesExpansions
 CompositeQ,Higher Mathematical Computation,implemented,2,,0,IntegerFunctions NumberRecognition PrimeNumbers
 Composition,Core Language & Structure,implemented,1,,6,FunctionalProgramming Syntax GeometricTransforms StructuralOperationsOnExpressions
-CompoundElement,Core Language & Structure,missing,2,,1,FreeFormAndExternalInput InterpretingStrings CreatingFormsAndApps FormStructureAndLayout
+CompoundElement,Core Language & Structure,implemented,2,,1,FreeFormAndExternalInput InterpretingStrings CreatingFormsAndApps FormStructureAndLayout
 CompoundExpression,Core Language & Structure,implemented,1,,4,LanguageOverview VariablesAndFunctions ProceduralProgramming Syntax
 CompoundPoissonDistribution,Core Language & Structure,missing,2,,0,ActuarialComputation DerivedDistributions
 CompoundPoissonProcess,Higher Mathematical Computation,missing,2,,0,ActuarialComputation ParametricRandomProcesses DerivedRandomProcesses MarkovProcesses
@@ -1305,7 +1305,7 @@ Constants,"Options, system variables & unclassified",implemented,3,,0,
 ConstellationData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Construct,Core Language & Structure,implemented,1,,0,Expressions ExpressionStructure FunctionCompositionAndOperatorForms
 ConstructColumns,Data Manipulation & Analysis,missing,2,,0,TabularProcessing TabularObjects TabularTransformation
-Containing,Machine Learning & LLMs,missing,3,,0,TextAnalysis TextNormalization
+Containing,Machine Learning & LLMs,implemented,3,,0,TextAnalysis TextNormalization
 ContainsAll,Core Language & Structure,implemented,1,,0,ListManipulation KnowledgeRepresentationAndAccess TestingExpressions OperationsOnSets
 ContainsAny,Core Language & Structure,implemented,1,,0,ListManipulation KnowledgeRepresentationAndAccess TestingExpressions OperationsOnSets
 ContainsExactly,Core Language & Structure,implemented,1,,0,ListManipulation KnowledgeRepresentationAndAccess TestingExpressions OperationsOnSets
@@ -1313,8 +1313,8 @@ ContainsNone,Core Language & Structure,implemented,1,,0,ListManipulation Knowled
 ContainsOnly,Core Language & Structure,implemented,1,,0,ListManipulation KnowledgeRepresentationAndAccess TestingExpressions OperationsOnSets
 ContentDetectorFunction,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,SupervisedMachineLearning
 ContentFieldOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-ContentLocationFunction,"Options, system variables & unclassified",missing,3,,0,
-ContentObject,Strings & Text,missing,2,,0,TextSearch WolframDataRepository
+ContentLocationFunction,"Options, system variables & unclassified",implemented,3,,0,
+ContentObject,Strings & Text,implemented,2,,0,TextSearch WolframDataRepository
 ContentPadding,User Interface Construction,infeasible,,front end / notebooks,0,ControlsOptions
 ContentSelectable,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 ContentSize,"Options, system variables & unclassified",missing,3,,0,
@@ -1444,7 +1444,7 @@ CreateNotebook,Core Language & Structure,infeasible,,front end / notebooks,1,Wor
 CreatePacletArchive,System Operation & Setup,infeasible,,Wolfram paclet server / licensing,0,Paclets
 CreatePalette,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects CustomInterfaceConstruction Palettes CreatingInspectors
 CreatePermissionsGroup,Higher Mathematical Computation,infeasible,,Wolfram Cloud / external services,0,CloudPermissionsControl
-CreateSearchIndex,Strings & Text,missing,2,,0,TextSearch
+CreateSearchIndex,Strings & Text,implemented,2,,0,TextSearch
 CreateSemanticSearchIndex,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions
 CreateSystemModel,Sound & Video,infeasible,,audio / video,0,SystemModelingOverview SystemModelCreation
 CreateTypeInstance,Core Language & Structure,missing,2,,0,CodeCompilation CompiledTypes
@@ -1508,7 +1508,7 @@ DSolveValue,Symbolic & Numeric Computation,implemented,2,,0,GeometricSolvers Sym
 DStabilityConditions,Symbolic & Numeric Computation,implemented,2,,0,DifferentialEquations
 DagumDistribution,Symbolic & Numeric Computation,missing,2,,0,HeavyTailDistributions
 DamData,"Options, system variables & unclassified",infeasible,,curated data,0,
-DamerauLevenshteinDistance,Strings & Text,missing,2,,0,SequenceAlignmentAndComparison DistanceAndSimilarityMeasures BiomolecularSequences
+DamerauLevenshteinDistance,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison DistanceAndSimilarityMeasures BiomolecularSequences
 DarkBlue,Visualization & Graphics,missing,3,,0,Colors
 DarkBrown,Visualization & Graphics,missing,3,,0,Colors
 DarkCyan,Visualization & Graphics,missing,3,,0,Colors
@@ -1648,10 +1648,10 @@ DeleteFile,Data Manipulation & Analysis,missing,2,,1,ImportingAndExporting FileO
 DeleteMissing,Core Language & Structure,implemented,2,,1,ComputationWithStructuredDatasets ImportingAndExporting DataTransformsAndSmoothing NumericalData
 DeleteObject,External Interfaces & Connections,missing,3,,0,RemoteBatchJobs PersistentStorage ExternalLanguageInterfaces NetworkProgramming
 DeletePermissionsKey,Higher Mathematical Computation,infeasible,,Wolfram Cloud / external services,0,CloudPermissionsControl
-DeleteSearchIndex,Strings & Text,missing,2,,0,TextSearch
+DeleteSearchIndex,Strings & Text,implemented,2,,0,TextSearch
 DeleteSmallComponents,Images,missing,3,,0,SegmentationAnalysis MathematicalMorphology ImageComputationForMicroscopy
 DeleteStopwords,Machine Learning & LLMs,missing,3,,0,NaturalLanguageProcessing ProcessingTextualData TextAnalysis TextNormalization
-DelimitedSequence,Core Language & Structure,missing,2,,0,FreeFormAndExternalInput InterpretingStrings ProgrammableLinguisticInterface
+DelimitedSequence,Core Language & Structure,implemented,2,,0,FreeFormAndExternalInput InterpretingStrings ProgrammableLinguisticInterface
 Delimiter,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,FormStructureAndLayout OptionsAndStylingForInteractiveManipulation
 DelimiterAutoMatching,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Stylesheets AutomaticTextStylingFeatures
 DelimiterFlashTime,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Accessibility AutomaticTextStylingFeatures
@@ -1705,14 +1705,14 @@ DiceDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSim
 DictionaryLookup,Strings & Text,infeasible,,curated data,0,StringManipulation Cryptography ProcessingTextualData TextAnalysis
 DictionaryWordQ,Machine Learning & LLMs,infeasible,,curated data,0,LinguisticData TextNormalization
 Diff,Strings & Text,implemented,1,,0,StringManipulation TextAnalysis SequenceAlignmentAndComparison LifeSciencesAndMedicineDataAndComputation
-Diff3,Strings & Text,missing,2,,0,TextAnalysis SequenceAlignmentAndComparison
-DiffAlignmentMethod,"Options, system variables & unclassified",missing,3,,0,
-DiffApply,"Options, system variables & unclassified",missing,3,,0,
-DiffGranularity,"Options, system variables & unclassified",missing,3,,0,
-DiffIgnore,"Options, system variables & unclassified",missing,3,,0,
-DiffIncludeMatches,"Options, system variables & unclassified",missing,3,,0,
-DiffInputFunction,"Options, system variables & unclassified",missing,3,,0,
-DiffObject,"Options, system variables & unclassified",missing,3,,0,
+Diff3,Strings & Text,implemented,2,,0,TextAnalysis SequenceAlignmentAndComparison
+DiffAlignmentMethod,"Options, system variables & unclassified",implemented,3,,0,
+DiffApply,"Options, system variables & unclassified",implemented,3,,0,
+DiffGranularity,"Options, system variables & unclassified",implemented,3,,0,
+DiffIgnore,"Options, system variables & unclassified",implemented,3,,0,
+DiffIncludeMatches,"Options, system variables & unclassified",implemented,3,,0,
+DiffInputFunction,"Options, system variables & unclassified",implemented,3,,0,
+DiffObject,"Options, system variables & unclassified",implemented,3,,0,
 DiffStyle,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 DifferenceDelta,Symbolic & Numeric Computation,implemented,2,,0,Calculus DiscreteMathematics DiscreteCalculus
 DifferenceQuotient,Symbolic & Numeric Computation,implemented,2,,0,Calculus DiscreteCalculus
@@ -1836,7 +1836,7 @@ DocumentGenerator,Data Manipulation & Analysis,infeasible,,Wolfram Cloud / exter
 DocumentGeneratorInformation,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 DocumentGenerators,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 DocumentNotebook,Core Language & Structure,infeasible,,front end / notebooks,0,DocumentGeneration TextConstruction
-DocumentWeightingRules,"Options, system variables & unclassified",missing,3,,0,
+DocumentWeightingRules,"Options, system variables & unclassified",implemented,3,,0,
 Dodecahedron,Geometry,missing,1,,3,GeometricComputation SolidGeometry GeometricSpecialRegions Polyhedra
 DominantColors,Images,missing,1,,3,ColorProcessing Colors ComputationalPhotography ImageRepresentation
 DominatorTreeGraph,Graphs & Networks,missing,2,,0,GraphModifications
@@ -2213,7 +2213,7 @@ FileExtension,Core Language & Structure,missing,2,,0,OperationsOnFileNames
 FileFormat,External Interfaces & Connections,missing,3,,0,ImportingAndExporting FileOperations InternetAndWebRelatedData CloudFunctionsAndDeployment
 FileFormatProperties,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting
 FileFormatQ,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting FileOperations
-FileHash,Core Language & Structure,missing,2,,0,ExternalOperations Cryptography FileOperations Files
+FileHash,Core Language & Structure,implemented,2,,0,ExternalOperations Cryptography FileOperations Files
 FileNameDepth,Core Language & Structure,missing,2,,0,OperationsOnFileNames DirectoriesAndDirectoryOperations
 FileNameDrop,Core Language & Structure,missing,2,,0,OperationsOnFileNames
 FileNameForms,"Options, system variables & unclassified",missing,3,,0,
@@ -2228,8 +2228,8 @@ FileSize,Core Language & Structure,missing,2,,0,FileOperations Files MemoryMeasu
 FileSystemMap,Core Language & Structure,missing,2,,0,ParallelComputing ExternalOperations FileOperations
 FileSystemScan,Core Language & Structure,missing,2,,0,ParallelComputing FileOperations
 FileSystemTree,"Options, system variables & unclassified",missing,3,,0,
-FileTemplate,External Interfaces & Connections,missing,2,,1,WorkingWithTemplates FileOperations ExternalLanguageInterfaces TextConstruction
-FileTemplateApply,Core Language & Structure,missing,1,,0,StringManipulation WorkingWithTemplates
+FileTemplate,External Interfaces & Connections,implemented,2,,1,WorkingWithTemplates FileOperations ExternalLanguageInterfaces TextConstruction
+FileTemplateApply,Core Language & Structure,implemented,1,,0,StringManipulation WorkingWithTemplates
 FileType,External Interfaces & Connections,missing,3,,0,FileOperations
 FilledCurve,Visualization & Graphics,missing,2,,1,SymbolicGraphicsLanguage CombiningGraphics GraphicsObjects
 FilledPolarCurve,"Options, system variables & unclassified",missing,3,,0,
@@ -2243,7 +2243,7 @@ FinancialBond,Financial Data & Computation,infeasible,,curated data,0,Finance
 FinancialData,Time-Related Computation,infeasible,,curated data,0,SocioeconomicAndDemographicData TimeSeries FinancialAndEconomicData Finance
 FinancialDerivative,Financial Data & Computation,infeasible,,curated data,0,Finance
 FinancialIndicator,Financial Data & Computation,infeasible,,curated data,0,FinancialVisualization
-Find,Core Language & Structure,missing,1,,0,ExternalOperations NaturalLanguageProcessing StringOperations Files
+Find,Core Language & Structure,implemented,1,,0,ExternalOperations NaturalLanguageProcessing StringOperations Files
 FindAnomalies,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,UnsupervisedMachineLearning TabularCleaning SignalAnalysis
 FindArgMax,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays ConvexOptimization
 FindArgMin,Symbolic & Numeric Computation,implemented,2,,0,Optimization GeometricSolvers SymbolicArrays ConvexOptimization
@@ -2293,7 +2293,7 @@ FindKClub,Graphs & Networks,missing,2,,0,SocialNetworks
 FindKPlex,Graphs & Networks,missing,2,,0,SocialNetworks
 FindLibrary,Core Language & Structure,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",0,ExternalOperations CallingExternalPrograms LibraryLink CLanguageInterface
 FindLinearRecurrence,Symbolic & Numeric Computation,implemented,2,,0,DiscreteCalculus DiscreteAndIntegerData RecurrenceAndSumFunctions IntegerSequences
-FindList,Core Language & Structure,missing,1,,0,NaturalLanguageProcessing ProcessingTextualData FileOperations ConstructingLists
+FindList,Core Language & Structure,implemented,1,,0,NaturalLanguageProcessing ProcessingTextualData FileOperations ConstructingLists
 FindMatchingColor,Visualization & Graphics,missing,3,,0,ColorProcessing Colors
 FindMatrixGameStrategies,"Options, system variables & unclassified",implemented,3,,0,
 FindMaxValue,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays ConvexOptimization
@@ -2314,7 +2314,7 @@ FindPointProcessParameters,Symbolic & Numeric Computation,missing,2,,0,SpatialPo
 FindPostmanTour,Graphs & Networks,missing,2,,0,ComputationOnGraphs GraphPathsCyclesAndFlows
 FindProcessParameters,Higher Mathematical Computation,missing,2,,0,RandomProcesses TimeSeriesProcesses
 FindRegionTransform,"Options, system variables & unclassified",missing,3,,0,
-FindRepeat,Data Manipulation & Analysis,missing,2,,0,DataTransformsAndSmoothing DiscreteAndIntegerData RecurrenceAndSumFunctions IntegerSequences
+FindRepeat,Data Manipulation & Analysis,implemented,2,,0,DataTransformsAndSmoothing DiscreteAndIntegerData RecurrenceAndSumFunctions IntegerSequences
 FindRoot,Symbolic & Numeric Computation,implemented,2,,0,CodeCompilation EquationSolving SpecialFunctions SymbolicArrays
 FindSequenceFunction,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics DiscreteCalculus MathematicalData ComputationalSystemsAndDiscovery
 FindSettings,"Options, system variables & unclassified",missing,3,,0,
@@ -2327,7 +2327,7 @@ FindSubgraphIsomorphism,Graphs & Networks,missing,2,,0,GraphPropertiesAndMeasure
 FindSystemModelEquilibrium,Engineering Data & Computation,infeasible,,curated data,0,SystemModelAnalyticsDesign
 FindTextualAnswer,Core Language & Structure,infeasible,,ML models / LLM services,0,KnowledgeRepresentationAndAccess NaturalLanguageProcessing TextAnalysis
 FindThreshold,Images,missing,3,,0,SegmentationAnalysis ColorProcessing ImageRepresentation
-FindTransientRepeat,Data Manipulation & Analysis,missing,2,,0,DataTransformsAndSmoothing DiscreteAndIntegerData RecurrenceAndSumFunctions IntegerSequences
+FindTransientRepeat,Data Manipulation & Analysis,implemented,2,,0,DataTransformsAndSmoothing DiscreteAndIntegerData RecurrenceAndSumFunctions IntegerSequences
 FindTreeGameStrategies,"Options, system variables & unclassified",implemented,3,,0,
 FindVertexColoring,Graphs & Networks,missing,2,,0,GraphPropertiesAndMeasurements
 FindVertexCover,Graphs & Networks,implemented,2,,0,ComputationOnGraphs GraphCliquesCoversAndIndependentSets
@@ -2358,7 +2358,7 @@ Fit,Data Manipulation & Analysis,implemented,2,,0,DataTransformsAndSmoothing Sta
 FitDegree,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
 FitRegularization,"Options, system variables & unclassified",implemented,3,,0,
 FittedModel,Data Manipulation & Analysis,missing,2,,0,ScientificModels StatisticalModelAnalysis
-FixedOrder,Core Language & Structure,missing,2,,0,ProgrammableLinguisticInterface
+FixedOrder,Core Language & Structure,implemented,2,,0,ProgrammableLinguisticInterface
 FixedPoint,Core Language & Structure,implemented,1,,1,FunctionalProgramming IteratedMapsAndFractals FunctionalIteration LoopingConstructs
 FixedPointList,Core Language & Structure,implemented,1,,5,FunctionalProgramming IteratedMapsAndFractals ConstructingLists FunctionalIteration
 Flat,Core Language & Structure,implemented,1,,3,VariablesAndFunctions Attributes Patterns
@@ -2543,7 +2543,7 @@ GameTheoryData,"Options, system variables & unclassified",infeasible,,curated da
 Gamma,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions FunctionsUsedInStatistics SpecialFunctions AnalyticNumberTheory
 GammaDistribution,Symbolic & Numeric Computation,implemented,2,,0,QueueingProcesses DistributionsUsedInReliabilityAnalysis DistributionsUsedInActuarialScience ExponentialRelatedDistributions
 GammaRegularized,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics GammaFunctionsAndRelatedFunctions
-GapPenalty,"Options, system variables & unclassified",missing,3,,0,
+GapPenalty,"Options, system variables & unclassified",implemented,3,,0,
 GatedRecurrentLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,SpeechComputation NeuralNetworkLayers
 Gather,Core Language & Structure,implemented,1,,2,ListManipulation ElementsOfLists RearrangingAndRestructuringLists
 GatherBy,Core Language & Structure,implemented,1,,2,FunctionalProgramming RearrangingAndRestructuringLists
@@ -2830,7 +2830,7 @@ HarmonicMean,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics
 HarmonicMeanFilter,Images,missing,3,,0,ImageFilteringAndNeighborhoodProcessing ImageRestoration
 HarmonicNumber,Symbolic & Numeric Computation,implemented,2,,0,DiscreteCalculus IntegerFunctions RecurrenceAndSumFunctions
 HarmonicPolyLog,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
-Hash,Core Language & Structure,missing,1,,0,StringManipulation TuningAndDebugging Cryptography ExpressionStructure
+Hash,Core Language & Structure,implemented,1,,0,StringManipulation TuningAndDebugging Cryptography ExpressionStructure
 HatchFilling,Visualization & Graphics,missing,3,,0,GraphicsDirectives
 HatchShading,Visualization & Graphics,missing,3,,0,GraphicsDirectives
 Haversine,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
@@ -2958,9 +2958,9 @@ IdentityMatrix,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinear
 If,Core Language & Structure,implemented,1,,11,LanguageOverview ProceduralProgramming Conditionals
 IfCompiled,Core Language & Structure,missing,2,,0,CodeCompilation
 IgnoreCase,Core Language & Structure,implemented,1,,0,StringPatterns ProgrammableLinguisticInterface TextNormalization
-IgnoreDiacritics,"Options, system variables & unclassified",missing,3,,0,
+IgnoreDiacritics,"Options, system variables & unclassified",implemented,3,,0,
 IgnoreIsotopes,"Options, system variables & unclassified",infeasible,,curated data,0,
-IgnorePunctuation,"Options, system variables & unclassified",missing,3,,0,
+IgnorePunctuation,"Options, system variables & unclassified",implemented,3,,0,
 IgnoreStereochemistry,"Options, system variables & unclassified",infeasible,,curated data,0,
 IgnoringInactive,Core Language & Structure,implemented,1,,0,EvaluationControl
 Im,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumericalEvaluationAndPrecision GPUComputing FunctionsOfComplexVariables
@@ -3160,7 +3160,7 @@ Insert,Core Language & Structure,implemented,1,,0,ComputationWithStructuredDatas
 InsertColumns,Data Manipulation & Analysis,missing,2,,0,TabularCleaning
 InsertLinebreaks,Core Language & Structure,implemented,1,,0,TextAnalysis StringOperations
 InsertResults,"Options, system variables & unclassified",missing,3,,0,
-InsertionFunction,Strings & Text,missing,2,,0,XMLTemplates
+InsertionFunction,Strings & Text,implemented,2,,0,XMLTemplates
 Inset,Visualization & Graphics,missing,2,,1,DataVisualization GraphicsOptionsAndStyling SymbolicGraphicsLanguage DocumentGeneration
 Insphere,Geometry,missing,2,,0,GeometricSpecialRegions
 Install,External Interfaces & Connections,infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,ExternalOperations CallingExternalPrograms ExternalLanguageInterfaces WSTPAPI
@@ -3504,7 +3504,7 @@ LessSlantEqual,"Options, system variables & unclassified",missing,3,,0,
 LessThan,Core Language & Structure,implemented,1,,0,KnowledgeRepresentationAndAccess TestingExpressions
 LessTilde,"Options, system variables & unclassified",missing,3,,0,
 LetterCharacter,Core Language & Structure,implemented,1,,2,StringPatterns ProgrammableLinguisticInterface CharacterOperations
-LetterCounts,Strings & Text,missing,1,,2,ProcessingTextualData TextAnalysis CharacterOperations TextNormalization
+LetterCounts,Strings & Text,implemented,1,,2,ProcessingTextualData TextAnalysis CharacterOperations TextNormalization
 LetterNumber,Core Language & Structure,implemented,1,,5,Cryptography ConvertingBetweenExpressionsAndStrings TextConstruction CharacterOperations
 LetterQ,Core Language & Structure,implemented,1,,3,StringManipulation TestingExpressions CharacterOperations
 Level,Core Language & Structure,implemented,1,,0,ExpressionStructure
@@ -3686,10 +3686,10 @@ LongRightArrow,"Options, system variables & unclassified",missing,3,,0,
 LongShortTermMemoryLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NaturalLanguageProcessing SpeechComputation NeuralNetworkLayers
 Longest,Core Language & Structure,implemented,1,,2,RulesAndPatterns StringManipulation Patterns StringPatterns
 LongestCommonSequence,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison BiomolecularSequences
-LongestCommonSequencePositions,Strings & Text,missing,2,,0,SequenceAlignmentAndComparison BiomolecularSequences
+LongestCommonSequencePositions,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison BiomolecularSequences
 LongestCommonSubsequence,Strings & Text,implemented,1,,0,StringManipulation TextAnalysis SequenceAlignmentAndComparison MathematicalAndCountingOperationsOnLists
-LongestCommonSubsequencePositions,Strings & Text,missing,2,,0,SequenceAlignmentAndComparison BiomolecularSequences
-LongestOrderedSequence,Strings & Text,missing,2,,0,SequenceAlignmentAndComparison
+LongestCommonSubsequencePositions,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison BiomolecularSequences
+LongestOrderedSequence,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison
 Longitude,Geometry,missing,2,,0,Geodesy AnglesAndPolarCoordinates
 Lookup,Core Language & Structure,implemented,1,,1,LanguageOverview Associations ComputationWithStructuredDatasets
 LoopFreeGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements GraphPredicates
@@ -3773,7 +3773,7 @@ MassOutflowValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTra
 MassSymmetryValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
 MassTransferValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
 MassTransportPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
-MatchLocalNames,"Options, system variables & unclassified",missing,3,,0,
+MatchLocalNames,"Options, system variables & unclassified",implemented,3,,0,
 MatchQ,Core Language & Structure,implemented,1,,3,RulesAndPatterns TestingExpressions Patterns PatternMatchingFunctions
 MatchingDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation LogicAndBooleanAlgebra DiscreteAndIntegerData DistanceAndSimilarityMeasures
 MaterialShading,Visualization & Graphics,missing,3,,0,GraphicsDirectives
@@ -3837,7 +3837,7 @@ MaxStepSize,"Options, system variables & unclassified",missing,3,,0,
 MaxSteps,"Options, system variables & unclassified",missing,3,,0,
 MaxTrainingRounds,"Options, system variables & unclassified",infeasible,,ML models / LLM services,0,
 MaxValue,Symbolic & Numeric Computation,implemented,2,,0,Optimization DiscreteCalculus GeometricSolvers SymbolicArrays
-MaxWordGap,"Options, system variables & unclassified",missing,3,,0,
+MaxWordGap,"Options, system variables & unclassified",implemented,3,,0,
 MaximalBy,Core Language & Structure,implemented,1,,0,FunctionalProgramming ElementsOfLists MathematicalAndCountingOperationsOnLists FunctionCompositionAndOperatorForms
 Maximize,Symbolic & Numeric Computation,implemented,2,,0,Calculus Optimization BooleanComputation DiscreteCalculus
 MaxwellDistribution,Data Manipulation & Analysis,missing,2,,0,NormalRelatedDistributions ExponentialRelatedDistributions
@@ -4097,7 +4097,7 @@ NearestNeighborG,Symbolic & Numeric Computation,missing,2,,0,DescriptiveStatisti
 NearestNeighborGraph,Data Manipulation & Analysis,missing,1,,2,GraphConstructionAndRepresentation ClusterAnalysis SupervisedMachineLearning SpatialPointCollections
 NearestTo,Core Language & Structure,implemented,1,,0,KnowledgeRepresentationAndAccess TestingExpressions
 NebulaData,"Options, system variables & unclassified",infeasible,,curated data,0,
-NeedlemanWunschSimilarity,Strings & Text,missing,2,,0,SequenceAlignmentAndComparison DistanceAndSimilarityMeasures BiomolecularSequences
+NeedlemanWunschSimilarity,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison DistanceAndSimilarityMeasures BiomolecularSequences
 Needs,Core Language & Structure,implemented,2,,0,PackageDevelopment NamespaceManagement WolframLanguageExpressionsInFiles InitializationAndProvisioning
 Negative,Core Language & Structure,implemented,1,,0,TestingExpressions
 NegativeBinomialDistribution,Symbolic & Numeric Computation,implemented,2,,0,DistributionsUsedInActuarialScience UrnModelDistributions DiscreteUnivariateDistributions
@@ -4174,7 +4174,7 @@ NeymanScottPointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialStati
 NicholsGridLines,Engineering Data & Computation,infeasible,,curated data,0,ClassicalAnalysisAndDesign
 NicholsPlot,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms FourierAnalysis ClassicalAnalysisAndDesign
 NightHemisphere,Geographic Data & Computation,infeasible,,curated data,0,MapsAndCartography GeographicData LocationsPathsAndRouting AstronomicalComputationAndData
-NoWhitespace,Core Language & Structure,missing,2,,0,ProgrammableLinguisticInterface
+NoWhitespace,Core Language & Structure,implemented,2,,0,ProgrammableLinguisticInterface
 Nominal,"Options, system variables & unclassified",missing,3,,0,
 NominalScale,"Options, system variables & unclassified",missing,3,,0,
 NominalVariables,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis SurvivalAnalysis
@@ -4309,9 +4309,9 @@ NuclearExplosionData,"Options, system variables & unclassified",infeasible,,cura
 NuclearReactorData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Null,"Options, system variables & unclassified",implemented,3,,0,
 NullRawPointerQ,Core Language & Structure,missing,2,,0,ForeignFunctionInterface
-NullRecords,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
+NullRecords,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
 NullSpace,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixOperations FiniteFields LinearSystems
-NullWords,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
+NullWords,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
 Number,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
 NumberCompose,Symbolic & Numeric Computation,implemented,2,,0,RepresentationOfNumbers NumberDigits
 NumberDecompose,Symbolic & Numeric Computation,implemented,2,,0,IntegerFunctions RepresentationOfNumbers NumberDigits AdditiveNumberTheory
@@ -4380,7 +4380,7 @@ OperatorApplied,Core Language & Structure,implemented,1,,3,FunctionalProgramming
 OptimumFlowData,Graphs & Networks,infeasible,,curated data,0,GraphPathsCyclesAndFlows
 OptionValue,Core Language & Structure,implemented,2,,0,PackageDevelopment OptionsManagement
 Optional,Core Language & Structure,implemented,1,,0,VariablesAndFunctions Syntax Patterns
-OptionalElement,Core Language & Structure,missing,2,,0,ProgrammableLinguisticInterface
+OptionalElement,Core Language & Structure,implemented,2,,0,ProgrammableLinguisticInterface
 Options,Core Language & Structure,implemented,2,,1,PackageDevelopment WolframDataRepository LowLevelNotebookProgramming CreatingFormsAndApps
 OptionsPattern,Core Language & Structure,implemented,1,,0,PackageDevelopment RobustnessAndErrorHandling Patterns OptionsManagement
 Or,Core Language & Structure,implemented,1,,7,LanguageOverview Syntax DiscreteMathematics BooleanComputation
@@ -4784,7 +4784,7 @@ Prefix,Core Language & Structure,implemented,1,,12,Syntax SymbolicNotationalForm
 Prepend,Core Language & Structure,implemented,1,,0,ElementsOfLists PartsOfExpressions StructuralOperationsOnExpressions FunctionCompositionAndOperatorForms
 PrependLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 PrependTo,Core Language & Structure,implemented,1,,0,Assignments ElementsOfLists
-PreprocessingRules,"Options, system variables & unclassified",missing,3,,0,
+PreprocessingRules,"Options, system variables & unclassified",implemented,3,,0,
 PreserveColor,"Options, system variables & unclassified",missing,3,,0,
 PreserveImageOptions,Visualization & Graphics,infeasible,,front end / notebooks,0,GraphicsOptionsAndStyling OptionsAndStylingForInteractiveManipulation
 PreviousCell,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming
@@ -4998,11 +4998,11 @@ RecognitionPrior,"Options, system variables & unclassified",infeasible,,depends 
 ReconstructionMesh,Geometry,missing,2,,0,MeshRegions
 Record,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
 RecordLists,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
-RecordSeparators,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
+RecordSeparators,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
 Rectangle,Visualization & Graphics,missing,3,,0,SymbolicGraphicsLanguage PlaneGeometry GeometricSpecialRegions GraphicsObjects
 RectangleChart,Data Manipulation & Analysis,missing,2,,0,ChartingAndInformationVisualization DateAndTimeVisualization
 RectangleChart3D,Data Manipulation & Analysis,missing,2,,0,ChartingAndInformationVisualization DateAndTimeVisualization
-RectangularRepeatingElement,Strings & Text,missing,2,,0,InterpretingStrings
+RectangularRepeatingElement,Strings & Text,implemented,2,,0,InterpretingStrings
 RecurrenceFilter,Sound & Video,infeasible,,audio / video,0,SignalProcessing SignalFilteringAndFilterDesign
 RecurrenceTable,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving DiscreteMathematics DiscreteCalculus IteratedMapsAndFractals
 Red,Visualization & Graphics,missing,1,,21,GraphicsOptionsAndStyling SymbolicGraphicsLanguage GraphVisualization ColorProcessing
@@ -5302,11 +5302,11 @@ ScrollPosition,User Interface Construction,infeasible,,front end / notebooks,0,C
 ScrollVideo,"Options, system variables & unclassified",infeasible,,audio / video,0,
 Scrollbars,User Interface Construction,infeasible,,front end / notebooks,0,ControlsOptions
 ScrollingOptions,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,WindowProperties
-SearchAdjustment,Strings & Text,missing,2,,0,TextSearch
-SearchIndexObject,Strings & Text,missing,2,,0,TextSearch
-SearchIndices,"Options, system variables & unclassified",missing,3,,0,
-SearchQueryString,Strings & Text,missing,2,,0,TextSearch
-SearchResultObject,Strings & Text,missing,2,,0,TextSearch
+SearchAdjustment,Strings & Text,implemented,2,,0,TextSearch
+SearchIndexObject,Strings & Text,implemented,2,,0,TextSearch
+SearchIndices,"Options, system variables & unclassified",implemented,3,,0,
+SearchQueryString,Strings & Text,implemented,2,,0,TextSearch
+SearchResultObject,Strings & Text,implemented,2,,0,TextSearch
 Sec,Sound & Video,implemented,3,,0,TrigonometricFunctions
 SecDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
 Sech,Symbolic & Numeric Computation,implemented,2,,0,HyperbolicFunctions
@@ -5343,7 +5343,7 @@ SemidefiniteOptimization,Symbolic & Numeric Computation,implemented,2,,0,Optimiz
 SendMail,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,3,ImportingAndExporting AutomatedReports StandaloneWolframLanguageKernels BackgroundAndScheduledTasks
 SendMessage,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,ImportingAndExporting BackgroundAndScheduledTasks CallingExternalPrograms AccessingExternalServicesAndAPIs
 Sequence,"Options, system variables & unclassified",implemented,3,,0,
-SequenceAlignment,Strings & Text,missing,1,,1,StringManipulation ProcessingTextualData TextAnalysis SequenceAlignmentAndComparison
+SequenceAlignment,Strings & Text,implemented,1,,1,StringManipulation ProcessingTextualData TextAnalysis SequenceAlignmentAndComparison
 SequenceCases,Core Language & Structure,implemented,1,,1,SequenceAlignmentAndComparison ElementsOfLists MathematicalAndCountingOperationsOnLists DiscreteAndIntegerData
 SequenceCount,Core Language & Structure,implemented,1,,0,ListManipulation SequenceAlignmentAndComparison ElementsOfLists MathematicalAndCountingOperationsOnLists
 SequenceFold,Core Language & Structure,implemented,1,,0,FunctionalProgramming FunctionalIteration
@@ -5427,7 +5427,7 @@ ShowAutoStyles,Notebook Documents & Presentation,infeasible,,front end / noteboo
 ShowCellBracket,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,CellStylingOptions Stylesheets
 ShowCellLabel,Core Language & Structure,infeasible,,front end / notebooks,0,ManagingComputationsInNotebooks CellStylingOptions WolframSystemSessionHistory
 ShowCellTags,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-ShowContents,"Options, system variables & unclassified",missing,3,,0,
+ShowContents,"Options, system variables & unclassified",implemented,3,,0,
 ShowCursorTracker,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Accessibility AutomaticTextStylingFeatures
 ShowGroupOpener,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,CellStylingOptions Stylesheets ControllingCellGrouping
 ShowPageBreaks,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Stylesheets PageLayoutAndPrintingControl
@@ -5448,7 +5448,7 @@ Signature,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics Pe
 SignedRankTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 SignedRegionDistance,Visualization & Graphics,missing,3,,0,GeometricPropertiesAndMeasures SyntheticGeometry Polygons Polyhedra
 SignificanceLevel,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
-SimilarityRules,Strings & Text,missing,2,,0,BiomolecularSequences
+SimilarityRules,Strings & Text,implemented,2,,0,BiomolecularSequences
 SimpleGraph,Graphs & Networks,missing,2,,0,GraphModifications
 SimpleGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements GraphPredicates
 SimplePolygonQ,Visualization & Graphics,missing,3,,0,Polygons
@@ -5492,7 +5492,7 @@ Smaller,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,No
 SmithDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 SmithDelayCompensator,Engineering Data & Computation,infeasible,,curated data,0,DelayControlSystems
 SmithReduce,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
-SmithWatermanSimilarity,Strings & Text,missing,2,,0,SequenceAlignmentAndComparison LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis DistanceAndSimilarityMeasures
+SmithWatermanSimilarity,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis DistanceAndSimilarityMeasures
 SmoothDateHistogram,Data Manipulation & Analysis,missing,2,,0,DateAndTimeVisualization EventSeries
 SmoothDensityHistogram,Data Manipulation & Analysis,missing,2,,0,StatisticalVisualization TabularVisualization SpatialPointCollections
 SmoothHistogram,Data Manipulation & Analysis,missing,2,,1,Statistics TabularProcessing ChartingAndInformationVisualization TimeSeries
@@ -5501,7 +5501,7 @@ SmoothKernelDistribution,Symbolic & Numeric Computation,missing,2,,0,Probability
 SmoothMesh,Geometry,missing,2,,0,MeshRegions
 SmoothPointDensity,Symbolic & Numeric Computation,missing,2,,0,DescriptiveStatistics SpatialStatistics SpatialPointCollections
 SnDispersion,Data Manipulation & Analysis,missing,2,,0,DateAndTime DescriptiveStatistics RobustDescriptiveStatistics
-Snippet,Strings & Text,missing,2,,0,NaturalLanguageProcessing TextAnalysis TextSearch
+Snippet,Strings & Text,implemented,2,,0,NaturalLanguageProcessing TextAnalysis TextSearch
 SnippetsVideo,Sound & Video,infeasible,,audio / video,0,VideoCreation
 SnubPolyhedron,"Options, system variables & unclassified",missing,3,,0,
 SocketConnect,External Interfaces & Connections,missing,3,,0,UsingConnectedDevices ExternalLanguageInterfaces NetworkProgramming HTTPRequestsAndResponses
@@ -5572,7 +5572,7 @@ SpeakerMatchQ,Data Manipulation & Analysis,infeasible,,audio / video,0,MachineLe
 SpearmanRankTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 SpearmanRho,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics StatisticalMomentsAndGeneratingFunctions
 SpeciesData,"Options, system variables & unclassified",infeasible,,curated data,0,
-SpecificityGoal,"Options, system variables & unclassified",missing,3,,0,
+SpecificityGoal,"Options, system variables & unclassified",implemented,3,,0,
 SpectralLineData,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData PhysicsAndChemistryDataAndComputation
 Spectrogram,Machine Learning & LLMs,infeasible,,audio / video,3,SpeechComputation SoundAndSonification AudioProcessing SignalProcessing
 SpectrogramArray,Machine Learning & LLMs,infeasible,,audio / video,0,AudioAnalysis AudioRepresentation FourierAnalysis SignalAnalysis
@@ -5624,7 +5624,7 @@ Square,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Sym
 SquareFreeQ,Higher Mathematical Computation,implemented,2,,0,NumberTheoreticFunctions PolynomialFactoring NumberRecognition PrimeNumbers
 SquareIntersection,"Options, system variables & unclassified",missing,3,,0,
 SquareMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
-SquareRepeatingElement,Strings & Text,missing,2,,0,InterpretingStrings
+SquareRepeatingElement,Strings & Text,implemented,2,,0,InterpretingStrings
 SquareSubset,"Options, system variables & unclassified",missing,3,,0,
 SquareSubsetEqual,"Options, system variables & unclassified",missing,3,,0,
 SquareSuperset,"Options, system variables & unclassified",missing,3,,0,
@@ -5709,7 +5709,7 @@ StreamStyle,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
 Streams,External Interfaces & Connections,missing,3,,0,FileOperations WolframSystemSessionInformation LowLevelFileOperations
 StrictInequalities,Symbolic & Numeric Computation,implemented,2,,0,FunctionProperties
 String,Core Language & Structure,implemented,1,,2,LanguageOverview StringManipulation Syntax WDFWolframDataFramework
-StringApply,Core Language & Structure,missing,1,,0,StringManipulation
+StringApply,Core Language & Structure,implemented,1,,0,StringManipulation
 StringCases,Core Language & Structure,implemented,1,,3,LanguageOverview StringManipulation NaturalLanguageProcessing ProcessingTextualData
 StringContainsQ,Core Language & Structure,implemented,1,,1,StringManipulation StringPatterns PatternMatchingFunctions StringOperations
 StringCount,Strings & Text,implemented,1,,0,StringManipulation ProcessingTextualData LinguisticData SequenceAlignmentAndComparison
@@ -5719,8 +5719,8 @@ StringEndsQ,Core Language & Structure,implemented,1,,0,StringOperations Biomolec
 StringExpression,Core Language & Structure,implemented,1,,4,LanguageOverview StringManipulation Syntax ProcessingTextualData
 StringExtract,Core Language & Structure,implemented,1,,0,StringOperations TextNormalization
 StringForm,Core Language & Structure,implemented,1,,0,StringManipulation TextualElementsInNotebooks
-StringFormat,Core Language & Structure,missing,1,,0,ImportingAndExporting InternetAndWebRelatedData StringPatterns ConvertingBetweenExpressionsAndStrings
-StringFormatQ,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting
+StringFormat,Core Language & Structure,implemented,1,,0,ImportingAndExporting InternetAndWebRelatedData StringPatterns ConvertingBetweenExpressionsAndStrings
+StringFormatQ,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting
 StringFreeQ,Core Language & Structure,implemented,1,,0,TestingExpressions PatternMatchingFunctions StringOperations BiomolecularSequences
 StringInsert,Core Language & Structure,implemented,1,,0,StringOperations BiomolecularSequences
 StringJoin,Core Language & Structure,implemented,1,,10,StringManipulation Syntax StringOperations TextConstruction
@@ -5745,9 +5745,9 @@ StringSplit,Strings & Text,implemented,1,,2,StringManipulation NaturalLanguagePr
 StringStartsQ,Core Language & Structure,implemented,1,,0,StringOperations BiomolecularSequences
 StringTake,Core Language & Structure,implemented,1,,5,StringManipulation NaturalLanguageProcessing StringOperations TextNormalization
 StringTakeDrop,Core Language & Structure,implemented,1,,0,StringManipulation StringOperations
-StringTemplate,Core Language & Structure,missing,1,,2,StringManipulation LLMFunctions WorkingWithTemplates ProcessingTextualData
-StringToByteArray,Core Language & Structure,missing,1,,0,StringManipulation Cryptography SpecialCharacters NetworkProgramming
-StringToStream,Core Language & Structure,missing,1,,0,StringOperations LowLevelFileOperations
+StringTemplate,Core Language & Structure,implemented,1,,2,StringManipulation LLMFunctions WorkingWithTemplates ProcessingTextualData
+StringToByteArray,Core Language & Structure,implemented,1,,0,StringManipulation Cryptography SpecialCharacters NetworkProgramming
+StringToStream,Core Language & Structure,implemented,1,,0,StringOperations LowLevelFileOperations
 StringTrim,Core Language & Structure,implemented,1,,0,ProcessingTextualData StringOperations TextNormalization
 StripBoxes,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,DefiningCustomNotation
 StripCellGrouping,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming
@@ -5864,9 +5864,9 @@ SynchronousUpdating,Core Language & Structure,infeasible,,front end / notebooks,
 Synonyms,Strings & Text,infeasible,,curated data,0,LinguisticData
 SyntaxForm,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 SyntaxInformation,Core Language & Structure,implemented,2,,0,PackageDevelopment
-SyntaxLength,Core Language & Structure,missing,1,,0,ConvertingBetweenExpressionsAndStrings
+SyntaxLength,Core Language & Structure,implemented,1,,0,ConvertingBetweenExpressionsAndStrings
 SyntaxPacket,"Options, system variables & unclassified",infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,
-SyntaxQ,Core Language & Structure,missing,1,,0,TestingExpressions ConvertingBetweenExpressionsAndStrings
+SyntaxQ,Core Language & Structure,implemented,1,,0,TestingExpressions ConvertingBetweenExpressionsAndStrings
 SynthesizeMissingValues,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,DataTransformsAndSmoothing UnsupervisedMachineLearning
 SystemBenchmark,"Options, system variables & unclassified",missing,3,,0,
 SystemColor,Visualization & Graphics,infeasible,,front end / notebooks,0,Accessibility Colors
@@ -5975,15 +5975,15 @@ Tasks,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
 TautologyQ,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation TheoremProving GraphProgramming
 TeXForm,Core Language & Structure,implemented,1,,0,ConvertingBetweenExpressionsAndStrings
 TelegraphProcess,Higher Mathematical Computation,missing,2,,0,ParametricRandomProcesses MarkovProcesses
-TemplateApply,External Interfaces & Connections,missing,3,,0,StringManipulation WorkingWithTemplates DocumentGeneration FileOperations
+TemplateApply,External Interfaces & Connections,implemented,3,,0,StringManipulation WorkingWithTemplates DocumentGeneration FileOperations
 TemplateBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,DefiningCustomNotation LowLevelNotebookStructure
 TemplateBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-TemplateExpression,Strings & Text,missing,1,,7,StringManipulation WorkingWithTemplates XMLTemplates
-TemplateIf,Strings & Text,missing,2,,0,WorkingWithTemplates XMLTemplates
-TemplateObject,Data Manipulation & Analysis,missing,2,,0,LLMFunctions WorkingWithTemplates TabularCommunication
-TemplateSequence,Strings & Text,missing,2,,0,WorkingWithTemplates XMLTemplates
-TemplateSlot,Strings & Text,missing,1,,1,StringManipulation WorkingWithTemplates XMLTemplates FormStructureAndLayout
-TemplateWith,Strings & Text,missing,2,,0,WorkingWithTemplates XMLTemplates
+TemplateExpression,Strings & Text,implemented,1,,7,StringManipulation WorkingWithTemplates XMLTemplates
+TemplateIf,Strings & Text,implemented,2,,0,WorkingWithTemplates XMLTemplates
+TemplateObject,Data Manipulation & Analysis,implemented,2,,0,LLMFunctions WorkingWithTemplates TabularCommunication
+TemplateSequence,Strings & Text,implemented,2,,0,WorkingWithTemplates XMLTemplates
+TemplateSlot,Strings & Text,implemented,1,,1,StringManipulation WorkingWithTemplates XMLTemplates FormStructureAndLayout
+TemplateWith,Strings & Text,implemented,2,,0,WorkingWithTemplates XMLTemplates
 TemporalData,Higher Mathematical Computation,infeasible,,curated data,0,ProbabilityAndStatistics RandomProcesses DescriptiveStatistics TimeSeriesProcesses
 TemporalRegularity,"Options, system variables & unclassified",missing,3,,0,
 Temporary,Core Language & Structure,implemented,1,,0,Attributes
@@ -6020,7 +6020,7 @@ TextJustification,Notebook Documents & Presentation,infeasible,,front end / note
 TextPacket,Core Language & Structure,infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,WSTPPackets
 TextPosition,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NaturalLanguageProcessing TextAnalysis
 TextRecognize,Machine Learning & LLMs,infeasible,,ML models / LLM services,6,MachineLearning ComputerVision NaturalLanguageProcessing ProcessingTextualData
-TextSearch,Machine Learning & LLMs,missing,2,,1,NaturalLanguageProcessing TextSearch
+TextSearch,Machine Learning & LLMs,implemented,2,,1,NaturalLanguageProcessing TextSearch
 TextSearchReport,Strings & Text,missing,2,,0,TextSearch
 TextSentences,Machine Learning & LLMs,infeasible,,curated data,2,NaturalLanguageProcessing ProcessingTextualData TextAnalysis TextNormalization
 TextString,Core Language & Structure,implemented,1,,9,StringManipulation WorkingWithTemplates ProcessingTextualData DocumentGeneration
@@ -6133,7 +6133,7 @@ Toggler,User Interface Construction,infeasible,,front end / notebooks,0,ControlO
 TogglerBar,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects UserInterfaceStructuringAndLayout Toolbars CreatingInspectors
 TogglerBox,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 TogglerBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-TokenWords,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
+TokenWords,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
 Tolerance,Symbolic & Numeric Computation,missing,2,,0,QuestionsAndAssessment MatrixPredicates
 Tomorrow,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,1,DateAndTime
 Tooltip,Visualization & Graphics,infeasible,,front end / notebooks,3,DataVisualization FunctionVisualization ChartingAndInformationVisualization DynamicVisualization
@@ -6391,7 +6391,7 @@ UpValues,Core Language & Structure,implemented,1,,0,Assignments SymbolHandling
 Update,Core Language & Structure,implemented,1,,0,EvaluationControl LowLevelSystemOptimization
 UpdateInterval,Core Language & Structure,infeasible,,front end / notebooks,0,TuningAndDebugging
 UpdatePacletSites,"Options, system variables & unclassified",infeasible,,Wolfram paclet server / licensing,0,
-UpdateSearchIndex,Strings & Text,missing,2,,0,TextSearch
+UpdateSearchIndex,Strings & Text,implemented,2,,0,TextSearch
 UpdateSemanticSearchIndex,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions
 UpperCaseQ,Core Language & Structure,implemented,1,,0,CharacterOperations
 UpperLeftArrow,"Options, system variables & unclassified",missing,3,,0,
@@ -6408,7 +6408,7 @@ ValenceFilling,"Options, system variables & unclassified",infeasible,,curated da
 ValidationLength,"Options, system variables & unclassified",infeasible,,ML models / LLM services,0,
 ValidationSet,"Options, system variables & unclassified",infeasible,,ML models / LLM services,0,
 ValueDimensions,"Options, system variables & unclassified",missing,3,,0,
-ValuePreprocessingFunction,"Options, system variables & unclassified",missing,3,,0,
+ValuePreprocessingFunction,"Options, system variables & unclassified",implemented,3,,0,
 ValueQ,Core Language & Structure,implemented,1,,0,Assignments SymbolHandling
 Values,Core Language & Structure,implemented,1,,2,LanguageOverview Associations ComputationWithStructuredDatasets UsingTheWolframDataDrop
 VandermondeMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays
@@ -6675,19 +6675,19 @@ Word,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
 WordBoundary,Core Language & Structure,implemented,1,,1,StringPatterns
 WordCharacter,Core Language & Structure,implemented,1,,0,StringPatterns CharacterOperations
 WordCloud,Core Language & Structure,missing,1,,6,StringManipulation DataVisualization NaturalLanguageProcessing TextAnalysis
-WordCount,Strings & Text,missing,2,,0,ProcessingTextualData TextAnalysis
-WordCounts,Machine Learning & LLMs,missing,3,,0,NaturalLanguageProcessing ProcessingTextualData TextAnalysis TextNormalization
+WordCount,Strings & Text,implemented,2,,0,ProcessingTextualData TextAnalysis
+WordCounts,Machine Learning & LLMs,implemented,3,,0,NaturalLanguageProcessing ProcessingTextualData TextAnalysis TextNormalization
 WordData,Strings & Text,infeasible,,curated data,0,NaturalLanguageProcessing ProcessingTextualData TextAnalysis LinguisticData
 WordDefinition,Strings & Text,infeasible,,curated data,1,LinguisticData
 WordFrequency,Machine Learning & LLMs,infeasible,,curated data,0,NaturalLanguageProcessing TextAnalysis TextNormalization
 WordFrequencyData,Strings & Text,infeasible,,curated data,3,TextAnalysis LinguisticData CulturalData PeopleAndHistory
 WordList,Strings & Text,infeasible,,curated data,26,LinguisticData CulturalData
-WordOrientation,"Options, system variables & unclassified",missing,2,,1,
-WordSearch,"Options, system variables & unclassified",missing,3,,0,
-WordSelectionFunction,"Options, system variables & unclassified",missing,3,,0,
-WordSeparators,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
-WordSpacings,"Options, system variables & unclassified",missing,3,,0,
-WordStem,Machine Learning & LLMs,missing,3,,0,NaturalLanguageProcessing TextAnalysis TextNormalization
+WordOrientation,"Options, system variables & unclassified",implemented,2,,1,
+WordSearch,"Options, system variables & unclassified",implemented,3,,0,
+WordSelectionFunction,"Options, system variables & unclassified",implemented,3,,0,
+WordSeparators,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
+WordSpacings,"Options, system variables & unclassified",implemented,3,,0,
+WordStem,Machine Learning & LLMs,implemented,3,,0,NaturalLanguageProcessing TextAnalysis TextNormalization
 WordTranslation,Machine Learning & LLMs,infeasible,,curated data,5,LinguisticData CulturalData LocaleAndInternationalization TextNormalization
 WorkingPrecision,Symbolic & Numeric Computation,missing,2,,0,TimeMeasurementAndOptimization Wavelets NeuralNetworkConstruction PrecisionAndAccuracyControl
 WrapAround,"Options, system variables & unclassified",implemented,3,,0,
@@ -6697,7 +6697,7 @@ WriteString,External Interfaces & Connections,missing,3,,0,NetworkProgramming Fi
 Wronskian,Symbolic & Numeric Computation,implemented,2,,0,DifferentialEquations
 XMLElement,External Interfaces & Connections,missing,3,,0,WebOperations ExternalLanguageInterfaces XMLImportAndExport XMLFormats
 XMLObject,External Interfaces & Connections,missing,3,,0,WebOperations ExternalLanguageInterfaces XMLImportAndExport XMLFormats
-XMLTemplate,Strings & Text,missing,2,,1,WorkingWithTemplates CreatingFormsAndApps WebOperations ExternalLanguageInterfaces
+XMLTemplate,Strings & Text,implemented,2,,1,WorkingWithTemplates CreatingFormsAndApps WebOperations ExternalLanguageInterfaces
 XYZColor,Visualization & Graphics,missing,2,,1,Colors
 Xnor,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation
 Xor,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation LogicAndBooleanAlgebra
