@@ -192,21 +192,36 @@ def has_float(x) -> bool:
     return False
 
 
-def numeric_out(value, *inputs):
+def numeric_out(value, *inputs, keep_zero=False):
     """Evaluate ``value`` numerically when any input was inexact, else return it exactly.  The result has the
-    lowest input precision: machine if any input is a machine number, else the smallest bignum precision."""
+    lowest input precision: machine if any input is a machine number, else the smallest bignum precision.
+    keep_zero: an exact zero result of inexact input becomes an inexact zero (analytic functions: Sin[0.] = 0.;
+    not for parts such as Im[2.5] = 0, which Wolfram keeps exact)."""
     if any(has_float(i) for i in inputs):
         from ..precision import input_precision
         p = input_precision(inputs)
         if p == "m" or p is None:
             v = sp.sympify(value).evalf(15)
-            return R(v)
+            return _keep_inexact_zero(R(v), "m") if keep_zero else R(v)
         import mpmath
         dps = mpmath.libmp.prec_to_dps(p)
         v = sp.sympify(value).evalf(dps)
         from ..precision import round_to
-        return round_to(R(v), p)
+        out = round_to(R(v), p)
+        return _keep_inexact_zero(out, p) if keep_zero else out
     return R(value)
+
+
+def _keep_inexact_zero(v, p):
+    """A numeric function of inexact input gives an inexact result, also at zero (Sin[0.] = 0., Log[1.] = 0.);
+    SymPy's evalf returns exact Zero there. Applied to a number or a list of numbers, not inside expressions."""
+    if (isinstance(v, int) and not isinstance(v, bool) and v == 0) or v is sp.S.Zero:
+        from ..kernel import inexact_zero
+        return inexact_zero(p)
+    if is_list(v):
+        new = [_keep_inexact_zero(a, p) for a in v.args]
+        return v if all(n is o for n, o in zip(new, v.args)) else L(*new)
+    return v
 
 
 def is_numeric_value(x) -> bool:

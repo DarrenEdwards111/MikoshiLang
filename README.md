@@ -69,7 +69,12 @@ t = Session(allow_python={"math"})          # off by default; a module allow-lis
 t.eval('PythonFunction["math.gcd"][12, 18]')  # 6 (PermissionError without allow_python)
 ```
 
-`ExternalEvaluate` and other code-string evaluation raise `NotImplementedError`: there is no `eval`/`exec`.
+Python objects with no MikoshiLang form come back as session-local `PythonObject` handles
+(`np = PythonImport["numpy"]; PythonFunction[np, "linalg.det"][m]`, still gated by `allow_python`), and library
+authors can register global heads with `@mikoshilang.function`. Machine-number arrays from NumPy (and
+`ToPackedArray`, `NumericArray`) are packed: `Dot`, `Total`, arithmetic and elementary functions on them run in
+NumPy (a 200×200 `Dot` takes milliseconds instead of tens of seconds). `ExternalEvaluate` and other
+code-string evaluation raise `NotImplementedError`: there is no `eval`/`exec`.
 
 ## Language contract
 

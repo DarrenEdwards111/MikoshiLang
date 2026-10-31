@@ -1,10 +1,11 @@
 # Python interop
 
-MikoshiLang is a Python library first. This page covers the three ways the two languages meet: calling
-MikoshiLang from Python (`Session.eval`, `Session.ns`), calling your Python functions from MikoshiLang
-(`@session.function`), and calling library Python functions from MikoshiLang code (`PythonFunction`, gated by
-`allow_python`). Packed NumPy-backed arrays (`NumericArray`, which will let `Dot`, `Total` and arithmetic on
-machine arrays run in NumPy) are a later phase and are not part of this API yet.
+MikoshiLang is a Python library first. This page covers the ways the two languages meet: calling MikoshiLang
+from Python (`Session.eval`, `Session.ns`), calling your Python functions from MikoshiLang (`@session.function`
+for one session, `@mikoshilang.function` for library authors), calling Python libraries from MikoshiLang code
+(`PythonFunction`, `PythonImport` and `PythonObject` handles, gated by `allow_python`), and packed arrays, which
+keep machine-number data in one NumPy array so that `Dot`, `Total`, arithmetic and elementary functions run in
+NumPy.
 
 ## Calling MikoshiLang from Python
 
@@ -69,12 +70,14 @@ exactly (property-tested with hypothesis).
 | `None` | `Null` | | <-> |
 | `list` (`tuple` one way) | List | `ListOf[T]` | <-> |
 | `dict` | Association (key order kept) | `Assoc` | <-> |
-| `numpy.ndarray` | nested List | `ListOf[Number]` | -> (back with `arrays="numpy"`) |
+| `numpy.ndarray` (int, float, complex) | packed List (one NumPy array, see below) | `ListOf[Number]` | <-> (as `list`, or an ndarray with `arrays="numpy"`) |
+| `numpy.ndarray` (bool, str, object, NaN/inf) | nested List | | -> |
 | `pandas.Series` / `DataFrame` | List or Association / List of Associations | | -> |
 | `sympy.Basic` | expression | `Expr` | <-> (back with `symbolic="sympy"`) |
 | `sympy.Matrix` | nested List | `MatrixOf[T]` | -> |
 | `Expr`, `Symbol` | itself | `Expr`, `Var` | <-> |
-| callable, `set`, other objects | none: raises `TypeError` | | |
+| callable, `set`, other objects | none: raises `TypeError` (results of `PythonFunction` become `PythonObject` handles instead) | | |
+| `PythonObject` handle | the Python object it stands for | | <- (`Session.eval`) |
 
 Exact algebraic numbers (`Sqrt[2]`, `1 + 2 I`) have no exact Python type and stay expressions. Python operators
 on symbols use the same table: `x + Fraction(1, 3)` builds `x + 1/3`, and `x + object()` raises `TypeError`.
@@ -123,6 +126,25 @@ s.eval("Map[CollatzSteps, Range[3]]")        # [0, 1, 7]
   `numeric cross-check`, `reference`, `delegated`) and the function's module and qualified name in
   `fn.mikoshi.notes`.
 
+### For library authors: `@mikoshilang.function`
+
+```python
+import mikoshilang
+
+@mikoshilang.function(check="exact", listable=True, area="combinatorics")
+def triangle_number(n: "NonNegInteger") -> "Integer":
+    return n * (n + 1) // 2
+
+Session().eval("TriangleNumber[{1, 2, 10}]")      # [1, 3, 55], in every session
+mikoshilang.unregister("TriangleNumber")
+```
+
+The same typing, error and listable rules as `@session.function`, but the head is global: it is recorded in
+`library.STATUS` with status `added` and its `Check:` note, like the built-in library, so library modules and
+their tests follow CONVENTIONS.md. Kernel built-ins are never redefined; an existing library head is replaced only
+with `override=True`, and `unregister` restores it. A session function with the same name shadows the global one
+in that session. In applications prefer `@session.function`: a global head is visible to every session.
+
 ## Calling Python libraries from MikoshiLang: `PythonFunction` and `allow_python`
 
 ```python
@@ -139,8 +161,32 @@ Session().eval('PythonFunction["math.gcd"][12, 18]')          # PermissionError
   submodule. `allow_python=True` allows any importable module.
 * Private and dunder names (`os.__dict__`, `math._x`) are always refused.
 * `@session.function` needs no permission: the host program chose to expose that function.
-* `ExternalEvaluate`, `ExternalFunction` and `StartExternalSession` raise `NotImplementedError`: there are no
-  code strings and no `eval`/`exec`.
+* `ExternalEvaluate`, `ExternalFunction` and `StartExternalSession` are reserved library heads (status `error`)
+  that always raise `NotImplementedError`: there are no code strings and no `eval`/`exec`.
+* Trailing `Name -> value` rules are keyword arguments (`RelTol -> 0.1` is `rel_tol=0.1`), so a rule cannot be
+  passed as a positional data argument.
+
+### Python objects: `PythonImport`, `PythonObject` handles and `PythonAttribute`
+
+```python
+s = Session(allow_python={"numpy"})
+s.eval('np = PythonImport["numpy"]')                         # PythonObject[1, "module numpy"]
+s.eval('PythonFunction[np, "linalg.det"][{{2, 0}, {0, 3}}]')  # 6.0
+s.eval('rng = PythonFunction[np, "random.default_rng"][1]')  # PythonObject[2, "numpy.random._generator.Generator"]
+s.eval('PythonFunction[rng, "integers"][10]')                # 0 ... 9
+s.eval('PythonAttribute[np, "pi"]')                          # 3.141592653589793
+s.eval("rng")                                                # the Generator object itself, in Python
+```
+
+* `PythonImport["module"]` needs the module in `allow_python` and returns a handle `PythonObject[id, "description"]`.
+* `PythonFunction[handle][args]` calls the object; `PythonFunction[handle, "a.b"][args]` calls an attribute path
+  (for a module handle the full dotted name is checked against the allow-list, so `{"numpy.linalg"}` does not
+  open the rest of NumPy).
+* `PythonAttribute[handle, "a.b"]` reads an attribute.
+* A `PythonFunction` result that has no MikoshiLang form (a `Generator`, a file object, ...) becomes a new handle
+  instead of an error; handles passed as arguments are given to Python as the objects themselves.
+* Handles belong to their session: `Session.clear()` drops them, and another session cannot use them. Every use
+  re-checks `allow_python` for the module the object came from. Private and dunder attributes are refused.
 * Every capability error is a `PermissionError` that names the flag to set, and `Check` catches it.
 
 **A Session is not a sandbox.** An allow-list is a convenience, not a security boundary: `numpy` alone can reach
@@ -158,3 +204,32 @@ and memory limits, the network off and `allow_python=False`.
 | symbolic input | not an error: unevaluated result | unevaluated |
 | capability not granted | `PermissionError` | catchable by `Check` |
 | other Python exception | `ValueError("Name: Python raised KeyError: ...")` | catchable by `Check` |
+
+## Packed arrays
+
+A packed array is a `List` of machine numbers (`int64`, `float64` or `complex128`) stored as one read-only NumPy
+array, like Wolfram's packed arrays. It is invisible to the language: `Head` is `List`, `Part`, `Map`, patterns
+and printing see ordinary elements, and a packed list equals the unpacked list with the same elements.
+
+Arrays are packed when they come from NumPy (`Session.eval`, `Session.ns`), by `ToPackedArray[list]`
+(`Developer\`ToPackedArray`), in `NumericArray[...]` (its values are stored packed; `Normal` gives the packed
+list), as results of the fast operations, and by `Dot`, `Total` and `Mean` for plain machine-number lists of at
+least 250 elements. `FromPackedArray` unpacks and `PackedArrayQ[expr, type, rank]` tests.
+
+Operations on packed arrays run in NumPy: `Dot`, `Total`, `Mean`, `Max`, `Min`, `Transpose`, `Length`,
+`Dimensions`, `N`, `Normal`, `Plus`, `Times`, `Power` (scalar exponent), `Abs` and the machine-real elementary
+functions (`Sin`, `Cos`, `Tan`, `Exp`, `Log`, `Sqrt`, `Sinh`, `Cosh`, `Tanh`, `ArcTan`). They fall back to the
+ordinary element-by-element path whenever NumPy could give a different answer: integer results that could
+overflow `int64`, exact rationals with integer arrays (`{1, 2, 3}/2`), symbolic operands, exact functions of
+integers (`Sin[{1, 2}]` stays exact), values outside a real domain (`Sqrt` of a negative, `Log` of a non-positive
+number) and NaN or infinite results.
+
+Benchmarks: `python scripts/benchmark_packed.py`.
+
+## Inexact zero
+
+An inexact zero stays inexact, as in Wolfram: `0.5 - 0.5` is `0.`, `0. x` is `0.`, `x + 1.5 - 1.5` is `0. + x`,
+and numeric functions of inexact input give inexact results at zero (`Sin[0.]`, `Sqrt[0.]` and `Log[1.]` are
+`0.`). Exact zeros are unchanged (`Sin[0]` and `x - x` are `0`; `0 * 1.5` is exact `0`). One known difference
+remains: SymPy-based symbolic operations on an expression that contains an inexact zero term may drop it
+(`(0. + x)^2` gives `x^2`; Wolfram keeps `(0. + x)^2`).
