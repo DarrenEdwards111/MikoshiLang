@@ -45,6 +45,10 @@ def _realify(out, vals):
     return out
 
 
+class _Pole(Exception):
+    """The function has a pole at these arguments (Wolfram returns ComplexInfinity)."""
+
+
 def mpfun(name, nargs, mpf, exact=None, notes="", listable=True, symbolic=None, extra=24, real=None,
           status="added"):
     """Register ``name`` with ``nargs`` (int or (lo, hi)) arguments, which may be numbers or Lists of numbers.
@@ -77,6 +81,8 @@ def mpfun(name, nargs, mpf, exact=None, notes="", listable=True, symbolic=None, 
                 out = mpf(*[_to_mp(v) for v in vals])
             except ZeroDivisionError:
                 raise ValueError(f"{name}: the arguments are at a singularity")
+            except _Pole:
+                return Symbol("ComplexInfinity")
             if real is not None and real(*vals):
                 out = _re(out)
             elif _allreal(*vals):
@@ -1115,3 +1121,554 @@ mpfun("InverseWeierstrassP", 2, lambda pq, g: _inv_wp(pq, g, not isinstance(pq, 
       notes="InverseWeierstrassP[p, {g2, g3}] / [{p, q}, {g2, g3}]: a u with WeierstrassP[u] == p (and "
             "WeierstrassPPrime[u] == q; q defaults to Sqrt[4 p^3 - g2 p - g3]) from Carlson R_F, reduced to the "
             "period parallelogram centred at 0; it can differ from Wolfram's representative by a period")
+
+
+# ───────────────────────────── modified Lommel functions ─────────────────────────────
+
+
+
+def _lommel_t(mu, nu, z):
+    b1, b2 = (mu - nu + 3) / 2, (mu + nu + 3) / 2
+    d = (mu + 1) ** 2 - nu ** 2
+    for b in (b1, b2):
+        if _isint(b) and mpmath.re(b) <= 0:
+            raise _Pole()
+    if d == 0:
+        raise _Pole()
+    if z == 0:
+        if mpmath.re(mu + 1) > 0:
+            return mpmath.mpf(0)
+        raise _Pole()
+    return z ** (mu + 1) / d * mpmath.hyp1f2(1, b1, b2, z ** 2 / 4)
+
+
+def _lommel_T2(mu, nu, z):
+    g1, g2 = (mu + nu + 1) / 2, (mu - nu + 1) / 2
+    if any(_isint(g) and mpmath.re(g) <= 0 for g in (g1, g2)):
+        raise NotImplementedError("LommelT2: (mu +- nu + 1)/2 is a non-positive integer (limiting case not supported)")
+    c = 2 ** (mu - 1) * mpmath.gamma(g1) * mpmath.gamma(g2)
+    k = 2 / mpmath.pi * mpmath.cos((mu - nu) * mpmath.pi / 2) * mpmath.sin((mu + nu) * mpmath.pi / 2)
+    return -_lommel_t(mu, nu, z) + c * (mpmath.besseli(nu, z) + k * mpmath.besselk(nu, z))
+
+
+def _lommel_t_exact(mu, nu, z):
+    if any(isinstance(v, list) for v in (mu, nu, z)):
+        return None
+    b1, b2 = (mu - nu + 3) / 2, (mu + nu + 3) / 2
+    if ((mu + 1) ** 2 - nu ** 2) == 0 or any(b.is_integer and b <= 0 for b in (sp.sympify(b1), sp.sympify(b2))):
+        return Symbol("ComplexInfinity")
+    if z == 0 and sp.re(mu) > -1:
+        return sp.Integer(0)
+    return None
+
+
+mpfun("LommelT1", 3, _lommel_t, _lommel_t_exact, real=lambda m, n, z: _allreal(m, n, z) and z > 0,
+      notes="modified Lommel function t_{mu,nu}(z) = z^(mu+1)/((mu+1)^2 - nu^2) Hypergeometric1F2[1, (mu-nu+3)/2, "
+            "(mu+nu+3)/2, z^2/4] (z^2 y'' + z y' - (z^2 + nu^2) y = z^(mu+1)); ComplexInfinity at the poles")
+mpfun("LommelT2", 3, _lommel_T2, real=lambda m, n, z: _allreal(m, n, z) and z > 0,
+      notes="modified Lommel function of the second kind: -t_{mu,nu}(z) + 2^(mu-1) Gamma[(mu+nu+1)/2] "
+            "Gamma[(mu-nu+1)/2] (BesselI[nu, z] + 2/Pi Cos[(mu-nu) Pi/2] Sin[(mu+nu) Pi/2] BesselK[nu, z]) "
+            "(the solution with algebraic growth; reduces to the documented (BesselI - StruveL) forms)")
+
+
+# ───────────────────────────── linear ODE solver (Taylor series continuation) ─────────────────────────────
+#
+# Solves P(z) y'' + Q(z) y' + R(z) y = 0 by power series: P, Q, R are given by coefficient functions of the
+# expansion about the current centre.  The path is a straight segment; each step stays within half the distance
+# to the nearest singular point.  The whole computation is repeated at a higher working precision and must agree.
+
+class _ODE:
+    def __init__(self, coeffs, singular):
+        self.coeffs = coeffs          # coeffs(z0) -> (p, q, r): callables k -> k-th Taylor coefficient at z0
+        self.singular = singular      # finite singular points
+
+    def series(self, z0, y0, dy0, h, start_singular=False):
+        p, q, r, (dp, dq, dr) = self.coeffs(z0)
+        pk = [p(k) for k in range(dp + 1)] if dp is not None else None
+        qk = [q(k) for k in range(dq + 1)] if dq is not None else None
+        rk = [r(k) for k in range(dr + 1)] if dr is not None else None
+        rcache = []
+
+        def R_(k):
+            if rk is not None:
+                return rk[k] if k <= dr else 0
+            while len(rcache) <= k:
+                rcache.append(r(len(rcache)))
+            return rcache[k]
+        P_ = (lambda k: pk[k] if k <= dp else 0)
+        Q_ = (lambda k: qk[k] if k <= dq else 0)
+        c = [y0] if start_singular else [y0, dy0]
+        eps = mpmath.mpf(2) ** (-mpmath.mp.prec - 8)
+        total, dtotal = mpmath.mpf(0), mpmath.mpf(0)
+        hp = mpmath.mpf(1)
+        small = 0
+        n = 0
+        while True:
+            while len(c) <= n:
+                if start_singular:
+                    N = len(c) - 1
+                    acc = 0
+                    for k in range(2, min(N + 1, dp) + 1):
+                        acc += P_(k) * (N - k + 2) * (N - k + 1) * c[N - k + 2]
+                    for k in range(1, min(N, dq) + 1):
+                        acc += Q_(k) * (N - k + 1) * c[N - k + 1]
+                    for k in range(0, (N if dr is None else min(N, dr)) + 1):
+                        acc += R_(k) * c[N - k]
+                    den = (N + 1) * (P_(1) * N + Q_(0))
+                    if den == 0:
+                        raise ValueError("logarithmic case: the regular power-series solution does not exist")
+                    c.append(-acc / den)
+                else:
+                    N = len(c) - 2
+                    acc = 0
+                    for k in range(1, min(N, dp) + 1):
+                        acc += P_(k) * (N - k + 2) * (N - k + 1) * c[N - k + 2]
+                    for k in range(0, min(N + 1, dq) + 1):
+                        acc += Q_(k) * (N - k + 1) * c[N - k + 1]
+                    for k in range(0, (N if dr is None else min(N, dr)) + 1):
+                        acc += R_(k) * c[N - k]
+                    c.append(-acc / (P_(0) * (N + 2) * (N + 1)))
+            term = c[n] * hp
+            total += term
+            if n >= 1:
+                dtotal += n * c[n] * hp / h
+            scale = abs(total) + abs(dtotal * h)
+            if n > 4 and abs(term) * (n + 1) <= eps * scale:
+                small += 1
+                if small >= 3:
+                    return total, dtotal
+            else:
+                small = 0
+            n += 1
+            hp *= h
+            if n > 1500:
+                raise ArithmeticError("series did not converge")
+
+    def solve(self, z_start, y0, dy0, z_end, start_singular=False):
+        z, y, dy = z_start, y0, dy0
+        if z_end == z_start:
+            return y, dy
+        while True:
+            dist = abs(z_end - z)
+            others = [abs(s - z) for s in self.singular if abs(s - z) > 0]
+            rad = min(others) if others else mpmath.inf
+            step = min(dist, rad / 2, mpmath.mpf(1))
+            if step <= 0:
+                raise ValueError("the path runs into a singular point")
+            h = (z_end - z) * (step / dist)
+            for _ in range(60):
+                try:
+                    y1, dy1 = self.series(z, y, dy, h, start_singular)
+                    break
+                except ArithmeticError:
+                    h /= 2
+            else:
+                raise ArithmeticError("ODE continuation failed")
+            start_singular = False
+            z, y, dy = z + h, y1, dy1
+            if abs(z_end - z) <= abs(z_end) * mpmath.mpf(2) ** (-mpmath.mp.prec) + mpmath.mpf(2) ** (-mpmath.mp.prec):
+                return y, dy
+
+
+def _verified(f, name):
+    """Evaluate f() at two working precisions (current + 20 and + 60 bits) and insist that they agree."""
+    prec = mpmath.mp.prec
+    with mpmath.workprec(prec + 20):
+        a = f()
+    for extra in (60, 160):
+        with mpmath.workprec(prec + extra):
+            b = f()
+        tol = mpmath.mpf(2) ** (-(prec - 24)) * (1 + max(abs(x) for x in (a if isinstance(a, list) else [a])))
+        diff = max(abs(x - y) for x, y in zip(a if isinstance(a, list) else [a], b if isinstance(b, list) else [b]))
+        if diff <= tol:
+            return b
+        a = b
+    raise ArithmeticError(f"{name}: numerical evaluation lost precision")
+
+
+def _poly_coeffs(poly):
+    """poly: list of coefficients (constant first) -> coeffs at z0 via Taylor shift."""
+    def at(z0):
+        n = len(poly)
+        shifted = []
+        for k in range(n):
+            s = 0
+            for j in range(k, n):
+                s += mpmath.binomial(j, k) * poly[j] * z0 ** (j - k)
+            shifted.append(s)
+        return (lambda k: shifted[k] if k < n else 0), n - 1
+    return at
+
+
+def _poly_ode(P, Q, Rr, singular):
+    pa, qa, ra = _poly_coeffs(P), _poly_coeffs(Q), _poly_coeffs(Rr)
+
+    def co(z0):
+        (p, dp), (q, dq), (r, dr) = pa(z0), qa(z0), ra(z0)
+        return p, q, r, (dp, dq, dr)
+    return _ODE(co, singular)
+
+
+def _pmul(a, b):
+    out = [0] * (len(a) + len(b) - 1)
+    for i, x in enumerate(a):
+        for j, y in enumerate(b):
+            out[i + j] += x * y
+    return out
+
+
+def _padd(*ps):
+    n = max(len(p) for p in ps)
+    return [sum(p[i] if i < len(p) else 0 for p in ps) for i in range(n)]
+
+
+def _on_ray(z, s):
+    """z lies on the ray {t s : t >= 1}."""
+    if s == 0:
+        return False
+    t = z / s
+    return abs(mpmath.im(t)) <= mpmath.mpf(2) ** (-mpmath.mp.prec // 2) * abs(t) and mpmath.re(t) >= 1
+
+
+# ───────────────────────────── Heun functions ─────────────────────────────
+
+def _heun_setup(kind, params):
+    if kind == "G":
+        a, q, al, be, ga, de = params
+        if a == 0:
+            raise ValueError("HeunG: the singular point a must be nonzero")
+        ep = al + be + 1 - ga - de
+        # P = z(z-1)(z-a), Q = ga (z-1)(z-a) + de z (z-a) + ep z (z-1), R = al be z - q
+        P = _pmul(_pmul([0, 1], [-1, 1]), [-a, 1])
+        Q = _padd([x * ga for x in _pmul([-1, 1], [-a, 1])], [x * de for x in _pmul([0, 1], [-a, 1])],
+                  [x * ep for x in _pmul([0, 1], [-1, 1])])
+        Rr = [-q, al * be]
+        return _poly_ode(P, Q, Rr, [mpmath.mpf(1), a]), ga, (lambda z: _on_ray(z, 1) or _on_ray(z, a)), 0
+    q, al, ga, de, ep = params
+    if kind == "C":
+        # z(z-1) y'' + (ga (z-1) + de z + ep z (z-1)) y' + (al z - q) y = 0
+        P = [0, -1, 1]
+        Q = _padd([-ga, ga], [0, de], [x * ep for x in [0, -1, 1]])
+        return _poly_ode(P, Q, [-q, al], [mpmath.mpf(1)]), ga, (lambda z: _on_ray(z, 1)), 0
+    if kind == "B":
+        # z y'' + (ga + de z + ep z^2) y' + (al z - q) y = 0
+        return _poly_ode([0, 1], [ga, de, ep], [-q, al], []), ga, (lambda z: False), 0
+    if kind == "D":
+        # z^2 y'' + (ga + de z + ep z^2) y' + (al z - q) y = 0, normalised y(1) = 1, y'(1) = 0
+        return _poly_ode([0, 0, 1], [ga, de, ep], [-q, al], [mpmath.mpf(0)]), None, \
+            (lambda z: mpmath.im(z) == 0 and mpmath.re(z) <= 0), 1
+    # T: y'' + (ga + de z + ep z^2) y' + (al z - q) y = 0, y(0) = 1, y'(0) = 0
+    return _poly_ode([1], [ga, de, ep], [-q, al], []), None, (lambda z: False), 0
+
+
+def _heun(kind, deriv):
+    name = "Heun" + kind + ("Prime" if deriv else "")
+
+    def f(*args):
+        params, z = args[:-1], args[-1]
+        ode, ga, on_cut, z0 = _heun_setup(kind, params)
+        if ga is not None and _isint(ga) and mpmath.re(ga) <= 0:
+            raise ValueError(f"{name}: gamma is a non-positive integer (logarithmic case); the function is undefined")
+        if on_cut(z):
+            raise NotImplementedError(f"{name}: z lies on a branch cut or at a singular point")
+
+        def run():
+            p = [mpmath.mpf(1) * x if not isinstance(x, mpmath.mpc) else x for x in params]
+            ode2, _, _, _ = _heun_setup(kind, p)
+            zz = z
+            if kind in ("G", "C", "B"):
+                y, dy = ode2.solve(mpmath.mpf(0), mpmath.mpf(1), None, zz, start_singular=True)
+            elif kind == "T":
+                y, dy = ode2.solve(mpmath.mpf(0), mpmath.mpf(1), mpmath.mpf(0), zz)
+            else:
+                y, dy = ode2.solve(mpmath.mpf(1), mpmath.mpf(1), mpmath.mpf(0), zz)
+            return dy if deriv else y
+        if kind in ("G", "C", "B") and z == 0:
+            if not deriv:
+                return mpmath.mpf(1)
+            P = params
+            return {"G": lambda: P[1] / (P[0] * P[4]), "C": lambda: -P[0] / P[2], "B": lambda: P[0] / P[2]}[kind]()
+        return _verified(run, name)
+
+    nparams = 6 if kind == "G" else 5
+
+    def ex(*args):
+        z = args[-1]
+        if kind in ("G", "C", "B", "T") and z == 0:
+            if not deriv:
+                return sp.Integer(1)
+            P = args
+            return {"G": lambda: P[1] / (P[0] * P[4]), "C": lambda: -P[0] / P[2], "B": lambda: P[0] / P[2],
+                    "T": lambda: sp.Integer(0)}[kind]()
+        if kind == "D" and z == 1:
+            return sp.Integer(0) if deriv else sp.Integer(1)
+        return None
+    eq = {"G": "y'' + (gamma/z + delta/(z-1) + epsilon/(z-a)) y' + (alpha beta z - q)/(z(z-1)(z-a)) y = 0, "
+               "epsilon = alpha + beta + 1 - gamma - delta",
+          "C": "z(z-1) y'' + (gamma (z-1) + delta z + epsilon z (z-1)) y' + (alpha z - q) y = 0",
+          "B": "z y'' + (gamma + delta z + epsilon z^2) y' + (alpha z - q) y = 0",
+          "D": "z^2 y'' + (gamma + delta z + epsilon z^2) y' + (alpha z - q) y = 0",
+          "T": "y'' + (gamma + delta z + epsilon z^2) y' + (alpha z - q) y = 0"}[kind]
+    norm = {"G": "regular at 0 with y(0) = 1", "C": "regular at 0 with y(0) = 1", "B": "regular at 0 with y(0) = 1",
+            "D": "y(1) = 1, y'(1) = 0", "T": "y(0) = 1, y'(0) = 0"}[kind]
+    cuts = {"G": "branch cuts from 1 and from a radially to infinity (points on them raise)",
+            "C": "branch cut [1, Infinity) (points on it raise)", "B": "entire in z", "T": "entire in z",
+            "D": "z on (-Infinity, 0] raises"}[kind]
+    mpfun(name, nparams + 1, f, ex, symbolic=lambda *a: ex(*a) if (a[-1] == 0 or (kind == "D" and a[-1] == 1)) else None,
+          real=_allreal, extra=24,
+          notes=f"{'derivative of the ' if deriv else ''}{name.replace('Prime', '')} solution of {eq}, {norm}; "
+                f"power series continued along the straight path with verified precision; {cuts}; "
+                "gamma a non-positive integer (logarithmic case) raises")
+
+
+for _k in "GCBDT":
+    _heun(_k, False)
+    _heun(_k, True)
+
+
+# ───────────────────────────── Mathieu functions ─────────────────────────────
+#
+# y'' + (a - 2 q Cos[2 z]) y = 0.  Characteristic values from the (truncated) Hill matrices; the characteristic
+# exponent r from Cos[Pi r] = y_e(Pi) (y_e the even solution with y_e(0) = 1, computed by series continuation)
+# with the branch fixed by the band structure (r in [n, n+1] in the n-th stability band, r = n + I mu in the
+# n-th instability gap, as in Wolfram); MathieuC/MathieuS = (F(z) +- F(-z))/2(I) for the Floquet solution
+# F(z) = Sum[c_k E^(I (r + 2k) z)] normalised by Sum[c_k^2] = 1 (dominant coefficient positive), which
+# reproduces the Wolfram reference values (e.g. MathieuC[2, 1, 37/10] to 50 digits).
+
+def _mathieu_ode(a, q):
+    def coeffs(z0):
+        c2, s2 = mpmath.cos(2 * z0), mpmath.sin(2 * z0)
+
+        def r(k):
+            if k % 2 == 0:
+                t = c2 * (-1) ** (k // 2)
+            else:
+                t = -s2 * (-1) ** ((k - 1) // 2)
+            v = -2 * q * mpmath.mpf(2) ** k / mpmath.factorial(k) * t
+            return v + a if k == 0 else v
+        return (lambda k: mpmath.mpf(1) if k == 0 else 0), (lambda k: 0), r, (0, 0, None)
+    return _ODE(coeffs, [])
+
+
+def _mathieu_ye_pi(a, q):
+    y, _ = _mathieu_ode(a, q).solve(mpmath.mpf(0), mpmath.mpf(1), mpmath.mpf(0), +mpmath.pi)
+    return y
+
+
+def _hill_size(r, q):
+    return int(abs(r) / 2) + 12 + int(3 * mpmath.sqrt(abs(q))) + mpmath.mp.dps // 3
+
+
+def _sym_eigs(M, real):
+    if real:
+        return sorted(mpmath.eigsy(M, eigvals_only=True))
+    ev = mpmath.eig(M, left=False, right=False)
+    return sorted(ev, key=lambda x: (mpmath.re(x), mpmath.im(x)))
+
+
+def _mathieu_int_matrix(kind, par, q, N):
+    """kind 'a' (even) / 'b' (odd), par 0 (period Pi) / 1 (period 2 Pi): truncated characteristic matrices
+    (DLMF 28.4) for the coefficients of Cos/Sin[(2k + par) z]; symmetrised."""
+    if kind == "a" and par == 0:
+        M = mpmath.matrix(N, N)
+        for k in range(N):
+            M[k, k] = (2 * k) ** 2
+            if k + 1 < N:
+                M[k, k + 1] = M[k + 1, k] = q * (mpmath.sqrt(2) if k == 0 else 1)
+        return M
+    if kind == "b" and par == 0:
+        M = mpmath.matrix(N, N)
+        for k in range(N):
+            M[k, k] = (2 * k + 2) ** 2
+            if k + 1 < N:
+                M[k, k + 1] = M[k + 1, k] = q
+        return M
+    M = mpmath.matrix(N, N)
+    for k in range(N):
+        M[k, k] = (2 * k + 1) ** 2
+        if k + 1 < N:
+            M[k, k + 1] = M[k + 1, k] = q
+    M[0, 0] += q if kind == "a" else -q
+    return M
+
+
+def _floquet_matrix(r, q, N):
+    M = mpmath.matrix(2 * N + 1, 2 * N + 1)
+    for i, k in enumerate(range(-N, N + 1)):
+        M[i, i] = (r + 2 * k) ** 2
+        if i > 0:
+            M[i, i - 1] = M[i - 1, i] = q
+    return M
+
+
+def _char_value(kind, r, q):
+    """MathieuCharacteristicA (kind 'a') / B ('b') for real r and q."""
+    real = not isinstance(q, mpmath.mpc) and not isinstance(r, mpmath.mpc)
+    if not real:
+        raise NotImplementedError("MathieuCharacteristicA/B: complex r or q are not supported")
+    r = abs(r)
+    N = _hill_size(r, q)
+    if mpmath.isint(r):
+        n = int(r)
+        if kind == "b" and n == 0:
+            raise ValueError("MathieuCharacteristicB: r must be a positive integer (there is no odd solution with r = 0)")
+        par = n % 2
+        idx = n // 2 if kind == "a" or par == 1 else n // 2 - 1
+        return _sym_eigs(_mathieu_int_matrix(kind, par, q, N + idx), True)[idx]
+    return _sym_eigs(_floquet_matrix(r, q, N + int(r)), True)[int(mpmath.floor(r))]
+
+
+def _char_values_below(a, q):
+    """Number of Mathieu characteristic values (all a_n, b_n) below the real number a (real q)."""
+    count = 0
+    N = int(mpmath.sqrt(abs(a)) / 2) + 12 + int(3 * mpmath.sqrt(abs(q))) + mpmath.mp.dps // 3
+    for kind, par in (("a", 0), ("a", 1), ("b", 0), ("b", 1)):
+        ev = _sym_eigs(_mathieu_int_matrix(kind, par, q, N), True)
+        count += sum(1 for x in ev[:-4] if x < a)
+    return count
+
+
+def _round_half_even(x):
+    f = mpmath.floor(x)
+    d = x - f
+    if d > mpmath.mpf(1) / 2 or (d == mpmath.mpf(1) / 2 and int(f) % 2 == 1):
+        return int(f) + 1
+    return int(f)
+
+
+def _mathieu_exponent(a, q):
+    """Wolfram's branch: with n = Round[Re[Sqrt[a]]], r = n + ArcCos[(-1)^n y_e(Pi)]/Pi (principal ArcCos).
+    This reproduces every documented value (e.g. r(Pi, E) = 2.30738, r(2, 1/2) = 1.36951, r(1/5647, 5) =
+    1 + 1.31468 I, r(Pi/2, 2 + I) = 1.2109 - 0.665892 I)."""
+    if q == 0:
+        return mpmath.sqrt(a)
+    y = _mathieu_ye_pi(a, q)
+    n = _round_half_even(mpmath.re(mpmath.sqrt(a)))
+    r = n + mpmath.acos((-1) ** n * y) / mpmath.pi
+    if mpmath.im(a) == 0 and mpmath.im(q) == 0 and mpmath.im(r) < 0:
+        r = mpmath.mpc(mpmath.re(r), -mpmath.im(r))   # Wolfram: 1 + 0.41039 I for (0.2, 1)
+    return r
+
+
+def _mathieu_coeffs(a, q, r):
+    """Floquet coefficients c_k (k = -N..N) of the solution with exponent r, Sum c_k^2 = 1."""
+    N = _hill_size(r, q) + int(mpmath.sqrt(abs(a)) / 2)
+    M = mpmath.matrix(2 * N + 1, 2 * N + 1)
+    for i, k in enumerate(range(-N, N + 1)):
+        M[i, i] = (r + 2 * k) ** 2 - a
+        if i > 0:
+            M[i, i - 1] = M[i - 1, i] = q
+    # inverse iteration for the null vector
+    shift = mpmath.mpf(2) ** (-mpmath.mp.prec // 2) * (1 + abs(a) + abs(q))
+    A = M + shift * mpmath.eye(2 * N + 1)
+    v = mpmath.matrix([1] * (2 * N + 1))
+    for _ in range(4):
+        v = mpmath.lu_solve(A, v)
+        v = v / mpmath.norm(v)
+    c = [v[i] for i in range(2 * N + 1)]
+    s2 = mpmath.fsum(x * x for x in c)
+    if s2 == 0:
+        raise ArithmeticError("Mathieu: degenerate Floquet coefficients")
+    c = [x / mpmath.sqrt(s2) for x in c]
+    big = max(range(len(c)), key=lambda i: abs(c[i]))
+    if mpmath.re(c[big]) < 0:
+        c = [-x for x in c]
+    if abs(c[0]) + abs(c[-1]) > mpmath.mpf(2) ** (-mpmath.mp.prec + 10) * 0 + mpmath.mpf(2) ** (-mpmath.mp.prec // 2):
+        raise ArithmeticError("Mathieu: Fourier series truncated too early")
+    return c, N
+
+
+def _mathieu_fun(kind, deriv):
+    name = "Mathieu" + kind + ("Prime" if deriv else "")
+
+    def f(a, q, z):
+        if mpmath.im(a) != 0 or mpmath.im(q) != 0:
+            raise NotImplementedError(f"{name}: complex a or q is not supported (Wolfram's normalisation for "
+                                      "complex parameters could not be reproduced)")
+        if q == 0:
+            s = mpmath.sqrt(a)
+            if kind == "C":
+                return -s * mpmath.sin(s * z) if deriv else mpmath.cos(s * z)
+            return s * mpmath.cos(s * z) if deriv else (mpmath.sin(s * z) if s != 0 else z)
+
+        def run():
+            r = _mathieu_exponent(a, q)
+            if abs(r - mpmath.nint(mpmath.re(r))) < mpmath.mpf(2) ** (-mpmath.mp.prec // 3):
+                r = mpmath.nint(mpmath.re(r))
+            c, N = _mathieu_coeffs(a, q, r)
+            ks = range(-N, N + 1)
+            if mpmath.isint(r) if not isinstance(r, mpmath.mpc) else False:
+                ev = mpmath.fsum(ck * mpmath.cos((r + 2 * k) * z) for ck, k in zip(c, ks))
+                od = mpmath.fsum(ck * mpmath.sin((r + 2 * k) * z) for ck, k in zip(c, ks))
+                # at a characteristic value only one parity is a Floquet solution
+                tot = mpmath.fsum(abs(ck) for ck in c)
+                sym_even = mpmath.fsum(abs(c[i] - c[2 * N - i - int(r)]) for i in range(len(c)) if 0 <= 2 * N - i - int(r) < len(c))
+                sym_odd = mpmath.fsum(abs(c[i] + c[2 * N - i - int(r)]) for i in range(len(c)) if 0 <= 2 * N - i - int(r) < len(c))
+                small = mpmath.mpf(2) ** (-mpmath.mp.prec // 2) * tot
+                if (kind == "S" and sym_even < small) or (kind == "C" and sym_odd < small):
+                    raise NotImplementedError(f"{name}: a is a characteristic value of the other parity "
+                                              "(non-periodic case not supported)")
+            if kind == "C":
+                if deriv:
+                    return -mpmath.fsum(ck * (r + 2 * k) * mpmath.sin((r + 2 * k) * z) for ck, k in zip(c, ks))
+                return mpmath.fsum(ck * mpmath.cos((r + 2 * k) * z) for ck, k in zip(c, ks))
+            if deriv:
+                return mpmath.fsum(ck * (r + 2 * k) * mpmath.cos((r + 2 * k) * z) for ck, k in zip(c, ks))
+            return mpmath.fsum(ck * mpmath.sin((r + 2 * k) * z) for ck, k in zip(c, ks))
+        return _verified(run, name)
+
+    def ex(a, q, z):
+        if q == 0:
+            s = sp.sqrt(a)
+            if kind == "C":
+                return -s * sp.sin(s * z) if deriv else sp.cos(s * z)
+            return s * sp.cos(s * z) if deriv else sp.sin(s * z)
+        if z == 0:
+            if kind == "S" and not deriv:
+                return sp.Integer(0)
+            if kind == "C" and deriv:
+                return sp.Integer(0)
+        return None
+
+    def real(a, q, z):
+        return False
+    mpfun(name, 3, f, ex, symbolic=lambda a, q, z: ex(a, q, z) if q == 0 else None,
+          notes=f"{'derivative of ' if deriv else ''}{'even' if kind == 'C' else 'odd'} Mathieu function with "
+                "characteristic value a (Wolfram normalisation: Floquet solution F(z) = Sum[c_k E^(I(r+2k)z)], "
+                "Sum[c_k^2] = 1, r = MathieuCharacteristicExponent[a, q]); real a and q (complex z allowed); "
+                "complex a or q raise")
+
+
+for _k in "CS":
+    _mathieu_fun(_k, False)
+    _mathieu_fun(_k, True)
+
+
+def _mca(kind):
+    name = "MathieuCharacteristic" + kind.upper()
+
+    def f(r, q):
+        if q == 0:
+            return r ** 2
+        return _verified(lambda: _char_value(kind, r, q), name)
+
+    def ex(r, q):
+        if q == 0:
+            if kind == "b" and r == 0:
+                return None
+            return r ** 2
+        return None
+    mpfun(name, 2, f, ex, symbolic=lambda r, q: r ** 2 if q == 0 else None, real=_allreal,
+          notes=f"characteristic value {'a' if kind == 'a' else 'b'}_r(q) of the {'even' if kind == 'a' else 'odd'} "
+                "Mathieu functions: integer r from the DLMF 28.4 tridiagonal matrices, non-integer r from the "
+                "Floquet (Hill) matrix (the floor(|r|)-th eigenvalue); real r and q (complex raise)")
+
+
+_mca("a")
+_mca("b")
+mpfun("MathieuCharacteristicExponent", 2, lambda a, q: _verified(lambda: _mathieu_exponent(a, q),
+                                                                 "MathieuCharacteristicExponent"),
+      lambda a, q: sp.sqrt(a) if q == 0 else None, symbolic=lambda a, q: sp.sqrt(a) if q == 0 else None,
+      notes="characteristic exponent r with Cos[Pi r] = y_e(Pi) (even solution, y_e(0) = 1), r in [n, n+1] in the "
+            "n-th stability band and r = n + I mu in the n-th instability gap (Wolfram's branch); real a, q "
+            "(complex raise)")
