@@ -985,8 +985,34 @@ _SPLINE_HEADS = ("BezierCurve", "BSplineCurve", "BSplineSurface", "BezierSurface
                  "Arrow")
 
 
-def _check_args(head, args):
-    """Validate head[args] (options split off); returns the set of coordinate dimensions."""
+_INDEX_LIST_HEADS = ("Point", "Line", "Polygon", "Triangle", "Arrow", "BezierCurve", "BSplineCurve", "Tube", "Simplex",
+                     "Tetrahedron", "Hexahedron", "Prism", "Pyramid", "Cylinder", "Cone", "CapsuleShape", "HalfLine",
+                     "InfiniteLine", "Cuboid", "Rectangle")
+_INDEX_SCALAR_HEADS = ("Point", "Disk", "Circle", "Sphere", "Ball")
+
+
+def _index_form(x, head):
+    """A vertex index or a flat list of vertex indices (primitives inside GraphicsComplex)."""
+    if K.is_int(x) and not isinstance(x, bool):
+        return head in _INDEX_SCALAR_HEADS and int(x) >= 1
+    if head not in _INDEX_LIST_HEADS:
+        return False
+    return K.is_list(x) and bool(x.args) and all(K.is_int(i) and not isinstance(i, bool) and int(i) >= 1
+                                                 for i in x.args)
+
+
+def _check_args(head, args, allow_index=True):
+    """Validate head[args] (options split off); returns the set of coordinate dimensions.  With allow_index, the
+    GraphicsComplex forms (a vertex index or a flat list of indices as first argument) are accepted."""
+    try:
+        return _check_args0(head, args)
+    except (TypeError, ValueError):
+        if allow_index and args and _index_form(args[0], head):
+            return set()
+        raise
+
+
+def _check_args0(head, args):
     if head in _SPLINE_HEADS:
         return _CHECKS[head](args, head)
     a, opts = split_trailing_options(args)
@@ -1041,7 +1067,8 @@ _PRIM_COMMON = (" Inert geometric region and graphics primitive: arguments are v
                 "coordinates raise TypeError; wrong point counts, mixed dimensions or negative radii ValueError; "
                 "unknown options ValueError) and the expression then evaluates to itself, with symbolic "
                 "coordinates allowed. Inside Graphics/Graphics3D the coordinate dimension must match the "
-                "container (else ValueError). Deviation: forms that Wolfram autoevaluates (Disk[] to "
+                "container (else ValueError). Vertex-index forms used inside GraphicsComplex (Line[{1, 2}], "
+                "Polygon[{1, 2, 3}], Point[1]) are accepted as written. Deviation: forms that Wolfram autoevaluates (Disk[] to "
                 "Disk[{0, 0}], ...) stay as written; they denote the same region.")
 
 
@@ -1573,6 +1600,8 @@ def _solid_angle(p: ListOf[Real], spec: MatrixOf[Real] | Expr) -> Real:
     if isinstance(spec, Expr) and isinstance(spec.head, str) and spec.head in (
             "Ball", "Sphere", "Disk", "Circle", "Polygon", "Triangle"):
         return out(_solid_angle_region(pp, spec), p, spec)
+    if isinstance(spec, Expr) and isinstance(spec.head, str) and spec.head in _CHECKS:
+        raise NotImplementedError(f"SolidAngle: {spec.head} regions are not supported")
     us = pts(spec, "SolidAngle", "vectors")
     if len(us[0]) != len(pp):
         raise ValueError("SolidAngle: the apex and the vectors must have the same dimension")
@@ -2621,7 +2650,7 @@ def polygon_components(x, f):
             raise Unevaluated()
         raise TypeError(f"{f}: expected a polygon (Polygon, Triangle, Rectangle, RegularPolygon, Parallelogram), "
                         f"not {K_input(x)}")
-    _check_args(x.head, list(x.args))
+    _check_args(x.head, list(x.args), allow_index=False)
     h = x.head
     a, _opts = split_trailing_options(list(x.args))
     if h == "Triangle":
@@ -3481,7 +3510,7 @@ def polyhedron_data(x, f, need_orientation=False):
         if isinstance(x, Symbol):
             raise Unevaluated()
         raise TypeError(f"{f}: expected a polyhedron (Polyhedron, Tetrahedron, Cube, Cuboid, ...), not {K_input(x)}")
-    _check_args(x.head, list(x.args))
+    _check_args(x.head, list(x.args), allow_index=False)
     h = x.head
     a, _opts = split_trailing_options(list(x.args))
     if h == "UniformPolyhedron":
@@ -3493,6 +3522,7 @@ def polyhedron_data(x, f, need_orientation=False):
         return V, [[i - 1 for i in fc] for fc in _TET_FACES]
     if h in _PLATONIC:
         c, l_, rot = _solid_params(a, f)
+        concrete(c, l_)
         if need_orientation and (rot or h != "Cube"):
             raise NotImplementedError(f"{f}: the coordinates of {h}[...] in Wolfram's default orientation are not "
                                       "available; give the polyhedron explicitly")
@@ -4032,7 +4062,8 @@ def _augmented_polyhedron(poly: Expr, *rest: Real | Option) -> Expr:
 
 def _int_arg(x, f, what, lo=0):
     if isinstance(x, bool) or not K.is_int(x):
-        if isinstance(x, Symbol) or (isinstance(x, Expr) and not _bad_kind(x) and not K.is_list(x)):
+        if isinstance(x, Symbol) or (isinstance(x, Expr) and not _bad_kind(x) and not K.is_list(x)
+                                     and not _numberish(x)):
             raise Unevaluated()
         raise TypeError(f"{f}: {what} must be an integer, not {K_input(x)}")
     v = int(x)
@@ -4458,7 +4489,7 @@ def region_sampler(x, f, bounds=None):
         raise TypeError(f"{f}: {K_input(x)} is not a geometric region")
     h = x.head
     if h in _CHECKS:
-        _check_args(h, list(x.args))
+        _check_args(h, list(x.args), allow_index=False)
     a, _opts = split_trailing_options(list(x.args))
     flat = []
 
