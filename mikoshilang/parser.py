@@ -67,6 +67,8 @@ _TOKEN_SPEC = [
     ("DIVIDEBY",  r'/='),
     ("EQUAL",     r'=='),
     ("UNEQUAL",   r'!='),
+    ("PUTAPPEND", r'>>>[ \t]*(?:"(?:\\.|[^"\\])*"|[^\s;,\])}"]+)'),
+    ("PUT",       r'>>[ \t]*(?:"(?:\\.|[^"\\])*"|[^\s;,\])}"]+)'),
     ("GEQ",       r'>='),
     ("LEQ",       r'<='),
     ("STRINGJOIN", r'<>'),
@@ -124,7 +126,30 @@ _TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _T
 
 _STATEMENT_END = ("INTEGER", "FLOAT", "BIGNUM", "SCINUM", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "RASSOC",
                   "FUNCTION", "SLOT", "SLOTSEQ", "SLOTNAME", "INCREMENT", "DECREMENT", "BLANK", "BLANKS",
-                  "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL", "OUT", "GET", "UNSET")
+                  "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL", "OUT", "GET", "UNSET", "PUT", "PUTAPPEND")
+
+
+def _wl_escapes(lit: str) -> str:
+    """Wolfram string escapes \\:xxxx and \\.xx -> JSON \\uxxxx (other escapes are left to json.loads)."""
+    out, i, n = [], 0, len(lit)
+    while i < n:
+        c = lit[i]
+        if c == "\\" and i + 1 < n:
+            d = lit[i + 1]
+            if d == ":" and re.fullmatch(r"[0-9A-Fa-f]{4}", lit[i + 2:i + 6] or ""):
+                out.append("\\u" + lit[i + 2:i + 6])
+                i += 6
+                continue
+            if d == "." and re.fullmatch(r"[0-9A-Fa-f]{2}", lit[i + 2:i + 4] or ""):
+                out.append("\\u00" + lit[i + 2:i + 4])
+                i += 4
+                continue
+            out.append(lit[i:i + 2])
+            i += 2
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
 
 
 def _dps_bits(dps: float) -> int:
@@ -204,7 +229,7 @@ def tokenize(text: str) -> ListType[Token]:
             kind = "INTEGER" if isinstance(value, int) else "FLOAT"
         elif kind == "STRING":
             try:
-                value = json.loads(value)
+                value = json.loads(_wl_escapes(value) if "\\:" in value or "\\." in value else value)
             except ValueError as exc:
                 raise ParseError(f"Invalid string at position {pos}") from exc
         tokens.append(Token(kind, value, pos))
@@ -255,16 +280,27 @@ class Parser:
 
     def parse_compound(self) -> Any:
         """Handle semicolon-separated compound expressions."""
-        expr = self.parse_assignment()
+        expr = self.parse_put()
         if self.at("SEMICOLON"):
             exprs = [expr]
             while self.at("SEMICOLON"):
                 self.advance()
                 if self.peek() is not None and not self.at("RPAREN", "RSQUARE", "RBRACE"):
-                    exprs.append(self.parse_assignment())
+                    exprs.append(self.parse_put())
             if len(exprs) == 1:
                 return exprs[0]
             return Expr("CompoundExpression", *exprs)
+        return expr
+
+    def parse_put(self) -> Any:
+        """expr >> file (Put) and expr >>> file (PutAppend), binding more loosely than assignment."""
+        expr = self.parse_assignment()
+        while self.at("PUT", "PUTAPPEND"):
+            tok = self.advance()
+            name = tok.value[3 if tok.type == "PUTAPPEND" else 2:].strip()
+            if name.startswith('"'):
+                name = json.loads(name)
+            expr = Expr("PutAppend" if tok.type == "PUTAPPEND" else "Put", expr, name)
         return expr
 
     def parse_assignment(self) -> Any:
