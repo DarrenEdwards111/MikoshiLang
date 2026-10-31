@@ -3574,12 +3574,13 @@ for _n, _note in [
         ("AllowedHeads", "option name: heads of subexpressions into which a function may descend"),
         ("Application", "Application[f, g] is a formal application with no built-in meaning (stays unevaluated)"),
         ("ResolveContextAliases", "option of Names, NameQ and Contexts: False ignores $ContextAliases"),
+        ("InverseFunctions", "option name of Solve and Reduce: whether InverseFunction objects may be used"),
         ("$NewSymbol", "if set, $NewSymbol[name, context] is evaluated before a new symbol is created by the "
                        "parser")]:
     INERT[_n] = _note
     _added(_n, _note)
 for _n in ("Automatic", "Full", "Manual", "Inherited", "Method", "General", "ActivateResult", "AllowedHeads",
-           "Application", "ResolveContextAliases", "Heads", "Threaded", "Constants", "NonConstants",
+           "Application", "ResolveContextAliases", "InverseFunctions", "Heads", "Threaded", "Constants", "NonConstants",
            "ExcludedContexts", "IncludedContexts", "TraceDepth", "TraceForward", "TraceBackward", "TraceAbove",
            "TraceOn", "TraceOff"):
     K.BUILTIN_ATTRIBUTES.setdefault(_n, set()).add("Protected")

@@ -605,6 +605,9 @@ EXTRA = [
     ("In[]", form("In[]")),
     ("MemberQ[Attributes[Unique[w1tq2, {Temporary}]], Temporary]", True),
     ("Dt[w1ca w1cb, Constants -> {w1ca}]", "w1ca Dt[w1cb]"),
+    ("InverseFunctions -> True", "InverseFunctions -> True"),
+    ("Context[InverseFunctions]", text("System`")),
+    ("InverseFunctions = 1", Raises()),
 ]
 
 CASES = (CONTEXTS + ATTRIBUTES + DEFINITIONS + OPTIONS + EVALUATION + FUNCTIONAL + STACK_TRACE + MAIN_LOOP_CASES + MISC
