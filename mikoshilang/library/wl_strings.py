@@ -239,7 +239,7 @@ _OPTS = {"IgnoreCase", "Overlaps"}
 @fn("StringMatchQ", area=AREA, status="added",
     notes="whole-string match against a string pattern; literal patterns use the metacharacters * (any "
           "characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists")
-def _smatchq(s: Expr, p: Expr, *opts: Option) -> Boolean:
+def _smatchq(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     _, o = split_options(opts, _OPTS, "StringMatchQ")
 
     def one(x):
@@ -266,23 +266,23 @@ def _search(fname, s, p, opts, anchor):
 
 @fn("StringContainsQ", area=AREA, status="fixed",
     notes="string patterns (legacy: literal substrings only); IgnoreCase; threads over lists")
-def _scontains(s: Expr, p: Expr, *opts: Option) -> Boolean:
+def _scontains(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringContainsQ", s, p, opts, None)
 
 
 @fn("StringFreeQ", area=AREA, status="added", notes="not StringContainsQ; string patterns; IgnoreCase")
-def _sfree(s: Expr, p: Expr, *opts: Option) -> Boolean:
+def _sfree(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     r = _search("StringFreeQ", s, p, opts, None)
     return L(*(not v for v in r.args)) if is_list(r) else (not r)
 
 
 @fn("StringStartsQ", area=AREA, status="fixed", notes="string patterns (legacy: literal prefix only); IgnoreCase")
-def _sstarts(s: Expr, p: Expr, *opts: Option) -> Boolean:
+def _sstarts(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringStartsQ", s, p, opts, "start")
 
 
 @fn("StringEndsQ", area=AREA, status="fixed", notes="string patterns (legacy: literal suffix only); IgnoreCase")
-def _sends(s: Expr, p: Expr, *opts: Option) -> Boolean:
+def _sends(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringEndsQ", s, p, opts, "end")
 
 

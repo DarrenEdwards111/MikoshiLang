@@ -432,7 +432,7 @@ def _msic(*args: Expr) -> Expr:
 @fn("MandelbrotSetMemberQ", **ADDED, notes="MandelbrotSetMemberQ[c] is True if the orbit of 0 under z^2 + c does "
     "not leave |z| <= 2 within MaxIterations (default 1000) iterations or c is known to be inside (cardioid, "
     "period-2 disk); threads over lists; non-numeric arguments give False")
-def _msmq(*args: Expr) -> Boolean:
+def _msmq(*args: Expr) -> Boolean | ListOf[Boolean]:
     args, mx, prec = _iter_opts(args, "MandelbrotSetMemberQ", 1000)
     if len(args) != 1:
         raise ValueError("MandelbrotSetMemberQ takes 1 argument")
