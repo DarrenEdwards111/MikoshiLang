@@ -3374,3 +3374,610 @@ def _pairwisequantileplot(data: MatrixOf[Real], *opts: Option) -> Expr:
           "against itself lies on the diagonal).")
 def _pairwiseprobabilityplot(data: MatrixOf[Real], *opts: Option) -> Expr:
     return pairwise("PairwiseProbabilityPlot", (data,) + opts, _pp_points)
+
+
+# ───────────────────────────── number line, parallel/radial axes, ternary ─────────────────────────────
+
+def _sympy_set(pred, var, fname):
+    """Solution set (SymPy) of an inequality/equation predicate in one real variable."""
+    vs = sp.Symbol(var.name, real=True)
+    plain = sp.Symbol(var.name)
+
+    def walk(p):
+        if isinstance(p, Expr) and p.head == "And":
+            out = sp.S.Reals
+            for a in p.args:
+                out = out.intersect(walk(a))
+            return out
+        if isinstance(p, Expr) and p.head == "Or":
+            out = sp.S.EmptySet
+            for a in p.args:
+                out = out.union(walk(a))
+            return out
+        if isinstance(p, Expr) and p.head == "Not" and len(p.args) == 1:
+            return sp.S.Reals - walk(p.args[0])
+        if p is True:
+            return sp.S.Reals
+        if p is False:
+            return sp.S.EmptySet
+        if isinstance(p, Expr) and p.head in ("Less", "LessEqual", "Greater", "GreaterEqual", "Equal", "Unequal"):
+            try:
+                if len(p.args) != 2:
+                    raise ValueError
+                a_, b_ = S(p.args[0]), S(p.args[1])
+                rel = {"Less": sp.Lt, "LessEqual": sp.Le, "Greater": sp.Gt, "GreaterEqual": sp.Ge,
+                       "Equal": sp.Eq, "Unequal": sp.Ne}[p.head](a_, b_)
+            except Exception:
+                raise NotImplementedError(f"{fname}: could not convert {K_input(p)} to an inequality")
+            rel = rel.subs(plain, vs)
+            if rel.free_symbols - {vs}:
+                raise Unevaluated()
+            try:
+                return sp.solveset(rel, vs, sp.S.Reals)
+            except Exception:
+                raise NotImplementedError(f"{fname}: could not solve {K_input(p)}")
+        if isinstance(p, Expr) and p.head == "Element" and len(p.args) == 2 and is_sym(p.args[1], "Reals"):
+            return sp.S.Reals
+        raise NotImplementedError(f"{fname}: the predicate {K_input(p)} is not an inequality in {var.name}")
+    return walk(pred)
+
+
+def _set_pieces(st, fname):
+    """SymPy set -> ([(lo, hi, lo_closed, hi_closed)], [points])."""
+    pieces, points = [], []
+    parts = st.args if isinstance(st, sp.Union) else [st]
+    for p in parts:
+        if p is sp.S.EmptySet:
+            continue
+        if isinstance(p, sp.FiniteSet):
+            for v in p:
+                if not v.is_real:
+                    continue
+                points.append(float(v))
+        elif isinstance(p, sp.Interval):
+            lo = -math.inf if p.start is sp.S.NegativeInfinity else float(p.start)
+            hi = math.inf if p.end is sp.S.Infinity else float(p.end)
+            pieces.append((lo, hi, not p.left_open and math.isfinite(lo), not p.right_open and math.isfinite(hi)))
+        elif p is sp.S.Reals:
+            pieces.append((-math.inf, math.inf, False, False))
+        else:
+            raise NotImplementedError(f"{fname}: the solution set {p} cannot be drawn")
+    return pieces, points
+
+
+def _numberline_spec(spec, var, fname):
+    """One spec -> (pieces, points)."""
+    if isinstance(spec, Expr) and spec.head == "Interval":
+        pieces = []
+        for iv in spec.args:
+            if not (K.is_list(iv) and len(iv.args) == 2):
+                raise ValueError(f"{fname}: malformed Interval {K_input(spec)}")
+            lo, hi = [_num_or_raise(v, fname, "interval end") if not is_sym(v, "Infinity") else math.inf
+                      for v in iv.args]
+            if isinstance(iv.args[0], Expr) and iv.args[0].head == "DirectedInfinity":
+                lo = -math.inf
+            pieces.append((lo, hi, math.isfinite(lo), math.isfinite(hi)))
+        return pieces, []
+    if K.is_list(spec):
+        pieces, points = [], []
+        for s in spec.args:
+            a, b = _numberline_spec(s, var, fname)
+            pieces += a
+            points += b
+        return pieces, points
+    v = num(spec)
+    if v is not None:
+        return [], [v]
+    if is_missing(spec):
+        return [], []
+    if isinstance(spec, Expr) and isinstance(spec.head, str) and spec.head in (
+            "Less", "LessEqual", "Greater", "GreaterEqual", "Equal", "Unequal", "And", "Or", "Not", "Element"):
+        if var is None:
+            raise ValueError(f"{fname}: a predicate needs the variable as the second argument")
+        return _set_pieces(_sympy_set(spec, var, fname), fname)
+    if isinstance(spec, str):
+        raise TypeError(f"{fname}: {K_input(spec)} is not a number, interval or predicate")
+    raise Unevaluated()
+
+
+_NUMBERLINE_DEFAULTS = {"PlotStyle": AUTO, "PlotLegends": NONE, "Spacings": AUTO, "PlotTheme": AUTO,
+                        "IntervalMarkers": AUTO, "IntervalMarkersStyle": AUTO, "PlotRange": AUTO}
+_EXTRA_KNOWN |= {"Spacings"}
+
+
+@fn("NumberLinePlot", area=AREA, status="added",
+    notes="NumberLinePlot[{v1, ...}], NumberLinePlot[Interval[...]], NumberLinePlot[pred, x], NumberLinePlot[pred, "
+          "{x, xmin, xmax}] and NumberLinePlot[{spec1, spec2, ...}, ...]: values as points, intervals and the "
+          "solution sets of predicates (inequalities/equations combined with And, Or, Not; solved exactly with "
+          "SymPy over the reals) as segments at heights 1, 2, ... (Spacings -> s, {s1, ...} or None); closed ends "
+          "are filled points, open ends hollow, infinite ends arrows to the plot edge. Axes -> {True, False}. "
+          "Predicates with other free symbols leave the call unevaluated; non-inequality predicates raise "
+          "NotImplementedError. Check: exact (SymPy solveset) and reference (interval ends in tests).")
+def _numberlineplot(spec: Expr, *rest: Expr | Option) -> Expr:
+    fname = "NumberLinePlot"
+    pos, opts = split_trailing_options((spec,) + rest)
+    if not 1 <= len(pos) <= 2:
+        raise ValueError(f"{fname}: expected {fname}[spec] or {fname}[pred, x]")
+    o, gopts = split_options(fname, opts, _NUMBERLINE_DEFAULTS)
+    for n in ("PlotTheme", "IntervalMarkers", "IntervalMarkersStyle"):
+        if not (is_sym(o[n], "Automatic", "None") or (n == "PlotTheme" and o[n] == "Default")):
+            raise NotImplementedError(f"{fname}: the option {n} -> {K_input(o[n])} is not supported")
+    var, xr_explicit = None, None
+    if len(pos) == 2:
+        it = pos[1]
+        if isinstance(it, Symbol):
+            var = it
+        elif K.is_list(it) and len(it.args) == 3 and isinstance(it.args[0], Symbol):
+            var = it.args[0]
+            xr_explicit = (real_arg(it.args[1], fname, "xmin"), real_arg(it.args[2], fname, "xmax"))
+            if not xr_explicit[0] < xr_explicit[1]:
+                raise ValueError(f"{fname}: the range must have xmin < xmax")
+        else:
+            raise ValueError(f"{fname}: the second argument must be a variable or {{x, xmin, xmax}}")
+    s = pos[0]
+    if K.is_list(s) and s.args and all(num(a) is not None or is_missing(a) for a in s.args):
+        specs = [s]
+    elif K.is_list(s):
+        specs = list(s.args)
+    else:
+        specs = [s]
+    sets = [_numberline_spec(sp_, var, fname) for sp_ in specs]
+    finite = [v for pcs, ps in sets for v in ps] + [e for pcs, _ in sets for p in pcs for e in p[:2]
+                                                   if math.isfinite(e)]
+    if xr_explicit:
+        x0, x1 = xr_explicit
+    elif finite:
+        lo, hi = min(finite), max(finite)
+        pad = (hi - lo) * 0.1 if hi > lo else 1.0
+        x0, x1 = lo - pad, hi + pad
+    else:
+        x0, x1 = -1.0, 1.0
+    sp_opt = o["Spacings"]
+    n = len(sets)
+    if is_sym(sp_opt, "Automatic"):
+        heights = [float(i + 1) for i in range(n)]
+    elif is_sym(sp_opt, "None"):
+        heights = [1.0] * n
+    elif num(sp_opt) is not None:
+        heights = [num(sp_opt) * (i + 1) for i in range(n)]
+    elif K.is_list(sp_opt) and all(num(a) is not None for a in sp_opt.args) and sp_opt.args:
+        acc, heights = 0.0, []
+        for i in range(n):
+            acc += num(sp_opt.args[min(i, len(sp_opt.args) - 1)])
+            heights.append(acc)
+    else:
+        raise ValueError(f"{fname}: Spacings must be Automatic, None, a number or a list of numbers")
+    styles = style_list(o["PlotStyle"], n, fname, "point")
+    content = []
+    for (pcs, ps), h, st in zip(sets, heights, styles):
+        if st is None:
+            continue
+        grp = [st]
+        closed, opened = [], []
+        for lo, hi, lc, hc in pcs:
+            a, b = max(lo, x0), min(hi, x1)
+            if not math.isfinite(lo) and not math.isfinite(hi):
+                grp.append(Expr("Arrow", pts([(0.5 * (x0 + x1), h), (x0, h)])))
+                grp.append(Expr("Arrow", pts([(0.5 * (x0 + x1), h), (x1, h)])))
+                continue
+            if not math.isfinite(lo):
+                grp.append(Expr("Arrow", pts([(b, h), (x0, h)])))
+            elif not math.isfinite(hi):
+                grp.append(Expr("Arrow", pts([(a, h), (x1, h)])))
+            else:
+                grp.append(Expr("Line", pts([(lo, h), (hi, h)])))
+            if math.isfinite(lo):
+                (closed if lc else opened).append((lo, h))
+            if math.isfinite(hi):
+                (closed if hc else opened).append((hi, h))
+        closed += [(v, h) for v in ps]
+        if closed:
+            grp.append(Expr("Point", pts(closed)))
+        if opened:
+            grp.append(Expr("Point", pts(opened)))
+            grp.append(L(Expr("GrayLevel", 1), Expr("PointSize", POINT_SIZE * 0.6), Expr("Point", pts(opened))))
+        content.append(L(*grp))
+    ymax = max(heights) if heights else 1.0
+    defaults = [("AspectRatio", Symbol("Automatic") if False else 0.15 * max(1, n)), ("Axes", L(True, False)),
+                ("AxesOrigin", L(x0, 0)),
+                ("PlotRange", range_expr([(x0, x1), (0.0, ymax + 0.5)])), ("PlotRangePadding", L(Expr("Scaled", 0.02),
+                                                                                                Expr("Scaled", 0.1)))]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], styles, None, fname, "point")
+
+
+def _rows_datasets(data, fname):
+    """ParallelAxisPlot/RadialAxisPlot data -> list of datasets, each a list of rows (lists of floats/None)."""
+    d, _, _ = _unwrap(data, fname)
+    if isinstance(d, Expr) and d.head == "Association":
+        d = L(*[v for _, v in _assoc_items(d)])
+    if not K.is_list(d) or not d.args:
+        if isinstance(d, (Symbol, Expr)) and not K.is_list(d):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the data must be a non-empty list")
+
+    def row(r):
+        r, _, _ = _unwrap(r, fname)
+        if isinstance(r, Expr) and r.head == "Association":
+            r = L(*[v for _, v in _assoc_items(r)])
+        if not K.is_list(r):
+            raise ValueError(f"{fname}: {K_input(r)} is not a list of values")
+        return [scalar(v, fname) for v in r.args]
+    items = d.args
+    if all(not K.is_list(_unwrap(i, fname)[0]) for i in items):
+        return [[row(d)]]
+    if all(K.is_list(_unwrap(i, fname)[0]) and _unwrap(i, fname)[0].args and
+           all(not K.is_list(v) for v in _unwrap(i, fname)[0].args) for i in items):
+        return [[row(i) for i in items]]
+    return [[row(r) for r in _unwrap(i, fname)[0].args] for i in items]
+
+
+_AXISPLOT_DEFAULTS = {"PlotStyle": AUTO, "PlotLegends": NONE, "PlotTheme": AUTO, "Method": AUTO,
+                      "PlotHighlighting": AUTO, "PlotRange": AUTO, "Filling": AUTO}
+
+
+@fn("ParallelAxisPlot", area=AREA, status="added",
+    notes="ParallelAxisPlot[{{y11, ..., y1n}, ...}] and ParallelAxisPlot[{data1, ...}]: each point is a line "
+          "through its coordinates on n vertical axes at x = 1, ..., n, each axis scaled from its minimum (0) to "
+          "its maximum (1) over all data (a constant axis maps to 1/2); missing values break the line; axes are "
+          "drawn as gray lines labelled with their minimum and maximum. Options: PlotStyle, PlotLegends and "
+          "Graphics options; others raise NotImplementedError. Check: reference (scaled coordinates computed "
+          "independently in tests).")
+def _parallelaxisplot(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "ParallelAxisPlot"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = split_options(fname, o_, _AXISPLOT_DEFAULTS)
+    _axisplot_check(o, fname)
+    dss = _rows_datasets(pos[0], fname)
+    n = max(len(r) for ds in dss for r in ds)
+    if n < 2:
+        raise ValueError(f"{fname}: points need at least 2 coordinates")
+    rng = []
+    for j in range(n):
+        vals = [r[j] for ds in dss for r in ds if j < len(r) and r[j] is not None]
+        rng.append((min(vals), max(vals)) if vals else (0.0, 1.0))
+
+    def sc(v, j):
+        lo, hi = rng[j]
+        return 0.5 if hi == lo else (v - lo) / (hi - lo)
+    styles = style_list(o["PlotStyle"], len(dss), fname)
+    content = [L(Expr("GrayLevel", 0.6), *[Expr("Line", pts([(j + 1, 0), (j + 1, 1)])) for j in range(n)],
+                 *[Expr("Text", _num_label(rng[j][0]), pt(j + 1, -0.06)) for j in range(n)],
+                 *[Expr("Text", _num_label(rng[j][1]), pt(j + 1, 1.06)) for j in range(n)])]
+    for ds, st in zip(dss, styles):
+        if st is None:
+            continue
+        lines = []
+        for r in ds:
+            seq = [None if j >= len(r) or r[j] is None else (j + 1, sc(r[j], j)) for j in range(n)]
+            lines += [ln for ln in runs(seq) if len(ln) >= 2]
+        content.append(L(st, *[Expr("Line", pts(ln)) for ln in lines]))
+    defaults = [("AspectRatio", GOLDEN), ("Axes", False), ("PlotRange", range_expr([(1.0, float(n)), (-0.1, 1.1)])),
+                ("PlotRangePadding", L(Expr("Scaled", 0.05), 0))]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], styles, None, fname)
+
+
+def _num_label(v):
+    return int(v) if float(v).is_integer() else round(v, 6)
+
+
+def _axisplot_check(o, fname):
+    for n in ("PlotTheme", "Method", "PlotHighlighting", "PlotRange", "Filling"):
+        v = o[n]
+        if not (is_sym(v, "Automatic", "None") or (n == "PlotTheme" and v == "Default")):
+            raise NotImplementedError(f"{fname}: the option {n} -> {K_input(v)} is not supported")
+
+
+@fn("RadialAxisPlot", area=AREA, status="added",
+    notes="RadialAxisPlot[{y1, ..., yn}] and RadialAxisPlot[{data1, ...}] (n >= 3 values per shape): axis j points "
+          "at angle Pi/2 - 2 Pi (j - 1)/n (first axis up, then clockwise), each axis scaled from min(0, axis "
+          "minimum) at the centre to the axis maximum over all data at radius 1; each shape is a closed line with "
+          "a translucent filling (Filling -> None removes it); missing values are skipped. Wolfram's own axis "
+          "orientation and scaling are not documented. Options: PlotStyle, PlotLegends, Filling and Graphics "
+          "options. Check: reference (vertex radii equal the scaled values in tests).")
+def _radialaxisplot(data: ListOf[Real] | MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "RadialAxisPlot"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = split_options(fname, o_, _AXISPLOT_DEFAULTS)
+    fill = o["Filling"]
+    o2 = dict(o)
+    o2["Filling"] = AUTO
+    _axisplot_check(o2, fname)
+    dss = _rows_datasets(pos[0], fname)
+    shapes = [r for ds in dss for r in ds]
+    n = max(len(r) for r in shapes)
+    if n < 3:
+        raise ValueError(f"{fname}: each shape needs at least 3 values")
+    rng = []
+    for j in range(n):
+        vals = [r[j] for r in shapes if j < len(r) and r[j] is not None]
+        lo = min([0.0] + vals)
+        hi = max(vals) if vals else 1.0
+        rng.append((lo, hi if hi > lo else lo + 1.0))
+    ang = [math.pi / 2 - 2 * math.pi * j / n for j in range(n)]
+    styles = style_list(o["PlotStyle"], len(shapes), fname)
+    content = [L(Expr("GrayLevel", 0.6), *[Expr("Line", pts([(0, 0), (math.cos(a), math.sin(a))])) for a in ang])]
+    for r, st in zip(shapes, styles):
+        if st is None:
+            continue
+        vs = []
+        for j in range(n):
+            if j < len(r) and r[j] is not None:
+                lo, hi = rng[j]
+                rad = (r[j] - lo) / (hi - lo)
+                vs.append((rad * math.cos(ang[j]), rad * math.sin(ang[j])))
+        if len(vs) < 2:
+            continue
+        grp = [st]
+        if not is_sym(fill, "None"):
+            grp.append(L(Expr("Opacity", 0.2), style_color(st), Expr("EdgeForm"), Expr("Polygon", pts(vs))))
+        grp.append(Expr("Line", pts(vs + [vs[0]])))
+        content.append(L(*grp))
+    defaults = [("AspectRatio", 1), ("Axes", False), ("PlotRange", range_expr([(-1.1, 1.1), (-1.1, 1.1)])),
+                ("PlotRangePadding", 0)]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], styles, None, fname)
+
+
+@fn("TernaryListPlot", area=AREA, status="added",
+    notes="TernaryListPlot[{{u1, v1, w1}, ...}] and TernaryListPlot[{data1, ...}]: points normalised by t = u + v "
+          "+ w and placed at {v/t + w/(2 t), Sqrt[3]/2 w/t} inside the equilateral triangle with vertices {0, 0} "
+          "(u), {1, 0} (v), {1/2, Sqrt[3]/2} (w), as documented; points with negative or non-real coordinates "
+          "(or t = 0) are missing. The triangle is drawn in gray. Options: PlotStyle, PlotLegends, Joined and "
+          "Graphics options. Check: reference (barycentric-to-Cartesian map in tests; pure components land on "
+          "the vertices).")
+def _ternarylistplot(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "TernaryListPlot"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = split_options(fname, o_, {"PlotStyle": AUTO, "PlotLegends": NONE, "Joined": False,
+                                         "PlotTheme": AUTO, "PlotMarkers": NONE, "PlotHighlighting": AUTO})
+    for n in ("PlotTheme", "PlotMarkers", "PlotHighlighting"):
+        if not (is_sym(o[n], "Automatic", "None") or (n == "PlotTheme" and o[n] == "Default")):
+            raise NotImplementedError(f"{fname}: the option {n} -> {K_input(o[n])} is not supported")
+    d, _, _ = _unwrap(pos[0], fname)
+    if not K.is_list(d) or not d.args:
+        if isinstance(d, (Symbol, Expr)) and not K.is_list(d):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the data must be a non-empty list of {{u, v, w}} triples")
+    sets = [d] if all(_is_pair(i, 3) or is_missing(i) for i in d.args) else list(d.args)
+    curves = []
+    for s in sets:
+        s, _, _ = _unwrap(s, fname)
+        if not K.is_list(s) or not all(_is_pair(i, 3) or is_missing(i) for i in s.args):
+            raise ValueError(f"{fname}: each dataset must be a list of {{u, v, w}} triples")
+        cv = []
+        for i in s.args:
+            if is_missing(i):
+                continue
+            u, v, w = [scalar(c, fname) for c in i.args]
+            if None in (u, v, w) or min(u, v, w) < 0 or u + v + w <= 0:
+                continue
+            t = u + v + w
+            cv.append((v / t + w / (2 * t), math.sqrt(3) / 2 * w / t))
+        curves.append(cv)
+    joined = o["Joined"] is True
+    styles = style_list(o["PlotStyle"], len(curves), fname, "line" if joined else "point")
+    tri = [(0, 0), (1, 0), (0.5, math.sqrt(3) / 2), (0, 0)]
+    content = [L(Expr("GrayLevel", 0.6), Expr("Line", pts(tri)))]
+    for cv, st in zip(curves, styles):
+        if st is not None and cv:
+            content.append(L(st, Expr("Line" if joined else "Point", pts(cv))))
+    defaults = [("AspectRatio", Symbol("Automatic")), ("Axes", False),
+                ("PlotRange", range_expr([(0.0, 1.0), (0.0, math.sqrt(3) / 2)])),
+                ("PlotRangePadding", Expr("Scaled", 0.05))]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], styles, None, fname, "line" if joined else "point")
+
+
+# ───────────────────────────── timeline, curve path, plot grid ─────────────────────────────
+
+def _timeline_event(e, fname):
+    """An event -> ('point', t) or ('interval', t0, t1)."""
+    e, _, _ = _unwrap(e, fname)
+    if isinstance(e, Expr) and e.head == "DateInterval":
+        iv = e.args[0] if e.args else None
+        if K.is_list(iv) and iv.args and K.is_list(iv.args[0]) and len(iv.args[0].args) == 2 and \
+                is_date(iv.args[0].args[0]):
+            iv = iv.args[0]
+        if not (K.is_list(iv) and len(iv.args) == 2):
+            raise ValueError(f"{fname}: malformed DateInterval {K_input(e)}")
+        return ("interval", abs_time(iv.args[0], fname), abs_time(iv.args[1], fname))
+    if isinstance(e, Expr) and e.head in ("Entity", "EntityClass", "TimeSeries", "EventSeries"):
+        raise NotImplementedError(f"{fname}: {e.head} events are not supported")
+    return ("point", abs_time(e, fname))
+
+
+@fn("TimelinePlot", area=AREA, status="added",
+    notes="TimelinePlot[{date1, ...}], TimelinePlot[{event1, ...}] (dates or DateInterval[{d1, d2}]), "
+          "TimelinePlot[<|label -> event, ...|>] and TimelinePlot[{data1, ...}]: dataset i is drawn at height i "
+          "(points for dates, thick segments for intervals, association keys as labels above the events) on a "
+          "horizontal date axis (x = AbsoluteTime; Ticks at whole years, months, days or hours). Entity, "
+          "TimeSeries and EventSeries events raise NotImplementedError; symbolic dates leave the call unevaluated. "
+          "Options: PlotStyle, PlotLegends and Graphics options. Check: reference (AbsoluteTime of each event in "
+          "tests).")
+def _timelineplot(data: ListOf[Expr] | Assoc, *opts: Option) -> Expr:
+    fname = "TimelinePlot"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = split_options(fname, o_, {"PlotStyle": AUTO, "PlotLegends": NONE, "PlotTheme": AUTO,
+                                         "PlotHighlighting": AUTO, "PlotLayout": AUTO})
+    for n in ("PlotTheme", "PlotHighlighting", "PlotLayout"):
+        if not (is_sym(o[n], "Automatic", "None") or (n == "PlotTheme" and o[n] == "Default")):
+            raise NotImplementedError(f"{fname}: the option {n} -> {K_input(o[n])} is not supported")
+    d, _, _ = _unwrap(pos[0], fname)
+
+    def events(x):
+        x, _, _ = _unwrap(x, fname)
+        if isinstance(x, Expr) and x.head == "Association":
+            return [(k, _timeline_event(v, fname)) for k, v in _assoc_items(x)]
+        if K.is_list(x) and not is_date(x):
+            return [(None, _timeline_event(v, fname)) for v in x.args]
+        return [(None, _timeline_event(x, fname))]
+    if K.is_list(d) and d.args and all((K.is_list(_unwrap(i, fname)[0]) and not is_date(_unwrap(i, fname)[0])) or
+                                       (isinstance(_unwrap(i, fname)[0], Expr) and
+                                        _unwrap(i, fname)[0].head == "Association") for i in d.args):
+        sets = [events(i) for i in d.args]
+    elif K.is_list(d) or (isinstance(d, Expr) and d.head == "Association"):
+        sets = [events(d)]
+    else:
+        if isinstance(d, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of dates or events")
+    styles = style_list(o["PlotStyle"], len(sets), fname, "point")
+    content = []
+    ts = []
+    for i, (evs, st) in enumerate(zip(sets, styles)):
+        h = float(i + 1)
+        if st is None:
+            continue
+        points, segs, texts = [], [], []
+        for lab, e in evs:
+            if e[0] == "point":
+                points.append((e[1], h))
+                ts.append(e[1])
+                xpos = e[1]
+            else:
+                segs.append([(e[1], h), (e[2], h)])
+                ts += [e[1], e[2]]
+                xpos = (e[1] + e[2]) / 2
+            if lab is not None:
+                texts.append(Expr("Text", lab, pt(xpos, h), L(0, -1.5)))
+        grp = [st]
+        if segs:
+            grp.append(L(Expr("AbsoluteThickness", 6), *[Expr("Line", pts(s)) for s in segs]))
+        if points:
+            grp.append(Expr("Point", pts(points)))
+        grp += texts
+        content.append(L(*grp))
+    if not ts:
+        raise ValueError(f"{fname}: there are no events to plot")
+    t0, t1 = min(ts), max(ts)
+    if t1 == t0:
+        t0, t1 = t0 - 86400, t1 + 86400
+    defaults = [("AspectRatio", 0.25 * max(1, len(sets))), ("Axes", L(True, False)),
+                ("AxesOrigin", L(t0, 0)), ("Ticks", L(date_ticks(t0, t1), NONE)),
+                ("PlotRange", range_expr([(t0, t1), (0.0, len(sets) + 1.0)])),
+                ("PlotRangePadding", L(Expr("Scaled", 0.05), 0))]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], styles, None, fname, "point")
+
+
+def curve_paths(points):
+    """Smooth paths through unordered points: chains grown from an end point by nearest neighbours, broken when
+    the next point is farther than 3 times the median nearest-neighbour distance; a chain whose ends are that
+    close is closed."""
+    np = _np()
+    P = np.array(points, dtype=float)
+    n = len(P)
+    if n < 2:
+        return [list(map(tuple, P))]
+    D = np.sqrt(((P[:, None, :] - P[None, :, :]) ** 2).sum(-1))
+    np.fill_diagonal(D, np.inf)
+    nn = D.min(axis=1)
+    thr = 3.0 * float(np.median(nn)) if np.median(nn) > 0 else float(np.max(nn[np.isfinite(nn)]) or 1.0)
+    unused = set(range(n))
+    paths = []
+    while unused:
+        # start at an end point: the unused point whose two nearest unused neighbours are most one-sided
+        idx = sorted(unused)
+        best, best_score = idx[0], -2.0
+        for i in idx:
+            others = [j for j in idx if j != i]
+            if len(others) < 2:
+                break
+            o = sorted(others, key=lambda j: D[i, j])[:2]
+            v1, v2 = P[o[0]] - P[i], P[o[1]] - P[i]
+            c = float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-300))
+            if c > best_score:
+                best, best_score = i, c
+        path = [best]
+        unused.discard(best)
+        while True:
+            cur = path[-1]
+            cand = [j for j in unused if D[cur, j] <= thr]
+            if not cand:
+                break
+            nxt = min(cand, key=lambda j: D[cur, j])
+            path.append(nxt)
+            unused.discard(nxt)
+        if len(path) > 3 and D[path[0], path[-1]] <= thr:
+            path.append(path[0])
+        paths.append([tuple(P[k]) for k in path])
+    return paths
+
+
+@fn("ListCurvePathPlot", area=AREA, status="added",
+    notes="ListCurvePathPlot[{{x1, y1}, ...}] (or several datasets): lines through the points ordered as smooth "
+          "paths independently of the input order: chains start at an end point and follow nearest neighbours, "
+          "break at gaps larger than 3 times the median neighbour spacing (giving disconnected curves) and close "
+          "loops. Wolfram's own reconstruction method is not documented; well-sampled curves are reconstructed "
+          "exactly in vertex order, ambiguous clouds may join differently. InterpolationOrder other than None/1, "
+          "Mesh, ColorFunction and other settings raise NotImplementedError. Check: reference (shuffled samples "
+          "of a circle and of a parabola are reconnected in curve order in tests).")
+def _listcurvepathplot(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "ListCurvePathPlot"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = split_options(fname, o_, {"PlotStyle": AUTO, "PlotRange": AUTO, "InterpolationOrder": NONE,
+                                         "PlotTheme": AUTO, "Mesh": NONE, "ColorFunction": AUTO,
+                                         "MaxPlotPoints": AUTO, "Method": AUTO, "ScalingFunctions": NONE,
+                                         "PlotLegends": NONE})
+    for n in ("PlotTheme", "Mesh", "ColorFunction", "MaxPlotPoints", "Method", "ScalingFunctions"):
+        if not (is_sym(o[n], "Automatic", "None", "Infinity") or (n == "PlotTheme" and o[n] == "Default")):
+            raise NotImplementedError(f"{fname}: the option {n} -> {K_input(o[n])} is not supported")
+    if not (is_sym(o["InterpolationOrder"], "None", "Automatic") or o["InterpolationOrder"] == 1):
+        raise NotImplementedError(f"{fname}: InterpolationOrder -> {K_input(o['InterpolationOrder'])} is not "
+                                  "supported")
+    dss = datasets(pos[0], fname)
+    curves = []
+    for ds in dss:
+        ptsl = [p for p in ds.points if p is not None]
+        uniq = list(dict.fromkeys(ptsl))
+        curves.append(curve_paths(uniq) if uniq else [])
+    allp = [p for cv in curves for ln in cv for p in ln]
+    xr, yr = data_range([p[0] for p in allp]), data_range([p[1] for p in allp])
+    prange = resolve_plot_range(o["PlotRange"], fname, [xr, yr])
+    styles = style_list(o["PlotStyle"], len(curves), fname)
+    content = [L(st, *[Expr("Line", pts(ln)) for ln in cv if len(ln) >= 2]) for cv, st in zip(curves, styles)
+               if st is not None]
+    defaults = [("AspectRatio", GOLDEN), ("Axes", L(True, True)), ("PlotRange", range_expr(prange)),
+                ("PlotRangePadding", L(L(Expr("Scaled", 0.02), Expr("Scaled", 0.02)),
+                                       L(Expr("Scaled", 0.05), Expr("Scaled", 0.05))))]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], styles, None, fname)
+
+
+@fn("PlotGrid", area=AREA, status="added",
+    notes="PlotGrid[{{g11, g12, ...}, ...}] (and PlotGrid[{g1, g2, ...}] for one row): Graphics[{Inset[g_ij, "
+          "{j - 1/2, nrows - i + 1/2}, Center, {1, 1}], ...}] placing each plot in a unit cell (row 1 at the "
+          "top), PlotRange {{0, ncols}, {0, nrows}}; None leaves a cell empty; entries must be Graphics (or "
+          "Legended graphics). Wolfram's merging of shared frame ticks and labels between neighbouring panels is "
+          "not done (each panel keeps its own frame). Check: reference (cell positions in tests).")
+def _plotgrid(grid: MatrixOf[Expr] | ListOf[Expr], *opts: Option) -> Expr:
+    fname = "PlotGrid"
+    pos, o_ = _list_args((grid,) + opts, fname)
+    o, gopts = split_options(fname, o_, {"Spacings": AUTO, "PlotLayout": AUTO})
+    if not (is_sym(o["Spacings"], "Automatic", "None") or o["Spacings"] == 0):
+        raise NotImplementedError(f"{fname}: Spacings -> {K_input(o['Spacings'])} is not supported")
+    if not is_sym(o["PlotLayout"], "Automatic"):
+        raise NotImplementedError(f"{fname}: PlotLayout is not supported")
+    g = pos[0]
+    if not K.is_list(g) or not g.args:
+        if isinstance(g, (Symbol, Expr)) and not K.is_list(g):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the argument must be a list of rows of plots")
+    rows = [list(r.args) for r in g.args] if all(K.is_list(r) for r in g.args) else [list(g.args)]
+    nr, nc = len(rows), max(len(r) for r in rows)
+    content = []
+    for i, r in enumerate(rows):
+        for j, cell in enumerate(r):
+            if is_sym(cell, "None") or cell is None:
+                continue
+            inner = cell.args[0] if isinstance(cell, Expr) and cell.head == "Legended" and cell.args else cell
+            if not (isinstance(inner, Expr) and inner.head in ("Graphics", "Graphics3D", "GraphicsGrid")):
+                if isinstance(cell, (Symbol, Expr)) and not K.is_list(cell) and not isinstance(cell, str):
+                    raise Unevaluated()
+                raise TypeError(f"{fname}: {K_input(cell)} is not a plot")
+            content.append(Expr("Inset", cell, pt(j + 0.5, nr - i - 0.5), Symbol("Center"), L(1, 1)))
+    defaults = [("AspectRatio", fl(nr) / nc), ("PlotRange", range_expr([(0.0, float(nc)), (0.0, float(nr))])),
+                ("PlotRangePadding", 0)]
+    return finish_graphics(L(*content), gopts, defaults)
