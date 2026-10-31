@@ -5,6 +5,7 @@ quarantined legacy operations fail rather than manufacture evidence.
 Language semantics (definitions, patterns, scoping, control flow) live in
 :mod:`mikoshilang.kernel`.
 """
+from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 import json
@@ -29,56 +30,94 @@ values = _Values()
 
 
 class Session:
-    """Independent definitions for one notebook/user; not an execution sandbox."""
+    """Independent definitions for one notebook/user; not an execution sandbox.
+
+    allow_network: knowledge heads (EntityValue, ...) may reach the network.
+    allow_python:  what ``PythonFunction["module.name"]`` may call from MikoshiLang code: ``False`` (default,
+                   nothing), a module allow-list (``{"math", "numpy.linalg"}`` or a single module name) or ``True``
+                   (any importable module). Functions registered with ``@session.function`` are always callable,
+                   because the host program chose to expose them. An allow-list is a convenience, not a security
+                   boundary: run untrusted input in an external process sandbox.
+    """
 
     def __init__(self, allow_network=False, allow_python=False):
-        """allow_python: False (default), True (any module) or a set of module names PythonFunction may call."""
+        from .interop import python_permission
         self.state = SessionState()
         self.allow_network = allow_network
-        self.allow_python = frozenset(allow_python) if isinstance(allow_python, (set, frozenset, list, tuple)) \
-            else bool(allow_python)
+        self.allow_python = python_permission(allow_python)
 
-    def evaluate(self, source):
-        from .parser import parse
-        from .evaluate import evaluate
+    @contextmanager
+    def _active(self):
+        """Make this session current: its definitions, network flag and Python permission."""
         from .interop import _python
         network_token = _network.set(self.allow_network)
         python_token = _python.set(self.allow_python)
         token = _state.set(self.state)
         try:
-            return evaluate(parse(source) if isinstance(source, str) else source)
+            yield
         finally:
             _state.reset(token)
             _python.reset(python_token)
             _network.reset(network_token)
 
-    # ── Python interop (prototype; see PYTHON_INTEROP.md) ──
+    def evaluate(self, source):
+        """Evaluate source code (a str) or an expression and return the raw MikoshiLang result."""
+        from .parser import parse
+        from .evaluate import evaluate
+        with self._active():
+            return evaluate(parse(source) if isinstance(source, str) else source)
+
+    # ── Python interop (docs/python_interop.md) ──
 
     def eval(self, source, out="python", symbolic="expr", arrays="list"):
-        """Evaluate source (a string, an Expr or a Python value) and convert the result with to_python.
+        """Evaluate and return the result as Python data, keeping symbolic results as expressions.
 
-        out="python" (default): data as Python values, symbolic results as Expr (symbolic="sympy" converts them);
-        out="expr": the raw MikoshiLang result.
+        source:   MikoshiLang code (a str), an expression, or any Python value from the conversion table
+                  (converted with ``interop.from_python``; ``Fraction(1, 3)``, NumPy arrays, dicts, ...).
+        out:      "python" (default) converts the result with ``interop.to_python``; "expr" returns it raw.
+        symbolic: for results that are not data: "expr" (default, keep the Expr), "sympy" (convert to SymPy)
+                  or "error" (raise TypeError).
+        arrays:   "list" (default, nested lists) or "numpy" (a rectangular list of machine numbers becomes an
+                  ndarray).
+
+        Integers -> int, exact rationals -> fractions.Fraction, machine reals -> float, bignum reals ->
+        sympy.Float (precision kept), strings -> str, Null -> None, lists -> list, associations -> dict.
+        Errors raise with their Python class (TypeError, ValueError, NotImplementedError, ArithmeticError,
+        PermissionError) and a "Name: " message.
         """
-        from .interop import from_python, to_python
+        from .interop import from_python, to_python, check_modes
+        check_modes(out, symbolic, arrays)
         expr = source if isinstance(source, str) else from_python(source)
         result = self.evaluate(expr)
         return result if out == "expr" else to_python(result, symbolic=symbolic, arrays=arrays)
 
     @property
     def ns(self):
-        """Pythonic calls: ml = session.ns; ml.Integrate(x**2, x)."""
+        """Pythonic calls: ``ml = session.ns; x = ml.symbols("x"); ml.Integrate(x**2, x)``."""
         from .interop import Namespace
         return Namespace(self)
 
     def function(self, fn=None, *, name=None, listable=False, notes="", check="delegated", override=False):
-        """Decorator: register a typed Python function as a head in this session (types from its hints)."""
+        """Decorator: register a typed Python function as a head in this session only.
+
+        The head name defaults to the CamelCase form of the function name (``collatz_steps`` -> ``CollatzSteps``).
+        Type hints become the signature (``int`` -> Integer, ``float`` -> Real, ``list[int]`` -> ListOf[Integer],
+        ...): symbolic arguments leave the call unevaluated, arguments of the wrong kind raise TypeError. Built-in
+        and library heads are not shadowed unless ``override=True``. ``check`` is the CONVENTIONS ``Check:``
+        method recorded in the notes (``exact``, ``self-check``, ``numeric cross-check``, ``reference`` or
+        ``delegated``).
+        """
         from .interop import register
         def deco(f):
             f.mikoshi = register(self.state, f, name=name, listable=listable, notes=notes, check=check,
                                  override=override)
             return f
         return deco(fn) if fn is not None else deco
+
+    def functions(self):
+        """The Python functions registered in this session: {head: PythonFunctionInfo}."""
+        from .interop import registered
+        return registered(self.state)
 
     def evaluate_input(self, source, whole=True):
         """Evaluate input as the Wolfram main loop: In[n]/Out[n]/InString[n] history, $Line, $Pre, $Post, $PreRead.
@@ -87,13 +126,8 @@ class Session:
         top-level statement.  Use output_form(value) for the printed form ($PrePrint).
         """
         from .library.wl_evaluation import main_loop
-        network_token = _network.set(self.allow_network)
-        token = _state.set(self.state)
-        try:
+        with self._active():
             return main_loop(source, whole)
-        finally:
-            _state.reset(token)
-            _network.reset(network_token)
 
     def output_form(self, value):
         """The value as printed by the main loop ($PrePrint applied)."""
@@ -141,7 +175,7 @@ def special(expr, ev):
     h, a = expr.head, expr.args
     if h in _KNOWLEDGE:
         if not _network.get():
-            raise PermissionError("Knowledge access requires Session(allow_network=True)")
+            raise PermissionError(f"{h}: knowledge access requires Session(allow_network=True)")
         from .rules import replace
         if h in _LEGACY_KNOWLEDGE:
             from .knowledge_rules import register

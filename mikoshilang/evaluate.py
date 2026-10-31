@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, Set
 from .expr import Expr, Symbol
 from .rules import SIMPLIFICATION_RULES, replace
+from .interop import PYFUNCS_KEY, UNSUPPORTED_EXTERNAL
 
 # The reviewed function library (mikoshilang.library) replaces the legacy
 # extended/extended2/extended3/visualization rule tables, which are no longer
@@ -422,9 +423,9 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
                 return r
         return new_expr
 
-    # 9a. Session-local typed Python functions (Session.function)
+    # 9a. Session-local typed Python functions (Session.function); external code strings raise
     st = kernel.state()
-    if st.ext.get("\x00python_functions"):
+    if st.ext.get(PYFUNCS_KEY):
         from .interop import lookup, call_registered
         info = lookup(st, head)
         if info is not None:
@@ -437,6 +438,9 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
                 _supersede(chain)
                 result = evaluate(result, depth + 1)
             return result
+    if head in UNSUPPORTED_EXTERNAL:
+        from .interop import reject_external
+        reject_external(head)
 
     # 9. Reviewed function library
     result = replace(new_expr, SIMPLIFICATION_RULES)
