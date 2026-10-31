@@ -146,6 +146,45 @@ def _install_hook():
 
 _install_hook()
 
+# N[...] pre-pass: heads whose numeric value needs their unevaluated arguments (e.g. RootSum[f, form]).
+N_PRE = {}
+
+
+def _n_pre_walk(x, prec):
+    if isinstance(x, Expr):
+        if isinstance(x.head, str) and x.head in N_PRE:
+            r = N_PRE[x.head](x, prec)
+            if r is not None:
+                return r
+        args = [_n_pre_walk(a, prec) for a in x.args]
+        if any(n is not o for n, o in zip(args, x.args)):
+            return Expr(x.head, *args)
+    return x
+
+
+def _has_n_pre(x, depth=0):
+    if isinstance(x, Expr) and depth < 60:
+        if isinstance(x.head, str) and x.head in N_PRE:
+            return True
+        return any(_has_n_pre(a, depth + 1) for a in x.args)
+    return False
+
+
+def _n_pre(a, ev_, expr):
+    if not a or not _has_n_pre(a[0]):
+        raise _NotMine()
+    prec = 15
+    if len(a) >= 2:
+        p = a[1]
+        if isinstance(p, (int, float)) and not isinstance(p, bool):
+            prec = int(p)
+        elif isinstance(p, sp.Basic) and p.is_number:
+            prec = int(p)
+    new = _n_pre_walk(a[0], prec)
+    return ev_(Expr("N", new, *a[1:]))
+
+
+
 
 def number_of(x):
     """Exact SymPy number or float for a numeric Mikoshi value, else None."""
@@ -962,6 +1001,7 @@ def _inverse_pre(a, ev_, expr):
     return L(*[L(*[int(inv[i, j]) % m for j in range(inv.cols)]) for i in range(inv.rows)])
 
 
+wrap_builtin("N", _n_pre)
 wrap_builtin("Det", _det_pre)
 wrap_builtin("Inverse", _inverse_pre)
 
@@ -1258,7 +1298,7 @@ def _srs_run(step, state, length):
 @fn("ShiftRegisterSequence", **ADDED, notes="linear-feedback shift register sequences: ShiftRegisterSequence[n] "
     "(maximal length over GF(2), feedback polynomial x^n + x^k + 1 with least k or else the lexicographically "
     "first primitive pentanomial), [{n, {t1, ...}}] (Fibonacci register: the new bit is the sum mod 2 of the "
-    "bits at the tap positions), [{n, taps, f}] (feedback function f), [poly] (Galois register), with optional "
+    "bits at the tap positions), [{n, taps, f}] (feedback function f, result taken mod 2), [poly] (Galois register), with optional "
     "initial state (list, or polynomial for the Galois form) and length (an integer or All, default one full "
     "period p^n - 1, or 2^n terms with a feedback function); options Method -> \"Fibonacci\"|\"Galois\" and Modulus -> p (Galois form)")
 def _srs(*args):
@@ -1349,10 +1389,10 @@ def _srs(*args):
                 return s[1:] + [sum(s[t - 1] for t in taps) % 2]
         else:
             def step(s):
-                v = ev(Expr(feedback, L(*[s[t - 1] for t in taps])))
+                v = ev(K.call(feedback, L(*[s[t - 1] for t in taps])))
                 if not _intq(v):
                     raise ValueError(f"ShiftRegisterSequence: the feedback function returned {v}, not an integer")
-                return s[1:] + [int(v)]
+                return s[1:] + [int(v) % 2]
     else:
         def step(s):
             o = s[-1]
@@ -1505,12 +1545,12 @@ def _groupings_fn(lst, spec, wrapper=None):
     def build(shape, leaves):
         if isinstance(shape, int):
             return leaves[shape]
-        return Expr(head, *[build(s, leaves) for s in shape.args])
+        return K.call(head, *[build(s, leaves) for s in shape.args])
     out = []
     for sh in shapes:
         for lv in lists:
             e = build(sh, lv)
-            out.append(Expr(wrapper, e) if wrapper is not None else e)
+            out.append(K.call(wrapper, e) if wrapper is not None else e)
     return L(*out)
 
 
@@ -1892,7 +1932,7 @@ def _dt(f, n, s):
         if h == "KroneckerDelta" and _is_delta1(f, n):
             return 1
         if h == "DivisorSum" and len(f.args) == 2 and K.same(f.args[0], n):
-            inner = ev(Expr(f.args[1], n))
+            inner = ev(K.call(f.args[1], n))
             r = _dt(inner, n, s)
             if r is None:
                 r = Expr("DirichletTransform", inner, n, s)
