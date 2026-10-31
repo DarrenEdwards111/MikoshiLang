@@ -2554,6 +2554,7 @@ def _inscribed_ball(points: MatrixOf[Real]) -> Expr:
     if d not in (2, 3):
         raise NotImplementedError(f"{f}: only 2-D and 3-D points are supported")
     import numpy as np
+    _require_scipy(f)
     from scipy.optimize import linprog
     from scipy.spatial import ConvexHull
     Pn = np.array([[num(c) for c in p] for p in P])
@@ -3468,13 +3469,23 @@ def _platonic_vertices(h):
 def _hull_faces(V):
     """Faces (cyclically ordered, outward) of the convex hull of exact points V (all points are hull vertices)."""
     import numpy as np
-    from scipy.spatial import ConvexHull
     Vn = np.array([[num(c) for c in p] for p in V])
-    hull = ConvexHull(Vn)
     groups = {}
-    for simplex, eq in zip(hull.simplices, hull.equations):
-        key = tuple(np.round(eq, 9))
-        groups.setdefault(key, set()).update(int(i) for i in simplex)
+    for i, j, k in itertools.combinations(range(len(Vn)), 3):
+        nv = np.cross(Vn[j] - Vn[i], Vn[k] - Vn[i])
+        nn = np.linalg.norm(nv)
+        if nn < 1e-12:
+            continue
+        nv = nv / nn
+        side = (Vn - Vn[i]) @ nv
+        if np.all(side <= 1e-9):
+            pass
+        elif np.all(side >= -1e-9):
+            nv = -nv
+        else:
+            continue
+        key = tuple(np.round(np.append(nv, nv @ Vn[i]), 9) + 0.0)
+        groups.setdefault(key, set()).update((i, j, k))
     faces = []
     for key, idx in groups.items():
         n_ = np.array(key[:3])
@@ -4868,8 +4879,33 @@ def _random_star(rng, n):
             return P
 
 
+def _require_scipy(f):
+    try:
+        import scipy  # noqa: F401
+    except ImportError:
+        raise NotImplementedError(f"{f}: requires SciPy (pip install scipy)")
+
+
+def _hull2d(P):
+    """Indices of the convex hull of 2-D points, counterclockwise (Andrew's monotone chain)."""
+    idx = sorted(range(len(P)), key=lambda i: (P[i][0], P[i][1]))
+
+    def half(order):
+        h = []
+        for i in order:
+            while len(h) >= 2 and _cross2(P[h[-1]] - P[h[-2]], P[i] - P[h[-2]]) <= 0:
+                h.pop()
+            h.append(i)
+        return h
+    lo, up = half(idx), half(idx[::-1])
+    return lo[:-1] + up[:-1]
+
+
 def _random_hull_pts(rng, n, d):
-    import numpy as np
+    if d == 2:
+        P = rng.random((n, 2))
+        return P, _hull2d(P)
+    _require_scipy("RandomPolyhedron")
     from scipy.spatial import ConvexHull
     while True:
         P = rng.random((n, d))
@@ -4931,8 +4967,8 @@ def _random_polygon(*args: PosInteger | ListOf[Expr] | Option) -> Expr | ListOf[
         if kind == "Convex":
             P = _random_convex(rng, k)
         elif kind == "ConvexHull":
-            Q, hull = _random_hull_pts(rng, k, 2)
-            P = Q[hull.vertices]
+            Q, hv = _random_hull_pts(rng, k, 2)
+            P = Q[hv]
         else:
             P = _random_star(rng, k)
         P = _scale_to(P, rr) if kind != "ConvexHull" or opts else P

@@ -19,6 +19,7 @@ Sources of the expected values:
 
 Symbol names used as symbolic placeholders are prefixed ``w19`` so they cannot collide with other test modules.
 """
+import importlib.util
 import math
 
 import pytest
@@ -650,8 +651,15 @@ CHECKS = [
     ("Max[Map[Norm[# - {2, 3/2}] &, {{0, 0}, {4, 0}, {0, 3}, {1, 1}}]] == 5/2", True),
 ]
 
+HAVE_SCIPY = importlib.util.find_spec("scipy") is not None
+NEEDS_SCIPY = ("InscribedBall[", "RandomPolyhedron[")
+
 CASES = (PRIMITIVES + OPTION_SYMBOLS + SCENES + SYNTHETIC + TRIANGLES + SPHERES + POLYGONS + POLYHEDRA + SPLINES
          + RANDOM + GEOTEST + CHECKS)
+if not HAVE_SCIPY:  # minimal install: these heads raise the clear 'requires SciPy' error instead
+    CASES = [c for c in CASES if not any(n in c[0] for n in NEEDS_SCIPY)]
+    CASES += [("InscribedBall[{{0, 0}, {4, 0}, {0, 3}}]", Raises(NotImplementedError, "requires SciPy")),
+              ("RandomPolyhedron[{\"ConvexHull\", 8}]", Raises(NotImplementedError, "requires SciPy"))]
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
@@ -673,6 +681,7 @@ def test_w19_random_point_uniform_mean():
     assert abs(mx - 1) < 0.05 and abs(my - 1) < 0.05
 
 
+@pytest.mark.skipif(not HAVE_SCIPY, reason="needs SciPy")
 def test_w19_bspline_matches_scipy():
     import numpy as np
     from scipy.interpolate import BSpline
