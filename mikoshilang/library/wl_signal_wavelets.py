@@ -346,3 +346,118 @@ fn("WaveletPhi", area=AREA, status="added",
          "ShannonWavelet (Sinc[π x]); continuous wavelets without a scaling function raise ValueError, Daubechies "
          "(numerical cascade) raises NotImplementedError. Check: exact (closed forms); reference (Wolfram "
          "documentation) and ∫φ = 1 in tests.")(_phipsi("WaveletPhi", _phi_expr))
+
+
+# ──────────────────────────────────────────── further wavelet families (objects only) ──
+def _posint_arg(v, name, what):
+    if isinstance(v, Symbol):
+        raise Unevaluated()
+    if isinstance(v, (str, bool)) or is_list(v):
+        raise TypeError(f"{name}: the {what} must be a positive integer, not {v!r}")
+    x = sp.sympify(S(v)) if not isinstance(v, (int, float)) else sp.sympify(v)
+    if x.free_symbols:
+        raise Unevaluated()
+    if not (x.is_Integer and x > 0):
+        raise ValueError(f"{name}: the {what} must be a positive integer, not {v!r}")
+    return x
+
+
+def _real_arg(v, name, what):
+    if isinstance(v, Symbol):
+        raise Unevaluated()
+    if isinstance(v, (str, bool)) or is_list(v):
+        raise TypeError(f"{name}: the {what} must be a positive real number, not {v!r}")
+    x = sp.sympify(S(v)) if not isinstance(v, (int, float)) else sp.sympify(v)
+    if x.free_symbols:
+        raise Unevaluated()
+    if not (x.is_real and x > 0):
+        raise ValueError(f"{name}: the {what} must be a positive real number, not {v!r}")
+    return x
+
+
+def _order_ctor(name, default, lo=1, hi=None):
+    """Family[] -> Family[default]; Family[n] for integers lo <= n (<= hi)."""
+    def impl(*args: PosInteger) -> Expr:
+        if len(args) > 1:
+            raise TypeError(f"{name}: takes at most one argument")
+        if not args:
+            return Expr(name, default)
+        n = _posint_arg(args[0], name, "order")
+        if n < lo or (hi is not None and n > hi):
+            raise ValueError(f"{name}: the order must be an integer between {lo} and {hi}, not {args[0]!r}")
+        return Expr(name, R(n))
+    return impl
+
+
+def _spline_ctor(name):
+    """BiorthogonalSplineWavelet[] -> [4, 2]; [n, m] with positive integers and n + m even."""
+    def impl(*args: PosInteger) -> Expr:
+        if not args:
+            return Expr(name, 4, 2)
+        if len(args) != 2:
+            raise TypeError(f"{name}: takes no arguments or two orders n, m")
+        n, m = (_posint_arg(a, name, "order") for a in args)
+        if (n + m) % 2:
+            raise ValueError(f"{name}: the orders n and m must have an even sum, not {n} + {m}")
+        return Expr(name, R(n), R(m))
+    return impl
+
+
+def _lim_ctor(name):
+    """BattleLemarieWavelet / MeyerWavelet: [] -> [3]; [n]; [n, lim] with lim > 0."""
+    def impl(*args: PosInteger | Real) -> Expr:
+        if not args:
+            return Expr(name, 3)
+        if len(args) > 2:
+            raise TypeError(f"{name}: takes at most two arguments")
+        n = _posint_arg(args[0], name, "order")
+        if len(args) == 1:
+            return Expr(name, R(n))
+        lim = _real_arg(args[1], name, "limit")
+        return Expr(name, R(n), args[1] if isinstance(args[1], float) else R(lim))
+    return impl
+
+
+def _cdf_ctor(*args: String) -> Expr:
+    name = "CDFWavelet"
+    if not args:
+        return Expr(name, "9/7")
+    if len(args) > 1:
+        raise TypeError(f"{name}: takes at most one argument")
+    t = args[0]
+    if isinstance(t, Symbol):
+        raise Unevaluated()
+    if not isinstance(t, str):
+        raise TypeError(f"{name}: the type must be the string \"5/3\" or \"9/7\", not {t!r}")
+    if t not in ("5/3", "9/7"):
+        raise ValueError(f"{name}: the type must be \"5/3\" or \"9/7\", not {t!r}")
+    return Expr(name, t)
+
+
+_OBJ_NOTE = ("; invalid parameters raise ValueError (wrong kind TypeError), symbolic ones stay unevaluated. Filter "
+             "coefficients, φ/ψ and the wavelet transforms of this family are not available yet: "
+             "WaveletFilterCoefficients, WaveletPhi and WaveletPsi raise NotImplementedError for it. "
+             "Check: exact (validated constructor); reference (Wolfram documentation defaults) in tests.")
+
+fn("SymletWavelet", area=AREA, status="added",
+   notes="SymletWavelet[] = SymletWavelet[4], SymletWavelet[n] for positive integers n (least-asymmetric orthogonal "
+         "wavelet with n vanishing moments)" + _OBJ_NOTE)(_order_ctor("SymletWavelet", 4))
+fn("CoifletWavelet", area=AREA, status="added",
+   notes="CoifletWavelet[] = CoifletWavelet[2], CoifletWavelet[n] for integers 1 <= n <= 5 (Wolfram's documented "
+         "range)" + _OBJ_NOTE)(_order_ctor("CoifletWavelet", 2, 1, 5))
+fn("BiorthogonalSplineWavelet", area=AREA, status="added",
+   notes="BiorthogonalSplineWavelet[] = BiorthogonalSplineWavelet[4, 2], BiorthogonalSplineWavelet[n, m] for "
+         "positive integers with n + m even" + _OBJ_NOTE)(_spline_ctor("BiorthogonalSplineWavelet"))
+fn("ReverseBiorthogonalSplineWavelet", area=AREA, status="added",
+   notes="ReverseBiorthogonalSplineWavelet[] = ReverseBiorthogonalSplineWavelet[4, 2], [n, m] for positive "
+         "integers with n + m even" + _OBJ_NOTE)(_spline_ctor("ReverseBiorthogonalSplineWavelet"))
+fn("BattleLemarieWavelet", area=AREA, status="added",
+   notes="BattleLemarieWavelet[] = BattleLemarieWavelet[3], BattleLemarieWavelet[n] (n a positive integer; "
+         "equivalent to [n, 10]) and BattleLemarieWavelet[n, lim] with lim > 0" + _OBJ_NOTE)(
+    _lim_ctor("BattleLemarieWavelet"))
+fn("MeyerWavelet", area=AREA, status="added",
+   notes="MeyerWavelet[] = MeyerWavelet[3], MeyerWavelet[n] (n a positive integer) and MeyerWavelet[n, lim] with "
+         "lim > 0" + _OBJ_NOTE)(_lim_ctor("MeyerWavelet"))
+fn("CDFWavelet", area=AREA, status="added",
+   notes="CDFWavelet[] = CDFWavelet[\"9/7\"], CDFWavelet[\"5/3\"] (Cohen-Daubechies-Feauveau biorthogonal "
+         "wavelets of JPEG2000)" + _OBJ_NOTE)(_cdf_ctor)

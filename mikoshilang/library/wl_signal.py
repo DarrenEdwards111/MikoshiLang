@@ -3076,3 +3076,97 @@ fn("SavitzkyGolayMatrix", area=AREA, status="added",
          "WorkingPrecision (machine default, Infinity exact, digits); multidimensional kernels and derivative "
          "orders raise NotImplementedError. Check: exact (rational least squares); reference (Wolfram "
          "documentation examples) in tests.")(_savitzky_golay)
+
+
+# ═════════════════════════════════════════════════════════════ GaborMatrix ══
+def _gabor_matrix(spec: Real | ListOf[Real], k: Real | ListOf[Real], *rest: Real | Option) -> ListOf[Real]:
+    fname = "GaborMatrix"
+    args, opts = _opts(rest, {"Standardized", "WorkingPrecision"}, fname)
+    if len(args) > 1:
+        raise TypeError(f"{fname}: expected GaborMatrix[r, k] or GaborMatrix[r, k, ϕ]")
+    phi = _real_param(args[0], fname, "phase shift", allow_auto=False) if args else sp.Integer(0)
+    std = opts.get("Standardized", True)
+    if std is not True:
+        if std is False:
+            raise NotImplementedError(f"{fname}: Standardized -> False is not supported (the unstandardized "
+                                      "scale is not documented)")
+        raise ValueError(f"{fname}: Standardized must be True or False")
+    wp = _wp_opt(opts["WorkingPrecision"], fname) if "WorkingPrecision" in opts else None
+    ks = [_real_param(v, fname, "wave vector component", allow_auto=False)
+          for v in (k.args if is_list(k) else [k])]
+    if not ks:
+        raise ValueError(f"{fname}: the wave vector must not be empty")
+    d = len(ks)
+    # radius / standard deviation specification
+    if is_list(spec):
+        if not spec.args or len(spec.args) > 2:
+            raise ValueError(f"{fname}: the radius specification must be r, {{r, σ}} or {{{{r1, ...}}, σ}}")
+        rspec = spec.args[0]
+        sspec = spec.args[1] if len(spec.args) == 2 else None
+    else:
+        rspec, sspec = spec, None
+    if is_list(rspec):
+        rs = [_real_param(v, fname, "radius", allow_auto=False) for v in rspec.args]
+        if len(rs) != d:
+            raise ValueError(f"{fname}: {len(rs)} radii given for a {d}-dimensional wave vector")
+    else:
+        rs = [_real_param(rspec, fname, "radius", allow_auto=False)] * d
+    if any(r < 0 for r in rs):
+        raise ValueError(f"{fname}: the radius must be non-negative")
+    rs = [int(sp.floor(r + sp.Rational(1, 2))) for r in rs]      # noninteger r is rounded
+    if sspec is None:
+        if len(set(rs)) > 1:
+            raise NotImplementedError(f"{fname}: different radii need an explicit σ (direction-dependent default "
+                                      "standard deviations are not supported)")
+        sigma = sp.Integer(rs[0]) / 2
+    else:
+        if is_list(sspec):
+            raise NotImplementedError(f"{fname}: standard deviations along and perpendicular to k are not supported")
+        sigma = _real_param(sspec, fname, "standard deviation", allow_auto=False)
+    if not sigma > 0:
+        raise ValueError(f"{fname}: the standard deviation must be positive")
+    exact = wp == "exact"
+    inexact_in = any(isinstance(v, sp.Float) for v in ks + [phi, sigma])
+    if exact and inexact_in:
+        raise ValueError(f"{fname}: WorkingPrecision -> Infinity needs exact parameters")
+    shape = [2 * r + 1 for r in rs]
+    idx = list(np.ndindex(*shape))
+    offs = [[i - r for i, r in zip(ix, rs)] for ix in idx]
+    if exact:
+        env = [sp.exp(-sp.Integer(sum(o * o for o in off)) / (2 * sigma ** 2)) for off in offs]
+        tot = sp.Add(*env)
+        vals = [e * sp.cos(sum(kk * o for kk, o in zip(ks, off)) - phi) / tot for e, off in zip(env, offs)]
+        conv = (lambda v: R(sp.simplify(v))) if len(vals) <= 25 else R
+    else:
+        dps = 15 if wp in (None, "m") else int(mpmath.libmp.prec_to_dps(wp))
+        with mpmath.workdps(dps + 10):
+            s2 = 2 * mpmath.mpf(sp.N(sigma, dps + 10)) ** 2
+            kv = [mpmath.mpf(sp.N(kk, dps + 10)) for kk in ks]
+            ph = mpmath.mpf(sp.N(phi, dps + 10))
+            env = [mpmath.exp(-sum(o * o for o in off) / s2) for off in offs]
+            tot = mpmath.fsum(env)
+            vals = [e * mpmath.cos(mpmath.fsum(kk * o for kk, o in zip(kv, off)) - ph) / tot
+                    for e, off in zip(env, offs)]
+        if wp in (None, "m"):
+            conv = lambda v: float(v)            # noqa: E731
+        else:
+            conv = lambda v: R(sp.Float(v, dps))  # noqa: E731
+    arr = np.empty(len(vals), dtype=object)
+    for i, v in enumerate(vals):
+        arr[i] = conv(v)
+    arr = arr.reshape(shape)
+    return _nest(arr, lambda v: v)
+
+
+fn("GaborMatrix", area=AREA, status="added",
+   notes="GaborMatrix[r, k], GaborMatrix[r, k, ϕ], GaborMatrix[{r, σ}, k, ϕ], GaborMatrix[{{r1, ...}, σ}, k]: "
+         "(2r+1)^d array with entries exp(-x.x/(2σ²)) cos(k.x - ϕ) at offset x from the centre (x_i along the "
+         "i-th dimension), σ = r/2 by default, scaled so that the Gaussian envelope (Abs of GaborMatrix[r, k, 0] + "
+         "I GaborMatrix[r, k, π/2]) sums to 1 (Standardized -> True, the default); a scalar k gives a vector; "
+         "noninteger r is rounded; WorkingPrecision -> Infinity gives exact values, digits give bignums, the "
+         "default is machine precision; Standardized -> False, σ lists (along/perpendicular to k) and different "
+         "radii without σ raise NotImplementedError. Check: exact (WorkingPrecision -> Infinity); reference "
+         "(Wolfram's documented formula and standardization) and the envelope-sum identity in tests.")(_gabor_matrix)
+
+_inert_option("WaveletScale", "option for ContinuousWaveletTransform and related constructs giving the smallest "
+                              "resolvable scale; inert symbol")
