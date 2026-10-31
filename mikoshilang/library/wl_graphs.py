@@ -38,13 +38,19 @@ INF = sp.oo
 _PRESENTATION = {"VertexLabels", "EdgeLabels", "VertexStyle", "EdgeStyle", "GraphLayout", "ImageSize", "PlotLabel",
                  "VertexSize", "VertexShapeFunction", "EdgeShapeFunction", "VertexCoordinates", "PlotTheme",
                  "VertexLabelStyle", "EdgeLabelStyle", "GraphHighlight", "GraphHighlightStyle", "VertexShape",
-                 "ImagePadding", "Background", "BaseStyle", "AspectRatio", "GraphStyle", "Frame", "FrameStyle"}
-_DATA = {"EdgeWeight", "EdgeCapacity", "VertexWeight"}
+                 "ImagePadding", "Background", "BaseStyle", "AspectRatio", "GraphStyle", "Frame", "FrameStyle",
+                 "MultiedgeStyle", "SelfLoopStyle"}
+_DATA = {"EdgeWeight", "EdgeCapacity", "VertexWeight", "EdgeCost", "VertexCapacity", "AnnotationRules"}
 _GRAPH_OPTS = _PRESENTATION | _DATA
 
 
 class GraphError(ValueError):
     pass
+
+
+# Heads that understand tagged edges DirectedEdge[u, v, tag] / UndirectedEdge[u, v, tag] (W24).  Every other graph
+# function keeps raising for tagged edges rather than silently dropping the tags.
+TAG_AWARE = {"Graph", "GraphQ", "VertexList", "EdgeList", "VertexCount", "EdgeCount"}
 
 
 def _is_edge(e):
@@ -56,10 +62,28 @@ def _norm_edge(e, fname):
         if is_list(e) and len(e.args) in (2, 3):
             raise GraphError(f"{fname}: {e} is not an edge; use u <-> v (UndirectedEdge) or u -> v (DirectedEdge)")
         raise GraphError(f"{fname}: {e} is not a valid edge")
+    if len(e.args) == 3 and e.head in ("DirectedEdge", "UndirectedEdge") and fname in TAG_AWARE:
+        return e
     if len(e.args) != 2:
         raise GraphError(f"{fname}: tagged or malformed edge {e} is not supported")
     h = "DirectedEdge" if e.head in ("Rule", "DirectedEdge") else "UndirectedEdge"
     return Expr(h, e.args[0], e.args[1])
+
+
+def _directed_edges(edges, de, fname):
+    """Apply the DirectedEdges option: True makes every edge directed, False every edge undirected."""
+    if isinstance(de, Symbol) and de.name == "Automatic":
+        return list(edges)
+    if de is not True and de is not False:
+        raise GraphError(f"{fname}: DirectedEdges must be True, False or Automatic")
+    h = "DirectedEdge" if de else "UndirectedEdge"
+    out = []
+    for e in edges:
+        if not _is_edge(e):
+            out.append(e)
+            continue
+        out.append(Expr(h, *e.args))
+    return out
 
 
 class WG:
@@ -80,7 +104,7 @@ class WG:
         self.edge_exprs = []
         for e in edges:
             e = _norm_edge(e, fname)
-            u, v = e.args
+            u, v = e.args[0], e.args[1]
             for x in (u, v):
                 if K.tag(x) not in self.index:
                     raise GraphError(f"{fname}: edge {e} uses {x}, which is not in the vertex list")
@@ -237,10 +261,10 @@ class WG:
 def _parse_graph_expr(g, fname):
     args = list(g.args)
     args, opts = split_options(args, _GRAPH_OPTS | {"DirectedEdges"}, fname)
-    if "DirectedEdges" in opts:
-        de = opts.pop("DirectedEdges")
-        if not (de is False or (isinstance(de, Symbol) and de.name == "Automatic")):
-            raise GraphError(f"{fname}: the DirectedEdges option is not supported; give DirectedEdge/Rule edges")
+    de = opts.pop("DirectedEdges", None)
+    if de is not None:
+        args = [L(*_directed_edges(a.args, de, fname)) if is_list(a) and k == len(args) - 1 else a
+                for k, a in enumerate(args)]
     if len(args) == 1 and is_list(args[0]):
         edges = list(args[0].args)
         if edges and not all(_is_edge(e) for e in edges):
@@ -337,12 +361,15 @@ def _graph(*args):
         if len(args) == 1:
             return args[0]
         g = graph_of(args[0], "Graph")
-        pos, opts = split_options(list(args[1:]), _GRAPH_OPTS, "Graph")
+        pos, opts = split_options(list(args[1:]), _GRAPH_OPTS | {"DirectedEdges"}, "Graph")
         if pos:
             raise ValueError("Graph: invalid arguments")
+        edges = g.edge_exprs
+        if "DirectedEdges" in opts:
+            edges = _directed_edges(edges, opts.pop("DirectedEdges"), "Graph")
         merged = dict(g.opts)
         merged.update(opts)
-        return WG(g.vertices, g.edge_exprs, merged).expr()
+        return WG(g.vertices, edges, merged).expr()
     g = _parse_graph_expr(Expr("Graph", *args), "Graph")
     out = g.expr()
     return out
@@ -2223,11 +2250,24 @@ def _int_arg(x, fname, lo=0):
     return x
 
 
+# named graphs whose DirectedEdges -> True orientation is Wolfram's: trees point away from the root, paths and
+# cycles follow the vertex order (the cycle closes with n -> 1)
+_DIRECTABLE = {"PathGraph", "CycleGraph", "KaryTree", "CompleteKaryTree", "StarGraph"}
+
+
 def _named(name, notes):
     def deco(f):
         def impl(*args):
-            pos, opts = split_options(list(args), _GRAPH_OPTS, name)
+            pos, opts = split_options(list(args), _GRAPH_OPTS | {"DirectedEdges"}, name)
             vs, es = f(*pos)
+            if "DirectedEdges" in opts:
+                de = opts.pop("DirectedEdges")
+                if de is True and name not in _DIRECTABLE:
+                    raise NotImplementedError(f"{name}: DirectedEdges -> True is not supported (Wolfram's edge "
+                                              "orientation for this graph is not reproduced)")
+                es = _directed_edges(es, de, name)
+                if de is True and name == "CycleGraph" and len(vs) >= 3:
+                    es[-1] = Expr("DirectedEdge", vs[-1], vs[0])      # 1 -> 2 -> ... -> n -> 1
             return WG(vs, es, opts, name).expr()
         import inspect
         impl.__signature__ = inspect.Signature(
