@@ -2055,6 +2055,15 @@ def _sph_system(n, m, g2, nbig=0):
             rho[i] = -e_[i] / den if den != 0 else mpmath.mpf(0)
         for i in range(anchor, nb - 1):
             vec[i + 1] = rho[i] * vec[i]
+    if anchor > 0:
+        # and below the anchor (they decay towards l = m, like gamma^(n - l)) by the forward continued fraction
+        sig = [mpmath.mpf(0)] * (anchor + 1)      # sig[i] = v[i-1] / v[i]
+        sig[1] = -e_[0] / (d_[0] - lam)
+        for i in range(1, anchor):
+            den = (d_[i] - lam) + e_[i - 1] * sig[i]
+            sig[i + 1] = -e_[i] / den if den != 0 else mpmath.mpf(0)
+        for i in range(anchor, 0, -1):
+            vec[i - 1] = sig[i] * vec[i]
     if abs(vec[-1]) > mpmath.mpf(2) ** (-mpmath.mp.prec):
         raise ArithmeticError("Spheroidal: Legendre expansion truncated too early")
     scale = mpmath.sqrt(N(n))
@@ -2208,57 +2217,35 @@ for _j in (1, 2):
 
 
 # ---------------------------------------------------------------------------------------------------------------
-# Spheroidal joining and radial factors.
-#   SpheroidalRadialFactor[n, m, c] = A_n^m(c) = Sum_k (-1)^k a^m_{n,k}(c^2) (DLMF 30.11.4), the normalising factor
-#   of the Bessel series of the radial functions, where Ps_n^m = Sum_k (-1)^k a^m_{n,k} P^m_{n+2k}.
-#   SpheroidalJoiningFactor[n, 0, c] = SpheroidalS1[n, 0, c, z] / SpheroidalPS[n, 0, c, z] (the documented
-#   relation); only m = 0 is supported, because Wolfram's continuation of SpheroidalPS off [-1, 1] for m != 0
-#   (and so the phase of the factor) could not be confirmed.
+# Spheroidal joining factor: SpheroidalS1[n, m, c, z] = SpheroidalJoiningFactor[n, m, c] SpheroidalPS[n, m, c, z]
+# (documented for m = 0); for m != 0 the factor is real, the phase (-I)^|m| between the Ferrers function used by Ps
+# and the real Legendre function on z > 1 being removed (this reproduces the documented values for m = 1, -1, 5).
+# (SpheroidalRadialFactor is not implemented: its normalisation does not match DLMF 30.11.4 and could not be
+# reproduced from the documented values.)
 # ---------------------------------------------------------------------------------------------------------------
-
-def _sph_A(n, m, g2):
-    am = abs(m)
-    b = _sph_system(n, am, g2)[1] if g2 != 0 else {n: mpmath.mpf(1)}
-    if m >= 0:
-        return mpmath.fsum(b.values())
-    c = mpmath.factorial(n - am) / mpmath.factorial(n + am)
-    return mpmath.fsum(bl * c * mpmath.factorial(l + am) / mpmath.factorial(l - am) for l, bl in b.items())
-
-
-def _sph_radial_factor(n, m, g):
-    n, m = _sph_nm(n, m, "SpheroidalRadialFactor")
-    g2 = _sph_g2(g, "SpheroidalRadialFactor")
-    if g2 == 0:
-        return mpmath.mpf(1)
-    return _verified(lambda: _sph_A(n, m, g2), "SpheroidalRadialFactor")
-
-
-mpfun("SpheroidalRadialFactor", 3, _sph_radial_factor,
-      lambda n, m, g: sp.Integer(1) if (not isinstance(g, list) and g == 0 and not isinstance(n, list) and n.is_integer
-                                        and not isinstance(m, list) and m.is_integer and n >= abs(m)) else None,
-      notes="spheroidal radial factor A_n^m(c) = Sum_k (-1)^k a^m_{n,k}(c^2) (DLMF 30.11.4) with the Meixner-Schaefke "
-            "normalised Legendre coefficients of SpheroidalPS; integer n >= |m|, real or imaginary c (others raise)")
-
 
 def _sph_joining(n, m, g):
     n, m = _sph_nm(n, m, "SpheroidalJoiningFactor")
-    if m != 0:
-        raise NotImplementedError("SpheroidalJoiningFactor: only m = 0 is supported (the phase convention for m != 0 "
-                                  "could not be confirmed)")
     g2 = _sph_g2(g, "SpheroidalJoiningFactor")
     if g2 == 0:
         if n == 0:
             return mpmath.mpf(1)
         raise ValueError("SpheroidalJoiningFactor: c = 0 with n > 0 is a degenerate limit")
 
+    am = abs(m)
+
     def run():
-        a, A = _sph_radial_coeffs(n, 0, g2)
-        b = _sph_system(n, 0, g2)[1]
+        a, A = _sph_radial_coeffs(n, am, g2)
+        b = _sph_system(n, am, g2)[1]
         out = []
         for z in (mpmath.mpf(2), mpmath.mpf(3)):
-            s1 = mpmath.fsum(al * _sph_bessel(1, l, g * z, False) for l, al in a.items()) / A
-            tab = _legP_table(max(b), 0, z)
-            ps = mpmath.fsum(bl * tab[l] for l, bl in b.items())
+            # S1 and Ps for real z > 1 with the Ferrers factor (1 - z^2)^(m/2) = I^m (z^2 - 1)^(m/2) removed
+            s1 = (1 - 1 / (z * z)) ** (mpmath.mpf(am) / 2) * \
+                mpmath.fsum(al * _sph_bessel(1, l, g * z, False) for l, al in a.items()) / A
+            tab = _legP_table(max(b), am, z)
+            ps = mpmath.fsum(bl * tab[l] for l, bl in b.items()) / mpmath.mpc(0, -1) ** am
+            if m < 0:
+                ps *= (-1) ** am * mpmath.factorial(n - am) / mpmath.factorial(n + am)
             out.append(s1 / ps)
         if abs(out[0] - out[1]) > mpmath.mpf(2) ** (-mpmath.mp.prec // 2) * (1 + abs(out[0])):
             raise ArithmeticError("SpheroidalJoiningFactor: inconsistent ratio (numerical failure)")
@@ -2267,8 +2254,10 @@ def _sph_joining(n, m, g):
 
 
 mpfun("SpheroidalJoiningFactor", 3, _sph_joining,
-      notes="joining factor with SpheroidalS1[n, 0, c, z] == SpheroidalJoiningFactor[n, 0, c] SpheroidalPS[n, 0, c, z] "
-            "(the documented relation); integer n >= 0 and m = 0 only (m != 0 raises), real or imaginary c")
+      real=lambda n, m, g: _allreal(n, m, g),
+      notes="joining factor SpheroidalS1[n, m, c, z] / SpheroidalPS[n, m, c, z] (documented for m = 0), for m != 0 "
+            "with the Ferrers phase (-I)^|m| of SpheroidalPS on z > 1 removed (real for real c); integer n >= |m|, "
+            "real or imaginary c")
 
 
 # ---------------------------------------------------------------------------------------------------------------
