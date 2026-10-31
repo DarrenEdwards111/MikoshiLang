@@ -90,10 +90,6 @@ class Img:
         return self.a.shape[-2]
 
     @property
-    def depth(self):
-        return self.a.shape[0] if self.d3 else 1
-
-    @property
     def alpha(self):
         return self.cs != "Automatic" and self.c == NCHANNELS[self.cs] + 1
 
@@ -104,7 +100,8 @@ class Img:
         return self.a[..., -1:] if self.alpha else np.ones(self.a.shape[:-1] + (1,))
 
     def dims(self):
-        return [self.w, self.depth, self.h] if self.d3 else [self.w, self.h]
+        s = self.a.shape
+        return [s[2], s[1], s[0]] if self.d3 else [s[1], s[0]]
 
 
 def default_space(c):
@@ -681,3 +678,389 @@ def _imagedata(x: Expr, *rest: String | Option) -> Expr:
     else:
         t = "Bit" if im.type == "Bit" else "Real64"
     return data_expr(im.a, t, il is not False, rev, im.d3)
+
+
+# ───────────────────────────── colour spaces of pixel arrays ─────────────────────────────
+
+def source_space(img, fname):
+    """Colour space to interpret img's colour channels in (Automatic: 1 channel grayscale, 3 RGB)."""
+    if img.cs != "Automatic":
+        return img.cs
+    n = img.color().shape[-1]
+    if n == 1:
+        return "Grayscale"
+    if n == 3:
+        return "RGB"
+    raise ValueError(f"{fname}: an image with {img.c} channels and ColorSpace Automatic has no colour "
+                     f"interpretation; set ColorSpace first")
+
+
+def convert_array(a, src, target):
+    """(..., n_src) float array of colours in src -> (..., n_target) in target, via the W14 colour formulas."""
+    if src == target:
+        return np.array(a, dtype=float)
+    if src == "Grayscale" and target == "RGB":
+        return np.repeat(a, 3, axis=-1)
+    if src == "RGB" and target == "Grayscale":
+        return (0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2])[..., None]
+    flat = a.reshape(-1, a.shape[-1])
+    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
+    conv = np.array([convert_channels(src, tuple(float(t) for t in u), target) for u in uniq], dtype=float)
+    return conv[np.asarray(inv).reshape(-1)].reshape(a.shape[:-1] + (NCHANNELS[target],))
+
+
+def to_space(img, target, fname):
+    """Img converted to colour space `target` (alpha kept); type kept for Grayscale/RGB/CMYK/HSB, else Real32."""
+    src = source_space(img, fname)
+    col = convert_array(img.color(), src, target)
+    a = np.concatenate([col, img.alpha_array()], axis=-1) if img.alpha else col
+    typ = img.type if target in ("Grayscale", "RGB", "CMYK", "HSB") else larger_type(img.type, "Real32")
+    if typ == "Bit" and not np.all((a == 0) | (a == 1)):
+        typ = "Real32"
+    return Img(quantize(a, typ), typ, target, img.d3)
+
+
+# ───────────────────────────── alpha channels ─────────────────────────────
+
+def _color_with_alpha(c, alpha, fname):
+    p = parse_color(c)
+    space, ch, _ = p
+    if space == "HSB" and len(c.args) == 1:
+        ch = (real_value(c.args[0], fname), 1.0, 1.0)
+    return make_color(space, ch, alpha)
+
+
+@fn("AlphaChannel", area=AREA, status="added",
+    notes="AlphaChannel[color] gives the opacity (1 when none is given); AlphaChannel[image] gives the alpha channel "
+          "as a single-channel \"Grayscale\" image of the same type (all 1 when the image has no alpha channel). "
+          "Non-colours raise TypeError. Check: exact in tests.")
+def _alphachannel(x: Expr) -> Real | Expr:
+    p = parse_color(x)
+    if p is not None:
+        return 1 if p[2] is None else p[2]
+    im = _img1(x, "AlphaChannel")
+    return image_expr(Img(im.alpha_array(), im.type, "Grayscale", im.d3))
+
+
+def _alpha_space(im, fname):
+    if im.cs != "Automatic":
+        return im.cs
+    if im.c == 1:
+        return "Grayscale"
+    raise ValueError(f"{fname}: the image needs an explicit ColorSpace (it has {im.c} channels and ColorSpace "
+                     f"Automatic)")
+
+
+@fn("SetAlphaChannel", area=AREA, status="added",
+    notes="SetAlphaChannel[color] and SetAlphaChannel[color, a] give the colour with opacity 1 or a (an existing "
+          "opacity is replaced); SetAlphaChannel[image] = SetAlphaChannel[image, 1]; SetAlphaChannel[image, a] with a "
+          "number or a single-channel image of the same dimensions (values clipped to 0..1). An Automatic single-"
+          "channel image becomes \"Grayscale\"; other Automatic images raise ValueError, as Wolfram requires an explicit "
+          "colour space. Result type: the larger of the two types (a \"Bit\" image with fractional opacity becomes "
+          "\"Real32\"). Check: exact (AlphaChannel round trip) in tests.")
+def _setalphachannel(x: Expr, a: Real | Expr = 1) -> Expr:
+    if parse_color(x) is not None:
+        return _color_with_alpha(x, min(max(real_arg(a, "SetAlphaChannel", "opacity"), 0.0), 1.0), "SetAlphaChannel")
+    im = _img1(x, "SetAlphaChannel")
+    cs = _alpha_space(im, "SetAlphaChannel")
+    typ = im.type
+    if isinstance(a, Expr) and a.head in IMAGE_HEADS:
+        am = parse_image(a, "SetAlphaChannel")
+        if am.c != 1:
+            raise ValueError("SetAlphaChannel: the alpha image must have a single channel")
+        if am.a.shape[:-1] != im.a.shape[:-1]:
+            raise ValueError("SetAlphaChannel: the alpha image must have the same dimensions as the image")
+        al = np.clip(am.a, 0, 1)
+        typ = larger_type(typ, am.type)
+    else:
+        v = min(max(real_arg(a, "SetAlphaChannel", "opacity"), 0.0), 1.0)
+        al = np.full(im.a.shape[:-1] + (1,), v)
+    if typ == "Bit" and not np.all((al == 0) | (al == 1)):
+        typ = "Real32"
+    out = np.concatenate([im.color(), al], axis=-1)
+    return image_expr(Img(quantize(out, typ), typ, cs, im.d3))
+
+
+def _bg_rgb(bg, fname):
+    p = parse_color(bg)
+    if p is None:
+        if K.is_list(bg) or isinstance(bg, str):
+            raise TypeError(f"{fname}: the background must be a colour or a gray level, not {_short(bg)}")
+        g = real_arg(bg, fname, "background")
+        return "Grayscale", [g]
+    if p[0] == "Grayscale":
+        return "Grayscale", [p[1][0]]
+    return "RGB", list(convert_channels(p[0], p[1], "RGB"))
+
+
+@fn("RemoveAlphaChannel", area=AREA, status="added",
+    notes="RemoveAlphaChannel[color] drops the opacity; RemoveAlphaChannel[color, bg] blends c a + bg (1 - a) and "
+          "gives GrayLevel (both gray) or RGBColor; RemoveAlphaChannel[image] drops the alpha channel (the image itself "
+          "when it has none) and RemoveAlphaChannel[image, bg] blends with the background colour, giving a Grayscale "
+          "or RGB image. Check: exact (blend formula) in tests.")
+def _removealphachannel(x: Expr, bg: Expr = None) -> Expr:
+    fname = "RemoveAlphaChannel"
+    p = parse_color(x)
+    if p is not None:
+        space, ch, alpha = p
+        if space == "HSB" and len(x.args) == 1:
+            ch = (real_value(x.args[0], fname), 1.0, 1.0)
+        if bg is None:
+            return make_color(space, ch) if alpha is not None or x.head == "Opacity" else x
+        a = 1.0 if alpha is None else alpha
+        bspace, bch = _bg_rgb(bg, fname)
+        if space == "Grayscale" and bspace == "Grayscale":
+            return Expr("GrayLevel", ch[0] * a + bch[0] * (1 - a))
+        c = convert_channels(space, ch, "RGB")
+        b = bch * 3 if bspace == "Grayscale" else bch
+        return Expr("RGBColor", *[float(c[i] * a + b[i] * (1 - a)) for i in range(3)])
+    im = _img1(x, fname)
+    if bg is None:
+        return x if not im.alpha else image_expr(im.new(im.color().copy()))
+    if not im.alpha:
+        return x
+    bspace, bch = _bg_rgb(bg, fname)
+    src = source_space(im, fname)
+    a = im.alpha_array()
+    if src == "Grayscale" and bspace == "Grayscale":
+        out, cs = im.color() * a + bch[0] * (1 - a), "Grayscale"
+    else:
+        col = convert_array(im.color(), src, "RGB")
+        b = np.array(bch * 3 if bspace == "Grayscale" else bch)
+        out, cs = col * a + b * (1 - a), "RGB"
+    typ = im.type if im.type != "Bit" or np.all((out == 0) | (out == 1)) else "Real32"
+    return image_expr(Img(quantize(out, typ), typ, cs, im.d3))
+
+
+# ───────────────────────────── constructors ─────────────────────────────
+
+def _value_image(val, dims, fname):
+    """(array (h, w, c) or (d, h, w, c), colour space) of a constant value spec."""
+    d3 = len(dims) == 3
+    shape = (dims[2], dims[1], dims[0]) if d3 else (dims[1], dims[0])
+    p = parse_color(val)
+    if p is not None:
+        space, ch, alpha = p
+        if space == "HSB" and len(val.args) == 1:
+            ch = (real_value(val.args[0], fname), 1.0, 1.0)
+        vec = list(ch) + ([] if alpha is None else [alpha])
+        return np.broadcast_to(np.array(vec, dtype=float), shape + (len(vec),)).copy(), space
+    if K.is_list(val):
+        vec = [real_arg(v, fname, "channel value") for v in val.args]
+        if not vec:
+            raise ValueError(f"{fname}: the channel list is empty")
+        return np.broadcast_to(np.array(vec), shape + (len(vec),)).copy(), default_space(len(vec))
+    v = real_arg(val, fname, "value")
+    return np.full(shape + (1,), v), "Automatic"
+
+
+@fn("ConstantImage", area=AREA, status="added",
+    notes="ConstantImage[val, size, type] with val a gray level, a list of channel values or a colour directive (the "
+          "colour's space, opacity as alpha), size side, {w, h} or {w, d, h} (Image3D), default {150, 150}, type "
+          "default \"Real32\"; option ColorSpace relabels. Check: exact in tests.")
+def _constantimage(val: Real | ListOf[Real] | Expr, *rest: Integer | ListOf[PosInteger] | String | Option) -> Expr:
+    pos, o = opts_split(rest, {"ColorSpace"}, "ConstantImage")
+    if len(pos) > 2:
+        raise ValueError("ConstantImage: expected ConstantImage[val, size, type]")
+    dims = size_arg(pos[0] if pos else None, "ConstantImage")
+    typ = type_arg(pos[1], "ConstantImage") if len(pos) > 1 else None
+    a, cs = _value_image(val, dims, "ConstantImage")
+    if "ColorSpace" in o:
+        cs = space_arg(o["ColorSpace"], "ConstantImage")
+        if cs != "Automatic" and a.shape[-1] not in (NCHANNELS[cs], NCHANNELS[cs] + 1):
+            raise ValueError(f"ConstantImage: ColorSpace \"{cs}\" does not match {a.shape[-1]} channel values")
+    typ = typ or "Real32"
+    return image_expr(Img(quantize(a, typ), typ, cs, len(dims) == 3))
+
+
+@fn("RandomImage", area=AREA, status="added",
+    notes="RandomImage[] = RandomImage[1, {150, 150}]; RandomImage[max], RandomImage[{min, max}] (uniform) and "
+          "RandomImage[dist] (values from RandomVariate[dist]) with size side, {w, h} or {w, d, h} and type (default "
+          "\"Real32\"; integer types round the 0..1 values); ColorSpace -> cs gives that many channels per pixel. "
+          "Reproducible after SeedRandom (the stream differs from Wolfram's). Check: reference (range, dimensions, "
+          "type and sample statistics) in tests.")
+def _randomimage(*args: Real | ListOf[Real] | Expr | Option) -> Expr:
+    fname = "RandomImage"
+    pos, o = opts_split(args, {"ColorSpace", "Interleaving"}, fname)
+    if len(pos) > 3:
+        raise ValueError("RandomImage: expected RandomImage[range, size, type]")
+    spec = pos[0] if pos else 1
+    dims = size_arg(pos[1] if len(pos) > 1 else None, fname)
+    typ = type_arg(pos[2], fname) if len(pos) > 2 else None
+    cs = space_arg(o["ColorSpace"], fname) if "ColorSpace" in o else "Automatic"
+    nch = NCHANNELS[cs] if cs != "Automatic" else 1
+    d3 = len(dims) == 3
+    shape = ((dims[2], dims[1], dims[0]) if d3 else (dims[1], dims[0])) + (nch,)
+    n = int(np.prod(shape))
+    if K.is_list(spec):
+        if len(spec.args) != 2:
+            raise ValueError("RandomImage: the range must be {min, max}")
+        lo, hi = (real_arg(v, fname, "range") for v in spec.args)
+        a = _rng().uniform(lo, hi, size=shape)
+    elif isinstance(spec, Expr) and spec.head.endswith("Distribution"):
+        from ..evaluate import evaluate
+        vals = evaluate(Expr("RandomVariate", spec, n))
+        if not K.is_list(vals) or len(vals.args) != n:
+            raise Unevaluated()
+        a = np.array([_leaf_float(v, fname) for v in vals.args]).reshape(shape)
+    else:
+        if isinstance(spec, str) or isinstance(spec, bool):
+            raise TypeError(f"RandomImage: {_short(spec)} is not a range or a distribution")
+        hi = real_arg(spec, fname, "maximum")
+        a = _rng().uniform(0.0, hi, size=shape)
+    typ = typ or "Real32"
+    return image_expr(Img(quantize(a, typ), typ, cs, d3))
+
+
+for _name, _note in [
+        ("Interleaving", "option of Image, ImageData, ImageApply, ImageScan, ImageFilter... giving whether channel "
+                         "values are interleaved (True) or planar (False); Image/ImageData honour it and the pixel "
+                         "functions pass whole channel lists or single values accordingly. Inert as an expression."),
+        ("Masking", "option naming a region of interest for image functions; the W21 functions support only the "
+                    "default All (other settings raise NotImplementedError). Inert as an expression."),
+        ("MaxColorDistance", "option giving the largest colour distance allowed (FindMatchingColor, ColorDetect "
+                             "forms); inert as an expression."),
+        ("MinColorDistance", "option of DominantColors: clusters whose representative colours are closer than d (by "
+                             "ColorDistance) are merged. Inert as an expression."),
+        ("PreserveColor", "option of ImageRestyle and related functions (not part of W21); inert as an expression."),
+        ("ZoomCenter", "option of DynamicImage (a front-end display function); inert as an expression."),
+        ("ZoomFactor", "option of DynamicImage (a front-end display function); inert as an expression.")]:
+    inert_option(_name, _note + " Check: reference (Wolfram documentation settings) in tests.", area=AREA)
+
+
+# ───────────────────────────── colour operations ─────────────────────────────
+
+def _one_minus(v):
+    if isinstance(v, float):
+        return 1.0 - v
+    if isinstance(v, int) and not isinstance(v, bool):
+        return 1 - v
+    return K.from_sp(1 - K.to_sp(v))
+
+
+def _negate_color(c, fname="ColorNegate"):
+    space, ch, alpha = parse_color(c)
+    if space == "HSB" and len(c.args) == 1:
+        ch = (real_value(c.args[0], fname), 1.0, 1.0)
+    if c.head in ("RGBColor", "GrayLevel") and len(c.args) in (NCHANNELS[space], NCHANNELS[space] + 1) \
+            and not K.is_list(c.args[0]):
+        n = NCHANNELS[space]
+        return Expr(c.head, *[_one_minus(v) for v in c.args[:n]], *c.args[n:])
+    if space in ("RGB", "Grayscale"):
+        return make_color(space, [1 - v for v in ch], alpha)
+    rgb = convert_channels(space, ch, "RGB")
+    return make_color(space, convert_channels("RGB", [1 - v for v in rgb], space), alpha)
+
+
+def negate_img(im):
+    col = im.color()
+    if im.cs in ("Automatic", "Grayscale", "RGB"):
+        neg = 1.0 - col
+    else:
+        neg = convert_array(1.0 - convert_array(col, im.cs, "RGB"), "RGB", im.cs)
+    a = np.concatenate([neg, im.alpha_array()], axis=-1) if im.alpha else neg
+    return im.new(quantize(a, im.type))
+
+
+@fn("ColorNegate", area=AREA, status="added",
+    notes="ColorNegate[color] maps each RGB (or gray) channel v to 1 - v, keeping opacity and the colour's space (other "
+          "spaces are negated through RGB, as documented); ColorNegate[image] does the same per pixel keeping type, "
+          "colour space and alpha (images with ColorSpace Automatic negate every channel); ColorNegate[{...}] maps. "
+          "Non-colours raise TypeError, symbols stay unevaluated. Check: exact (involution ColorNegate[ColorNegate[x]] "
+          "== x and the documented 1 - v) in tests.")
+def _colornegate(x: Expr) -> Expr:
+    if K.is_list(x):
+        return L(*[_colornegate(v) for v in x.args])
+    if parse_color(x) is not None:
+        return _negate_color(x)
+    return image_expr(negate_img(_img1(x, "ColorNegate")))
+
+
+_CHANNEL_NAMES = {"Red": ("RGB", 0), "R": ("RGB", 0), "Green": ("RGB", 1), "G": ("RGB", 1), "Blue": ("RGB", 2),
+                  "B": ("RGB", 2), "Cyan": ("CMYK", 0), "C": ("CMYK", 0), "Magenta": ("CMYK", 1), "M": ("CMYK", 1),
+                  "Yellow": ("CMYK", 2), "Y": ("CMYK", 2), "Black": ("CMYK", 3), "K": ("CMYK", 3),
+                  "Hue": ("HSB", 0), "H": ("HSB", 0), "Saturation": ("HSB", 1), "S": ("HSB", 1),
+                  "Brightness": ("HSB", 2), "V": ("HSB", 2), "Intensity": ("Grayscale", 0), "Gray": ("Grayscale", 0),
+                  "I": ("Grayscale", 0), "Luminance": ("LAB", 0), "L": ("LAB", 0)}
+
+
+def _single(im, a, typ=None):
+    return Img(a, typ or im.type, "Automatic", im.d3)
+
+
+def _separate(im, spec, fname="ColorSeparate"):
+    """List of single-channel Img for a ColorSeparate specification (a str, Automatic or None)."""
+    if spec is None or _is_sym(spec, "Automatic"):
+        return [_single(im, im.a[..., i:i + 1]) for i in range(im.color().shape[-1] if im.cs != "Automatic"
+                                                                 else im.c)]
+    if not isinstance(spec, str):
+        raise TypeError(f"{fname}: {_short(spec)} is not a colour space or channel name")
+    if spec in ("Alpha", "A"):
+        return [_single(im, im.alpha_array())]
+    if spec == "Average":
+        return [_single(im, im.color().mean(axis=-1, keepdims=True), larger_type(im.type, "Real32")
+                        if im.type == "Bit" else im.type)]
+    if spec in ("RGBA",):
+        conv = to_space(im, "RGB", fname)
+        return [_single(conv, conv.a[..., i:i + 1]) for i in range(3)] + [_single(conv, im.alpha_array())]
+    if spec in SPACE_LIST:
+        conv = to_space(im, spec, fname)
+        return [_single(conv, conv.a[..., i:i + 1]) for i in range(NCHANNELS[spec])]
+    if spec in _CHANNEL_NAMES:
+        space, i = _CHANNEL_NAMES[spec]
+        conv = to_space(im, space, fname)
+        return [_single(conv, conv.a[..., i:i + 1])]
+    raise ValueError(f"{fname}: {spec!r} is not a colour space or channel name")
+
+
+@fn("ColorSeparate", area=AREA, status="added",
+    notes="ColorSeparate[image] gives one single-channel image per colour channel (alpha excluded when the image has a "
+          "colour space; every channel for ColorSpace Automatic); ColorSeparate[image, cs] converts to cs (\"RGB\", "
+          "\"RGBA\", \"CMYK\", \"HSB\", \"XYZ\", \"LAB\", \"LCH\", \"LUV\", \"Grayscale\") first; channel names "
+          "\"R\"/\"Red\", \"G\", \"B\", \"C\", \"M\", \"Y\", \"K\", \"H\", \"S\", \"V\"/\"Brightness\", \"I\"/"
+          "\"Intensity\"/\"Gray\" (Rec. 601 luma), \"L\"/\"Luminance\" (L of LAB), \"A\"/\"Alpha\", \"Average\" "
+          "give one image; a list of names gives a list. Types are kept except for the CIE spaces (\"Real32\"). "
+          "Conversions use the ColorConvert formulas. Check: exact (ColorCombine[ColorSeparate[i]] == i) in tests.")
+def _colorseparate(x: Expr, spec: String | ListOf[String] | Expr = None) -> ListOf[Expr] | Expr:
+    im = _img1(x, "ColorSeparate")
+    if K.is_list(spec):
+        out = []
+        for s in spec.args:
+            out.extend(_separate(im, s))
+        return L(*[image_expr(i) for i in out])
+    parts = _separate(im, spec)
+    if isinstance(spec, str) and (spec in _CHANNEL_NAMES or spec in ("Alpha", "A", "Average")):
+        return image_expr(parts[0])
+    return L(*[image_expr(i) for i in parts])
+
+
+@fn("ColorCombine", area=AREA, status="added",
+    notes="ColorCombine[{image1, image2, ...}] concatenates the channels of images of equal dimensions (largest "
+          "type); single-channel inputs give an \"RGB\" image for 3 or 4 channels (the 4th as alpha) and Automatic "
+          "otherwise, and a colour image followed by one single-channel image gives that colour space with alpha; "
+          "ColorCombine[{...}, cs] labels the result with cs (n or n + 1 channels, else ValueError). Check: exact "
+          "(round trip with ColorSeparate) in tests.")
+def _colorcombine(imgs: ListOf[Expr], cs: String = None) -> Expr:
+    if not K.is_list(imgs):
+        if isinstance(imgs, Symbol):
+            raise Unevaluated()
+        raise TypeError("ColorCombine: the first argument must be a list of images")
+    if not imgs.args:
+        raise ValueError("ColorCombine: the list of images is empty")
+    ims = [parse_image(v, "ColorCombine") for v in imgs.args]
+    if len({i.a.shape[:-1] for i in ims}) != 1 or len({i.d3 for i in ims}) != 1:
+        raise ValueError("ColorCombine: the images must have the same dimensions")
+    a = np.concatenate([i.a for i in ims], axis=-1)
+    typ = larger_type(*[i.type for i in ims])
+    if cs is not None:
+        space = space_arg(cs, "ColorCombine")
+        if space != "Automatic" and a.shape[-1] not in (NCHANNELS[space], NCHANNELS[space] + 1):
+            raise ValueError(f"ColorCombine: \"{space}\" needs {NCHANNELS[space]} or {NCHANNELS[space] + 1} "
+                             f"channels, the images have {a.shape[-1]}")
+    elif len(ims) == 2 and ims[0].cs != "Automatic" and not ims[0].alpha and ims[1].c == 1:
+        space = ims[0].cs
+    elif all(i.c == 1 for i in ims):
+        space = default_space(a.shape[-1])
+    else:
+        space = "Automatic"
+    return image_expr(Img(quantize(a, typ), typ, space, ims[0].d3))
