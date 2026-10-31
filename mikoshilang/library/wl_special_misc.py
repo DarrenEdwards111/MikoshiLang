@@ -276,7 +276,7 @@ def _lambda_value(v):
 
 def _comb_value(v):
     if isinstance(v, sp.Float):
-        if v == int(v):
+        if float(v) == int(v):
             return None
         return sp.Integer(0)
     if v.is_integer:
@@ -372,3 +372,253 @@ NOTES = {
 _wave("SquareWave", _square, None)
 _wave("TriangleWave", _triangle, None)
 _wave("SawtoothWave", _sawtooth, None)
+
+
+# ───────────────────────────── mathematical constants ─────────────────────────────
+
+class _WLConstant(sp.NumberSymbol):
+    """A real Wolfram constant evaluated with mpmath (N[Glaisher, 50] etc.)."""
+    is_real = True
+    is_positive = True
+    is_irrational = True
+    is_number = True
+    __slots__ = ()
+    _wl_name = ""
+    _mp = None
+    _bounds = (0, 1)
+
+    def _as_mpf_val(self, prec):
+        with mpmath.workprec(prec + 20):
+            v = type(self)._mp()
+        return mpmath.mpf(v)._mpf_
+
+    def approximation_interval(self, number_cls):
+        if issubclass(number_cls, sp.Integer):
+            return (sp.Integer(self._bounds[0]), sp.Integer(self._bounds[1]))
+
+    def _latex(self, printer):
+        return self._wl_name
+
+    def __str__(self):
+        return self._wl_name
+
+    __repr__ = __str__
+
+
+def _constant(name, mpfun, bounds, notes):
+    cls = type(name + "Constant", (_WLConstant,), {"__slots__": (), "_wl_name": name, "_mp": staticmethod(mpfun),
+                                                   "_bounds": bounds})
+    cls = sp.core.singleton.Singleton(cls.__name__, (cls,), {"__slots__": ()}) if False else cls
+    inst = cls()
+    from .. import math_ops
+    math_ops._CONSTANTS[name] = inst
+    from .core import record
+    record(name, AREA, STATUS, notes)
+    return inst
+
+
+GLAISHER = _constant("Glaisher", lambda: mpmath.glaisher, (1, 2),
+                     "Glaisher-Kinkelin constant A = 1.28242712910062...; symbolic constant, N[Glaisher, n] to any "
+                     "precision (mpmath glaisher)")
+KHINCHIN = _constant("Khinchin", lambda: mpmath.khinchin, (2, 3),
+                     "Khinchin's constant K = 2.68545200106530...; symbolic constant, N[Khinchin, n] to any "
+                     "precision (mpmath khinchin)")
+GOLDEN_ANGLE = _constant("GoldenAngle", lambda: (3 - mpmath.sqrt(5)) * mpmath.pi, (2, 3),
+                         "GoldenAngle = (3 - Sqrt[5]) Pi = 2.39996322972865...; symbolic constant, N to any precision")
+
+
+def _champernowne(b):
+    if float(b) != int(b) or b < 2:
+        raise ValueError("ChampernowneNumber: the base must be an integer greater than 1")
+    b = int(b)
+    prec = mpmath.mp.prec
+    x = mpmath.mpf(0)
+    scale = mpmath.mpf(1)
+    n = 1
+    lim = mpmath.mpf(2) ** (-(prec + 10))
+    while True:
+        digits = len(mpmath.libmp.numeral(n, b)) if b <= 36 else len(_digits(n, b))
+        scale = scale / mpmath.mpf(b) ** digits
+        x += n * scale
+        if scale * n < lim:
+            break
+        n += 1
+    return x
+
+
+def _digits(n, b):
+    out = []
+    while n:
+        n, r = divmod(n, b)
+        out.append(r)
+    return out
+
+
+def _champernowne_check(*vals):
+    if len(vals) == 1 and vals[0].is_number:
+        b = vals[0]
+        if not (b.is_integer or (isinstance(b, sp.Float) and float(b) == int(b))) or b < 2:
+            raise ValueError("ChampernowneNumber: the base must be an integer greater than 1")
+
+
+def _champernowne_impl(*args):
+    if not args:
+        return Expr("ChampernowneNumber", 10)
+    return _champernowne_numeric(*args)
+
+
+_champernowne_numeric = special("ChampernowneNumber", 1, _champernowne, None, check=_champernowne_check,
+                                notes="ChampernowneNumber[b] = 0.123456789101112... in base b (stays symbolic; N "
+                                      "gives any precision); ChampernowneNumber[] is base 10")
+_register("ChampernowneNumber", 0, _champernowne_impl, "ChampernowneNumber[] = ChampernowneNumber[10]")
+
+
+# ───────────────────────────── harmonic-type numbers ─────────────────────────────
+
+def _is_nonneg_int(v):
+    return v.is_Integer and v >= 0
+
+
+def _alt_harmonic(*args):
+    name = "AlternatingHarmonicNumber"
+    vals = [sym(a, name) for a in args]
+    if not all(v.is_number for v in vals):
+        raise Unevaluated()
+    n = vals[0]
+    r = vals[1] if len(vals) > 1 else sp.Integer(1)
+    s = vals[2] if len(vals) > 2 else sp.Integer(1)
+    prec = input_precision(args)
+    if n.is_Integer:
+        if n < 0:
+            if prec is None:
+                raise Unevaluated()
+        else:
+            if prec is None:
+                return R(sp.Add(*[(-1) ** (i + 1) * s ** i / sp.Integer(i) ** r for i in range(1, int(n) + 1)]))
+    if prec is None:
+        raise Unevaluated()
+
+    def f(n, r, s):
+        sign = mpmath.power(-1, n)
+        if len(vals) == 1:
+            return mpmath.log(2) - sign * mpmath.lerchphi(-1, 1, 1 + n)
+        if len(vals) == 2:
+            return mpmath.power(2, -r) * ((mpmath.power(2, r) - 2) * mpmath.zeta(r) - sign * mpmath.zeta(r, (1 + n) / 2)
+                                          + sign * mpmath.zeta(r, 1 + n / 2))
+        return mpmath.power(-s, 1 + n) * mpmath.lerchphi(-s, r, 1 + n) - mpmath.polylog(r, -s)
+    return mp_eval(f, [n, r, s], prec)
+
+
+_register("AlternatingHarmonicNumber", (1, 3), _alt_harmonic,
+          "AlternatingHarmonicNumber[n] = Sum[(-1)^(i+1)/i, {i, n}], [n, r] = Sum[(-1)^(i+1)/i^r], [n, r, s] = "
+          "Sum[(-1)^(i+1) s^i/i^r]; exact for non-negative integer n, approximate arguments via the reference "
+          "analytic continuations (LerchPhi / Hurwitz Zeta / PolyLog)")
+
+
+def _harmonic_rs(k, r, s):
+    return sp.Add(*[s ** i / sp.Integer(i) ** r for i in range(1, k + 1)])
+
+
+def _hyper_harmonic(*args):
+    name = "HyperHarmonicNumber"
+    vals = [sym(a, name) for a in args]
+    if not all(v.is_number for v in vals):
+        if len(vals) == 2 and vals[0] == 1:
+            return Expr("HarmonicNumber", args[1])
+        raise Unevaluated()
+    p, n = vals[0], vals[1]
+    r = vals[2] if len(vals) > 2 else sp.Integer(1)
+    s = vals[3] if len(vals) > 3 else sp.Integer(1)
+    prec = input_precision(args)
+    if _is_nonneg_int(p) and _is_nonneg_int(n) and int(n) <= 20000 and int(p) <= 200:
+        p, n = int(p), int(n)
+        if p == 0:
+            if n == 0:
+                return Symbol("ComplexInfinity") if len(vals) == 2 else Symbol("ComplexInfinity")
+            out = s ** n / sp.Integer(n) ** r
+        else:
+            row = [sp.Integer(0)] + [s ** k / sp.Integer(k) ** r for k in range(1, n + 1)]   # level 0
+            for _ in range(p):
+                acc, new = sp.Integer(0), [sp.Integer(0)]
+                for k in range(1, n + 1):
+                    acc += row[k]
+                    new.append(acc)
+                row = new
+            out = row[n]
+        out = R(sp.nsimplify(out) if prec is None else out)
+        return out
+    if prec is None or len(vals) > 2:
+        raise Unevaluated()
+    if p.is_Integer and p <= 0:
+        raise Unevaluated()
+
+    def f(p, n):
+        return mpmath.gamma(n + p) / (mpmath.gamma(n + 1) * mpmath.gamma(p)) * (mpmath.digamma(n + p) - mpmath.digamma(p))
+    return mp_eval(f, [p, n], prec)
+
+
+_register("HyperHarmonicNumber", (2, 4), _hyper_harmonic,
+          "HyperHarmonicNumber[p, n]: p-fold cumulative sums of harmonic numbers (level 0 = 1/n); [p, n, r] and "
+          "[p, n, r, s] with order r and decoration s (level 1 = HarmonicNumber[n, r, s] = Sum[s^k/k^r]); exact "
+          "for non-negative integers p, n; HyperHarmonicNumber[1, n] = HarmonicNumber[n]; other approximate "
+          "p, n via Gamma[n + p]/(n! Gamma[p]) (PolyGamma[n + p] - PolyGamma[p])")
+
+
+def _nested_sum(n, rs, ss, zero, one, power):
+    """Sum over n >= n1 > n2 > ... > nk >= 1 of prod s_i^n_i / n_i^r_i (dynamic programming)."""
+    k = len(rs)
+    prev = [one] * (n + 1)          # depth beyond k: empty product
+    for i in range(k - 1, -1, -1):
+        cur = [zero] * (n + 1)
+        acc = zero
+        for m in range(1, n + 1):
+            inner = prev[m - 1] if i < k - 1 else one
+            acc = acc + power(ss[i], m) / power(m, rs[i]) * inner
+            cur[m] = acc
+        prev = cur
+    return prev[n]
+
+
+def _multiple_harmonic(*args):
+    name = "MultipleHarmonicNumber"
+    if len(args) == 1:
+        return Expr("HarmonicNumber", args[0])
+    n = args[0]
+    if not is_list(args[1]) or (len(args) == 3 and not is_list(args[2])):
+        raise ValueError(f"{name}: weights and decorations must be lists")
+    rs = list(args[1].args)
+    ss = list(args[2].args) if len(args) == 3 else [1] * len(rs)
+    if len(ss) != len(rs):
+        raise ValueError(f"{name}: the weight and decoration lists must have the same length")
+    if not rs:
+        return 1
+    if isinstance(n, Symbol) and n.name == "Infinity":
+        if len(args) == 2:
+            return Expr("MultipleZeta", args[1])
+        return Expr("MultiplePolyLog", args[1], args[2])
+    nv = sym(n, name)
+    if not nv.is_number:
+        raise Unevaluated()
+    if not _is_nonneg_int(nv):
+        raise ValueError(f"{name}: the truncation index must be a non-negative integer")
+    rv = [sym(x, name) for x in rs]
+    sv = [sym(x, name) for x in ss]
+    if not all(v.is_number for v in rv + sv):
+        raise Unevaluated()
+    N = int(nv)
+    if N > 100000:
+        raise ValueError(f"{name}: truncation index too large for direct summation")
+    prec = input_precision(rs + ss)
+    if prec is None:
+        if N > 5000:
+            raise ValueError(f"{name}: exact truncation index too large (at most 5000)")
+        return R(sp.nsimplify(_nested_sum(N, rv, sv, sp.Integer(0), sp.Integer(1),
+                                          lambda b, e: sp.Integer(b) ** e if isinstance(b, int) else b ** e)))
+    return mp_eval(lambda *v: _nested_sum(N, v[:len(rv)], v[len(rv):], mpmath.mpf(0), mpmath.mpf(1), mpmath.power),
+                   rv + sv, prec)
+
+
+_register("MultipleHarmonicNumber", (1, 3), _multiple_harmonic,
+          "MultipleHarmonicNumber[n, {r1, ..., rk}, {s1, ..., sk}] = Sum over n >= n1 > ... > nk >= 1 of "
+          "s1^n1 ... sk^nk/(n1^r1 ... nk^rk) (exact for exact weights); MultipleHarmonicNumber[n] = "
+          "HarmonicNumber[n]; n = Infinity gives MultipleZeta / MultiplePolyLog", listable=False, numeric=False)
