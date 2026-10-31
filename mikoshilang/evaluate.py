@@ -408,12 +408,35 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
 
     if not isinstance(head, str):
         # 8b. Associations as functions, Key[k][assoc], compositions and operator forms (Select[crit][list])
+        if isinstance(head, Expr) and head.head == "PythonFunction":
+            from .interop import apply_python_function
+            from .library.core import Unevaluated as _Uneval
+            try:
+                return apply_python_function(head, new_args)
+            except _Uneval:
+                return new_expr
         if isinstance(head, Expr):
             from .kernel_lists import apply_compound_head
             r = apply_compound_head(head, new_args, ev)
             if r is not kernel.UNHANDLED:
                 return r
         return new_expr
+
+    # 9a. Session-local typed Python functions (Session.function)
+    st = kernel.state()
+    if st.ext.get("\x00python_functions"):
+        from .interop import lookup, call_registered
+        info = lookup(st, head)
+        if info is not None:
+            from .library.core import Unevaluated as _Uneval
+            try:
+                result = call_registered(info, new_expr.args)
+            except _Uneval:
+                return new_expr
+            if isinstance(result, Expr) and result != new_expr:
+                _supersede(chain)
+                result = evaluate(result, depth + 1)
+            return result
 
     # 9. Reviewed function library
     result = replace(new_expr, SIMPLIFICATION_RULES)

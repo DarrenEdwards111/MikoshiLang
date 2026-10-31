@@ -31,20 +31,54 @@ values = _Values()
 class Session:
     """Independent definitions for one notebook/user; not an execution sandbox."""
 
-    def __init__(self, allow_network=False):
+    def __init__(self, allow_network=False, allow_python=False):
+        """allow_python: False (default), True (any module) or a set of module names PythonFunction may call."""
         self.state = SessionState()
         self.allow_network = allow_network
+        self.allow_python = frozenset(allow_python) if isinstance(allow_python, (set, frozenset, list, tuple)) \
+            else bool(allow_python)
 
     def evaluate(self, source):
         from .parser import parse
         from .evaluate import evaluate
+        from .interop import _python
         network_token = _network.set(self.allow_network)
+        python_token = _python.set(self.allow_python)
         token = _state.set(self.state)
         try:
             return evaluate(parse(source) if isinstance(source, str) else source)
         finally:
             _state.reset(token)
+            _python.reset(python_token)
             _network.reset(network_token)
+
+    # ── Python interop (prototype; see PYTHON_INTEROP.md) ──
+
+    def eval(self, source, out="python", symbolic="expr", arrays="list"):
+        """Evaluate source (a string, an Expr or a Python value) and convert the result with to_python.
+
+        out="python" (default): data as Python values, symbolic results as Expr (symbolic="sympy" converts them);
+        out="expr": the raw MikoshiLang result.
+        """
+        from .interop import from_python, to_python
+        expr = source if isinstance(source, str) else from_python(source)
+        result = self.evaluate(expr)
+        return result if out == "expr" else to_python(result, symbolic=symbolic, arrays=arrays)
+
+    @property
+    def ns(self):
+        """Pythonic calls: ml = session.ns; ml.Integrate(x**2, x)."""
+        from .interop import Namespace
+        return Namespace(self)
+
+    def function(self, fn=None, *, name=None, listable=False, notes="", check="delegated", override=False):
+        """Decorator: register a typed Python function as a head in this session (types from its hints)."""
+        from .interop import register
+        def deco(f):
+            f.mikoshi = register(self.state, f, name=name, listable=listable, notes=notes, check=check,
+                                 override=override)
+            return f
+        return deco(fn) if fn is not None else deco
 
     def evaluate_input(self, source, whole=True):
         """Evaluate input as the Wolfram main loop: In[n]/Out[n]/InString[n] history, $Line, $Pre, $Post, $PreRead.
