@@ -2689,3 +2689,360 @@ fn("InverseHankelTransform", area=AREA, status="added",
          "sympy.inverse_hankel_transform; a numeric r evaluates the closed form; unknown transforms stay "
          "unevaluated. Check: delegated (sympy.inverse_hankel_transform); reference (Wolfram documentation "
          "examples, HankelTransform round trips) in tests.")(_hankel("InverseHankelTransform", True))
+
+
+# ═══════════════════════════════════════════════════════════════ kernel matrices ══
+_SHEN_C = sp.Rational(102798103, 66535189)   # Wolfram's b = σ / c (exact value shown in ref/ShenCastanMatrix)
+_KMAX_EXACT, _KMAX = 20000, 4_000_000
+
+
+def _auto(v):
+    return isinstance(v, Symbol) and v.name == "Automatic"
+
+
+def _num_param(v, fname, what, allow_auto=True):
+    if allow_auto and _auto(v):
+        return None
+    if isinstance(v, (str, bool)) or is_list(v):
+        raise TypeError(f"{fname}: the {what} must be a number, not {v!r}")
+    x = sp.sympify(S(v)) if not isinstance(v, (int, float)) else sp.sympify(v)
+    if _is_symbolic(x):
+        raise Unevaluated()
+    if not (x.is_number and x.is_real):
+        raise TypeError(f"{fname}: the {what} must be a real number, not {v!r}")
+    return x
+
+
+def _kernel_spec(spec, fname):
+    """First argument of GaussianMatrix/ShenCastanMatrix -> (rs, sigmas, fracs) lists (None = Automatic)."""
+    if is_list(spec) and spec.args and all(is_list(a) for a in spec.args):
+        if not 1 <= len(spec.args) <= 3:
+            raise ValueError(f"{fname}: the specification must be {{{{r...}}, {{σ...}}, {{f...}}}}")
+        lists = [list(a.args) for a in spec.args]
+        d = max(len(l) for l in lists)
+        for l in lists:
+            if len(l) not in (1, d):
+                raise ValueError(f"{fname}: radius, σ and fraction lists must have equal lengths")
+        cols = [[l[i] if len(l) == d else l[0] for i in range(d)] for l in lists]
+    elif is_list(spec):
+        if not 2 <= len(spec.args) <= 3 or any(is_list(a) for a in spec.args):
+            raise ValueError(f"{fname}: the specification must be r, {{r, σ}} or {{r, σ, f}}")
+        cols = [[a, a] for a in spec.args]
+        d = 2
+    else:
+        cols, d = [[spec, spec]], 2
+    rs = [_num_param(v, fname, "radius") for v in cols[0]]
+    sig = [_num_param(v, fname, "standard deviation") for v in cols[1]] if len(cols) > 1 else [None] * d
+    fr = [_num_param(v, fname, "fraction") for v in cols[2]] if len(cols) > 2 else [None] * d
+    return rs, sig, fr
+
+
+def _kernel_base(kind, sigma, x, method, exact, dps):
+    """Untruncated 1-D profile value at integer x."""
+    if exact:
+        if kind == "ShenCastan":
+            return sp.tanh(_SHEN_C / (2 * sigma)) * sp.exp(-_SHEN_C * abs(x) / sigma)
+        if method == "Gaussian":
+            return sp.exp(-sp.Integer(x) ** 2 / (2 * sigma ** 2)) / (sp.sqrt(2 * sp.pi) * sigma)
+        return sp.exp(-sigma ** 2) * sp.besseli(abs(x), sigma ** 2)
+    s = mpmath.mpf(sp.N(sigma, dps + 5)) if isinstance(sigma, sp.Basic) else mpmath.mpf(sigma)
+    if kind == "ShenCastan":
+        c = mpmath.mpf(102798103) / 66535189
+        return mpmath.tanh(c / (2 * s)) * mpmath.exp(-c * abs(x) / s)
+    if method == "Gaussian":
+        return mpmath.exp(-mpmath.mpf(x) ** 2 / (2 * s ** 2)) / (mpmath.sqrt(2 * mpmath.pi) * s)
+    return mpmath.exp(-s ** 2) * mpmath.besseli(abs(x), s ** 2)
+
+
+def _coverage(kind, sigma, r, dps=30):
+    with mpmath.workdps(dps):
+        return sum(_kernel_base(kind, sigma, x, "Bessel", False, dps) for x in range(-r, r + 1))
+
+
+def _kernel_1d(fname, kind, r, sigma, n, std, method, exact, dps):
+    xs = list(range(-r, r + 1))
+    if method == "Gaussian" and kind == "Gaussian":
+        if exact:
+            X = sp.Symbol("x")
+            g = sp.diff(sp.exp(-X ** 2 / (2 * sigma ** 2)) / (sp.sqrt(2 * sp.pi) * sigma), X, n)
+            vals = [sp.simplify(g.subs(X, x)) for x in xs]
+        else:
+            s = mpmath.mpf(sp.N(sigma, dps + 5))
+            vals = [mpmath.diff(lambda t: mpmath.exp(-t ** 2 / (2 * s ** 2)) / (mpmath.sqrt(2 * mpmath.pi) * s),
+                                x, n) for x in xs]
+    else:
+        def D(x):
+            acc = 0
+            for j in range(n + 1):
+                acc += sp.binomial(n, j) * (-1) ** j * _kernel_base(kind, sigma, x + n - 2 * j, method, exact, dps)
+            return acc / sp.Integer(2) ** n if exact else acc / mpmath.mpf(2) ** n
+        vals = [D(x) for x in xs]
+    if not std:
+        return vals
+    N = len(vals)
+    if n == 0:
+        tot = sum(vals)
+        return [v / tot for v in vals]
+    w = [(sp.Integer(x) ** n / sp.factorial(n)) if exact else mpmath.mpf(x) ** n / math.factorial(n) for x in xs]
+    swv = sum(a * b for a, b in zip(w, vals))
+    if n % 2:
+        return [v / swv for v in vals]
+    sv, sw1 = sum(vals), sum(w)
+    a = 1 / (swv - sv * sw1 / N)
+    b = -a * sv / N
+    return [a * v + b for v in vals]
+
+
+def _kernel_matrix(fname, kind):
+    allowed = {"Standardized", "WorkingPrecision"} | ({"Method"} if kind == "Gaussian" else set())
+
+    def impl(spec: Expr, *rest: Expr) -> ListOf[Real]:
+        pos, opts = _opts(rest, allowed, fname)
+        if len(pos) > 1:
+            raise TypeError(f"{fname}: called with {len(pos) + 1} positional arguments; 1 or 2 are expected")
+        rs, sig, fr = _kernel_spec(spec, fname)
+        d = len(rs)
+        if pos:
+            nv = pos[0]
+            if is_list(nv) and any(is_list(a) for a in nv.args):
+                raise NotImplementedError(f"{fname}: sums of derivative kernels (matrix derivative specs) are not "
+                                          "supported")
+            ns = list(nv.args) if is_list(nv) else [nv]
+            if not is_list(nv) and d != 1:
+                raise NotImplementedError(f"{fname}: give one derivative order per dimension, {{n1, ..., n{d}}}")
+            if len(ns) != d:
+                raise ValueError(f"{fname}: the derivative specification must have {d} orders")
+            for v in ns:
+                if isinstance(v, Symbol):
+                    raise Unevaluated()
+                if isinstance(v, bool) or not K.is_int(v) or int(v) < 0:
+                    raise ValueError(f"{fname}: derivative orders must be non-negative integers, not {v!r}")
+            ns = [int(v) for v in ns]
+        else:
+            ns = [0] * d
+        sv = opts.get("Standardized", Symbol("True"))
+        if not (isinstance(sv, Symbol) and sv.name in ("True", "False")) and not isinstance(sv, bool):
+            raise ValueError(f"{fname}: Standardized must be True or False")
+        std = sv is True or (isinstance(sv, Symbol) and sv.name == "True")
+        method = "Bessel"
+        if "Method" in opts:
+            m = opts["Method"]
+            if isinstance(m, str) and m in ("Bessel", "Gaussian"):
+                method = m
+            elif _auto(m):
+                method = "Bessel"
+            else:
+                raise NotImplementedError(f"{fname}: Method {m!r} is not supported (\"Bessel\" or \"Gaussian\")")
+        wp = _wp_opt(opts["WorkingPrecision"], fname) if "WorkingPrecision" in opts else None
+        exact = wp == "exact"
+        dps = 30 if wp in (None, "m", "exact") else int(mpmath.libmp.prec_to_dps(wp)) + 5
+        if std and d > 1 and any(n > 0 and n % 2 == 0 for n in ns):
+            raise NotImplementedError(f"{fname}: standardized even-order derivatives in more than one dimension "
+                                      "are not supported (the shift is not specified per direction)")
+        radii, sigmas = [], []
+        for r, s, f in zip(rs, sig, fr):
+            if f is not None and not (0 < f < 1):
+                raise ValueError(f"{fname}: the fraction f must be between 0 and 1")
+            if r is None or (s is None and f is not None):
+                if f is None:
+                    raise NotImplementedError(f"{fname}: an Automatic radius or σ needs an explicit fraction f "
+                                              "(the default fraction is not documented)")
+                if method == "Gaussian":
+                    raise NotImplementedError(f"{fname}: Automatic sizes are only supported for the default method")
+                if r is None and s is None:
+                    raise NotImplementedError(f"{fname}: Automatic radius and σ together are not supported")
+            if r is None:
+                if not s > 0:
+                    raise ValueError(f"{fname}: σ must be positive")
+                rr = 0
+                while _coverage(kind, s, rr) < float(f):
+                    rr += 1
+                    if rr > 100000:
+                        raise ValueError(f"{fname}: the requested fraction needs a radius above 100000")
+                radii.append(rr)
+                sigmas.append(s)
+                continue
+            if r < 0:
+                raise ValueError(f"{fname}: the radius must be non-negative")
+            if not r.is_Integer and s is None:
+                raise NotImplementedError(f"{fname}: a non-integer radius needs an explicit σ")
+            rr = int(sp.floor(r + sp.Rational(1, 2)))
+            if s is None and f is not None:
+                lo, hi = mpmath.mpf("1e-6"), mpmath.mpf(rr + 1) * 50
+                if _coverage(kind, lo, rr) < f:
+                    raise ValueError(f"{fname}: the fraction cannot be reached with radius {rr}")
+                for _ in range(200):
+                    mid = (lo + hi) / 2
+                    if _coverage(kind, mid, rr) > f:
+                        lo = mid
+                    else:
+                        hi = mid
+                s = sp.Float(lo, 25)
+            elif s is None:
+                s = r / 2
+            if not s > 0:
+                raise ValueError(f"{fname}: σ must be positive")
+            radii.append(rr)
+            sigmas.append(s)
+        size = 1
+        for rr in radii:
+            size *= 2 * rr + 1
+        if size > (_KMAX_EXACT if exact else _KMAX):
+            raise ValueError(f"{fname}: the matrix would have {size} elements")
+        with mpmath.workdps(dps):
+            factors = [_kernel_1d(fname, kind, rr, s, n, std, method, exact, dps)
+                       for rr, s, n in zip(radii, sigmas, ns)]
+            arr = np.array(factors[0], dtype=object)
+            for fct in factors[1:]:
+                arr = np.multiply.outer(arr, np.array(fct, dtype=object))
+
+            def conv(v):
+                if exact:
+                    return R(v)
+                if wp in (None, "m"):
+                    return float(v)
+                return sp.Float(v, int(mpmath.libmp.prec_to_dps(wp)))
+            return _nest(arr, conv) if arr.ndim else conv(arr)
+    return impl
+
+
+fn("GaussianMatrix", area=AREA, status="added",
+   notes="GaussianMatrix[r], [{r, σ}], [{r, σ, f}], [{{r1, ...}, {σ1, ...}}] and derivative orders "
+         "[spec, {n1, ...}]: (2r+1)^d arrays with σ = r/2 by default; Method \"Bessel\" (default, e^(-σ²) "
+         "I_x(σ²), derivatives as central differences) or \"Gaussian\" (e^(-x²/2σ²)/(√(2π)σ), analytic "
+         "derivatives); Standardized -> True rescales each direction to sum 1 (derivatives: sum 0 and Σ x^n/n! "
+         "= 1, the doc rule); WorkingPrecision (machine default, Infinity exact, or digits); Automatic r or σ "
+         "with an explicit fraction f; the default fraction, matrix derivative specs and standardized even "
+         "derivatives in several dimensions raise NotImplementedError. Check: exact (WorkingPrecision -> "
+         "Infinity is exact); reference (Wolfram documentation examples) in tests.")(
+    _kernel_matrix("GaussianMatrix", "Gaussian"))
+fn("ShenCastanMatrix", area=AREA, status="added",
+   notes="ShenCastanMatrix[r], [{r, σ}], [{{r...}, {σ...}}], [spec, {n...}]: exponential kernel tanh(c/2σ) "
+         "e^(-c|x|/σ) with Wolfram's constant c = 102798103/66535189 (σ = r/2 by default), derivatives as "
+         "central differences, Standardized and WorkingPrecision as for GaussianMatrix; Automatic r/σ need an "
+         "explicit fraction f. Check: exact (WorkingPrecision -> Infinity is exact); reference (Wolfram "
+         "documentation examples) in tests.")(_kernel_matrix("ShenCastanMatrix", "ShenCastan"))
+
+
+def _disk_matrix(r: Expr, w: Expr = None) -> ListOf[Integer]:
+    fname = "DiskMatrix"
+    if isinstance(r, Symbol) and r.name == "All":
+        if w is None:
+            raise TypeError(f"{fname}: DiskMatrix[All, w] needs the size w")
+        ws = list(w.args) if is_list(w) else [w, w]
+        sizes = []
+        for v in ws:
+            if isinstance(v, Symbol):
+                raise Unevaluated()
+            if isinstance(v, bool) or not K.is_int(v) or int(v) < 1:
+                raise ValueError(f"{fname}: sizes must be positive integers")
+            if int(v) % 2 == 0:
+                raise NotImplementedError(f"{fname}: even sizes with All are not supported (placement of the "
+                                          "largest disk is not documented)")
+            sizes.append(int(v))
+        radii = [sp.Integer((v - 1) // 2) for v in sizes]
+    else:
+        rl = list(r.args) if is_list(r) else [r, r]
+        radii = []
+        for v in rl:
+            if isinstance(v, Symbol) and v.name == "All":
+                raise NotImplementedError(f"{fname}: All radii in a list are not supported")
+            x = _num_param(v, fname, "radius", allow_auto=False)
+            if x < 0:
+                raise ValueError(f"{fname}: the radius must be non-negative")
+            radii.append(x)
+        half = [int(sp.floor(x + sp.Rational(1, 2))) for x in radii]
+        if w is None:
+            sizes = [2 * h + 1 for h in half]
+        else:
+            ws = list(w.args) if is_list(w) else [w] * len(radii)
+            if len(ws) != len(radii):
+                raise ValueError(f"{fname}: the size list must have one entry per dimension")
+            sizes = []
+            for v, h in zip(ws, half):
+                if isinstance(v, Symbol) and v.name == "All":
+                    sizes.append(2 * h + 1)
+                    continue
+                if isinstance(v, bool) or not K.is_int(v) or int(v) < 1:
+                    if isinstance(v, Symbol):
+                        raise Unevaluated()
+                    raise ValueError(f"{fname}: sizes must be positive integers or All")
+                if int(v) < 2 * h + 1 or (int(v) - 2 * h - 1) % 2:
+                    raise NotImplementedError(f"{fname}: a size smaller than the disk or of different parity is "
+                                              "not supported (centring/cropping is not documented)")
+                sizes.append(int(v))
+    d = len(sizes)
+    if math.prod(sizes) > _KMAX:
+        raise ValueError(f"{fname}: the array would be too large")
+    axes = [np.arange(s) - (s - 1) // 2 for s in sizes]
+    grids = np.meshgrid(*axes, indexing="ij")
+    acc = sp.Integer(0)
+    tot = np.zeros(sizes, dtype=object)
+    for g, rad in zip(grids, radii):
+        lim = rad + sp.Rational(1, 2)
+        tot = tot + np.vectorize(lambda v: sp.Rational(int(v) ** 2) / lim ** 2 if lim != 0 else
+                                 (0 if v == 0 else sp.oo), otypes=[object])(g)
+    del acc
+    out = np.vectorize(lambda v: 1 if v <= 1 else 0, otypes=[object])(tot)
+    return _nest(out, lambda v: int(v))
+
+
+fn("DiskMatrix", area=AREA, status="added",
+   notes="DiskMatrix[r], DiskMatrix[{r1, ...}], DiskMatrix[r, w], DiskMatrix[All, w]: arrays of 0/1 with 1 where "
+         "Σ (x_i/(r_i + 1/2))² ≤ 1 (distance from the centre at most r + 1/2), sized 2⌊r+1/2⌋+1 or w per "
+         "direction (padding centred); sizes smaller than the disk, different parity, or even sizes with All "
+         "raise NotImplementedError. Check: exact; reference (Wolfram documentation examples) in tests.")(
+    _disk_matrix)
+
+
+def _savitzky_golay(r: Expr, k: Expr, *rest: Expr) -> ListOf[Real]:
+    fname = "SavitzkyGolayMatrix"
+    pos, opts = _opts(rest, {"WorkingPrecision"}, fname)
+    if pos:
+        nv = pos[0]
+        if len(pos) > 1:
+            raise TypeError(f"{fname}: too many arguments")
+        if not ((K.is_int(nv) and int(nv) == 0) or (is_list(nv) and all(K.is_int(a) and int(a) == 0
+                                                                          for a in nv.args))):
+            if isinstance(nv, Symbol):
+                raise Unevaluated()
+            raise NotImplementedError(f"{fname}: derivative kernels are not supported (their sign/orientation "
+                                      "convention is not documented with values)")
+    if not (is_list(r) and len(r.args) == 1):
+        if isinstance(r, Symbol):
+            raise Unevaluated()
+        if is_list(r) or K.is_int(r) or isinstance(r, float):
+            raise NotImplementedError(f"{fname}: only one-dimensional kernels SavitzkyGolayMatrix[{{r}}, k] are "
+                                      "supported (the multidimensional polynomial basis is not documented)")
+        raise TypeError(f"{fname}: the radius must be a number or a list, not {r!r}")
+    rv = _num_param(r.args[0], fname, "radius", allow_auto=False)
+    kk = k.args[0] if is_list(k) and len(k.args) == 1 else k
+    if isinstance(kk, Symbol):
+        raise Unevaluated()
+    if isinstance(kk, bool) or not K.is_int(kk) or int(kk) < 0:
+        raise ValueError(f"{fname}: the polynomial degree must be a non-negative integer")
+    if rv < 0:
+        raise ValueError(f"{fname}: the radius must be non-negative")
+    rr = int(sp.floor(rv + sp.Rational(1, 2)))
+    deg = min(int(kk), 2 * rr)
+    if rr > 2000:
+        raise ValueError(f"{fname}: the radius is too large")
+    xs = list(range(-rr, rr + 1))
+    V = sp.Matrix([[sp.Integer(x) ** j for j in range(deg + 1)] for x in xs])
+    coeffs = (V.T * V).LUsolve(V.T)[0, :]   # row 0 of the pseudo-inverse: value of the fit at x = 0
+    vals = [sp.nsimplify(c) for c in coeffs]
+    wp = _wp_opt(opts["WorkingPrecision"], fname) if "WorkingPrecision" in opts else "m"
+    if wp == "exact":
+        return L(*[R(v) for v in vals])
+    if wp in (None, "m"):
+        return L(*[float(v) for v in vals])
+    return L(*[sp.Float(sp.N(v, int(mpmath.libmp.prec_to_dps(wp))), int(mpmath.libmp.prec_to_dps(wp)))
+               for v in vals])
+
+
+fn("SavitzkyGolayMatrix", area=AREA, status="added",
+   notes="SavitzkyGolayMatrix[{r}, k]: 1-D smoothing kernel of the local least-squares polynomial fit of degree "
+         "min(k, 2r) over 2r+1 points (row of the pseudo-inverse giving the fitted centre value; sums to 1); "
+         "WorkingPrecision (machine default, Infinity exact, digits); multidimensional kernels and derivative "
+         "orders raise NotImplementedError. Check: exact (rational least squares); reference (Wolfram "
+         "documentation examples) in tests.")(_savitzky_golay)
