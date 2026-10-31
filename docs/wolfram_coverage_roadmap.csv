@@ -64,7 +64,7 @@ $DefaultRemoteBatchSubmissionEnvironment,Core Language & Structure,infeasible,,W
 $DefaultRemoteKernel,Core Language & Structure,missing,2,,0,RemoteComputation ManagingRemoteAndParallelKernels
 $DefaultSystemCredentialStore,Higher Mathematical Computation,infeasible,,ML models / LLM services,0,Cryptography PersistentStorage
 $Display,"Options, system variables & unclassified",missing,3,,0,
-$DisplayFunction,"Options, system variables & unclassified",missing,3,,0,
+$DisplayFunction,"Options, system variables & unclassified",implemented,3,,0,
 $DistributedContexts,"Options, system variables & unclassified",missing,3,,0,
 $DistributedDefinitions,"Options, system variables & unclassified",missing,3,,0,
 $DynamicEvaluation,User Interface Construction,infeasible,,front end / notebooks,0,DynamicInteractivityLanguage
@@ -91,7 +91,7 @@ $HistoryLength,System Operation & Setup,implemented,3,,0,TuningAndDebugging Wolf
 $HomeDirectory,Core Language & Structure,missing,2,,0,OperationsOnFileNames CloudExecutionMetadata DirectoriesAndDirectoryOperations
 $IgnoreEOF,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels SessionCustomization
 $ImageFormattingWidth,Geographic Data & Computation,infeasible,,curated data,0,CloudExecutionMetadata
-$ImageResolution,Images,missing,3,,0,CreatingAndImportingImages
+$ImageResolution,Images,implemented,3,,0,CreatingAndImportingImages
 $ImagingDevice,Scientific and Medical Data & Computation,infeasible,,curated data,0,UsingConnectedDevices
 $ImagingDevices,Core Language & Structure,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",0,UsingConnectedDevices SystemInformation CreatingAndImportingImages
 $ImportFormats,Core Language & Structure,implemented,2,,1,ImportingAndExporting SystemInformation
@@ -160,12 +160,12 @@ $ParentProcessID,Core Language & Structure,missing,2,,0,SystemInformation System
 $PasswordFile,System Operation & Setup,infeasible,,Wolfram paclet server / licensing,0,SystemAndLicenseManagement
 $Path,System Operation & Setup,missing,3,,0,WolframSystemSessions WolframSystemSetup FileOperations OperationsOnFileNames
 $PathnameSeparator,"Options, system variables & unclassified",missing,3,,0,
-$PerformanceGoal,"Options, system variables & unclassified",missing,3,,0,
+$PerformanceGoal,"Options, system variables & unclassified",implemented,3,,0,
 $Permissions,Cloud & Deployment,infeasible,,Wolfram Cloud / external services,1,CloudFunctionsAndDeployment SharingAndEmbeddingContent CloudPermissionsControl ManagingContentInTheCloud
 $PersistenceBase,System Operation & Setup,infeasible,,Wolfram Cloud / external services,0,SettingPersistentValues InitializationAndProvisioning
 $PersistencePath,System Operation & Setup,infeasible,,Wolfram Cloud / external services,0,SettingPersistentValues InitializationAndProvisioning
 $PlotInteractivity,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-$PlotTheme,"Options, system variables & unclassified",missing,3,,0,
+$PlotTheme,"Options, system variables & unclassified",implemented,3,,0,
 $Post,System Operation & Setup,implemented,3,,0,WolframSystemSessions WolframSystemSetup SessionCustomization
 $Pre,System Operation & Setup,implemented,3,,0,SessionCustomization
 $PreInitialization,System Operation & Setup,missing,3,,0,PersistentStorage WolframSystemSetup SettingPersistentValues InitializationAndProvisioning
@@ -478,7 +478,7 @@ AskState,User Interface Construction,infeasible,,front end / notebooks,0,Setting
 AskTemplateDisplay,User Interface Construction,infeasible,,front end / notebooks,0,SettingUpUserInteractions
 AskedQ,User Interface Construction,infeasible,,front end / notebooks,0,SettingUpUserInteractions
 AskedValue,User Interface Construction,infeasible,,front end / notebooks,0,CreatingFormsAndApps SettingUpUserInteractions
-AspectRatio,Visualization & Graphics,missing,1,,2,GraphicsOptionsAndStyling ChartLayoutAndStyling GraphicsShapeAndSize PlottingAndImageRegions
+AspectRatio,Visualization & Graphics,implemented,1,,2,GraphicsOptionsAndStyling ChartLayoutAndStyling GraphicsShapeAndSize PlottingAndImageRegions
 Assert,Core Language & Structure,implemented,2,,0,PackageDevelopment TuningAndDebugging RobustnessAndErrorHandling Messages
 AssessmentFunction,User Interface Construction,infeasible,,front end / notebooks,0,QuestionsAndAssessment SettingUpUserInteractions QuestionInterfaceTypes
 AssessmentResultObject,User Interface Construction,infeasible,,front end / notebooks,0,QuestionsAndAssessment SettingUpUserInteractions
@@ -616,16 +616,16 @@ AutocompletionFunction,"Options, system variables & unclassified",infeasible,,fr
 AutocorrelationTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests TimeSeriesProcesses
 Automatic,Visualization & Graphics,implemented,1,,6,GraphicsOptionsAndStyling OptionsManagement GraphicsShapeAndSize PlottingAndImageRegions
 AutorunSequencing,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,CreatingWebPages OptionsAndStylingForInteractiveManipulation
-Axes,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance 3DGraphicsOptions
-AxesEdge,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance 3DGraphicsOptions
-AxesLabel,Data Manipulation & Analysis,missing,2,,0,Labels AnnotatingAndCombiningGraphics ChartLabelingLegendingAndAnnotation GraphicsAnnotationAndAppearance
-AxesOrigin,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance
-AxesStyle,Visualization & Graphics,missing,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions Colors
+Axes,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance 3DGraphicsOptions
+AxesEdge,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance 3DGraphicsOptions
+AxesLabel,Data Manipulation & Analysis,implemented,2,,0,Labels AnnotatingAndCombiningGraphics ChartLabelingLegendingAndAnnotation GraphicsAnnotationAndAppearance
+AxesOrigin,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance
+AxesStyle,Visualization & Graphics,implemented,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions Colors
 AxiomaticTheory,Higher Mathematical Computation,infeasible,,curated data,0,MathematicalData LogicAndBooleanAlgebra TheoremProving
-Axis,"Options, system variables & unclassified",missing,2,,1,
-AxisLabel,Visualization & Graphics,missing,3,,0,GraphicsObjects
-AxisObject,Visualization & Graphics,missing,3,,0,GraphicsObjects
-AxisStyle,Visualization & Graphics,missing,3,,0,GraphicsObjects
+Axis,"Options, system variables & unclassified",implemented,2,,1,
+AxisLabel,Visualization & Graphics,implemented,3,,0,GraphicsObjects
+AxisObject,Visualization & Graphics,implemented,3,,0,GraphicsObjects
+AxisStyle,Visualization & Graphics,implemented,3,,0,GraphicsObjects
 BSplineBasis,Data Manipulation & Analysis,missing,2,,0,Splines
 BSplineCurve,Data Manipulation & Analysis,missing,2,,0,GraphicsObjects Splines
 BSplineFunction,Data Manipulation & Analysis,missing,2,,0,CurveFittingAndApproximateFunctions Splines
@@ -641,9 +641,9 @@ BandpassFilter,Data Manipulation & Analysis,implemented,2,,0,ImageFilteringAndNe
 BandstopFilter,Data Manipulation & Analysis,implemented,2,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters SignalFilteringAndFilterDesign
 BarChart,Data Manipulation & Analysis,implemented,1,,2,DataVisualization TabularProcessing ChartingAndInformationVisualization ScientificDataAnalysis
 BarChart3D,Data Manipulation & Analysis,missing,2,,1,DataVisualization ChartingAndInformationVisualization DateAndTimeVisualization
-BarLegend,Data Manipulation & Analysis,missing,2,,1,DataVisualization FunctionVisualization Labels Legends
-BarOrigin,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization StatisticalVisualization ChartLayoutAndStyling
-BarSpacing,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization FinancialVisualization StatisticalVisualization ChartLayoutAndStyling
+BarLegend,Data Manipulation & Analysis,implemented,2,,1,DataVisualization FunctionVisualization Labels Legends
+BarOrigin,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization StatisticalVisualization ChartLayoutAndStyling
+BarSpacing,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization FinancialVisualization StatisticalVisualization ChartLayoutAndStyling
 BarabasiAlbertGraphDistribution,Graphs & Networks,implemented,2,,0,SocialNetworks ScientificModels RandomGraphs DerivedDistributions
 BarcodeImage,Images,missing,2,,1,CreatingAndImportingImages
 BarcodeRecognize,Machine Learning & LLMs,infeasible,,ML models / LLM services,1,ComputerVision VideoAnalysis FeatureDetection
@@ -655,7 +655,7 @@ BartlettWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 BaseDecode,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting Cryptography NetworkProgramming SystemsRelatedStringOperations
 BaseEncode,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting Cryptography NetworkProgramming BinaryData
 BaseForm,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers NumberDigits
-BaseStyle,Visualization & Graphics,missing,3,,0,GraphVisualization GraphicsAnnotationAndAppearance GraphicsStylingInNotebooks GraphStylingAndLabeling
+BaseStyle,Visualization & Graphics,implemented,3,,0,GraphVisualization GraphicsAnnotationAndAppearance GraphicsStylingInNotebooks GraphStylingAndLabeling
 Baseline,"Options, system variables & unclassified",implemented,3,,0,
 BaselinePosition,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance CombiningGraphics GraphicsStylingInNotebooks
 BasicRecurrentLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
@@ -828,7 +828,7 @@ BoundaryDiscretizeRegion,Geometry,missing,2,,0,GeometricComputation MeshRegions
 BoundaryMesh,Geometry,missing,2,,0,MeshRegions
 BoundaryMeshRegion,Geometry,missing,2,,0,GeometricComputation MeshRegions 3DPrinting Polyhedra
 BoundaryMeshRegionQ,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
-BoundaryStyle,Visualization & Graphics,missing,3,,0,GraphicsCoordinates PlottingOptions
+BoundaryStyle,Visualization & Graphics,implemented,3,,0,GraphicsCoordinates PlottingOptions
 BoundedRegionQ,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
 BoundingRegion,Geometry,missing,2,,0,GeometricSpecialRegions GeometricPropertiesAndMeasures Polygons
 BoxData,Notebook Documents & Presentation,infeasible,,curated data,0,LowLevelNotebookStructure
@@ -854,8 +854,8 @@ BrownianBridgeProcess,Higher Mathematical Computation,missing,2,,0,ParametricRan
 BubbleChart,Data Manipulation & Analysis,missing,2,,1,DataVisualization ChartingAndInformationVisualization StatisticalVisualization DateAndTimeVisualization
 BubbleChart3D,Data Manipulation & Analysis,missing,2,,0,ChartingAndInformationVisualization DateAndTimeVisualization SpatialPointCollections
 BubbleHistogram,"Options, system variables & unclassified",missing,3,,0,
-BubbleScale,Visualization & Graphics,missing,3,,0,ChartLayoutAndStyling
-BubbleSizes,Visualization & Graphics,missing,3,,0,ChartLayoutAndStyling
+BubbleScale,Visualization & Graphics,implemented,3,,0,ChartLayoutAndStyling
+BubbleSizes,Visualization & Graphics,implemented,3,,0,ChartLayoutAndStyling
 BuckyballGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
 BuildCompiledComponent,Core Language & Structure,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",0,CodeCompilation
 BuildingData,"Options, system variables & unclassified",infeasible,,curated data,0,
@@ -1026,13 +1026,13 @@ CharacterRange,Core Language & Structure,implemented,1,,0,SpecialCharacters Loca
 CharacteristicFunction,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics FourierAnalysis StatisticalMomentsAndGeneratingFunctions StatisticalDistributionFunctions
 CharacteristicPolynomial,Core Language & Structure,implemented,2,,0,MatrixOperations FiniteFields
 Characters,Core Language & Structure,implemented,1,,4,StringManipulation ConstructingLists StringOperations CharacterOperations
-ChartBaseStyle,"Options, system variables & unclassified",missing,3,,0,
-ChartElementFunction,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization FinancialVisualization StatisticalVisualization ChartLayoutAndStyling
-ChartElements,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
-ChartLabels,Visualization & Graphics,missing,2,,1,ChartingAndInformationVisualization Labels ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
-ChartLayout,Visualization & Graphics,missing,3,,0,ChartLayoutAndStyling
-ChartLegends,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization Labels Legends ChartLabelingLegendingAndAnnotation
-ChartStyle,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
+ChartBaseStyle,"Options, system variables & unclassified",implemented,3,,0,
+ChartElementFunction,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization FinancialVisualization StatisticalVisualization ChartLayoutAndStyling
+ChartElements,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
+ChartLabels,Visualization & Graphics,implemented,2,,1,ChartingAndInformationVisualization Labels ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
+ChartLayout,Visualization & Graphics,implemented,3,,0,ChartLayoutAndStyling
+ChartLegends,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization Labels Legends ChartLabelingLegendingAndAnnotation
+ChartStyle,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
 ChatEvaluate,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions NaturalLanguageProcessing DocumentGeneration TextConstruction
 ChatObject,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,MachineLearning LLMFunctions
 ChatSubmit,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions
@@ -1100,8 +1100,8 @@ CliffordAlgebra,"Options, system variables & unclassified",implemented,3,,0,
 Clip,Data Manipulation & Analysis,implemented,2,,0,DataTransformsAndSmoothing MathematicalFunctions BasicImageManipulation ScientificDataAnalysis
 ClipPlanes,Visualization & Graphics,implemented,3,,0,LifeSciencesAndMedicineDataAndComputation 3DGraphicsOptions
 ClipPlanesStyle,Visualization & Graphics,implemented,3,,0,3DGraphicsOptions
-ClipRange,"Options, system variables & unclassified",missing,3,,0,
-ClippingStyle,Visualization & Graphics,missing,3,,0,VectorVisualization GraphicsCoordinates PlottingOptions
+ClipRange,"Options, system variables & unclassified",implemented,3,,0,
+ClippingStyle,Visualization & Graphics,implemented,3,,0,VectorVisualization GraphicsCoordinates PlottingOptions
 Clock,Core Language & Structure,implemented,2,,0,DateAndTime DynamicInteractivityLanguage LowLevelInterfaceControl
 ClockGauge,Data Manipulation & Analysis,missing,2,,0,DateAndTimeVisualization Gauges
 Close,External Interfaces & Connections,missing,3,,0,NetworkProgramming LowLevelFileOperations
@@ -1151,20 +1151,20 @@ Colon,"Options, system variables & unclassified",missing,3,,0,
 ColorBalance,Images,missing,3,,0,ImageRestoration ColorProcessing ComputationalPhotography
 ColorCombine,Images,missing,3,,0,ColorProcessing ImageRepresentation
 ColorConvert,Images,implemented,3,,0,ImageProcessing ColorProcessing Colors ComputationalPhotography
-ColorCoverage,"Options, system variables & unclassified",missing,3,,0,
+ColorCoverage,"Options, system variables & unclassified",implemented,3,,0,
 ColorData,Visualization & Graphics,infeasible,,curated data,0,GraphicsOptionsAndStyling ChartLayoutAndStyling PlottingOptions Colors
 ColorDataFunction,Images,missing,3,,0,ColorSchemes
 ColorDetect,Images,missing,3,,0,ColorProcessing
 ColorDistance,Visualization & Graphics,implemented,2,,1,ColorProcessing Colors DistanceAndSimilarityMeasures
-ColorFunction,Visualization & Graphics,missing,1,,2,GraphicsOptionsAndStyling FinancialVisualization VectorVisualization ChartLayoutAndStyling
-ColorFunctionBinning,"Options, system variables & unclassified",missing,3,,0,
-ColorFunctionScaling,Visualization & Graphics,missing,3,,0,PlottingOptions
+ColorFunction,Visualization & Graphics,implemented,1,,2,GraphicsOptionsAndStyling FinancialVisualization VectorVisualization ChartLayoutAndStyling
+ColorFunctionBinning,"Options, system variables & unclassified",implemented,3,,0,
+ColorFunctionScaling,Visualization & Graphics,implemented,3,,0,PlottingOptions
 ColorNegate,Images,missing,1,,5,MathematicalMorphology ColorProcessing Colors VideoEditing
 ColorProfileData,Images,infeasible,,curated data,0,ColorProcessing
 ColorQ,Visualization & Graphics,implemented,3,,0,ColorProcessing Colors
 ColorQuantize,Images,missing,3,,0,ImageProcessing SegmentationAnalysis ColorProcessing
 ColorReplace,Images,missing,3,,0,ImageProcessing ColorProcessing
-ColorRules,Visualization & Graphics,missing,3,,0,DiscreteAndIntegerData PlottingOptions Colors
+ColorRules,Visualization & Graphics,implemented,3,,0,DiscreteAndIntegerData PlottingOptions Colors
 ColorSeparate,Images,missing,3,,0,ColorProcessing ImageRepresentation
 ColorSetter,User Interface Construction,infeasible,,front end / notebooks,0,ColorProcessing ControlObjects GeneralizedInput Colors
 ColorSlider,Visualization & Graphics,infeasible,,front end / notebooks,0,DynamicVisualization ControlObjects Colors Palettes
@@ -1317,7 +1317,7 @@ ContentLocationFunction,"Options, system variables & unclassified",implemented,3
 ContentObject,Strings & Text,implemented,2,,0,TextSearch WolframDataRepository
 ContentPadding,User Interface Construction,infeasible,,front end / notebooks,0,ControlsOptions
 ContentSelectable,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-ContentSize,"Options, system variables & unclassified",missing,3,,0,
+ContentSize,"Options, system variables & unclassified",implemented,3,,0,
 Context,Core Language & Structure,implemented,2,,0,SymbolHandling AtomicElementsOfExpressions
 Contexts,Core Language & Structure,implemented,2,,0,LowLevelSystemSpelunking
 Continue,Core Language & Structure,implemented,1,,0,LoopingConstructs FlowControl
@@ -1331,12 +1331,12 @@ ContinuousWaveletData,Data Manipulation & Analysis,infeasible,,curated data,0,Wa
 ContinuousWaveletTransform,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms Wavelets FourierAnalysis SignalTransforms
 ContourDetect,Machine Learning & LLMs,missing,3,,0,3DImages FeatureDetection SignalAnalysis
 ContourIntegrate,Visualization & Graphics,implemented,3,,0,FunctionsOfComplexVariables
-ContourLabels,Data Manipulation & Analysis,missing,2,,1,Labels PlottingOptions
+ContourLabels,Data Manipulation & Analysis,implemented,2,,1,Labels PlottingOptions
 ContourPlot,Data Manipulation & Analysis,implemented,2,,0,FunctionVisualization EquationSolving GeometricSolvers StatisticalVisualization
 ContourPlot3D,Data Manipulation & Analysis,missing,2,,0,FunctionVisualization EquationSolving 3DPrinting DateAndTimeVisualization
 ContourShading,Visualization & Graphics,implemented,3,,0,PlottingOptions
-ContourStyle,Visualization & Graphics,missing,3,,0,PlottingOptions
-Contours,Visualization & Graphics,missing,3,,0,PlottingOptions
+ContourStyle,Visualization & Graphics,implemented,3,,0,PlottingOptions
+Contours,Visualization & Graphics,implemented,3,,0,PlottingOptions
 ContraharmonicMean,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics
 ContrastiveLossLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 Control,User Interface Construction,infeasible,,front end / notebooks,0,InteractiveManipulation ControlObjects OptionsAndStylingForInteractiveManipulation
@@ -1526,7 +1526,7 @@ Dashed,Visualization & Graphics,implemented,3,,0,GraphVisualization GraphicsObje
 Dashing,Visualization & Graphics,implemented,3,,0,SymbolicGraphicsLanguage MapsAndCartography GraphicsObjects GraphicsDirectives
 DataConnectionObject,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting TabularProcessing AccessingExternalServicesAndAPIs TabularDataSources
 DataDistribution,Core Language & Structure,missing,2,,0,NonparametricStatisticalDistributions
-DataRange,Visualization & Graphics,missing,3,,0,GraphicsCoordinates PlottingOptions PlottingAndImageRegions
+DataRange,Visualization & Graphics,implemented,3,,0,GraphicsCoordinates PlottingOptions PlottingAndImageRegions
 DataReversed,"Options, system variables & unclassified",missing,3,,0,
 DataStructure,Core Language & Structure,implemented,2,,0,Expressions TuningAndDebugging DataStructures
 DataStructureQ,Core Language & Structure,implemented,2,,0,DataStructures
@@ -1562,7 +1562,7 @@ DateReduction,Data Manipulation & Analysis,implemented,2,,0,DateAndTimeVisualiza
 DateScale,Data Manipulation & Analysis,implemented,2,,0,DateAndTimeVisualization EventSeries
 DateSelect,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 DateString,Core Language & Structure,implemented,1,,2,DateAndTime LocaleAndInternationalization WolframSystemSessions ConvertingBetweenExpressionsAndStrings
-DateTicksFormat,Data Manipulation & Analysis,missing,2,,0,DateAndTimeVisualization
+DateTicksFormat,Data Manipulation & Analysis,implemented,2,,0,DateAndTimeVisualization
 DateValue,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,3,DateAndTime
 DateWithinQ,Symbolic & Numeric Computation,implemented,2,,1,DateAndTime IntervalArithmetic
 Dated,Core Language & Structure,implemented,1,,4,KnowledgeRepresentationAndAccess SocioeconomicAndDemographicData TimeAndEventSeriesDataSources
@@ -1595,27 +1595,27 @@ DecryptFile,Higher Mathematical Computation,implemented,2,,0,Cryptography FileOp
 DedekindEta,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions NumberTheoreticFunctions QFunctions
 DeepSpaceProbeData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Default,Core Language & Structure,implemented,1,,0,Patterns
-DefaultAxesStyle,"Options, system variables & unclassified",missing,3,,0,
-DefaultBaseStyle,"Options, system variables & unclassified",missing,3,,0,
+DefaultAxesStyle,"Options, system variables & unclassified",implemented,3,,0,
+DefaultBaseStyle,"Options, system variables & unclassified",implemented,3,,0,
 DefaultBoxStyle,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 DefaultButton,User Interface Construction,infeasible,,front end / notebooks,0,DialogBoxes
 DefaultDiffStyle,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 DefaultDuplicateCellStyle,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 DefaultDuration,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
 DefaultElement,"Options, system variables & unclassified",implemented,3,,0,
-DefaultFaceGridsStyle,"Options, system variables & unclassified",missing,3,,0,
+DefaultFaceGridsStyle,"Options, system variables & unclassified",implemented,3,,0,
 DefaultFieldHintStyle,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 DefaultFontProperties,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,FontOptions
-DefaultFrameStyle,"Options, system variables & unclassified",missing,3,,0,
-DefaultFrameTicksStyle,"Options, system variables & unclassified",missing,3,,0,
-DefaultGridLinesStyle,"Options, system variables & unclassified",missing,3,,0,
-DefaultLabelStyle,"Options, system variables & unclassified",missing,3,,0,
+DefaultFrameStyle,"Options, system variables & unclassified",implemented,3,,0,
+DefaultFrameTicksStyle,"Options, system variables & unclassified",implemented,3,,0,
+DefaultGridLinesStyle,"Options, system variables & unclassified",implemented,3,,0,
+DefaultLabelStyle,"Options, system variables & unclassified",implemented,3,,0,
 DefaultMenuStyle,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 DefaultNaturalLanguage,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LocaleAndInternationalization
 DefaultNewCellStyle,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Stylesheets ProgrammaticNotebookAndInterfaceCustomization
 DefaultOptions,User Interface Construction,infeasible,,front end / notebooks,0,ControlsOptions
 DefaultPrintPrecision,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers
-DefaultTicksStyle,"Options, system variables & unclassified",missing,3,,0,
+DefaultTicksStyle,"Options, system variables & unclassified",implemented,3,,0,
 DefaultTooltipStyle,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 DefaultValues,Core Language & Structure,implemented,1,,0,Assignments SymbolHandling
 Defer,Core Language & Structure,implemented,1,,0,DocumentGeneration EvaluationControl ClipboardOperations
@@ -2017,8 +2017,8 @@ EntityValue,Core Language & Structure,infeasible,,curated data,7,ComputationWith
 Entropy,Data Manipulation & Analysis,missing,2,,0,DescriptiveStatistics
 EntropyFilter,Images,missing,3,,0,ImageProcessing ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters
 Environment,Core Language & Structure,missing,2,,0,LLMFunctions StandaloneWolframLanguageKernels SystemInformation LowLevelSystemOptimization
-Epilog,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance CombiningGraphics
-EpilogFunction,"Options, system variables & unclassified",missing,3,,0,
+Epilog,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance CombiningGraphics
+EpilogFunction,"Options, system variables & unclassified",implemented,3,,0,
 Equal,Core Language & Structure,implemented,1,,9,LanguageOverview ProceduralProgramming Syntax FormulaManipulation
 EqualTilde,"Options, system variables & unclassified",missing,3,,0,
 EqualTo,Core Language & Structure,implemented,1,,0,TestingExpressions
@@ -2068,7 +2068,7 @@ EvaluatorNames,"Options, system variables & unclassified",infeasible,,front end 
 EvenQ,Core Language & Structure,implemented,1,,3,TestingExpressions IntegerFunctions
 EventData,Data Manipulation & Analysis,infeasible,,curated data,0,ProbabilityAndStatistics LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis Reliability
 EventHandler,Visualization & Graphics,infeasible,,front end / notebooks,0,GraphicsInteractivityAndDrawing GraphVisualization ControlObjects CustomInterfaceConstruction
-EventLabels,Data Manipulation & Analysis,missing,2,,0,FinancialVisualization Labels
+EventLabels,Data Manipulation & Analysis,implemented,2,,0,FinancialVisualization Labels
 EventSeries,Data Manipulation & Analysis,missing,2,,0,WDFWolframDataFramework TimeSeries ScientificDataAnalysis UsingTheWolframDataDrop
 EventSeriesAccumulate,Time-Related Computation,missing,2,,0,TimeSeries EventSeries TimeAndEventSeriesDataSources
 EventSeriesQ,Higher Mathematical Computation,missing,2,,0,EventSeries
@@ -2085,8 +2085,8 @@ ExcludedContexts,Core Language & Structure,implemented,2,,0,SymbolHandling Optio
 ExcludedForms,Symbolic & Numeric Computation,implemented,2,,0,AlgebraicTransformations
 ExcludedLines,"Options, system variables & unclassified",missing,3,,0,
 ExcludedPhysicalQuantities,"Options, system variables & unclassified",infeasible,,depends on Quantity / curated unit data (already infeasible),0,
-Exclusions,User Interface Construction,missing,3,,0,PlottingOptions OptionsAndStylingForInteractiveManipulation ControlsOptions
-ExclusionsStyle,Visualization & Graphics,missing,3,,0,PlottingOptions
+Exclusions,User Interface Construction,implemented,3,,0,PlottingOptions OptionsAndStylingForInteractiveManipulation ControlsOptions
+ExclusionsStyle,Visualization & Graphics,implemented,3,,0,PlottingOptions
 Exists,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation LogicAndBooleanAlgebra TheoremProving AssumptionsAndDomains
 Exit,"Options, system variables & unclassified",missing,3,,0,
 ExoplanetData,"Options, system variables & unclassified",infeasible,,curated data,0,
@@ -2124,9 +2124,9 @@ ExtendedEntityClass,Core Language & Structure,infeasible,,depends on Entity fram
 ExtendedGCD,Symbolic & Numeric Computation,implemented,2,,0,NumberTheoreticFunctions
 ExtendedKey,Data Manipulation & Analysis,implemented,2,,0,TabularObjects
 Extension,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra PolynomialFactoring AlgebraicNumberTheory
-ExtentElementFunction,Visualization & Graphics,missing,3,,0,PlottingOptions
-ExtentMarkers,Visualization & Graphics,missing,3,,0,PlottingOptions
-ExtentSize,Visualization & Graphics,missing,3,,0,PlottingOptions
+ExtentElementFunction,Visualization & Graphics,implemented,3,,0,PlottingOptions
+ExtentMarkers,Visualization & Graphics,implemented,3,,0,PlottingOptions
+ExtentSize,Visualization & Graphics,implemented,3,,0,PlottingOptions
 ExternalBundle,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,WebOperations CloudFunctionsAndDeployment
 ExternalEvaluate,Core Language & Structure,missing,2,,0,ExternalOperations DatabaseConnectivity CallingExternalPrograms ExternalLanguageInterfaces
 ExternalEvaluatorObject,External Interfaces & Connections,missing,3,,0,ExternalInterpretedLanguageInterfaces
@@ -2155,8 +2155,8 @@ FARIMAProcess,Higher Mathematical Computation,missing,2,,0,TimeSeriesProcesses
 FRatioDistribution,Data Manipulation & Analysis,implemented,2,,0,NormalRelatedDistributions
 FaceAlign,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,ComputerVision
 FaceForm,Visualization & Graphics,implemented,3,,0,MolecularStructureAndComputation Colors GraphicsObjects GraphicsDirectives
-FaceGrids,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance 3DGraphicsOptions
-FaceGridsStyle,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance 3DGraphicsOptions
+FaceGrids,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance 3DGraphicsOptions
+FaceGridsStyle,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance 3DGraphicsOptions
 FaceRecognize,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,ComputerVision
 FacialFeatures,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,ComputerVision VideoAnalysis
 Factor,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation PolynomialAlgebra FiniteFields RationalFunctions
@@ -2234,8 +2234,8 @@ FileType,External Interfaces & Connections,missing,3,,0,FileOperations
 FilledCurve,Visualization & Graphics,missing,2,,1,SymbolicGraphicsLanguage CombiningGraphics GraphicsObjects
 FilledPolarCurve,"Options, system variables & unclassified",missing,3,,0,
 FilledTorus,Geometry,missing,2,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects
-Filling,Visualization & Graphics,missing,1,,2,DataVisualization FunctionVisualization GraphicsOptionsAndStyling PlottingOptions
-FillingStyle,Visualization & Graphics,missing,3,,0,PlottingOptions Colors
+Filling,Visualization & Graphics,implemented,1,,2,DataVisualization FunctionVisualization GraphicsOptionsAndStyling PlottingOptions
+FillingStyle,Visualization & Graphics,implemented,3,,0,PlottingOptions Colors
 FillingTransform,Images,missing,3,,0,SegmentationAnalysis MathematicalMorphology
 FilterRules,Core Language & Structure,implemented,2,,0,OptionsManagement
 FilteredEntityClass,Core Language & Structure,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),0,KnowledgeRepresentationAndAccess DatabaseConnectivity WorkingWithRelationalDatabases EntityTypes
@@ -2257,7 +2257,7 @@ FindCycle,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics Mo
 FindDevices,Images,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",0,UsingConnectedDevices CreatingAndImportingImages CreatingAndImportingSignals
 FindDistribution,Data Manipulation & Analysis,missing,2,,0,TabularProcessing ScientificDataAnalysis StatisticalModelAnalysis UnsupervisedMachineLearning
 FindDistributionParameters,Data Manipulation & Analysis,implemented,2,,0,RandomVariables RobustDescriptiveStatistics
-FindDivisions,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance
+FindDivisions,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance
 FindEdgeColoring,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements
 FindEdgeCover,Graphs & Networks,implemented,2,,0,ComputationOnGraphs GraphCliquesCoversAndIndependentSets
 FindEdgeCut,Graphs & Networks,implemented,2,,0,GraphComponents
@@ -2440,16 +2440,16 @@ FractionalBrownianMotionProcess,Higher Mathematical Computation,missing,2,,0,Par
 FractionalD,"Options, system variables & unclassified",implemented,3,,0,
 FractionalGaussianNoiseProcess,Higher Mathematical Computation,missing,2,,0,ParametricRandomProcesses
 FractionalPart,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing NumericalFunctions RepresentationOfNumbers
-Frame,Visualization & Graphics,missing,1,,2,DataVisualization FunctionVisualization GraphicsOptionsAndStyling LayoutAndTables
+Frame,Visualization & Graphics,implemented,1,,2,DataVisualization FunctionVisualization GraphicsOptionsAndStyling LayoutAndTables
 FrameBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 FrameBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-FrameLabel,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling Labels AnnotatingAndCombiningGraphics ChartLabelingLegendingAndAnnotation
+FrameLabel,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling Labels AnnotatingAndCombiningGraphics ChartLabelingLegendingAndAnnotation
 FrameListVideo,Sound & Video,infeasible,,audio / video,1,VideoCreation
-FrameMargins,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance UserInterfaceStructuringAndLayout OptionsAndStylingForInteractiveManipulation PlottingAndImageRegions
+FrameMargins,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance UserInterfaceStructuringAndLayout OptionsAndStylingForInteractiveManipulation PlottingAndImageRegions
 FrameRate,"Options, system variables & unclassified",infeasible,,audio / video,0,
-FrameStyle,Visualization & Graphics,missing,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions Colors
-FrameTicks,Data Manipulation & Analysis,missing,2,,0,Labels GraphicsAnnotationAndAppearance
-FrameTicksStyle,Visualization & Graphics,missing,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions
+FrameStyle,Visualization & Graphics,implemented,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions Colors
+FrameTicks,Data Manipulation & Analysis,implemented,2,,0,Labels GraphicsAnnotationAndAppearance
+FrameTicksStyle,Visualization & Graphics,implemented,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions
 Framed,Notebook Documents & Presentation,implemented,1,,14,NotebookFormattingAndStyling LayoutAndTables MathematicalTypesetting DocumentGeneration
 FrechetDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions DistributionsUsedInReliabilityAnalysis ExtremeValueDistributions
 FreeQ,Core Language & Structure,implemented,1,,0,Expressions TestingExpressions ElementsOfLists PatternMatchingFunctions
@@ -2773,8 +2773,8 @@ Grid,User Interface Construction,implemented,1,,8,ListManipulation ComputationWi
 GridBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming LowLevelNotebookStructure
 GridDefaultElement,"Options, system variables & unclassified",implemented,3,,0,
 GridGraph,Graphs & Networks,implemented,2,,1,GraphConstructionAndRepresentation
-GridLines,Visualization & Graphics,missing,3,,0,StatisticalVisualization ChartLayoutAndStyling GraphicsAnnotationAndAppearance
-GridLinesStyle,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance 3DGraphicsOptions Colors
+GridLines,Visualization & Graphics,implemented,3,,0,StatisticalVisualization ChartLayoutAndStyling GraphicsAnnotationAndAppearance
+GridLinesStyle,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance 3DGraphicsOptions Colors
 GridVideo,Sound & Video,infeasible,,audio / video,0,VideoCreation VideoEditing
 GroebnerBasis,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra TheoremProving ComputationalGeometry PolynomialSystems
 GroupActionBase,Higher Mathematical Computation,implemented,2,,0,GroupTheory
@@ -3017,17 +3017,17 @@ ImageHistogram,Images,missing,3,,0,ImageProcessing 3DImages ColorProcessing Comp
 ImageIdentify,Images,infeasible,,ML models / LLM services,17,MachineLearning ComputerVision ImageProcessing EarthSciencesDataAndComputation
 ImageInstanceQ,Machine Learning & LLMs,infeasible,,ML models / LLM services,3,ComputerVision
 ImageKeypoints,Machine Learning & LLMs,missing,3,,0,ComputerVision ImageProcessing VideoAnalysis FeatureDetection
-ImageLabels,"Options, system variables & unclassified",missing,3,,0,
-ImageLegends,"Options, system variables & unclassified",missing,3,,0,
+ImageLabels,"Options, system variables & unclassified",implemented,3,,0,
+ImageLegends,"Options, system variables & unclassified",implemented,3,,0,
 ImageLevels,Images,missing,3,,0,ColorProcessing ComputationalPhotography ImageRepresentation
 ImageLines,Machine Learning & LLMs,missing,3,,0,ComputerVision ImageProcessing VideoAnalysis FeatureDetection
-ImageMargins,Visualization & Graphics,missing,3,,0,GraphicsShapeAndSize UserInterfaceStructuringAndLayout OptionsAndStylingForInteractiveManipulation ControlsOptions
+ImageMargins,Visualization & Graphics,implemented,3,,0,GraphicsShapeAndSize UserInterfaceStructuringAndLayout OptionsAndStylingForInteractiveManipulation ControlsOptions
 ImageMarker,Images,missing,3,,0,ImageComposition
 ImageMeasurements,Images,missing,3,,0,ImageProcessing ImageComputationForMicroscopy ImageRepresentation SignalAnalysis
 ImageMesh,Machine Learning & LLMs,missing,3,,0,ComputerVision GeometricComputation MeshRegions FeatureDetection
 ImageMultiply,Images,missing,2,,1,BasicImageManipulation 3DImages ComputationalPhotography ImageComposition
 ImagePad,Images,missing,3,,0,BasicImageManipulation ImageGeometry ComputationalPhotography
-ImagePadding,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling OptionsAndStylingForInteractiveManipulation PlottingAndImageRegions
+ImagePadding,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling OptionsAndStylingForInteractiveManipulation PlottingAndImageRegions
 ImagePartition,Images,missing,3,,0,BasicImageManipulation ImageGeometry ImageComposition
 ImagePeriodogram,Machine Learning & LLMs,missing,3,,0,ComputerVision FeatureDetection FourierAnalysis SummationTransforms
 ImagePerspectiveTransformation,Images,missing,3,,0,ImageGeometry ComputationalPhotography VideoEditing
@@ -3039,7 +3039,7 @@ ImageQ,Images,missing,3,,0,ImageRepresentation
 ImageRecolor,Images,missing,3,,0,ColorProcessing VideoEditing
 ImageReflect,Images,missing,3,,0,BasicImageManipulation ImageGeometry
 ImageResize,Images,missing,3,,0,ImageProcessing BasicImageManipulation ImageGeometry 3DImages
-ImageResolution,Images,missing,3,,0,RasterImageFormats MultimediaFormats ImageRepresentation GraphicsImportingAndExporting
+ImageResolution,Images,implemented,3,,0,RasterImageFormats MultimediaFormats ImageRepresentation GraphicsImportingAndExporting
 ImageRestyle,Images,infeasible,,ML models / LLM services,3,ComputerVision ImageProcessing BasicImageManipulation
 ImageRotate,Images,missing,3,,0,ImageProcessing BasicImageManipulation ImageGeometry 3DImages
 ImageSaliencyFilter,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,ComputerVision
@@ -3047,9 +3047,9 @@ ImageScaled,Visualization & Graphics,implemented,3,,0,SymbolicGraphicsLanguage G
 ImageScan,Images,missing,3,,0,BasicImageManipulation ColorProcessing
 ImageSegmentationComponents,Images,missing,3,,0,ImageProcessing SegmentationAnalysis VideoAnalysis
 ImageSegmentationFilter,Images,missing,3,,0,SegmentationAnalysis
-ImageSize,Visualization & Graphics,missing,1,,6,DataVisualization FunctionVisualization GraphicsOptionsAndStyling RasterImageFormats
-ImageSizeAction,Visualization & Graphics,missing,3,,0,Accessibility GraphicsShapeAndSize OptionsAndStylingForInteractiveManipulation
-ImageSizeMultipliers,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling GraphicsShapeAndSize GraphicsAnnotationAndAppearance GraphicsStylingInNotebooks
+ImageSize,Visualization & Graphics,implemented,1,,6,DataVisualization FunctionVisualization GraphicsOptionsAndStyling RasterImageFormats
+ImageSizeAction,Visualization & Graphics,implemented,3,,0,Accessibility GraphicsShapeAndSize OptionsAndStylingForInteractiveManipulation
+ImageSizeMultipliers,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling GraphicsShapeAndSize GraphicsAnnotationAndAppearance GraphicsStylingInNotebooks
 ImageStitch,Images,missing,3,,0,ImageGeometry
 ImageSubtract,Images,missing,3,,0,BasicImageManipulation 3DImages ImageComposition
 ImageSynthesize,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,MachineLearning LLMFunctions ComputerVision ImageProcessing
@@ -3300,7 +3300,7 @@ JohnsonDistribution,Data Manipulation & Analysis,implemented,2,,0,ParametricStat
 Join,Core Language & Structure,implemented,1,,16,ListManipulation HandlingArraysOfData RearrangingAndRestructuringLists StructuralOperationsOnExpressions
 JoinAcross,Core Language & Structure,implemented,1,,1,Associations ComputationWithStructuredDatasets DatabaseLikeOperationsOnDatasets TabularTransformation
 JoinForm,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
-Joined,Visualization & Graphics,missing,1,,2,GraphicsOptionsAndStyling ChartLayoutAndStyling PlottingOptions
+Joined,Visualization & Graphics,implemented,1,,2,GraphicsOptionsAndStyling ChartLayoutAndStyling PlottingOptions
 JoinedCurve,Visualization & Graphics,missing,3,,0,CombiningGraphics GraphicsObjects
 JordanDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 JordanMatrix,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
@@ -3406,13 +3406,13 @@ LQRegulatorTrain,Engineering Data & Computation,infeasible,,curated data,0,Desig
 LUDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra FiniteFields LinearSystems MatrixDecompositions
 LUVColor,Visualization & Graphics,implemented,3,,0,Colors
 Label,Core Language & Structure,implemented,1,,0,FlowControl
-LabelStyle,Visualization & Graphics,missing,3,,0,Labels Legends GraphicsAnnotationAndAppearance 3DGraphicsOptions
-LabelVisibility,"Options, system variables & unclassified",missing,3,,0,
+LabelStyle,Visualization & Graphics,implemented,3,,0,Labels Legends GraphicsAnnotationAndAppearance 3DGraphicsOptions
+LabelVisibility,"Options, system variables & unclassified",implemented,3,,0,
 Labeled,User Interface Construction,implemented,1,,8,DataVisualization FunctionVisualization ChartingAndInformationVisualization GraphVisualization
 LabeledGraphicsBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
-LabelingFunction,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization Labels ChartLabelingLegendingAndAnnotation
-LabelingSize,Data Manipulation & Analysis,missing,2,,0,Labels
-LabelingTarget,"Options, system variables & unclassified",missing,3,,0,
+LabelingFunction,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization Labels ChartLabelingLegendingAndAnnotation
+LabelingSize,Data Manipulation & Analysis,implemented,2,,0,Labels
+LabelingTarget,"Options, system variables & unclassified",implemented,3,,0,
 LaguerreL,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions
 LakeData,"Options, system variables & unclassified",infeasible,,curated data,0,
 LambdaComponents,Graphs & Networks,missing,2,,0,SocialNetworks
@@ -3443,12 +3443,12 @@ LatitudeLongitude,Geometry,missing,2,,0,Geodesy AnglesAndPolarCoordinates
 LatticeData,Symbolic & Numeric Computation,infeasible,,curated data,0,DiscreteMathematics MathematicalData PhysicsAndChemistryDataAndComputation ComputationalGeometry
 LatticeReduce,Higher Mathematical Computation,implemented,2,,0,DiscreteAndIntegerData MatrixDecompositions CryptographicNumberTheory NumberRecognition
 LaunchKernels,Core Language & Structure,missing,2,,0,ParallelComputing WolframSystemSetup ParallelComputationSetupAndConfiguration RemoteComputation
-LayerSizeFunction,"Options, system variables & unclassified",missing,3,,0,
+LayerSizeFunction,"Options, system variables & unclassified",implemented,3,,0,
 LayeredGraph,"Options, system variables & unclassified",missing,3,,0,
 LayeredGraph3D,"Options, system variables & unclassified",missing,3,,0,
 LayeredGraphPlot,Graphs & Networks,missing,2,,0,DataVisualization GraphVisualization SocialNetworks
 LayeredGraphPlot3D,Graphs & Networks,missing,2,,0,GraphVisualization
-LeaderSize,Data Manipulation & Analysis,missing,2,,0,Labels
+LeaderSize,Data Manipulation & Analysis,implemented,2,,0,Labels
 LeafCount,Core Language & Structure,implemented,1,,1,ExpressionStructure MemoryMeasurementAndOptimization
 LeapVariant,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 LeapYearQ,Knowledge Representation & Natural Language,implemented,3,,0,DateAndTime
@@ -3480,13 +3480,13 @@ LeftUpVector,"Options, system variables & unclassified",missing,3,,0,
 LeftUpVectorBar,"Options, system variables & unclassified",missing,3,,0,
 LeftVector,"Options, system variables & unclassified",missing,3,,0,
 LeftVectorBar,"Options, system variables & unclassified",missing,3,,0,
-LegendAppearance,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization ChartLabelingLegendingAndAnnotation
-LegendFunction,Data Manipulation & Analysis,missing,2,,0,Legends
-LegendLabel,Data Manipulation & Analysis,missing,2,,0,Legends
-LegendLayout,Data Manipulation & Analysis,missing,2,,0,Legends
-LegendMargins,Data Manipulation & Analysis,missing,2,,0,Legends
-LegendMarkerSize,Data Manipulation & Analysis,missing,2,,0,Legends
-LegendMarkers,Data Manipulation & Analysis,missing,2,,0,Legends
+LegendAppearance,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization ChartLabelingLegendingAndAnnotation
+LegendFunction,Data Manipulation & Analysis,implemented,2,,0,Legends
+LegendLabel,Data Manipulation & Analysis,implemented,2,,0,Legends
+LegendLayout,Data Manipulation & Analysis,implemented,2,,0,Legends
+LegendMargins,Data Manipulation & Analysis,implemented,2,,0,Legends
+LegendMarkerSize,Data Manipulation & Analysis,implemented,2,,0,Legends
+LegendMarkers,Data Manipulation & Analysis,implemented,2,,0,Legends
 Legended,Data Manipulation & Analysis,implemented,1,,2,DataVisualization ChartingAndInformationVisualization Labels Legends
 LegendreP,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions
 LegendreQ,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions
@@ -3555,9 +3555,9 @@ LineGraph,Graphs & Networks,implemented,2,,0,GraphModifications
 LineIndent,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathematicalTypesetting TextStyling MathTypesettingOptionsAndTweaking TextLayoutOptions
 LineIndentMaxFraction,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,TextLayoutOptions
 LineIntegralConvolutionPlot,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-LineIntegralConvolutionScale,"Options, system variables & unclassified",missing,3,,0,
+LineIntegralConvolutionScale,"Options, system variables & unclassified",implemented,3,,0,
 LineIntegrate,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays VectorAnalysis
-LineLegend,Data Manipulation & Analysis,missing,2,,1,DataVisualization FunctionVisualization Labels Legends
+LineLegend,Data Manipulation & Analysis,implemented,2,,1,DataVisualization FunctionVisualization Labels Legends
 LineSpacing,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,TextStyling Stylesheets TextLayoutOptions
 LinearFractionalOptimization,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays ConvexOptimization
 LinearFractionalTransform,Geometry,missing,2,,0,GeometricTransforms
@@ -3827,9 +3827,9 @@ MaxIterations,"Options, system variables & unclassified",missing,3,,0,
 MaxLimit,Symbolic & Numeric Computation,implemented,2,,0,Calculus SymbolicArrays Asymptotics
 MaxMemoryUsed,Core Language & Structure,implemented,2,,0,MemoryMeasurementAndOptimization WolframSystemSessionInformation
 MaxMixtureKernels,Core Language & Structure,implemented,2,,0,NonparametricStatisticalDistributions
-MaxOverlapFraction,"Options, system variables & unclassified",missing,3,,0,
-MaxPlotPoints,Visualization & Graphics,missing,3,,0,PlottingOptions
-MaxRecursion,Visualization & Graphics,missing,3,,0,PlottingOptions
+MaxOverlapFraction,"Options, system variables & unclassified",implemented,3,,0,
+MaxPlotPoints,Visualization & Graphics,implemented,3,,0,PlottingOptions
+MaxRecursion,Visualization & Graphics,implemented,3,,0,PlottingOptions
 MaxRoots,"Options, system variables & unclassified",implemented,3,,0,
 MaxStableDistribution,Symbolic & Numeric Computation,implemented,2,,0,RandomVariables DistributionsUsedInReliabilityAnalysis ExtremeValueDistributions
 MaxStepFraction,"Options, system variables & unclassified",missing,3,,0,
@@ -3880,7 +3880,7 @@ Merge,Core Language & Structure,implemented,1,,1,LanguageOverview Associations C
 MergingFunction,Higher Mathematical Computation,missing,2,,0,TimeSeries EventSeries SettingPersistentValues
 MersennePrimeExponent,Higher Mathematical Computation,implemented,2,,0,PrimeNumbers MultiplicativeNumberTheory
 MersennePrimeExponentQ,Higher Mathematical Computation,implemented,2,,0,PrimeNumbers MultiplicativeNumberTheory
-Mesh,Visualization & Graphics,missing,1,,2,DataVisualization FunctionVisualization GraphicsOptionsAndStyling VectorVisualization
+Mesh,Visualization & Graphics,implemented,1,,2,DataVisualization FunctionVisualization GraphicsOptionsAndStyling VectorVisualization
 MeshCellCentroid,Geometry,missing,2,,0,MeshRegions
 MeshCellCount,Visualization & Graphics,missing,3,,0,MeshRegions Polygons Polyhedra
 MeshCellHighlight,Geometry,missing,2,,0,MeshRegions Annotations Properties
@@ -3894,14 +3894,14 @@ MeshCellStyle,Geometry,missing,2,,0,GeometricComputation MeshRegions Annotations
 MeshCells,Visualization & Graphics,missing,3,,0,MeshRegions Polygons Polyhedra
 MeshConnectivityGraph,Graphs & Networks,missing,2,,0,GraphConstructionAndRepresentation MeshRegions
 MeshCoordinates,Geometry,missing,2,,0,MeshRegions
-MeshFunctions,Data Manipulation & Analysis,missing,2,,1,VectorVisualization PlottingOptions
+MeshFunctions,Data Manipulation & Analysis,implemented,2,,1,VectorVisualization PlottingOptions
 MeshPrimitives,Visualization & Graphics,missing,3,,0,MeshRegions Polygons Polyhedra
 MeshQualityGoal,Geometry,missing,2,,0,MeshRegions
 MeshRefinementFunction,Geometry,missing,2,,0,MeshRegions
 MeshRegion,Geometry,missing,2,,0,WDFWolframDataFramework GeometricComputation PlaneGeometry SolidGeometry
 MeshRegionQ,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
-MeshShading,Visualization & Graphics,missing,3,,0,PlottingOptions Colors
-MeshStyle,Visualization & Graphics,missing,2,,1,PlottingOptions Colors
+MeshShading,Visualization & Graphics,implemented,3,,0,PlottingOptions Colors
+MeshStyle,Visualization & Graphics,implemented,2,,1,PlottingOptions Colors
 Message,Core Language & Structure,implemented,2,,0,PackageDevelopment TuningAndDebugging Messages
 MessageDialog,User Interface Construction,infeasible,,front end / notebooks,0,CustomInterfaceConstruction Messages SettingUpUserInteractions DialogBoxes
 MessageList,Core Language & Structure,missing,2,,0,Messages WolframSystemSessionHistory
@@ -4024,7 +4024,7 @@ MovingAverage,Data Manipulation & Analysis,implemented,2,,0,HandlingArraysOfData
 MovingMap,Sound & Video,implemented,3,,0,DataTransformsAndSmoothing SignalProcessing DateAndTime TimeSeries
 MovingMedian,Data Manipulation & Analysis,implemented,2,,0,DataTransformsAndSmoothing Statistics TimeSeries ScientificDataAnalysis
 MoyalDistribution,Symbolic & Numeric Computation,implemented,2,,0,ExponentialRelatedDistributions
-MultiaxisArrangement,"Options, system variables & unclassified",missing,3,,0,
+MultiaxisArrangement,"Options, system variables & unclassified",implemented,3,,0,
 Multicolumn,Data Manipulation & Analysis,implemented,2,,0,ComputationWithStructuredDatasets DataVisualization AutomatedReports NotebookFormattingAndStyling
 MultiedgeStyle,"Options, system variables & unclassified",implemented,3,,0,
 MultigraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements
@@ -4576,7 +4576,7 @@ PenttinenPointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialPointPr
 PercentForm,Symbolic & Numeric Computation,implemented,2,,1,DisplayOfNumbers NumberDigits
 PerfectNumber,Higher Mathematical Computation,implemented,2,,0,NumberTheory MultiplicativeNumberTheory
 PerfectNumberQ,Higher Mathematical Computation,implemented,2,,0,MultiplicativeNumberTheory
-PerformanceGoal,Core Language & Structure,missing,2,,1,TuningAndDebugging TimeMeasurementAndOptimization ClusterAnalysis SupervisedMachineLearning
+PerformanceGoal,Core Language & Structure,implemented,2,,1,TuningAndDebugging TimeMeasurementAndOptimization ClusterAnalysis SupervisedMachineLearning
 Perimeter,Visualization & Graphics,missing,3,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry Polygons
 PeriodicBoundaryCondition,Symbolic & Numeric Computation,missing,2,,0,DifferentialEquations PDEModeling PDEModelingAndAnalysis AcousticPDEModels
 PeriodicModel,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
@@ -4660,18 +4660,18 @@ PlotFitElements,Data Manipulation & Analysis,missing,2,,0,StatisticalVisualizati
 PlotGrid,Data Manipulation & Analysis,missing,2,,0,HighDimensionalVisualization
 PlotHighlighting,Visualization & Graphics,infeasible,,front end / notebooks,0,DynamicVisualization GraphicsInteractivityAndDrawing Labels PlottingOptions
 PlotInteractivity,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-PlotLabel,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling Labels AnnotatingAndCombiningGraphics ChartLabelingLegendingAndAnnotation
-PlotLabels,Visualization & Graphics,missing,3,,0,DataVisualization FunctionVisualization GraphicsOptionsAndStyling Labels
+PlotLabel,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling Labels AnnotatingAndCombiningGraphics ChartLabelingLegendingAndAnnotation
+PlotLabels,Visualization & Graphics,implemented,3,,0,DataVisualization FunctionVisualization GraphicsOptionsAndStyling Labels
 PlotLayout,Engineering Data & Computation,infeasible,,curated data,0,ClassicalAnalysisAndDesign
-PlotLegends,Data Manipulation & Analysis,missing,2,,0,DataVisualization FunctionVisualization GraphicsOptionsAndStyling Labels
-PlotMarkers,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling PlottingOptions GraphicsObjects ShapesIconsAndRelatedCharacters
-PlotPoints,Visualization & Graphics,missing,3,,0,PlottingOptions
-PlotRange,Visualization & Graphics,missing,1,,9,GraphicsOptionsAndStyling InteractiveManipulation ClickInteractivePanels GraphicsCoordinates
-PlotRangeClipping,Visualization & Graphics,missing,3,,0,GraphicsShapeAndSize PlottingAndImageRegions
-PlotRangePadding,Visualization & Graphics,missing,3,,0,GraphicsCoordinates GraphicsShapeAndSize PlottingAndImageRegions
-PlotRegion,"Options, system variables & unclassified",missing,3,,0,
-PlotStyle,Visualization & Graphics,missing,1,,3,DataVisualization FunctionVisualization GraphicsOptionsAndStyling PlottingOptions
-PlotTheme,Visualization & Graphics,missing,1,,7,GraphicsOptionsAndStyling MolecularStructureAndComputation PlottingOptions
+PlotLegends,Data Manipulation & Analysis,implemented,2,,0,DataVisualization FunctionVisualization GraphicsOptionsAndStyling Labels
+PlotMarkers,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling PlottingOptions GraphicsObjects ShapesIconsAndRelatedCharacters
+PlotPoints,Visualization & Graphics,implemented,3,,0,PlottingOptions
+PlotRange,Visualization & Graphics,implemented,1,,9,GraphicsOptionsAndStyling InteractiveManipulation ClickInteractivePanels GraphicsCoordinates
+PlotRangeClipping,Visualization & Graphics,implemented,3,,0,GraphicsShapeAndSize PlottingAndImageRegions
+PlotRangePadding,Visualization & Graphics,implemented,3,,0,GraphicsCoordinates GraphicsShapeAndSize PlottingAndImageRegions
+PlotRegion,"Options, system variables & unclassified",implemented,3,,0,
+PlotStyle,Visualization & Graphics,implemented,1,,3,DataVisualization FunctionVisualization GraphicsOptionsAndStyling PlottingOptions
+PlotTheme,Visualization & Graphics,implemented,1,,7,GraphicsOptionsAndStyling MolecularStructureAndComputation PlottingOptions
 Pluralize,Core Language & Structure,infeasible,,curated data,0,StringManipulation WorkingWithTemplates TextConstruction
 Plus,Core Language & Structure,implemented,1,,54,Associations Syntax HandlingArraysOfData MathematicalFunctions
 PlusMinus,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
@@ -4683,7 +4683,7 @@ PointCountDistribution,Symbolic & Numeric Computation,missing,2,,0,SpatialPointP
 PointDensity,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics DescriptiveStatistics SpatialStatistics SpatialPointProcesses
 PointDensityFunction,Symbolic & Numeric Computation,missing,2,,0,SpatialPointCollections
 PointFigureChart,Financial Data & Computation,infeasible,,curated data,0,FinancialVisualization
-PointLegend,Data Manipulation & Analysis,missing,2,,0,Labels Legends ChartLabelingLegendingAndAnnotation
+PointLegend,Data Manipulation & Analysis,implemented,2,,0,Labels Legends ChartLabelingLegendingAndAnnotation
 PointLight,Visualization & Graphics,implemented,3,,0,3DGraphicsOptions GraphicsDirectives
 PointProcessEstimator,Symbolic & Numeric Computation,missing,2,,0,SpatialPointProcesses
 PointProcessFitTest,Symbolic & Numeric Computation,missing,2,,0,SpatialStatistics SpatialPointProcesses SpatialPointCollections
@@ -4698,13 +4698,13 @@ PoissonPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
 PoissonPointProcess,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics SpatialStatistics SpatialPointProcesses SpatialPointCollections
 PoissonProcess,Higher Mathematical Computation,missing,2,,0,ProbabilityAndStatistics RandomProcesses ParametricRandomProcesses MarkovProcesses
 PoissonWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
-PolarAxes,Visualization & Graphics,missing,3,,0,ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
-PolarAxesOrigin,Visualization & Graphics,missing,3,,0,ChartLayoutAndStyling
+PolarAxes,Visualization & Graphics,implemented,3,,0,ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
+PolarAxesOrigin,Visualization & Graphics,implemented,3,,0,ChartLayoutAndStyling
 PolarCurve,"Options, system variables & unclassified",missing,3,,0,
 PolarDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
-PolarGridLines,Visualization & Graphics,missing,3,,0,ChartLayoutAndStyling
+PolarGridLines,Visualization & Graphics,implemented,3,,0,ChartLayoutAndStyling
 PolarPlot,Visualization & Graphics,implemented,3,,0,FunctionVisualization AnglesAndPolarCoordinates
-PolarTicks,Visualization & Graphics,missing,3,,0,ChartLayoutAndStyling
+PolarTicks,Visualization & Graphics,implemented,3,,0,ChartLayoutAndStyling
 PoleZeroMarkers,Engineering Data & Computation,infeasible,,curated data,0,ClassicalAnalysisAndDesign
 PoleZeroPlot,Engineering Data & Computation,infeasible,,curated data,0,ClassicalAnalysisAndDesign
 PolyGamma,Symbolic & Numeric Computation,implemented,2,,0,DiscreteCalculus SpecialFunctions RecurrenceAndSumFunctions GammaFunctionsAndRelatedFunctions
@@ -4835,7 +4835,7 @@ ProductLog,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions Inve
 ProgressIndicator,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects UserInterfaceStructuringAndLayout DialogBoxes
 ProgressReporting,Core Language & Structure,missing,2,,0,CodeCompilation TimeMeasurementAndOptimization SystematicTestingAndVerification
 Projection,Core Language & Structure,implemented,1,,0,MatricesAndLinearAlgebra OperationsOnVectors MathematicalAndCountingOperationsOnLists
-Prolog,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance CombiningGraphics
+Prolog,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance CombiningGraphics
 ProofObject,Higher Mathematical Computation,implemented,2,,0,LogicAndBooleanAlgebra TheoremProving
 PropagateAborts,Core Language & Structure,implemented,1,,0,RobustnessAndErrorHandling FlowControl PackageBulletproofing
 Proportion,"Options, system variables & unclassified",missing,3,,0,
@@ -4970,9 +4970,9 @@ RawPointer,External Interfaces & Connections,missing,3,,0,CallingExternalProgram
 RayleighDistribution,Symbolic & Numeric Computation,implemented,2,,0,NormalRelatedDistributions DistributionsInCommunicationSystems ExponentialRelatedDistributions
 Re,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumericalEvaluationAndPrecision GPUComputing FunctionsOfComplexVariables
 ReIm,Symbolic & Numeric Computation,implemented,2,,0,FunctionsOfComplexVariables ComplexNumbers RepresentationOfNumbers AnglesAndPolarCoordinates
-ReImLabels,Visualization & Graphics,missing,3,,0,ComplexVisualization
+ReImLabels,Visualization & Graphics,implemented,3,,0,ComplexVisualization
 ReImPlot,Visualization & Graphics,missing,3,,0,FunctionVisualization FunctionsOfComplexVariables ComplexVisualization
-ReImStyle,Visualization & Graphics,missing,3,,0,ComplexVisualization
+ReImStyle,Visualization & Graphics,implemented,3,,0,ComplexVisualization
 ReactionBalance,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
 ReactionBalancedQ,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
 ReactionPDETerm,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
@@ -5008,7 +5008,7 @@ RecurrenceTable,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving 
 Red,Visualization & Graphics,implemented,1,,21,GraphicsOptionsAndStyling SymbolicGraphicsLanguage GraphVisualization ColorProcessing
 Reduce,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation EquationSolving PolynomialAlgebra NumberTheory
 ReferenceAltitude,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData
-ReferenceLineStyle,Data Manipulation & Analysis,missing,2,,0,StatisticalVisualization
+ReferenceLineStyle,Data Manipulation & Analysis,implemented,2,,0,StatisticalVisualization
 Refine,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation AssumptionsAndDomains
 ReflectionMatrix,Symbolic & Numeric Computation,implemented,2,,0,GeometricTransforms StructuredArrays
 ReflectionTransform,Geometry,missing,2,,0,DerivedRegions GeometricTransforms
@@ -5017,7 +5017,7 @@ RefreshRate,User Interface Construction,infeasible,,front end / notebooks,0,Opti
 Region,Geometry,missing,2,,0,GeometricComputation PlaneGeometry SolidGeometry Polygons
 RegionBinarize,Images,missing,3,,0,SegmentationAnalysis 3DImages ImageComposition
 RegionBoundary,Geometry,missing,2,,0,GeometricComputation DerivedRegions SyntheticGeometry
-RegionBoundaryStyle,"Options, system variables & unclassified",missing,3,,0,
+RegionBoundaryStyle,"Options, system variables & unclassified",implemented,3,,0,
 RegionBounds,Geometry,missing,2,,0,GeometricPropertiesAndMeasures 3DPrinting Polygons RegularAndCoordinateArrays
 RegionCentroid,Visualization & Graphics,missing,3,,0,GeometricComputation GeometricPropertiesAndMeasures GeometricSolvers SyntheticGeometry
 RegionCongruent,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
@@ -5032,9 +5032,9 @@ RegionEmbeddingDimension,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
 RegionEqual,Visualization & Graphics,missing,3,,0,GeometricPropertiesAndMeasures Polygons Polyhedra
 RegionErosion,Geometry,missing,2,,0,DerivedRegions
 RegionFarthestDistance,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
-RegionFillingStyle,"Options, system variables & unclassified",missing,3,,0,
+RegionFillingStyle,"Options, system variables & unclassified",implemented,3,,0,
 RegionFit,Geometry,missing,2,,0,GeometricSpecialRegions
-RegionFunction,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling VectorVisualization GraphicsCoordinates PlottingOptions
+RegionFunction,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling VectorVisualization GraphicsCoordinates PlottingOptions
 RegionGaussianCurvature,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
 RegionHausdorffDistance,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
 RegionImage,Images,missing,3,,0,CreatingAndImportingImages
@@ -5131,7 +5131,7 @@ RescalingTransform,Geometry,missing,2,,0,GeometricTransforms
 ResetDirectory,External Interfaces & Connections,missing,3,,0,DirectoriesAndDirectoryOperations
 ReshapeLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 Residue,Visualization & Graphics,implemented,3,,0,FunctionsOfComplexVariables RationalFunctions
-ResidueLabels,"Options, system variables & unclassified",missing,3,,0,
+ResidueLabels,"Options, system variables & unclassified",implemented,3,,0,
 ResidueSum,Visualization & Graphics,implemented,3,,0,FunctionsOfComplexVariables
 ResizeLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 Resolve,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation PolynomialAlgebra LogicAndBooleanAlgebra TheoremProving
@@ -5217,7 +5217,7 @@ RootSum,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra
 RootTree,"Options, system variables & unclassified",implemented,3,,0,
 Roots,Symbolic & Numeric Computation,implemented,2,,0,PolynomialEquations
 Rotate,Visualization & Graphics,implemented,1,,2,SymbolicGraphicsLanguage DerivedRegions GeometricTransforms GraphicsTransformations
-RotateLabel,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance
+RotateLabel,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance
 RotateLeft,Core Language & Structure,implemented,1,,0,RearrangingAndRestructuringLists PartsOfMatrices
 RotateRight,Core Language & Structure,implemented,1,,0,RearrangingAndRestructuringLists PartsOfMatrices
 RotationAction,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling 3DGraphicsOptions
@@ -5239,7 +5239,7 @@ RudvalisGroupRu,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 Rule,Core Language & Structure,implemented,1,,46,LanguageOverview Expressions RulesAndPatterns Syntax
 RuleDelayed,Core Language & Structure,implemented,1,,9,LanguageOverview RulesAndPatterns Syntax ScopingConstructs
 RulePlot,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics BooleanComputation IteratedMapsAndFractals ComputationalSystemsAndDiscovery
-RulerUnits,"Options, system variables & unclassified",missing,3,,0,
+RulerUnits,"Options, system variables & unclassified",implemented,3,,0,
 RulesTree,"Options, system variables & unclassified",implemented,3,,0,
 Run,Core Language & Structure,missing,2,,0,ExternalOperations CallingExternalPrograms LowLevelSystemOptimization DirectControlOfExternalProcesses
 RunProcess,External Interfaces & Connections,missing,2,,1,ExternalOperations CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
@@ -5274,13 +5274,13 @@ Saveable,"Options, system variables & unclassified",infeasible,,front end / note
 SavitzkyGolayMatrix,Images,implemented,3,,0,StructureMatricesAndConvolutionKernels
 SawtoothWave,Symbolic & Numeric Computation,implemented,2,,0,IntegralTransforms NumericalFunctions FourierAnalysis CreatingAndImportingSignals
 Scale,Visualization & Graphics,implemented,2,,1,SymbolicGraphicsLanguage DerivedRegions GeometricTransforms GraphicsTransformations
-ScaleDivisions,Data Manipulation & Analysis,missing,2,,0,Gauges
-ScaleOrigin,Data Manipulation & Analysis,missing,2,,0,Gauges
-ScalePadding,Data Manipulation & Analysis,missing,2,,0,Gauges
-ScaleRangeStyle,Data Manipulation & Analysis,missing,2,,0,Gauges
-ScaleRanges,Data Manipulation & Analysis,missing,2,,0,Gauges
+ScaleDivisions,Data Manipulation & Analysis,implemented,2,,0,Gauges
+ScaleOrigin,Data Manipulation & Analysis,implemented,2,,0,Gauges
+ScalePadding,Data Manipulation & Analysis,implemented,2,,0,Gauges
+ScaleRangeStyle,Data Manipulation & Analysis,implemented,2,,0,Gauges
+ScaleRanges,Data Manipulation & Analysis,implemented,2,,0,Gauges
 Scaled,Visualization & Graphics,implemented,3,,0,SymbolicGraphicsLanguage GraphicsCoordinates GraphicsShapeAndSize GraphicsTransformations
-ScalingFunctions,Data Manipulation & Analysis,missing,2,,0,FinancialVisualization StatisticalVisualization DateAndTimeVisualization Gauges
+ScalingFunctions,Data Manipulation & Analysis,implemented,2,,0,FinancialVisualization StatisticalVisualization DateAndTimeVisualization Gauges
 ScalingMatrix,Symbolic & Numeric Computation,implemented,2,,0,GeometricTransforms ConstructingMatrices
 ScalingTransform,Geometry,missing,2,,0,GeometricTransforms
 Scan,Core Language & Structure,implemented,1,,0,ListManipulation FunctionalProgramming ApplyingFunctionsToLists LoopingConstructs
@@ -5314,8 +5314,8 @@ SechDistribution,Symbolic & Numeric Computation,implemented,2,,0,ExponentialRela
 SecondOrderConeOptimization,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays ConvexOptimization
 SectorChart,Data Manipulation & Analysis,missing,2,,0,ChartingAndInformationVisualization TabularVisualization
 SectorChart3D,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization
-SectorOrigin,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization ChartLayoutAndStyling
-SectorSpacing,Visualization & Graphics,missing,3,,0,ChartingAndInformationVisualization ChartLayoutAndStyling
+SectorOrigin,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization ChartLayoutAndStyling
+SectorSpacing,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization ChartLayoutAndStyling
 SecuredAuthenticationKey,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,WebOperations URLManipulation CloudPermissionsControl HTTPRequestsAndResponses
 SecuredAuthenticationKeys,Higher Mathematical Computation,infeasible,,Wolfram Cloud / external services,0,CloudPermissionsControl
 SecurityCertificate,Higher Mathematical Computation,implemented,2,,0,Cryptography
@@ -5696,16 +5696,16 @@ StrataVariables,Symbolic & Numeric Computation,missing,2,,0,SurvivalAnalysis
 StratonovichProcess,Higher Mathematical Computation,missing,2,,0,RandomProcesses MarkovProcesses StochasticDifferentialEquationProcesses
 StraussHardcorePointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialPointProcesses
 StraussPointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialStatistics SpatialPointProcesses
-StreamColorFunction,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-StreamColorFunctionScaling,"Options, system variables & unclassified",missing,3,,0,
+StreamColorFunction,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
+StreamColorFunctionScaling,"Options, system variables & unclassified",implemented,3,,0,
 StreamDensityPlot,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-StreamMarkers,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
+StreamMarkers,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
 StreamPlot,Symbolic & Numeric Computation,missing,2,,0,FunctionVisualization GeometricSolvers VectorVisualization DifferentialEquations
 StreamPlot3D,Data Manipulation & Analysis,missing,2,,0,FunctionVisualization VectorVisualization
-StreamPoints,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
+StreamPoints,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
 StreamPosition,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
-StreamScale,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-StreamStyle,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
+StreamScale,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
+StreamStyle,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
 Streams,External Interfaces & Connections,missing,3,,0,FileOperations WolframSystemSessionInformation LowLevelFileOperations
 StrictInequalities,Symbolic & Numeric Computation,implemented,2,,0,FunctionProperties
 String,Core Language & Structure,implemented,1,,2,LanguageOverview StringManipulation Syntax WDFWolframDataFramework
@@ -5836,7 +5836,7 @@ SurvivalModel,"Options, system variables & unclassified",missing,3,,0,
 SurvivalModelFit,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis Reliability
 SuzukiDistribution,Symbolic & Numeric Computation,implemented,2,,0,DistributionsInCommunicationSystems HeavyTailDistributions
 SuzukiGroupSuz,Higher Mathematical Computation,implemented,2,,0,NamedGroups
-SwatchLegend,Data Manipulation & Analysis,missing,2,,0,Labels Legends ChartLabelingLegendingAndAnnotation
+SwatchLegend,Data Manipulation & Analysis,implemented,2,,0,Labels Legends ChartLabelingLegendingAndAnnotation
 Switch,Core Language & Structure,implemented,1,,0,ProceduralProgramming Conditionals
 Symbol,Core Language & Structure,implemented,1,,1,Expressions ExpressionStructure ConvertingBetweenExpressionsAndStrings SymbolHandling
 SymbolName,Core Language & Structure,implemented,1,,0,ConvertingBetweenExpressionsAndStrings SymbolHandling AtomicElementsOfExpressions
@@ -5998,7 +5998,7 @@ TensorTranspose,Higher Mathematical Computation,implemented,2,,0,SymbolicTensors
 TensorWedge,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays SymbolicTensors
 TerminatedEvaluation,Core Language & Structure,implemented,1,,0,RobustnessAndErrorHandling EvaluationControl Messages
 TernaryListPlot,Data Manipulation & Analysis,missing,2,,0,DataVisualization TabularVisualization
-TernaryPlotCorners,"Options, system variables & unclassified",missing,3,,0,
+TernaryPlotCorners,"Options, system variables & unclassified",implemented,3,,0,
 TestCreate,Core Language & Structure,implemented,2,,0,TuningAndDebugging SystematicTestingAndVerification
 TestEvaluate,Core Language & Structure,implemented,2,,0,SystematicTestingAndVerification
 TestEvaluationFunction,Core Language & Structure,implemented,2,,0,SystematicTestingAndVerification
@@ -6053,14 +6053,14 @@ ThrowException,Core Language & Structure,implemented,1,,0,ScopingConstructs Robu
 ThueMorse,Symbolic & Numeric Computation,implemented,2,,0,IteratedMapsAndFractals ComputationalSystemsAndDiscovery IntegerFunctions
 Thumbnail,Images,missing,3,,0,ImageProcessing BasicImageManipulation CreatingAndImportingImages
 Thursday,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
-TickDirection,Visualization & Graphics,missing,3,,0,GraphicsObjects
-TickLabelOrientation,Visualization & Graphics,missing,3,,0,GraphicsObjects
-TickLabelPositioning,Visualization & Graphics,missing,3,,0,GraphicsObjects
-TickLabels,Visualization & Graphics,missing,3,,0,GraphicsObjects
-TickLengths,Visualization & Graphics,missing,3,,0,GraphicsObjects
-TickPositions,Visualization & Graphics,missing,3,,0,GraphicsObjects
-Ticks,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling Labels GraphicsAnnotationAndAppearance
-TicksStyle,Visualization & Graphics,missing,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions
+TickDirection,Visualization & Graphics,implemented,3,,0,GraphicsObjects
+TickLabelOrientation,Visualization & Graphics,implemented,3,,0,GraphicsObjects
+TickLabelPositioning,Visualization & Graphics,implemented,3,,0,GraphicsObjects
+TickLabels,Visualization & Graphics,implemented,3,,0,GraphicsObjects
+TickLengths,Visualization & Graphics,implemented,3,,0,GraphicsObjects
+TickPositions,Visualization & Graphics,implemented,3,,0,GraphicsObjects
+Ticks,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling Labels GraphicsAnnotationAndAppearance
+TicksStyle,Visualization & Graphics,implemented,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions
 TideData,Geographic Data & Computation,infeasible,,curated data,0,WeatherData EarthSciencesDataAndComputation
 Tilde,"Options, system variables & unclassified",missing,3,,0,
 TildeEqual,"Options, system variables & unclassified",missing,3,,0,
@@ -6423,9 +6423,9 @@ VariogramFunction,Symbolic & Numeric Computation,missing,2,,0,SpatialStatistics 
 VariogramModel,Symbolic & Numeric Computation,missing,2,,0,SpatialEstimation
 VectorAngle,Geometry,implemented,2,,0,GeometricPropertiesAndMeasures OperationsOnVectors AnglesAndPolarCoordinates
 VectorAround,Data Manipulation & Analysis,missing,2,,0,Units NumbersWithUncertainty
-VectorAspectRatio,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-VectorColorFunction,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-VectorColorFunctionScaling,"Options, system variables & unclassified",missing,3,,0,
+VectorAspectRatio,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
+VectorColorFunction,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
+VectorColorFunctionScaling,"Options, system variables & unclassified",implemented,3,,0,
 VectorDatabaseObject,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions
 VectorDatabaseObjects,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions
 VectorDatabaseSearch,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions
@@ -6436,15 +6436,15 @@ VectorGreater,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays Con
 VectorGreaterEqual,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays ConvexOptimization
 VectorLess,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays ConvexOptimization
 VectorLessEqual,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays ConvexOptimization
-VectorMarkers,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
+VectorMarkers,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
 VectorPlot,Symbolic & Numeric Computation,implemented,2,,0,FunctionVisualization GeometricSolvers VectorVisualization DifferentialEquations
 VectorPlot3D,Data Manipulation & Analysis,missing,2,,0,FunctionVisualization VectorVisualization VectorAnalysis
-VectorPoints,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
+VectorPoints,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
 VectorQ,Core Language & Structure,implemented,1,,0,GPUComputing TestingExpressions OperationsOnVectors ElementsOfLists
-VectorRange,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-VectorScaling,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-VectorSizes,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
-VectorStyle,Data Manipulation & Analysis,missing,2,,0,VectorVisualization
+VectorRange,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
+VectorScaling,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
+VectorSizes,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
+VectorStyle,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
 VectorSymbol,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays
 Vectors,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays SymbolicTensors
 Vee,"Options, system variables & unclassified",missing,3,,0,
