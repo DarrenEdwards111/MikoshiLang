@@ -155,6 +155,169 @@ TIMEZONE = [
     ('$TimeZone = "Mars/Olympus"', Raises()),
 ]
 
+DI = 'DateInterval[{{2020, 1, 1}, {2020, 3, 1}}]'
+DATEINTERVAL = [
+    (DI, 'DateInterval[{{{2020, 1, 1}, {2020, 3, 1}}}, "Day"]'),
+    ("DateInterval[{DateObject[{2020}], DateObject[{2021}]}]", 'DateInterval[{{{2020}, {2021}}}, "Year"]'),
+    ("DateInterval[{{{2020, 1, 1}, {2020, 2, 1}}, {{2020, 1, 15}, {2020, 3, 1}}}]",
+     'DateInterval[{{{2020, 1, 1}, {2020, 3, 1}}}, "Day"]'),
+    (DI + '["DateBounds"]', '{DateObject[{2020, 1, 1}, "Day"], DateObject[{2020, 3, 1}, "Day"]}'),
+]
+DS3 = "{DateObject[{2020, 5, 1}], DateObject[{2019, 5, 1}], DateObject[{2021, 1, 1}]}"
+MINDATE = [
+    (f"MinDate[{DS3}]", 'DateObject[{2019, 5, 1}, "Day"]'),
+    ("MinDate[{DateObject[{2020, 5, 1}], DateObject[{2020, 5, 2}]}]", 'DateObject[{2020, 5, 1}, "Day"]'),
+    (f"MinDate[{DI}]", 'DateObject[{2020, 1, 1}, "Day"]'),
+]
+MAXDATE = [
+    (f"MaxDate[{DS3}]", 'DateObject[{2021, 1, 1}, "Day"]'),
+    ("MaxDate[{DateObject[{2020, 5, 1}], DateObject[{2019, 5, 1}]}]", 'DateObject[{2020, 5, 1}, "Day"]'),
+    (f"MaxDate[{DI}]", 'DateObject[{2020, 3, 1}, "Day"]'),
+]
+DATEBOUNDS = [
+    (f"DateBounds[{DS3}]", '{DateObject[{2019, 5, 1}, "Day"], DateObject[{2021, 1, 1}, "Day"]}'),
+    ("DateBounds[{DateObject[{2020, 5, 1}]}]", '{DateObject[{2020, 5, 1}, "Day"], DateObject[{2020, 5, 1}, "Day"]}'),
+    (f"DateBounds[{DI}]", '{DateObject[{2020, 1, 1}, "Day"], DateObject[{2020, 3, 1}, "Day"]}'),
+]
+DATEWITHINQ = [
+    T("DateWithinQ[DateObject[{2020}], DateObject[{2020, 5, 3}]]"),
+    F("DateWithinQ[DateObject[{2020}], DateObject[{2021, 5, 3}]]"),
+    T(f"DateWithinQ[{DI}, DateObject[{{2020, 2, 3}}]]"),
+    F(f"DateWithinQ[{DI}, DateObject[{{2020, 4, 3}}]]"),
+]
+DATEOVERLAPSQ = [
+    T("DateOverlapsQ[DateObject[{2020}], DateObject[{2020, 5}]]"),
+    F("DateOverlapsQ[DateObject[{2020}], DateObject[{2021, 5}]]"),
+    T(f"DateOverlapsQ[{DI}, DateInterval[{{{{2020, 2, 1}}, {{2020, 5, 1}}}}]]"),
+]
+DATEDIFFERENCE = [
+    ("DateDifference[{2017, 1, 1}, {2017, 7, 4}]", 'Quantity[184, "Days"]'),
+    ("DateDifference[{2017, 7, 4}, {2017, 1, 1}]", 'Quantity[-184, "Days"]'),
+    ('DateDifference[{2017, 1, 1}, {2017, 7, 4}, "Week"][[1]]', near(184 / 7)),
+    ('DateDifference[{2017, 1, 1}, {2017, 6, 1}, "Hour"]', 'Quantity[3624, "Hours"]'),
+    ('DateDifference[{2017, 1, 1}, {2017, 7, 4}, {"Year", "Month", "Day"}]',
+     'Quantity[MixedMagnitude[{0, 6, 3}], MixedUnit[{"Years", "Months", "Days"}]]'),
+    ('DateDifference[{2016, 1, 1}, {2017, 3, 5}, {"Month", "Day"}]',
+     'Quantity[MixedMagnitude[{14, 4}], MixedUnit[{"Months", "Days"}]]'),
+]
+DAYCOUNTCONVENTION = [
+    ('DateDifference[{2017, 1, 1}, {2017, 7, 4}, DayCountConvention -> "Thirty360"]', 'Quantity[183, "Days"]'),
+    ('DateDifference[{2017, 1, 1}, {2017, 7, 4}, DayCountConvention -> "ActualActual"]', 'Quantity[184, "Days"]'),
+    ('DateDifference[{2016, 1, 30}, {2017, 3, 1}, "Year", DayCountConvention -> "Thirty360"][[1]]',
+     near(391 / 360)),
+    ('DateDifference[{2017, 1, 1}, {2017, 7, 4}, DayCountConvention -> "Bogus"]', Raises()),
+]
+TIMESYSTEMCONVERT = [
+    ('TimeSystemConvert[DateObject[{2021, 8, 1, 0, 0, 0}, TimeZone -> 0], "TAI"]',
+     'DateObject[{2021, 8, 1, 0, 0, 37.}, "Instant", "Gregorian", 0., "TAI"]'),
+    ('TimeSystemConvert[DateObject[{2021, 8, 1, 0, 0, 0}, TimeZone -> 0], "GPS"]',
+     'DateObject[{2021, 8, 1, 0, 0, 18.}, "Instant", "Gregorian", 0., "GPS"]'),
+    ('TimeSystemConvert[DateObject[{2021, 8, 1, 0, 0, 0}, TimeZone -> 0], "TT"]',
+     'DateObject[{2021, 8, 1, 0, 1, 9.184}, "Instant", "Gregorian", 0., "TT"]'),
+    ('TimeSystemConvert[DateObject[{2021, 8, 1, 0, 0, 0}, TimeZone -> 0], "Bogus"]', Raises()),
+]
+JULIANDATE = [
+    ("JulianDate[DateObject[{2000, 1, 1, 12, 0, 0}, TimeZone -> 0]]", near(2451545.0)),
+    ('JulianDate["Modified", DateObject[{2000, 1, 1, 0, 0, 0}, TimeZone -> 0]]', near(51544.0)),
+    ('JulianDate["Dublin", DateObject[{2021, 2, 19, 11, 0, 0}, TimeZone -> 0]]', near(44244.958333333)),
+]
+FROMJULIANDATE = [
+    ("FromJulianDate[2457754, TimeZone -> 0]", 'DateObject[{2016, 12, 31, 12, 0, 0}, "Instant", "Gregorian", 0.]'),
+    ("FromJulianDate[0, TimeZone -> 0]", 'DateObject[{-4714, 11, 24, 12, 0, 0}, "Instant", "Gregorian", 0.]'),
+    ('FromJulianDate["Modified", 0, TimeZone -> 0]', 'DateObject[{1858, 11, 17, 0, 0, 0}, "Instant", "Gregorian", 0.]'),
+    ('FromJulianDate["Truncated", 0, TimeZone -> 0]',
+     'DateObject[{1968, 5, 24, 0, 0, 0}, "Instant", "Gregorian", 0.]'),
+]
+LUNATIONNUMBER = [
+    ("Block[{$TimeZone = -6}, LunationNumber[DateObject[{2020, 1, 1}]]]", near(247.19, 3e-5)),
+    ("Block[{$TimeZone = -5}, LunationNumber[DateObject[{1988, 6, 23}]]]", near(-142.726, 5e-6)),
+    ('Block[{$TimeZone = -5}, LunationNumber["BrownLunationNumber", DateObject[{1988, 6, 23}]]]', near(810.274, 1e-6)),
+    ("LunationNumber[DateObject[{2023, 9, 28, 12, 0, 0}, TimeZone -> 0]]", near(293.465, 3e-6)),
+    ('LunationNumber["NoSuchScheme", DateObject[{2020, 1, 1}]]', Raises()),
+]
+FROMLUNATIONNUMBER = [
+    T("Abs[AbsoluteTime[FromLunationNumber[0]] - AbsoluteTime[DateObject[{2000, 1, 6, 18, 13, 38}, TimeZone -> 0]]] < 60"),
+    T("Abs[AbsoluteTime[FromLunationNumber[300]] - AbsoluteTime[DateObject[{2024, 4, 8, 18, 20, 51}, TimeZone -> 0]]] "
+      "< 60"),
+    T('Abs[AbsoluteTime[FromLunationNumber["IslamicLunationNumber", 1]] - '
+      'AbsoluteTime[DateObject[{622, 7, 17, 5, 29, 13}, TimeZone -> 0]]] < 600'),
+    T("Abs[LunationNumber[FromLunationNumber[123.25]] - 123.25] < 10^-6"),
+]
+
+
+def _sid(secs, tol):
+    return Pred(lambda g: abs(_num(g) - secs) <= tol, f"~{secs}s")
+
+
+def _sidsecs(src):
+    return f"Module[{{q = {src}}}, q[[1, 1]] . {{3600, 60, 1}}]"
+
+
+SIDEREALTIME = [
+    (_sidsecs('SiderealTime[GeoPosition[{50.3, -80.1}], DateObject[{2025, 3, 17, 15, 3, 6.49081}, "Instant", '
+              '"Gregorian", -5.]]'), _sid(2 * 3600 + 25 * 60 + 17.7664, 0.1)),
+    (_sidsecs('SiderealTime["MeanTime", {0, 0}, DateObject[{1987, 4, 10, 0, 0, 0}, TimeZone -> 0]]'),
+     _sid(13 * 3600 + 10 * 60 + 46.3668, 0.002)),
+    (_sidsecs('SiderealTime["ApparentTime", {0, 0}, DateObject[{1987, 4, 10, 0, 0, 0}, TimeZone -> 0]]'),
+     _sid(13 * 3600 + 10 * 60 + 46.1351, 0.01)),
+    (_sidsecs('SiderealTime["MeanTime", {10, 0}, DateObject[{2000, 1, 1, 12, 0, 0}, TimeZone -> 0]]'),
+     _sid(18 * 3600 + 41 * 60 + 50.548, 0.002)),
+    ('SiderealTime[{0, 0}, DateObject[{2000}]][[2]]',
+     'MixedUnit[{"HoursOfRightAscension", "MinutesOfRightAscension", "SecondsOfRightAscension"}]'),
+    ("SiderealTime[{100, 0}, DateObject[{2000}]]", Raises()),
+]
+RANDOMDATE = [
+    T('DateWithinQ[DateObject[{1999}, "Year"], RandomDate[DateObject[{1999}, "Year"], TimeZone -> 0]]'),
+    ('Length[RandomDate[DateObject[{1999}, "Year"], 5]]', "5"),
+    ('Dimensions[RandomDate[DateObject[{1999}, "Year"], {2, 3}]]', "{2, 3}"),
+    T('SeedRandom[3]; w12a = RandomDate[DateObject[{1999}, "Year"]]; SeedRandom[3]; '
+      'w12a === RandomDate[DateObject[{1999}, "Year"]]'),
+    T('Module[{d = RandomDate[DateObject[{1985, 8}, "Month"], DateGranularity -> "Day"]}, '
+      'd[[2]] === "Day" && d[[1, 1 ;; 2]] === {1985, 8}]'),
+    ("RandomDate[DateObject[{2000, 1, 1, 0, 0, 0}]]", Raises()),
+]
+RANDOMTIME = [
+    T("TimeObjectQ[RandomTime[]]"),
+    T('Module[{t = RandomTime[TimeObject[{3}, "Hour"]]}, t[[1, 1]] == 3]'),
+    ('Length[RandomTime[TimeObject[{3}, "Hour"], 4]]', "4"),
+    T('Module[{t = RandomTime[{TimeObject[{6}, "Hour"], TimeObject[{15}, "Hour"]}]}, 6 <= t[[1, 1]] <= 15]'),
+]
+DATED = [
+    ('Dated["Population", 1985]', 'Dated["Population", 1985]'),
+    ('Dated["Population", All]', 'Dated["Population", All]'),
+    ('Dated["Population", "x"]', Raises()),
+]
+CLOCK = [
+    ("Clock[]", "0"),
+    ("Clock[{1, 3}]", "1"),
+    ("Clock[{5, 7}, 2]", "5"),
+    ("Clock[{1, 3}, -2]", Raises()),
+]
+DATESCALE = [
+    ("DateScale[]", "DateScale[]"),
+    ('DateScale[DateTicksFormat -> {"Year"}]', 'DateScale[DateTicksFormat -> {"Year"}]'),
+    ("DateScale[Foo -> 1]", Raises()),
+]
+DATEPATTERN = [
+    T('StringMatchQ["2021-03-04", DatePattern[{"Year", "Month", "Day"}]]'),
+    F('StringMatchQ["2021-13-04", DatePattern[{"Year", "Month", "Day"}]]'),
+    ('StringCases["on 12/25/2020 and 1/2/2021", DatePattern[{"Month", "Day", "Year"}]]',
+     '{"12/25/2020", "1/2/2021"}'),
+    T('StringMatchQ["Mar 2021", DatePattern[{"MonthName", " ", "Year"}]]'),
+    T('StringMatchQ["2021 03", DatePattern[{"Year", "Month"}, " "]]'),
+]
+DATEFORMAT = [
+    ('DateString[DateObject[{2019, 4, 4}, DateFormat -> {"Year", "-", "Month"}]]', '"2019-04"'),
+    ('DateObject[{2019, 4, 4}, DateFormat -> "ISODate"][[-1]]', 'DateFormat -> "ISODate"'),
+    ('DateObject[{2019, 4, 4}, DateFormat -> 17]', Raises()),
+]
+DATEGRANULARITY = [
+    ('RandomDate[DateObject[{1985, 8}, "Month"], DateGranularity -> "Month"]', 'DateObject[{1985, 8}, "Month"]'),
+    ('RandomDate[DateObject[{1985}, "Year"], DateGranularity -> "Year"]', 'DateObject[{1985}, "Year"]'),
+    ('RandomDate[DateObject[{1985}, "Year"], DateGranularity -> "Fortnight"]', Raises()),
+]
+
+
 GROUPS = [v for k, v in list(globals().items()) if k.isupper() and k != "GROUPS" and isinstance(v, list)
           and v and isinstance(v[0], tuple)]
 CASES = [c for g in GROUPS for c in g]

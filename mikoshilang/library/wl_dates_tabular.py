@@ -1423,3 +1423,1311 @@ _added("$TimeZone", "time zone assumed by date functions: hours east of GMT (def
                     "number) or an IANA zone name; assignable (validated) and Block-able")
 _added("$DateStringFormat", "default DateString format (\"DateTimeShort\"); assignable to any named format or "
                             "element list, and Block-able")
+
+
+# ─────────────────────────── date intervals, bounds and comparisons ───────────────────────────
+
+def _finest(grans):
+    best = None
+    for g in grans:
+        k = _FINENESS.index(_gran_name(g))
+        if best is None or k < best[0]:
+            best = (k, g)
+    return best[1]
+
+
+def _gran_name(g):
+    if isinstance(g, int):
+        return "Instant" if g > 3 else _SUBSEC_NAME.get(g, "Instant")
+    return g
+
+
+class DI:
+    """A DateInterval: [(start D, end D)] at one granularity (granular ends are inclusive dates)."""
+    __slots__ = ("parts", "gran", "cal", "tz", "explicit")
+
+    def __init__(self, parts, gran, cal="Gregorian", tz=None, explicit=False):
+        self.parts, self.gran, self.cal, self.tz, self.explicit = parts, gran, cal, tz, explicit
+
+    def utc_parts(self):
+        out = []
+        for s, e in self.parts:
+            us = s.bounds_utc()[0]
+            ue = e.to_utc(e.wall()) if self.gran == "Instant" else e.bounds_utc()[1]
+            out.append((us, ue))
+        return out
+
+    def expr(self):
+        lst = L(*(L(L(*(_out(v) for v in s.dl)), L(*(_out(v) for v in e.dl))) for s, e in self.parts))
+        out = [lst, self.gran]
+        floating = self.gran in _FLOATING and self.tz is None and not self.explicit
+        if not floating or self.cal != "Gregorian":
+            out += [self.cal, _tz_out(self.tz)]
+        return Expr("DateInterval", *out)
+
+
+def _date_at(d, g, end=False):
+    """d re-expressed at granularity g: the period containing its start (or, for end=True, its last instant)."""
+    s, e = d.bounds_wall()
+    if g == "Instant":
+        t = (e if end and d.gran != "Instant" else (d.wall() if d.gran == "Instant" else s))
+        return _from_wall(t, "Instant", d.cal, d.tz if d.tz is not None else current_tz(), d.tsys, None, True)
+    if end and d.gran != "Instant":
+        _, gs, ge = _canon_start(s, g, d.cal)
+        if ge < e:
+            # the last g-period that starts before the end of d
+            last = e - (Fraction(1, 10 ** 9) if _is_exact(e) else 1e-6)
+            return _from_wall(last, g, d.cal, d.tz, d.tsys, None, d.tz_explicit)
+    return _from_wall(s if d.gran != "Instant" else d.wall(), g, d.cal, d.tz, d.tsys, None, d.tz_explicit)
+
+
+def parse_interval(e):
+    if not (isinstance(e, Expr) and e.head == "DateInterval" and len(e.args) in (2, 4) and is_list(e.args[0])
+            and e.args[0].args):
+        return None
+    try:
+        g = _gran(e.args[1], "DateInterval")
+    except (ValueError, Unevaluated):
+        return None
+    cal, tz, explicit = "Gregorian", None, False
+    if len(e.args) == 4:
+        if e.args[2] not in ("Gregorian", "Julian"):
+            return None
+        cal = e.args[2]
+        try:
+            tz = _tz(e.args[3], "DateInterval")
+        except (ValueError, Unevaluated):
+            return None
+        explicit = True
+    elif g not in _FLOATING:
+        return None
+    parts = []
+    for p in e.args[0].args:
+        if not (is_list(p) and len(p.args) == 2):
+            return None
+        ds = []
+        for x in p.args:
+            args = [x, g] + ([cal, _tz_out(tz)] if len(e.args) == 4 else [])
+            d = parse_dobj(Expr("DateObject", *args))
+            if d is None:
+                return None
+            ds.append(d)
+        parts.append(tuple(ds))
+    return DI(parts, g, cal, tz, explicit)
+
+
+def _interval_from(pairs, gran, fname, o):
+    """Normalise (start D, end D) pairs at a common granularity, sorted and merged."""
+    ds = [d for p in pairs for d in p]
+    g = _gran(gran, fname) if gran is not None else _finest([d.gran for d in ds])
+    zones = {d.tz for d in ds if d.tz is not None}
+    tz = None
+    if "TimeZone" in o:
+        tz = _tz(o["TimeZone"], fname)
+    elif len(zones) == 1:
+        tz = zones.pop()
+    elif zones:
+        tz = current_tz()
+    if g not in _FLOATING and tz is None:
+        tz = current_tz()
+    conv = []
+    for s, e in pairs:
+        if tz is not None and s.tz is not None and s.tz != tz:
+            s = _convert_tz(s, tz)
+        if tz is not None and e.tz is not None and e.tz != tz:
+            e = _convert_tz(e, tz)
+        s2, e2 = _date_at(s, g), _date_at(e, g, end=True)
+        s2 = D(s2.dl, g, s2.cal, tz, None, None, tz is not None)
+        e2 = D(e2.dl, g, e2.cal, tz, None, None, tz is not None)
+        if _wall_key(e2, g, True) < _wall_key(s2, g, False):
+            raise ValueError(f"{fname}: the end date precedes the start date")
+        conv.append((s2, e2))
+    conv.sort(key=lambda p: _wall_key(p[0], g, False))
+    merged = []
+    for s, e in conv:
+        if merged and _wall_key(s, g, False) <= _wall_key(merged[-1][1], g, True):
+            if _wall_key(e, g, True) > _wall_key(merged[-1][1], g, True):
+                merged[-1] = (merged[-1][0], e)
+        else:
+            merged.append((s, e))
+    return DI(merged, g, "Gregorian", tz, tz is not None)
+
+
+def _wall_key(d, g, end):
+    if g == "Instant":
+        return d.wall()
+    s, e = d.bounds_wall()
+    return e if end else s
+
+
+@fn("DateInterval", **ADDED,
+    notes="DateInterval[{start, end}], DateInterval[{start, end}, gran], DateInterval[{{s1, e1}, ...}] (union, "
+          "sorted and merged) and DateInterval[gdate]; dates may be DateObjects, date lists, absolute times or "
+          "strings; the finest granularity of the endpoints is used by default, the end date's period is included "
+          "(its final instant excluded); canonical form DateInterval[{{startlist, endlist}, ...}, gran] (floating) or "
+          "DateInterval[..., gran, cal, tz]; properties \"DateBounds\", \"Granularity\", \"TimeZone\", "
+          "\"CalendarType\"")
+def _dateinterval(*args):
+    raw = Expr("DateInterval", *args)
+    di = parse_interval(raw)
+    if di is not None:
+        return di.expr()
+    args, o = _opts(args, _DATE_OPTS, "DateInterval")
+    if not 1 <= len(args) <= 2:
+        raise ValueError("DateInterval: expected DateInterval[{start, end}] or DateInterval[{start, end}, gran]")
+    x = args[0]
+    gran = args[1] if len(args) == 2 else o.get("DateGranularity")
+    if gran is not None and is_sym(gran, "Automatic"):
+        gran = None
+    d = parse_dobj(x)
+    if d is not None:
+        pairs = [(d, d)]
+    elif is_list(x) and x.args and all(is_list(p) and len(p.args) == 2 and not isinstance(p.args[0], str)
+                                       and not K.is_number(p.args[0]) for p in x.args):
+        pairs = [(to_date(p.args[0], "DateInterval"), to_date(p.args[1], "DateInterval")) for p in x.args]
+    elif is_list(x) and len(x.args) == 2:
+        pairs = [(to_date(x.args[0], "DateInterval"), to_date(x.args[1], "DateInterval"))]
+    elif isinstance(x, (Symbol,)) or (isinstance(x, Expr) and not is_list(x) and x.head != "DateObject"):
+        raise Unevaluated()
+    else:
+        raise ValueError("DateInterval: expected a {start, end} pair of dates")
+    return _interval_from(pairs, gran, "DateInterval", o).expr()
+
+
+def _interval_hook(head, args, ev_):
+    di = parse_interval(head)
+    if di is None or len(args) != 1 or not isinstance(args[0], str):
+        return K.UNHANDLED
+    p = args[0]
+    if p == "DateBounds":
+        return L(_min_of_interval(di), _max_of_interval(di))
+    if p == "Granularity":
+        return di.gran
+    if p == "TimeZone":
+        return _tz_out(di.tz)
+    if p == "CalendarType":
+        return di.cal
+    if p == "Properties":
+        return L("CalendarType", "DateBounds", "Granularity", "TimeZone")
+    raise ValueError(f"DateInterval: unknown property {p!r}")
+
+
+KL.COMPOUND_HEAD_HOOKS["DateInterval"] = _interval_hook
+
+
+def _min_of_interval(di, g=None):
+    s = di.parts[0][0]
+    return (s if g is None else _with_gran(s, g)).expr()
+
+
+def _max_of_interval(di, g=None):
+    e = di.parts[-1][1]
+    if g is None:
+        return e.expr()
+    return _date_at(e, _gran(g, "MaxDate"), end=True).expr()
+
+
+def _utc_span(x, fname):
+    """(utc start, utc end) of a date, granular date or interval specification."""
+    di = parse_interval(x)
+    if di is not None:
+        ps = di.utc_parts()
+        return ps[0][0], ps[-1][1]
+    if K.is_number(x) and not isinstance(x, bool):
+        t = _num(x, fname, "absolute time")
+        u = t - _off_secs(_tz_offset(current_tz(), wall=t))
+        return u, u
+    d = to_date(x, fname)
+    if d.gran == "Instant":
+        u = d.to_utc(d.wall())
+        return u, u
+    return d.bounds_utc()
+
+
+def _date_items(x, fname):
+    if not is_list(x) or not x.args:
+        raise ValueError(f"{fname}: expected a non-empty list of dates")
+    return list(x.args)
+
+
+def _extreme(x, fname, pick):
+    items = _date_items(x, fname)
+    keyed = [(_utc_span(v, fname), i) for i, v in enumerate(items)]
+    best = keyed[0]
+    for k in keyed[1:]:
+        if pick(k[0], best[0]):
+            best = k
+    return items[best[1]]
+
+
+def _earlier(a, b):
+    return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1])
+
+
+def _later(a, b):
+    return a[1] > b[1] or (a[1] == b[1] and a[0] > b[0])
+
+
+@fn("MinDate", **ADDED,
+    notes="MinDate[{d1, d2, ...}] gives the earliest date in the form given (DateObject, date list, absolute time, "
+          "string, DateInterval); MinDate[interval] the start of a DateInterval, MinDate[interval, gran] at "
+          "granularity gran")
+def _mindate(x, g=None):
+    di = parse_interval(x)
+    if di is not None:
+        return _min_of_interval(di, g)
+    if g is not None:
+        raise ValueError("MinDate: a granularity can only be given for a DateInterval")
+    if not is_list(x):
+        if isinstance(x, (Symbol, Expr)) and not isinstance(x, str):
+            raise Unevaluated()
+        raise ValueError("MinDate: expected a list of dates or a DateInterval")
+    return _extreme(x, "MinDate", _earlier)
+
+
+@fn("MaxDate", **ADDED,
+    notes="MaxDate[{d1, d2, ...}] gives the latest date (latest end of its period) in the form given; "
+          "MaxDate[interval] the end date of a DateInterval, MaxDate[interval, gran] at granularity gran")
+def _maxdate(x, g=None):
+    di = parse_interval(x)
+    if di is not None:
+        return _max_of_interval(di, g)
+    if g is not None:
+        raise ValueError("MaxDate: a granularity can only be given for a DateInterval")
+    if not is_list(x):
+        if isinstance(x, (Symbol, Expr)) and not isinstance(x, str):
+            raise Unevaluated()
+        raise ValueError("MaxDate: expected a list of dates or a DateInterval")
+    return _extreme(x, "MaxDate", _later)
+
+
+@fn("DateBounds", **ADDED,
+    notes="DateBounds[{d1, d2, ...}] = {earliest, latest} in the form given; DateBounds[interval] the first and last "
+          "dates of a DateInterval; DateBounds[gdate] the first and final instants of a granular DateObject (the "
+          "final instant is the start of the next period); DateBounds[obj, gran] at granularity gran")
+def _datebounds(x, g=None):
+    di = parse_interval(x)
+    if di is not None:
+        return L(_min_of_interval(di, g), _max_of_interval(di, g))
+    d = parse_dobj(x)
+    if d is not None:
+        s, e = d.bounds_wall()
+        z = d.tz if d.tz is not None else current_tz()
+        a = _from_wall(s, "Instant", d.cal, z, d.tsys, None, True)
+        b = _from_wall(e, "Instant", d.cal, z, d.tsys, None, True)
+        if g is not None:
+            a, b = _with_gran(a, g), _date_at(b, _gran(g, "DateBounds"), end=False)
+        return L(a.expr(), b.expr())
+    if g is not None:
+        raise ValueError("DateBounds: a granularity can only be given for a DateObject or DateInterval")
+    if not is_list(x):
+        if isinstance(x, (Symbol, Expr)) and not isinstance(x, str):
+            raise Unevaluated()
+        raise ValueError("DateBounds: expected a list of dates, a DateObject or a DateInterval")
+    return L(_extreme(x, "DateBounds", _earlier), _extreme(x, "DateBounds", _later))
+
+
+def _outer2(f, a, b, fname):
+    if is_list(a) and parse_dobj(a) is None and not all(K.is_number(v) for v in a.args):
+        return L(*(_outer2(f, x, b, fname) for x in a.args))
+    if is_list(b) and parse_dobj(b) is None and not all(K.is_number(v) for v in b.args):
+        return L(*(_outer2(f, a, y, fname) for y in b.args))
+    for v in (a, b):
+        if not (parse_dobj(v) is not None or parse_interval(v) is not None):
+            if isinstance(v, (Symbol, Expr)) and not isinstance(v, str) and not is_list(v):
+                raise Unevaluated()
+            raise ValueError(f"{fname}: {v!r} is not a DateObject or DateInterval")
+    return f(_utc_span(a, fname), _utc_span(b, fname), a, b)
+
+
+@fn("DateWithinQ", **ADDED,
+    notes="DateWithinQ[d1, d2] is True if the period of DateObject (or DateInterval) d2 lies entirely within d1; "
+          "lists in either argument thread like Outer")
+def _datewithinq(a, b):
+    def f(s1, s2, x, y):
+        di = parse_interval(x)
+        if di is not None:
+            return any(p[0] <= s2[0] and s2[1] <= p[1] for p in di.utc_parts())
+        return s1[0] <= s2[0] and s2[1] <= s1[1]
+    return _outer2(f, a, b, "DateWithinQ")
+
+
+@fn("DateOverlapsQ", **ADDED,
+    notes="DateOverlapsQ[d1, d2] is True if the periods of two DateObjects (or DateIntervals) intersect; instants "
+          "overlap a period they lie in; lists thread like Outer")
+def _dateoverlapsq(a, b):
+    def f(s1, s2, x, y):
+        p1 = parse_interval(x).utc_parts() if parse_interval(x) is not None else [s1]
+        p2 = parse_interval(y).utc_parts() if parse_interval(y) is not None else [s2]
+        for a0, a1 in p1:
+            for b0, b1 in p2:
+                if a0 == a1 and b0 == b1:
+                    if a0 == b0:
+                        return True
+                elif a0 == a1:
+                    if b0 <= a0 < b1:
+                        return True
+                elif b0 == b1:
+                    if a0 <= b0 < a1:
+                        return True
+                elif a0 < b1 and b0 < a1:
+                    return True
+        return False
+    return _outer2(f, a, b, "DateOverlapsQ")
+
+
+# ─────────────────────────── DateDifference ───────────────────────────
+
+_UNIT_SECS = {"Week": 604800, "Day": 86400, "Hour": 3600, "Minute": 60, "Second": 1}
+_UNIT_PLURAL = {"Year": "Years", "Quarter": "Quarters", "Month": "Months", "Week": "Weeks", "Day": "Days",
+                "Hour": "Hours", "Minute": "Minutes", "Second": "Seconds"}
+_UNIT_ALIASES = {k: k for k in _UNIT_PLURAL}
+_UNIT_ALIASES.update({v: k for k, v in _UNIT_PLURAL.items()})
+_CONVENTIONS = {"ActualActual", "Thirty360US", "Thirty360", "ThirtyE360", "ThirtyE360ISDA", "ThirtyEPlus360",
+                "Actual365", "Actual360", "Actual365L", "ActualActualISDA", "ActualActualICMA"}
+
+
+def _quantity_value(v):
+    if isinstance(v, Fraction):
+        if v.denominator == 1:
+            return int(v)
+        return float(v)
+    if isinstance(v, float) and v == int(v) and abs(v) < 2 ** 53:
+        return v
+    return v
+
+
+def _add_months(dl, k, cal):
+    """Calendar addition of k months to a full date list (day clamped to the month's length: RollBackward)."""
+    y, m = dl[0], dl[1]
+    ya, mm = _norm_ym(y, m + k)
+    y2 = _wl_year(ya)
+    d = min(dl[2], _days_in_month(y2, mm, cal))
+    return [y2, mm, d] + list(dl[3:])
+
+
+def _cal_steps(w1, w2, months, cal):
+    """(whole steps, fractional remainder) of a calendar unit of `months` months from wall time w1 to w2 >= w1."""
+    dl1 = _abs_to_list(w1, cal)
+    k = 0
+    # jump close to the answer, then step
+    approx = (_abs_to_list(w2, cal)[0] - dl1[0]) * 12 + (_abs_to_list(w2, cal)[1] - dl1[1])
+    k = max(0, approx // months - 1)
+    while _list_to_abs(_add_months(dl1, (k + 1) * months, cal), cal) <= w2:
+        k += 1
+    a = _list_to_abs(_add_months(dl1, k * months, cal), cal)
+    b = _list_to_abs(_add_months(dl1, (k + 1) * months, cal), cal)
+    frac = (w2 - a) / (b - a) if not (_is_exact(w2) and _is_exact(a)) else Fraction(w2 - a, b - a)
+    return k, frac, a
+
+
+def _thirty360(d1, d2, conv):
+    y1, m1, dd1 = d1[:3]
+    y2, m2, dd2 = d2[:3]
+    last1 = dd1 == _days_in_month(y1, m1)
+    last2 = dd2 == _days_in_month(y2, m2)
+    if conv == "Thirty360US":
+        if m1 == 2 and last1:
+            dd1 = 30
+        if m2 == 2 and last2:
+            dd2 = 30
+        if dd2 == 31 and dd1 >= 30:
+            dd2 = 30
+        if dd1 == 31:
+            dd1 = 30
+    elif conv == "Thirty360":
+        if dd1 == 31:
+            dd1 = 30
+        if dd2 == 31 and dd1 >= 30:
+            dd2 = 30
+    elif conv == "ThirtyE360":
+        dd1, dd2 = min(dd1, 30), min(dd2, 30)
+    elif conv == "ThirtyE360ISDA":
+        if last1:
+            dd1 = 30
+        if last2 and not (m2 == 2):
+            dd2 = 30
+        elif m2 == 2 and last2:
+            dd2 = 30
+    elif conv == "ThirtyEPlus360":
+        if dd1 == 31:
+            dd1 = 30
+        if dd2 == 31:
+            ya, mm = _norm_ym(y2, m2 + 1)
+            y2, m2, dd2 = _wl_year(ya), mm, 1
+    return 360 * (_astro(y2) - _astro(y1)) + 30 * (m2 - m1) + (dd2 - dd1)
+
+
+def _convention_diff(w1, w2, unit, conv):
+    d1, d2 = _abs_to_list(w1), _abs_to_list(w2)
+    if conv.startswith("Thirty"):
+        days = _thirty360(d1, d2, conv)
+        per = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 360}
+        if unit not in per:
+            raise ValueError(f"DateDifference: unit {unit!r} cannot be used with DayCountConvention -> {conv!r}")
+        return Fraction(days, per[unit])
+    days = Fraction(w2 - w1, 86400) if _is_exact(w1) and _is_exact(w2) else (w2 - w1) / 86400
+    if unit == "Day":
+        return days
+    if unit == "Week":
+        return days / 7
+    if unit != "Year":
+        raise NotImplementedError(f"DateDifference: unit {unit!r} is not supported with DayCountConvention -> {conv!r}")
+    if conv == "Actual365":
+        return days / 365
+    if conv == "Actual360":
+        return days / 360
+    if conv == "ActualActualISDA":
+        total = Fraction(0)
+        a = w1
+        while a < w2:
+            y = _abs_to_list(a)[0]
+            ny = _list_to_abs([_wl_year(_astro(y) + 1)])
+            b = min(ny, w2)
+            total += Fraction(b - a, 86400) / (366 if _leap(y) else 365) if _is_exact(a) and _is_exact(b) \
+                else (b - a) / 86400 / (366 if _leap(y) else 365)
+            a = b
+        return total
+    raise NotImplementedError(f"DateDifference: DayCountConvention -> {conv!r} is not supported")
+
+
+def _diff_one(w1, w2, unit, cal):
+    """Difference in one unit (fractional) from w1 to w2 (any order)."""
+    if unit in _UNIT_SECS:
+        if _is_exact(w1) and _is_exact(w2):
+            return Fraction(w2 - w1, _UNIT_SECS[unit])
+        return (w2 - w1) / _UNIT_SECS[unit]
+    months = {"Month": 1, "Quarter": 3, "Year": 12}[unit]
+    if w2 < w1:
+        k, f, _ = _cal_steps(w2, w1, months, cal)
+        return -(k + f)
+    k, f, _ = _cal_steps(w1, w2, months, cal)
+    return k + f
+
+
+def _diff_mixed(w1, w2, units, cal):
+    sign = 1
+    if w2 < w1:
+        w1, w2, sign = w2, w1, -1
+    out = []
+    a = w1
+    for i, u in enumerate(units):
+        if i == len(units) - 1:
+            out.append(sign * _diff_one(a, w2, u, cal))
+            break
+        if u in _UNIT_SECS:
+            n = int((w2 - a) // _UNIT_SECS[u])
+            a = a + n * _UNIT_SECS[u]
+        else:
+            months = {"Month": 1, "Quarter": 3, "Year": 12}[u]
+            n, _, a = _cal_steps(a, w2, months, cal)
+        out.append(sign * n)
+    return out
+
+
+def _unit(u, fname):
+    if isinstance(u, str) and u in _UNIT_ALIASES:
+        return _UNIT_ALIASES[u]
+    raise ValueError(f"{fname}: {u!r} is not a date unit (Year, Quarter, Month, Week, Day, Hour, Minute, Second)")
+
+
+def _walls_in_common_zone(a, b, fname):
+    d1 = to_date(a, fname) if not (K.is_number(a) and not isinstance(a, bool)) else \
+        _instant_from_wall(_num(a, fname, "absolute time"), current_tz())
+    d2 = to_date(b, fname) if not (K.is_number(b) and not isinstance(b, bool)) else \
+        _instant_from_wall(_num(b, fname, "absolute time"), current_tz())
+    w1 = d1.wall() if d1.gran == "Instant" else d1.bounds_wall()[0]
+    w2 = d2.wall() if d2.gran == "Instant" else d2.bounds_wall()[0]
+    if d1.tz is not None or d2.tz is not None:
+        z = d1.zone()
+        w2 = d2.to_utc(w2) + _off_secs(_tz_offset(z, utc=d2.to_utc(w2)))
+    return w1, w2, d1.cal
+
+
+@fn("DateDifference", **ADDED,
+    notes="DateDifference[d1, d2] = Quantity[n, \"Days\"]; DateDifference[d1, d2, unit] for Year, Quarter, Month "
+          "(calendar steps plus the fraction of the next step), Week, Day, Hour, Minute, Second; a unit list gives "
+          "Quantity[MixedMagnitude[...], MixedUnit[...]]; DateDifference[d2] from now; DayCountConvention "
+          "(ActualActual, Thirty360, Thirty360US, ThirtyE360, ThirtyE360ISDA, ThirtyEPlus360, Actual365, Actual360, "
+          "ActualActualISDA; Actual365L and ActualActualICMA raise); integer results are exact, others machine "
+          "reals (as Wolfram displays them)")
+def _datedifference(*args):
+    args, o = _opts(args, {"DayCountConvention", "Method"}, "DateDifference")
+    if len(args) == 1:
+        z = current_tz()
+        args = [_instant_from_wall(_now_wall(z), z).expr(), args[0]]
+    if len(args) not in (2, 3):
+        raise ValueError("DateDifference: expected DateDifference[d1, d2] or DateDifference[d1, d2, unit]")
+    conv = o.get("DayCountConvention", "ActualActual")
+    if conv not in _CONVENTIONS:
+        raise ValueError(f"DateDifference: {conv!r} is not a DayCountConvention")
+    meth = o.get("Method", AUTOMATIC)
+    if not (is_sym(meth, "Automatic") or meth in ("RollBackward",)):
+        raise NotImplementedError(f"DateDifference: Method -> {meth!r} is not supported (RollBackward only)")
+    w1, w2, cal = _walls_in_common_zone(args[0], args[1], "DateDifference")
+    spec = args[2] if len(args) == 3 else "Day"
+    if is_list(spec):
+        units = [_unit(u, "DateDifference") for u in spec.args]
+        if not units:
+            raise ValueError("DateDifference: empty unit list")
+        if conv != "ActualActual":
+            raise NotImplementedError("DateDifference: mixed units need DayCountConvention -> \"ActualActual\"")
+        vals = _diff_mixed(w1, w2, units, cal)
+        mags = [_out(_quantity_value(v)) for v in vals]
+        if len(units) == 1:
+            return Expr("Quantity", mags[0], _UNIT_PLURAL[units[0]])
+        return Expr("Quantity", Expr("MixedMagnitude", L(*mags)),
+                    Expr("MixedUnit", L(*(_UNIT_PLURAL[u] for u in units))))
+    u = _unit(spec, "DateDifference")
+    v = _diff_one(w1, w2, u, cal) if conv == "ActualActual" else _convention_diff(min(w1, w2), max(w1, w2), u, conv) \
+        * (1 if w2 >= w1 else -1)
+    return Expr("Quantity", _out(_quantity_value(v)), _UNIT_PLURAL[u])
+
+
+# ─────────────────────────── time systems, Julian dates ───────────────────────────
+
+# (UTC date at which TAI - UTC became n seconds, n)
+_LEAPS = [((1972, 1, 1), 10), ((1972, 7, 1), 11), ((1973, 1, 1), 12), ((1974, 1, 1), 13), ((1975, 1, 1), 14),
+          ((1976, 1, 1), 15), ((1977, 1, 1), 16), ((1978, 1, 1), 17), ((1979, 1, 1), 18), ((1980, 1, 1), 19),
+          ((1981, 7, 1), 20), ((1982, 7, 1), 21), ((1983, 7, 1), 22), ((1985, 7, 1), 23), ((1988, 1, 1), 24),
+          ((1990, 1, 1), 25), ((1991, 1, 1), 26), ((1992, 7, 1), 27), ((1993, 7, 1), 28), ((1994, 7, 1), 29),
+          ((1996, 1, 1), 30), ((1997, 7, 1), 31), ((1999, 1, 1), 32), ((2006, 1, 1), 33), ((2009, 1, 1), 34),
+          ((2012, 7, 1), 35), ((2015, 7, 1), 36), ((2017, 1, 1), 37)]
+_LEAP_SECS = [(_list_to_abs(list(d)), n) for d, n in _LEAPS]
+_TT_TAI = Fraction(32184, 1000)
+_JD_EPOCH = Fraction(4830041, 2)        # Julian date of 1900-01-01 00:00 = 2415020.5
+
+
+def _dat(u):
+    """TAI - UTC at UTC seconds u (since 1900)."""
+    if u < _LEAP_SECS[0][0]:
+        raise NotImplementedError("TimeSystemConvert: TAI - UTC before 1972 (the rubber-second era) is not supported")
+    n = 10
+    for b, k in _LEAP_SECS:
+        if u >= b:
+            n = k
+    return n
+
+
+def _smear(u):
+    """TAI - UT for the smeared UTC time scale ("UT"): a leap second is spread over the preceding UTC day."""
+    base = _dat(u)
+    for b, k in _LEAP_SECS[1:]:
+        if b - 86400 <= u < b:
+            frac = Fraction(u - (b - 86400), 86400) if _is_exact(u) else (u - (b - 86400)) / 86400
+            return base + frac * (k - base)
+    return base
+
+
+def _tdb_minus_tt(tt):
+    jd = _JD_EPOCH + Fraction(tt) / 86400 if _is_exact(tt) else float(_JD_EPOCH) + tt / 86400
+    g = math.radians(357.53 + 0.9856003 * (float(jd) - 2451545.0))
+    return 0.001657 * math.sin(g) + 0.000014 * math.sin(2 * g)
+
+
+_LG, _LB, _T0JD, _TDB0 = 6.969290134e-10, 1.550519768e-8, 2443144.5003725, -6.55e-5
+
+
+def _to_tai(wall, z, tsys, utc_day_secs=None):
+    """TAI seconds for a wall time (seconds since 1900 in zone z) of time system tsys."""
+    off = _off_secs(_tz_offset(z, wall=wall)) if z is not None else 0
+    t = wall - off
+    if tsys in (None, "UT", "SmearedUTC"):
+        return t + _smear(t)
+    if tsys == "UTC":
+        day0 = utc_day_secs if utc_day_secs is not None else t
+        return t + _dat(day0)
+    if tsys == "TAI":
+        return t
+    if tsys == "GPS":
+        return t + 19
+    if tsys == "TT":
+        return t - _TT_TAI
+    if tsys == "TDB":
+        return t - _tdb_minus_tt(t) - _TT_TAI
+    if tsys == "TCG":
+        jd = float(_JD_EPOCH) + float(t) / 86400
+        return t - _LG * (jd - _T0JD) * 86400 / (1 + _LG) - _TT_TAI
+    if tsys == "TCB":
+        jd = float(_JD_EPOCH) + float(t) / 86400
+        tdb = t - _LB * (jd - _T0JD) * 86400 + _TDB0
+        return tdb - _tdb_minus_tt(tdb) - _TT_TAI
+    if tsys == "UT1":
+        raise NotImplementedError("TimeSystemConvert: UT1 needs IERS Earth-orientation data, which is not available")
+    raise ValueError(f"TimeSystemConvert: unknown time system {tsys!r}")
+
+
+def _from_tai(tai, z, tsys, cal="Gregorian"):
+    """Date list for TAI seconds in time system tsys and zone z (UTC lists may show second 60)."""
+    if tsys in (None, "UT", "SmearedUTC"):
+        u = tai - _smear(tai - _dat(tai - 37 if tai > _LEAP_SECS[-1][0] else tai - 10))
+        for _ in range(3):
+            u = tai - _smear(u)
+        t = u
+    elif tsys == "UTC":
+        for b, k in _LEAP_SECS[1:]:
+            if b + k - 1 <= tai < b + k:
+                w = b - 1 + _off_secs(_tz_offset(z, utc=b - 1)) if z is not None else b - 1
+                dl = _abs_to_list(w, cal)
+                dl[5] = dl[5] + 1 + (tai - (b + k - 1))
+                return dl
+        u = tai - 10
+        for _ in range(2):
+            u = tai - _dat(u)
+        t = u
+    elif tsys == "TAI":
+        t = tai
+    elif tsys == "GPS":
+        t = tai - 19
+    elif tsys == "TT":
+        t = tai + _TT_TAI
+    elif tsys == "TDB":
+        tt = tai + _TT_TAI
+        t = tt + _tdb_minus_tt(tt)
+    elif tsys == "TCG":
+        tt = tai + _TT_TAI
+        jd = float(_JD_EPOCH) + float(tt) / 86400
+        t = tt + _LG * (jd - _T0JD) * 86400 / (1 - _LG)
+    elif tsys == "TCB":
+        tt = tai + _TT_TAI
+        tdb = tt + _tdb_minus_tt(tt)
+        jd = float(_JD_EPOCH) + float(tdb) / 86400
+        t = tdb + _LB * (jd - _T0JD) * 86400 - _TDB0
+    elif tsys == "UT1":
+        raise NotImplementedError("TimeSystemConvert: UT1 needs IERS Earth-orientation data, which is not available")
+    else:
+        raise ValueError(f"TimeSystemConvert: unknown time system {tsys!r}")
+    w = t + _off_secs(_tz_offset(z, utc=t)) if z is not None else t
+    return _abs_to_list(w, cal)
+
+
+def _date_tai(d):
+    w = d.wall() if d.gran == "Instant" else d.bounds_wall()[0]
+    day0 = None
+    if d.tsys == "UTC":
+        full = _pad(d)
+        if full[5] >= 60:
+            w = _list_to_abs(full[:5] + [59], d.cal) + (full[5] - 59)
+        z = d.zone()
+        day_wall = _list_to_abs(full[:3], d.cal)
+        day0 = day_wall - _off_secs(_tz_offset(z, wall=day_wall))
+    return _to_tai(w, d.zone(), d.tsys, day0)
+
+
+@fn("TimeSystemConvert", **ADDED,
+    notes="TimeSystemConvert[date, tsys] and TimeSystemConvert[{d1, ...}, tsys] between \"UT\" (smeared UTC, the "
+          "default), \"UTC\" (leap seconds shown as second 60), \"TAI\", \"TT\" (TAI + 32.184 s), \"GPS\", \"TDB\" "
+          "(Fairhead-Bretagnon leading terms, ~10 us), \"TCG\" and \"TCB\" (IAU 2006 linear relations); leap seconds "
+          "from 1972 to 2017 are tabulated; \"UT1\" (needs IERS data) and dates before 1972 raise")
+def _timesystemconvert(x, tsys=None):
+    if is_list(x) and parse_dobj(x) is None:
+        return L(*(_timesystemconvert(v, tsys) for v in x.args))
+    d = parse_dobj(x)
+    if d is None:
+        if isinstance(x, (Symbol, Expr)) and not isinstance(x, str):
+            raise Unevaluated()
+        raise ValueError("TimeSystemConvert: expected a DateObject")
+    target = None if tsys is None or is_sym(tsys, "Automatic") else tsys
+    if target is not None and target not in _TSYS:
+        raise ValueError(f"TimeSystemConvert: {tsys!r} is not a known time system")
+    tai = _date_tai(d)
+    z = d.zone()
+    dl = _from_tai(tai, z, target, d.cal)
+    dl[5] = float(dl[5])
+    if target in (None, "UT"):
+        return D(dl, "Instant", d.cal, z, None, d.fmt, True).expr()
+    return Expr("DateObject", L(*(_out(v) for v in dl)), "Instant", d.cal, _tz_out(z), target)
+
+
+_JD_VARIANTS = {"Full": Fraction(0), "Reduced": Fraction(2400000), "Modified": Fraction(4800001, 2),
+                "Truncated": Fraction(4880001, 2), "Dublin": Fraction(2415020)}
+
+
+def _jd_of(d, tsys=None):
+    tai = _date_tai(d)
+    if tsys in (None, "UT", "UTC", "SmearedUTC"):
+        u = tai - _smear(tai - (37 if tai > _LEAP_SECS[-1][0] else 10)) if tai >= _LEAP_SECS[0][0] + 10 else None
+        if u is None:
+            w = d.wall() if d.gran == "Instant" else d.bounds_wall()[0]
+            u = d.to_utc(w)
+        else:
+            for _ in range(3):
+                u = tai - _smear(u)
+    else:
+        lst = _from_tai(tai, None, tsys)
+        u = _list_to_abs(lst)
+    return (_JD_EPOCH + Fraction(u) / 86400) if _is_exact(u) else float(_JD_EPOCH) + u / 86400
+
+
+def _jd_date(x, fname):
+    if K.is_number(x) and not isinstance(x, bool):
+        return _instant_from_wall(_num(x, fname, "absolute time"), current_tz())
+    if is_list(x) and not (len(x.args) == 2 and isinstance(x.args[0], str)):
+        vals, _ = _list_spec(x, fname)
+        return _instant_from_wall(_list_to_abs(vals, "Gregorian", fname), current_tz())
+    return to_date(x, fname)
+
+
+@fn("JulianDate", **ADDED,
+    notes="days since noon GMT on 24 Nov -4714 (proleptic Gregorian): JulianDate[], JulianDate[date] (DateObject, "
+          "date list or string in $TimeZone, absolute time) and the variants \"Full\", \"Reduced\" (JD - 2400000), "
+          "\"Modified\" (JD - 2400000.5), \"Truncated\" (JD - 2440000.5), \"Dublin\" (JD - 2415020); exact for exact "
+          "input; TimeSystem option (UT/UTC, TAI, TT, TDB, ...)")
+def _juliandate(*args):
+    args, o = _opts(args, {"TimeSystem"}, "JulianDate")
+    variant = "Full"
+    if args and isinstance(args[0], str) and args[0] in _JD_VARIANTS:
+        variant, args = args[0], args[1:]
+    if len(args) > 1:
+        raise ValueError("JulianDate: expected JulianDate[date] or JulianDate[\"type\", date]")
+    ts = o.get("TimeSystem", AUTOMATIC)
+    ts = None if is_sym(ts, "Automatic") else ts
+    if ts is not None and ts not in _TSYS:
+        raise ValueError(f"JulianDate: {ts!r} is not a known time system")
+    if not args:
+        z = current_tz()
+        d = _instant_from_wall(_now_wall(z), z)
+    else:
+        d = _jd_date(args[0], "JulianDate")
+    jd = _jd_of(d, ts)
+    jd = jd - _JD_VARIANTS[variant] if _is_exact(jd) else jd - float(_JD_VARIANTS[variant])
+    return float(jd)          # Wolfram gives Julian dates as reals (JulianDate["Dublin", ...] = 44245.)
+
+
+@fn("FromJulianDate", **ADDED,
+    notes="FromJulianDate[jd] and FromJulianDate[\"type\", jd] give the DateObject (\"Instant\", in $TimeZone or the "
+          "TimeZone option) of a Julian date (variants Full, Reduced, Modified, Truncated, Dublin); exact for exact "
+          "input (FromJulianDate[2457754, TimeZone -> 0] = 2016-12-31 12:00:00); options CalendarType, DateFormat, "
+          "DateGranularity, TimeSystem, TimeZone")
+def _fromjuliandate(*args):
+    args, o = _opts(args, _DATE_OPTS, "FromJulianDate")
+    variant = "Full"
+    if len(args) == 2:
+        if args[0] not in _JD_VARIANTS:
+            raise ValueError(f"FromJulianDate: {args[0]!r} is not a Julian date variant")
+        variant, args = args[0], args[1:]
+    if len(args) != 1:
+        raise ValueError("FromJulianDate: expected FromJulianDate[jd] or FromJulianDate[\"type\", jd]")
+    jd = _num(args[0], "FromJulianDate", "Julian date")
+    off = _JD_VARIANTS[variant]
+    jd = jd + off if _is_exact(jd) else jd + float(off)
+    u = (jd - _JD_EPOCH) * 86400 if _is_exact(jd) else (jd - float(_JD_EPOCH)) * 86400
+    if isinstance(u, Fraction) and u.denominator == 1:
+        u = int(u)
+    z = _tz(o["TimeZone"], "FromJulianDate", allow_none=False) if "TimeZone" in o else current_tz()
+    ts = o.get("TimeSystem", AUTOMATIC)
+    ts = None if is_sym(ts, "Automatic") or ts in ("SmearedUTC", "UT") else ts
+    if ts is not None and ts not in _TSYS:
+        raise ValueError(f"FromJulianDate: {ts!r} is not a known time system")
+    if ts is None:
+        w = u + _off_secs(_tz_offset(z, utc=u))
+        d = _instant_from_wall(w, z, "Gregorian", True)
+    else:
+        # the Julian date counts days of the given time system
+        tai = _to_tai(u, None, "UT" if ts == "UTC" else ts)
+        dl = _from_tai(tai, z, ts)
+        d = D(dl, "Instant", "Gregorian", z, ts, None, True)
+        return _apply_date_opts(d, {k: v for k, v in o.items() if k not in ("TimeZone", "TimeSystem")},
+                                "FromJulianDate").expr()
+    return _apply_date_opts(d, {k: v for k, v in o.items() if k != "TimeZone"}, "FromJulianDate").expr()
+
+
+# ─────────────────────────── lunations and sidereal time ───────────────────────────
+
+# Meeus, Astronomical Algorithms (2nd ed.), table 47.A: (D, M, M', F, coefficient of sin in 1e-6 degrees)
+_MOON_LON = [
+    (0, 0, 1, 0, 6288774), (2, 0, -1, 0, 1274027), (2, 0, 0, 0, 658314), (0, 0, 2, 0, 213618), (0, 1, 0, 0, 
+    -185116), (0, 0, 0, 2, -114332), (2, 0, -2, 0, 58793), (2, -1, -1, 0, 57066), (2, 0, 1, 0, 53322), (2, -1, 0, 
+    0, 45758), (0, 1, -1, 0, -40923), (1, 0, 0, 0, -34720), (0, 1, 1, 0, -30383), (2, 0, 0, -2, 15327), (0, 0, 1, 
+    2, -12528), (0, 0, 1, -2, 10980), (4, 0, -1, 0, 10675), (0, 0, 3, 0, 10034), (4, 0, -2, 0, 8548), (2, 1, -1, 
+    0, -7888), (2, 1, 0, 0, -6766), (1, 0, -1, 0, -5163), (1, 1, 0, 0, 4987), (2, -1, 1, 0, 4036), (2, 0, 2, 0, 
+    3994), (4, 0, 0, 0, 3861), (2, 0, -3, 0, 3665), (0, 1, -2, 0, -2689), (2, 0, -1, 2, -2602), (2, -1, -2, 0, 
+    2390), (1, 0, 1, 0, -2348), (2, -2, 0, 0, 2236), (0, 1, 2, 0, -2120), (0, 2, 0, 0, -2069), (2, -2, -1, 0, 
+    2048), (2, 0, 1, -2, -1773), (2, 0, 0, 2, -1595), (4, -1, -1, 0, 1215), (0, 0, 2, 2, -1110), (3, 0, -1, 0, 
+    -892), (2, 1, 1, 0, -810), (4, -1, -2, 0, 759), (0, 2, -1, 0, -713), (2, 2, -1, 0, -700), (2, 1, -2, 0, 691), 
+    (2, -1, 0, -2, 596), (4, 0, 1, 0, 549), (0, 0, 4, 0, 537), (4, -1, 0, 0, 520), (1, 0, -2, 0, -487), (2, 1, 0, 
+    -2, -399), (0, 0, 2, -2, -381), (1, 1, 1, 0, 351), (3, 0, -2, 0, -340), (4, 0, -3, 0, 330), (2, -1, 2, 0, 
+    327), (0, 2, 1, 0, -323), (1, 1, -1, 0, 299), (2, 0, 3, 0, 294), (2, 0, -1, -2, 0)
+]
+_LUNATION_OFFSETS = {"BrownLunationNumber": 953, "GoldstineLunationNumber": 37105, "HebrewLunationNumber": 71234,
+                     "IslamicLunationNumber": 17038, "ThaiLunationNumber": 16843}
+_SYNODIC = 29.530588861
+_LN0_JD = 2451550.09766
+
+
+def _delta_t(year):
+    """TT - UT in seconds (Espenak & Meeus polynomial approximations)."""
+    y = year
+    if 2005 <= y < 2050:
+        t = y - 2000
+        return 62.92 + 0.32217 * t + 0.005589 * t * t
+    if 1986 <= y < 2005:
+        t = y - 2000
+        return 63.86 + 0.3345 * t - 0.060374 * t ** 2 + 0.0017275 * t ** 3 + 0.000651814 * t ** 4 + \
+            0.00002373599 * t ** 5
+    if 1961 <= y < 1986:
+        t = y - 1975
+        return 45.45 + 1.067 * t - t ** 2 / 260 - t ** 3 / 718
+    if 1941 <= y < 1961:
+        t = y - 1950
+        return 29.07 + 0.407 * t - t ** 2 / 233 + t ** 3 / 2547
+    if 1920 <= y < 1941:
+        t = y - 1920
+        return 21.20 + 0.84493 * t - 0.076100 * t ** 2 + 0.0020936 * t ** 3
+    if 1900 <= y < 1920:
+        t = y - 1900
+        return -2.79 + 1.494119 * t - 0.0598939 * t ** 2 + 0.0061966 * t ** 3 - 0.000197 * t ** 4
+    if 2050 <= y < 2150:
+        return -20 + 32 * ((y - 1820) / 100) ** 2 - 0.5628 * (2150 - y)
+    u = (y - 1820) / 100
+    return -20 + 32 * u * u
+
+
+def _elongation(jd_ut):
+    """Apparent geocentric elongation of the Moon from the Sun (degrees, 0..360) at a UT Julian date."""
+    year = 2000 + (jd_ut - 2451545.0) / 365.25
+    jde = jd_ut + _delta_t(year) / 86400.0
+    T = (jde - 2451545.0) / 36525.0
+    Lp = 218.3164477 + 481267.88123421 * T - 0.0015786 * T ** 2 + T ** 3 / 538841 - T ** 4 / 65194000
+    D = 297.8501921 + 445267.1114034 * T - 0.0018819 * T ** 2 + T ** 3 / 545868 - T ** 4 / 113065000
+    M = 357.5291092 + 35999.0502909 * T - 0.0001536 * T ** 2 + T ** 3 / 24490000
+    Mp = 134.9633964 + 477198.8675055 * T + 0.0087414 * T ** 2 + T ** 3 / 69699 - T ** 4 / 14712000
+    F = 93.2720950 + 483202.0175233 * T - 0.0036539 * T ** 2 - T ** 3 / 3526000 + T ** 4 / 863310000
+    A1 = 119.75 + 131.849 * T
+    A2 = 53.09 + 479264.290 * T
+    E = 1 - 0.002516 * T - 0.0000074 * T ** 2
+    r = math.radians
+    sl = 0.0
+    for d, m, mp, f, c in _MOON_LON:
+        term = c * math.sin(r(d * D + m * M + mp * Mp + f * F))
+        if m:
+            term *= E ** abs(m)
+        sl += term
+    sl += 3958 * math.sin(r(A1)) + 1962 * math.sin(r(Lp - F)) + 318 * math.sin(r(A2))
+    moon = Lp + sl / 1e6
+    L0 = 280.46646 + 36000.76983 * T + 0.0003032 * T ** 2
+    C = (1.914602 - 0.004817 * T - 0.000014 * T ** 2) * math.sin(r(M)) + (0.019993 - 0.000101 * T) * \
+        math.sin(r(2 * M)) + 0.000289 * math.sin(r(3 * M))
+    sun = L0 + C - 0.00569                       # aberration; nutation cancels in the difference
+    return (moon - sun) % 360.0
+
+
+def _lunation_at(jd):
+    e = _elongation(jd) / 360.0
+    k = (jd - _LN0_JD) / _SYNODIC
+    return round(k - e) + e
+
+
+def _scheme(s, fname):
+    if s is None or is_sym(s, "Automatic"):
+        return 0
+    if s in _LUNATION_OFFSETS:
+        return _LUNATION_OFFSETS[s]
+    raise ValueError(f"{fname}: {s!r} is not a lunation counting scheme")
+
+
+def _jd_ut(d):
+    w = d.wall() if d.gran == "Instant" else d.bounds_wall()[0]
+    u = d.to_utc(w)
+    return float(_JD_EPOCH) + float(u) / 86400.0
+
+
+@fn("LunationNumber", **ADDED,
+    notes="lunations since the new moon of 6 Jan 2000 (fractional part = Moon-Sun elongation / 360: .5 full moon); "
+          "LunationNumber[], LunationNumber[date], LunationNumber[scheme, date] for BrownLunationNumber (+953), "
+          "GoldstineLunationNumber (+37105), HebrewLunationNumber (+71234), IslamicLunationNumber (+17038), "
+          "ThaiLunationNumber (+16843); Moon from Meeus ch. 47 (60 terms), Sun from Meeus ch. 25, TT - UT from the "
+          "Espenak-Meeus fits: about 1e-5 lunation (~30 s) accuracy")
+def _lunationnumber(*args):
+    scheme = None
+    if len(args) == 2:
+        scheme, args = args[0], args[1:]
+    if len(args) > 1:
+        raise ValueError("LunationNumber: expected LunationNumber[date] or LunationNumber[scheme, date]")
+    off = _scheme(scheme, "LunationNumber")
+    if not args:
+        z = current_tz()
+        d = _instant_from_wall(_now_wall(z), z)
+    else:
+        d = _jd_date(args[0], "LunationNumber")
+    return _lunation_at(_jd_ut(d)) + off
+
+
+@fn("FromLunationNumber", **ADDED,
+    notes="FromLunationNumber[ln] and FromLunationNumber[scheme, ln]: the instant (DateObject in  or the "
+          "TimeZone option) with the given lunation number, found by Newton iteration on LunationNumber; "
+          "FromLunationNumber[0] is the new moon of 2000-01-06 18:14 UTC; options CalendarType, DateFormat, "
+          "DateGranularity, TimeSystem, TimeZone")
+def _fromlunationnumber(*args):
+    args, o = _opts(args, _DATE_OPTS, "FromLunationNumber")
+    scheme = None
+    if len(args) == 2:
+        scheme, args = args[0], args[1:]
+    if len(args) != 1:
+        raise ValueError("FromLunationNumber: expected FromLunationNumber[ln] or FromLunationNumber[scheme, ln]")
+    ln = float(_num(args[0], "FromLunationNumber", "lunation number")) - _scheme(scheme, "FromLunationNumber")
+    jd = _LN0_JD + _SYNODIC * ln
+    for _ in range(30):
+        cur = _lunation_at(jd)
+        step = (ln - cur) * _SYNODIC
+        jd += step
+        if abs(step) < 1e-9:
+            break
+    u = (jd - float(_JD_EPOCH)) * 86400.0
+    z = _tz(o["TimeZone"], "FromLunationNumber", allow_none=False) if "TimeZone" in o else current_tz()
+    d = _instant_from_wall(u + _off_secs(_tz_offset(z, utc=u)), z, "Gregorian", True)
+    return _apply_date_opts(d, {k: v for k, v in o.items() if k != "TimeZone"}, "FromLunationNumber").expr()
+
+
+def _location(x, fname):
+    """(latitude, longitude) in degrees from {lat, lon} or GeoPosition[{lat, lon, ...}]."""
+    if isinstance(x, Expr) and x.head == "GeoPosition" and x.args:
+        x = x.args[0]
+    if is_list(x) and len(x.args) in (2, 3) and all(K.is_number(v) for v in x.args):
+        lat, lon = float(_num(x.args[0], fname, "latitude")), float(_num(x.args[1], fname, "longitude"))
+        if not -90 <= lat <= 90:
+            raise ValueError(f"{fname}: latitude {lat} is out of range")
+        return lat, lon
+    return None
+
+
+def _sidereal_hours(jd, lon, apparent):
+    T = (jd - 2451545.0) / 36525.0
+    gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * T * T - T ** 3 / 38710000.0
+    if apparent:
+        r = math.radians
+        om = 125.04452 - 1934.136261 * T
+        Ls = 280.4665 + 36000.7698 * T
+        Lm = 218.3165 + 481267.8813 * T
+        dpsi = (-17.20 * math.sin(r(om)) - 1.32 * math.sin(r(2 * Ls)) - 0.23 * math.sin(r(2 * Lm))
+                + 0.21 * math.sin(r(2 * om))) / 3600.0
+        deps = (9.20 * math.cos(r(om)) + 0.57 * math.cos(r(2 * Ls)) + 0.10 * math.cos(r(2 * Lm))
+                - 0.09 * math.cos(r(2 * om))) / 3600.0
+        eps = 23.4392911111 - 0.0130041667 * T - 1.6389e-7 * T * T + 5.0361e-7 * T ** 3 + deps
+        gmst += dpsi * math.cos(r(eps))
+    return ((gmst + lon) % 360.0) / 15.0
+
+
+def _hms_quantity(h):
+    hh = int(h)
+    mm = int((h - hh) * 60)
+    ss = (h - hh - mm / 60.0) * 3600.0
+    if ss >= 60 - 1e-9:
+        ss, mm = 0.0, mm + 1
+    if mm >= 60:
+        mm, hh = 0, (hh + 1) % 24
+    return Expr("Quantity", Expr("MixedMagnitude", L(hh, mm, ss)),
+                Expr("MixedUnit", L("HoursOfRightAscension", "MinutesOfRightAscension", "SecondsOfRightAscension")))
+
+
+@fn("SiderealTime", **ADDED,
+    notes="SiderealTime[loc, date] (apparent: mean sidereal time plus the equation of the equinoxes) and "
+          "SiderealTime[\"MeanTime\" | \"ApparentTime\", loc, date] for loc = {lat, lon} or GeoPosition[{lat, lon}] "
+          "(east longitude positive) and a DateObject, date list or string; SiderealTime[{{loc1, date1}, ...}]; "
+          "result Quantity[MixedMagnitude[{h, m, s}], MixedUnit[{\"HoursOfRightAscension\", ...}]] (IAU 1982 GMST, "
+          "UT1 taken as UTC: ~1 s accuracy); forms needing  (SiderealTime[], SiderealTime[date]) raise")
+def _siderealtime(*args):
+    kind = "ApparentTime"
+    if args and args[0] in ("MeanTime", "ApparentTime"):
+        kind, args = args[0], args[1:]
+    if len(args) == 1 and is_list(args[0]) and args[0].args and all(
+            is_list(p) and len(p.args) == 2 and _location(p.args[0], "SiderealTime") for p in args[0].args):
+        return L(*(_siderealtime(kind, p.args[0], p.args[1]) for p in args[0].args))
+    if len(args) == 2:
+        loc = _location(args[0], "SiderealTime")
+        if loc is None:
+            if isinstance(args[0], Expr) and args[0].head in ("Entity", "GeoPosition"):
+                raise NotImplementedError("SiderealTime: entity locations need curated data; give {lat, lon}")
+            raise ValueError("SiderealTime: the location must be {lat, lon} or GeoPosition[{lat, lon}]")
+        if is_list(args[1]) and args[1].args and all(parse_dobj(v) is not None for v in args[1].args):
+            return L(*(_siderealtime(kind, args[0], v) for v in args[1].args))
+        d = _jd_date(args[1], "SiderealTime")
+        return _hms_quantity(_sidereal_hours(_jd_ut(d), loc[1], kind == "ApparentTime"))
+    if len(args) <= 1:
+        raise NotImplementedError("SiderealTime: the location defaults to $GeoLocation, which is not available; "
+                                  "use SiderealTime[{lat, lon}, date]")
+    raise ValueError("SiderealTime: expected SiderealTime[loc, date] or SiderealTime[type, loc, date]")
+
+
+# ─────────────────────────── random dates and times ───────────────────────────
+
+def _rng():
+    from .statistics import _RNG
+    return _RNG
+
+
+def _uniform(a, b):
+    r = _rng()
+    return a + (b - a) * r.random()
+
+
+def _count_spec(n, fname):
+    if K.is_int(n) and int(n) >= 0:
+        return [int(n)]
+    if is_list(n) and n.args and all(K.is_int(v) and int(v) >= 0 for v in n.args):
+        return [int(v) for v in n.args]
+    raise ValueError(f"{fname}: the number of values must be a non-negative integer or a list of them")
+
+
+def _array(dims, gen):
+    if not dims:
+        return gen()
+    return L(*(_array(dims[1:], gen) for _ in range(dims[0])))
+
+
+_QUNITS = {"Seconds": 1, "Minutes": 60, "Hours": 3600, "Days": 86400, "Weeks": 604800}
+
+
+def _quantity_secs(q, fname):
+    if isinstance(q, Expr) and q.head == "Quantity" and len(q.args) == 2 and isinstance(q.args[1], str):
+        u = q.args[1]
+        v = float(_num(q.args[0], fname, "quantity"))
+        if u in _QUNITS:
+            return v * _QUNITS[u], None
+        if u in ("Months", "Years"):
+            return v, u
+        raise ValueError(f"{fname}: {u!r} is not a time unit")
+    return None
+
+
+@fn("RandomDate", **ADDED,
+    notes="RandomDate[] (in the current year), RandomDate[{dmin, dmax}] (uniform between the start of dmin and the "
+          "end of dmax), RandomDate[gdate] (within a granular DateObject or DateInterval), RandomDate[Quantity[q, "
+          "unit]] and RandomDate[{q1, q2}] (relative to now), RandomDate[range, n | {n1, n2, ...}]; options "
+          "DateGranularity (default \"Instant\"), TimeZone, CalendarType, DateFormat; uses the session generator "
+          "(SeedRandom)")
+def _randomdate(*args):
+    args, o = _opts(args, _DATE_OPTS, "RandomDate")
+    if len(args) > 2:
+        raise ValueError("RandomDate: expected RandomDate[range] or RandomDate[range, n]")
+    dims = _count_spec(args[1], "RandomDate") if len(args) == 2 else []
+    z = _tz(o["TimeZone"], "RandomDate", allow_none=False) if "TimeZone" in o else current_tz()
+    lo, hi = _random_range(args[0] if args else None, z, "RandomDate")
+    gran = o.get("DateGranularity", AUTOMATIC)
+    gran = "Instant" if is_sym(gran, "Automatic") else _gran(gran, "RandomDate")
+    rest = {k: v for k, v in o.items() if k not in ("TimeZone", "DateGranularity")}
+
+    def gen():
+        u = _uniform(float(lo), float(hi))
+        w = u + _off_secs(_tz_offset(z, utc=u))
+        d = _from_wall(w, gran, "Gregorian", None if gran in _FLOATING else z, None, None, False)
+        return _apply_date_opts(d, rest, "RandomDate").expr()
+    return _array(dims, gen)
+
+
+def _random_range(spec, z, fname):
+    """(utc low, utc high) for a RandomDate/RandomTime range specification."""
+    if spec is None:
+        now = _now_wall(z)
+        y = _abs_to_list(now)[0]
+        d = D([y], "Year", tz=z, tz_explicit=True)
+        return d.bounds_utc()
+    q = _quantity_secs(spec, fname)
+    if q is not None:
+        now = _now_utc()
+        secs, cal_unit = q
+        if cal_unit is not None:
+            w = _now_wall(z)
+            months = int(round(secs * (12 if cal_unit == "Years" else 1)))
+            other = _list_to_abs(_add_months(_abs_to_list(w), months, "Gregorian"))
+            other_u = other - _off_secs(_tz_offset(z, wall=other))
+            return (min(now, other_u), max(now, other_u))
+        return (min(now, now + Fraction(secs)), max(now, now + Fraction(secs)))
+    if is_list(spec) and len(spec.args) == 2 and parse_dobj(spec) is None:
+        qa, qb = _quantity_secs(spec.args[0], fname), _quantity_secs(spec.args[1], fname)
+        if qa is not None and qb is not None:
+            if qa[1] or qb[1]:
+                raise NotImplementedError(f"{fname}: month and year offsets are only supported alone")
+            now = _now_utc()
+            return now + Fraction(qa[0]), now + Fraction(qb[0])
+        a = _utc_span(spec.args[0], fname) if parse_tobj(spec.args[0]) is None else _time_span(spec.args[0], z)
+        b = _utc_span(spec.args[1], fname) if parse_tobj(spec.args[1]) is None else _time_span(spec.args[1], z)
+        if b[1] < a[0]:
+            raise ValueError(f"{fname}: the end of the range precedes its start")
+        return a[0], max(b[1], b[0])
+    if parse_tobj(spec) is not None:
+        return _time_span(spec, z)
+    a = _utc_span(spec, fname)
+    if a[0] == a[1]:
+        raise ValueError(f"{fname}: an instant is not a range of dates")
+    return a
+
+
+def _time_span(t, z):
+    tt = parse_tobj(t)
+    s, e = tt.bounds()
+    w = _now_wall(tt.tz if tt.tz is not None else z)
+    day = _list_to_abs(_abs_to_list(w)[:3])
+    base = day - _list_to_abs([1900, 1, 1])
+    zz = tt.tz if tt.tz is not None else z
+    off = _off_secs(_tz_offset(zz, wall=base + s))
+    return base + s - off, base + (e if e > s else s) - off
+
+
+@fn("RandomTime", **ADDED,
+    notes="RandomTime[] (a time of day), RandomTime[{tmin, tmax}], RandomTime[time] (within a granular TimeObject "
+          "or DateObject), RandomTime[Quantity[...]] relative to now, RandomTime[range, n | {n1, ...}]; options "
+          "DateGranularity (default \"Instant\") and TimeZone; gives TimeObjects")
+def _randomtime(*args):
+    args, o = _opts(args, {"DateGranularity", "TimeZone"}, "RandomTime")
+    if len(args) > 2:
+        raise ValueError("RandomTime: expected RandomTime[range] or RandomTime[range, n]")
+    dims = _count_spec(args[1], "RandomTime") if len(args) == 2 else []
+    z = _tz(o["TimeZone"], "RandomTime", allow_none=False) if "TimeZone" in o else current_tz()
+    gran = o.get("DateGranularity", AUTOMATIC)
+    gran = "Instant" if is_sym(gran, "Automatic") else _tgran(gran, "RandomTime")
+    if args:
+        lo, hi = _random_range(args[0], z, "RandomTime")
+    else:
+        w = _now_wall(z)
+        day = _list_to_abs(_abs_to_list(w)[:3])
+        lo = day - _off_secs(_tz_offset(z, wall=day))
+        hi = lo + 86400
+
+    def gen():
+        u = _uniform(float(lo), float(hi))
+        w = u + _off_secs(_tz_offset(z, utc=u))
+        t = _time_from_secs(w - _list_to_abs(_abs_to_list(w)[:3]), gran, z if "TimeZone" in o else None)
+        return t.expr()
+    return _array(dims, gen)
+
+
+# ─────────────────────────── Dated, Clock, DateScale, DatePattern ───────────────────────────
+
+@fn("Dated", **ADDED,
+    notes="Dated[obj, year], Dated[obj, date] and Dated[obj, All]: an inert wrapper associating obj (an entity, "
+          "entity property or property name) with a date; the date must be an integer year, a DateObject or "
+          "DateInterval, Interval of dates or All (resolving entity data needs curated data and is not available)")
+def _dated(obj, date):
+    if K.is_int(date) or is_sym(date, "All") or parse_dobj(date) is not None or parse_interval(date) is not None:
+        raise Unevaluated()
+    if isinstance(date, Expr) and date.head == "Interval":
+        raise Unevaluated()
+    if isinstance(date, Symbol) or (isinstance(date, Expr) and not is_list(date)):
+        raise Unevaluated()
+    raise ValueError(f"Dated: {date!r} is not a year, date or All")
+
+
+@fn("Clock", **ADDED,
+    notes="Clock[...] outside Dynamic evaluates to its starting value (documented 'Possible Issues'): Clock[] -> 0, "
+          "Clock[vmax] -> 0, Clock[{vmin, vmax}] and Clock[{vmin, vmax, dv}] -> vmin, with the optional cycle time "
+          "t and count n validated; Clock[Infinity] -> 0")
+def _clock(spec=None, t=None, n=None):
+    if t is not None:
+        tv = _num(t, "Clock", "cycle time")
+        if tv <= 0:
+            raise ValueError("Clock: the cycle time must be positive")
+    if n is not None and not (K.is_int(n) and int(n) >= 0) and not is_sym(n, "Infinity"):
+        raise ValueError("Clock: the number of cycles must be a non-negative integer")
+    if spec is None:
+        return 0
+    if is_sym(spec, "Infinity") or (K.is_number(spec) and not isinstance(spec, bool)):
+        if not is_sym(spec, "Infinity"):
+            _num(spec, "Clock", "maximum value")
+        return 0
+    if is_list(spec) and len(spec.args) in (2, 3):
+        vmin = spec.args[0]
+        _num(vmin, "Clock", "minimum value")
+        if not is_sym(spec.args[1], "Infinity"):
+            _num(spec.args[1], "Clock", "maximum value")
+        if len(spec.args) == 3 and _num(spec.args[2], "Clock", "step") <= 0:
+            raise ValueError("Clock: the step must be positive")
+        return vmin
+    if isinstance(spec, Symbol):
+        raise Unevaluated()
+    raise ValueError("Clock: expected Clock[], Clock[vmax], Clock[{vmin, vmax}] or Clock[{vmin, vmax, dv}]")
+
+
+@fn("DateScale", **ADDED,
+    notes="DateScale[] and DateScale[DateFunction -> f, DateTicksFormat -> fmt]: the inert date scale for "
+          "ScalingFunctions; options are validated (unknown options raise)")
+def _datescale(*args):
+    for a in args:
+        if not (is_rule(a) and isinstance(a.args[0], Symbol) and a.args[0].name in ("DateFunction",
+                                                                                    "DateTicksFormat")):
+            raise ValueError("DateScale: only the options DateFunction and DateTicksFormat can be given")
+    raise Unevaluated()
+
+
+_DP_RX = {"Year": r"\d{4}", "Quarter": "[1-4]", "Month": r"(?:1[0-2]|0?[1-9])",
+          "MonthName": "(?:" + "|".join(sorted([m for m in _MONTHS] + [m[:3] for m in _MONTHS], key=len,
+                                                reverse=True)) + ")",
+          "Day": r"(?:3[01]|[12]\d|0?[1-9])",
+          "DayName": "(?:" + "|".join(sorted(_DAYS + [d[:3] for d in _DAYS], key=len, reverse=True)) + ")",
+          "Hour": r"(?:2[0-3]|[01]?\d)", "AMPM": "(?:[AaPp][Mm])", "Minute": r"[0-5]\d", "Second": r"[0-5]\d"}
+
+
+def _datepattern_rx(e, compile_):
+    if not (1 <= len(e.args) <= 2 and is_list(e.args[0]) and e.args[0].args):
+        raise ValueError("DatePattern: expected DatePattern[{\"e1\", \"e2\", ...}] or DatePattern[{...}, sep]")
+    sep = r"[/\-:.]" if len(e.args) == 1 else "(?:" + compile_(e.args[1]) + ")"
+    out = []
+    prev_elem = False
+    for x in e.args[0].args:
+        if not isinstance(x, str):
+            raise ValueError("DatePattern: date elements must be strings")
+        if x in _DP_RX:
+            if prev_elem:
+                out.append(sep)
+            out.append(_DP_RX[x])
+            prev_elem = True
+        else:
+            out.append(re.escape(x))
+            prev_elem = False
+    return "(?:" + "".join(out) + ")"
+
+
+def _hook_string_patterns():
+    from . import wl_strings as WS
+    prev = WS._compile
+
+    def comp(p, ctx, lazy=False):
+        if isinstance(p, Expr) and p.head == "DatePattern":
+            return _datepattern_rx(p, lambda q: comp(q, ctx, lazy))
+        return prev(p, ctx, lazy)
+    WS._compile = comp
+
+
+_hook_string_patterns()
+
+
+@fn("DatePattern", **ADDED,
+    notes="DatePattern[{\"e1\", ...}] and DatePattern[{...}, sep] as string patterns (StringMatchQ, StringCases, "
+          "StringReplace, ...): elements Year (4 digits), Quarter, Month, MonthName (full or 3-letter), Day, "
+          "DayName, Hour, AMPM, Minute, Second; consecutive elements are separated by one of / - : . (or by sep), "
+          "literal strings in the list are matched exactly; inert as an expression")
+def _datepattern(*args):
+    _datepattern_rx(Expr("DatePattern", *args), lambda q: re.escape(q) if isinstance(q, str) else "(?:.+?)")
+    raise Unevaluated()
+
+
+# ─────────────────────────── option symbols ───────────────────────────
+
+for _n, _note in [
+        ("DateFormat", "option of DateObject, DateInterval, FromJulianDate, ... giving the display format: a named "
+                       "format, an element list or Automatic; DateString of the date uses it"),
+        ("DateFunction", "option of TimeSeries, DateListPlot, DateScale, ... converting inputs to dates; an inert "
+                         "option name validated by DateScale"),
+        ("DateGranularity", "option of DateObject, RandomDate, RandomTime, TimeObject, FromJulianDate, ... giving the "
+                            "calendar granularity of generated dates (Automatic or a granularity)"),
+        ("DateReduction", "option of DateHistogram giving a cyclic period (None, \"Week\", \"Year\", ...); an inert "
+                          "option name"),
+        ("TimeFormat", "option giving the TextString format of a TimeObject (Automatic = 24-hour); an inert option "
+                       "name"),
+        ("DayCountConvention", "option of DateDifference: ActualActual (default), Thirty360, Thirty360US, ThirtyE360, "
+                               "ThirtyE360ISDA, ThirtyEPlus360, Actual365, Actual360, ActualActualISDA"),
+        ("ExpirationDate", "option of PersistentSymbol and InitializationValue (when a persistent value expires); an "
+                           "inert option name"),
+        ("PartitionGranularity", "option of audio analysis functions (partition length, offset, window); an inert "
+                                 "option name"),
+        ("MaxExtraBandwidths", "option of SmoothKernelDistribution (how far the estimate extends beyond the data); "
+                               "an inert option name"),
+        ("MaxMixtureKernels", "option of SmoothKernelDistribution and related functions (number and placement of "
+                              "kernels); an inert option name"),
+        ("AllowedDimensions", "option of Grid and Tabular restricting the displayed number of rows and columns; an "
+                              "inert option name"),
+        ("ValueDimensions", "option of TemporalData giving the dimension of the value space; an inert option name"),
+        ("DatasetTheme", "option of Dataset giving its visual theme; stored by Dataset, otherwise inert"),
+        ("IncludeRelatedTables", "option of RelationalDatabase: include tables referenced by foreign keys "
+                                 "(default False)")]:
+    _added(_n, _note)
