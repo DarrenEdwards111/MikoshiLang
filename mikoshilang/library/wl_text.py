@@ -949,7 +949,8 @@ for _cp in range(0xC0, 0x180):
 @fn("CharacterName", area=AREA, status="added", listable=True,
     notes="Wolfram standard names (\\[name]) for Greek letters, Latin letters with diacritics and common "
           "mathematical/typographic characters, and \"UnicodeName\" for any character; CharacterName[n] by code; "
-          "a string gives a list; types without a reproducible table (LongName, CommonName, TeXName, HTMLName), "
+          "\"CommonName\" (the Unicode name in sentence case), \"HTMLName\" for the HTML 4 entity set; a string "
+          "gives a list; types without a reproducible table (LongName, TeXName), "
           "and characters outside the table, raise. Greek epsilon/phi forms are omitted (Wolfram's naming of the "
           "lunate/curly variants differs from Unicode's)")
 def _charname(c, typ=None):
@@ -973,6 +974,17 @@ def _charname(c, typ=None):
             return unicodedata.name(c)
         except ValueError:
             return _missing("NotAvailable")
+    if typ == "CommonName":
+        try:
+            return unicodedata.name(c).capitalize()
+        except ValueError:
+            return _missing("NotAvailable")
+    if typ == "HTMLName":
+        import html.entities
+        n = html.entities.codepoint2name.get(ord(c))
+        if n is not None:
+            return n
+        raise NotImplementedError(f"CharacterName: the HTML name of {c!r} is only known for the HTML 4 entity set")
     raise NotImplementedError(f"CharacterName: the name type {typ!r} is not supported")
 
 
