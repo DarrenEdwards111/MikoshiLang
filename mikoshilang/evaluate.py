@@ -19,6 +19,7 @@ def _ensure_extended():
 # Hold attributes
 _HOLD_ALL: Set[str] = {"Trace", "Assuming"}   # library heads that receive unevaluated arguments
 _HOLD_FIRST: Set[str] = set()
+_HOLD_ALL_OPERATORS: Set[str] = set()   # operator forms h[spec][args] whose args are held (CatchExceptions)
 
 _MAX_DEPTH = 1024  # matches Wolfram's default $RecursionLimit
 _memo: Dict[int, Any] = {}
@@ -270,6 +271,8 @@ def _evaluate_body(expr, depth: int) -> Any:
 
     # 4. Arguments, respecting Hold attributes (HoldAllComplete; SubValuesHoldAll for f[...][args])
     attrs = kernel.attributes(head) if isinstance(head, str) else set()
+    if isinstance(head, Expr) and isinstance(head.head, str) and head.head in _HOLD_ALL_OPERATORS:
+        attrs = set(attrs) | {"HoldAll"}
     eva = lambda x: x if isinstance(x, Expr) and x.head == "Unevaluated" else _ev_arg(x, depth + 1)  # noqa: E731
     complete = "HoldAllComplete" in attrs
     n = len(expr.args)

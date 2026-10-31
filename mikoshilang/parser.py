@@ -46,6 +46,7 @@ _TOKEN_SPEC = [
     ("UNSET",     r'=\.(?![0-9.])'),
     ("SET",       r'(?<![=!<>])=(?!=)'),
     ("RULEDELAYED", r':>'),
+    ("MESSAGENAME", r'::'),
     ("COLON",     r':(?![=>])'),
     ("MAPALL", r'//@'),
     ("MAP", r'/@'),
@@ -698,6 +699,8 @@ class Parser:
                 self.advance()
                 blank = self._blank_tail(_blank_kinds[nxt.type])
                 return self._pattern_test(Expr("Pattern", Symbol(name), blank))
+            if nxt is not None and nxt.type == "MESSAGENAME":
+                return self._message_name(Symbol(name))
             return Symbol(name)
 
         if tok.type == "BLANKOPT":
@@ -727,6 +730,18 @@ class Parser:
             return Expr("Association", *args)
 
         raise ParseError(f"Unexpected token: {tok}")
+
+    def _message_name(self, sym):
+        """symbol::tag and symbol::tag::lang (MessageName; tag and lang may be symbols or strings)."""
+        parts = []
+        while self.at("MESSAGENAME") and len(parts) < 2:
+            self.advance()
+            tok = self.peek()
+            if tok is None or tok.type not in ("SYMBOL", "STRING"):
+                raise ParseError("'::' must be followed by a message tag")
+            self.advance()
+            parts.append(tok.value)
+        return Expr("MessageName", sym, *parts)
 
     def _parse_arglist(self, end_type: str) -> ListType[Any]:
         """Parse comma-separated arguments until end_type token."""
