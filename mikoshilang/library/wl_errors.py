@@ -141,6 +141,22 @@ def _own(name, default):
     return default
 
 
+_PATTERN_HEADS = {"Blank", "BlankSequence", "BlankNullSequence", "Pattern", "Alternatives", "Condition",
+                  "PatternTest", "Optional", "Except", "HoldPattern", "Verbatim", "Repeated", "RepeatedNull",
+                  "OrderlessPatternSequence", "PatternSequence"}
+
+
+def _has_pattern(*xs):
+    """True if an argument is (or contains) a pattern: the expression is a pattern for MatchQ / Cases, not data."""
+    for x in xs:
+        if isinstance(x, Expr):
+            if isinstance(x.head, str) and x.head in _PATTERN_HEADS:
+                return True
+            if _has_pattern(*x.args):
+                return True
+    return False
+
+
 # ─────────────────────────── output ───────────────────────────
 
 def _strings_to_symbols(e):
@@ -636,15 +652,6 @@ _hold_first("Messages", "MessageName", "Message")
 _hold_all("Off", "On", "Quiet", "Check")
 
 
-@fn("MessageList", area=AREA, status="added",
-    notes="MessageList[n] is the list of messages of input line n; MikoshiLang sessions have no numbered input "
-          "lines, so MessageList[n] stays unevaluated unless a value is assigned to it")
-def _message_list(n):
-    if not (isinstance(n, int) and not isinstance(n, bool) and n > 0):
-        raise ValueError(f"MessageList: {input_text(n)} is not a positive integer line number")
-    raise Unevaluated()
-
-
 # ─────────────────────────── system symbols ───────────────────────────
 
 def _install_constants():
@@ -957,6 +964,8 @@ def _failure_hook(head, args, ev_):
           "\"Message\" (template applied to \"MessageParameters\"), \"MessageTemplate\", \"MessageName\", "
           "\"HeldMessageTemplate\", \"Tag\" and \"Properties\" (sorted); failure[{p1, p2}] gives a list")
 def _failure(*args):
+    if _has_pattern(*args):
+        raise Unevaluated()
     if len(args) == 2 and not is_assoc(args[1]):
         raise ValueError(f"Failure: the second argument {input_text(args[1])} must be an association")
     if len(args) not in (1, 2):
@@ -968,6 +977,8 @@ def _failure(*args):
     notes="Success[\"tag\", assoc] is inert; success[\"prop\"] gives assoc values, \"Message\", \"Tag\" and "
           "\"Properties\" (the association keys in order)")
 def _success(*args):
+    if _has_pattern(*args):
+        raise Unevaluated()
     if len(args) == 2 and not is_assoc(args[1]):
         raise ValueError(f"Success: the second argument {input_text(args[1])} must be an association")
     if len(args) not in (1, 2):
@@ -1461,6 +1472,8 @@ KL.COMPOUND_HEAD_HOOKS["Exception"] = _exception_hook
           "an association; malformed input issues Exception::untagged / Exception::invargs and stays unevaluated; "
           "exc[\"prop\"] gives the documented properties")
 def _exception(*args):
+    if _has_pattern(*args):
+        raise Unevaluated()
     if len(args) == 2 and is_exception(Expr("Exception", *args)):
         raise Unevaluated()
     try:
@@ -2256,6 +2269,8 @@ def _clear_system_cache(*kind):
     notes="TerminatedEvaluation[\"reason\"] is the inert representation of an evaluation stopped by a session limit "
           "(\"IterationLimit\", \"RecursionLimit\", ...); a non-string reason raises")
 def _terminated_evaluation(reason):
+    if _has_pattern(reason):
+        raise Unevaluated()
     if not isinstance(reason, str):
         raise ValueError(f"TerminatedEvaluation: the reason {input_text(reason)} must be a string")
     raise Unevaluated()
@@ -2557,6 +2572,8 @@ KL.COMPOUND_HEAD_HOOKS["TestObject"] = _test_object_hook
           "\"Input\", \"ExpectedOutput\", \"ActualOutput\", \"ActualMessages\", \"TestID\", \"TestKey\", "
           "\"TestCreate\", \"Created\", timings, ...; test[{p1, ...}] gives an association; \"Properties\"")
 def _test_object(*args):
+    if _has_pattern(*args):
+        raise Unevaluated()
     if len(args) != 1 or not is_assoc(args[0]):
         raise ValueError("TestObject: the argument must be an association of test data")
     raise Unevaluated()
@@ -2737,6 +2754,8 @@ KL.COMPOUND_HEAD_HOOKS["TestReportObject"] = _report_hook
           "\"ResultsByOutcome\", \"ResultsByTestID\", \"ResultsByTestFileName\", \"ResultsDataset\", "
           "\"ReportSucceeded\", \"RuntimeFailures\", \"Title\", timings, \"TestsSucceededCount\", the key lists ...")
 def _test_report_object(*args):
+    if _has_pattern(*args):
+        raise Unevaluated()
     if len(args) != 1 or not is_assoc(args[0]):
         raise ValueError("TestReportObject: the argument must be an association of report data")
     raise Unevaluated()
