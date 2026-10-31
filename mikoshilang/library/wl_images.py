@@ -403,11 +403,6 @@ def _color_leaves(nest):
     out = walk(nest)
     if not found:
         return None
-    def fill(v):
-        if isinstance(v, list) and v and not isinstance(v[0], (list,)) and not all(isinstance(t, float) for t in v):
-            return [fill(t) for t in v]
-        return v
-
     def leaf_to_rgba(v):
         if isinstance(v, list) and len(v) == 4 and all(isinstance(t, float) for t in v):
             return v
@@ -1827,6 +1822,8 @@ def _imageclip(x: Expr, rng: ListOf[Real] = None, vals: ListOf[Real] = None) -> 
         lo, hi = r[i]
         if lo is None or hi is None:
             raise ValueError("ImageClip: the clipping range must be numeric")
+        if lo > hi:
+            raise ValueError("ImageClip: the clipping range {min, max} must have min <= max")
         vlo, vhi = v[i]
         ch = a[..., i]
         below, above = ch < lo, ch > hi
@@ -2365,12 +2362,15 @@ def pad_array(a, pads, padding, fname, im=None):
             raise ValueError(f"{fname}: unknown Padding {padding!r} (\"Fixed\", \"Periodic\", \"Reflected\", "
                              f"\"Reversed\", a value or None)")
         mode = _PAD_MODES[padding]
-        if mode == "reflect" and any(a.shape[i] < 2 for i in range(a.ndim - 1 - len(pads), a.ndim - 1)):
-            mode = "edge"
-        if mode in ("reflect", "symmetric", "wrap"):
-            # numpy repeats these as needed for wide pads (wrap/reflect beyond one period)
-            return np.pad(a, full, mode=mode)
-        return np.pad(a, full, mode=mode)
+        out = a
+        for i, pw in enumerate(full):
+            if pw == (0, 0):
+                continue
+            m = "edge" if mode == "reflect" and a.shape[i] < 2 else mode
+            spec = [(0, 0)] * a.ndim
+            spec[i] = pw
+            out = np.pad(out, spec, mode=m)            # numpy repeats wrap/reflect beyond one period as needed
+        return out
     if im is not None and not (isinstance(padding, (int, float)) and not isinstance(padding, bool)):
         v = value_for(im, padding, fname)
     else:
