@@ -1095,13 +1095,18 @@ _CURRIED_ONLY = {"SameAs"} | set(_COMPARATORS)
 # Library hooks for other compound heads, e.g. BooleanFunction[k, n][args] (coverage batch 6):
 # head name -> hook(head_expr, args, ev) returning a value or K.UNHANDLED.
 COMPOUND_HEAD_HOOKS = {}
+DEEP_HEAD_HOOKS = {}      # innermost head -> fn(head, args, ev) for f[a][b][c] (set by wl_evaluation)
 
 
 def apply_compound_head(head, args, ev):
     """f[ops...][args...] for associations, Key, compositions and operator forms; UNHANDLED otherwise."""
     h = head.head
     if not isinstance(h, str):
-        return K.UNHANDLED
+        # f[a][b][c]: a hook registered for the innermost head f (OperatorApplied, CurryApplied, ...)
+        while isinstance(h, Expr):
+            h = h.head
+        hook = DEEP_HEAD_HOOKS.get(h) if isinstance(h, str) else None
+        return hook(head, args, ev) if hook is not None else K.UNHANDLED
     hook = COMPOUND_HEAD_HOOKS.get(h)
     if hook is not None:
         r = hook(head, args, ev)
