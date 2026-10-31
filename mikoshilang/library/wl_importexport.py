@@ -119,7 +119,7 @@ def file_arg(x, fname):
     if isinstance(x, Expr) and x.head == "File" and len(x.args) == 1 and isinstance(x.args[0], str):
         x = x.args[0]
     if not isinstance(x, str):
-        raise ValueError(f"{fname}: {F.input_form(x)} is not a valid file specification")
+        raise TypeError(f"{fname}: {F.input_form(x)} is not a valid file specification")
     return os.path.expanduser(x)
 
 
@@ -2136,6 +2136,8 @@ def parse_export_spec(spec, path_hint, fname):
     fmt, inner = None, None
     items = list(spec.args) if is_list(spec) else ([spec] if spec is not None else [])
     if items:
+        if not isinstance(items[0], str):
+            raise TypeError(f"{fname}: {F.input_form(items[0])} is not a format name")
         if not _is_format_name(items[0]):
             raise ValueError(f"{fname}: {F.input_form(items[0])} is not a supported export format")
         fmt = format_of(items[0], fname)
@@ -2397,7 +2399,7 @@ def _fileformatq(f: String | Expr, fmt: String) -> Boolean:
           "extension; FileConvert[\"src\" -> \"dest\"] infers the format from dest; returns the new file name. Check: self-check by construction (Import then Export); tests re-import the converted file.")
 def _fileconvert(spec: Rule, *opts: Option) -> String:
     if not _is_rule(spec):
-        raise ValueError("FileConvert: FileConvert[source -> format] or FileConvert[source -> destination] "
+        raise TypeError("FileConvert: FileConvert[source -> format] or FileConvert[source -> destination] "
                          "expected")
     src, target = spec.args
     path = file_arg(src, "FileConvert")
@@ -2857,7 +2859,9 @@ _PERSIST_TYPES = ("KernelSession", "FrontEndSession", "Notebook", "Local", "Loca
 def _persistencelocation(t: String, base: Expr = None) -> Expr:
     if _is_rule(t) and base is None:
         return Expr("PersistenceLocation", t.args[0], t.args[1])
-    if not isinstance(t, str) or t not in _PERSIST_TYPES:
+    if not isinstance(t, str):
+        raise TypeError(f"PersistenceLocation: {F.input_form(t)} is not a persistence location type name")
+    if t not in _PERSIST_TYPES:
         raise ValueError(f"PersistenceLocation: {F.input_form(t)} is not a persistence location type "
                          f"({', '.join(_PERSIST_TYPES)})")
     if base is None:

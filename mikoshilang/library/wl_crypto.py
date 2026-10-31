@@ -1362,7 +1362,7 @@ def encrypt(key, x, o, fname="Encrypt"):
         items = [("Data", _ba(ct)), ("InitializationVector", _ba(iv) if iv and mode != "ECB" else None),
                  ("OriginalForm", Symbol(form))]
         if not pad and mode in ("ECB", "CBC"):
-            items.append(("Padding", None))
+            items.append(("Padding", Symbol("None")))
         if cipher != "RC4" and mode != sym_key_parts(key, fname)[1]:
             items.append(("BlockMode", mode))
         return Expr("EncryptedObject", A(items))
@@ -1956,7 +1956,7 @@ def _pairs(spec, fname):
         return [spec.args], False
     if is_list(spec) and spec.args and all(is_list(p) and len(p.args) == 2 for p in spec.args):
         return [p.args for p in spec.args], True
-    raise ValueError(f"{fname}: expected {{expr, DigitalSignature[...]}} or a list of such pairs")
+    raise TypeError(f"{fname}: expected {{expr, DigitalSignature[...]}} or a list of such pairs")
 
 
 @fn("VerifyDigitalSignature", area=AREA, status="added",
@@ -2402,7 +2402,7 @@ def to_pem(x, fname):
             out.append(_pem_block(assoc_get(it.args[0], "Type"), ba_bytes(raw, fname)) if is_byte_array(raw)
                        else raw.rstrip("\n") + "\n")
         else:
-            raise ValueError(f"{fname}: PEM export needs PrivateKey, PublicKey or SecurityCertificate objects, not "
+            raise TypeError(f"{fname}: PEM export needs PrivateKey, PublicKey or SecurityCertificate objects, not "
                              f"{F.input_form(it)}")
     return "".join(out).encode("ascii")
 
