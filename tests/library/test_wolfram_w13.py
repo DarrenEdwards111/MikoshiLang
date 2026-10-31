@@ -514,9 +514,9 @@ SIGNATURES = [
        "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8"),
     (f"VerifyDigitalSignature[{{\"sample\", GenerateDigitalSignature[\"sample\", {P256_KEY}]}}, {P256_KEY}]", "True"),
     # RFC 8032 7.1 tests 1 and 2
-    BA(f"Join[Normal /@ Values[GenerateDigitalSignature[ByteArray[{{}}], PrivateKey[<|\"Type\" -> \"EdwardsCurve\", "
-       f"\"PrivateHexString\" -> \"{ED_SEED1}\"|>]][[1, {{5, 6}}]]]][[1]]",
-       "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"[:64]),
+    BA(f"GenerateDigitalSignature[ByteArray[{{}}], PrivateKey[<|\"Type\" -> \"EdwardsCurve\", "
+       f"\"PrivateHexString\" -> \"{ED_SEED1}\"|>]][\"R\"]",
+       "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155"),
     BA(f"GenerateDigitalSignature[ByteArray[{{114}}], PrivateKey[<|\"Type\" -> \"EdwardsCurve\", "
        f"\"PrivateHexString\" -> \"{ED_SEED2}\"|>]][\"S\"]",
        "085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"),
