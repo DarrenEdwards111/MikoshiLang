@@ -4078,3 +4078,816 @@ def _bmo(*args):
           "[\"Properties\"] and lists of properties")
 def _bmxo(*args):
     raise Unevaluated()
+
+
+# ═══════════════════════════════ matrix games ═══════════════════════════════
+
+def _game_array(p, fname):
+    """(payoff array as nested Python lists of SymPy numbers, dims of actions, number of players)."""
+    d = _dims(p)
+    if len(d) == 2:                                     # zero-sum matrix
+        rows = [[S(v) for v in r.args] for r in p.args]
+        arr = [[[v, -v] for v in r] for r in rows]
+        return arr, [d[0], d[1]], 2
+    if len(d) >= 3 and d[-1] == len(d) - 1:
+        def conv(x):
+            return [conv(a) for a in x.args] if is_list(x) else S(x)
+        return conv(p), list(d[:-1]), d[-1]
+    raise ValueError(f"{fname}: {p} is not a payoff matrix or an array of payoff vectors with dimensions "
+                     "{m1, ..., mn, n}")
+
+
+def _game_parts(g, fname):
+    if not (isinstance(g, Expr) and g.head == "MatrixGame" and g.args):
+        if isinstance(g, Symbol):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: {g} is not a MatrixGame")
+    arr, dims, n = _game_array(g.args[0], fname)
+    opts = {}
+    for r in g.args[1:]:
+        if is_rule(r):
+            k = r.args[0]
+            opts[k.name if isinstance(k, Symbol) else k] = r.args[1]
+    for v in _flat_py(arr):
+        if not (isinstance(v, sp.Basic) and v.is_number and v.is_real):
+            raise ValueError(f"{fname}: payoffs must be real numbers")
+    return arr, dims, n, opts
+
+
+def _flat_py(x):
+    if isinstance(x, list):
+        out = []
+        for a in x:
+            out.extend(_flat_py(a))
+        return out
+    return [x]
+
+
+def _payoff(arr, idx):
+    for i in idx:
+        arr = arr[i]
+    return arr
+
+
+def _py_to_ml(x):
+    if isinstance(x, list):
+        return L(*(_py_to_ml(a) for a in x))
+    return R(x)
+
+
+@fn("MatrixGame", **ADDED,
+    notes="MatrixGame[{{a11, ...}, ...}] (two-player zero-sum) or MatrixGame[p] with p of dimensions {m1, ..., mn, "
+          "n} gives MatrixGame[payoff array, options..., \"Validity\" -> {True}]; options GameActionLabels and "
+          "GamePlayerLabels; properties \"PayoffArray\", \"ComponentPayoffArray\", \"GameActionLabels\", "
+          "\"GamePlayerLabels\", \"Dataset\" (Dataset of payoff vectors by action labels) and \"Plot\" "
+          "(MatrixGamePlot); \"TreeGame\" and SparseArray/rule specifications raise")
+def _matrixgame(p, *rest):
+    fname = "MatrixGame"
+    if any(isinstance(r, Expr) and is_rule(r) and r.args[0] == "Validity" for r in rest):
+        raise Unevaluated()
+    args, opts = split_options(rest, {"GameActionLabels", "GamePlayerLabels"}, fname)
+    if args:
+        raise ValueError(f"{fname} called with too many arguments")
+    if is_list(p) and p.args and all(is_rule(r) for r in p.args):
+        raise NotImplementedError(f"{fname}: rule (SparseArray) specifications are not supported")
+    arr, dims, n = _game_array(p, fname)
+    for v in _flat_py(arr):
+        if not (isinstance(v, sp.Basic) and v.is_number and v.is_real):
+            raise ValueError(f"{fname}: payoffs must be real numbers")
+    out = [_py_to_ml(arr)]
+    for k in ("GameActionLabels", "GamePlayerLabels"):
+        if k in opts and not is_sym(opts[k], "Automatic"):
+            v = opts[k]
+            if k == "GamePlayerLabels" and (not is_list(v) or len(v.args) != n):
+                raise ValueError(f"{fname}: GamePlayerLabels must be a list of {n} labels")
+            if k == "GameActionLabels" and (not is_list(v) or len(v.args) != n or
+                                            any(not is_list(a) or len(a.args) != m for a, m in zip(v.args, dims))):
+                raise ValueError(f"{fname}: GameActionLabels must give one list of labels per player matching the "
+                                 "numbers of actions")
+            out.append(Expr("Rule", Symbol(k), v))
+    out.append(Expr("Rule", "Validity", L(True)))
+    return Expr("MatrixGame", *out)
+
+
+def _labels(dims, n, opts):
+    al = opts.get("GameActionLabels")
+    pl = opts.get("GamePlayerLabels")
+    al = [list(a.args) for a in al.args] if al is not None else [list(range(1, m + 1)) for m in dims]
+    pl = list(pl.args) if pl is not None else list(range(1, n + 1))
+    return al, pl
+
+
+def _matrixgame_props(head, args, ev_):
+    if len(args) != 1 or not isinstance(args[0], str):
+        return K.UNHANDLED
+    arr, dims, n, opts = _game_parts(head, "MatrixGame")
+    prop = args[0]
+    al, pl = _labels(dims, n, opts)
+    if prop == "PayoffArray":
+        return _py_to_ml(arr)
+    if prop == "ComponentPayoffArray":
+        def comp(k):
+            def rec(x, depth):
+                return [rec(a, depth + 1) for a in x] if depth < len(dims) else x[k]
+            return rec(arr, 0)
+        return L(*(_py_to_ml(comp(k)) for k in range(n)))
+    if prop == "GameActionLabels":
+        return L(*(L(*a) for a in al))
+    if prop == "GamePlayerLabels":
+        return L(*pl)
+    if prop == "Dataset":
+        def key(v):
+            return str(v) if isinstance(v, int) else v
+
+        def rec(x, depth):
+            if depth == len(dims):
+                return _py_to_ml(x)
+            return Expr("Association", *(Expr("Rule", key(al[depth][i]), rec(x[i], depth + 1))
+                                         for i in range(dims[depth])))
+        return Expr("Dataset", rec(arr, 0))
+    if prop == "Plot":
+        return ev_(Expr("MatrixGamePlot", head))
+    if prop == "Properties":
+        return L("ComponentPayoffArray", "Dataset", "GameActionLabels", "GamePlayerLabels", "PayoffArray", "Plot",
+                 "TreeGame")
+    if prop == "TreeGame":
+        raise NotImplementedError("MatrixGame: the \"TreeGame\" property is not supported")
+    raise ValueError(f"MatrixGame: unknown property {prop!r}")
+
+
+KL.COMPOUND_HEAD_HOOKS["MatrixGame"] = _matrixgame_props
+
+record("GameActionLabels", AREA, "added",
+       "option of MatrixGame and MatrixGamePlot: one list of action labels per player")
+record("GamePlayerLabels", AREA, "added",
+       "option of MatrixGame and MatrixGamePlot: a list of player labels")
+
+
+def _profile(strat, dims, n, pl, fname):
+    """List of n probability vectors (SymPy) from a strategy profile specification."""
+    if is_assoc(strat) or (is_list(strat) and strat.args and all(is_rule(r) for r in strat.args)):
+        rules = strat.args
+        table = {}
+        for r in rules:
+            k, v = r.args
+            if is_list(k):
+                raise NotImplementedError(f"{fname}: joint strategies for groups of players are not supported")
+            if k in pl:
+                table[pl.index(k)] = v
+            elif isinstance(k, int) and 1 <= k <= n:
+                table[k - 1] = v
+            else:
+                raise ValueError(f"{fname}: unknown player {k}")
+        if len(table) != n:
+            raise ValueError(f"{fname}: a strategy is needed for every player")
+        vecs = [table[i] for i in range(n)]
+    else:
+        vecs = _items(strat, fname, "strategy profile")
+    if len(vecs) != n:
+        raise ValueError(f"{fname}: the profile must give {n} strategies")
+    out = []
+    for v, m in zip(vecs, dims):
+        if not is_list(v) or len(v.args) != m:
+            raise ValueError(f"{fname}: a strategy must be a probability vector of length {m}")
+        vals = [S(x) for x in v.args]
+        out.append(vals)
+    return out
+
+
+def _is_profile_list(strat, n):
+    return is_list(strat) and strat.args and all(is_list(s) and len(s.args) == n and
+                                                 all(is_list(t) for t in s.args) for s in strat.args)
+
+
+def _expected(arr, dims, n, prof, power=1):
+    res = [sp.Integer(0)] * n
+    for idx in itertools.product(*[range(m) for m in dims]):
+        pr = sp.Integer(1)
+        for j, a in enumerate(idx):
+            pr *= prof[j][a]
+        if pr == 0:
+            continue
+        pv = _payoff(arr, idx)
+        for i in range(n):
+            res[i] += pr * pv[i] ** power
+    return [sp.nsimplify(r) if False else sp.expand(r) for r in res]
+
+
+@fn("MatrixGamePayoff", **ADDED,
+    notes="MatrixGamePayoff[game, {s1, ..., sn}] gives the expected payoff of each player for mixed strategies si "
+          "(probability vectors; also {1 -> s1, ...} rules or <|label -> s|>, and lists of profiles); "
+          "MatrixGamePayoff[game, profile, \"Expectation\" | \"Variance\"]; exact for exact strategies; joint "
+          "group strategies and the distribution/simulation properties raise")
+def _matrixgamepayoff(game, strat, *rest):
+    fname = "MatrixGamePayoff"
+    arr, dims, n, opts = _game_parts(game, fname)
+    _, pl = _labels(dims, n, opts)
+    prop = rest[0] if rest else "Expectation"
+    if len(rest) > 1:
+        raise ValueError(f"{fname} called with too many arguments")
+    if prop not in ("Expectation", "Variance"):
+        raise NotImplementedError(f"{fname}: the property {prop} is not supported (\"Expectation\", \"Variance\")")
+    if _is_profile_list(strat, n):
+        return L(*(_matrixgamepayoff(game, s, *rest) for s in strat.args))
+    prof = _profile(strat, dims, n, pl, fname)
+    for v in prof:
+        tot = sum(v)
+        if any(x.is_number and x < 0 for x in v) or (tot.is_number and abs(complex(sp.N(tot)) - 1) > 1e-9):
+            raise ValueError(f"{fname}: strategies must be probability vectors")
+    e1 = _expected(arr, dims, n, prof)
+    if prop == "Variance":
+        e2 = _expected(arr, dims, n, prof, 2)
+        e1 = [sp.expand(b - a ** 2) for a, b in zip(e1, e2)]
+    return L(*(R(v) for v in e1))
+
+
+def _nash_check(arr, dims, n, prof, tol=0):
+    vals = _expected(arr, dims, n, prof)
+    for i in range(n):
+        for a in range(dims[i]):
+            dev = [list(p) for p in prof]
+            dev[i] = [sp.Integer(int(k == a)) for k in range(dims[i])]
+            v = _expected(arr, dims, n, dev)[i]
+            diff = v - vals[i]
+            if diff.is_number:
+                if float(sp.N(diff)) > tol:
+                    return False
+            else:
+                raise NotImplementedError("VerifyMatrixGameStrategy: symbolic strategies are not supported")
+    return True
+
+
+@fn("VerifyMatrixGameStrategy", **ADDED,
+    notes="True when the strategy profile {s1, ..., sn} is a Nash equilibrium of the matrix game (no player gains "
+          "by deviating to any pure action; machine-number strategies use a 10^-9 tolerance); a list of profiles "
+          "gives a list; symbolic strategies raise")
+def _verifymatrixgame(game, strat, *rest):
+    fname = "VerifyMatrixGameStrategy"
+    if rest:
+        raise ValueError(f"{fname} called with too many arguments")
+    arr, dims, n, opts = _game_parts(game, fname)
+    _, pl = _labels(dims, n, opts)
+    if _is_profile_list(strat, n):
+        return L(*(_verifymatrixgame(game, s) for s in strat.args))
+    prof = _profile(strat, dims, n, pl, fname)
+    inexact = any(isinstance(x, sp.Float) for v in prof for x in v)
+    return _nash_check(arr, dims, n, prof, 1e-9 if inexact else 0)
+
+
+def _frac_of(v):
+    return _frac(v) if (v.is_Rational or isinstance(v, sp.Float)) else Fraction(float(v))
+
+
+@fn("FindMatrixGameStrategies", **ADDED,
+    notes="Nash equilibria of a matrix game as a list of strategy profiles: pure equilibria first, then mixed ones, "
+          "each sorted; two-player games use exact support enumeration (all equilibria of a non-degenerate game; "
+          "for degenerate games the extreme equilibria with equal-size supports), n-player games give the pure "
+          "equilibria only with \"Pure\" (mixed n-player equilibria raise); FindMatrixGameStrategies[game, "
+          "\"Pure\" | \"Mixed\"] restricts the kind; the Method option is not supported")
+def _findmatrixgame(game, *rest):
+    fname = "FindMatrixGameStrategies"
+    args, opts = split_options(rest, {"Method"}, fname)
+    if "Method" in opts and not is_sym(opts["Method"], "Automatic") and opts["Method"] != "SolveValues":
+        raise NotImplementedError(f"{fname}: the Method option is not supported")
+    spec = args[0] if args else "All"
+    if spec not in ("All", "Pure", "Mixed"):
+        raise ValueError(f"{fname}: the specification must be \"Pure\" or \"Mixed\"")
+    arr, dims, n, opts2 = _game_parts(game, fname)
+    pure = []
+    for idx in itertools.product(*[range(m) for m in dims]):
+        prof = [[sp.Integer(int(k == a)) for k in range(m)] for a, m in zip(idx, dims)]
+        if _nash_check(arr, dims, n, prof):
+            pure.append(prof)
+    mixed = []
+    if spec != "Pure":
+        if n != 2:
+            raise NotImplementedError(f"{fname}: mixed equilibria of games with more than two players are not "
+                                      "supported (use \"Pure\")")
+        m1, m2 = dims
+        A = [[_frac_of(_payoff(arr, (i, j))[0]) for j in range(m2)] for i in range(m1)]
+        B = [[_frac_of(_payoff(arr, (i, j))[1]) for j in range(m2)] for i in range(m1)]
+        seen = set()
+        for k in range(2, min(m1, m2) + 1):
+            for I in itertools.combinations(range(m1), k):
+                for J in itertools.combinations(range(m2), k):
+                    # y on J makes player 1 indifferent over I; x on I makes player 2 indifferent over J
+                    My = [[A[i][j] for j in J] + [Fraction(-1)] for i in I] + [[Fraction(1)] * k + [Fraction(0)]]
+                    y = _frac_solve(My, [Fraction(0)] * k + [Fraction(1)])
+                    Mx = [[B[i][j] for i in I] + [Fraction(-1)] for j in J] + [[Fraction(1)] * k + [Fraction(0)]]
+                    x = _frac_solve(Mx, [Fraction(0)] * k + [Fraction(1)])
+                    if x is None or y is None:
+                        continue
+                    yv, v = y[:k], y[k]
+                    xv, u = x[:k], x[k]
+                    if any(t <= 0 for t in yv) or any(t <= 0 for t in xv):
+                        continue
+                    yfull = [Fraction(0)] * m2
+                    for j, t in zip(J, yv):
+                        yfull[j] = t
+                    xfull = [Fraction(0)] * m1
+                    for i, t in zip(I, xv):
+                        xfull[i] = t
+                    if any(sum(A[i][j] * yfull[j] for j in range(m2)) > v for i in range(m1)):
+                        continue
+                    if any(sum(B[i][j] * xfull[i] for i in range(m1)) > u for j in range(m2)):
+                        continue
+                    key = (tuple(xfull), tuple(yfull))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    inexact = any(isinstance(v_, sp.Float) for v_ in _flat_py(arr))
+                    conv = (lambda t: sp.Float(float(t))) if inexact else \
+                        (lambda t: sp.Rational(t.numerator, t.denominator))
+                    mixed.append([[conv(t) for t in xfull], [conv(t) for t in yfull]])
+
+    def sort_key(prof):
+        return tuple(tuple(float(t) for t in v) for v in prof)
+    pure.sort(key=sort_key)
+    mixed.sort(key=sort_key)
+    res = (pure if spec in ("All", "Pure") else []) + (mixed if spec in ("All", "Mixed") else [])
+    return L(*(L(*(L(*(R(t) for t in v)) for v in prof)) for prof in res))
+
+
+def _game_plot_prims(arr, dims, n, al, pl, strategy=None):
+    """Graphics primitives: a grid of payoff cells, each split into one coloured strip per player."""
+    colors = [Expr("RGBColor", 0.368417, 0.506779, 0.709798), Expr("RGBColor", 0.880722, 0.611041, 0.142051),
+              Expr("RGBColor", 0.560181, 0.691569, 0.194885), Expr("RGBColor", 0.922526, 0.385626, 0.209179),
+              Expr("RGBColor", 0.528488, 0.470624, 0.701351)]
+    rp = list(range((n + 1) // 2))
+    cp = list(range((n + 1) // 2, n))
+    rows = list(itertools.product(*[range(dims[i]) for i in rp]))
+    cols = list(itertools.product(*[range(dims[i]) for i in cp])) or [()]
+    prims = []
+    H = len(rows)
+    for r, ra in enumerate(rows):
+        for c, ca in enumerate(cols):
+            idx = [0] * n
+            for i, a in zip(rp, ra):
+                idx[i] = a
+            for i, a in zip(cp, ca):
+                idx[i] = a
+            pv = _payoff(arr, idx)
+            x0, y0 = c, H - 1 - r
+            w = sp.Rational(1, n)
+            for k in range(n):
+                prims.append(L(Expr("Opacity", 0.6), colors[k % len(colors)],
+                               Expr("Rectangle", L(R(x0 + k * w), y0), L(R(x0 + (k + 1) * w), y0 + 1))))
+                prims.append(Expr("Text", R(pv[k]), L(R(x0 + (k + sp.Rational(1, 2)) * w), R(y0 + sp.Rational(1, 2)))))
+            prims.append(L(Expr("EdgeForm", Symbol("Black")), Expr("FaceForm", Symbol("None")),
+                           Expr("Rectangle", L(x0, y0), L(x0 + 1, y0 + 1))))
+    for r, ra in enumerate(rows):
+        lab = ", ".join(str(al[i][a]) for i, a in zip(rp, ra))
+        prims.append(Expr("Text", lab, L(R(sp.Rational(-1, 2)), R(H - 1 - r + sp.Rational(1, 2)))))
+    for c, ca in enumerate(cols):
+        lab = ", ".join(str(al[i][a]) for i, a in zip(cp, ca))
+        prims.append(Expr("Text", lab, L(R(c + sp.Rational(1, 2)), R(H + sp.Rational(1, 3)))))
+    prims.append(Expr("Text", ", ".join(str(pl[i]) for i in rp) + " \\ " + ", ".join(str(pl[i]) for i in cp),
+                      L(R(sp.Rational(-1, 2)), R(H + sp.Rational(1, 3)))))
+    return prims
+
+
+@fn("MatrixGamePlot", **ADDED,
+    notes="MatrixGamePlot[game] gives Graphics[...]: a grid of payoff cells (rows: the first Ceiling[n/2] players' "
+          "action combinations, columns: the rest), each split into one coloured strip per player with the payoff "
+          "as Text, and action/player labels (GameActionLabels, GamePlayerLabels options); Graphics options are "
+          "passed through; PlotLayout, ColorFunction and strategy thickness are not supported (raise)")
+def _matrixgameplot(game, *rest):
+    fname = "MatrixGamePlot"
+    args, opts = split_options(rest, None, fname) if False else ([r for r in rest if not is_rule(r)],
+                                                                 [r for r in rest if is_rule(r)])
+    if args:
+        raise NotImplementedError(f"{fname}: strategy arguments are not supported")
+    arr, dims, n, gopts = _game_parts(game, fname)
+    gopts = dict(gopts)
+    gfx_opts = []
+    for r in opts:
+        k = r.args[0].name if isinstance(r.args[0], Symbol) else r.args[0]
+        if k in ("GameActionLabels", "GamePlayerLabels"):
+            gopts[k] = r.args[1]
+        elif k in ("PlotLayout", "ColorFunction", "ColorFunctionScaling", "PlotLegends"):
+            raise NotImplementedError(f"{fname}: the option {k} is not supported")
+        else:
+            gfx_opts.append(r)
+    al, pl = _labels(dims, n, gopts)
+    return Expr("Graphics", L(*_game_plot_prims(arr, dims, n, al, pl)), *gfx_opts)
+
+
+# ═══════════════════════════════ tree-game strategies ═══════════════════════════════
+
+def _tree_nodes(root):
+    """Preorder list of (path, node) for action nodes, and players in order of first appearance."""
+    out, players = [], []
+
+    def walk(n, path):
+        if n.payoffs is not None:
+            return
+        if n.player not in players:
+            players.append(n.player)
+        out.append((path, n))
+        for i, c in enumerate(n.children):
+            walk(c, path + (i + 1,))
+    walk(root, ())
+    return out, players
+
+
+def _is_chance(n):
+    return n.children and n.children[0].prob is not None
+
+
+def _tree_checks(root, fname):
+    nodes, players = _tree_nodes(root)
+    infos = {}
+    for path, n in nodes:
+        if n.infoset is not None:
+            infos.setdefault((n.player, n.infoset), []).append(path)
+    # like Wolfram, information sets are ignored: every action node is solved as its own subgame
+    return nodes, players
+
+
+def _player_index(players, root):
+    # payoffs are listed per player in order of first appearance of the non-chance players
+    return {p: i for i, p in enumerate([q for q in players if not _chance_player(q, root)])}
+
+
+def _chance_player(p, root):
+    nodes, _ = _tree_nodes(root)
+    return all(_is_chance(n) for _, n in nodes if n.player == p)
+
+
+def _ksp(v):
+    return K.to_sp(v) if not isinstance(v, sp.Basic) else v
+
+
+@fn("FindTreeGameStrategies", **ADDED,
+    notes="pure-strategy solutions of a TreeGame by backward induction: at each action node every action "
+          "that is optimal for the moving player under some tie-breaking below it is kept, and all combinations "
+          "are listed (this reproduces Wolfram's results, including its handling of ties), each as <|player -> <|node -> probabilities|>|> with "
+          "nodes as child-index paths ({} the root), players in order of appearance (chance players get <||>), "
+          "sorted; payoff vectors are matched to the non-chance players in order of appearance; as in Wolfram, "
+          "information sets are ignored (each node solved separately)")
+def _findtreegame(game, *rest):
+    fname = "FindTreeGameStrategies"
+    if rest:
+        raise ValueError(f"{fname} called with too many arguments")
+    from .wl_trees import _game_root
+    root = _game_root(game, fname)
+    nodes, players = _tree_checks(root, fname)
+    pidx = _player_index(players, root)
+
+    acc = {}
+
+    def solve(n, path):
+        """Set of payoff vectors reachable from n under some tie-breaking; records each node's acceptable actions."""
+        if n.payoffs is not None:
+            return {tuple(_ksp(v) for v in n.payoffs)}
+        subs = [solve(c, path + (i + 1,)) for i, c in enumerate(n.children)]
+        if _is_chance(n):
+            out = set()
+            for combo in itertools.product(*subs):
+                out.add(tuple(sp.nsimplify(0) + sum(_ksp(c.prob) * v[k] for c, v in zip(n.children, combo))
+                              for k in range(len(combo[0]))))
+                if len(out) > 10 ** 4:
+                    raise NotImplementedError(f"{fname}: too many tie-breaking alternatives")
+            return out
+        if n.player not in pidx:
+            raise ValueError(f"{fname}: player {n.player} has no payoff component")
+        k = pidx[n.player]
+        f = lambda v: float(sp.N(v[k]))
+        lows = [min(f(v) for v in V) for V in subs]
+        ok, out = [], set()
+        for a, V in enumerate(subs):
+            floor_ = max([lows[b] for b in range(len(subs)) if b != a], default=-math.inf)
+            good = [v for v in V if f(v) >= floor_ - 1e-12]
+            if good:
+                ok.append(a)
+                out.update(good)
+        acc[path] = ok
+        return out
+    solve(root, ())
+    keys = [path for path, n in nodes if path in acc]
+    total = 1
+    for kk in keys:
+        total *= len(acc[kk])
+    if total > 10 ** 5:
+        raise NotImplementedError(f"{fname}: too many equilibria ({total})")
+    results = [dict(zip(keys, combo)) for combo in itertools.product(*(acc[kk] for kk in keys))]
+
+    def as_assoc(choices):
+        per = []
+        for p in players:
+            entries = []
+            for path, n in nodes:
+                if n.player == p and not _is_chance(n):
+                    vec = [int(i == choices[path]) for i in range(len(n.children))]
+                    entries.append((path, vec))
+            per.append((p, entries))
+        return per
+
+    order = sorted(keys, key=lambda pth: (len(pth), pth))      # Wolfram sorts by node in canonical order
+    results.sort(key=lambda c: tuple(-c[pth] for pth in order))
+    profs = [as_assoc(c) for c in results]
+    return L(*(Expr("Association", *(Expr("Rule", p, Expr("Association", *(Expr("Rule", L(*path), L(*vec))
+                                                                           for path, vec in ent)))
+                                     for p, ent in pr)) for pr in profs))
+
+
+@fn("VerifyTreeGameStrategy", **ADDED,
+    notes="True when the strategy profile <|player -> <|node -> probabilities|>|> is a subgame-perfect equilibrium "
+          "of a perfect-information TreeGame (at every action node no action gives the moving player a higher "
+          "expected payoff than the strategy, given the strategy below it; a 10^-9 tolerance for machine numbers); "
+          "every non-chance action node must be specified; information sets are ignored; symbolic strategies raise")
+def _verifytreegame(game, strat, *rest):
+    fname = "VerifyTreeGameStrategy"
+    if rest:
+        raise ValueError(f"{fname} called with too many arguments")
+    from .wl_trees import _game_root, _strategy_table
+    root = _game_root(game, fname)
+    nodes, players = _tree_checks(root, fname)
+    pidx = _player_index(players, root)
+    table = _strategy_table(strat, fname)
+    ok = [True]
+
+    def value(n, path):
+        if n.payoffs is not None:
+            return [_ksp(v) for v in n.payoffs]
+        vals = [value(c, path + (i + 1,)) for i, c in enumerate(n.children)]
+        if _is_chance(n) and path not in table:
+            ps = [_ksp(c.prob) for c in n.children]
+        else:
+            if path not in table:
+                raise ValueError(f"{fname}: the strategy does not specify node {list(path)}")
+            ps = [_ksp(v) for v in table[path]]
+            if len(ps) != len(n.children):
+                raise ValueError(f"{fname}: node {list(path)} has {len(n.children)} actions")
+        res = [sum(p * v[k] for p, v in zip(ps, vals)) for k in range(len(vals[0]))]
+        if not _is_chance(n):
+            k = pidx[n.player]
+            for v in vals:
+                d = v[k] - res[k]
+                if not d.is_number:
+                    raise NotImplementedError(f"{fname}: symbolic strategies are not supported")
+                if float(sp.N(d)) > 1e-9:
+                    ok[0] = False
+        return res
+    value(root, ())
+    return ok[0]
+
+
+# ═══════════════════════════════ Turing machines ═══════════════════════════════
+
+def _tm_rule(rule, fname):
+    """(lookup(s, a) -> (s', a', off) | None, s, k)."""
+    spec = list(rule.args) if is_list(rule) and rule.args and not is_rule(rule.args[0]) else [rule]
+    n = spec[0]
+    if is_list(n) or (isinstance(n, Expr) and is_rule(n)) or (is_list(rule) and rule.args and is_rule(rule.args[0])):
+        rules = rule if (is_list(rule) and rule.args and is_rule(rule.args[0])) else n
+
+        def look(s, a):
+            r = ev(Expr("Replace", L(s, a), rules))
+            if r == L(s, a):
+                return None
+            if not (is_list(r) and len(r.args) == 3):
+                raise ValueError(f"{fname}: a rule must give {{state, value, offset}}")
+            return r.args[0], r.args[1], int_arg(r.args[2], fname)
+        return look
+    num = int_arg(n, fname)
+    s = int_arg(spec[1], fname) if len(spec) > 1 else 2
+    k = int_arg(spec[2], fname) if len(spec) > 2 else 2
+    if len(spec) > 3 and not (isinstance(spec[3], int) and spec[3] == 1):
+        raise NotImplementedError(f"{fname}: offset ranges other than 1 and multidimensional machines are not "
+                                  "supported")
+    sk = s * k
+    if num < 0 or num >= (2 * sk) ** sk:
+        raise ValueError(f"{fname}: rule number {num} is out of range for {s} states and {k} colours")
+    digits = []
+    x = num
+    for _ in range(sk):
+        digits.append(x % (2 * sk))
+        x //= 2 * sk
+    digits.reverse()
+    table = {}
+    for i, d in enumerate(digits):
+        st, col = 1 + i // k, k - 1 - i % k
+        table[(st, col)] = (1 + d // (2 * k), (d // 2) % k, 2 * (d % 2) - 1)
+
+    def look(st, a):
+        key = (int(st) if isinstance(st, int) else st, int(a) if isinstance(a, int) else a)
+        return table.get(key)
+    return look
+
+
+def _tm_parse_init(init, fname):
+    if not (is_list(init) and len(init.args) == 2):
+        raise ValueError(f"{fname}: the initial condition must be {{state, tape}}")
+    head, tape = init.args
+    if is_list(head):
+        s = head.args[0]
+        x = int_arg(head.args[1], fname) if len(head.args) > 1 else 1
+        dx = int_arg(head.args[2], fname) if len(head.args) > 2 else 0
+        if len(head.args) > 1 and is_list(head.args[1]):
+            raise NotImplementedError(f"{fname}: multidimensional machines are not supported")
+    else:
+        s, x, dx = head, 1, 0
+    if is_list(tape) and len(tape.args) == 2 and is_list(tape.args[0]) and not is_list(tape.args[1]):
+        cells = list(tape.args[0].args)
+        if any(is_list(c) for c in cells):
+            raise NotImplementedError(f"{fname}: multidimensional machines are not supported")
+        return s, x, dx, ("inf", cells, tape.args[1])
+    if is_list(tape) and len(tape.args) == 2 and is_list(tape.args[0]) and is_list(tape.args[1]):
+        raise NotImplementedError(f"{fname}: repetitive backgrounds are not supported")
+    if is_list(tape) and not any(is_list(c) for c in tape.args):
+        if not tape.args:
+            raise ValueError(f"{fname}: a finite tape must not be empty")
+        return s, x, dx, ("fin", list(tape.args), None)
+    raise ValueError(f"{fname}: invalid tape {tape}")
+
+
+def _tm_run(look, init, steps, fname):
+    s, x, dx, (kind, cells, bg) = _tm_parse_init(init, fname)
+    hist = []
+    if kind == "fin":
+        tape = list(cells)
+        n = len(tape)
+        if not 1 <= x <= n:
+            raise ValueError(f"{fname}: the head position {x} is outside the tape")
+        pos = x - 1
+        hist.append((s, pos, dx, list(tape)))
+        for _ in range(steps):
+            r = look(s, tape[pos])
+            if r is not None:
+                s, tape[pos], off = r
+                pos = (pos + off) % n
+                dx += off
+            hist.append((s, pos, dx, list(tape)))
+        return kind, hist, None
+    tape = {i - (x - 1): v for i, v in enumerate(cells)}
+    off0 = 0
+    region = set(tape) | {0}
+    head = off0
+    hist.append((s, head, dx, dict(tape)))
+    for _ in range(steps):
+        a = tape.get(head, bg)
+        r = look(s, a)
+        if r is not None:
+            s, tape[head], off = r
+            head += off
+            dx += off
+        region.add(head)
+        hist.append((s, head, dx, dict(tape)))
+    return kind, hist, (bg, region)
+
+
+def _tm_format(kind, hist, extra, region_override=None):
+    out = []
+    if kind == "fin":
+        for s, pos, dx, tape in hist:
+            out.append(L(L(s, pos + 1, dx), L(*tape)))
+        return out
+    bg, region = extra
+    lo, hi = min(region), max(region)
+    for s, head, dx, tape in hist:
+        out.append(L(L(s, head - lo + 1, dx), L(*(tape.get(i, bg) for i in range(lo, hi + 1)))))
+    return out
+
+
+@fn("TuringMachine", **ADDED,
+    notes="one-dimensional Turing machines: rule n, {n, s} or {n, s, k} (Wolfram numbering) or explicit rules "
+          "{s, a} -> {s', a', offset} (patterns and conditions allowed; no matching rule leaves the configuration "
+          "unchanged); initial conditions {s, {{a1, ...}, b}} (infinite tape with background b), {{s, x}, ...}, "
+          "{{s, x, dx}, ...} and finite cyclic tapes {s, {a1, ...}}; TuringMachine[rule, init, t] gives the t + 1 "
+          "steps {{s, x, dx}, tape} (infinite tapes padded to the region visited), TuringMachine[rule, init] and "
+          "TuringMachine[rule][init] one step; multidimensional machines, offset ranges and repetitive "
+          "backgrounds raise")
+def _turingmachine(rule, *rest):
+    fname = "TuringMachine"
+    if not rest:
+        _tm_rule(rule, fname)
+        raise Unevaluated()
+    init = rest[0]
+    look = _tm_rule(rule, fname)
+    if len(rest) == 1:
+        kind, hist, extra = _tm_run(look, init, 1, fname)
+        if kind == "fin":
+            return _tm_format(kind, hist[1:], extra)[0]
+        s, head, dx, tape = hist[1]
+        _, _, _, (_, cells, bg) = _tm_parse_init(init, fname)
+        s0, h0, _, t0 = hist[0]
+        keys = set(t0) | set(tape) | {h0, head}
+        lo, hi = min(keys), max(keys)
+        return L(L(s, head - lo + 1, dx), L(L(*(tape.get(i, bg) for i in range(lo, hi + 1))), bg))
+    if len(rest) > 2:
+        raise ValueError(f"{fname} called with too many arguments")
+    t = rest[1]
+    if is_list(t):
+        raise NotImplementedError(f"{fname}: step specifications other than an integer t are not supported")
+    steps = nonneg_int(t, fname, "number of steps") if True else 0
+    kind, hist, extra = _tm_run(look, init, steps, fname)
+    return L(*_tm_format(kind, hist, extra))
+
+
+def _tm_call(head, args, ev_):
+    if len(head.args) == 1 and len(args) == 1:
+        return ev_(Expr("TuringMachine", head.args[0], args[0]))
+    return K.UNHANDLED
+
+
+KL.COMPOUND_HEAD_HOOKS["TuringMachine"] = _tm_call
+
+
+# ── RulePlot ──
+
+def _gray(v, k):
+    return Expr("GrayLevel", R(sp.Rational(k - 1 - v, k - 1)) if k > 1 else 1)
+
+
+def _cell(x, y, color):
+    return L(color, Expr("EdgeForm", Expr("GrayLevel", 0.5)), Expr("Rectangle", L(x, y), L(x + 1, y + 1)))
+
+
+@fn("RulePlot", **ADDED, hold=True,
+    notes="RulePlot[CellularAutomaton[n | {n, k} | {n, k, r}]] gives Graphics of the rule icons (each neighbourhood, "
+          "in decreasing order, above the new centre cell; colour v drawn as GrayLevel[1 - v/(k-1)]) and "
+          "RulePlot[TuringMachine[n | {n, s, k}]] the icons of each {state, colour} case (head state as a number above "
+          "the cell, new colour, state and move below); other systems (and 2D rules) raise; the drawing style differs "
+          "from Wolfram's")
+def _ruleplot(system, *rest):
+    fname = "RulePlot"
+    gfx = [ev(r) for r in rest if is_rule(r)]
+    if not isinstance(system, Expr) or system.head not in ("CellularAutomaton", "TuringMachine") or \
+            len(system.args) != 1:
+        raise NotImplementedError(f"{fname}: only CellularAutomaton[rule] and TuringMachine[rule] are supported")
+    spec = ev(system.args[0])
+    prims = []
+    if system.head == "CellularAutomaton":
+        parts = list(spec.args) if is_list(spec) else [spec]
+        if any(is_list(p) or is_assoc(p) for p in parts[1:]) or is_assoc(spec):
+            raise NotImplementedError(f"{fname}: only 1D numbered cellular automaton rules are supported")
+        num = int_arg(parts[0], fname)
+        k = int_arg(parts[1], fname) if len(parts) > 1 else 2
+        r = parts[2] if len(parts) > 2 else 1
+        r = int(S(r) * 2) / 2 if not isinstance(r, int) else r
+        if not float(r).is_integer():
+            raise NotImplementedError(f"{fname}: half-integer ranges are not supported")
+        r = int(r)
+        w = 2 * r + 1
+        ncase = k ** w
+        if num < 0 or num >= k ** ncase:
+            raise ValueError(f"{fname}: rule number out of range")
+        outs = []
+        x = num
+        for _ in range(ncase):
+            outs.append(x % k)
+            x //= k
+        for idx, case in enumerate(range(ncase - 1, -1, -1)):
+            cells = []
+            c = case
+            for _ in range(w):
+                cells.append(c % k)
+                c //= k
+            cells.reverse()
+            x0 = idx * (w + 1)
+            for j, v in enumerate(cells):
+                prims.append(_cell(x0 + j, 1, _gray(v, k)))
+            prims.append(_cell(x0 + r, 0, _gray(outs[case], k)))
+        return Expr("Graphics", L(*prims), *gfx)
+    parts = list(spec.args) if is_list(spec) else [spec]
+    num = int_arg(parts[0], fname)
+    s = int_arg(parts[1], fname) if len(parts) > 1 else 2
+    k = int_arg(parts[2], fname) if len(parts) > 2 else 2
+    look = _tm_rule(spec if is_list(spec) else L(num, s, k), fname)
+    idx = 0
+    for st in range(1, s + 1):
+        for col in range(k - 1, -1, -1):
+            ns, nc, off = look(st, col)
+            x0 = idx * 4
+            prims.append(_cell(x0 + 1, 1, _gray(col, k)))
+            prims.append(Expr("Text", st, L(R(x0 + sp.Rational(3, 2)), R(sp.Rational(5, 2)))))
+            prims.append(_cell(x0 + 1, 0, _gray(nc, k)))
+            prims.append(Expr("Text", ns, L(R(x0 + sp.Rational(3, 2) + off), R(sp.Rational(-1, 2)))))
+            prims.append(Expr("Arrow", L(L(R(x0 + sp.Rational(3, 2)), R(sp.Rational(-1, 5))),
+                                         L(R(x0 + sp.Rational(3, 2) + off), R(sp.Rational(-1, 5))))))
+            idx += 1
+    return Expr("Graphics", L(*prims), *gfx)
+
+
+K.BUILTIN_ATTRIBUTES["RulePlot"] = {"HoldAll", "Protected"}   # CellularAutomaton[rule] alone does not evaluate here
+
+
+# ═══════════════════════════════ option names ═══════════════════════════════
+
+record("Normalized", AREA, "added",
+       "option of OrthogonalMatrixQ and UnitaryMatrixQ (Normalized -> False only requires orthogonal columns/rows)")
+record("NormFunction", AREA, "added",
+       "option name (Wolfram: the norm minimised by FindFit/Fit); MikoshiLang's FindFit and Fit do not accept it and "
+       "raise an unknown-option error")
+record("FitRegularization", AREA, "added",
+       "option name (Wolfram: {\"Tikhonov\", l}, {\"LASSO\", l}, ... regularisation for Fit/FindFit); MikoshiLang's "
+       "Fit and FindFit do not accept it and raise an unknown-option error")
+record("Regularization", AREA, "added",
+       "option name (Wolfram: regularisation of divergent sums, \"Abel\", \"Borel\", \"Cesaro\", \"Dirichlet\", "
+       "\"Euler\"); Sum raises when it is given")
+record("LossFunction", AREA, "added",
+       "option name (Wolfram: the loss for NetTrain/Predict/Classify); MikoshiLang's machine-learning functions do not "
+       "accept it")
+record("UnconstrainedParameters", AREA, "added",
+       "option name (Wolfram: parameters left free in GeometricScene); GeometricScene does not accept it here")
