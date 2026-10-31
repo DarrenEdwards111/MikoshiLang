@@ -170,6 +170,22 @@ def num(v):
     return float(sp.N(v, 30))
 
 
+def nice_angle(a):
+    """Exact angle a: replaced by r Pi when it equals a rational multiple of Pi with denominator <= 720, decided
+    by a 60-digit numerical comparison (|a - r Pi| < 1e-50)."""
+    a = sp.sympify(a)
+    if a.has(sp.Float) or a.free_symbols or not a.is_number:
+        return a
+    try:
+        v = sp.N(a, 60)
+        q = sp.Rational(str(sp.N(v / sp.pi, 30))).limit_denominator(720)
+        if abs(v - sp.N(q * sp.pi, 60)) < sp.Float(10) ** -50:
+            return q * sp.pi
+    except Exception:
+        pass
+    return a
+
+
 def sign_of(v, fname, what="value"):
     """Exact sign (-1, 0, 1) of a concrete real expression; NotImplementedError if undecidable."""
     v = sp.sympify(v)
@@ -1337,8 +1353,8 @@ def _planar_interior(p, q1, q2, fname):
         raise ValueError(f"{fname}: the angle is undefined because two of the points coincide")
     c = _dot(u, v) / (_norm(u) * _norm(v))
     if len(p) == 2:
-        return sp.Abs(sp.atan2(u[0] * v[1] - u[1] * v[0], _dot(u, v)))
-    return sp.acos(c)
+        return nice_angle(sp.Abs(sp.atan2(u[0] * v[1] - u[1] * v[0], _dot(u, v))))
+    return nice_angle(sp.acos(sp.simplify(c)))
 
 
 def _planar_ccw(p, q1, q2, fname):
@@ -1348,7 +1364,7 @@ def _planar_ccw(p, q1, q2, fname):
     if _is_zero_vec(u) or _is_zero_vec(v):
         raise ValueError(f"{fname}: the angle is undefined because two of the points coincide")
     a = sp.atan2(u[0] * v[1] - u[1] * v[0], _dot(u, v))
-    return a if fsign(a) >= 0 else a + 2 * sp.pi
+    return nice_angle(a if fsign(a) >= 0 else a + 2 * sp.pi)
 
 
 _PLANAR_SPECS = ("Interior", "Exterior", "FullExterior", "Counterclockwise", "Clockwise")
@@ -1532,7 +1548,7 @@ def _dihedral_angle(edge: ListOf[ListOf[Real]], dirs: ListOf[ListOf[Real]]) -> R
     if _is_zero_vec(vp) or _is_zero_vec(wp):
         raise ValueError("DihedralAngle: a direction is parallel to the edge, so its half-plane is undefined")
     c = sp.simplify(_dot(vp, wp) / (_norm(vp) * _norm(wp)))
-    return out(sp.acos(c), edge, dirs)
+    return out(nice_angle(sp.acos(c)), edge, dirs)
 
 
 def _solid_triangle(a, b, c):
@@ -1740,8 +1756,8 @@ def _sph_angle(p, q, r, f):
     if _is_zero_vec(t1) or _is_zero_vec(t2):
         raise ValueError(f"{f}: the great circle through p and a point equal or antipodal to p is undefined")
     if len(p) == 2:
-        return sp.atan2(_dot(P, _cross(t1, t2)), _dot(t1, t2))
-    return sp.acos(sp.simplify(_dot(t1, t2) / (_norm(t1) * _norm(t2))))
+        return nice_angle(sp.atan2(_dot(P, _cross(t1, t2)), _dot(t1, t2)))
+    return nice_angle(sp.acos(sp.simplify(_dot(t1, t2) / (_norm(t1) * _norm(t2)))))
 
 
 # ───────────────────────────── triangles ─────────────────────────────
@@ -2058,7 +2074,7 @@ def _measure(P, t, i, f):
         return K_ / (s - ai)
     if t == "Height":
         return 2 * K_ / ai
-    ang = sp.acos(sp.simplify((bj ** 2 + ck ** 2 - ai ** 2) / (2 * bj * ck)))
+    ang = nice_angle(sp.acos(sp.simplify((bj ** 2 + ck ** 2 - ai ** 2) / (2 * bj * ck))))
     return {"InteriorAngle": ang, "ExteriorAngle": sp.pi - ang, "FullExteriorAngle": 2 * sp.pi - ang}[t]
 
 
@@ -2569,3 +2585,814 @@ def _check_ball_inside(A, b, c, r, f):
     import numpy as np
     if np.any(A @ np.array(c, dtype=float) + r > b + 1e-7 * max(1.0, abs(r))):
         raise ArithmeticError(f"{f}: result failed verification")
+
+
+# ───────────────────────────── polygon data ─────────────────────────────
+
+_POLYGON_HEADS = ("Polygon", "Triangle", "Rectangle", "RegularPolygon", "Parallelogram", "Simplex")
+
+
+def _regular_polygon_pts(a, f):
+    n = a[-1]
+    if not K.is_int(n) or isinstance(n, bool):
+        if _numberish(n) or _bad_kind(n):
+            raise ValueError(f"{f}: RegularPolygon needs an integer number of vertices")
+        raise Unevaluated()
+    n = int(n)
+    if n < 3:
+        raise ValueError(f"{f}: RegularPolygon needs at least 3 vertices")
+    c, r, t1 = [sp.Integer(0), sp.Integer(0)], sp.Integer(1), sp.pi / n - sp.pi / 2
+    rest = list(a[:-1])
+    if len(rest) == 2:
+        c = pt(rest[0], f, "centre", dim=2)
+        rest = rest[1:]
+    if rest:
+        if K.is_list(rest[0]):
+            r, t1 = sx(rest[0].args[0], f, "radius"), sx(rest[0].args[1], f, "angle")
+        else:
+            r = sx(rest[0], f, "radius")
+    return [[c[0] + r * sp.cos(t1 + 2 * sp.pi * k / n), c[1] + r * sp.sin(t1 + 2 * sp.pi * k / n)] for k in range(n)]
+
+
+def polygon_components(x, f):
+    """[(outer ring, [hole rings])] of a polygon-like region (rings as lists of SymPy points)."""
+    if not isinstance(x, Expr) or not isinstance(x.head, str) or x.head not in _POLYGON_HEADS:
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{f}: expected a polygon (Polygon, Triangle, Rectangle, RegularPolygon, Parallelogram), "
+                        f"not {K_input(x)}")
+    _check_args(x.head, list(x.args))
+    h = x.head
+    a, _opts = split_trailing_options(list(x.args))
+    if h == "Triangle":
+        if not a:
+            return [([[sp.Integer(0), sp.Integer(0)], [sp.Integer(1), sp.Integer(0)], [sp.Integer(0), sp.Integer(1)]],
+                     [])]
+        if _is_coord_list(a[0]) and _is_coord_list(a[0].args[0]):
+            return [c for t in a[0].args for c in polygon_components(Expr("Triangle", t), f)]
+        return [(pts(a[0], f, n=3), [])]
+    if h == "Simplex":
+        P = pts(a[0], f) if K.is_list(a[0]) else None
+        if P is None or len(P) != 3:
+            raise NotImplementedError(f"{f}: only triangular simplices are supported as polygons")
+        return [(P, [])]
+    if h == "Rectangle":
+        p = pt(a[0], f, "corner", dim=2) if a else [sp.Integer(0), sp.Integer(0)]
+        q = pt(a[1], f, "corner", dim=2) if len(a) > 1 else [p[0] + 1, p[1] + 1]
+        return [([[p[0], p[1]], [q[0], p[1]], [q[0], q[1]], [p[0], q[1]]], [])]
+    if h == "Parallelogram":
+        if not a:
+            p, v1, v2 = [sp.Integer(0)] * 2, [sp.Integer(1), sp.Integer(0)], [sp.Integer(1), sp.Integer(1)]
+        else:
+            p = pt(a[0], f, "origin")
+            v1, v2 = pts(a[1], f, "vectors", n=2)
+        return [([p, _add(p, v1), _add(_add(p, v1), v2), _add(p, v2)], [])]
+    if h == "RegularPolygon":
+        return [(_regular_polygon_pts(a, f), [])]
+    # Polygon
+    if len(a) == 2:
+        P = pts(a[0], f)
+        return _index_components(a[1], P, f)
+    x0 = a[0]
+    if isinstance(x0, Expr) and x0.head == "Rule":
+        outer = pts(x0.args[0], f)
+        hs = x0.args[1]
+        holes = [pts(hh, f) for hh in (hs.args if hs.args and _is_coord_list(hs.args[0]) else [hs])] \
+            if hs.args else []
+        return [(outer, holes)]
+    if K.is_list(x0) and x0.args and (K.is_list(x0.args[0]) and _is_coord_list(x0.args[0]) or
+                                     (isinstance(x0.args[0], Expr) and x0.args[0].head == "Rule")):
+        return [c for part in x0.args for c in polygon_components(Expr("Polygon", part), f)]
+    return [(pts(x0, f), [])]
+
+
+def _index_components(d, P, f):
+    def ring(r):
+        if not K.is_list(r):
+            raise TypeError(f"{f}: a face must be a list of vertex indices")
+        out_ = []
+        for i in r.args:
+            if not K.is_int(i) or isinstance(i, bool) or not 1 <= int(i) <= len(P):
+                raise ValueError(f"{f}: invalid vertex index {K_input(i)}")
+            out_.append(P[int(i) - 1])
+        return out_
+    if isinstance(d, Expr) and d.head == "Rule":
+        hs = d.args[1]
+        holes = [ring(h) for h in (hs.args if hs.args and K.is_list(hs.args[0]) else [hs])] if hs.args else []
+        return [(ring(d.args[0]), holes)]
+    if K.is_list(d) and d.args and (K.is_list(d.args[0]) or (isinstance(d.args[0], Expr) and d.args[0].head == "Rule")):
+        return [c for part in d.args for c in _index_components(part, P, f)]
+    return [(ring(d), [])]
+
+
+def polygon_data(x, f, dim=2):
+    """All rings (outer rings and holes) of a polygon-like region; dim checks the embedding dimension."""
+    comps = polygon_components(x, f)
+    rings = []
+    for o, hs in comps:
+        rings.append(o)
+        rings += hs
+    for r in rings:
+        if dim is not None and len(r[0]) != dim:
+            raise NotImplementedError(f"{f}: only {dim}-dimensional polygons are supported")
+    return rings
+
+
+def _signed_area(R_):
+    n = len(R_)
+    return sum((R_[i][0] * R_[(i + 1) % n][1] - R_[(i + 1) % n][0] * R_[i][1] for i in range(n)),
+               sp.Integer(0)) / 2
+
+
+def _orient2(a, b, c):
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+
+def _dedup_ring(R_):
+    out_ = []
+    for p in R_:
+        if not out_ or not all(fsign(a - b) == 0 for a, b in zip(p, out_[-1])):
+            out_.append(p)
+    while len(out_) > 1 and all(fsign(a - b) == 0 for a, b in zip(out_[0], out_[-1])):
+        out_.pop()
+    return out_
+
+
+def _to_plane(R_, f):
+    """2-D coordinates of a planar ring (3-D rings are projected onto their plane's dominant axes)."""
+    d = len(R_[0])
+    if d == 2:
+        return R_
+    if d != 3:
+        raise NotImplementedError(f"{f}: only 2-D and 3-D polygons are supported")
+    n_ = [sp.Integer(0)] * 3
+    for i in range(len(R_)):
+        n_ = _add(n_, _cross(R_[i], R_[(i + 1) % len(R_)]))
+    if _is_zero_vec(n_):
+        raise ValueError(f"{f}: the polygon is degenerate")
+    for p in R_:
+        if fsign(_dot(n_, _sub(p, R_[0]))) != 0:
+            raise ValueError(f"{f}: the polygon is not planar")
+    k = max(range(3), key=lambda i: abs(num(n_[i])))
+    keep = [i for i in range(3) if i != k]
+    sgn = 1 if num(n_[k]) > 0 else -1
+    if (k == 1):
+        sgn = -sgn
+    return [[p[keep[0]], p[keep[1]]] if sgn > 0 else [p[keep[1]], p[keep[0]]] for p in R_]
+
+
+def _segments_intersect(p1, p2, q1, q2, proper_only=False):
+    d1, d2 = fsign(_orient2(q1, q2, p1)), fsign(_orient2(q1, q2, p2))
+    d3, d4 = fsign(_orient2(p1, p2, q1)), fsign(_orient2(p1, p2, q2))
+    if d1 * d2 < 0 and d3 * d4 < 0:
+        return True
+    if proper_only:
+        return False
+
+    def on(a, b, c):
+        return all(fsign(min(a[i], b[i]) - c[i]) <= 0 and fsign(c[i] - max(a[i], b[i])) <= 0 for i in range(2))
+    return (d1 == 0 and on(q1, q2, p1)) or (d2 == 0 and on(q1, q2, p2)) or \
+        (d3 == 0 and on(p1, p2, q1)) or (d4 == 0 and on(p1, p2, q2))
+
+
+def _simple_ring(R_):
+    n = len(R_)
+    if n < 3:
+        return False
+    keys = {tuple(num(c) for c in p) for p in R_}
+    if len(keys) != n:
+        return False
+    if fsign(_signed_area(R_)) == 0:
+        return False
+    for i in range(n):
+        a, b = R_[i], R_[(i + 1) % n]
+        for j in range(i + 1, n):
+            c, d = R_[j], R_[(j + 1) % n]
+            if j == i + 1 or (i == 0 and j == n - 1):
+                # adjacent edges: only overlapping (collinear and folding back) is a violation
+                shared = b if j == i + 1 else a
+                other1 = a if j == i + 1 else b
+                other2 = d if j == i + 1 else c
+                if fsign(_orient2(shared, other1, other2)) == 0 and \
+                        fsign(_dot(_sub(other1, shared), _sub(other2, shared))) > 0:
+                    return False
+                continue
+            if _segments_intersect(a, b, c, d):
+                return False
+    return True
+
+
+def _convex_ring(R_):
+    R_ = _dedup_ring(R_)
+    n = len(R_)
+    if n < 3:
+        return False
+    sgn = 0
+    for i in range(n):
+        s = fsign(_orient2(R_[i], R_[(i + 1) % n], R_[(i + 2) % n]))
+        if s == 0:
+            continue
+        if sgn == 0:
+            sgn = s
+        elif s != sgn:
+            return False
+    if sgn == 0:
+        return False
+    # total turning must be one revolution (rules out star-shaped self-intersecting rings)
+    tot = 0.0
+    for i in range(n):
+        a, b, c = ([num(t) for t in R_[(i + k) % n]] for k in range(3))
+        tot += math.atan2((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]),
+                          (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]))
+    return abs(abs(tot) - 2 * math.pi) < 1e-6
+
+
+def _polygon_arg(poly, f):
+    comps = polygon_components(poly, f)
+    for o, hs in comps:
+        concrete(o, hs)
+    return comps
+
+
+@fn("ConvexPolygonQ", area=AREA, status="added",
+    notes="ConvexPolygonQ[poly] for Polygon (all forms), Triangle, Rectangle, RegularPolygon, Parallelogram: True for "
+          "a single boundary without holes whose turns all have the same sign and whose total turning is one "
+          "revolution (planar 3-D polygons are projected onto their plane); polygons with holes or several "
+          "components give False; collinear vertices are allowed. Non-planar 3-D polygons raise ValueError, "
+          "non-polygons TypeError; symbolic coordinates stay unevaluated. "
+          "Check: exact (exact orientation signs; tolerance 1e-12 for machine numbers).")
+def _convex_polygon_q(poly: Expr) -> Boolean:
+    f = "ConvexPolygonQ"
+    comps = _polygon_arg(poly, f)
+    if len(comps) != 1 or comps[0][1]:
+        return False
+    return _convex_ring(_to_plane(_dedup_ring(comps[0][0]), f))
+
+
+@fn("SimplePolygonQ", area=AREA, status="added",
+    notes="SimplePolygonQ[poly]: True when the polygon has a single boundary, no holes, at least three distinct "
+          "vertices, non-zero area and no two non-adjacent edges touching or crossing (adjacent edges may not fold "
+          "back); planar 3-D polygons are projected onto their plane. Non-polygons raise TypeError; symbolic "
+          "coordinates stay unevaluated. Check: exact (exact segment-intersection predicates).")
+def _simple_polygon_q(poly: Expr) -> Boolean:
+    f = "SimplePolygonQ"
+    comps = _polygon_arg(poly, f)
+    if len(comps) != 1 or comps[0][1]:
+        return False
+    R_ = _dedup_ring(comps[0][0])
+    try:
+        R_ = _to_plane(R_, f)
+    except ValueError:
+        return False
+    return _simple_ring(R_)
+
+
+def _ring_angles(R_, f):
+    """Interior angles of a simple ring (any orientation)."""
+    s = fsign(_signed_area(R_))
+    n = len(R_)
+    res = []
+    for i in range(n):
+        a, b, c = R_[(i - 1) % n], R_[i], R_[(i + 1) % n]
+        u, v = _sub(a, b), _sub(c, b)
+        # counterclockwise angle from (c - b) to (a - b) for a counterclockwise ring is the interior angle
+        ang = sp.atan2(v[0] * u[1] - v[1] * u[0], _dot(u, v)) if s > 0 else \
+            sp.atan2(u[0] * v[1] - u[1] * v[0], _dot(u, v))
+        if fsign(ang) < 0:
+            ang = ang + 2 * sp.pi
+        res.append(nice_angle(sp.simplify(ang)))
+    return res
+
+
+@fn("PolygonAngle", area=AREA, status="added",
+    notes="PolygonAngle[poly] gives the interior angles at the vertices of a simple polygon (in vertex order), "
+          "PolygonAngle[poly, p] the angle at vertex p, PolygonAngle[poly, i] at the i-th point of the coordinate "
+          "list (Polygon[pts, data] form: index into pts); spec \"Interior\" (default), \"Exterior\" (Pi - a), "
+          "\"FullExterior\" (2 Pi - a). Reflex angles exceed Pi. Planar 3-D polygons are projected onto their "
+          "plane. Polygons with holes, several components or self-intersections raise NotImplementedError; a point "
+          "that is not a vertex or an index out of range ValueError; symbolic coordinates stay unevaluated. "
+          "Check: exact; the identity Sum[angles] == (n - 2) Pi in tests.")
+def _polygon_angle(poly: Expr, *rest: ListOf[Real] | PosInteger | String) -> Real | ListOf[Real]:
+    f = "PolygonAngle"
+    _nargs((poly,) + rest, 1, 3, f)
+    rest = list(rest)
+    spec = "Interior"
+    if rest and isinstance(rest[-1], str):
+        spec = _string_arg(rest.pop(), ("Interior", "Exterior", "FullExterior"), f)
+    comps = _polygon_arg(poly, f)
+    if len(comps) != 1 or comps[0][1]:
+        raise NotImplementedError(f"{f}: polygons with holes or several components are not supported")
+    R0 = comps[0][0]
+    R_ = _to_plane(R0, f)
+    if not _simple_ring(R_):
+        raise NotImplementedError(f"{f}: self-intersecting or degenerate polygons are not supported")
+    angs = _ring_angles(R_, f)
+    tr = {"Interior": lambda a: a, "Exterior": lambda a: sp.pi - a, "FullExterior": lambda a: 2 * sp.pi - a}[spec]
+    if not rest:
+        return out([tr(a) for a in angs], poly)
+    sel = rest[0]
+    if K.is_int(sel) and not isinstance(sel, bool):
+        coords = _coord_list_of(poly, f)
+        i = int(sel)
+        if not 1 <= i <= len(coords):
+            raise ValueError(f"{f}: index {i} is out of range 1..{len(coords)}")
+        target = coords[i - 1]
+    else:
+        target = pt(sel, f, "vertex")
+    for k, p in enumerate(R0):
+        if len(p) == len(target) and all(fsign(a - b) == 0 for a, b in zip(p, target)):
+            return out(tr(angs[k]), poly)
+    raise ValueError(f"{f}: {K_input(sel)} is not a vertex of the polygon")
+
+
+def _coord_list_of(poly, f):
+    if poly.head == "Polygon":
+        a, _ = split_trailing_options(list(poly.args))
+        if len(a) == 2:
+            return pts(a[0], f)
+    return polygon_data(poly, f, dim=None)[0]
+
+
+def _sorted_unique(points):
+    seen, res = set(), []
+    for p in points:
+        key = tuple(sp.srepr(sp.nsimplify(c) if False else c) for c in p)
+        if key in seen:
+            continue
+        dup = False
+        for q in res:
+            if all(fsign(a - b) == 0 for a, b in zip(p, q)):
+                dup = True
+                break
+        if not dup:
+            seen.add(key)
+            res.append(p)
+    return sorted(res, key=lambda p: [num(c) for c in p])
+
+
+@fn("PolygonCoordinates", area=AREA, status="added",
+    notes="PolygonCoordinates[poly] gives the distinct vertex coordinates of a polygon (Polygon in all forms, "
+          "Triangle, Rectangle, RegularPolygon, Parallelogram), in Sort order as in Wolfram's canonical form. "
+          "Self-intersecting polygons (whose intersection points Wolfram adds) raise NotImplementedError. "
+          "RegularPolygon[n] has its vertices at CirclePoints[n] (horizontal base). Non-polygons raise TypeError; "
+          "symbolic coordinates stay unevaluated. Check: exact; reference values in tests.")
+def _polygon_coordinates(poly: Expr) -> MatrixOf[Real]:
+    f = "PolygonCoordinates"
+    comps = _polygon_arg(poly, f)
+    _require_noncrossing(comps, f)
+    allp = [p for o, hs in comps for r in [o] + hs for p in r]
+    return out(_sorted_unique(allp), poly)
+
+
+def _require_noncrossing(comps, f):
+    rings = [_dedup_ring(r) for o, hs in comps for r in [o] + hs]
+    if any(len(r[0]) != 2 for r in rings):
+        raise NotImplementedError(f"{f}: only 2-D polygons are supported")
+    for r in rings:
+        if not _simple_ring(r):
+            raise NotImplementedError(f"{f}: self-intersecting or degenerate polygons are not supported")
+    for i in range(len(rings)):
+        for j in range(i + 1, len(rings)):
+            A, B = rings[i], rings[j]
+            for k in range(len(A)):
+                for m in range(len(B)):
+                    if _segments_intersect(A[k], A[(k + 1) % len(A)], B[m], B[(m + 1) % len(B)]):
+                        raise NotImplementedError(f"{f}: polygons whose boundaries touch or cross are not supported")
+    return rings
+
+
+def _point_in_ring(p, R_):
+    """Winding number of the closed ring around p (exact predicates); None if p is on the ring."""
+    wn = 0
+    n = len(R_)
+    for i in range(n):
+        a, b = R_[i], R_[(i + 1) % n]
+        o = fsign(_orient2(a, b, p))
+        if o == 0 and all(fsign(min(a[k], b[k]) - p[k]) <= 0 and fsign(p[k] - max(a[k], b[k])) <= 0 for k in range(2)):
+            return None
+        if fsign(a[1] - p[1]) <= 0:
+            if fsign(b[1] - p[1]) > 0 and o > 0:
+                wn += 1
+        elif fsign(b[1] - p[1]) <= 0 and o < 0:
+            wn -= 1
+    return wn
+
+
+def _nesting(rings):
+    """Depth (number of rings containing it) of each ring, for mutually non-crossing simple rings."""
+    depth = []
+    for i, r in enumerate(rings):
+        d = 0
+        for j, s in enumerate(rings):
+            if i != j and _point_in_ring(r[0], s) not in (None, 0):
+                d += 1
+        depth.append(d)
+    return depth
+
+
+def _orient_ring(R_, ccw=True):
+    s = fsign(_signed_area(R_))
+    return R_ if (s > 0) == ccw else R_[::-1]
+
+
+def _canonical(comps_rings, keep, f, inputs, empty_if_none=False):
+    """Polygon[pts, {outer -> {holes}, ...}] from rings with fill flags; points in Sort order."""
+    rings = [r for r in comps_rings]
+    depth = _nesting(rings)
+    filled = keep(rings, depth)
+    # filled region = union over rings with fill parity; build outer rings (filled inside, parent not filled)
+    outers = [i for i in range(len(rings)) if filled[i]]
+    if not outers:
+        if empty_if_none:
+            return Expr("EmptyRegion", 2)
+        raise ValueError(f"{f}: the polygon is empty")
+    allp = _sorted_unique([p for i in range(len(rings)) for p in rings[i]])
+
+    def idx(p):
+        for k, q in enumerate(allp):
+            if all(fsign(a - b) == 0 for a, b in zip(p, q)):
+                return k + 1
+        raise ArithmeticError(f"{f}: internal error")
+
+    used = set()
+    parts = []
+    for i in outers:
+        holes = [j for j in range(len(rings)) if depth[j] == depth[i] + 1 and not filled[j]
+                 and _point_in_ring(rings[j][0], rings[i]) not in (None, 0)]
+        o = [idx(p) for p in _orient_ring(rings[i], True)]
+        hs = [[idx(p) for p in _orient_ring(rings[j], False)] for j in holes]
+        used.update(o)
+        for h in hs:
+            used.update(h)
+        parts.append(Expr("Rule", L(*o), L(*[L(*h) for h in hs])) if hs else L(*o))
+    order = sorted(used)
+    remap = {old: new + 1 for new, old in enumerate(order)}
+
+    def re(x):
+        if isinstance(x, Expr):
+            return Expr(x.head, *[re(a) for a in x.args])
+        return remap[x]
+    parts = [re(p) for p in parts]
+    P = [allp[k - 1] for k in order]
+    data = parts[0] if len(parts) == 1 else L(*parts)
+    return Expr("Polygon", out(P, *inputs), data)
+
+
+def _rings_of(poly, f, allow_list=True):
+    if K.is_list(poly):
+        P = pts(poly, f, lo=3) if not (poly.args and _is_coord_list(poly.args[0])) else None
+        rings = [P] if P is not None else [pts(r, f, lo=3) for r in poly.args]
+        comps = [(r, []) for r in rings]
+    else:
+        comps = polygon_components(poly, f)
+    for o, hs in comps:
+        concrete(o, hs)
+    return comps
+
+
+def _rings_for_rule(comps, f):
+    rings = [_dedup_ring(r) for o, hs in comps for r in [o] + hs]
+    if any(len(r[0]) != 2 for r in rings):
+        raise NotImplementedError(f"{f}: only 2-D polygons are supported")
+    _require_noncrossing([(r, []) for r in rings], f)
+    return rings
+
+
+@fn("CanonicalizePolygon", area=AREA, status="added",
+    notes="CanonicalizePolygon[poly] (2-D Polygon in all forms, Triangle, Rectangle, RegularPolygon, Parallelogram) "
+          "gives Polygon[{p1, ...}, data] with the distinct points in Sort order and data the outer boundaries "
+          "(counterclockwise) with their holes (clockwise) as index lists (outer -> {holes} where present); the "
+          "filled set follows the polygon's own rule (Polygon[outer -> holes] and collections are unions of "
+          "components minus holes). Filter \"Full\" (default) or All. Polygons whose boundaries cross or touch "
+          "raise NotImplementedError (Wolfram splits them at the intersections). Deviation: the starting vertex of "
+          "each boundary may differ from Wolfram's (same region). Symbolic coordinates stay unevaluated. "
+          "Check: exact; the area of the result equals the input's in tests.")
+def _canonicalize_polygon(poly: Expr, *flt: String) -> Expr:
+    f = "CanonicalizePolygon"
+    if flt:
+        _string_arg(flt[0], ("Full", "All"), f, "filter")
+    comps = _polygon_arg(poly, f)
+    for o, hs in comps:
+        if len(o[0]) != 2:
+            raise NotImplementedError(f"{f}: only 2-D polygons are supported")
+    _require_noncrossing(comps, f)
+    rings, fill = [], []
+    for o, hs in comps:
+        rings.append(_dedup_ring(o))
+        fill.append(True)
+        for h in hs:
+            rings.append(_dedup_ring(h))
+            fill.append(False)
+    return _canonical(rings, lambda rs, d: fill, f, (poly,))
+
+
+@fn("OuterPolygon", area=AREA, status="added",
+    notes="OuterPolygon[poly] gives Polygon[{p1, ...}, data] of the outer boundaries of the canonical form "
+          "(CanonicalizePolygon) with the holes removed. Same support and limitations as CanonicalizePolygon. "
+          "Check: exact; Area[OuterPolygon] - Area[InnerPolygon] == Area[poly] relations in tests.")
+def _outer_polygon(poly: Expr) -> Expr:
+    f = "OuterPolygon"
+    comps = _polygon_arg(poly, f)
+    _require_noncrossing(comps, f)
+    rings = [_dedup_ring(o) for o, hs in comps]
+    return _canonical(rings, lambda rs, d: [True] * len(rs), f, (poly,))
+
+
+@fn("InnerPolygon", area=AREA, status="added",
+    notes="InnerPolygon[poly] gives Polygon[{p1, ...}, data] of the holes of the canonical form (each hole as a "
+          "counterclockwise outer boundary), or EmptyRegion[2] when there are none. Same support and limitations "
+          "as CanonicalizePolygon. Check: exact; reference cases in tests.")
+def _inner_polygon(poly: Expr) -> Expr:
+    f = "InnerPolygon"
+    comps = _polygon_arg(poly, f)
+    _require_noncrossing(comps, f)
+    rings = [_dedup_ring(h) for o, hs in comps for h in hs]
+    if not rings:
+        return Expr("EmptyRegion", 2)
+    return _canonical(rings, lambda rs, d: [x == 0 for x in d], f, (poly,), empty_if_none=True)
+
+
+def _contour_rings(contour, f):
+    """Closed rings of a contour: Line[{p1, ..., p1}] / Line[{{...}, ...}] / Polygon-like / point list."""
+    if isinstance(contour, Expr) and contour.head == "Line" and contour.args:
+        x = contour.args[0]
+        parts = x.args if (K.is_list(x) and x.args and _is_coord_list(x.args[0])) else [x]
+        rings = []
+        for part in parts:
+            P = pts(part, f, lo=2)
+            if len(P) == 2:                           # a segment list {{p, q}, ...} is joined below
+                rings.append(P)
+                continue
+            rings.append(P)
+        if parts is not None and all(len(r) == 2 for r in rings) and len(rings) > 1:
+            # Line[{{p1, p2}, {p2, p3}, ...}]: chain segments
+            chain = [rings[0][0]]
+            for s in rings:
+                chain.append(s[1])
+            rings = [chain]
+        out_ = []
+        for r in rings:
+            if not all(fsign(a - b) == 0 for a, b in zip(r[0], r[-1])):
+                raise ValueError(f"{f}: the contour must be closed (Line[{{p1, ..., p1}}])")
+            out_.append(r[:-1])
+        return out_
+    if isinstance(contour, Expr) and isinstance(contour.head, str) and contour.head in _POLYGON_HEADS:
+        return [r for o, hs in polygon_components(contour, f) for r in [o] + hs]
+    if K.is_list(contour):
+        return [pts(contour, f, lo=3)]
+    if isinstance(contour, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{f}: expected a closed Line contour or a polygon, not {K_input(contour)}")
+
+
+def _query_points(p, f):
+    if K.is_list(p) and p.args and K.is_list(p.args[0]):
+        return [pt(q, f, "point", dim=2) for q in p.args], True
+    return [pt(p, f, "point", dim=2)], False
+
+
+@fn("WindingCount", area=AREA, status="added",
+    notes="WindingCount[contour, p]: the number of counterclockwise revolutions of the closed contour around p, summed "
+          "over its closed curves; contour is a closed Line[{p1, ..., p1}] (or several), a list of segments, or a "
+          "polygon (its boundary rings as given); p may be a list of points (list result). 2-D only (else "
+          "ValueError); a point on the contour raises ValueError; symbolic input stays unevaluated. "
+          "Check: exact (exact orientation predicates); reference values (documentation star, nested rings) in "
+          "tests.")
+def _winding_count(contour: Expr, p: ListOf[Real] | MatrixOf[Real]) -> Integer | ListOf[Integer]:
+    f = "WindingCount"
+    rings = _contour_rings(contour, f)
+    Q, many = _query_points(p, f)
+    concrete(rings, Q)
+    if any(len(r[0]) != 2 for r in rings):
+        raise ValueError(f"{f}: only planar 2-D contours are supported")
+    res = []
+    for q in Q:
+        tot = 0
+        for r in rings:
+            w = _point_in_ring(q, r)
+            if w is None:
+                raise ValueError(f"{f}: the point {K_input(out(q, p))} lies on the contour")
+            tot += w
+        res.append(tot)
+    return L(*res) if many else res[0]
+
+
+def _ray_crossings(q, rings, direction):
+    cnt = 0
+    for r in rings:
+        n = len(r)
+        for i in range(n):
+            a, b = r[i], r[(i + 1) % n]
+            ax, ay, bx, by = a[0] - q[0], a[1] - q[1], b[0] - q[0], b[1] - q[1]
+            dx, dy = direction
+            den = (bx - ax) * dy - (by - ay) * dx
+            if abs(den) < 1e-300:
+                continue
+            t = -(ax * dy - ay * dx) / den           # parameter along the segment
+            if 0 <= t < 1:
+                px, py = ax + t * (bx - ax), ay + t * (by - ay)
+                if px * dx + py * dy > 0:
+                    cnt += 1
+    return cnt
+
+
+@fn("CrossingCount", area=AREA, status="added",
+    notes="CrossingCount[contour, p]: the minimal number of crossings of a ray from p with the closed contour, over "
+          "all ray directions (directions are sampled between consecutive vertex directions as seen from p, so "
+          "every combinatorially distinct ray is tried; the crossings are counted in machine arithmetic); contour "
+          "and p as for WindingCount (p may be a list of points). A point on the contour raises ValueError, non-2-D "
+          "input ValueError; symbolic input stays unevaluated. Check: reference values (documentation examples) and "
+          "parity agreement with WindingCount for simple contours in tests.")
+def _crossing_count(contour: Expr, p: ListOf[Real] | MatrixOf[Real]) -> Integer | ListOf[Integer]:
+    f = "CrossingCount"
+    rings = _contour_rings(contour, f)
+    Q, many = _query_points(p, f)
+    concrete(rings, Q)
+    if any(len(r[0]) != 2 for r in rings):
+        raise ValueError(f"{f}: only planar 2-D contours are supported")
+    rn = [[[num(c) for c in v] for v in r] for r in rings]
+    res = []
+    for q in Q:
+        for r in rings:
+            if _point_in_ring(q, r) is None:
+                raise ValueError(f"{f}: the point {K_input(out(q, p))} lies on the contour")
+        qn = [num(c) for c in q]
+        angs = sorted({math.atan2(v[1] - qn[1], v[0] - qn[0]) for r in rn for v in r})
+        cands = [(angs[i] + angs[(i + 1) % len(angs)] + (2 * math.pi if i == len(angs) - 1 else 0)) / 2
+                 for i in range(len(angs))] or [0.123]
+        best = min(_ray_crossings(qn, rn, (math.cos(t), math.sin(t))) for t in cands)
+        res.append(best)
+    return L(*res) if many else res[0]
+
+
+_WINDING_RULES = ("NonzeroRule", "PositiveRule", "NegativeRule", "OddRule", "EvenOddRule", "AbsGeqTwoRule")
+
+
+def _winding_fill(rule):
+    return {"NonzeroRule": lambda w: w != 0, "PositiveRule": lambda w: w > 0, "NegativeRule": lambda w: w < 0,
+            "OddRule": lambda w: w % 2 == 1, "EvenOddRule": lambda w: w % 2 == 1,
+            "AbsGeqTwoRule": lambda w: abs(w) >= 2}[rule]
+
+
+def _fill_by_rule(rings, depth, rule, oriented):
+    """Fill flag of the face just inside each ring: winding number there decides."""
+    flags = []
+    for i, r in enumerate(rings):
+        # winding number just inside ring i = sum of orientations of rings containing it plus its own
+        w = 0
+        for j, s in enumerate(rings):
+            if j == i or _point_in_ring(r[0], s) not in (None, 0):
+                w += (1 if fsign(_signed_area(s)) > 0 else -1) if oriented else 1
+        outside = w - ((1 if fsign(_signed_area(r)) > 0 else -1) if oriented else 1)
+        flags.append((_winding_fill(rule)(w), _winding_fill(rule)(outside)))
+    return flags
+
+
+def _rule_polygon(spec, rule, f, oriented):
+    comps = _rings_of(spec, f)
+    rings = _rings_for_rule(comps, f)
+    flags = _fill_by_rule(rings, None, rule, oriented)
+    # a ring is an outer boundary when inside is filled and outside is not; a hole when the reverse
+    keep_rings = [r for r, (fi, fo) in zip(rings, flags) if fi != fo]
+    fill = [fi for (fi, fo) in flags if fi != fo]
+    if not keep_rings:
+        return Expr("EmptyRegion", 2)
+    return _canonical(keep_rings, lambda rs, d: fill, f, (spec,))
+
+
+@fn("WindingPolygon", area=AREA, status="added",
+    notes="WindingPolygon[{p1, ...}] and WindingPolygon[{{p11, ...}, ...}] give the polygon of points around which "
+          "the closed contours wind (\"NonzeroRule\", default) or by a winding rule \"PositiveRule\", "
+          "\"NegativeRule\", \"OddRule\", \"EvenOddRule\", \"AbsGeqTwoRule\", in the canonical form of "
+          "CanonicalizePolygon (EmptyRegion[2] when nothing is filled). 2-D contours that do not cross or touch "
+          "each other or themselves are supported; crossing contours raise NotImplementedError (Wolfram splits "
+          "them). Unknown rules raise ValueError; symbolic coordinates stay unevaluated. "
+          "Check: exact; reference cases (nested contours with either orientation) in tests.")
+def _winding_polygon(spec: MatrixOf[Real] | ListOf[MatrixOf[Real]], *rule: String) -> Expr:
+    f = "WindingPolygon"
+    r = _string_arg(rule[0], _WINDING_RULES, f, "winding rule") if rule else "NonzeroRule"
+    if len(rule) > 1:
+        raise ValueError(f"{f}: too many arguments")
+    return _rule_polygon(spec, r, f, oriented=True)
+
+
+@fn("CrossingPolygon", area=AREA, status="added",
+    notes="CrossingPolygon[{p1, ...}] and CrossingPolygon[{{p11, ...}, ...}] give the polygon of points from which a "
+          "ray crosses the closed contours an odd number of times (even-odd rule), in the canonical form of "
+          "CanonicalizePolygon. 2-D contours that do not cross or touch are supported; crossing contours raise "
+          "NotImplementedError. Symbolic coordinates stay unevaluated. "
+          "Check: exact; reference cases (nested contours give holes) in tests.")
+def _crossing_polygon(spec: MatrixOf[Real] | ListOf[MatrixOf[Real]]) -> Expr:
+    return _rule_polygon(spec, "EvenOddRule", "CrossingPolygon", oriented=False)
+
+
+def _triangulate(R_, f):
+    """Ear clipping of a simple ring (CCW) -> list of index triples."""
+    R_ = _orient_ring(R_, True)
+    idx = list(range(len(R_)))
+    tris = []
+    guard = 0
+    while len(idx) > 3:
+        guard += 1
+        if guard > 10 * len(R_) ** 2:
+            raise ArithmeticError(f"{f}: triangulation failed")
+        for k in range(len(idx)):
+            i0, i1, i2 = idx[k - 1], idx[k], idx[(k + 1) % len(idx)]
+            a, b, c = R_[i0], R_[i1], R_[i2]
+            if fsign(_orient2(a, b, c)) <= 0:
+                continue
+            ok = True
+            for j in idx:
+                if j in (i0, i1, i2):
+                    continue
+                q = R_[j]
+                if fsign(_orient2(a, b, q)) >= 0 and fsign(_orient2(b, c, q)) >= 0 and fsign(_orient2(c, a, q)) >= 0:
+                    ok = False
+                    break
+            if ok:
+                tris.append([R_[i0], R_[i1], R_[i2]])
+                idx.pop(k)
+                break
+        else:
+            # only collinear ears remain: drop a collinear vertex
+            for k in range(len(idx)):
+                if fsign(_orient2(R_[idx[k - 1]], R_[idx[k]], R_[idx[(k + 1) % len(idx)]])) == 0:
+                    idx.pop(k)
+                    break
+            else:
+                raise ArithmeticError(f"{f}: triangulation failed")
+    tris.append([R_[i] for i in idx])
+    return tris
+
+
+def _merge_convex(tris):
+    """Hertel-Mehlhorn: merge adjacent convex pieces while the union stays convex."""
+    pieces = [list(t) for t in tris]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(pieces)):
+            for j in range(i + 1, len(pieces)):
+                m = _merge_two(pieces[i], pieces[j])
+                if m is not None and _convex_ring(m):
+                    pieces[i] = m
+                    pieces.pop(j)
+                    changed = True
+                    break
+            if changed:
+                break
+    return pieces
+
+
+def _same(p, q):
+    return all(fsign(a - b) == 0 for a, b in zip(p, q))
+
+
+def _merge_two(A, B):
+    n, m = len(A), len(B)
+    for i in range(n):
+        a1, a2 = A[i], A[(i + 1) % n]
+        for j in range(m):
+            b1, b2 = B[j], B[(j + 1) % m]
+            if _same(a1, b2) and _same(a2, b1):
+                # A ... a1 | (B from b2's successor around to b1's predecessor) | a2 ...
+                merged = A[:i + 1] + [B[(j + 2 + k) % m] for k in range(m - 2)] + A[i + 1:]
+                return merged
+    return None
+
+
+@fn("PolygonDecomposition", area=AREA, status="added",
+    notes="PolygonDecomposition[poly] / PolygonDecomposition[poly, \"Convex\"] gives Polygon[{piece1, ...}], a "
+          "union of convex polygons with disjoint interiors (ear-clipping triangulation followed by Hertel-Mehlhorn "
+          "merging); \"Triangle\" gives the triangulation; \"Simple\" gives the simple components. Supports 2-D "
+          "simple polygons, collections of them (Triangle, Rectangle, RegularPolygon, Parallelogram too); holes or "
+          "self-intersections raise NotImplementedError, unknown types ValueError. A convex input is returned as a "
+          "single piece. Deviation: the decomposition is not unique and may differ from Wolfram's (same region). "
+          "Check: self-check (the piece areas sum to the polygon area; ArithmeticError).")
+def _polygon_decomposition(poly: Expr, *typ: String) -> Expr:
+    f = "PolygonDecomposition"
+    t = _string_arg(typ[0], ("Convex", "Triangle", "Simple"), f, "decomposition type") if typ else "Convex"
+    comps = _polygon_arg(poly, f)
+    pieces = []
+    total = sp.Integer(0)
+    for o, hs in comps:
+        if hs:
+            raise NotImplementedError(f"{f}: polygons with holes are not supported")
+        R_ = _dedup_ring(o)
+        if len(R_[0]) != 2:
+            raise NotImplementedError(f"{f}: only 2-D polygons are supported")
+        if not _simple_ring(R_):
+            raise NotImplementedError(f"{f}: self-intersecting or degenerate polygons are not supported")
+        total += sp.Abs(_signed_area(R_))
+        if t == "Simple":
+            pieces.append(R_)
+            continue
+        if t == "Convex" and _convex_ring(R_):
+            pieces.append(R_)
+            continue
+        tris = _triangulate(R_, f)
+        pieces += tris if t == "Triangle" else _merge_convex(tris)
+    s = sum((sp.Abs(_signed_area(p)) for p in pieces), sp.Integer(0))
+    if abs(num(s - total)) > 1e-9 * max(1.0, abs(num(total))):
+        raise ArithmeticError(f"{f}: result failed verification")
+    return Expr("Polygon", out(pieces, poly))
