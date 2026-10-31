@@ -2934,8 +2934,10 @@ class Suzuki(NumericOnly):
     def _mix(self, h):
         import mpmath
         m, v = (_mp(t) for t in self.a)
-        # E over s ~ LogNormal(m, v) of h(s), with s = e^(m + v z), z standard normal
-        return mpmath.quad(lambda z: h(mpmath.exp(m + v * z)) * mpmath.npdf(z), [-mpmath.inf, 0, mpmath.inf])
+        # E over s ~ LogNormal(m, v) of h(s), with s = e^(m + v z), z standard normal. h is bounded on the
+        # densities used here, so truncating z to [-14, 14] changes the result by less than 2 Phi(-14) < 1e-43
+        # times that bound (an infinite range makes mpmath evaluate e^(-e^(huge)) and stall)
+        return mpmath.quad(lambda z: h(mpmath.exp(m + v * z)) * mpmath.npdf(z), [-14, -4, 0, 4, 14])
 
     def npdf(self, x):
         import mpmath

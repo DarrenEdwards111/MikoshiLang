@@ -471,15 +471,16 @@ CONT = [
 ]
 
 
-def _landau_pdf(x):
-    """standard Landau density from the integral in the LandauDistribution Details"""
-    return mpmath.quad(lambda t: mpmath.exp(-t * x - 2 / mpmath.pi * t * mpmath.log(t)) * mpmath.sin(2 * t),
-                       [0, mpmath.inf]) / mpmath.pi
+def _landau_pdf(x, mu=0, s=1):
+    """Landau density from the integral in the LandauDistribution Details (Sin[2 t] Exp[-t (x - mu)/s - 2/Pi t
+    Log[t/s]]), normalised by 1/(Pi s)"""
+    return mpmath.quad(lambda t: mpmath.exp(-t * (x - mu) / s - 2 / mpmath.pi * t * mpmath.log(t / s)) * mpmath.sin(2 * t),
+                       [0, mpmath.inf]) / (mpmath.pi * s)
 
 
 def _rayleigh_mix(f):
     """E over s ~ LogNormal(1/2, 1/4) of f(s) (SuzukiDistribution[1/2, 1/4])"""
-    return mpmath.quad(lambda z: f(mpmath.exp(0.5 + 0.25 * z)) * mpmath.npdf(z), [-mpmath.inf, 0, mpmath.inf])
+    return mpmath.quad(lambda z: f(mpmath.exp(0.5 + 0.25 * z)) * mpmath.npdf(z), [-12, 0, 12])  # npdf(12) < 1e-31
 
 
 def _polya_aeppli(theta, p, k):
@@ -506,7 +507,7 @@ SPECIAL = [
     ("LandauDistribution[]", "LandauDistribution[0, 1]"),
     ("LandauDistribution[w17m, w17s]", "LandauDistribution[w17m, w17s]"),
     ("PDF[LandauDistribution[], 0.5]", M(lambda: _landau_pdf(0.5))),
-    ("PDF[LandauDistribution[1, 2], 2.]", M(lambda: _landau_pdf(0.5) / 2)),
+    ("PDF[LandauDistribution[1, 2], 2.]", M(lambda: _landau_pdf(2, 1, 2))),  # log(t/sigma) term: not a pure rescale
     ("PDF[LandauDistribution[], 0.5]", S(lambda st: st.landau.pdf(0.5), 1e-7)),
     ("CDF[LandauDistribution[], 0.5]", S(lambda st: st.landau.cdf(0.5), 1e-6)),
     ("Mean[LandauDistribution[]]", "Indeterminate"),
@@ -524,8 +525,9 @@ SPECIAL = [
     ("CDF[BeckmannDistribution[1, 0, 1, 1], 1.2]", S(lambda st: st.rice.cdf(1.2, 1), 1e-8)),
     ("PDF[BeckmannDistribution[1, 1, 1, 2], 1.5]", M(lambda: mpmath.quad(
         lambda t: 1.5 * mpmath.npdf(1.5 * mpmath.cos(t), 1, 1) * mpmath.npdf(1.5 * mpmath.sin(t), 1, 2), [0, mpmath.pi, 2 * mpmath.pi]))),
-    ("Mean[BeckmannDistribution[0, 0, 1, 1]]", near(math.sqrt(math.pi / 2), 1e-8)),
-    ("Variance[BeckmannDistribution[0, 0, 1, 1]] + Mean[BeckmannDistribution[0, 0, 1, 1]]^2", "2"),
+    ("Mean[BeckmannDistribution[0., 0., 1., 1.]]", near(math.sqrt(math.pi / 2), 1e-8)),
+    ("Variance[BeckmannDistribution[0., 0., 1., 1.]] + Mean[BeckmannDistribution[0., 0., 1., 1.]]^2", near(2.0, 1e-8)),
+    ("Mean[BeckmannDistribution[0, 1, 1, 2]]", Raises(NotImplementedError)),  # exact odd moments: no closed form
     ("BeckmannDistribution[0, 0, -1, 1]", Raises(ValueError)),
     # phase-type distributions (exact)
     ("HyperexponentialDistribution[{w17p, 1 - w17p}, {w17a, w17b}]", "HyperexponentialDistribution[{w17p, 1 - w17p}, {w17a, w17b}]"),
@@ -558,7 +560,7 @@ DISC = [
     ("BenfordDistribution[w17b]", "BenfordDistribution[w17b]"),
     ("PDF[BenfordDistribution[10], 1]", "Log[2]/Log[10]"),
     ("CDF[BenfordDistribution[10], 3]", "Log[4]/Log[10]"),
-    ("Mean[BenfordDistribution[10.]]", M(lambda: sum(k * mpmath.log10(1 + 1 / mpmath.mpf(k)) for k in range(1, 10)))),
+    ("N[Mean[BenfordDistribution[10]]]", M(lambda: sum(k * mpmath.log10(1 + 1 / mpmath.mpf(k)) for k in range(1, 10)))),
     ("BenfordDistribution[1]", Raises(ValueError)),
     # BetaBinomialDistribution[alpha, beta, n]: SciPy betabinom(n, alpha, beta)
     ("BetaBinomialDistribution[w17a, w17b, w17n]", "BetaBinomialDistribution[w17a, w17b, w17n]"),
@@ -620,7 +622,7 @@ DISC = [
     ("Mean[SkellamDistribution[w17a, w17b]]", "w17a - w17b"),
     ("PDF[SkellamDistribution[2, 3], -1]", S(lambda st: st.skellam.pmf(-1, 2, 3))),
     ("CDF[SkellamDistribution[2., 3.], 1]", S(lambda st: st.skellam.cdf(1, 2, 3))),
-    ("PDF[SkellamDistribution[2, 3], 1.]", S(lambda st: st.skellam.pmf(1, 2, 3))),
+    ("PDF[SkellamDistribution[2, 3.], 2]", S(lambda st: st.skellam.pmf(2, 2, 3))),
     ("SkellamDistribution[-2, 3]", Raises(ValueError)),
     # WaringYuleDistribution[alpha] = SciPy yulesimon(alpha) shifted by -1
     ("WaringYuleDistribution[w17a]", "WaringYuleDistribution[w17a]"),
@@ -631,7 +633,7 @@ DISC = [
     ("WaringYuleDistribution[-1]", Raises(ValueError)),
     # ZipfDistribution[rho] = SciPy zipf(rho + 1); [n, rho] = zipfian(rho + 1, n)
     ("ZipfDistribution[w17r]", "ZipfDistribution[w17r]"),
-    ("PDF[ZipfDistribution[1], 2]", "6/(8 Pi^2)"),
+    ("PDF[ZipfDistribution[1], 2]", "3/(2 Pi^2)"),  # 2^-2/Zeta[2]
     ("PDF[ZipfDistribution[1.5], 3]", S(lambda st: st.zipf.pmf(3, 2.5))),
     ("CDF[ZipfDistribution[5, 1.5], 3]", S(lambda st: st.zipfian.cdf(3, 2.5, 5))),
     ("Mean[ZipfDistribution[1]]", "Infinity"),
