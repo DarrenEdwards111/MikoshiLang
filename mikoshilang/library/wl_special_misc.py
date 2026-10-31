@@ -970,3 +970,570 @@ for _c, _rule in (("CombinatorS", "S x y z -> x z (y z)"), ("CombinatorK", "K x 
                   ("CombinatorW", "W x y -> x y y"), ("CombinatorY", "Y f -> f (Y f)")):
     _inert(_c, f"{_c} represents the {_c[-1]} combinator ({_rule}); no transformations are applied automatically "
            f"(reference), so applications such as {_c}[x][y] stay unevaluated for rule-based reduction")
+
+
+# ───────────────────────────── zeta relatives ─────────────────────────────
+
+def _dbeta_exact(s):
+    if s.is_Integer:
+        n = int(s)
+        if n == 0:
+            return sp.Rational(1, 2)
+        if n == 1:
+            return sp.pi / 4
+        if n == 2:
+            return sp.Catalan
+        if n < 0:
+            return sp.euler(-n) / 2
+        if n % 2 == 1:
+            k = (n - 1) // 2
+            return (-1) ** k * sp.euler(2 * k) * sp.pi ** n / (4 ** (k + 1) * sp.factorial(2 * k))
+    return None
+
+
+def _dbeta(s):
+    if s == 1:
+        return mpmath.pi / 4
+    return mpmath.dirichlet(s, [0, 1, 0, -1])
+
+
+special("DirichletBeta", 1, _dbeta, _dbeta_exact,
+        notes="DirichletBeta[s] = Sum[(-1)^n/(2n + 1)^s, {n, 0, Infinity}] (analytically continued; mpmath dirichlet "
+              "with the character mod 4); exact: beta(0) = 1/2, beta(1) = Pi/4, beta(2) = Catalan, odd s via Euler "
+              "numbers, beta(-n) = EulerE[n]/2")
+
+
+def _dlambda_exact(s):
+    if s == 1:
+        return sp.zoo
+    v = (1 - sp.Integer(2) ** (-s)) * sp.zeta(s)
+    v = sp.simplify(v) if s.is_Integer else v
+    return None if v.has(sp.zeta) else v
+
+
+special("DirichletLambda", 1, lambda s: (1 - mpmath.power(2, -s)) * mpmath.zeta(s), _dlambda_exact,
+        notes="DirichletLambda[s] = (1 - 2^-s) Zeta[s] = Sum[1/(2n + 1)^s, {n, 0, Infinity}]; exact where Zeta "
+              "is (even positive and non-positive integers), DirichletLambda[1] = ComplexInfinity")
+
+
+def _primezeta(s):
+    if mpmath.re(s) <= 0:
+        raise ValueError("PrimeZetaP: the prime zeta function has a natural boundary at Re(s) = 0")
+    return mpmath.primezeta(s)
+
+
+special("PrimeZetaP", 1, _primezeta, lambda s: sp.oo if s == 1 else None,
+        notes="PrimeZetaP[s] = Sum[1/Prime[k]^s] for Re(s) > 0 (mpmath primezeta; natural boundary Re(s) = 0 "
+              "raises); PrimeZetaP[1] = Infinity")
+special("RiemannR", 1, mpmath.riemannr,
+        notes="RiemannR[x] = Sum[MoebiusMu[n]/n LogIntegral[x^(1/n)]] (Gram series; mpmath riemannr)")
+special("RiemannSiegelTheta", 1, mpmath.siegeltheta, lambda t: sp.Integer(0) if t == 0 else None,
+        notes="RiemannSiegelTheta[t] = Im[LogGamma[1/4 + I t/2]] - t Log[Pi]/2 (mpmath siegeltheta); value 0 at 0")
+special("RiemannSiegelZ", 1, mpmath.siegelz,
+        notes="RiemannSiegelZ[t] = Exp[I RiemannSiegelTheta[t]] Zeta[1/2 + I t] (mpmath siegelz)")
+
+
+def _xi(s):
+    if s == 0 or s == 1:
+        return mpmath.mpf(1) / 2
+    if mpmath.re(s) < 0.5:
+        s = 1 - s
+    return s * (s - 1) / 2 * mpmath.power(mpmath.pi, -s / 2) * mpmath.gamma(s / 2) * mpmath.zeta(s)
+
+
+def _xi_exact(s):
+    if s == 0 or s == 1:
+        return sp.Rational(1, 2)
+    if s.is_Integer:
+        n = int(s)
+        if n <= 0:
+            n = 1 - n
+        if n % 2 == 0:
+            m = sp.Integer(n)
+            return sp.simplify(m * (m - 1) / 2 * sp.pi ** (-m / 2) * sp.gamma(m / 2) * sp.zeta(m))
+    return None
+
+
+special("RiemannXi", 1, _xi, _xi_exact,
+        notes="RiemannXi[s] = s (s - 1) Pi^(-s/2) Gamma[s/2] Zeta[s]/2 with xi(s) = xi(1 - s); exact 1/2 at 0, 1 "
+              "and closed forms at even integers (RiemannXi[2] = Pi/6)")
+
+
+def _zetazero(k, t=None):
+    if mpmath.im(k) != 0 or k != int(k) or k == 0:
+        raise ValueError("ZetaZero: the index must be a non-zero integer")
+    k = int(k)
+    if t is not None:
+        if mpmath.im(t) != 0 or t < 0 or k < 0:
+            raise ValueError("ZetaZero: ZetaZero[k, t] is supported for positive k and real t >= 0")
+        base = mpmath.nzeros(t)
+        return mpmath.zetazero(base + k)
+    z = mpmath.zetazero(abs(k))
+    return z if k > 0 else mpmath.conj(z)
+
+
+def _zetazero_check(*vals):
+    k = vals[0]
+    if k.is_number and input_precision([k]) is None and (not k.is_Integer or k == 0):
+        raise ValueError("ZetaZero: the index must be a non-zero integer")
+
+
+special("ZetaZero", (1, 2), _zetazero, None, check=_zetazero_check,
+        notes="ZetaZero[k] represents the k-th zero 1/2 + I t of Zeta on the critical line (negative k: conjugate "
+              "zeros), ZetaZero[k, t] the k-th zero above height t; stays symbolic for exact k, N gives any "
+              "precision (mpmath zetazero / nzeros)")
+
+
+def _log_barnes_g(z):
+    """Analytic log G(z) on C minus (-Infinity, 0]: shift to large |z| with log G(z) = log G(z + N) -
+    Sum LogGamma[z + j], then the Stirling-type asymptotic expansion of log G(w + 1)."""
+    if mpmath.im(z) == 0 and mpmath.re(z) <= 0 and mpmath.re(z) == int(mpmath.re(z)):
+        raise ValueError("LogBarnesG: logarithmic singularity at a non-positive integer")
+    prec = mpmath.mp.prec
+    R0 = max(10, (prec + 30) * 0.12)
+    shift = 0
+    while abs(z + shift) < R0 or mpmath.re(z + shift) < R0 / 2:
+        shift += 1
+    w = z + shift - 1                       # log G(w + 1) with w + 1 = z + shift
+    with mpmath.workprec(prec + 30):
+        lw = mpmath.log(w)
+        val = w * w / 2 * lw - 3 * w * w / 4 + w / 2 * mpmath.log(2 * mpmath.pi) - lw / 12 + \
+            mpmath.zeta(-1, derivative=1)
+        k = 1
+        eps = mpmath.mpf(2) ** (-(prec + 20))
+        last = None
+        while True:
+            term = mpmath.bernoulli(2 * k + 2) / (4 * k * (k + 1) * mpmath.power(w, 2 * k))
+            if last is not None and abs(term) > abs(last):
+                break                       # asymptotic series: stop at the smallest term
+            val += term
+            last = term
+            if abs(term) < eps * max(1, abs(val)):
+                break
+            k += 1
+        for j in range(shift):
+            val -= mpmath.loggamma(z + j)
+    return val
+
+
+def _lbg_exact(z):
+    if z.is_Integer and z >= 1:
+        g = sp.Integer(1)
+        for k in range(1, int(z) - 1):
+            g *= sp.factorial(k)
+        return sp.log(g)
+    return None
+
+
+special("LogBarnesG", 1, _log_barnes_g, _lbg_exact,
+        notes="LogBarnesG[z]: holomorphic logarithm of BarnesG with a branch cut along the negative real axis "
+              "(recurrence with LogGamma plus the asymptotic expansion; log of Prod[k!, {k, n-2}] at positive "
+              "integers); singular at non-positive integers")
+
+
+# ───────────────────────────── Dawson, Fresnel auxiliaries, Owen T, Marcum Q, Mittag-Leffler ─────────────────
+
+def _dawson(z):
+    return mpmath.sqrt(mpmath.pi) / 2 * mpmath.exp(-z * z) * mpmath.erfi(z)
+
+
+special("DawsonF", 1, _dawson, lambda z: sp.Integer(0) if z in (0, sp.oo, -sp.oo) else None,
+        notes="DawsonF[z] = E^-z^2 Integrate[E^t^2, {t, 0, z}] = Sqrt[Pi]/2 E^-z^2 Erfi[z]; 0 at 0 and +-Infinity")
+
+
+def _fresnel_aux(which):
+    def f(z):
+        extra = int(2 * mpmath.log(abs(z) + 2, 2) * 2) + 20
+        with mpmath.workprec(mpmath.mp.prec + extra):
+            S, C = mpmath.fresnels(z), mpmath.fresnelc(z)
+            a = mpmath.pi * z * z / 2
+            c, s = mpmath.cos(a), mpmath.sin(a)
+            half = mpmath.mpf(1) / 2
+            if which == "F":
+                return (half - S) * c - (half - C) * s
+            return (half - C) * c + (half - S) * s
+    return f
+
+
+special("FresnelF", 1, _fresnel_aux("F"),
+        lambda z: sp.Rational(1, 2) if z == 0 else (sp.Integer(0) if z == sp.oo else None),
+        notes="FresnelF[z] = (1/2 - FresnelS[z]) Cos[Pi z^2/2] - (1/2 - FresnelC[z]) Sin[Pi z^2/2] (extra working "
+              "precision against cancellation); FresnelF[0] = 1/2, FresnelF[Infinity] = 0")
+special("FresnelG", 1, _fresnel_aux("G"),
+        lambda z: sp.Rational(1, 2) if z == 0 else (sp.Integer(0) if z == sp.oo else None),
+        notes="FresnelG[z] = (1/2 - FresnelC[z]) Cos[Pi z^2/2] + (1/2 - FresnelS[z]) Sin[Pi z^2/2]; FresnelG[0] = "
+              "1/2, FresnelG[Infinity] = 0")
+
+
+def _owen(h, a):
+    if mpmath.im(h) != 0 or mpmath.im(a) != 0:
+        raise ValueError("OwenT: only real arguments are supported")
+    f = lambda x: mpmath.exp(-h * h * (1 + x * x) / 2) / (1 + x * x)
+    return mpmath.quad(f, [0, a]) / (2 * mpmath.pi)
+
+
+def _owen_exact(h, a):
+    if a == 0:
+        return sp.Integer(0)
+    if h == 0:
+        return sp.atan(a) / (2 * sp.pi)
+    return None
+
+
+special("OwenT", 2, _owen, _owen_exact,
+        notes="OwenT[h, a] = 1/(2 Pi) Integrate[E^(-h^2 (1 + x^2)/2)/(1 + x^2), {x, 0, a}] (mpmath quadrature, "
+              "real arguments); OwenT[0, a] = ArcTan[a]/(2 Pi), OwenT[h, 0] = 0")
+
+
+def _marcum(m, a, b, b1=None):
+    if b1 is not None:
+        return _marcum(m, a, b) - _marcum(m, a, b1)
+    for v in (m, a, b):
+        if mpmath.im(v) != 0:
+            raise ValueError("MarcumQ: only real arguments are supported")
+    if m <= 0:
+        raise ValueError("MarcumQ: the order m must be positive")
+    x = a * a / 2
+    y = b * b / 2
+    with mpmath.workprec(mpmath.mp.prec + 20):
+        total = mpmath.mpf(0)
+        w = mpmath.exp(-x)
+        eps = mpmath.mpf(2) ** (-(mpmath.mp.prec + 10))
+        j = 0
+        while True:
+            term = w * mpmath.gammainc(m + j, y, regularized=True)
+            total += term
+            if j > x and w < eps:
+                break
+            j += 1
+            w = w * x / j
+            if j > 100000:
+                raise ValueError("MarcumQ: series did not converge")
+    return total
+
+
+def _marcum_exact(m, a, b, b1=None):
+    if b1 is not None:
+        return None
+    if b == 0:
+        return sp.Integer(1)
+    if a == 0:
+        return Expr("GammaRegularized", R(m), R(b ** 2 / 2))
+    return None
+
+
+special("MarcumQ", (3, 4), _marcum, _marcum_exact,
+        notes="MarcumQ[m, a, b] = Integrate[x (x/a)^(m-1) BesselI[m-1, a x] E^(-(a^2 + x^2)/2), {x, b, Infinity}] "
+              "via the Poisson-weighted series Sum[E^(-a^2/2) (a^2/2)^j/j! GammaRegularized[m + j, b^2/2]] (real "
+              "arguments, m > 0); MarcumQ[m, a, b0, b1] = MarcumQ[m, a, b0] - MarcumQ[m, a, b1]; exact "
+              "MarcumQ[m, a, 0] = 1 and MarcumQ[m, 0, b] = GammaRegularized[m, b^2/2]")
+
+
+def _mittag(*v):
+    if len(v) == 2:
+        a, b, z = v[0], mpmath.mpf(1), v[1]
+    else:
+        a, b, z = v
+    if mpmath.im(a) != 0 or a <= 0:
+        raise ValueError("MittagLefflerE: only real alpha > 0 is supported")
+    if z == 0:
+        return mpmath.rgamma(b)
+    size = abs(z) ** (1 / a)
+    extra = int(size * 1.4427) + 30
+    if extra > 40000:
+        raise ValueError("MittagLefflerE: argument too large for the power series")
+    with mpmath.workprec(mpmath.mp.prec + extra):
+        total = mpmath.mpf(0)
+        biggest = mpmath.mpf(0)
+        k = 0
+        zk = mpmath.mpf(1)
+        eps = mpmath.mpf(2) ** (-(mpmath.mp.prec))
+        while True:
+            term = zk * mpmath.rgamma(a * k + b)
+            total += term
+            biggest = max(biggest, abs(term))
+            if k > size + 5 and abs(term) < eps * biggest and abs(term) <= abs(total) * eps:
+                break
+            k += 1
+            zk *= z
+            if k > 200000:
+                raise ValueError("MittagLefflerE: series did not converge")
+    return total
+
+
+def _mittag_sym(*v):
+    if len(v) == 2:
+        a, b, z = v[0], sp.Integer(1), v[1]
+    else:
+        a, b, z = v
+    if z == 0 and b.is_number:
+        return 1 / sp.gamma(b)
+    if a == 1 and b == 1:
+        return sp.exp(z)
+    if a == 2 and b == 1:
+        return sp.cosh(sp.sqrt(z))
+    if a == 1 and b == 2:
+        return (sp.exp(z) - 1) / z
+    if a == sp.Rational(1, 2) and b == 1:
+        return sp.exp(z ** 2) * sp.erfc(-z)
+    return None
+
+
+def _mittag_exact(*v):
+    out = _mittag_sym(*v)
+    return out
+
+
+special("MittagLefflerE", (2, 3), _mittag, _mittag_exact, symbolic=_mittag_sym,
+        notes="MittagLefflerE[a, b, z] = Sum[z^k/Gamma[a k + b], {k, 0, Infinity}] (power series with extra "
+              "working precision against cancellation, real a > 0); MittagLefflerE[a, z] = MittagLefflerE[a, 1, z]; "
+              "closed forms for (1, 1), (2, 1), (1, 2), (1/2, 1) and z = 0")
+
+
+# ───────────────────────────── inverse regularized gamma and beta ─────────────────────────────
+
+def _bracket_root(f, lo, hi, increasing):
+    """Bisection + secant on a monotone function on (lo, hi); f(lo) and f(hi) must differ in sign."""
+    prec = mpmath.mp.prec
+    with mpmath.workprec(prec + 30):
+        flo, fhi = f(lo), f(hi)
+        if flo == 0:
+            return lo
+        if fhi == 0:
+            return hi
+        if (flo > 0) == (fhi > 0):
+            raise ValueError("no sign change")
+        try:
+            return mpmath.findroot(f, (lo, hi), solver="anderson", tol=mpmath.mpf(2) ** (-(prec + 10)))
+        except (ValueError, ZeroDivisionError):
+            for _ in range(prec + 40):
+                mid = (lo + hi) / 2
+                fm = f(mid)
+                if (fm > 0) == (flo > 0):
+                    lo, flo = mid, fm
+                else:
+                    hi = mid
+            return (lo + hi) / 2
+
+
+def _inv_gamma_reg(a, *rest):
+    if len(rest) == 1:
+        s = rest[0]
+        target = s
+    else:
+        z0, s = rest
+        target = mpmath.gammainc(a, z0, regularized=True) - s
+    for v in (a, target):
+        if mpmath.im(v) != 0:
+            raise ValueError("InverseGammaRegularized: only real arguments are supported")
+    if a <= 0:
+        raise ValueError("InverseGammaRegularized: a must be positive")
+    if target == 1:
+        return mpmath.mpf(0)
+    if target == 0:
+        return mpmath.inf
+    if not 0 < target < 1:
+        raise ValueError("InverseGammaRegularized: the value must lie in (0, 1)")
+    f = lambda z: mpmath.gammainc(a, z, regularized=True) - target
+    hi = max(mpmath.mpf(1), a)
+    while f(hi) > 0:
+        hi *= 2
+    lo = hi / 2
+    while f(lo) < 0 and lo > mpmath.mpf(2) ** (-mpmath.mp.prec * 4):
+        lo /= 2
+    with mpmath.workprec(mpmath.mp.prec + 20):
+        g = lambda t: mpmath.gammainc(a, mpmath.exp(t), regularized=True) - target
+        t = _bracket_root(g, mpmath.log(lo), mpmath.log(hi), False)
+    return mpmath.exp(t)
+
+
+def _inv_gamma_exact(a, *rest):
+    if len(rest) == 1:
+        s = rest[0]
+        if s == 1:
+            return sp.Integer(0)
+        if s == 0:
+            return sp.oo
+        if a == 1:
+            return -sp.log(s)
+    return None
+
+
+special("InverseGammaRegularized", (2, 3), _inv_gamma_reg, _inv_gamma_exact,
+        notes="InverseGammaRegularized[a, s] solves GammaRegularized[a, z] == s for z (upper regularized gamma; "
+              "bracketing root finder at the input precision); InverseGammaRegularized[a, z0, s] inverts "
+              "GammaRegularized[a, z0, z]; exact: s = 1 -> 0, s = 0 -> Infinity, a = 1 -> -Log[s]")
+
+
+def _inv_beta_reg(*v):
+    if len(v) == 3:
+        s, a, b = v
+        target = s
+    else:
+        z0, s, a, b = v
+        target = mpmath.betainc(a, b, 0, z0, regularized=True) + s
+    for x in (a, b, target):
+        if mpmath.im(x) != 0:
+            raise ValueError("InverseBetaRegularized: only real arguments are supported")
+    if a <= 0 or b <= 0:
+        raise ValueError("InverseBetaRegularized: a and b must be positive")
+    if target == 0:
+        return mpmath.mpf(0)
+    if target == 1:
+        return mpmath.mpf(1)
+    if not 0 < target < 1:
+        raise ValueError("InverseBetaRegularized: the value must lie in (0, 1)")
+    f = lambda z: mpmath.betainc(a, b, 0, z, regularized=True) - target
+    return _bracket_root(f, mpmath.mpf(0), mpmath.mpf(1), True)
+
+
+def _inv_beta_exact(*v):
+    if len(v) == 3:
+        s, a, b = v
+        if s == 0:
+            return sp.Integer(0)
+        if s == 1:
+            return sp.Integer(1)
+        if b == 1:
+            return s ** (1 / a)
+        if a == 1:
+            return 1 - (1 - s) ** (1 / b)
+    return None
+
+
+special("InverseBetaRegularized", (3, 4), _inv_beta_reg, _inv_beta_exact,
+        notes="InverseBetaRegularized[s, a, b] solves BetaRegularized[z, a, b] == s for z in [0, 1] (bracketing "
+              "root finder); InverseBetaRegularized[z0, s, a, b] inverts BetaRegularized[z0, z, a, b]; exact "
+              "s = 0, 1 and b = 1 (s^(1/a)), a = 1 (1 - (1 - s)^(1/b))")
+
+
+# ───────────────────────────── Minkowski question mark and Cantor staircase ─────────────────────────────
+
+def _qmark_cf(terms):
+    """?(x) for a finite continued fraction [a0; a1, ..., an] (exact)."""
+    a0, rest = terms[0], terms[1:]
+    total = sp.Integer(a0)
+    acc = 0
+    for k, a in enumerate(rest, 1):
+        acc += a
+        total += 2 * sp.Integer(-1) ** (k + 1) / sp.Integer(2) ** acc
+    return total
+
+
+def _qmark_exact(x):
+    if x.is_Rational:
+        return _qmark_cf(list(sp.continued_fraction_iterator(x)))
+    try:
+        x = sp.expand_func(x).rewrite(sp.sqrt) if x.has(sp.GoldenRatio) else x
+        t = sp.Symbol("t")
+        if x.is_real and x.is_algebraic and sp.Poly(sp.minimal_polynomial(x, t), t).degree() == 2:
+            cf = sp.continued_fraction(sp.radsimp(x))
+        else:
+            return None
+    except Exception:
+        return None
+    if not cf or not isinstance(cf[-1], list):
+        return None
+    pre, period = list(cf[:-1]), list(cf[-1])
+    if not pre:                             # purely periodic: a0 belongs to the period
+        pre, period = [period[0]], period[1:] + period[:1]
+    head = _qmark_cf(pre)
+    k0 = len(pre) - 1                       # number of partial quotients after a0 in the prefix
+    acc0 = sum(pre[1:])
+    block = sp.Integer(0)
+    acc = acc0
+    for i, a in enumerate(period, 1):
+        acc += a
+        block += 2 * sp.Integer(-1) ** (k0 + i + 1) / sp.Integer(2) ** acc
+    S, L = sum(period), len(period)
+    ratio = sp.Integer(-1) ** L / sp.Integer(2) ** S
+    return sp.nsimplify(head + block / (1 - ratio))
+
+
+def _qmark_num(x):
+    from fractions import Fraction
+    if mpmath.im(x) != 0:
+        raise ValueError("MinkowskiQuestionMark: the argument must be real")
+    f = Fraction(*mpmath.mpf(x).man_exp[0:1] and (int(mpmath.mpf(x).man), 1)) if False else None
+    m, e = mpmath.mpf(x).man_exp
+    f = Fraction(int(m) * 2 ** e) if e >= 0 else Fraction(int(m), 2 ** (-e))
+    a0 = f.numerator // f.denominator
+    total = mpmath.mpf(a0)
+    r = f - a0
+    acc, k = 0, 0
+    lim = mpmath.mp.prec + 10
+    while r != 0:
+        r = 1 / r
+        a = r.numerator // r.denominator
+        r -= a
+        k += 1
+        acc += a
+        if acc > lim:
+            break
+        total += 2 * (-1) ** (k + 1) * mpmath.ldexp(1, -acc)
+    return total
+
+
+special("MinkowskiQuestionMark", 1, _qmark_num, _qmark_exact,
+        notes="MinkowskiQuestionMark[x] = a0 + 2 Sum[(-1)^(k+1) 2^-(a1 + ... + ak)] for x = [a0; a1, a2, ...]: "
+              "exact for rationals and quadratic irrationals (periodic continued fractions, e.g. ?(Sqrt[2]) = 7/5); "
+              "approximate x uses its exact binary value")
+
+
+def _cantor_rational(p, q, maxdigits=None):
+    """Cantor function of p/q in [0, 1]: exact via the ternary expansion (cycle detection)."""
+    from fractions import Fraction
+    r = Fraction(p, q)
+    if r <= 0:
+        return Fraction(0)
+    if r >= 1:
+        return Fraction(1)
+    seen = {}
+    bits = []
+    while True:
+        if maxdigits is None and r in seen:
+            start = seen[r]
+            pre, cyc = bits[:start], bits[start:]
+            val = sum(Fraction(b, 2 ** (i + 1)) for i, b in enumerate(pre))
+            cval = sum(Fraction(b, 2 ** (i + 1)) for i, b in enumerate(cyc))
+            return val + cval / 2 ** len(pre) / (1 - Fraction(1, 2 ** len(cyc)))
+        if maxdigits is not None and len(bits) >= maxdigits:
+            return sum(Fraction(b, 2 ** (i + 1)) for i, b in enumerate(bits))
+        seen[r] = len(bits)
+        r *= 3
+        d = r.numerator // r.denominator
+        r -= d
+        if d == 1:
+            return sum(Fraction(b, 2 ** (i + 1)) for i, b in enumerate(bits)) + Fraction(1, 2 ** (len(bits) + 1))
+        bits.append(d // 2)
+        if r == 0:
+            return sum(Fraction(b, 2 ** (i + 1)) for i, b in enumerate(bits))
+
+
+def _cantor_exact(x):
+    if x.is_Rational:
+        if x.q > 10 ** 12:
+            return None
+        f = _cantor_rational(int(x.p), int(x.q))
+        return sp.Rational(f.numerator, f.denominator)
+    if x.is_real:
+        if (x <= 0) is sp.true:
+            return sp.Integer(0)
+        if (x >= 1) is sp.true:
+            return sp.Integer(1)
+    return None
+
+
+def _cantor_num(x):
+    if mpmath.im(x) != 0:
+        raise ValueError("CantorStaircase: the argument must be real")
+    m, e = mpmath.mpf(x).man_exp
+    from fractions import Fraction
+    f = Fraction(int(m) * 2 ** e) if e >= 0 else Fraction(int(m), 2 ** (-e))
+    v = _cantor_rational(f.numerator, f.denominator, maxdigits=mpmath.mp.prec + 10)
+    return mpmath.mpf(v.numerator) / v.denominator
+
+
+special("CantorStaircase", 1, _cantor_num, _cantor_exact,
+        notes="CantorStaircase[x]: the Cantor function (0 for x <= 0, 1 for x >= 1); exact for rationals via the "
+              "ternary expansion (periodic expansions summed exactly), approximate x via its exact binary value")
