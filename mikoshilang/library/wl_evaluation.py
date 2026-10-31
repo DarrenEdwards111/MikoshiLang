@@ -449,8 +449,8 @@ def _display_name(full):
     return full
 
 
-def _abbrev_regex(p, ignore_case=False):
-    src = "".join("[^`]*" if ch == "*" else "[^A-Z`]+" if ch == "@" else re.escape(ch) for ch in p)
+def _abbrev_regex(p, ignore_case=False, star="[^`]*"):
+    src = "".join(star if ch == "*" else "[^A-Z`]+" if ch == "@" else re.escape(ch) for ch in p)
     return re.compile(src + r"\Z", re.DOTALL | (re.IGNORECASE if ignore_case else 0))
 
 
@@ -566,9 +566,9 @@ def _contexts(*args):
             if ex != p:
                 pats.append(ex)
             for a in aliases():
-                if _abbrev_regex(p).match(a):
+                if _abbrev_regex(p, star=".*").match(a):
                     cs = cs | {a}
-        rxs = [_abbrev_regex(q) for q in pats]
+        rxs = [_abbrev_regex(q, star=".*") for q in pats]
         cs = {c for c in cs if any(r.match(c) for r in rxs)}
     return L(*sorted(cs))
 
@@ -778,7 +778,8 @@ def _get_file(path):
 
 @fn("Get", area=AREA, status="added",
     notes="Get[\"file\"] (<<file) reads a file of Wolfram Language input and evaluates each expression in turn, "
-          "returning the last result; Get[\"ctx`\"] loads ctx.wl, ctx.m, ctx/init.m or ctx/Kernel/init.m from the "
+          "returning the last result (a relative file name is also searched for in PACKAGE_PATH and "
+          "$MIKOSHILANG_PATH); Get[\"ctx`\"] loads ctx.wl, ctx.m, ctx/init.m or ctx/Kernel/init.m from the "
           "working directory, PACKAGE_PATH or $MIKOSHILANG_PATH. A file that cannot be opened raises Get::noopen")
 def _get(name, *opts):
     if opts:
@@ -793,7 +794,13 @@ def _get(name, *opts):
         if p is None:
             raise ValueError(f"Get::noopen: Cannot open {name}.")
         return _get_file(p)
-    return _get_file(os.path.expanduser(name))
+    path = os.path.expanduser(name)
+    if not os.path.isabs(path) and not os.path.exists(path):
+        for d in _search_dirs():
+            if os.path.exists(os.path.join(d, path)):
+                path = os.path.join(d, path)
+                break
+    return _get_file(path)
 
 
 def _needs(c, file=None):
@@ -802,6 +809,7 @@ def _needs(c, file=None):
     if is_rule(c):
         target, alias = c.args
     target = _resolve_context_arg(target, "Needs")
+    path_before = context_path()
     if target not in packages():
         if file is not None:
             if not isinstance(file, str):
@@ -818,6 +826,11 @@ def _needs(c, file=None):
         p = context_path()
         if target not in p:
             _set_own("$ContextPath", L(target, *p))
+    else:
+        if target not in path_before:       # the package's EndPackage put it on the path: undo that
+            _set_own("$ContextPath", L(*[x for x in context_path() if x != target]))
+    if alias is UNH:
+        pass
     elif isinstance(alias, str):
         _check_context(alias, "Needs")
         al = aliases()
@@ -1028,6 +1041,7 @@ K._HELD["Unset"] = _h_unset
 NEW_ATTRIBUTES = {"HoldAllComplete", "NHoldAll", "NHoldFirst", "NHoldRest", "Stub", "Temporary",
                   "SubValuesHoldAll", "NonThreadable", "Locked", "Constant", "ReadProtected"}
 K.KNOWN_ATTRIBUTES |= NEW_ATTRIBUTES
+set_attrs("Unevaluated", "HoldAllComplete")
 K.SUPPORTED_USER_ATTRIBUTES |= NEW_ATTRIBUTES
 
 for _n, _note in [
@@ -1699,6 +1713,13 @@ def _known_options(name):
         return o[name]
     if is_system(name):
         raise NotImplementedError(f"Options[{name}]: the option lists of built-in functions are not catalogued")
+    s = st()
+    if name[:1].isupper() and "`" not in name and name not in s.own and name not in s.down and \
+            name not in s.attrs and not any(K._def_key(l) == name for l, _ in s.exact.values()):
+        # a capitalised name with no user definitions may be a Wolfram built-in MikoshiLang lacks: do not
+        # claim it has no options
+        raise NotImplementedError(f"Options[{name}]: {name} has no user definitions and built-in option lists "
+                                  "are not catalogued")
     return []
 
 
@@ -2422,7 +2443,7 @@ def _ignoring_inactive(pat, expr, b, ev_):
 K.PATTERN_HOOKS["IgnoringInactive"] = _ignoring_inactive
 _added("IgnoringInactive", "IgnoringInactive[patt] matches as patt with Inactive removed from both the pattern "
        "and the expression (Cases[{Sin[m], Inactive[Sin][p]}, IgnoringInactive[Sin[a_]]] gives both)")
-K._PATTERN_HEADS.add("IgnoringInactive") if hasattr(K, "_PATTERN_HEADS") else None
+K._PATTERN_HEADS.update({"IgnoringInactive", "OptionsPattern"})
 
 
 @held("Until", attrs={"HoldAll"},
@@ -2443,7 +2464,7 @@ def _h_until(a, ev_, expr):
     raise RecursionError(f"Until exceeded {K.MAX_ITERATIONS} iterations")
 
 
-class GotoSignal(Exception):
+class GotoSignal(ValueError):
     def __init__(self, tag):
         super().__init__(f"Goto::nolabel: Label {tag} not found")
         self.tag = tag
@@ -2871,6 +2892,10 @@ def _h_stackbegin(a, ev_, expr):
                                                  "evaluations to the stack")
 def _h_stackinhibit(a, ev_, expr):
     _need(a, 1, "StackInhibit")
+    frames = E._STACK.get()
+    mine = frames[-1] if frames and frames[-1][0] is expr else None
+    if mine is not None:
+        mine[1] = False                 # StackInhibit itself is not shown either
     tok = E._STACK_INHIBIT.set(True)
     try:
         return ev_(a[0])
@@ -2920,29 +2945,31 @@ def _depth_cut(chain, n, d=1):
 
 
 def _trace_off(chain, patt):
+    """Forms after a form matching patt in its chain are not traced (the chain's final result is kept)."""
     out = []
-    for el in chain:
+    for i, el in enumerate(chain):
         if isinstance(el, list):
-            f = _first_form(el)
-            if f is not None and _m(patt, f):
-                out.append([x for x in el if not isinstance(x, list)])
-            else:
-                out.append(_trace_off(el, patt))
+            out.append(_trace_off(el, patt))
         else:
             out.append(el)
+            if _m(patt, el):
+                last = chain[-1]
+                if i < len(chain) - 1 and not isinstance(last, list):
+                    out.append(last)
+                return out
     return out
 
 
-def _trace_on(chain, patt, active):
-    if active:
-        return chain
+def _trace_on(chain, patt):
+    """Only the parts of chains from a form matching patt onwards."""
     out = []
-    for el in chain:
+    for i, el in enumerate(chain):
         if isinstance(el, list):
-            f = _first_form(el)
-            sub = _trace_on(el, patt, f is not None and _m(patt, f))
+            sub = _trace_on(el, patt)
             if sub:
                 out.append(sub)
+        elif _m(patt, el):
+            return out + list(chain[i:])
     return out
 
 
@@ -3026,7 +3053,11 @@ def _traced_chain(e, form, opts):
         chain = _trace_off(chain, opts["TraceOff"])
     if "TraceOn" in opts:
         p = opts["TraceOn"]
-        chain = _trace_on(chain, p, bool(chain) and _first_form(chain) is not None and _m(p, _first_form(chain)))
+        f0 = _first_form(chain)
+        if chain and not isinstance(chain[0], list) and f0 is not None and _m(p, f0):
+            pass
+        else:
+            chain = _trace_on(chain, p)
     if "TraceDepth" in opts:
         d = opts["TraceDepth"]
         if is_sym(d, "Infinity"):

@@ -194,6 +194,13 @@ def _check_recursion(depth):
         raise RecursionError(f"$RecursionLimit::reclim: Recursion depth of {lim} exceeded")
 
 
+def _force(a, eva):
+    """Evaluate[x] in a held argument position is evaluated (not under HoldAllComplete)."""
+    if isinstance(a, Expr) and a.head == "Evaluate" and len(a.args) == 1:
+        return eva(a.args[0])
+    return a
+
+
 def _evaluate_body(expr, depth: int) -> Any:
     chain = _CHAIN_NEXT.get()
     if chain:
@@ -263,7 +270,7 @@ def _evaluate_body(expr, depth: int) -> Any:
 
     # 4. Arguments, respecting Hold attributes (HoldAllComplete; SubValuesHoldAll for f[...][args])
     attrs = kernel.attributes(head) if isinstance(head, str) else set()
-    eva = lambda x: _ev_arg(x, depth + 1)  # noqa: E731
+    eva = lambda x: x if isinstance(x, Expr) and x.head == "Unevaluated" else _ev_arg(x, depth + 1)  # noqa: E731
     complete = "HoldAllComplete" in attrs
     n = len(expr.args)
     if isinstance(head, Expr) and kernel.state().attrs:
@@ -276,11 +283,13 @@ def _evaluate_body(expr, depth: int) -> Any:
     if complete or sub_hold or head in _HOLD_ALL or "HoldAll" in attrs:
         new_args = list(expr.args)
         evaluated = range(n) if sub_hold else ()
+        if not complete:
+            new_args = [_force(a, eva) for a in new_args]
     elif head in _HOLD_FIRST or "HoldFirst" in attrs:
-        new_args = list(expr.args[:1]) + [eva(a) for a in expr.args[1:]]
+        new_args = [_force(a, eva) for a in expr.args[:1]] + [eva(a) for a in expr.args[1:]]
         evaluated = range(1, n)
     elif "HoldRest" in attrs:
-        new_args = [eva(a) for a in expr.args[:1]] + list(expr.args[1:])
+        new_args = [eva(a) for a in expr.args[:1]] + [_force(a, eva) for a in expr.args[1:]]
         evaluated = range(min(n, 1))
     else:
         new_args = [eva(a) for a in expr.args]
