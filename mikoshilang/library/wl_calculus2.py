@@ -146,11 +146,13 @@ for _n, _ex, _d in (("Symmetric", None, "Symmetric[{s1, ..., sn}]: symmetry unde
                     ("Antihermitian", 2, "Antihermitian[{s1, s2}]: sign change under conjugate transposition")):
     def _mk(name, exact):
         def f(slots):
-            _slots_ok(slots, name, exact)
+            if not (exact is None and isinstance(slots, Symbol) and slots.name == "All"):  # Symmetric[All]: every slot
+                _slots_ok(slots, name, exact)
             raise Unevaluated()
         return f
     fn(_n, area=AREA, status="added", notes=_d + "; inert symmetry specification used by TensorSymmetry, "
-       "ArraySymbol, MatrixSymbol, Matrices and Arrays; malformed slot lists raise")(_mk(_n, _ex))
+       "ArraySymbol, MatrixSymbol, Matrices and Arrays (Symmetric/Antisymmetric/ZeroSymmetric[All]: every "
+       "slot); malformed slot lists raise")(_mk(_n, _ex))
 
 _DOMAINS = {"Reals", "Complexes", "Integers", "Rationals", "Algebraics", "Booleans", "PositiveReals",
             "NonNegativeReals", "NegativeReals", "NonPositiveReals", "PositiveIntegers", "NonNegativeIntegers"}
@@ -187,6 +189,9 @@ def _symspec_ok(s, rank, fname):
         return
     items = s.args if is_list(s) and all(_head(v) for v in s.args) else (s,)
     for v in items:
+        if _head(v) and v.head in _SYMHEADS[:3] and len(v.args) == 1 and isinstance(v.args[0], Symbol) \
+                and v.args[0].name == "All":
+            continue
         if _head(v) and v.head in _SYMHEADS and len(v.args) == 1:
             sl = _slots_ok(v.args[0], fname)
             if rank is not None and max(sl) > rank:
