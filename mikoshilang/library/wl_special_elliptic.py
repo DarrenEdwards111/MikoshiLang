@@ -2266,6 +2266,127 @@ mpfun("SpheroidalJoiningFactor", 3, _sph_joining,
 
 
 # ---------------------------------------------------------------------------------------------------------------
+# Angular spheroidal functions of the second kind (DLMF 30.8.9, Meixner-Schaefke; Wolfram's SpheroidalQS):
+# Qs_n^m(x) = Sum_{k <= -N-1} (-1)^k a'_k P^m_{n+2k}(x) + Sum_{k >= -N} (-1)^k a_k Q^m_{n+2k}(x),  N = Floor[(n+m)/2],
+# a_k (k >= -R) the Ps coefficients, continued for -N <= k < -R by forward recursion of DLMF 30.8.4 from
+# a_{-N-1} = 0, and a'_k the recessive solution of 30.8.4 as k -> -Infinity normalised by DLMF 30.8.10-11.
+# Ferrers functions (type 2), analytically continued off [-1, 1] as LegendreQ[n, m, x] (mpmath type 2).
+# Reproduces every documented value (SpheroidalQS[3, 2, 1, 0.5] = -0.263019, N[SpheroidalQS[2, 1, 1/3, -11], 20],
+# SpheroidalQS[23, 5, 2 I, 2/3], ...).
+# ---------------------------------------------------------------------------------------------------------------
+
+def _sph_q_coeffs(n, m, g2):
+    """({k: a_k} for k >= -N, {k: a'_k} for k <= -N-1) of DLMF 30.8.9 (m >= 0)."""
+    lam, b = _sph_system(n, m, g2)
+    a = {(l - n) // 2: (-1) ** ((l - n) // 2) * bl for l, bl in b.items()}
+    R, N = (n - m) // 2, (n + m) // 2
+
+    def A(k):
+        return -g2 * mpmath.mpf((n - m + 2 * k - 1) * (n - m + 2 * k)) / ((2 * n + 4 * k - 3) * (2 * n + 4 * k - 1))
+
+    def B(k):
+        return (n + 2 * k) * (n + 2 * k + 1) - \
+            2 * g2 * mpmath.mpf((n + 2 * k) * (n + 2 * k + 1) - 1 + m * m) / ((2 * n + 4 * k - 1) * (2 * n + 4 * k + 3))
+
+    def C(k):
+        return -g2 * mpmath.mpf((n + m + 2 * k + 1) * (n + m + 2 * k + 2)) / ((2 * n + 4 * k + 3) * (2 * n + 4 * k + 5))
+    if N > R:
+        f = {-N - 1: mpmath.mpf(0), -N: mpmath.mpf(1)}
+        for k in range(-N, -R):
+            f[k + 1] = -(A(k) * f[k - 1] + (B(k) - lam) * f[k]) / C(k)
+        if f[-R] == 0:
+            raise ValueError("SpheroidalQS: the coefficients a_{n,k} are undefined for these parameters (DLMF 30.8)")
+        s = a[-R] / f[-R]
+        for k in range(-N, -R):
+            a[k] = f[k] * s
+    Cp = g2 / (4 * m * m - 1) if (n - m) % 2 == 0 else -g2 / mpmath.mpf((2 * m - 1) * (2 * m - 3))
+    K = -N - 1 - 40 - mpmath.mp.prec // 3
+    rho, rhos = mpmath.mpf(0), {}
+    for k in range(K + 1, -N):        # rho_k = a'_{k-1} / a'_k, by the recessive (downward-minimal) continued fraction
+        rho = -C(k - 1) / (B(k - 1) - lam + A(k - 1) * rho)
+        rhos[k] = rho
+    ap = {-N - 1: -Cp * a[-N] / (A(-N - 1) * rhos[-N - 1] + B(-N - 1) - lam)}
+    for k in range(-N - 1, K + 2, -1):
+        ap[k - 1] = rhos[k] * ap[k]
+    return a, ap
+
+
+def _sph_qs(deriv):
+    name = "SpheroidalQS" + ("Prime" if deriv else "")
+
+    def f(n, m, g, x):
+        n, m = _sph_nm(n, m, name)
+        g2 = _sph_g2(g, name)
+        if x in (1, -1):
+            raise ValueError(f"{name}: x = +-1 is a singular point")
+        am = abs(m)
+
+        def run():
+            if g2 == 0:
+                a, ap = {0: mpmath.mpf(1)}, {}
+            else:
+                a, ap = _sph_q_coeffs(n, am, g2)
+            degs = [n + 2 * k for k in a]
+            lo, hi = min(degs), max(degs) + 1
+            inside = not isinstance(x, mpmath.mpc) and abs(x) < 1
+            if inside:
+                # Ferrers Q on (-1, 1): the three-term recurrence in the degree is stable (P, Q both oscillatory)
+                # (the recurrence cannot cross l = m - 1 -> m, whose coefficient l - m + 1 vanishes)
+                top = max(lo + 1, am)
+                Q = {l: mpmath.legenq(l, am, x, type=2) for l in range(lo, top + 1)}
+                for l in range(top, hi):
+                    Q[l + 1] = ((2 * l + 1) * x * Q[l] - (l + am) * Q[l - 1]) / (l - am + 1)
+                getq = Q.__getitem__
+            else:
+                # off (-1, 1) the continued Ferrers Q mixes the dominant P and the minimal Q, so no recurrence
+                # direction is stable: evaluate each degree directly, stopping once the terms are negligible
+                Q = {}
+
+                def getq(l):
+                    if l not in Q:
+                        Q[l] = mpmath.legenq(l, am, x, type=2)
+                    return Q[l]
+
+            def dq(l):
+                if not deriv:
+                    return getq(l)
+                return ((l + 1) * x * getq(l) - (l - am + 1) * getq(l + 1)) / (1 - x * x)
+            terms, small = [], 0
+            tiny = mpmath.mpf(2) ** (-mpmath.mp.prec - 10)
+            for k in sorted(a):
+                t = (-1) ** k * a[k] * dq(n + 2 * k)
+                terms.append(t)
+                if not inside and k > -(n - am) // 2:
+                    small = small + 1 if abs(t) <= tiny * max(abs(u) for u in terms) else 0
+                    if small >= 3:
+                        break
+            out = mpmath.fsum(terms)
+            if ap:
+                Ls = {k: -(n + 2 * k) - 1 for k in ap}      # P^m_nu = P^m_{-nu-1}
+                tab = _legP_table(max(Ls.values()) + 1, am, x)
+                out += mpmath.fsum((-1) ** k * apk * _legP(Ls[k], am, x, deriv, tab) for k, apk in ap.items())
+            if m < 0:
+                out *= (-1) ** am * mpmath.factorial(n - am) / mpmath.factorial(n + am)
+            return out
+        return _verified(run, name)
+
+    def exact(n, m, g, x):
+        if any(isinstance(v, list) for v in (n, m, g, x)) or g != 0 or not (n.is_integer and m.is_integer):
+            return None
+        if deriv:
+            return None
+        return Expr("LegendreQ", n, m, x) if n >= abs(m) else None
+    mpfun(name, 4, f, exact,
+          notes=f"{'x-derivative of the ' if deriv else ''}angular spheroidal function of the second kind "
+                "Qs_n^m(gamma, x) (DLMF 30.8.9 Meixner-Schaefke series in Ferrers functions; SpheroidalQS[n, m, 0, x] "
+                "= LegendreQ[n, m, x]); integer n >= |m|, real or imaginary gamma (others raise); x = +-1 raises")
+
+
+_sph_qs(False)
+_sph_qs(True)
+
+
+# ---------------------------------------------------------------------------------------------------------------
 # SiegelTheta[Omega, s] = Sum_{n in Z^p} Exp[Pi I n.Omega.n + 2 Pi I n.s];
 # SiegelTheta[{nu1, nu2}, Omega, s] = Sum Exp[Pi I (n+nu1).Omega.(n+nu1) + 2 Pi I (n+nu1).(s+nu2)].
 # The lattice sum is truncated to the ellipsoid outside which every term is below 2^-(prec+20) of the largest.

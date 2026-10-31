@@ -533,6 +533,35 @@ SPHEROIDAL = [
     ("N[SpheroidalJoiningFactor[2, -1, -1], 20]", HP("0.13478393896276848251")),
     ("SpheroidalS1[2, 0, 1., 0.7] - SpheroidalJoiningFactor[2, 0, 1.] SpheroidalPS[2, 0, 1., 0.7]", Zero(1e-14)),
     ("SpheroidalJoiningFactor[1, 0.5, -5]", R),
+    # SpheroidalQS: documented values (DLMF 30.8.9 series)
+    ("SpheroidalQS[3, 2, 1, 0.5]", W(-0.263019)),
+    ("SpheroidalQS[5, 1, .1, .3]", W(-3.00656)),
+    ("SpheroidalQS[3, 2, 1., .2]", W(-6.66162)),
+    ("N[SpheroidalQS[23, 5, 2 I, 2/3]]", W(-1.7082389401816712e6, 14)),
+    ("SpheroidalQS[1, 0, 0, 0.5]", W(-0.7253469278329727, 15)),
+    ("SpheroidalQS[2, 1, 0.5 + I, 0.3]", R),
+    ("SpheroidalQS[2, 1, 1/3, -11.]", W(-190.54416091822214467 + 0.00036531273120174j, 12)),
+    ("SpheroidalQS[2, 1, 0, 1/2]", Pred(lambda g: str(g) == "LegendreQ[2, 1, 1/2]", "LegendreQ[2, 1, 1/2]")),
+    ("SpheroidalQS[3, 2, 0., 0.4] - LegendreQ[3, 2, 0.4]", Zero(1e-13)),
+    ("SpheroidalQS[3/2, 1, 1, 0.5]", R),
+    ("SpheroidalQS[2, 1, 1, 1.]", R),
+    # parity Qs(-x) = (-1)^(n-m+1) Qs(x) (DLMF 30.5.2)
+    ("SpheroidalQS[4, 1, 1.3, -0.35] - SpheroidalQS[4, 1, 1.3, 0.35]", Zero(1e-12)),
+    # Wronskian (1 - x^2) W{Ps, Qs} is constant (DLMF 30.5.4)
+    ("With[{x = 0.3, y = -0.6}, (1 - x^2) (SpheroidalPS[3, 1, 1.2, x] SpheroidalQSPrime[3, 1, 1.2, x] - "
+     "SpheroidalPSPrime[3, 1, 1.2, x] SpheroidalQS[3, 1, 1.2, x]) - (1 - y^2) (SpheroidalPS[3, 1, 1.2, y] "
+     "SpheroidalQSPrime[3, 1, 1.2, y] - SpheroidalPSPrime[3, 1, 1.2, y] SpheroidalQS[3, 1, 1.2, y])]", Zero(1e-11)),
+    ("SpheroidalQSPrime[3, 2, 1, 0.5]", W(28.5884)),
+    ("SpheroidalQSPrime[5, 1, .1, .3]", W(0.93037)),
+    ("SpheroidalQSPrime[3, 2, -.3, .2]", W(12.5829)),
+    ("N[SpheroidalQSPrime[5, 3, I 2, 1/2]]", W(-281.371)),
+    ("SpheroidalQSPrime[2, 2, 1/3, 0.2111111111111111]", W(8.0651323397698955, 14)),
+    ("SpheroidalQSPrime[3, 2, 1, .2`40]", HP("12.976371063736039748663845236251542136510")),
+    ("SpheroidalQSPrime[1, 0, 0, 0.5]", W(1.2159728110007215, 15)),
+    # the ODE (1-x^2) y'' - 2 x y' + (lambda + c^2 (1-x^2) - m^2/(1-x^2)) y = 0, y'' by a central difference
+    ("With[{x = 0.4, h = 10^-5, c = 1.7}, (1 - x^2) (SpheroidalQSPrime[3, 2, c, x + h] - SpheroidalQSPrime[3, 2, c, "
+     "x - h])/(2 h) - 2 x SpheroidalQSPrime[3, 2, c, x] + (SpheroidalEigenvalue[3, 2, c] + c^2 (1 - x^2) - "
+     "4/(1 - x^2)) SpheroidalQS[3, 2, c, x]]", Zero(1e-6)),
 ]
 
 CASES = ZEROS + CARLSON + WAVES + THETA + JACOBI + WEIER + HEUN + MATHIEU + LAME + SPHEROIDAL
