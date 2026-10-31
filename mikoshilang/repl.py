@@ -90,8 +90,8 @@ def main():
             result = session.evaluate(expr)
             history_out[counter] = result
             if result is not None:  # Null output is not printed, as in Wolfram
-                from .formatting import input_form
-                shown = result if isinstance(result, str) else input_form(result)
+                from .library.wl_forms import display_text   # display wrappers (NumberForm, Grid, ...) as text
+                shown = display_text(result)
                 print(f"Out[{counter}]= {shown}")
         except ParseError as ex:
             print(f"  Parse error: {ex}")

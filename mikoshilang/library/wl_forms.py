@@ -204,7 +204,7 @@ class NumOpts:
                 raise ValueError(f"{fname}: ScientificNotationThreshold must be a pair {{lo, hi}} of integers")
         self.thresh = tuple(self._thr(t, fname) for t in th.args)
         sp_ = o["SignPadding"]
-        if sp_ not in (True, False):
+        if sp_ is not True and sp_ is not False:
             raise ValueError(f"{fname}: SignPadding must be True or False")
         self.sign_padding = sp_
 
@@ -350,6 +350,8 @@ def _format_number(x, n, f, o, percent):
     ndig = len(left) + len(right)
     left_b = _blocks(left, o.block[0], o.sep[0], False)
     right_b = _blocks(right, o.block[1], o.sep[1], True)
+    if percent and not right and f is None:
+        has_point = False                 # PercentForm[0.5] is 50%, not 50.%
     body = left_b + (o.point + right_b if has_point else "")
     pre, suf = o.signs[0] if neg and (d != 0) else o.signs[1]
     maxsign = max(len(o.signs[0][0]), len(o.signs[1][0]))
@@ -1577,7 +1579,7 @@ def _check_style_opt(name, v, fname):
     if name == "FontFamily":
         if not isinstance(v, str) and not is_sym(v, "Automatic") and not is_sym(v, "Inherited"):
             raise ValueError(f"{fname}: FontFamily must be a string such as \"Helvetica\"")
-    if name == "Visible" and v not in (True, False):
+    if name == "Visible" and v is not True and v is not False:
         raise ValueError(f"{fname}: Visible must be True or False")
     if name == "ScriptLevel":
         if not (_is_int(v) and int(v) >= 0) and not is_sym(v, "Automatic") and not is_sym(v, "Inherited"):
@@ -2309,7 +2311,10 @@ class TeX:
         if h == "Superscript" and len(a) == 2:
             return f"{self.wrap(self.tex(a[0]), P_ATOM)}^{{{self.tex(a[1])[0]}}}", P_POW
         if h == "Subsuperscript" and len(a) == 3:
-            return f"{self.wrap(self.tex(a[0]), P_ATOM)}_{{{self.tex(a[1])[0]}}}^{{{self.tex(a[2])[0]}}}", P_POW
+            b_, c_ = self.tex(a[1])[0], self.tex(a[2])[0]
+            b_ = b_ if len(b_) == 1 else "{" + b_ + "}"
+            c_ = c_ if len(c_) == 1 else "{" + c_ + "}"
+            return f"{self.wrap(self.tex(a[0]), P_ATOM)}_{b_}^{c_}", P_POW
         if h in ("Integrate", "Sum", "Product") and len(a) >= 2:
             return self.bigop(h, a)
         if h == "Limit" and len(a) == 2 and isinstance(a[1], Expr) and a[1].head == "Rule":
