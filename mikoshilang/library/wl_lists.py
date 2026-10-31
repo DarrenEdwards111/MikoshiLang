@@ -1622,6 +1622,8 @@ def _modify_symbol(s, f, fname):
 
 # ---------------------------------------------------------------- rule application
 def _rule_list(r, fname):
+    if isinstance(r, Expr) and r.head == "Dispatch" and len(r.args) == 1:     # Dispatch[{rules}] (W03)
+        r = r.args[0]
     rules = list(r.args) if is_list(r) else [r]
     if not all(is_rule(x) for x in rules):
         raise ValueError(f"{fname}: {r!r} is not a rule or list of rules")
