@@ -36,7 +36,7 @@ _INV_FUNCS = {
     sp.beta: "Beta", sp.zeta: "Zeta", sp.conjugate: "Conjugate", sp.re: "Re", sp.im: "Im",
     sp.binomial: "Binomial", sp.erf: "Erf", sp.Max: "Max", sp.Min: "Min", sp.Mod: "Mod",
     sp.besselj: "BesselJ", sp.bessely: "BesselY", sp.loggamma: "LogGamma",
-    sp.polygamma: "PolyGamma", sp.fibonacci: "Fibonacci",
+    sp.polygamma: "PolyGamma", sp.fibonacci: "Fibonacci", sp.polylog: "PolyLog",
 }
 
 
@@ -470,6 +470,8 @@ def from_sympy(sexpr) -> Any:
         return Expr(_INV_FUNCS[type(sexpr)], *(from_sympy(a) for a in sexpr.args))
     if isinstance(sexpr, sp.Number):
         return float(sexpr)
+    if isinstance(sexpr, sp.NumberSymbol) and getattr(sexpr, "_wl_name", ""):
+        return Symbol(sexpr._wl_name)    # library constants (Glaisher, Khinchin, ...)
     # Fallback
     if hasattr(sexpr, 'args') and hasattr(sexpr, 'func'):
         fname = type(sexpr).__name__

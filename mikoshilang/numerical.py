@@ -30,6 +30,8 @@ def numerical(expr, precision: int = 15) -> Any:
     if isinstance(precision, bool) or not isinstance(precision, int) or precision < 1:
         raise ValueError("Precision must be a positive integer")
     expr = _numericize_special(expr, precision)
+    if isinstance(expr, Expr) and expr.head == "List":
+        return Expr("List", *(numerical(a, precision) for a in expr.args))
     from .precision import input_precision
     import mpmath
     pin = input_precision([expr])
@@ -61,6 +63,13 @@ def _leaves(args):
     return out
 
 
+def _num_arg(a, precision):
+    """numerical() of an argument, mapped over List arguments (e.g. invariants {g2, g3})."""
+    if isinstance(a, Expr) and a.head == "List":
+        return Expr("List", *(_num_arg(x, precision) for x in a.args))
+    return numerical(a, precision)
+
+
 def _numericize_special(expr, precision):
     """Evaluate calls of mpmath-backed special functions (which stay symbolic for exact arguments) with
     approximate arguments at ``precision`` digits, so that N[f[exact args], p] gives p digits."""
@@ -79,7 +88,7 @@ def _numericize_special(expr, precision):
         num = []
         for a in args:
             try:
-                num.append(numerical(a, precision + 5) if not isinstance(a, (str, bool)) else a)
+                num.append(_num_arg(a, precision + 5) if not isinstance(a, (str, bool)) else a)
             except Exception:
                 num.append(a)
         try:

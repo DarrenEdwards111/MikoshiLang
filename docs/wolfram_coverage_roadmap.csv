@@ -130,7 +130,7 @@ $MaxExtraPrecision,Core Language & Structure,missing,2,,0,GlobalComputationSetti
 $MaxMachineNumber,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
 $MaxNumber,Core Language & Structure,missing,2,,0,SystemInformation MemoryMeasurementAndOptimization RepresentationOfNumbers
 $MaxPiecewiseCases,Core Language & Structure,implemented,2,,0,GlobalComputationSettingsAndParameters
-$MaxPrecision,Core Language & Structure,missing,2,,0,GlobalComputationSettingsAndParameters MemoryMeasurementAndOptimization RepresentationOfNumbers PrecisionAndAccuracyControl
+$MaxPrecision,Core Language & Structure,implemented,2,,0,GlobalComputationSettingsAndParameters MemoryMeasurementAndOptimization RepresentationOfNumbers PrecisionAndAccuracyControl
 $MaxRootDegree,Core Language & Structure,implemented,2,,0,GlobalComputationSettingsAndParameters
 $MessageGroups,Core Language & Structure,implemented,2,,0,Messages
 $MessageList,Core Language & Structure,implemented,2,,0,Messages
@@ -138,7 +138,7 @@ $MessagePrePrint,Core Language & Structure,implemented,2,,0,Messages SessionCust
 $Messages,"Options, system variables & unclassified",implemented,3,,0,
 $MinMachineNumber,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
 $MinNumber,Core Language & Structure,missing,2,,0,SystemInformation RepresentationOfNumbers
-$MinPrecision,Symbolic & Numeric Computation,missing,2,,0,GlobalComputationSettingsAndParameters RepresentationOfNumbers PrecisionAndAccuracyControl SessionCustomization
+$MinPrecision,Symbolic & Numeric Computation,implemented,2,,0,GlobalComputationSettingsAndParameters RepresentationOfNumbers PrecisionAndAccuracyControl SessionCustomization
 $MobilePhone,External Interfaces & Connections,missing,3,,0,AccessingExternalServicesAndAPIs MailMessagesEtc
 $ModuleNumber,Core Language & Structure,implemented,2,,0,NamespaceManagement GlobalComputationSettingsAndParameters
 $NetEvaluator,"Options, system variables & unclassified",infeasible,,ML models / LLM services,0,
@@ -313,18 +313,18 @@ AircraftData,"Options, system variables & unclassified",infeasible,,curated data
 AirportData,"Options, system variables & unclassified",infeasible,,curated data,0,
 AiryAi,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FunctionsUsedInQuantumMechanics SpecialFunctions BesselRelatedFunctions
 AiryAiPrime,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions BesselRelatedFunctions
-AiryAiZero,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics BesselRelatedFunctions InverseFunctions
+AiryAiZero,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics BesselRelatedFunctions InverseFunctions
 AiryBi,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics BesselRelatedFunctions
 AiryBiPrime,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
-AiryBiZero,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics BesselRelatedFunctions InverseFunctions
-AlgebraicIntegerQ,Higher Mathematical Computation,missing,2,,0,TestingExpressions AlgebraicNumberTheory NumberRecognition
-AlgebraicNumber,Higher Mathematical Computation,missing,2,,0,NumberTheory AlgebraicNumbers AlgebraicNumberTheory
-AlgebraicNumberDenominator,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-AlgebraicNumberNorm,Symbolic & Numeric Computation,missing,2,,0,NumberTheoreticFunctions AlgebraicNumberTheory
-AlgebraicNumberPolynomial,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-AlgebraicNumberTrace,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-AlgebraicUnitQ,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-Algebraics,Symbolic & Numeric Computation,missing,2,,0,NumberTheory AlgebraicNumbers AssumptionsAndDomains NumberRecognition
+AiryBiZero,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics BesselRelatedFunctions InverseFunctions
+AlgebraicIntegerQ,Higher Mathematical Computation,implemented,2,,0,TestingExpressions AlgebraicNumberTheory NumberRecognition
+AlgebraicNumber,Higher Mathematical Computation,implemented,2,,0,NumberTheory AlgebraicNumbers AlgebraicNumberTheory
+AlgebraicNumberDenominator,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+AlgebraicNumberNorm,Symbolic & Numeric Computation,implemented,2,,0,NumberTheoreticFunctions AlgebraicNumberTheory
+AlgebraicNumberPolynomial,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+AlgebraicNumberTrace,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+AlgebraicUnitQ,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+Algebraics,Symbolic & Numeric Computation,implemented,2,,0,NumberTheory AlgebraicNumbers AssumptionsAndDomains NumberRecognition
 Alignment,Notebook Documents & Presentation,implemented,3,,0,LayoutAndTables CombiningGraphics UserInterfaceStructuringAndLayout GridsAndTables
 AlignmentPoint,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance CombiningGraphics
 All,Core Language & Structure,implemented,1,,14,ComputationWithStructuredDatasets GraphicsOptionsAndStyling OptionsManagement PlottingAndImageRegions
@@ -347,7 +347,7 @@ AlphabeticOrder,Core Language & Structure,implemented,1,,0,LinguisticData Testin
 AlphabeticSort,Core Language & Structure,implemented,1,,0,StringManipulation RearrangingAndRestructuringLists StringOperations TabularTransformation
 AlternatingFactorial,Symbolic & Numeric Computation,implemented,2,,0,RecurrenceAndSumFunctions
 AlternatingGroup,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
-AlternatingHarmonicNumber,Symbolic & Numeric Computation,missing,2,,0,RecurrenceAndSumFunctions
+AlternatingHarmonicNumber,Symbolic & Numeric Computation,implemented,2,,0,RecurrenceAndSumFunctions
 AlternativeHypothesis,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 Alternatives,Core Language & Structure,implemented,1,,4,LanguageOverview VariablesAndFunctions RulesAndPatterns Syntax
 AltitudeMethod,"Options, system variables & unclassified",infeasible,,curated data,0,
@@ -361,11 +361,11 @@ AnatomyStyling,Scientific and Medical Data & Computation,infeasible,,curated dat
 AnchoredSearch,"Options, system variables & unclassified",missing,3,,0,
 And,Core Language & Structure,implemented,1,,10,LanguageOverview ProceduralProgramming Syntax DiscreteMathematics
 AndersonDarlingTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests RandomVariables
-AngerJ,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
+AngerJ,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 AngleBisector,Geometry,missing,2,,0,PlaneGeometry SyntheticGeometry AnglesAndPolarCoordinates
 AngleBracket,Core Language & Structure,missing,2,,0,WolframLanguageSyntaxCharacters SymbolicNotationalForms
-AnglePath,Higher Mathematical Computation,missing,1,,5,IteratedMapsAndFractals ComputationalSystemsAndDiscovery AnglesAndPolarCoordinates
-AnglePath3D,Higher Mathematical Computation,missing,2,,1,IteratedMapsAndFractals ComputationalSystemsAndDiscovery AnglesAndPolarCoordinates
+AnglePath,Higher Mathematical Computation,implemented,1,,5,IteratedMapsAndFractals ComputationalSystemsAndDiscovery AnglesAndPolarCoordinates
+AnglePath3D,Higher Mathematical Computation,implemented,2,,1,IteratedMapsAndFractals ComputationalSystemsAndDiscovery AnglesAndPolarCoordinates
 AngleVector,Core Language & Structure,missing,2,,0,OperationsOnVectors AnglesAndPolarCoordinates TrigonometricFunctions
 AngularGauge,Data Manipulation & Analysis,missing,2,,1,DataVisualization ChartingAndInformationVisualization DynamicVisualization Gauges
 Animate,Visualization & Graphics,infeasible,,front end / notebooks,0,ChartingAndInformationVisualization DynamicVisualization PresentationsWithTheWolframSystem InteractiveManipulation
@@ -407,10 +407,10 @@ ApartSquareFree,Higher Mathematical Computation,implemented,2,,0,PolynomialFacto
 Appearance,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,ControlObjects AudioRepresentation UserInterfaceStructuringAndLayout Palettes
 AppearanceElements,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,WolframAlphaIntegration OptionsAndStylingForInteractiveManipulation
 AppearanceRules,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,CreatingFormsAndApps FormStructureAndLayout
-AppellF1,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions SpecialFunctions HypergeometricFunctions
-AppellF2,Symbolic & Numeric Computation,missing,2,,0,HypergeometricFunctions
-AppellF3,Symbolic & Numeric Computation,missing,2,,0,HypergeometricFunctions
-AppellF4,Symbolic & Numeric Computation,missing,2,,0,HypergeometricFunctions
+AppellF1,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions SpecialFunctions HypergeometricFunctions
+AppellF2,Symbolic & Numeric Computation,implemented,2,,0,HypergeometricFunctions
+AppellF3,Symbolic & Numeric Computation,implemented,2,,0,HypergeometricFunctions
+AppellF4,Symbolic & Numeric Computation,implemented,2,,0,HypergeometricFunctions
 Append,Core Language & Structure,implemented,1,,1,ListManipulation Expressions FunctionalProgramming ComputationWithStructuredDatasets
 AppendLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 AppendTo,Core Language & Structure,implemented,1,,1,ProceduralProgramming Assignments ConstructingLists ElementsOfLists
@@ -424,15 +424,15 @@ ArcCosDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
 ArcCosh,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing ElementaryFunctions HyperbolicFunctions InverseFunctions
 ArcCot,Sound & Video,implemented,3,,0,TrigonometricFunctions
 ArcCotDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
-ArcCoth,Symbolic & Numeric Computation,missing,2,,0,HyperbolicFunctions
+ArcCoth,Symbolic & Numeric Computation,implemented,2,,0,HyperbolicFunctions
 ArcCsc,Sound & Video,implemented,3,,0,TrigonometricFunctions
 ArcCscDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
-ArcCsch,Symbolic & Numeric Computation,missing,2,,0,HyperbolicFunctions
+ArcCsch,Symbolic & Numeric Computation,implemented,2,,0,HyperbolicFunctions
 ArcCurvature,Symbolic & Numeric Computation,implemented,2,,0,VectorAnalysis
 ArcLength,Symbolic & Numeric Computation,implemented,2,,0,Calculus PlaneGeometry SolidGeometry GeometricPropertiesAndMeasures
 ArcSec,Sound & Video,implemented,3,,0,TrigonometricFunctions
 ArcSecDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
-ArcSech,Symbolic & Numeric Computation,missing,2,,0,HyperbolicFunctions
+ArcSech,Symbolic & Numeric Computation,implemented,2,,0,HyperbolicFunctions
 ArcSin,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing ElementaryFunctions TrigonometricFunctions InverseFunctions
 ArcSinDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
 ArcSinDistribution,Symbolic & Numeric Computation,missing,2,,0,BoundedDomainDistributions
@@ -445,7 +445,7 @@ Arg,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions GPUCom
 ArgMax,Symbolic & Numeric Computation,implemented,2,,0,Optimization DiscreteCalculus GeometricSolvers SymbolicArrays
 ArgMin,Symbolic & Numeric Computation,implemented,2,,0,Optimization DiscreteCalculus GeometricSolvers SymbolicArrays
 ArgumentsOptions,Core Language & Structure,implemented,2,,0,PackageDevelopment RobustnessAndErrorHandling OptionsManagement PackageBulletproofing
-ArithmeticGeometricMean,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals
+ArithmeticGeometricMean,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
 Around,Data Manipulation & Analysis,missing,2,,1,DataVisualization ProbabilityAndStatistics Units AstronomicalComputationAndData
 AroundReplace,Data Manipulation & Analysis,missing,2,,0,Units NumbersWithUncertainty
 Array,Core Language & Structure,implemented,1,,14,LanguageOverview ListManipulation FunctionalProgramming HandlingArraysOfData
@@ -630,7 +630,7 @@ BSplineBasis,Data Manipulation & Analysis,missing,2,,0,Splines
 BSplineCurve,Data Manipulation & Analysis,missing,2,,0,GraphicsObjects Splines
 BSplineFunction,Data Manipulation & Analysis,missing,2,,0,CurveFittingAndApproximateFunctions Splines
 BSplineSurface,Data Manipulation & Analysis,missing,2,,0,GraphicsObjects Splines
-BabyMonsterGroupB,Higher Mathematical Computation,missing,2,,0,NamedGroups
+BabyMonsterGroupB,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 Back,Visualization & Graphics,missing,3,,0,3DGraphicsOptions
 Background,Notebook Documents & Presentation,implemented,1,,3,AutomatedReports GraphicsOptionsAndStyling RasterImageFormats NotebookFormattingAndStyling
 Backslash,"Options, system variables & unclassified",missing,3,,0,
@@ -675,7 +675,7 @@ Begin,Core Language & Structure,implemented,1,,0,PackageDevelopment ScopingConst
 BeginDialogPacket,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 BeginPackage,Core Language & Structure,implemented,2,,0,PackageDevelopment NamespaceManagement PackageBulletproofing
 BellB,Symbolic & Numeric Computation,implemented,2,,0,IntegerFunctions NumberTheoreticFunctions RecurrenceAndSumFunctions CombinatorialFunctions
-BellY,Symbolic & Numeric Computation,missing,2,,0,CombinatorialFunctions
+BellY,Symbolic & Numeric Computation,implemented,2,,0,CombinatorialFunctions
 Below,Visualization & Graphics,implemented,3,,0,3DGraphicsOptions
 BenfordDistribution,Symbolic & Numeric Computation,missing,2,,0,DiscreteUnivariateDistributions BoundedDomainDistributions
 BeniniDistribution,Symbolic & Numeric Computation,missing,2,,0,HeavyTailDistributions
@@ -690,10 +690,10 @@ BesagL,Data Manipulation & Analysis,missing,2,,0,DescriptiveStatistics SpatialPo
 BesselFilterModel,Sound & Video,infeasible,,audio / video,0,SignalFilteringAndFilterDesign
 BesselI,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions ContinuedFractionsAndRationalApproximations BesselRelatedFunctions
 BesselJ,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions ScientificModels FunctionsForSeparableCoordinateSystems FunctionsUsedInOptics
-BesselJZero,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInOptics SpecialFunctions BesselRelatedFunctions InverseFunctions
+BesselJZero,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInOptics SpecialFunctions BesselRelatedFunctions InverseFunctions
 BesselK,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FunctionsUsedInQuantumMechanics SpecialFunctions BesselRelatedFunctions
 BesselY,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems SpecialFunctions BesselRelatedFunctions
-BesselYZero,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions InverseFunctions
+BesselYZero,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions InverseFunctions
 Beta,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics SpecialFunctions GammaFunctionsAndRelatedFunctions
 BetaBinomialDistribution,Symbolic & Numeric Computation,missing,2,,0,DistributionsUsedInActuarialScience UrnModelDistributions DiscreteUnivariateDistributions BoundedDomainDistributions
 BetaDistribution,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics ParametricStatisticalDistributions BoundedDomainDistributions
@@ -707,7 +707,7 @@ BezierCurve,Data Manipulation & Analysis,missing,2,,0,GraphicsObjects Splines
 BezierFunction,Data Manipulation & Analysis,missing,2,,0,CurveFittingAndApproximateFunctions Splines
 BezierSurface,Data Manipulation & Analysis,missing,2,,0,Splines
 BilateralFilter,Images,missing,3,,0,ImageProcessing ImageFilteringAndNeighborhoodProcessing ImageRestoration 3DImages
-BilateralHypergeometricPFQ,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions HypergeometricFunctions
+BilateralHypergeometricPFQ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions HypergeometricFunctions
 BilateralLaplaceTransform,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms SignalTransforms
 BilateralZTransform,Higher Mathematical Computation,missing,2,,0,SummationTransforms
 BinCounts,Core Language & Structure,implemented,1,,0,ListManipulation HandlingArraysOfData NumericalData MathematicalAndCountingOperationsOnLists
@@ -818,7 +818,7 @@ BooleanRegion,Visualization & Graphics,missing,3,,0,GeometricComputation Derived
 BooleanStrings,"Options, system variables & unclassified",implemented,3,,0,
 BooleanTable,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation ComputationalSystemsAndDiscovery
 BooleanVariables,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation
-Booleans,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
+Booleans,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 BorderDimensions,Images,missing,3,,0,BasicImageManipulation ImageGeometry
 BorelTannerDistribution,Symbolic & Numeric Computation,missing,2,,0,DiscreteUnivariateDistributions
 Bottom,"Options, system variables & unclassified",implemented,2,,1,
@@ -912,7 +912,7 @@ CanonicalizePolygon,Visualization & Graphics,missing,3,,0,Polygons
 CanonicalizePolyhedron,Visualization & Graphics,missing,3,,0,Polyhedra
 CanonicalizeRegion,Geometry,missing,2,,0,GeometricComputation
 CantorMesh,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals MeshRegions
-CantorStaircase,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions IteratedMapsAndFractals
+CantorStaircase,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IteratedMapsAndFractals
 Canvas,Visualization & Graphics,infeasible,,front end / notebooks,1,GraphicsInteractivityAndDrawing NotebookFormattingAndStyling AnnotatingAndCombiningGraphics CombiningGraphics
 Cap,"Options, system variables & unclassified",missing,3,,0,
 CapForm,Visualization & Graphics,missing,3,,0,GraphicsDirectives
@@ -922,14 +922,14 @@ CapsuleShape,Geometry,missing,2,,0,GeometricSpecialRegions
 CaptureRunning,"Options, system variables & unclassified",missing,3,,0,
 CaputoD,"Options, system variables & unclassified",implemented,3,,0,
 CarlemanLinearize,Engineering Data & Computation,infeasible,,curated data,0,NonlinearControlSystems
-CarlsonRC,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals
-CarlsonRD,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals
-CarlsonRE,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals
-CarlsonRF,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions EllipticIntegrals
-CarlsonRG,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals
-CarlsonRJ,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals
-CarlsonRK,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions EllipticIntegrals
-CarlsonRM,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals
+CarlsonRC,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
+CarlsonRD,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
+CarlsonRE,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
+CarlsonRF,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions EllipticIntegrals
+CarlsonRG,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
+CarlsonRJ,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
+CarlsonRK,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions EllipticIntegrals
+CarlsonRM,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
 CarmichaelLambda,Symbolic & Numeric Computation,implemented,2,,0,NumberTheoreticFunctions CryptographicNumberTheory
 CaseOrdering,"Options, system variables & unclassified",implemented,3,,0,
 CaseSensitive,Core Language & Structure,missing,2,,0,ProgrammableLinguisticInterface
@@ -1005,7 +1005,7 @@ CentralMomentGeneratingFunction,Data Manipulation & Analysis,implemented,2,,0,St
 Cepstrogram,Machine Learning & LLMs,missing,3,,0,SpeechComputation AudioProcessing VideoAnalysis AudioAnalysis
 CepstrogramArray,Machine Learning & LLMs,missing,3,,0,AudioAnalysis AudioRepresentation FourierAnalysis SignalAnalysis
 CepstrumArray,Machine Learning & LLMs,missing,3,,0,AudioAnalysis AudioRepresentation FourierAnalysis
-ChampernowneNumber,Symbolic & Numeric Computation,missing,2,,0,MathematicalConstants ContinuedFractionsAndRationalApproximations
+ChampernowneNumber,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants ContinuedFractionsAndRationalApproximations
 ChanVeseBinarize,Images,missing,3,,0,SegmentationAnalysis ImageComposition
 ChannelBase,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 ChannelBrokerAction,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
@@ -1092,7 +1092,7 @@ ClearCookies,Geographic Data & Computation,infeasible,,curated data,0,CookieMana
 ClearDistributedDefinitions,Core Language & Structure,missing,2,,0,ParallelComputationSetupAndConfiguration DataParallelism ResourceSharingInParallelComputing
 ClearPermissions,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,StructuredDataInTheCloud CloudPermissionsControl
 ClearSystemCache,Core Language & Structure,implemented,2,,0,TuningAndDebugging TimeMeasurementAndOptimization MemoryMeasurementAndOptimization LowLevelSystemOptimization
-ClebschGordan,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics CombinatorialFunctions
+ClebschGordan,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics CombinatorialFunctions
 ClickPane,Visualization & Graphics,infeasible,,front end / notebooks,0,DynamicVisualization GraphicsInteractivityAndDrawing ControlObjects CustomInterfaceConstruction
 ClickToCopy,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects CustomInterfaceConstruction ClipboardOperations DialogBoxes
 ClickToCopyEnabled,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
@@ -1186,13 +1186,13 @@ ColumnwiseThread,Data Manipulation & Analysis,missing,2,,0,TabularProcessing Tab
 ColumnwiseValue,Data Manipulation & Analysis,missing,2,,0,TabularTransformation
 Comap,Core Language & Structure,implemented,1,,0,FunctionalProgramming StructuralOperationsOnExpressions FunctionCompositionAndOperatorForms
 ComapApply,Core Language & Structure,implemented,1,,0,FunctionalProgramming StructuralOperationsOnExpressions FunctionCompositionAndOperatorForms
-CombinatorB,"Options, system variables & unclassified",missing,3,,0,
-CombinatorC,"Options, system variables & unclassified",missing,3,,0,
-CombinatorI,"Options, system variables & unclassified",missing,3,,0,
-CombinatorK,"Options, system variables & unclassified",missing,3,,0,
-CombinatorS,"Options, system variables & unclassified",missing,3,,0,
-CombinatorW,"Options, system variables & unclassified",missing,3,,0,
-CombinatorY,"Options, system variables & unclassified",missing,3,,0,
+CombinatorB,"Options, system variables & unclassified",implemented,3,,0,
+CombinatorC,"Options, system variables & unclassified",implemented,3,,0,
+CombinatorI,"Options, system variables & unclassified",implemented,3,,0,
+CombinatorK,"Options, system variables & unclassified",implemented,3,,0,
+CombinatorS,"Options, system variables & unclassified",implemented,3,,0,
+CombinatorW,"Options, system variables & unclassified",implemented,3,,0,
+CombinatorY,"Options, system variables & unclassified",implemented,3,,0,
 CombinedEntityClass,Core Language & Structure,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),0,KnowledgeRepresentationAndAccess WorkingWithRelationalDatabases EntityTypes
 CombinerFunction,Strings & Text,missing,2,,0,XMLTemplates
 CometData,"Options, system variables & unclassified",infeasible,,curated data,0,
@@ -1229,7 +1229,7 @@ Complement,Core Language & Structure,implemented,1,,1,DiscreteMathematics Rearra
 ComplementedEntityClass,Core Language & Structure,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),0,KnowledgeRepresentationAndAccess WorkingWithRelationalDatabases
 CompleteGraph,Graphs & Networks,implemented,2,,1,GraphsAndNetworks GraphConstructionAndRepresentation
 CompleteGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements GraphCliquesCoversAndIndependentSets
-CompleteIntegral,Symbolic & Numeric Computation,missing,2,,0,DifferentialEquations
+CompleteIntegral,Symbolic & Numeric Computation,implemented,2,,0,DifferentialEquations
 CompleteKaryTree,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
 Complex,Symbolic & Numeric Computation,implemented,2,,0,WDFWolframDataFramework ComplexNumbers RepresentationOfNumbers AtomicElementsOfExpressions
 ComplexArrayPlot,Visualization & Graphics,missing,3,,0,ComplexVisualization
@@ -1242,7 +1242,7 @@ ComplexPlot3D,Visualization & Graphics,missing,3,,0,FunctionVisualization Functi
 ComplexRegionPlot,Visualization & Graphics,missing,3,,0,ComplexVisualization
 ComplexStreamPlot,Data Manipulation & Analysis,missing,2,,0,VectorVisualization ComplexVisualization
 ComplexVectorPlot,Data Manipulation & Analysis,missing,2,,0,VectorVisualization ComplexVisualization
-Complexes,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains PolynomialSystems
+Complexes,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains PolynomialSystems
 ComplexityFunction,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation AlgebraicTransformations
 ComponentExpand,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays
 ComponentKeys,"Options, system variables & unclassified",implemented,3,,0,
@@ -1322,7 +1322,7 @@ Context,Core Language & Structure,implemented,2,,0,SymbolHandling AtomicElements
 Contexts,Core Language & Structure,implemented,2,,0,LowLevelSystemSpelunking
 Continue,Core Language & Structure,implemented,1,,0,LoopingConstructs FlowControl
 ContinuedFraction,Higher Mathematical Computation,implemented,2,,0,NumberTheory MathematicalConstants AlgebraicNumbers NumberRecognition
-ContinuedFractionK,Higher Mathematical Computation,missing,2,,0,DiscreteMathematics DiscreteCalculus ContinuedFractionsAndRationalApproximations
+ContinuedFractionK,Higher Mathematical Computation,implemented,2,,0,DiscreteMathematics DiscreteCalculus ContinuedFractionsAndRationalApproximations
 ContinuousAction,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation ControlsOptions
 ContinuousMarkovProcess,Higher Mathematical Computation,missing,2,,0,RandomProcesses MarkovProcesses QueueingProcesses
 ContinuousTask,Data Manipulation & Analysis,infeasible,,Wolfram Cloud / external services,0,AutomatedReports BackgroundAndScheduledTasks AccessingExternalServicesAndAPIs CloudFunctionsAndDeployment
@@ -1365,9 +1365,9 @@ ConvexPolyhedronQ,Visualization & Graphics,missing,3,,0,Polyhedra
 ConvexRegionQ,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
 ConvolutionLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,MachineLearning NeuralNetworks ComputerVision NeuralNetworkConstruction
 Convolve,Symbolic & Numeric Computation,implemented,2,,0,Calculus IntegralTransforms GeneralizedFunctions FourierAnalysis
-ConwayGroupCo1,Higher Mathematical Computation,missing,2,,0,GroupTheory NamedGroups
-ConwayGroupCo2,Higher Mathematical Computation,missing,2,,0,NamedGroups
-ConwayGroupCo3,Higher Mathematical Computation,missing,2,,0,NamedGroups
+ConwayGroupCo1,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
+ConwayGroupCo2,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+ConwayGroupCo3,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 CookieFunction,Geographic Data & Computation,missing,3,,0,HTTPRequestsAndResponses CookieManagement
 CoordinateBoundingBox,Core Language & Structure,infeasible,,front end / notebooks,0,MathematicalAndCountingOperationsOnLists RegularAndCoordinateArrays
 CoordinateBoundingBoxArray,Core Language & Structure,missing,1,,0,ConstructingLists RegularAndCoordinateArrays
@@ -1404,10 +1404,10 @@ CosineWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 Cot,Sound & Video,implemented,3,,0,TrigonometricFunctions
 CotDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
 Coth,Symbolic & Numeric Computation,implemented,2,,0,HyperbolicFunctions
-CoulombF,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions
-CoulombG,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions
-CoulombH1,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions
-CoulombH2,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions
+CoulombF,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions
+CoulombG,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions
+CoulombH1,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions
+CoulombH2,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions
 Count,Core Language & Structure,implemented,1,,2,ListManipulation RulesAndPatterns ComputationWithStructuredDatasets HandlingArraysOfData
 CountDistinct,Core Language & Structure,implemented,1,,0,ListManipulation MathematicalAndCountingOperationsOnLists
 CountDistinctBy,Core Language & Structure,implemented,1,,0,MathematicalAndCountingOperationsOnLists
@@ -1487,11 +1487,11 @@ CurvatureFlowFilter,Images,missing,3,,0,ImageFilteringAndNeighborhoodProcessing 
 CurveClosed,"Options, system variables & unclassified",missing,3,,0,
 Cyan,Visualization & Graphics,missing,3,,0,Colors
 CycleGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
-CycleIndexPolynomial,Higher Mathematical Computation,missing,2,,0,GroupTheory
+CycleIndexPolynomial,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 Cycles,Symbolic & Numeric Computation,implemented,2,,0,Permutations
 Cyclic,"Options, system variables & unclassified",implemented,3,,0,
 CyclicGroup,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
-Cyclotomic,Higher Mathematical Computation,missing,2,,0,PolynomialAlgebra
+Cyclotomic,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra
 Cylinder,Geometry,missing,1,,2,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
 CylindricalDecomposition,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra TheoremProving ComputationalGeometry PolynomialSystems
 CylindricalDecompositionFunction,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra PolynomialSystems
@@ -1569,7 +1569,7 @@ Dated,Core Language & Structure,missing,1,,4,KnowledgeRepresentationAndAccess So
 DatedUnit,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,Units DateAndTime Finance
 DaubechiesWavelet,Sound & Video,missing,3,,0,Wavelets SignalTransforms SignalAnalysis SignalFilteringAndFilterDesign
 DavisDistribution,Symbolic & Numeric Computation,missing,2,,0,HeavyTailDistributions
-DawsonF,Symbolic & Numeric Computation,missing,2,,0,ErrorAndExponentialIntegralFunctions
+DawsonF,Symbolic & Numeric Computation,implemented,2,,0,ErrorAndExponentialIntegralFunctions
 DayCount,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime Finance
 DayCountConvention,"Options, system variables & unclassified",missing,3,,0,
 DayHemisphere,Geographic Data & Computation,infeasible,,curated data,0,MapsAndCartography GeographicData LocationsPathsAndRouting AstronomicalComputationAndData
@@ -1581,7 +1581,7 @@ DayRange,Knowledge Representation & Natural Language,infeasible,,curated data / 
 DayRound,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 DaylightQ,Knowledge Representation & Natural Language,infeasible,,curated data,0,DateAndTime AstronomicalComputationAndData
 DeBruijnGraph,Graphs & Networks,missing,2,,0,GraphConstructionAndRepresentation
-DeBruijnSequence,Symbolic & Numeric Computation,missing,2,,0,CombinatorialFunctions
+DeBruijnSequence,Symbolic & Numeric Computation,implemented,2,,0,CombinatorialFunctions
 Decapitalize,Core Language & Structure,implemented,2,,0,TextConstruction
 DecimalForm,Visualization & Graphics,implemented,2,,1,ChartLabelingLegendingAndAnnotation DisplayOfNumbers NumberDigits MathTypesettingOptionsAndTweaking
 DecisionTreeModel,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,StatisticalModelAnalysis
@@ -1592,7 +1592,7 @@ DeconvolutionLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,
 Decrement,Core Language & Structure,implemented,1,,0,Assignments
 Decrypt,Higher Mathematical Computation,missing,2,,0,DiscreteMathematics Cryptography SystemsRelatedStringOperations BinaryData
 DecryptFile,Higher Mathematical Computation,missing,2,,0,Cryptography FileOperations
-DedekindEta,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions NumberTheoreticFunctions QFunctions
+DedekindEta,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions NumberTheoreticFunctions QFunctions
 DeepSpaceProbeData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Default,Core Language & Structure,implemented,1,,0,Patterns
 DefaultAxesStyle,"Options, system variables & unclassified",missing,3,,0,
@@ -1741,7 +1741,7 @@ DimensionReduction,Data Manipulation & Analysis,infeasible,,ML models / LLM serv
 DimensionalCombinations,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,Units EngineeringData
 DimensionalMeshComponents,Visualization & Graphics,missing,3,,0,MeshRegions Polygons Polyhedra
 Dimensions,Symbolic & Numeric Computation,implemented,2,,0,HandlingArraysOfData MatricesAndLinearAlgebra Tensors GPUComputing
-DiracComb,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions IntegralTransforms GeneralizedFunctions
+DiracComb,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IntegralTransforms GeneralizedFunctions
 DiracDelta,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions Calculus IntegralTransforms GeneralizedFunctions
 DirectedEdge,Graphs & Networks,implemented,2,,1,Syntax GraphConstructionAndRepresentation GraphVisualization
 DirectedEdges,"Options, system variables & unclassified",missing,3,,0,
@@ -1755,15 +1755,15 @@ Directory,System Operation & Setup,missing,3,,0,WolframSystemSessions WolframSys
 DirectoryName,External Interfaces & Connections,missing,3,,0,FileOperations OperationsOnFileNames DirectoriesAndDirectoryOperations
 DirectoryQ,External Interfaces & Connections,missing,3,,0,FileOperations OperationsOnFileNames DirectoriesAndDirectoryOperations
 DirectoryStack,External Interfaces & Connections,missing,3,,0,DirectoriesAndDirectoryOperations
-DirichletBeta,Symbolic & Numeric Computation,missing,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
-DirichletCharacter,Higher Mathematical Computation,missing,2,,0,NumberTheory MultiplicativeNumberTheory AnalyticNumberTheory
+DirichletBeta,Symbolic & Numeric Computation,implemented,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
+DirichletCharacter,Higher Mathematical Computation,implemented,2,,0,NumberTheory MultiplicativeNumberTheory AnalyticNumberTheory
 DirichletCondition,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers DifferentialEquations PDEModeling PDEModelingAndAnalysis
-DirichletConvolve,Higher Mathematical Computation,missing,2,,0,SummationTransforms MultiplicativeNumberTheory AnalyticNumberTheory AdditiveNumberTheory
+DirichletConvolve,Higher Mathematical Computation,implemented,2,,0,SummationTransforms MultiplicativeNumberTheory AnalyticNumberTheory AdditiveNumberTheory
 DirichletDistribution,Symbolic & Numeric Computation,missing,2,,0,ParametricStatisticalDistributions
 DirichletEta,Symbolic & Numeric Computation,implemented,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
-DirichletL,Higher Mathematical Computation,missing,2,,0,MathematicalFunctions NumberTheory NumberTheoreticFunctions MultiplicativeNumberTheory
-DirichletLambda,Symbolic & Numeric Computation,missing,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
-DirichletTransform,Higher Mathematical Computation,missing,2,,0,SummationTransforms MultiplicativeNumberTheory AnalyticNumberTheory
+DirichletL,Higher Mathematical Computation,implemented,2,,0,MathematicalFunctions NumberTheory NumberTheoreticFunctions MultiplicativeNumberTheory
+DirichletLambda,Symbolic & Numeric Computation,implemented,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
+DirichletTransform,Higher Mathematical Computation,implemented,2,,0,SummationTransforms MultiplicativeNumberTheory AnalyticNumberTheory
 DirichletWindow,Sound & Video,infeasible,,audio / video,0,SignalFilteringAndFilterDesign WindowFunctions
 DisableFormatting,Core Language & Structure,implemented,1,,0,MathematicalTypesetting EvaluationControl
 Discard,Data Manipulation & Analysis,implemented,2,,0,TabularObjects
@@ -1773,7 +1773,7 @@ DiscreteConvolve,Higher Mathematical Computation,missing,2,,0,FourierAnalysis Su
 DiscreteDelta,Symbolic & Numeric Computation,implemented,2,,0,FourierAnalysis SummationTransforms
 DiscreteHadamardTransform,Higher Mathematical Computation,missing,2,,0,SummationTransforms
 DiscreteHilbertTransform,Higher Mathematical Computation,missing,2,,0,SummationTransforms
-DiscreteIndicator,Core Language & Structure,missing,1,,0,Conditionals NumericalFunctions
+DiscreteIndicator,Core Language & Structure,implemented,1,,0,Conditionals NumericalFunctions
 DiscreteInputOutputModel,Engineering Data & Computation,infeasible,,curated data,0,DesignUsingStateSpaceModels
 DiscreteLQEstimatorGains,Engineering Data & Computation,infeasible,,curated data,0,DesignUsingStateSpaceModels
 DiscreteLQRegulatorGains,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems DesignUsingStateSpaceModels
@@ -1957,16 +1957,16 @@ ElidedForms,"Options, system variables & unclassified",infeasible,,front end / n
 Eliminate,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra PolynomialSystems
 Ellipsoid,Geometry,missing,2,,0,GeometricSpecialRegions 3DPrinting GraphicsObjects
 EllipticE,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions EllipticIntegrals
-EllipticExp,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-EllipticExpPrime,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+EllipticExp,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+EllipticExpPrime,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 EllipticF,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions EllipticIntegrals
 EllipticFilterModel,Sound & Video,infeasible,,audio / video,0,SignalFilteringAndFilterDesign
 EllipticK,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions SpecialFunctions EllipticIntegrals
-EllipticLog,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals EllipticFunctions
-EllipticNomeQ,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals EllipticFunctions InverseFunctions
+EllipticLog,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals EllipticFunctions
+EllipticNomeQ,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals EllipticFunctions InverseFunctions
 EllipticPi,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions EllipticIntegrals
-EllipticTheta,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions SpecialFunctions NumberTheoreticFunctions QFunctions
-EllipticThetaPrime,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+EllipticTheta,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions SpecialFunctions NumberTheoreticFunctions QFunctions
+EllipticThetaPrime,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 EmbedCode,Cloud & Deployment,infeasible,,Wolfram Cloud / external services,2,AutomatedReports InterpretingStrings CreatingFormsAndApps WebOperations
 EmbeddedHTML,Cloud & Deployment,infeasible,,Wolfram Cloud / external services,0,CreatingFormsAndApps WebOperations CloudFunctionsAndDeployment CreatingAnInstantAPI
 EmbeddedSQLEntityClass,Core Language & Structure,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),0,WorkingWithRelationalDatabases
@@ -2123,7 +2123,7 @@ ExpressionUUID,Notebook Documents & Presentation,infeasible,,front end / noteboo
 ExtendedEntityClass,Core Language & Structure,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),0,KnowledgeRepresentationAndAccess WorkingWithRelationalDatabases EntityTypes
 ExtendedGCD,Symbolic & Numeric Computation,implemented,2,,0,NumberTheoreticFunctions
 ExtendedKey,Data Manipulation & Analysis,missing,2,,0,TabularObjects
-Extension,Higher Mathematical Computation,missing,2,,0,PolynomialAlgebra PolynomialFactoring AlgebraicNumberTheory
+Extension,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra PolynomialFactoring AlgebraicNumberTheory
 ExtentElementFunction,Visualization & Graphics,missing,3,,0,PlottingOptions
 ExtentMarkers,Visualization & Graphics,missing,3,,0,PlottingOptions
 ExtentSize,Visualization & Graphics,missing,3,,0,PlottingOptions
@@ -2284,7 +2284,7 @@ FindImageText,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,Com
 FindIndependentEdgeSet,Graphs & Networks,missing,2,,0,ComputationOnGraphs GraphCliquesCoversAndIndependentSets
 FindIndependentVertexSet,Graphs & Networks,implemented,2,,0,GraphCliquesCoversAndIndependentSets
 FindInstance,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving NumberTheory LogicAndBooleanAlgebra TheoremProving
-FindIntegerNullVector,Higher Mathematical Computation,missing,2,,0,NumberRecognition
+FindIntegerNullVector,Higher Mathematical Computation,implemented,2,,0,NumberRecognition
 FindIsomers,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
 FindIsomorphicSubgraph,Graphs & Networks,missing,2,,0,GraphPropertiesAndMeasurements
 FindKClan,Graphs & Networks,missing,2,,0,SocialNetworks
@@ -2334,23 +2334,23 @@ FindVertexCover,Graphs & Networks,implemented,2,,0,ComputationOnGraphs GraphCliq
 FindVertexCut,Graphs & Networks,missing,2,,0,GraphComponents
 FindVertexIndependentPaths,Graphs & Networks,missing,2,,0,GraphPathsCyclesAndFlows
 FinishDynamic,User Interface Construction,infeasible,,front end / notebooks,0,DynamicInteractivityLanguage
-FiniteAbelianGroupCount,Symbolic & Numeric Computation,missing,2,,0,CombinatorialFunctions
-FiniteField,Symbolic & Numeric Computation,missing,2,,0,PolynomialAlgebra FiniteFields
-FiniteFieldElement,Symbolic & Numeric Computation,missing,2,,0,PolynomialAlgebra FiniteFields
-FiniteFieldElementNorm,Symbolic & Numeric Computation,missing,2,,0,FiniteFields
-FiniteFieldElementPrimitiveQ,Symbolic & Numeric Computation,missing,2,,0,FiniteFields
-FiniteFieldElementTrace,Symbolic & Numeric Computation,missing,2,,0,FiniteFields
-FiniteFieldEmbedding,Symbolic & Numeric Computation,missing,2,,0,PolynomialAlgebra FiniteFields
-FiniteFieldIndex,Symbolic & Numeric Computation,missing,2,,0,FiniteFields
-FiniteGroupCount,Symbolic & Numeric Computation,missing,2,,0,DiscreteMathematics CombinatorialFunctions
+FiniteAbelianGroupCount,Symbolic & Numeric Computation,implemented,2,,0,CombinatorialFunctions
+FiniteField,Symbolic & Numeric Computation,implemented,2,,0,PolynomialAlgebra FiniteFields
+FiniteFieldElement,Symbolic & Numeric Computation,implemented,2,,0,PolynomialAlgebra FiniteFields
+FiniteFieldElementNorm,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields
+FiniteFieldElementPrimitiveQ,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields
+FiniteFieldElementTrace,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields
+FiniteFieldEmbedding,Symbolic & Numeric Computation,implemented,2,,0,PolynomialAlgebra FiniteFields
+FiniteFieldIndex,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields
+FiniteGroupCount,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics CombinatorialFunctions
 FiniteGroupData,Higher Mathematical Computation,infeasible,,curated data,0,DiscreteMathematics GroupTheory MathematicalData GeometricTransforms
 First,Core Language & Structure,implemented,1,,5,ListManipulation GPUComputing ElementsOfLists PartsOfExpressions
 FirstCase,Core Language & Structure,implemented,1,,0,ElementsOfLists FunctionCompositionAndOperatorForms
 FirstPassageTimeDistribution,Higher Mathematical Computation,missing,2,,0,MarkovProcesses
 FirstPosition,Core Language & Structure,implemented,1,,1,ElementsOfLists
-FischerGroupFi22,Higher Mathematical Computation,missing,2,,0,NamedGroups
-FischerGroupFi23,Higher Mathematical Computation,missing,2,,0,NamedGroups
-FischerGroupFi24Prime,Higher Mathematical Computation,missing,2,,0,NamedGroups
+FischerGroupFi22,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+FischerGroupFi23,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+FischerGroupFi24Prime,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 FisherHypergeometricDistribution,Symbolic & Numeric Computation,missing,2,,0,UrnModelDistributions DiscreteUnivariateDistributions BoundedDomainDistributions
 FisherRatioTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 FisherZDistribution,Data Manipulation & Analysis,missing,2,,0,NormalRelatedDistributions
@@ -2432,8 +2432,8 @@ FourierSinSeries,Data Manipulation & Analysis,implemented,2,,0,IntegralTransform
 FourierSinTransform,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms FourierAnalysis SignalTransforms
 FourierTransform,Symbolic & Numeric Computation,implemented,2,,0,Calculus IntegralTransforms GeneralizedFunctions FourierAnalysis
 FourierTrigSeries,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms FourierAnalysis
-FoxH,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions SpecialFunctions AlgebraicTransformations HypergeometricFunctions
-FoxHReduce,Symbolic & Numeric Computation,missing,2,,0,AlgebraicTransformations
+FoxH,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions SpecialFunctions AlgebraicTransformations HypergeometricFunctions
+FoxHReduce,Symbolic & Numeric Computation,implemented,2,,0,AlgebraicTransformations
 FractionBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 FractionBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 FractionalBrownianMotionProcess,Higher Mathematical Computation,missing,2,,0,ParametricRandomProcesses
@@ -2457,11 +2457,11 @@ FreeformEvaluate,"Options, system variables & unclassified",infeasible,,depends 
 FrenetSerretSystem,Symbolic & Numeric Computation,implemented,2,,0,VectorAnalysis
 FrequencySamplingFilterKernel,Sound & Video,infeasible,,audio / video,0,SignalFilteringAndFilterDesign
 FresnelC,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInOptics ErrorAndExponentialIntegralFunctions
-FresnelF,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInOptics ErrorAndExponentialIntegralFunctions
-FresnelG,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInOptics ErrorAndExponentialIntegralFunctions
+FresnelF,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInOptics ErrorAndExponentialIntegralFunctions
+FresnelG,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInOptics ErrorAndExponentialIntegralFunctions
 FresnelS,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInOptics SpecialFunctions ErrorAndExponentialIntegralFunctions
 Friday,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
-FrobeniusAutomorphism,Symbolic & Numeric Computation,missing,2,,0,FiniteFields
+FrobeniusAutomorphism,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields
 FrobeniusDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 FrobeniusNumber,Symbolic & Numeric Computation,implemented,2,,0,NumberTheory IntegerFunctions NumberTheoreticFunctions CombinatorialFunctions
 FrobeniusReduce,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
@@ -2474,8 +2474,8 @@ FromDMS,Geographic Data & Computation,missing,2,,1,MapsAndCartography Geodesy As
 FromDateString,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 FromDigits,Symbolic & Numeric Computation,implemented,1,,3,NumericalEvaluationAndPrecision NumberTheory BitwiseOperations DiscreteAndIntegerData
 FromEntity,Core Language & Structure,infeasible,,curated data,0,KnowledgeRepresentationAndAccess
-FromFiniteField,Symbolic & Numeric Computation,missing,2,,0,FiniteFields
-FromFiniteFieldIndex,Symbolic & Numeric Computation,missing,2,,0,FiniteFields
+FromFiniteField,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields
+FromFiniteFieldIndex,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields
 FromJulianDate,Knowledge Representation & Natural Language,missing,3,,0,DateAndTime AstronomicalComputationAndData
 FromLetterNumber,Core Language & Structure,implemented,1,,3,ConvertingBetweenExpressionsAndStrings CharacterOperations
 FromLunationNumber,Time-Related Computation,missing,2,,0,AstronomicalComputationAndData
@@ -2556,7 +2556,7 @@ GaugeLabels,Data Manipulation & Analysis,missing,2,,0,Gauges Labels
 GaugeMarkers,Data Manipulation & Analysis,missing,2,,0,Gauges
 GaugeStyle,Data Manipulation & Analysis,missing,2,,0,Gauges
 GaussianFilter,Images,missing,3,,0,DataTransformsAndSmoothing ImageProcessing ImageFilteringAndNeighborhoodProcessing ImageRestoration
-GaussianIntegers,Higher Mathematical Computation,missing,2,,0,PolynomialAlgebra NumberTheory ComplexNumbers PolynomialFactoring
+GaussianIntegers,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra NumberTheory ComplexNumbers PolynomialFactoring
 GaussianMatrix,Images,missing,3,,0,ImageFilteringAndNeighborhoodProcessing 3DImages LinearAndNonlinearFilters ConstructingMatrices
 GaussianOrthogonalMatrixDistribution,Symbolic & Numeric Computation,missing,2,,0,MatrixDistributions RandomVariables
 GaussianSymplecticMatrixDistribution,Symbolic & Numeric Computation,missing,2,,0,MatrixDistributions
@@ -2565,8 +2565,8 @@ GaussianWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 GegenbauerC,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems SpecialFunctions
 General,"Options, system variables & unclassified",implemented,3,,0,
 GeneralizedLinearModelFit,Data Manipulation & Analysis,missing,2,,0,Statistics ScientificDataAnalysis NumericalData StatisticalModelAnalysis
-GeneralizedPolyLog,Symbolic & Numeric Computation,missing,2,,0,ZetaFunctionsAndPolylogarithms
-GeneralizedPower,"Options, system variables & unclassified",missing,3,,0,
+GeneralizedPolyLog,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
+GeneralizedPower,"Options, system variables & unclassified",implemented,3,,0,
 GenerateAsymmetricKeyPair,Higher Mathematical Computation,missing,2,,0,Cryptography Blockchain CryptographicNumberTheory
 GenerateConditions,Symbolic & Numeric Computation,implemented,2,,0,FunctionProperties
 GenerateDerivedKey,Higher Mathematical Computation,missing,2,,0,Cryptography
@@ -2691,10 +2691,10 @@ GestureHandler,User Interface Construction,infeasible,,front end / notebooks,0,C
 Get,Core Language & Structure,implemented,1,,2,ExternalOperations Syntax StandaloneWolframLanguageKernels PersistentStorage
 GetEnvironment,Core Language & Structure,missing,2,,0,LowLevelSystemOptimization
 GibbsPointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialStatistics SpatialPointProcesses SpatialPointCollections
-Glaisher,Symbolic & Numeric Computation,missing,2,,0,MathematicalConstants
+Glaisher,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants
 GlobalClusteringCoefficient,Graphs & Networks,implemented,2,,0,GraphsAndNetworks GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
 Glow,Visualization & Graphics,missing,3,,0,3DGraphicsOptions Colors GraphicsObjects GraphicsDirectives
-GoldenAngle,Symbolic & Numeric Computation,missing,2,,0,MathematicalConstants
+GoldenAngle,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants
 GoldenRatio,Symbolic & Numeric Computation,implemented,2,,1,MathematicalConstants
 GompertzMakehamDistribution,Financial Data & Computation,missing,3,,0,ActuarialComputation SurvivalAnalysis DistributionsUsedInReliabilityAnalysis DistributionsUsedInActuarialScience
 GoochShading,Visualization & Graphics,missing,3,,0,GraphicsDirectives
@@ -2777,25 +2777,25 @@ GridLines,Visualization & Graphics,missing,3,,0,StatisticalVisualization ChartLa
 GridLinesStyle,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance 3DGraphicsOptions Colors
 GridVideo,Sound & Video,infeasible,,audio / video,0,VideoCreation VideoEditing
 GroebnerBasis,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra TheoremProving ComputationalGeometry PolynomialSystems
-GroupActionBase,Higher Mathematical Computation,missing,2,,0,GroupTheory
+GroupActionBase,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 GroupBy,Core Language & Structure,implemented,1,,0,ListManipulation Associations FunctionalProgramming ComputationWithStructuredDatasets
-GroupCentralizer,Higher Mathematical Computation,missing,2,,0,GroupTheory
-GroupElementFromWord,Higher Mathematical Computation,missing,2,,0,GroupTheory
+GroupCentralizer,Higher Mathematical Computation,implemented,2,,0,GroupTheory
+GroupElementFromWord,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 GroupElementPosition,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 GroupElementQ,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics GroupTheory
-GroupElementToWord,Higher Mathematical Computation,missing,2,,0,GroupTheory
+GroupElementToWord,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 GroupElements,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics GroupTheory
 GroupGenerators,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 GroupMultiplicationTable,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 GroupOrbits,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 GroupOrder,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics GroupTheory
 GroupPageBreakWithin,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,PageLayoutAndPrintingControl
-GroupSetwiseStabilizer,Higher Mathematical Computation,missing,2,,0,GroupTheory
-GroupStabilizer,Higher Mathematical Computation,missing,2,,0,GroupTheory
-GroupStabilizerChain,Higher Mathematical Computation,missing,2,,0,GroupTheory
-Groupings,Core Language & Structure,missing,1,,0,DiscreteMathematics IteratedMapsAndFractals TheoremProving ComputationalSystemsAndDiscovery
+GroupSetwiseStabilizer,Higher Mathematical Computation,implemented,2,,0,GroupTheory
+GroupStabilizer,Higher Mathematical Computation,implemented,2,,0,GroupTheory
+GroupStabilizerChain,Higher Mathematical Computation,implemented,2,,0,GroupTheory
+Groupings,Core Language & Structure,implemented,1,,0,DiscreteMathematics IteratedMapsAndFractals TheoremProving ComputationalSystemsAndDiscovery
 GrowCutComponents,Data Manipulation & Analysis,missing,2,,0,SegmentationAnalysis ClusterAnalysis VideoAnalysis
-Gudermannian,Symbolic & Numeric Computation,missing,2,,0,HyperbolicFunctions
+Gudermannian,Symbolic & Numeric Computation,implemented,2,,0,HyperbolicFunctions
 GuidedFilter,Symbolic & Numeric Computation,missing,2,,0,Optimization ImageRestoration
 GumbelDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions DistributionsUsedInReliabilityAnalysis ExtremeValueDistributions
 HITSCentrality,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
@@ -2823,13 +2823,13 @@ HankelMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays Co
 HankelTransform,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms FourierAnalysis
 HannPoissonWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 HannWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
-HaradaNortonGroupHN,Higher Mathematical Computation,missing,2,,0,NamedGroups
+HaradaNortonGroupHN,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 HararyGraph,Graphs & Networks,missing,2,,0,GraphConstructionAndRepresentation
 HardcorePointProcess,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics SpatialStatistics SpatialPointProcesses
 HarmonicMean,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics
 HarmonicMeanFilter,Images,missing,3,,0,ImageFilteringAndNeighborhoodProcessing ImageRestoration
 HarmonicNumber,Symbolic & Numeric Computation,implemented,2,,0,DiscreteCalculus IntegerFunctions RecurrenceAndSumFunctions
-HarmonicPolyLog,Symbolic & Numeric Computation,missing,2,,0,ZetaFunctionsAndPolylogarithms
+HarmonicPolyLog,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
 Hash,Core Language & Structure,missing,1,,0,StringManipulation TuningAndDebugging Cryptography ExpressionStructure
 HatchFilling,Visualization & Graphics,missing,3,,0,GraphicsDirectives
 HatchShading,Visualization & Graphics,missing,3,,0,GraphicsDirectives
@@ -2851,10 +2851,10 @@ HeatSymmetryValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTr
 HeatTemperatureCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
 HeatTransferPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
 HeatTransferValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
-HeavisideLambda,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms GeneralizedFunctions
-HeavisidePi,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms GeneralizedFunctions
+HeavisideLambda,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms GeneralizedFunctions
+HeavisidePi,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms GeneralizedFunctions
 HeavisideTheta,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IntegralTransforms GeneralizedFunctions FourierAnalysis
-HeldGroupHe,Higher Mathematical Computation,missing,2,,0,NamedGroups
+HeldGroupHe,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 HelmholtzPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
 Here,Geographic Data & Computation,infeasible,,curated data,3,MapsAndCartography LocationsPathsAndRouting Geodesy
 HermiteDecomposition,Data Manipulation & Analysis,implemented,2,,0,DiscreteAndIntegerData MatrixDecompositions
@@ -2864,16 +2864,16 @@ Hermitian,Higher Mathematical Computation,implemented,2,,0,SymbolicTensors
 HermitianMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays
 HermitianMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
 HessenbergDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
-HeunB,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
-HeunBPrime,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-HeunC,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
-HeunCPrime,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-HeunD,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
-HeunDPrime,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-HeunG,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
-HeunGPrime,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-HeunT,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
-HeunTPrime,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics HeunAndRelatedFunctions
+HeunB,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
+HeunBPrime,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+HeunC,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
+HeunCPrime,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+HeunD,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
+HeunDPrime,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+HeunG,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
+HeunGPrime,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+HeunT,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
+HeunTPrime,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics HeunAndRelatedFunctions
 HexadecimalCharacter,Core Language & Structure,implemented,1,,0,StringPatterns
 Hexahedron,Geometry,missing,2,,0,GeometricComputation SolidGeometry GeometricSpecialRegions GraphicsObjects
 HiddenItems,"Options, system variables & unclassified",implemented,3,,0,
@@ -2885,8 +2885,8 @@ HighlightRegion,"Options, system variables & unclassified",missing,3,,0,
 HighlightVideo,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,VideoProcessing VideoAnalysis
 Highlighted,Visualization & Graphics,missing,3,,0,DynamicVisualization GraphicsInteractivityAndDrawing NaturalLanguageProcessing MathematicalTypesetting
 HighpassFilter,Data Manipulation & Analysis,missing,2,,0,ImageFilteringAndNeighborhoodProcessing TimeSeries LinearAndNonlinearFilters EventSeries
-HigmanSimsGroupHS,Higher Mathematical Computation,missing,2,,0,GroupTheory NamedGroups
-HilbertCurve,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals GeometricSpecialRegions
+HigmanSimsGroupHS,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
+HilbertCurve,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals GeometricSpecialRegions
 HilbertFilter,Data Manipulation & Analysis,missing,2,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters SignalFilteringAndFilterDesign
 HilbertMatrix,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra StructuredArrays ConstructingMatrices
 HilbertTransform,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms
@@ -2926,7 +2926,7 @@ HumpDownHump,"Options, system variables & unclassified",missing,3,,0,
 HumpEqual,"Options, system variables & unclassified",missing,3,,0,
 HurwitzLerchPhi,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
 HurwitzZeta,Symbolic & Numeric Computation,implemented,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
-HyperHarmonicNumber,Symbolic & Numeric Computation,missing,2,,0,RecurrenceAndSumFunctions
+HyperHarmonicNumber,Symbolic & Numeric Computation,implemented,2,,0,RecurrenceAndSumFunctions
 HyperbolicDistribution,Data Manipulation & Analysis,missing,2,,0,NormalRelatedDistributions
 HypercubeGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
 HyperexponentialDistribution,Symbolic & Numeric Computation,missing,2,,0,QueueingProcesses DistributionsUsedInReliabilityAnalysis ExponentialRelatedDistributions
@@ -3175,7 +3175,7 @@ IntegerPartitions,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathem
 IntegerQ,Symbolic & Numeric Computation,implemented,1,,2,NumericalEvaluationAndPrecision TestingExpressions Conditionals NumericalFunctions
 IntegerReverse,Symbolic & Numeric Computation,implemented,1,,1,IntegerFunctions NumberTheoreticFunctions NumberDigits
 IntegerString,Core Language & Structure,implemented,1,,0,ConvertingBetweenExpressionsAndStrings TextConstruction NumberDigits
-Integers,Higher Mathematical Computation,missing,2,,0,FormulaManipulation NumberTheory AssumptionsAndDomains PolynomialSystems
+Integers,Higher Mathematical Computation,implemented,2,,0,FormulaManipulation NumberTheory AssumptionsAndDomains PolynomialSystems
 Integrate,Symbolic & Numeric Computation,implemented,2,,0,Calculus MathematicalData GeometricComputation GeometricSolvers
 IntegrateChangeVariables,Symbolic & Numeric Computation,implemented,2,,0,Calculus
 Interactive,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
@@ -3207,14 +3207,14 @@ IntervalMemberQ,Symbolic & Numeric Computation,implemented,2,,0,IntervalArithmet
 IntervalSlider,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects ControlsOptions
 IntervalUnion,Symbolic & Numeric Computation,implemented,2,,0,IntervalArithmetic
 Inverse,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra GPUComputing MatrixOperations FiniteFields
-InverseBetaRegularized,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInStatistics GammaFunctionsAndRelatedFunctions InverseFunctions
+InverseBetaRegularized,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics GammaFunctionsAndRelatedFunctions InverseFunctions
 InverseBilateralLaplaceTransform,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms
 InverseBilateralZTransform,Higher Mathematical Computation,missing,2,,0,SummationTransforms
 InverseCDF,Symbolic & Numeric Computation,implemented,2,,0,DescriptiveStatistics RandomVariables StatisticalDistributionFunctions
 InverseChiSquareDistribution,Data Manipulation & Analysis,missing,2,,0,NormalRelatedDistributions
 InverseContinuousWaveletTransform,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms Wavelets SignalTransforms
 InverseDistanceTransform,Images,missing,3,,0,MathematicalMorphology
-InverseEllipticNomeQ,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions QFunctions EllipticIntegrals EllipticFunctions
+InverseEllipticNomeQ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions QFunctions EllipticIntegrals EllipticFunctions
 InverseErf,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics SpecialFunctions ErrorAndExponentialIntegralFunctions InverseFunctions
 InverseErfc,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics ErrorAndExponentialIntegralFunctions InverseFunctions
 InverseFourier,Sound & Video,missing,3,,0,DataTransformsAndSmoothing GPUComputing FourierAnalysis SummationTransforms
@@ -3225,9 +3225,9 @@ InverseFourierTransform,Data Manipulation & Analysis,implemented,2,,0,IntegralTr
 InverseFunction,Core Language & Structure,implemented,1,,0,GeometricTransforms FunctionCompositionAndOperatorForms InverseFunctions
 InverseFunctions,"Options, system variables & unclassified",implemented,3,,0,
 InverseGammaDistribution,Symbolic & Numeric Computation,missing,2,,0,ExponentialRelatedDistributions
-InverseGammaRegularized,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInStatistics SpecialFunctions GammaFunctionsAndRelatedFunctions InverseFunctions
+InverseGammaRegularized,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics SpecialFunctions GammaFunctionsAndRelatedFunctions InverseFunctions
 InverseGaussianDistribution,Data Manipulation & Analysis,missing,2,,0,NormalRelatedDistributions
-InverseGudermannian,Symbolic & Numeric Computation,missing,2,,0,HyperbolicFunctions
+InverseGudermannian,Symbolic & Numeric Computation,implemented,2,,0,HyperbolicFunctions
 InverseHankelTransform,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms
 InverseHaversine,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
 InverseHilbertTransform,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms
@@ -3235,11 +3235,11 @@ InverseImagePyramid,Images,missing,3,,0,CreatingAndImportingImages
 InverseJacobiCD,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 InverseJacobiCN,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions InverseFunctions
 InverseJacobiCS,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
-InverseJacobiDC,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+InverseJacobiDC,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 InverseJacobiDN,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
-InverseJacobiDS,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+InverseJacobiDS,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 InverseJacobiNC,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
-InverseJacobiND,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+InverseJacobiND,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 InverseJacobiNS,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 InverseJacobiSC,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 InverseJacobiSD,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
@@ -3255,7 +3255,7 @@ InverseSpectrogram,Machine Learning & LLMs,missing,3,,0,AudioAnalysis AudioRepre
 InverseSurvivalFunction,Symbolic & Numeric Computation,implemented,2,,0,StatisticalDistributionFunctions
 InverseTransformedRegion,Geometry,missing,2,,0,DerivedRegions
 InverseWaveletTransform,Sound & Video,missing,3,,0,Wavelets SignalAnalysis SignalFilteringAndFilterDesign
-InverseWeierstrassP,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions EllipticIntegrals EllipticFunctions InverseFunctions
+InverseWeierstrassP,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions EllipticIntegrals EllipticFunctions InverseFunctions
 InverseWishartMatrixDistribution,Symbolic & Numeric Computation,missing,2,,0,MatrixDistributions
 InverseZTransform,Higher Mathematical Computation,implemented,2,,0,SummationTransforms SignalTransforms
 Invisible,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathematicalTypesetting TextualElementsInNotebooks
@@ -3273,14 +3273,14 @@ ItemSize,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,U
 ItemStyle,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,GridsAndTables
 ItoProcess,Higher Mathematical Computation,missing,2,,0,ProbabilityAndStatistics RandomProcesses ScientificModels Finance
 JaccardDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimilarityMeasures
-JacobiAmplitude,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals EllipticFunctions InverseFunctions
+JacobiAmplitude,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals EllipticFunctions InverseFunctions
 JacobiCD,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiCN,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiCS,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiDC,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiDN,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiDS,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
-JacobiEpsilon,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+JacobiEpsilon,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiNC,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiND,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiNS,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
@@ -3289,12 +3289,12 @@ JacobiSC,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiSD,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 JacobiSN,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions SpecialFunctions EllipticFunctions
 JacobiSymbol,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumberTheory NumberTheoreticFunctions CryptographicNumberTheory
-JacobiZN,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-JacobiZeta,Symbolic & Numeric Computation,missing,2,,0,EllipticIntegrals
-JankoGroupJ1,Higher Mathematical Computation,missing,2,,0,NamedGroups
-JankoGroupJ2,Higher Mathematical Computation,missing,2,,0,NamedGroups
-JankoGroupJ3,Higher Mathematical Computation,missing,2,,0,NamedGroups
-JankoGroupJ4,Higher Mathematical Computation,missing,2,,0,NamedGroups
+JacobiZN,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+JacobiZeta,Symbolic & Numeric Computation,implemented,2,,0,EllipticIntegrals
+JankoGroupJ1,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+JankoGroupJ2,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+JankoGroupJ3,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+JankoGroupJ4,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 JarqueBeraALMTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 JohnsonDistribution,Data Manipulation & Analysis,missing,2,,0,ParametricStatisticalDistributions NormalRelatedDistributions
 Join,Core Language & Structure,implemented,1,,16,ListManipulation HandlingArraysOfData RearrangingAndRestructuringLists StructuralOperationsOnExpressions
@@ -3306,10 +3306,10 @@ JordanDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecomp
 JordanMatrix,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 JordanModelDecomposition,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems AnalysisOfStateSpaceModels
 JordanReduce,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
-JuliaSetBoettcher,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals
+JuliaSetBoettcher,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals
 JuliaSetIterationCount,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions IteratedMapsAndFractals
 JuliaSetPlot,Visualization & Graphics,missing,3,,0,IteratedMapsAndFractals ComplexVisualization
-JuliaSetPoints,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals
+JuliaSetPoints,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals
 JulianDate,Knowledge Representation & Natural Language,missing,3,,0,DateAndTime AstronomicalComputationAndData
 KCoreComponents,Graphs & Networks,missing,2,,0,ComputationOnGraphs SocialNetworks GraphComponents
 KDistribution,Symbolic & Numeric Computation,missing,2,,0,DistributionsInCommunicationSystems
@@ -3326,10 +3326,10 @@ KarhunenLoeveDecomposition,Symbolic & Numeric Computation,implemented,2,,0,Matri
 KaryTree,Symbolic & Numeric Computation,implemented,2,,1,DiscreteMathematics GraphConstructionAndRepresentation
 KatzCentrality,Graphs & Networks,missing,2,,0,GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
 KeepExistingVersion,"Options, system variables & unclassified",infeasible,,Wolfram paclet server / licensing,0,
-KelvinBei,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
-KelvinBer,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions BesselRelatedFunctions
-KelvinKei,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
-KelvinKer,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
+KelvinBei,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
+KelvinBer,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions BesselRelatedFunctions
+KelvinKei,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
+KelvinKer,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 KendallTau,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics StatisticalMomentsAndGeneratingFunctions
 KendallTauTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 KernelConfiguration,Core Language & Structure,missing,2,,0,ManagingRemoteAndParallelKernels
@@ -3360,16 +3360,16 @@ KeyValuePattern,Core Language & Structure,implemented,1,,0,Associations Patterns
 KeyframeActions,Sound & Video,infeasible,,audio / video,0,VideoCreation OptionsAndStylingForInteractiveManipulation
 KeypointStrength,"Options, system variables & unclassified",missing,3,,0,
 Keys,Core Language & Structure,implemented,1,,2,LanguageOverview Associations ComputationWithStructuredDatasets UsingTheWolframDataDrop
-Khinchin,Symbolic & Numeric Computation,missing,2,,0,MathematicalConstants ContinuedFractionsAndRationalApproximations
+Khinchin,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants ContinuedFractionsAndRationalApproximations
 KillProcess,External Interfaces & Connections,missing,3,,0,CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
 KirchhoffGraph,Graphs & Networks,missing,2,,0,GraphsAndMatrices GraphProgramming
 KirchhoffMatrix,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation GraphsAndMatrices GraphProgramming
-KleinInvariantJ,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions QFunctions
+KleinInvariantJ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions QFunctions
 KnapsackSolve,Symbolic & Numeric Computation,implemented,2,,0,Optimization DiscreteMathematics DiophantineEquations
 KnightTourGraph,Graphs & Networks,missing,2,,0,GraphConstructionAndRepresentation
 KnotData,Symbolic & Numeric Computation,infeasible,,curated data,0,DiscreteMathematics MathematicalData GeometricComputation 3DPrinting
 KnownUnitQ,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,Units
-KochCurve,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals GeometricSpecialRegions
+KochCurve,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals GeometricSpecialRegions
 KolmogorovSmirnovTest,Data Manipulation & Analysis,implemented,2,,0,HypothesisTests RandomVariables
 KroneckerDelta,Higher Mathematical Computation,implemented,2,,0,Tensors FourierAnalysis SummationTransforms
 KroneckerModelDecomposition,Engineering Data & Computation,infeasible,,curated data,0,DescriptorControlSystems AnalysisOfStateSpaceModels
@@ -3416,12 +3416,12 @@ LabelingTarget,"Options, system variables & unclassified",missing,3,,0,
 LaguerreL,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions
 LakeData,"Options, system variables & unclassified",infeasible,,curated data,0,
 LambdaComponents,Graphs & Networks,missing,2,,0,SocialNetworks
-LameC,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-LameCPrime,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-LameEigenvalueA,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-LameEigenvalueB,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-LameS,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
-LameSPrime,Symbolic & Numeric Computation,missing,2,,0,HeunAndRelatedFunctions
+LameC,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+LameCPrime,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+LameEigenvalueA,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+LameEigenvalueB,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+LameS,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
+LameSPrime,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctions
 LaminaData,Geometry,infeasible,,curated data,0,GeometricComputation
 LanczosWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 LandauDistribution,Symbolic & Numeric Computation,missing,2,,0,HeavyTailDistributions
@@ -3441,7 +3441,7 @@ Last,Core Language & Structure,implemented,1,,4,ListManipulation GPUComputing El
 Latitude,Geometry,missing,2,,0,Geodesy AnglesAndPolarCoordinates
 LatitudeLongitude,Geometry,missing,2,,0,Geodesy AnglesAndPolarCoordinates
 LatticeData,Symbolic & Numeric Computation,infeasible,,curated data,0,DiscreteMathematics MathematicalData PhysicsAndChemistryDataAndComputation ComputationalGeometry
-LatticeReduce,Higher Mathematical Computation,missing,2,,0,DiscreteAndIntegerData MatrixDecompositions CryptographicNumberTheory NumberRecognition
+LatticeReduce,Higher Mathematical Computation,implemented,2,,0,DiscreteAndIntegerData MatrixDecompositions CryptographicNumberTheory NumberRecognition
 LaunchKernels,Core Language & Structure,missing,2,,0,ParallelComputing WolframSystemSetup ParallelComputationSetupAndConfiguration RemoteComputation
 LayerSizeFunction,"Options, system variables & unclassified",missing,3,,0,
 LayeredGraph,"Options, system variables & unclassified",missing,3,,0,
@@ -3658,7 +3658,7 @@ Locked,Core Language & Structure,implemented,1,,0,Attributes PackageBulletproofi
 Log,Symbolic & Numeric Computation,implemented,1,,2,MathematicalFunctions ImageProcessing GPUComputing FunctionsUsedInStatistics
 Log10,Symbolic & Numeric Computation,implemented,1,,2,MathematicalFunctions GPUComputing ElementaryFunctions NumberDigits
 Log2,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing ElementaryFunctions NumberTheoreticFunctions NumberDigits
-LogBarnesG,Symbolic & Numeric Computation,missing,2,,0,GammaFunctionsAndRelatedFunctions
+LogBarnesG,Symbolic & Numeric Computation,implemented,2,,0,GammaFunctionsAndRelatedFunctions
 LogGamma,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions AnalyticNumberTheory GammaFunctionsAndRelatedFunctions
 LogGammaDistribution,Symbolic & Numeric Computation,missing,2,,0,ExponentialRelatedDistributions
 LogIntegral,Higher Mathematical Computation,implemented,2,,0,NumberTheory SpecialFunctions NumberTheoreticFunctions PrimeNumbers
@@ -3674,12 +3674,12 @@ LogRankTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests TabularMod
 LogSeriesDistribution,Symbolic & Numeric Computation,missing,2,,0,DistributionsUsedInActuarialScience DiscreteUnivariateDistributions
 LogicalExpand,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation Inequalities AlgebraicTransformations ManipulatingEquations
 LogisticDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions ExponentialRelatedDistributions
-LogisticSigmoid,Symbolic & Numeric Computation,missing,2,,0,NumericalFunctions
+LogisticSigmoid,Symbolic & Numeric Computation,implemented,2,,0,NumericalFunctions
 LogitModelFit,Data Manipulation & Analysis,missing,2,,0,LifeSciencesAndMedicineDataAndComputation StatisticalModelAnalysis SupervisedMachineLearning MatrixBasedMinimization
-LommelS1,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
-LommelS2,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
-LommelT1,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
-LommelT2,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
+LommelS1,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
+LommelS2,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
+LommelT1,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
+LommelT2,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 LongLeftArrow,"Options, system variables & unclassified",missing,3,,0,
 LongLeftRightArrow,"Options, system variables & unclassified",missing,3,,0,
 LongRightArrow,"Options, system variables & unclassified",missing,3,,0,
@@ -3707,7 +3707,7 @@ LuccioSamiComponents,Graphs & Networks,missing,2,,0,SocialNetworks
 LunarEclipse,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData
 LunationNumber,Time-Related Computation,missing,2,,0,AstronomicalComputationAndData
 LyapunovSolve,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving ControlSystems
-LyonsGroupLy,Higher Mathematical Computation,missing,2,,0,NamedGroups
+LyonsGroupLy,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 MAProcess,Higher Mathematical Computation,missing,2,,0,MarkovProcesses TimeSeriesProcesses
 MIMETypeToFormatList,Data Manipulation & Analysis,missing,2,,0,ImportingAndExporting
 MachineNumberQ,Core Language & Structure,implemented,1,,0,TestingExpressions RepresentationOfNumbers PrecisionAndAccuracyControl AtomicElementsOfExpressions
@@ -3738,10 +3738,10 @@ MakeExpression,Notebook Documents & Presentation,infeasible,,front end / noteboo
 ManagedLibraryExpressionID,Core Language & Structure,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",0,LibraryLink
 ManagedLibraryExpressionQ,Core Language & Structure,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",0,LibraryLink
 ManagedObject,Core Language & Structure,missing,2,,0,ForeignFunctionInterface
-MandelbrotSetBoettcher,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals
-MandelbrotSetDistance,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals
-MandelbrotSetIterationCount,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals
-MandelbrotSetMemberQ,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions IteratedMapsAndFractals
+MandelbrotSetBoettcher,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals
+MandelbrotSetDistance,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals
+MandelbrotSetIterationCount,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals
+MandelbrotSetMemberQ,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IteratedMapsAndFractals
 MandelbrotSetPlot,Visualization & Graphics,missing,3,,0,IteratedMapsAndFractals ScientificModels ComplexVisualization
 MangoldtLambda,Higher Mathematical Computation,implemented,2,,0,NumberTheory NumberTheoreticFunctions PrimeNumbers MultiplicativeNumberTheory
 ManhattanDistance,Core Language & Structure,implemented,2,,0,OperationsOnVectors DistanceAndSimilarityMeasures
@@ -3759,7 +3759,7 @@ MapAt,Core Language & Structure,implemented,1,,0,Expressions FunctionalProgrammi
 MapIndexed,Core Language & Structure,implemented,1,,0,ListManipulation FunctionalProgramming ApplyingFunctionsToLists LoopingConstructs
 MapThread,Core Language & Structure,implemented,1,,0,ListManipulation FunctionalProgramming ApplyingFunctionsToLists
 MarchenkoPasturDistribution,Symbolic & Numeric Computation,missing,2,,0,MatrixDistributions BoundedDomainDistributions
-MarcumQ,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInStatistics
+MarcumQ,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics
 MardiaCombinedTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 MardiaKurtosisTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 MardiaSkewnessTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
@@ -3780,18 +3780,18 @@ MaterialShading,Visualization & Graphics,missing,3,,0,GraphicsDirectives
 MaternPointProcess,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics SpatialStatistics SpatialPointProcesses SpatialPointCollections
 MathMLForm,"Options, system variables & unclassified",implemented,3,,0,
 MathematicalFunctionData,Symbolic & Numeric Computation,infeasible,,curated data,0,MathematicalFunctions
-MathieuC,Symbolic & Numeric Computation,missing,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions MathieuAndRelatedFunctions
-MathieuCPrime,Symbolic & Numeric Computation,missing,2,,0,MathieuAndRelatedFunctions
-MathieuCharacteristicA,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions MathieuAndRelatedFunctions
-MathieuCharacteristicB,Symbolic & Numeric Computation,missing,2,,0,MathieuAndRelatedFunctions
-MathieuCharacteristicExponent,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics MathieuAndRelatedFunctions
-MathieuGroupM11,Higher Mathematical Computation,missing,2,,0,NamedGroups
-MathieuGroupM12,Higher Mathematical Computation,missing,2,,0,NamedGroups
-MathieuGroupM22,Higher Mathematical Computation,missing,2,,0,NamedGroups
-MathieuGroupM23,Higher Mathematical Computation,missing,2,,0,NamedGroups
-MathieuGroupM24,Higher Mathematical Computation,missing,2,,0,GroupTheory NamedGroups
-MathieuS,Symbolic & Numeric Computation,missing,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions MathieuAndRelatedFunctions
-MathieuSPrime,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions MathieuAndRelatedFunctions
+MathieuC,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions MathieuAndRelatedFunctions
+MathieuCPrime,Symbolic & Numeric Computation,implemented,2,,0,MathieuAndRelatedFunctions
+MathieuCharacteristicA,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions MathieuAndRelatedFunctions
+MathieuCharacteristicB,Symbolic & Numeric Computation,implemented,2,,0,MathieuAndRelatedFunctions
+MathieuCharacteristicExponent,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics MathieuAndRelatedFunctions
+MathieuGroupM11,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+MathieuGroupM12,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+MathieuGroupM22,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+MathieuGroupM23,Higher Mathematical Computation,implemented,2,,0,NamedGroups
+MathieuGroupM24,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
+MathieuS,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions MathieuAndRelatedFunctions
+MathieuSPrime,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions MathieuAndRelatedFunctions
 Matrices,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays SymbolicTensors
 MatrixExp,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixOperations IntegerFunctions SymbolicArrays
 MatrixForm,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra Tensors MathematicalTypesetting
@@ -3841,7 +3841,7 @@ MaxWordGap,"Options, system variables & unclassified",missing,3,,0,
 MaximalBy,Core Language & Structure,implemented,1,,0,FunctionalProgramming ElementsOfLists MathematicalAndCountingOperationsOnLists FunctionCompositionAndOperatorForms
 Maximize,Symbolic & Numeric Computation,implemented,2,,0,Calculus Optimization BooleanComputation DiscreteCalculus
 MaxwellDistribution,Data Manipulation & Analysis,missing,2,,0,NormalRelatedDistributions ExponentialRelatedDistributions
-McLaughlinGroupMcL,Higher Mathematical Computation,missing,2,,0,NamedGroups
+McLaughlinGroupMcL,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 Mean,Data Manipulation & Analysis,implemented,2,,0,ComputationWithStructuredDatasets Statistics TabularProcessing ProbabilityAndStatistics
 MeanAbsoluteLossLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 MeanAround,Data Manipulation & Analysis,missing,2,,0,Units NumbersWithUncertainty
@@ -3861,7 +3861,7 @@ MedianFilter,Data Manipulation & Analysis,missing,2,,0,DataTransformsAndSmoothin
 MedicalTestData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Medium,Visualization & Graphics,missing,3,,0,GraphicsShapeAndSize
 MeijerG,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions SpecialFunctions AlgebraicTransformations HypergeometricFunctions
-MeijerGReduce,Symbolic & Numeric Computation,missing,2,,0,AlgebraicTransformations
+MeijerGReduce,Symbolic & Numeric Computation,implemented,2,,0,AlgebraicTransformations
 MeixnerDistribution,Symbolic & Numeric Computation,missing,2,,0,ExponentialRelatedDistributions
 MellinConvolve,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms
 MellinTransform,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms SummationTransforms
@@ -3932,7 +3932,7 @@ MinimalPolynomial,Higher Mathematical Computation,implemented,2,,0,PolynomialAlg
 MinimalStateSpaceModel,Engineering Data & Computation,infeasible,,curated data,0,NonlinearControlSystems AnalysisOfStateSpaceModels
 Minimize,Symbolic & Numeric Computation,implemented,2,,0,Calculus Optimization DiscreteMathematics BooleanComputation
 MinimumTimeIncrement,Higher Mathematical Computation,missing,2,,0,TimeSeries EventSeries
-MinkowskiQuestionMark,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals
+MinkowskiQuestionMark,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals
 MinorPlanetData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Minors,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixOperations LinearSystems
 Minus,Core Language & Structure,implemented,2,,0,Syntax
@@ -3947,11 +3947,11 @@ MissingString,"Options, system variables & unclassified",implemented,3,,0,
 MissingStyle,"Options, system variables & unclassified",implemented,3,,0,
 MissingValuePattern,Data Manipulation & Analysis,missing,2,,0,SupervisedMachineLearning TabularCleaning
 MissingValueSynthesis,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,MachineLearning SupervisedMachineLearning
-MittagLefflerE,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions
-MixedFractionParts,Symbolic & Numeric Computation,missing,2,,0,NumericalFunctions
+MittagLefflerE,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions
+MixedFractionParts,Symbolic & Numeric Computation,implemented,2,,0,NumericalFunctions
 MixedGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements
 MixedMagnitude,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,Units
-MixedRadix,Higher Mathematical Computation,missing,2,,0,NumberDigits AdditiveNumberTheory
+MixedRadix,Higher Mathematical Computation,implemented,2,,0,NumberDigits AdditiveNumberTheory
 MixedRadixQuantity,"Options, system variables & unclassified",infeasible,,depends on Quantity / curated unit data (already infeasible),0,
 MixedUnit,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,Units
 MixtureDistribution,Core Language & Structure,missing,2,,0,Reliability ProbabilityWithQuantities DistributionsUsedInReliabilityAnalysis NonparametricStatisticalDistributions
@@ -3961,9 +3961,9 @@ ModelFit,Data Manipulation & Analysis,missing,2,,0,TimeSeries StatisticalModelAn
 ModelFitReport,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
 ModelPredictiveController,Engineering Data & Computation,infeasible,,curated data,0,DesignUsingStateSpaceModels
 ModularInverse,Symbolic & Numeric Computation,implemented,2,,0,NumberTheory NumericalFunctions IntegerFunctions NumberTheoreticFunctions
-ModularLambda,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions QFunctions
+ModularLambda,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions QFunctions
 Module,Core Language & Structure,implemented,1,,14,LanguageOverview VariablesAndFunctions ProceduralProgramming PackageDevelopment
-Modulus,Higher Mathematical Computation,missing,2,,0,PolynomialAlgebra PolynomialFactoring PolynomialDivision
+Modulus,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra PolynomialFactoring PolynomialDivision
 MoebiusMu,Higher Mathematical Computation,implemented,2,,0,MathematicalFunctions NumberTheory NumberTheoreticFunctions CryptographicNumberTheory
 Molecule,Scientific and Medical Data & Computation,infeasible,,curated data,0,3DPrinting AstronomicalComputationAndData PhysicsAndChemistryDataAndComputation LifeSciencesAndMedicineDataAndComputation
 MoleculeAlign,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
@@ -4000,7 +4000,7 @@ MomentOfInertia,Visualization & Graphics,missing,3,,0,GeometricPropertiesAndMeas
 Monday,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,1,DateAndTime
 Monitor,Core Language & Structure,implemented,1,,3,TuningAndDebugging ViewersAndAnnotation
 MonomialList,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra PolynomialFactoring
-MonsterGroupM,Higher Mathematical Computation,missing,2,,0,NamedGroups
+MonsterGroupM,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 MoonPhase,Geographic Data & Computation,infeasible,,curated data,2,Geodesy WeatherData DateAndTime AstronomicalComputationAndData
 MoonPhaseDate,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData
 MoonPosition,Geographic Data & Computation,infeasible,,curated data,0,Geodesy DateAndTime AstronomicalComputationAndData
@@ -4031,9 +4031,9 @@ MultigraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements
 Multinomial,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics IntegerFunctions CombinatorialFunctions
 MultinomialDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions UrnModelDistributions
 MultinormalDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions RandomVariables NormalRelatedDistributions DistributionsInCommunicationSystems
-MultipleHarmonicNumber,Symbolic & Numeric Computation,missing,2,,0,RecurrenceAndSumFunctions
-MultiplePolyLog,Symbolic & Numeric Computation,missing,2,,0,ZetaFunctionsAndPolylogarithms
-MultipleZeta,Symbolic & Numeric Computation,missing,2,,0,ZetaFunctionsAndPolylogarithms
+MultipleHarmonicNumber,Symbolic & Numeric Computation,implemented,2,,0,RecurrenceAndSumFunctions
+MultiplePolyLog,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
+MultipleZeta,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
 MultiplicativeOrder,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumberTheory Cryptography NumberTheoreticFunctions
 MultiplySides,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation ManipulatingEquations
 Multiselection,User Interface Construction,infeasible,,front end / notebooks,0,ControlsOptions
@@ -4102,10 +4102,10 @@ Needs,Core Language & Structure,implemented,2,,0,PackageDevelopment NamespaceMan
 Negative,Core Language & Structure,implemented,1,,0,TestingExpressions
 NegativeBinomialDistribution,Symbolic & Numeric Computation,implemented,2,,0,DistributionsUsedInActuarialScience UrnModelDistributions DiscreteUnivariateDistributions
 NegativeDefiniteMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
-NegativeIntegers,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
+NegativeIntegers,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 NegativeMultinomialDistribution,Symbolic & Numeric Computation,missing,2,,0,ParametricStatisticalDistributions UrnModelDistributions
-NegativeRationals,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
-NegativeReals,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
+NegativeRationals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
+NegativeReals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 NegativeSemidefiniteMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
 NegativelyOrientedPoints,Geometry,missing,2,,0,PlaneGeometry GeometricPropertiesAndMeasures
 NeighborhoodData,"Options, system variables & unclassified",infeasible,,curated data,0,
@@ -4161,10 +4161,10 @@ NetworkPacketRecording,External Interfaces & Connections,infeasible,,ML models /
 NetworkPacketTrace,External Interfaces & Connections,infeasible,,ML models / LLM services,0,TuningAndDebugging NetworkProgramming InternetAndWebRelatedData
 NeumannBoundaryUnitNormal,Symbolic & Numeric Computation,missing,2,,0,PDEModelingAndAnalysis
 NeumannValue,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers DifferentialEquations PDEModeling PDEModelingAndAnalysis
-NevilleThetaC,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-NevilleThetaD,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-NevilleThetaN,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-NevilleThetaS,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+NevilleThetaC,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+NevilleThetaD,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+NevilleThetaN,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+NevilleThetaS,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 NewMoon,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData
 NextCell,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming
 NextDate,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,1,DateAndTime
@@ -4190,13 +4190,13 @@ NonCommutativePolynomialReduction,"Options, system variables & unclassified",imp
 NonCommutativeVariables,"Options, system variables & unclassified",implemented,3,,0,
 NonConstants,"Options, system variables & unclassified",implemented,3,,0,
 NonNegative,Core Language & Structure,implemented,1,,0,TestingExpressions
-NonNegativeIntegers,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
-NonNegativeRationals,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
-NonNegativeReals,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
+NonNegativeIntegers,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
+NonNegativeRationals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
+NonNegativeReals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 NonPositive,Core Language & Structure,implemented,1,,0,TestingExpressions
-NonPositiveIntegers,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
-NonPositiveRationals,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
-NonPositiveReals,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
+NonPositiveIntegers,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
+NonPositiveRationals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
+NonPositiveReals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 NonThreadable,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays
 NoncentralBetaDistribution,Symbolic & Numeric Computation,missing,2,,0,BoundedDomainDistributions
 NoncentralChiSquareDistribution,Data Manipulation & Analysis,missing,2,,0,NormalRelatedDistributions
@@ -4210,7 +4210,7 @@ NonlinearModelFit,Data Manipulation & Analysis,missing,2,,0,Statistics TimeSerie
 NonlinearStateSpaceModel,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems NonlinearControlSystems
 NonlocalMeansFilter,Images,missing,3,,0,ImageRestoration
 Nor,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation LogicAndBooleanAlgebra
-NorlundB,Symbolic & Numeric Computation,missing,2,,0,RecurrenceAndSumFunctions
+NorlundB,Symbolic & Numeric Computation,implemented,2,,0,RecurrenceAndSumFunctions
 Norm,Symbolic & Numeric Computation,implemented,2,,0,NumericalEvaluationAndPrecision MatricesAndLinearAlgebra OperationsOnVectors MatrixOperations
 NormFunction,"Options, system variables & unclassified",implemented,3,,0,
 Normal,Symbolic & Numeric Computation,implemented,1,,4,Associations MatricesAndLinearAlgebra GPUComputing UsingTheWolframDataDrop
@@ -4313,18 +4313,18 @@ NullRecords,External Interfaces & Connections,missing,3,,0,LowLevelFileOperation
 NullSpace,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixOperations FiniteFields LinearSystems
 NullWords,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
 Number,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
-NumberCompose,Symbolic & Numeric Computation,missing,2,,0,RepresentationOfNumbers NumberDigits
-NumberDecompose,Symbolic & Numeric Computation,missing,2,,0,IntegerFunctions RepresentationOfNumbers NumberDigits AdditiveNumberTheory
+NumberCompose,Symbolic & Numeric Computation,implemented,2,,0,RepresentationOfNumbers NumberDigits
+NumberDecompose,Symbolic & Numeric Computation,implemented,2,,0,IntegerFunctions RepresentationOfNumbers NumberDigits AdditiveNumberTheory
 NumberDigit,Symbolic & Numeric Computation,implemented,2,,0,IntegerFunctions NumberTheoreticFunctions RepresentationOfNumbers NumberDigits
 NumberExpand,Symbolic & Numeric Computation,implemented,2,,0,RepresentationOfNumbers NumberDigits
-NumberFieldClassNumber,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-NumberFieldDiscriminant,Higher Mathematical Computation,missing,2,,0,NumberTheory NumberTheoreticFunctions AlgebraicNumberTheory
-NumberFieldFundamentalUnits,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-NumberFieldIntegralBasis,Higher Mathematical Computation,missing,2,,0,NumberTheory AlgebraicNumberTheory
+NumberFieldClassNumber,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+NumberFieldDiscriminant,Higher Mathematical Computation,implemented,2,,0,NumberTheory NumberTheoreticFunctions AlgebraicNumberTheory
+NumberFieldFundamentalUnits,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+NumberFieldIntegralBasis,Higher Mathematical Computation,implemented,2,,0,NumberTheory AlgebraicNumberTheory
 NumberFieldNormRepresentatives,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-NumberFieldRegulator,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-NumberFieldRootsOfUnity,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-NumberFieldSignature,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
+NumberFieldRegulator,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+NumberFieldRootsOfUnity,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+NumberFieldSignature,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
 NumberForm,Notebook Documents & Presentation,implemented,2,,1,NumericalEvaluationAndPrecision MathematicalTypesetting LocaleAndInternationalization ChartLabelingLegendingAndAnnotation
 NumberFormat,"Options, system variables & unclassified",implemented,3,,0,
 NumberLinePlot,Data Manipulation & Analysis,missing,2,,1,DataVisualization FunctionVisualization TabularVisualization
@@ -4337,7 +4337,7 @@ NumberSeparator,Notebook Documents & Presentation,implemented,3,,0,LocaleAndInte
 NumberSigns,"Options, system variables & unclassified",implemented,3,,0,
 NumberString,Core Language & Structure,implemented,1,,1,StringManipulation StringPatterns
 Numerator,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation RepresentationOfNumbers RationalFunctions
-NumeratorDenominator,Symbolic & Numeric Computation,missing,2,,0,RepresentationOfNumbers RationalFunctions
+NumeratorDenominator,Symbolic & Numeric Computation,implemented,2,,0,RepresentationOfNumbers RationalFunctions
 NumericArray,Core Language & Structure,implemented,1,,0,ListManipulation BinaryData NetEncoderDecoder
 NumericArrayQ,Data Manipulation & Analysis,implemented,2,,0,BinaryData
 NumericArrayType,Data Manipulation & Analysis,implemented,2,,0,BinaryData
@@ -4349,7 +4349,7 @@ NuttallWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 NyquistGridLines,Engineering Data & Computation,infeasible,,curated data,0,ClassicalAnalysisAndDesign
 NyquistPlot,Engineering Data & Computation,missing,3,,0,ControlSystems IntegralTransforms FourierAnalysis DelayControlSystems
 O,Symbolic & Numeric Computation,implemented,2,,0,SeriesExpansions
-ONanGroupON,Higher Mathematical Computation,missing,2,,0,NamedGroups
+ONanGroupON,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 ObjectTrackingData,Machine Learning & LLMs,infeasible,,curated data,0,VideoAnalysis
 ObservabilityGramian,Engineering Data & Computation,infeasible,,curated data,0,DescriptorControlSystems AnalysisOfStateSpaceModels
 ObservabilityMatrix,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems AnalysisOfStateSpaceModels
@@ -4418,7 +4418,7 @@ OverDot,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Sy
 OverHat,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
 OverTilde,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
 OverVector,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
-Overflow,"Options, system variables & unclassified",missing,3,,0,
+Overflow,"Options, system variables & unclassified",implemented,3,,0,
 Overlaps,Core Language & Structure,implemented,1,,1,StringPatterns
 Overlay,User Interface Construction,implemented,3,,0,ViewersAndAnnotation ControlObjects CombiningGraphics UserInterfaceStructuringAndLayout
 OverlayVideo,Sound & Video,infeasible,,audio / video,0,VideoCreation VideoEditing
@@ -4426,7 +4426,7 @@ Overscript,Notebook Documents & Presentation,infeasible,,front end / notebooks,0
 OverscriptBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 OverscriptBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 OverwriteTarget,"Options, system variables & unclassified",missing,3,,0,
-OwenT,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInStatistics
+OwenT,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics
 OwnValues,Core Language & Structure,implemented,1,,0,Assignments SymbolHandling
 PDF,Symbolic & Numeric Computation,implemented,2,,0,ProbabilityAndStatistics DescriptiveStatistics FourierAnalysis RandomVariables
 PERTDistribution,Symbolic & Numeric Computation,missing,2,,0,BoundedDomainDistributions
@@ -4489,7 +4489,7 @@ Pane,Graphs & Networks,infeasible,,front end / notebooks,0,GraphVisualization Co
 PaneSelector,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,UserInterfaceStructuringAndLayout
 Panel,User Interface Construction,infeasible,,front end / notebooks,0,LayoutAndTables DocumentGeneration ViewersAndAnnotation ControlObjects
 Paneled,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
-ParabolicCylinderD,Symbolic & Numeric Computation,missing,2,,0,HypergeometricFunctions
+ParabolicCylinderD,Symbolic & Numeric Computation,implemented,2,,0,HypergeometricFunctions
 ParagraphIndent,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,TextLayoutOptions
 ParagraphSpacing,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,TextLayoutOptions
 ParallelArray,Core Language & Structure,missing,2,,0,DataParallelism
@@ -4549,7 +4549,7 @@ PartitionGranularity,"Options, system variables & unclassified",missing,3,,0,
 PartitionsP,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions DiscreteMathematics NumberTheory IntegerFunctions
 PartitionsQ,Symbolic & Numeric Computation,implemented,2,,0,NumberTheory NumberTheoreticFunctions CombinatorialFunctions AdditiveNumberTheory
 ParzenWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
-PascalBinomial,"Options, system variables & unclassified",missing,3,,0,
+PascalBinomial,"Options, system variables & unclassified",implemented,3,,0,
 PascalDistribution,Symbolic & Numeric Computation,missing,2,,0,DiscreteUnivariateDistributions
 PassEventsDown,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 PassEventsUp,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
@@ -4565,10 +4565,10 @@ PatternReactionQ,Scientific and Medical Data & Computation,infeasible,,curated d
 PatternSequence,Core Language & Structure,implemented,1,,1,Patterns
 PatternTest,Core Language & Structure,implemented,1,,0,Syntax Patterns
 PaulWavelet,Data Manipulation & Analysis,missing,2,,0,Wavelets
-PauliMatrix,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics
+PauliMatrix,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics
 Pause,Core Language & Structure,implemented,1,,0,ProceduralProgramming FlowControl BasicInputAndOutputInPrograms
 PeakDetect,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,FeatureDetection
-PeanoCurve,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals GeometricSpecialRegions
+PeanoCurve,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals GeometricSpecialRegions
 PearsonChiSquareTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 PearsonCorrelationTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 PearsonDistribution,Symbolic & Numeric Computation,missing,2,,0,ParametricStatisticalDistributions
@@ -4749,9 +4749,9 @@ PositionLargest,Core Language & Structure,implemented,1,,0,ElementsOfLists
 PositionSmallest,Core Language & Structure,implemented,1,,0,ElementsOfLists
 Positive,Core Language & Structure,implemented,1,,0,TestingExpressions
 PositiveDefiniteMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixPredicates
-PositiveIntegers,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
-PositiveRationals,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
-PositiveReals,Symbolic & Numeric Computation,missing,2,,0,AssumptionsAndDomains
+PositiveIntegers,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
+PositiveRationals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
+PositiveReals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 PositiveSemidefiniteMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
 PositivelyOrientedPoints,Geometry,missing,2,,0,PlaneGeometry SolidGeometry GeometricPropertiesAndMeasures
 PossibleZeroQ,Core Language & Structure,implemented,1,,0,FormulaManipulation TheoremProving TestingExpressions
@@ -4796,9 +4796,9 @@ PrimeOmega,Higher Mathematical Computation,implemented,2,,0,NumberTheory NumberT
 PrimePi,Higher Mathematical Computation,implemented,1,,1,MathematicalFunctions NumberTheory NumberTheoreticFunctions PrimeNumbers
 PrimePowerQ,Higher Mathematical Computation,implemented,2,,0,NumberTheoreticFunctions NumberRecognition PrimeNumbers
 PrimeQ,Higher Mathematical Computation,implemented,1,,3,NumberTheory TheoremProving TestingExpressions IntegerFunctions
-PrimeZetaP,Higher Mathematical Computation,missing,2,,0,PrimeNumbers MultiplicativeNumberTheory AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
-Primes,Higher Mathematical Computation,missing,2,,0,NumberTheory AssumptionsAndDomains NumberRecognition PrimeNumbers
-PrimitivePolynomialQ,Higher Mathematical Computation,missing,2,,0,PolynomialAlgebra NumberTheory
+PrimeZetaP,Higher Mathematical Computation,implemented,2,,0,PrimeNumbers MultiplicativeNumberTheory AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
+Primes,Higher Mathematical Computation,implemented,2,,0,NumberTheory AssumptionsAndDomains NumberRecognition PrimeNumbers
+PrimitivePolynomialQ,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra NumberTheory
 PrimitiveRoot,Higher Mathematical Computation,implemented,2,,0,NumberTheory NumberTheoreticFunctions CryptographicNumberTheory
 PrimitiveRootList,Symbolic & Numeric Computation,implemented,2,,0,NumberTheoreticFunctions CryptographicNumberTheory
 PrincipalComponents,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra UnsupervisedMachineLearning MatrixDecompositions ImageRepresentation
@@ -4854,12 +4854,12 @@ Purple,Visualization & Graphics,missing,1,,2,Colors
 Put,Core Language & Structure,missing,1,,3,ExternalOperations Syntax StandaloneWolframLanguageKernels PersistentStorage
 PutAppend,Core Language & Structure,missing,2,,0,Syntax CloudFunctionsAndDeployment Files WolframLanguageExpressionsInFiles
 Pyramid,Visualization & Graphics,missing,3,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
-QBinomial,Higher Mathematical Computation,missing,2,,0,QFunctions
-QFactorial,Higher Mathematical Computation,missing,2,,0,DiscreteCalculus SpecialFunctions QFunctions
-QGamma,Higher Mathematical Computation,missing,2,,0,QFunctions
-QHypergeometricPFQ,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions QFunctions
-QPochhammer,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions QFunctions
-QPolyGamma,Higher Mathematical Computation,missing,2,,0,QFunctions
+QBinomial,Higher Mathematical Computation,implemented,2,,0,QFunctions
+QFactorial,Higher Mathematical Computation,implemented,2,,0,DiscreteCalculus SpecialFunctions QFunctions
+QGamma,Higher Mathematical Computation,implemented,2,,0,QFunctions
+QHypergeometricPFQ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions QFunctions
+QPochhammer,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions QFunctions
+QPolyGamma,Higher Mathematical Computation,implemented,2,,0,QFunctions
 QRDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixBasedMinimization MatrixDecompositions
 QnDispersion,Data Manipulation & Analysis,missing,2,,0,DateAndTime DescriptiveStatistics RobustDescriptiveStatistics
 QuadraticIrrationalQ,Symbolic & Numeric Computation,implemented,2,,0,AlgebraicNumbers ContinuedFractionsAndRationalApproximations
@@ -4910,15 +4910,15 @@ RadioButton,User Interface Construction,infeasible,,front end / notebooks,0,Cont
 RadioButtonBar,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects CreatingFormsAndApps UserInterfaceStructuringAndLayout DialogBoxes
 Radon,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,ComputerVision FeatureDetection
 RadonTransform,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms
-RamanujanTau,Symbolic & Numeric Computation,missing,2,,0,NumberTheoreticFunctions AnalyticNumberTheory
-RamanujanTauL,Higher Mathematical Computation,missing,2,,0,AnalyticNumberTheory
-RamanujanTauTheta,Higher Mathematical Computation,missing,2,,0,AnalyticNumberTheory
-RamanujanTauZ,Higher Mathematical Computation,missing,2,,0,AnalyticNumberTheory
-Ramp,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions NumericalFunctions
+RamanujanTau,Symbolic & Numeric Computation,implemented,2,,0,NumberTheoreticFunctions AnalyticNumberTheory
+RamanujanTauL,Higher Mathematical Computation,implemented,2,,0,AnalyticNumberTheory
+RamanujanTauTheta,Higher Mathematical Computation,implemented,2,,0,AnalyticNumberTheory
+RamanujanTauZ,Higher Mathematical Computation,implemented,2,,0,AnalyticNumberTheory
+Ramp,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumericalFunctions
 RandomArrayLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 RandomChoice,Core Language & Structure,implemented,1,,4,Statistics MathematicalFunctions ConstructingLists RandomNumberGeneration
 RandomColor,Core Language & Structure,missing,1,,7,ColorProcessing RandomNumberGeneration Colors
-RandomComplex,Core Language & Structure,missing,2,,0,GPUComputing RandomNumberGeneration FunctionsOfComplexVariables ComplexNumbers
+RandomComplex,Core Language & Structure,implemented,2,,0,GPUComputing RandomNumberGeneration FunctionsOfComplexVariables ComplexNumbers
 RandomDate,"Options, system variables & unclassified",missing,3,,0,
 RandomEntity,Core Language & Structure,infeasible,,curated data,2,KnowledgeRepresentationAndAccess AstronomicalComputationAndData PhysicsAndChemistryDataAndComputation LifeSciencesAndMedicineDataAndComputation
 RandomFunction,Higher Mathematical Computation,missing,2,,0,ProbabilityAndStatistics RandomProcesses ScientificModels ActuarialComputation
@@ -4956,7 +4956,7 @@ Rasterize,Images,missing,1,,5,TuningAndDebugging ImageProcessing RasterImageForm
 Rational,Core Language & Structure,implemented,2,,0,WDFWolframDataFramework RepresentationOfNumbers AtomicElementsOfExpressions
 RationalExpressionQ,Core Language & Structure,implemented,1,,0,TestingExpressions FunctionProperties
 Rationalize,Higher Mathematical Computation,implemented,2,,0,NumberTheory NumberRecognition ContinuedFractionsAndRationalApproximations
-Rationals,Higher Mathematical Computation,missing,2,,0,NumberTheory AssumptionsAndDomains NumberRecognition
+Rationals,Higher Mathematical Computation,implemented,2,,0,NumberTheory AssumptionsAndDomains NumberRecognition
 Ratios,Core Language & Structure,implemented,1,,0,DiscreteCalculus GPUComputing NumericalData ApplyingFunctionsToLists
 RawBoxes,Core Language & Structure,infeasible,,front end / notebooks,0,ClipboardOperations
 RawData,Notebook Documents & Presentation,infeasible,,curated data,0,LowLevelNotebookStructure
@@ -4986,11 +4986,11 @@ Real,Core Language & Structure,implemented,1,,1,WDFWolframDataFramework Expressi
 RealAbs,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing NumericalFunctions ElementaryFunctions
 RealBlockDiagonalForm,"Options, system variables & unclassified",implemented,3,,0,
 RealDigits,Symbolic & Numeric Computation,implemented,1,,1,NumericalEvaluationAndPrecision NumberTheory ConstructingLists MathematicalConstants
-RealExponent,Symbolic & Numeric Computation,missing,2,,0,RepresentationOfNumbers
-RealSign,Symbolic & Numeric Computation,missing,2,,0,GPUComputing NumericalFunctions
-RealValuedNumberQ,Core Language & Structure,missing,1,,0,TestingExpressions RepresentationOfNumbers AtomicElementsOfExpressions
-RealValuedNumericQ,Core Language & Structure,missing,1,,0,TestingExpressions
-Reals,Symbolic & Numeric Computation,missing,2,,0,FormulaManipulation NumberTheory AssumptionsAndDomains PolynomialSystems
+RealExponent,Symbolic & Numeric Computation,implemented,2,,0,RepresentationOfNumbers
+RealSign,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing NumericalFunctions
+RealValuedNumberQ,Core Language & Structure,implemented,1,,0,TestingExpressions RepresentationOfNumbers AtomicElementsOfExpressions
+RealValuedNumericQ,Core Language & Structure,implemented,1,,0,TestingExpressions
+Reals,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation NumberTheory AssumptionsAndDomains PolynomialSystems
 Reap,Core Language & Structure,implemented,1,,5,LanguageOverview TuningAndDebugging ConstructingLists PartsOfExpressions
 ReapVideo,Sound & Video,infeasible,,audio / video,0,VideoCreation
 RecalibrationFunction,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,SupervisedMachineLearning
@@ -5171,17 +5171,17 @@ RevolutionPlot3D,Visualization & Graphics,missing,3,,0,FunctionVisualization 3DP
 RiccatiSolve,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving ControlSystems
 RiceDistribution,Symbolic & Numeric Computation,missing,2,,0,DistributionsInCommunicationSystems
 RidgeFilter,Data Manipulation & Analysis,missing,2,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters
-RiemannR,Higher Mathematical Computation,missing,2,,0,PrimeNumbers AnalyticNumberTheory
-RiemannSiegelTheta,Symbolic & Numeric Computation,missing,2,,0,ZetaFunctionsAndPolylogarithms
-RiemannSiegelZ,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions NumberTheoreticFunctions PrimeNumbers MultiplicativeNumberTheory
-RiemannXi,Symbolic & Numeric Computation,missing,2,,0,ZetaFunctionsAndPolylogarithms
+RiemannR,Higher Mathematical Computation,implemented,2,,0,PrimeNumbers AnalyticNumberTheory
+RiemannSiegelTheta,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
+RiemannSiegelZ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions NumberTheoreticFunctions PrimeNumbers MultiplicativeNumberTheory
+RiemannXi,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
 Riffle,Core Language & Structure,implemented,1,,2,ListManipulation RearrangingAndRestructuringLists AnnotatingAndCombiningGraphics TextualElementsInNotebooks
 Right,Visualization & Graphics,implemented,2,,1,3DGraphicsOptions
 RightArrow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,ArrowsAndArrowLikeForms
 RightArrowBar,"Options, system variables & unclassified",missing,3,,0,
 RightArrowLeftArrow,"Options, system variables & unclassified",missing,3,,0,
 RightComposition,Core Language & Structure,implemented,1,,6,Syntax FunctionCompositionAndOperatorForms
-RightCosetRepresentative,Higher Mathematical Computation,missing,2,,0,GroupTheory
+RightCosetRepresentative,Higher Mathematical Computation,implemented,2,,0,GroupTheory
 RightDownTeeVector,"Options, system variables & unclassified",missing,3,,0,
 RightDownVector,"Options, system variables & unclassified",missing,3,,0,
 RightDownVectorBar,"Options, system variables & unclassified",missing,3,,0,
@@ -5207,13 +5207,13 @@ RollPitchYawAngles,Geometry,missing,2,,0,GeometricTransforms
 RollPitchYawMatrix,Geometry,missing,2,,0,GeometricTransforms AnglesAndPolarCoordinates
 RomanNumeral,Core Language & Structure,implemented,2,,1,TextConstruction NumberDigits
 Root,Symbolic & Numeric Computation,implemented,2,,0,PolynomialAlgebra NumberTheory MathematicalConstants SpecialFunctions
-RootApproximant,Higher Mathematical Computation,missing,2,,0,AlgebraicNumbers AlgebraicNumberTheory NumberRecognition
+RootApproximant,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumbers AlgebraicNumberTheory NumberRecognition
 RootIntervals,Symbolic & Numeric Computation,implemented,2,,0,IntervalArithmetic PolynomialEquations
 RootLocusPlot,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems ClassicalAnalysisAndDesign
 RootMeanSquare,Data Manipulation & Analysis,implemented,2,,0,GPUComputing DescriptiveStatistics StatisticalMomentsAndGeneratingFunctions
-RootOfUnityQ,Higher Mathematical Computation,missing,2,,0,AlgebraicNumberTheory
-RootReduce,Higher Mathematical Computation,missing,2,,0,FormulaManipulation PolynomialAlgebra TheoremProving AlgebraicNumbers
-RootSum,Higher Mathematical Computation,missing,2,,0,PolynomialAlgebra
+RootOfUnityQ,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumberTheory
+RootReduce,Higher Mathematical Computation,implemented,2,,0,FormulaManipulation PolynomialAlgebra TheoremProving AlgebraicNumbers
+RootSum,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra
 RootTree,"Options, system variables & unclassified",implemented,3,,0,
 Roots,Symbolic & Numeric Computation,implemented,2,,0,PolynomialEquations
 Rotate,Visualization & Graphics,missing,1,,2,SymbolicGraphicsLanguage DerivedRegions GeometricTransforms GraphicsTransformations
@@ -5235,7 +5235,7 @@ RowReduce,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgeb
 RowSpacings,"Options, system variables & unclassified",implemented,3,,0,
 RowsEqual,"Options, system variables & unclassified",implemented,3,,0,
 RudinShapiro,Symbolic & Numeric Computation,implemented,2,,0,IteratedMapsAndFractals ComputationalSystemsAndDiscovery IntegerFunctions
-RudvalisGroupRu,Higher Mathematical Computation,missing,2,,0,NamedGroups
+RudvalisGroupRu,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 Rule,Core Language & Structure,implemented,1,,46,LanguageOverview Expressions RulesAndPatterns Syntax
 RuleDelayed,Core Language & Structure,implemented,1,,9,LanguageOverview RulesAndPatterns Syntax ScopingConstructs
 RulePlot,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics BooleanComputation IteratedMapsAndFractals ComputationalSystemsAndDiscovery
@@ -5272,7 +5272,7 @@ SaveConnection,"Options, system variables & unclassified",missing,3,,0,
 SaveDefinitions,User Interface Construction,infeasible,,front end / notebooks,0,InteractiveManipulation OptionsAndStylingForInteractiveManipulation
 Saveable,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 SavitzkyGolayMatrix,Images,missing,3,,0,StructureMatricesAndConvolutionKernels
-SawtoothWave,Symbolic & Numeric Computation,missing,2,,0,IntegralTransforms NumericalFunctions FourierAnalysis CreatingAndImportingSignals
+SawtoothWave,Symbolic & Numeric Computation,implemented,2,,0,IntegralTransforms NumericalFunctions FourierAnalysis CreatingAndImportingSignals
 Scale,Visualization & Graphics,missing,2,,1,SymbolicGraphicsLanguage DerivedRegions GeometricTransforms GraphicsTransformations
 ScaleDivisions,Data Manipulation & Analysis,missing,2,,0,Gauges
 ScaleOrigin,Data Manipulation & Analysis,missing,2,,0,Gauges
@@ -5289,10 +5289,10 @@ SchrodingerPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
 SchurDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixDecompositions
 ScientificForm,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers
 ScientificNotationThreshold,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers
-ScorerGi,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
-ScorerGiPrime,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
-ScorerHi,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
-ScorerHiPrime,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
+ScorerGi,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
+ScorerGiPrime,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
+ScorerHi,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
+ScorerHiPrime,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 ScreenStyleEnvironment,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 ScriptBaselineShifts,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathTypesettingOptionsAndTweaking
 ScriptLevel,"Options, system variables & unclassified",implemented,3,,0,
@@ -5409,7 +5409,7 @@ ShearingMatrix,Symbolic & Numeric Computation,implemented,2,,0,GeometricTransfor
 ShearingTransform,Geometry,missing,2,,0,DerivedRegions GeometricTransforms GraphicsTransformations
 ShellRegion,Geometry,missing,2,,0,GeometricComputation DerivedRegions 3DPrinting
 ShenCastanMatrix,Images,missing,3,,0,StructureMatricesAndConvolutionKernels
-ShiftRegisterSequence,Symbolic & Numeric Computation,missing,2,,0,BooleanComputation ComputationalSystemsAndDiscovery RandomNumberGeneration IntegerSequences
+ShiftRegisterSequence,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation ComputationalSystemsAndDiscovery RandomNumberGeneration IntegerSequences
 ShiftedGompertzDistribution,Symbolic & Numeric Computation,missing,2,,0,DistributionsUsedInReliabilityAnalysis ExponentialRelatedDistributions
 Short,Core Language & Structure,implemented,2,,0,TuningAndDebugging LayoutAndTables MemoryMeasurementAndOptimization
 ShortDownArrow,"Options, system variables & unclassified",missing,3,,0,
@@ -5437,9 +5437,9 @@ ShowStringCharacters,Notebook Documents & Presentation,infeasible,,front end / n
 ShowSubtitles,Sound & Video,infeasible,,audio / video,0,VideoProcessing VideoEditing
 ShrinkingDelay,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
 SiderealTime,Knowledge Representation & Natural Language,missing,3,,0,DateAndTime AstronomicalComputationAndData
-SiegelTheta,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions EllipticFunctions
+SiegelTheta,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions EllipticFunctions
 SiegelTukeyTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
-SierpinskiCurve,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals GeometricSpecialRegions
+SierpinskiCurve,Higher Mathematical Computation,implemented,2,,0,IteratedMapsAndFractals GeometricSpecialRegions
 SierpinskiMesh,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals MeshRegions
 Sign,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing Conditionals ComplexNumbers NumericalFunctions
 SignPadding,"Options, system variables & unclassified",implemented,3,,0,
@@ -5459,7 +5459,7 @@ SimplifyMesh,Geometry,missing,2,,0,MeshRegions
 Sin,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions GPUComputing FunctionsForSeparableCoordinateSystems ElementaryFunctions
 SinDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
 SinIntegral,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions ErrorAndExponentialIntegralFunctions
-Sinc,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions FunctionsUsedInOptics ElementaryFunctions
+Sinc,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FunctionsUsedInOptics ElementaryFunctions
 SinghMaddalaDistribution,Symbolic & Numeric Computation,missing,2,,0,HeavyTailDistributions
 SingleLetterItalics,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Stylesheets MathTypesettingOptionsAndTweaking AutomaticTextStylingFeatures
 SingularValueDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra GPUComputing UnsupervisedMachineLearning MatrixBasedMinimization
@@ -5467,7 +5467,7 @@ SingularValueList,Data Manipulation & Analysis,implemented,2,,0,SparseArrays Mat
 SingularValuePlot,Data Manipulation & Analysis,missing,2,,0,IntegralTransforms FourierAnalysis ClassicalAnalysisAndDesign
 Sinh,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing ElementaryFunctions HyperbolicFunctions
 SinhIntegral,Symbolic & Numeric Computation,implemented,2,,0,ErrorAndExponentialIntegralFunctions
-SixJSymbol,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics CombinatorialFunctions
+SixJSymbol,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics CombinatorialFunctions
 Skeleton,"Options, system variables & unclassified",implemented,3,,0,
 SkeletonTransform,Images,missing,3,,0,MathematicalMorphology
 SkellamDistribution,Symbolic & Numeric Computation,missing,2,,0,DiscreteUnivariateDistributions
@@ -5596,17 +5596,17 @@ SphericalHarmonicY,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForS
 SphericalPlot3D,Data Manipulation & Analysis,missing,2,,0,FunctionVisualization DateAndTimeVisualization AnglesAndPolarCoordinates
 SphericalRegion,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling GraphicsCoordinates GraphicsShapeAndSize 3DGraphicsOptions
 SphericalShell,Geometry,missing,2,,0,GeometricSpecialRegions
-SpheroidalEigenvalue,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions SpheroidalAndRelatedFunctions
-SpheroidalJoiningFactor,Symbolic & Numeric Computation,missing,2,,0,SpheroidalAndRelatedFunctions
-SpheroidalPS,Symbolic & Numeric Computation,missing,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInOptics FunctionsUsedInQuantumMechanics SpecialFunctions
-SpheroidalPSPrime,Symbolic & Numeric Computation,missing,2,,0,SpheroidalAndRelatedFunctions
-SpheroidalQS,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions SpheroidalAndRelatedFunctions
-SpheroidalQSPrime,Symbolic & Numeric Computation,missing,2,,0,SpheroidalAndRelatedFunctions
+SpheroidalEigenvalue,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions SpheroidalAndRelatedFunctions
+SpheroidalJoiningFactor,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelatedFunctions
+SpheroidalPS,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInOptics FunctionsUsedInQuantumMechanics SpecialFunctions
+SpheroidalPSPrime,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelatedFunctions
+SpheroidalQS,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions SpheroidalAndRelatedFunctions
+SpheroidalQSPrime,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelatedFunctions
 SpheroidalRadialFactor,Symbolic & Numeric Computation,missing,2,,0,SpheroidalAndRelatedFunctions
-SpheroidalS1,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions
-SpheroidalS1Prime,Symbolic & Numeric Computation,missing,2,,0,SpheroidalAndRelatedFunctions
-SpheroidalS2,Symbolic & Numeric Computation,missing,2,,0,SpheroidalAndRelatedFunctions
-SpheroidalS2Prime,Symbolic & Numeric Computation,missing,2,,0,SpheroidalAndRelatedFunctions
+SpheroidalS1,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FunctionsForSeparableCoordinateSystems FunctionsUsedInQuantumMechanics SpecialFunctions
+SpheroidalS1Prime,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelatedFunctions
+SpheroidalS2,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelatedFunctions
+SpheroidalS2Prime,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelatedFunctions
 Splice,Core Language & Structure,implemented,1,,2,ListManipulation RearrangingAndRestructuringLists
 SplicedDistribution,Financial Data & Computation,missing,3,,0,ActuarialComputation DistributionsUsedInActuarialScience DerivedDistributions
 SplineClosed,Data Manipulation & Analysis,missing,2,,0,Splines
@@ -5630,7 +5630,7 @@ SquareSubsetEqual,"Options, system variables & unclassified",missing,3,,0,
 SquareSuperset,"Options, system variables & unclassified",missing,3,,0,
 SquareSupersetEqual,"Options, system variables & unclassified",missing,3,,0,
 SquareUnion,"Options, system variables & unclassified",missing,3,,0,
-SquareWave,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions IntegralTransforms NumericalFunctions FourierAnalysis
+SquareWave,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IntegralTransforms NumericalFunctions FourierAnalysis
 SquaredEuclideanDistance,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimilarityMeasures
 SquaresR,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumberTheory NumberTheoreticFunctions DiophantineEquations
 Squiggled,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,ViewersAndAnnotation FontOptions
@@ -5757,7 +5757,7 @@ Struckthrough,Notebook Documents & Presentation,infeasible,,front end / notebook
 StructuralImportance,Engineering Data & Computation,infeasible,,curated data,0,SystemModelAnalyticsDesign Reliability
 StructuredSelection,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 StruveH,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInOptics SpecialFunctions BesselRelatedFunctions
-StruveL,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInOptics BesselRelatedFunctions
+StruveL,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInOptics BesselRelatedFunctions
 Stub,Core Language & Structure,implemented,1,,0,Attributes
 StudentTDistribution,Symbolic & Numeric Computation,implemented,2,,0,RandomNumberGeneration FunctionsUsedInStatistics ParametricStatisticalDistributions NormalRelatedDistributions
 Style,Notebook Documents & Presentation,implemented,1,,10,AutomatedReports ChartingAndInformationVisualization NaturalLanguageProcessing TextAnalysis
@@ -5835,7 +5835,7 @@ SurvivalFunction,Symbolic & Numeric Computation,implemented,2,,0,SystemModelAnal
 SurvivalModel,"Options, system variables & unclassified",missing,3,,0,
 SurvivalModelFit,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis Reliability
 SuzukiDistribution,Symbolic & Numeric Computation,missing,2,,0,DistributionsInCommunicationSystems HeavyTailDistributions
-SuzukiGroupSuz,Higher Mathematical Computation,missing,2,,0,NamedGroups
+SuzukiGroupSuz,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 SwatchLegend,Data Manipulation & Analysis,missing,2,,0,Labels Legends ChartLabelingLegendingAndAnnotation
 Switch,Core Language & Structure,implemented,1,,0,ProceduralProgramming Conditionals
 Symbol,Core Language & Structure,implemented,1,,1,Expressions ExpressionStructure ConvertingBetweenExpressionsAndStrings SymbolHandling
@@ -6041,11 +6041,11 @@ Thickness,Visualization & Graphics,missing,3,,0,MapsAndCartography GraphicsObjec
 Thin,Visualization & Graphics,missing,3,,0,GraphicsObjects GraphicsDirectives
 Thinning,Images,missing,3,,0,ImageProcessing MathematicalMorphology
 ThomasPointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialPointProcesses
-ThompsonGroupTh,Higher Mathematical Computation,missing,2,,0,NamedGroups
+ThompsonGroupTh,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 Thread,Core Language & Structure,implemented,1,,3,ListManipulation Expressions OperationsOnVectors ApplyingFunctionsToLists
 Threaded,Core Language & Structure,implemented,1,,2,ListManipulation HandlingArraysOfData
 ThreadingLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworks NeuralNetworkConstruction NeuralNetworkLayers
-ThreeJSymbol,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics CombinatorialFunctions
+ThreeJSymbol,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics CombinatorialFunctions
 Threshold,Images,missing,3,,0,DataTransformsAndSmoothing BasicImageManipulation SegmentationAnalysis ColorProcessing
 Through,Core Language & Structure,implemented,1,,0,FunctionalProgramming StructuralOperationsOnExpressions FunctionCompositionAndOperatorForms
 Throw,Core Language & Structure,implemented,1,,0,LanguageOverview ProceduralProgramming ScopingConstructs RobustnessAndErrorHandling
@@ -6106,18 +6106,18 @@ Times,Core Language & Structure,implemented,1,,20,Syntax MathematicalFunctions M
 TimesBy,Core Language & Structure,implemented,1,,0,ProceduralProgramming Assignments
 Timing,Core Language & Structure,implemented,1,,3,TuningAndDebugging DateAndTime TimeMeasurementAndOptimization
 Tiny,Visualization & Graphics,missing,2,,1,GraphicsShapeAndSize FontOptions
-TitsGroupT,Higher Mathematical Computation,missing,2,,0,NamedGroups
+TitsGroupT,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 ToBoxes,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,DefiningCustomNotation
 ToCharacterCode,Core Language & Structure,implemented,1,,1,StringManipulation SpecialCharacters LocaleAndInternationalization CharacterOperations
 ToContinuousTimeModel,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems Modeling
 ToDiscreteTimeModel,Engineering Data & Computation,infeasible,,curated data,0,SignalProcessing ControlSystems SignalFilteringAndFilterDesign Modeling
 ToEntity,Core Language & Structure,infeasible,,curated data,0,KnowledgeRepresentationAndAccess
 ToExpression,Core Language & Structure,implemented,1,,0,StringManipulation FreeFormAndExternalInput EvaluationControl ConvertingBetweenExpressionsAndStrings
-ToFiniteField,Symbolic & Numeric Computation,missing,2,,0,FiniteFields
+ToFiniteField,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields
 ToInvertibleTimeSeries,Higher Mathematical Computation,missing,2,,0,TimeSeriesProcesses
 ToLowerCase,Core Language & Structure,implemented,1,,0,NaturalLanguageProcessing ProcessingTextualData StringOperations TextConstruction
 ToMemory,Core Language & Structure,missing,2,,0,WorkingWithRelationalDatabases TabularDataSources
-ToNumberField,Higher Mathematical Computation,missing,2,,0,NumberTheory AlgebraicNumbers AlgebraicNumberTheory
+ToNumberField,Higher Mathematical Computation,implemented,2,,0,NumberTheory AlgebraicNumbers AlgebraicNumberTheory
 ToPolarCoordinates,Symbolic & Numeric Computation,implemented,2,,0,VectorAnalysis AnglesAndPolarCoordinates TrigonometricFunctions
 ToRadicals,Symbolic & Numeric Computation,implemented,2,,0,PolynomialAlgebra AlgebraicNumbers AlgebraicTransformations PolynomialEquations
 ToRawPointer,"Options, system variables & unclassified",missing,3,,0,
@@ -6265,7 +6265,7 @@ Triangle,Visualization & Graphics,missing,3,,0,PlaneGeometry SolidGeometry Geome
 TriangleCenter,Geometry,missing,2,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry
 TriangleConstruct,Geometry,missing,2,,0,PlaneGeometry SyntheticGeometry AnglesAndPolarCoordinates
 TriangleMeasurement,Visualization & Graphics,missing,3,,0,PlaneGeometry SyntheticGeometry
-TriangleWave,Symbolic & Numeric Computation,missing,2,,0,MathematicalFunctions IntegralTransforms NumericalFunctions FourierAnalysis
+TriangleWave,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IntegralTransforms NumericalFunctions FourierAnalysis
 TriangularDistribution,Symbolic & Numeric Computation,implemented,2,,0,BoundedDomainDistributions
 TriangulateMesh,Geometry,missing,2,,0,MeshRegions
 Trig,"Options, system variables & unclassified",implemented,3,,0,
@@ -6322,7 +6322,7 @@ Uncompress,Core Language & Structure,missing,2,,0,MemoryMeasurementAndOptimizati
 UnconstrainedParameters,Visualization & Graphics,implemented,3,,0,SyntheticGeometry
 Undefined,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants
 UnderBar,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
-Underflow,"Options, system variables & unclassified",missing,3,,0,
+Underflow,"Options, system variables & unclassified",implemented,3,,0,
 Underlined,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,FormatMenu FontOptions
 Underoverscript,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
 UnderoverscriptBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
@@ -6358,7 +6358,7 @@ UnitRootTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests TimeSerie
 UnitSimplify,Core Language & Structure,infeasible,,depends on Quantity / curated unit data (already infeasible),0,Units AstronomicalComputationAndData PhysicsAndChemistryDataAndComputation EngineeringData
 UnitStep,Core Language & Structure,implemented,1,,0,Conditionals NumericalFunctions
 UnitSystem,"Options, system variables & unclassified",infeasible,,depends on Quantity / curated unit data (already infeasible),0,
-UnitTriangle,Symbolic & Numeric Computation,missing,2,,0,NumericalFunctions
+UnitTriangle,Symbolic & Numeric Computation,implemented,2,,0,NumericalFunctions
 UnitVector,Core Language & Structure,implemented,2,,0,OperationsOnVectors
 UnitVectorLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 UnitaryMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays MatrixDecompositions
@@ -6598,27 +6598,27 @@ WebSearch,Core Language & Structure,infeasible,,Wolfram Cloud / external service
 WebSessionObject,External Interfaces & Connections,missing,3,,0,WebOperations WebBrowserAutomation HTTPRequestsAndResponses
 WebSessions,Core Language & Structure,missing,2,,0,WebBrowserAutomation
 WebWindowObject,Core Language & Structure,missing,2,,0,WebOperations WebBrowserAutomation
-WeberE,Symbolic & Numeric Computation,missing,2,,0,BesselRelatedFunctions
+WeberE,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 Wedge,Core Language & Structure,implemented,2,,0,WolframLanguageSyntaxCharacters SymbolicNotationalForms
 Wednesday,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 WeibullDistribution,Symbolic & Numeric Computation,implemented,2,,0,Reliability ActuarialComputation ParametricStatisticalDistributions SurvivalAnalysis
-WeierstrassE1,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassE2,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassE3,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassEta1,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassEta2,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassEta3,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassHalfPeriodW1,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassHalfPeriodW2,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassHalfPeriodW3,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassHalfPeriods,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassInvariantG2,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassInvariantG3,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassInvariants,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+WeierstrassE1,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassE2,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassE3,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassEta1,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassEta2,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassEta3,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassHalfPeriodW1,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassHalfPeriodW2,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassHalfPeriodW3,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassHalfPeriods,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassInvariantG2,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassInvariantG3,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassInvariants,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 WeierstrassP,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions SpecialFunctions EllipticFunctions
 WeierstrassPPrime,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
-WeierstrassSigma,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
-WeierstrassZeta,Symbolic & Numeric Computation,missing,2,,0,EllipticFunctions
+WeierstrassSigma,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
+WeierstrassZeta,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 WeightedAdjacencyGraph,Graphs & Networks,missing,2,,0,GraphsAndMatrices GraphAnnotations GraphProperties
 WeightedAdjacencyMatrix,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation GraphsAndMatrices GraphAnnotations GraphProperties
 WeightedData,Data Manipulation & Analysis,infeasible,,curated data,0,DescriptiveStatistics
@@ -6635,12 +6635,12 @@ WhiteNoiseProcess,Higher Mathematical Computation,missing,2,,0,RandomProcesses P
 WhitePoint,"Options, system variables & unclassified",missing,3,,0,
 Whitespace,Core Language & Structure,implemented,1,,3,StringManipulation StringPatterns ProgrammableLinguisticInterface
 WhitespaceCharacter,Core Language & Structure,implemented,1,,0,StringPatterns
-WhittakerM,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInQuantumMechanics HypergeometricFunctions
-WhittakerW,Symbolic & Numeric Computation,missing,2,,0,HypergeometricFunctions
+WhittakerM,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics HypergeometricFunctions
+WhittakerW,Symbolic & Numeric Computation,implemented,2,,0,HypergeometricFunctions
 WholeCellGroupOpener,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,ControllingCellGrouping
 WienerFilter,Data Manipulation & Analysis,missing,2,,0,DataTransformsAndSmoothing SpeechComputation ImageFilteringAndNeighborhoodProcessing ImageRestoration
 WienerProcess,Higher Mathematical Computation,missing,2,,0,RandomProcesses ParametricRandomProcesses MarkovProcesses StochasticDifferentialEquationProcesses
-WignerD,Symbolic & Numeric Computation,missing,2,,0,SpecialFunctions
+WignerD,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions
 WignerSemicircleDistribution,Symbolic & Numeric Computation,missing,2,,0,MatrixDistributions BoundedDomainDistributions
 WikidataData,Core Language & Structure,infeasible,,curated data,0,KnowledgeRepresentationAndAccess PeopleAndHistory
 WikidataSearch,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,KnowledgeRepresentationAndAccess
@@ -6707,11 +6707,11 @@ YuleDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSim
 ZIPCodeData,"Options, system variables & unclassified",infeasible,,curated data,0,
 ZTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 ZTransform,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics DiscreteCalculus IntegralTransforms FourierAnalysis
-ZernikeR,Symbolic & Numeric Computation,missing,2,,0,FunctionsUsedInOptics SpecialFunctions
+ZernikeR,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInOptics SpecialFunctions
 ZeroSymmetric,Higher Mathematical Computation,implemented,2,,0,SymbolicTensors
 ZeroTest,"Options, system variables & unclassified",implemented,3,,0,
 Zeta,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions DiscreteCalculus NumberTheory SpecialFunctions
-ZetaZero,Symbolic & Numeric Computation,missing,2,,0,NumberTheory SpecialFunctions NumberTheoreticFunctions PrimeNumbers
+ZetaZero,Symbolic & Numeric Computation,implemented,2,,0,NumberTheory SpecialFunctions NumberTheoreticFunctions PrimeNumbers
 ZipfDistribution,Symbolic & Numeric Computation,missing,2,,0,DiscreteUnivariateDistributions BoundedDomainDistributions HeavyTailDistributions
 ZoomCenter,Images,missing,3,,0,ImageRepresentation
 ZoomFactor,Images,missing,3,,0,ImageRepresentation
