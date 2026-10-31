@@ -23,12 +23,19 @@ AREA = "special functions II (W10)"
 STATUS = "added"
 
 
+def _as_expr(a):
+    """Python lists (as produced by N on list arguments) -> List expressions."""
+    if isinstance(a, (list, tuple)):
+        return Expr("List", *(_as_expr(x) for x in a))
+    return a
+
+
 def _register(name, nargs, impl, notes, listable=True, numeric=True, hold=False):
     lo, hi = (nargs, nargs) if isinstance(nargs, int) else nargs
     for n in range(lo, hi + 1):
         def make(n):
             def f(*args):
-                return impl(*args)
+                return impl(*(_as_expr(a) for a in args))
             f.__signature__ = inspect.Signature(
                 [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD) for i in range(n)])
             f.__name__ = f"_{name}_{n}"
@@ -1917,3 +1924,330 @@ _register("WignerD", (2, 4), _wignerd,
           "Wolfram's phase convention (WignerD[{1/2, 1/2, -1/2}, t] = Sin[t/2]); WignerD[{j, m1, m2}, theta, phi] "
           "and WignerD[{j, m1, m2}, theta] set the leading angles to 0; physical (half-)integer parameters only",
           listable=False, numeric=False)
+
+
+# ───────────────────────────── multiple polylogarithms (Goncharov G) ─────────────────────────────
+
+class _Divergent(Exception):
+    """Upper-endpoint collision: the iterated integral diverges (Wolfram returns ComplexInfinity)."""
+
+
+def _shuffle(u, v):
+    if not u:
+        return [tuple(v)]
+    if not v:
+        return [tuple(u)]
+    return [(u[0],) + w for w in _shuffle(u[1:], v)] + [(v[0],) + w for w in _shuffle(u, v[1:])]
+
+
+def _li_series(ms, xs, rate):
+    """Li_{m1..mk}(x1..xk) = Sum_{n1 > ... > nk >= 1} prod x_i^n_i / n_i^m_i, truncated for geometric ``rate``."""
+    k = len(ms)
+    prec = mpmath.mp.prec
+    N = int((prec * 0.6931 + 20 + 3 * k * mpmath.log(prec + 10)) / -mpmath.log(rate)) + 10 * k + 10
+    if N > 400000:
+        raise ValueError("series converges too slowly")
+    # inner[i][n] = Sum over n > n_{i} > ... (levels i..k-1) ; iterate levels from the innermost outwards
+    prev = None
+    for i in range(k - 1, -1, -1):
+        x, m = xs[i], ms[i]
+        cur = [mpmath.mpf(0)] * (N + 1)        # cur[n] = Sum_{j < n} x^j/j^m * prev[j]
+        acc = mpmath.mpf(0)
+        xp = mpmath.mpf(1)
+        for j in range(1, N + 1):
+            xp = xp * x
+            term = xp / mpmath.power(j, m) * (prev[j] if prev is not None else 1)
+            acc += term
+            if j < N:
+                cur[j + 1] = acc
+        cur_total = acc
+        prev = cur
+    return cur_total
+
+
+def _g_series(word):
+    """G(word; 1) for a word with non-zero last letter and every non-zero letter outside the unit disc."""
+    ms, bs = [], []
+    run = 0
+    for a in word:
+        if a == 0:
+            run += 1
+        else:
+            ms.append(run + 1)
+            bs.append(a)
+            run = 0
+    rate = max(1 / abs(b) for b in bs)
+    if rate >= 1:
+        raise ValueError("letter inside the unit disc")
+    xs = [1 / bs[0]] + [bs[i - 1] / bs[i] for i in range(1, len(bs))]
+    return (-1) ** len(bs) * _li_series(ms, xs, rate)
+
+
+def _g_at(word, y, allow_holder):
+    """G(word; y): regularised for trailing zeros (shuffle with G(0; y) = Log[y])."""
+    word = tuple(word)
+    if not word:
+        return mpmath.mpf(1)
+    if all(a == 0 for a in word):
+        if y == 0:
+            raise _Divergent()
+        return mpmath.log(y) ** len(word) / mpmath.factorial(len(word))
+    if y == 0:
+        return mpmath.mpf(0)
+    if word[0] == y:
+        raise _Divergent()
+    if word[-1] == 0:
+        u = word[:-1]
+        tz = 0
+        for a in reversed(word):
+            if a == 0:
+                tz += 1
+            else:
+                break
+        total = mpmath.log(y) * _g_at(u, y, allow_holder)
+        for w in _shuffle((0,), u):
+            if w != word:
+                total -= _g_at(w, y, allow_holder)
+        return total / tz
+    scaled = tuple(a / y for a in word)
+    return _g1(scaled, allow_holder)
+
+
+def _g1(word, allow_holder=True):
+    """G(word; 1), last letter non-zero, first letter != 1."""
+    nz = [a for a in word if a != 0]
+    direct = max(1 / abs(a) for a in nz)
+    best, bestp = direct, None
+    if allow_holder:
+        for p in (2, 1.5, 3, 1.25, 4, 6, 10, 1.1):
+            p = mpmath.mpf(p)
+            r = max(max(1 / (p * abs(a)), (1 - 1 / p) / abs(1 - a) if a != 1 else 0) for a in nz)
+            if r < best:
+                best, bestp = r, p
+    if best >= 0.92:
+        raise ValueError("a letter lies on or too close to the integration path; analytic continuation around "
+                         "letters on the path is not supported")
+    if bestp is None:
+        return _g_series(word)
+    p = bestp
+    w = len(word)
+    total = mpmath.mpf(0)
+    for j in range(w + 1):
+        left = tuple(1 - a for a in reversed(word[:j]))
+        right = word[j:]
+        lv = _g_at(left, 1 - 1 / p, False) if left else mpmath.mpf(1)
+        rv = _g_at(right, 1 / p, False) if right else mpmath.mpf(1)
+        total += (-1) ** j * lv * rv
+    return total
+
+
+def goncharov(word, x):
+    with mpmath.workprec(mpmath.mp.prec + 20 + 4 * len(word)):
+        return _g_at(tuple(word), x, True)
+
+
+def _complex_infinity():
+    return Symbol("ComplexInfinity")
+
+
+def _gpl_numeric(word_vals, x, prec):
+    try:
+        return mp_eval(lambda *v: goncharov(v[:-1], v[-1]), list(word_vals) + [x], prec)
+    except _Divergent:
+        return _complex_infinity()
+
+
+def _gpl_impl(name, letters_of, sign_of):
+    def impl(*args):
+        if len(args) not in (2, 3):
+            raise ValueError(f"{name}: expected a word, an endpoint and an optional base point")
+        word = letters_of(args[0])
+        x = sym(args[1], name)
+        if len(args) == 3:
+            if is_list(args[2]):
+                ps = [sym(p, name) for p in args[2].args]
+                if len(ps) != len(word):
+                    raise ValueError(f"{name}: one base point per letter is expected")
+                if any(sp.simplify(p - ps[0]) != 0 for p in ps):
+                    raise ValueError(f"{name}: distinct base points per letter are not supported")
+                base = ps[0]
+            else:
+                base = sym(args[2], name)
+        else:
+            base = sp.Integer(0)
+        sgn = sign_of(word)
+        if not word:
+            return 1
+        allv = word + [x, base]
+        if not all(v.is_number for v in allv):
+            raise Unevaluated()
+        prec = input_precision(list(args))
+        w2 = [a - base for a in word]
+        x2 = x - base
+        if prec is None:
+            if all(a == 0 for a in w2) and x2 != 0:
+                return R(sgn * sp.log(x2) ** len(w2) / sp.factorial(len(w2)))
+            if len(w2) == 1 and x2 == 0:
+                return 0
+            raise Unevaluated()
+        out = _gpl_numeric(w2, x2, prec)
+        if isinstance(out, Symbol):
+            return out
+        return out if sgn == 1 else Expr("Times", -1, out)
+    return impl
+
+
+def _gpl_letters(w):
+    if not is_list(w):
+        raise Unevaluated() if isinstance(w, (Symbol, Expr)) else ValueError("GeneralizedPolyLog: the word must be a list")
+    return [sym(a, "GeneralizedPolyLog") for a in w.args]
+
+
+def _hpl_letters(w):
+    if not is_list(w):
+        raise Unevaluated() if isinstance(w, (Symbol, Expr)) else ValueError("HarmonicPolyLog: the word must be a list")
+    out = []
+    for a in w.args:
+        v = sym(a, "HarmonicPolyLog")
+        if not v.is_number:
+            raise Unevaluated()
+        if not v.is_Integer:
+            raise ValueError("HarmonicPolyLog: letters must be 0, 1, -1 or abbreviated indices +-m")
+        n = int(v)
+        if abs(n) <= 1:
+            out.append(sp.Integer(n))
+        else:
+            out.extend([sp.Integer(0)] * (abs(n) - 1) + [sp.Integer(1 if n > 0 else -1)])
+    return out
+
+
+_register("GeneralizedPolyLog", (2, 3), _gpl_impl("GeneralizedPolyLog", _gpl_letters, lambda w: 1),
+          "GeneralizedPolyLog[{a1, ..., ak}, x] Goncharov polylogarithm Integrate[1/(t1 - a1) ... , {0 < tk < ... < "
+          "t1 < x}]: trailing zeros regularised by shuffle (G(0; x) = Log[x]), upper-endpoint collision -> "
+          "ComplexInfinity, numerics by the nested Li series with Hoelder convolution; base point p (a single p or a "
+          "constant list) by translation; letters on the integration path raise (detour continuation not "
+          "supported)", listable=False)
+_register("HarmonicPolyLog", (2, 3), _gpl_impl("HarmonicPolyLog", _hpl_letters,
+                                              lambda w: (-1) ** sum(1 for a in w if a == 1)),
+          "HarmonicPolyLog[{a1, ..., ak}, x] Remiddi-Vermaseren harmonic polylogarithm with kernels 1/t, 1/(1 - t), "
+          "1/(1 + t) and the abbreviated +-m notation; computed as (-1)^(number of 1s) GeneralizedPolyLog of the "
+          "same letters", listable=False)
+
+
+def _mzv_exact(s):
+    k = len(s)
+    if k == 1:
+        return Expr("Zeta", R(s[0]))
+    if all(v == 2 for v in s):
+        return R(sp.pi ** (2 * k) / sp.factorial(2 * k + 1))
+    if k == 2 and s[1] == 1 and s[0].is_Integer and s[0] >= 2:
+        n = int(s[0])
+        v = sp.Rational(n, 2) * sp.zeta(n + 1) - sp.Rational(1, 2) * sp.Add(
+            *[sp.zeta(n - j) * sp.zeta(j + 1) for j in range(1, n - 1)])
+        return R(sp.simplify(v))
+    return None
+
+
+def _mzv_numeric(svals):
+    if not all(isinstance(v, (int,)) or (v == int(v)) for v in svals):
+        raise ValueError("MultipleZeta: numerical evaluation needs positive integer indices")
+    s = [int(v) for v in svals]
+    if any(v < 1 for v in s):
+        raise ValueError("MultipleZeta: numerical evaluation needs positive integer indices")
+    if s[0] == 1:
+        raise _Divergent()
+    word = []
+    for v in s:
+        word += [0] * (v - 1) + [1]
+    return (-1) ** len(s) * goncharov(word, mpmath.mpf(1))
+
+
+def _multiple_zeta(*args):
+    name = "MultipleZeta"
+    if len(args) == 1 and is_list(args[0]):
+        items = list(args[0].args)
+    else:
+        items = list(args)
+    vals = [sym(a, name) for a in items]
+    if not vals:
+        return 1
+    if not all(v.is_number for v in vals):
+        if len(vals) == 1:
+            return Expr("Zeta", items[0])
+        raise Unevaluated()
+    prec = input_precision(items)
+    if prec is None:
+        if vals[0] == 1:
+            return _complex_infinity()
+        if all(v.is_Integer and v >= 1 for v in vals):
+            out = _mzv_exact(vals)
+            if out is not None:
+                return out
+        if len(vals) == 1:
+            return Expr("Zeta", items[0])
+        raise Unevaluated()
+    try:
+        return mp_eval(lambda *v: _mzv_numeric(v), vals, prec)
+    except _Divergent:
+        return _complex_infinity()
+
+
+_register("MultipleZeta", (1, 10), _multiple_zeta,
+          "MultipleZeta[{s1, ..., sk}] = Sum over n1 > n2 > ... > nk >= 1 of 1/(n1^s1 ... nk^sk): MultipleZeta[{s}] "
+          "= Zeta[s], exact ({2,...,2}) = Pi^(2k)/(2k+1)! and Euler's formula for {n, 1} (MultipleZeta[{2, 1}] = "
+          "Zeta[3]); divergent s1 = 1 -> ComplexInfinity; numerics for positive integer indices via the iterated "
+          "integral (Hoelder convolution); non-integer indices stay unevaluated / raise under N", listable=False)
+
+
+def _mpl(z, s):
+    name = "MultiplePolyLog"
+    if not (is_list(z) and is_list(s)):
+        raise Unevaluated()
+    zv = [sym(a, name) for a in z.args]
+    sv = [sym(a, name) for a in s.args]
+    if len(zv) != len(sv):
+        raise ValueError(f"{name}: the index and argument lists must have the same length")
+    if not zv:
+        return 1
+    if len(zv) == 1:
+        return Expr("PolyLog", z.args[0], s.args[0])
+    if all(v == 1 for v in sv) and input_precision(list(s.args)) is None:
+        return Expr("MultipleZeta", z)
+    if not all(v.is_number for v in zv + sv):
+        raise Unevaluated()
+    prec = input_precision([z, s])
+    if prec is None:
+        raise Unevaluated()
+    k = len(zv)
+
+    def f(*v):
+        zs, ss = v[:k], v[k:]
+        ps = []
+        acc = mpmath.mpf(1)
+        for x in ss:
+            acc *= x
+            ps.append(abs(acc))
+        if max(ps) > 1:
+            raise _Divergent()
+        if max(ps) < 0.92:
+            return _li_series(list(zs), list(ss), max(ps))
+        if not all(mpmath.im(x) == 0 and x == int(x) and x >= 1 for x in zs):
+            raise ValueError("MultiplePolyLog: on the boundary of convergence only positive integer indices are "
+                             "supported")
+        word = []
+        acc = mpmath.mpf(1)
+        for zi, si in zip(zs, ss):
+            acc *= si
+            word += [0] * (int(zi) - 1) + [1 / acc]
+        return (-1) ** k * goncharov(word, mpmath.mpf(1))
+    try:
+        return mp_eval(f, zv + sv, prec)
+    except _Divergent:
+        return _complex_infinity()
+
+
+_register("MultiplePolyLog", 2, _mpl,
+          "MultiplePolyLog[{z1, ..., zk}, {s1, ..., sk}] = Sum over n1 > ... > nk >= 1 of s1^n1 ... sk^nk/(n1^z1 ... "
+          "nk^zk): nested series inside the poly-disc |s1 ... sj| < 1, ComplexInfinity outside it, the boundary "
+          "via GeneralizedPolyLog (positive integer indices); depth 1 = PolyLog, all s = 1 gives MultipleZeta",
+          listable=False)

@@ -79,7 +79,10 @@ def _numericize_special(expr, precision):
         num = []
         for a in args:
             try:
-                num.append(numerical(a, precision + 5) if not isinstance(a, (str, bool)) else a)
+                if isinstance(a, Expr) and a.head == "List":      # parameter lists, e.g. MultipleZeta[{3, 2}]
+                    num.append(Expr("List", *(numerical(x, precision + 5) for x in a.args)))
+                else:
+                    num.append(numerical(a, precision + 5) if not isinstance(a, (str, bool)) else a)
             except Exception:
                 num.append(a)
         try:
