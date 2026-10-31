@@ -894,7 +894,223 @@ MATRIX = [
     ("MatrixPropertyDistribution[Tr[w17x], 3]", Raises(ValueError)),
 ]
 
-GROUPS = [CONT, SPECIAL, DISC, MULTI, MATRIX]
+
+# ───────────────────────────── derived, data, reliability, Tracy-Widom ─────────────────────────────
+
+def _frank(u, v, a):
+    """Frank copula, Nelsen (2006) eq. 4.2.5"""
+    return float(-mpmath.log(1 + (mpmath.exp(-a * u) - 1) * (mpmath.exp(-a * v) - 1) / (mpmath.exp(-a) - 1)) / a)
+
+
+def _tw_painleve(s, x0=8):
+    """independent Tracy-Widom reference: Hastings-McLeod solution q of Painleve II (q'' = x q + 2 q^3, q ~ AiryAi at
+    +Infinity) integrated with mpmath from x0 down to s; F2 = Exp[-Integrate[(x - s) q^2, {x, s, Infinity}]],
+    F1 = Sqrt[F2] Exp[-Integrate[q]/2], F4(s) = Sqrt[F2] Cosh[Integrate[q]/2] (Tracy & Widom 1994, 1996; F4 is then
+    evaluated at Sqrt[2] x for Wolfram's scaling, Bornemann 2010)"""
+    with mpmath.workdps(40):
+        f = mpmath.odefun(lambda t, y: [-y[1], -((x0 - t) * y[0] + 2 * y[0] ** 3), y[0] ** 2, (x0 - t) * y[0] ** 2, y[0]],
+                          0, [mpmath.airyai(x0), mpmath.airyai(x0, derivative=1), 0, 0, 0])
+        y = f(x0 - s)
+        q_int = y[4] + mpmath.quad(mpmath.airyai, [x0, mpmath.inf])
+        F2 = mpmath.exp(-(y[3] - s * y[2]))
+        return {2: float(F2), 1: float(mpmath.sqrt(F2) * mpmath.exp(-q_int / 2)),
+                4: float(mpmath.sqrt(F2) * mpmath.cosh(q_int / 2))}
+
+
+_REL2 = "{{w17x, ExponentialDistribution[1]}, {w17y, ExponentialDistribution[2]}}"
+_SPL = "{1, 1}, {0, 1, Infinity}, {UniformDistribution[], ExponentialDistribution[1]}"
+
+DERIVED = [
+    # TruncatedDistribution: SciPy truncnorm; memorylessness of the exponential; inclusive discrete truncation
+    ("TruncatedDistribution[{w17a, w17b}, NormalDistribution[]]", "TruncatedDistribution[{w17a, w17b}, NormalDistribution[0, 1]]"),
+    ("PDF[TruncatedDistribution[{0, 1}, NormalDistribution[]], 1/2]",
+     "PDF[NormalDistribution[], 1/2]/(CDF[NormalDistribution[], 1] - 1/2)"),
+    ("CDF[TruncatedDistribution[{-1, 2}, NormalDistribution[]], 0.5]", S(lambda st: st.truncnorm.cdf(0.5, -1, 2))),
+    ("Mean[TruncatedDistribution[{1, Infinity}, ExponentialDistribution[2]]]", "3/2"),
+    ("PDF[TruncatedDistribution[{1, 3}, PoissonDistribution[2]], 2]", "3/8"),  # 2/(2 + 2 + 4/3)
+    ("InverseCDF[TruncatedDistribution[{0, 2}, UniformDistribution[{0, 4}]], 1/4]", "1/2"),
+    ("TruncatedDistribution[{2, 1}, NormalDistribution[]]", Raises(ValueError)),
+    ("TruncatedDistribution[{0, 1}, MultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}]]", Raises(NotImplementedError)),
+    # CensoredDistribution = Clip[x, {xmin, xmax}]
+    ("CensoredDistribution[{w17a, w17b}, NormalDistribution[]]", "CensoredDistribution[{w17a, w17b}, NormalDistribution[0, 1]]"),
+    ("CDF[CensoredDistribution[{0, 1}, NormalDistribution[]], 1/2]", "CDF[NormalDistribution[], 1/2]"),
+    ("CDF[CensoredDistribution[{0, 1}, NormalDistribution[]], -1/2]", "0"),
+    ("Mean[CensoredDistribution[{0, 1}, UniformDistribution[{-1, 2}]]]", "1/2"),  # 1/3 (0) + 1/3 (1) + Int[x/3, {x, 0, 1}]
+    ("PDF[CensoredDistribution[{1, 3}, PoissonDistribution[2]], 1]", "3/E^2"),  # P[X <= 1]
+    ("PDF[CensoredDistribution[{1, 3}, PoissonDistribution[2]], 2]", "2/E^2"),
+    ("PDF[CensoredDistribution[{0, 1}, NormalDistribution[]], 1/2]", Raises(NotImplementedError)),
+    ("CensoredDistribution[{2, 1}, NormalDistribution[]]", Raises(ValueError)),
+    # MixtureDistribution: weights 1/4, 3/4
+    ("MixtureDistribution[{w17p, 1}, {NormalDistribution[], NormalDistribution[1, 2]}]",
+     "MixtureDistribution[{w17p, 1}, {NormalDistribution[0, 1], NormalDistribution[1, 2]}]"),
+    ("PDF[MixtureDistribution[{1, 3}, {ExponentialDistribution[1], ExponentialDistribution[2]}], 1]",
+     "E^-1/4 + 3 E^-2/2"),
+    ("Mean[MixtureDistribution[{1, 3}, {ExponentialDistribution[1], ExponentialDistribution[2]}]]", "5/8"),
+    ("Variance[MixtureDistribution[{1, 3}, {ExponentialDistribution[1], ExponentialDistribution[2]}]]", "31/64"),
+    ("CDF[MixtureDistribution[{1, 1}, {PoissonDistribution[1], PoissonDistribution[2]}], 1]", "E^-1 + 3 E^-2/2"),
+    ("MixtureDistribution[{1, -1}, {NormalDistribution[], NormalDistribution[]}]", Raises(ValueError)),
+    ("MixtureDistribution[{1, 1}, {MultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}], "
+     "MultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}]}]", Raises(NotImplementedError)),
+    # ProductDistribution
+    ("ProductDistribution[NormalDistribution[w17m, 1], ExponentialDistribution[2]]",
+     "ProductDistribution[NormalDistribution[w17m, 1], ExponentialDistribution[2]]"),
+    ("PDF[ProductDistribution[NormalDistribution[], ExponentialDistribution[2]], {0, 1}]", "2 E^-2/Sqrt[2 Pi]"),
+    ("CDF[ProductDistribution[UniformDistribution[], ExponentialDistribution[2]], {1/2, 1}]", "(1 - E^-2)/2"),
+    ("Mean[ProductDistribution[{ExponentialDistribution[2], 3}]]", "{1/2, 1/2, 1/2}"),
+    ("Covariance[ProductDistribution[NormalDistribution[0, 2], ExponentialDistribution[2]]]", "{{4, 0}, {0, 1/4}}"),
+    ("ProductDistribution[MultinormalDistribution[{0, 0}, {{1, 0}, {0, 1}}], NormalDistribution[]]",
+     Raises(NotImplementedError)),
+    ("ProductDistribution[3, NormalDistribution[]]", Raises(TypeError)),
+    # CompoundPoissonDistribution: P[0] = E^(-lambda (1 - P_jump[0])); Panjer p1 = lambda f1 p0
+    ("CompoundPoissonDistribution[w17l, PoissonDistribution[2]]", "CompoundPoissonDistribution[w17l, PoissonDistribution[2]]"),
+    ("PDF[CompoundPoissonDistribution[1, PoissonDistribution[2]], 0]", "E^(-1 + E^-2)"),
+    ("PDF[CompoundPoissonDistribution[1, PoissonDistribution[2]], 1]", "2 E^-2 E^(-1 + E^-2)"),
+    ("CDF[CompoundPoissonDistribution[1, BernoulliDistribution[1/2]], 1]", "CDF[PoissonDistribution[1/2], 1]"),  # thinning
+    ("Mean[CompoundPoissonDistribution[3, ExponentialDistribution[2]]]", "3/2"),  # lambda E[X]
+    ("Variance[CompoundPoissonDistribution[3, ExponentialDistribution[2]]]", "3/2"),  # lambda E[X^2]
+    ("PDF[CompoundPoissonDistribution[3, ExponentialDistribution[2]], 1]", Raises(NotImplementedError)),
+    ("CompoundPoissonDistribution[-1, PoissonDistribution[2]]", Raises(ValueError)),
+    # CopulaDistribution: Nelsen (2006) closed forms at u = v = 1/2
+    ("CopulaDistribution[{\"Clayton\", w17c}, {UniformDistribution[], UniformDistribution[]}]",
+     "CopulaDistribution[{\"Clayton\", w17c}, {UniformDistribution[], UniformDistribution[]}]"),
+    ("PDF[CopulaDistribution[\"Product\", {NormalDistribution[], ExponentialDistribution[1]}], {0, 1}]",
+     "PDF[ProductDistribution[NormalDistribution[], ExponentialDistribution[1]], {0, 1}]"),
+    ("CDF[CopulaDistribution[{\"Clayton\", 2}, {UniformDistribution[], UniformDistribution[]}], {1/2, 1/2}]", "1/Sqrt[7]"),
+    ("CDF[CopulaDistribution[{\"FGM\", 1/2}, {UniformDistribution[], UniformDistribution[]}], {1/2, 1/2}]", "9/32"),
+    ("CDF[CopulaDistribution[\"Maximal\", {UniformDistribution[], UniformDistribution[]}], {1/2, 1/3}]", "1/3"),
+    ("CDF[CopulaDistribution[\"Minimal\", {UniformDistribution[], UniformDistribution[]}], {1/2, 2/3}]", "1/6"),
+    ("CDF[CopulaDistribution[{\"Frank\", 1}, {UniformDistribution[], UniformDistribution[]}], {0.5, 0.5}]",
+     _frank(0.5, 0.5, 1)),
+    ("CDF[CopulaDistribution[{\"GumbelHougaard\", 2}, {UniformDistribution[], UniformDistribution[]}], {1/2, 1/2}]",
+     "2^-Sqrt[2]"),
+    ("CDF[CopulaDistribution[{\"AMH\", 1/2}, {UniformDistribution[], UniformDistribution[]}], {1/2, 1/2}]", "2/7"),
+    ("CDF[CopulaDistribution[{\"Binormal\", 0.5}, {NormalDistribution[], NormalDistribution[]}], {0., 0.}]", 1 / 3, 1e-7),
+    ("Mean[CopulaDistribution[{\"Clayton\", 2}, {NormalDistribution[1, 2], ExponentialDistribution[1]}]]", "{1, 1}"),
+    ("PDF[CopulaDistribution[\"Maximal\", {UniformDistribution[], UniformDistribution[]}], {1/2, 1/2}]",
+     Raises(NotImplementedError)),
+    ("CopulaDistribution[{\"Foo\", 1}, {UniformDistribution[], UniformDistribution[]}]", Raises(ValueError)),
+    ("CopulaDistribution[{\"FGM\", 3}, {UniformDistribution[], UniformDistribution[]}]", Raises(ValueError)),
+    # OrderDistribution: uniform order statistics are BetaDistribution[k, n - k + 1]
+    ("OrderDistribution[{NormalDistribution[], w17n}, 2]", "OrderDistribution[{NormalDistribution[0, 1], w17n}, 2]"),
+    ("PDF[OrderDistribution[{UniformDistribution[], 3}, 2], 1/3]", "PDF[BetaDistribution[2, 2], 1/3]"),
+    ("Mean[OrderDistribution[{UniformDistribution[], 5}, 2]]", "1/3"),
+    ("CDF[OrderDistribution[{ExponentialDistribution[1], 3}, 1], 1]", "1 - E^-3"),  # minimum ~ Exponential[3]
+    ("PDF[OrderDistribution[{BernoulliDistribution[1/2], 2}, 2], 1]", "3/4"),
+    ("OrderDistribution[{UniformDistribution[], 3}, 4]", Raises(ValueError)),
+    ("OrderDistribution[{UniformDistribution[], 3}, {1, 2}]", Raises(NotImplementedError)),
+    # ParameterMixtureDistribution: Poisson-Gamma = NegativeBinomial; normal-normal variance adds
+    ("PDF[ParameterMixtureDistribution[PoissonDistribution[w17m], w17m \\[Distributed] GammaDistribution[2, 1]], 3]",
+     "PDF[NegativeBinomialDistribution[2, 1/2], 3]"),
+    ("PDF[ParameterMixtureDistribution[PoissonDistribution[w17m], w17m \\[Distributed] GammaDistribution[2, 1]], 3]",
+     "1/8"),
+    ("Mean[ParameterMixtureDistribution[NormalDistribution[w17m, 1], w17m \\[Distributed] NormalDistribution[2, 3]]]", "2"),
+    ("Variance[ParameterMixtureDistribution[NormalDistribution[w17m, 1], w17m \\[Distributed] NormalDistribution[2, 3]]]",
+     "10"),
+    ("PDF[ParameterMixtureDistribution[UniformDistribution[{0, w17m}], w17m \\[Distributed] ExponentialDistribution[1]], 1]",
+     Raises(NotImplementedError)),
+    ("ParameterMixtureDistribution[PoissonDistribution[w17m], 3]", Raises(ValueError)),
+    # HistogramDistribution: counts 1, 2, 3 in [1, 2), [2, 3), [3, 4)
+    ("HistogramDistribution[{1, 2, 2, 3, 3, 3}, {w17w}]", "HistogramDistribution[{1, 2, 2, 3, 3, 3}, {w17w}]"),
+    ("PDF[HistogramDistribution[{1, 2, 2, 3, 3, 3}, {1}], 5/2]", "1/3"),
+    ("CDF[HistogramDistribution[{1, 2, 2, 3, 3, 3}, {1}], 3]", "1/2"),
+    ("Mean[HistogramDistribution[{1, 2, 2, 3, 3, 3}, {1}]]", "17/6"),  # bin midpoints 3/2, 5/2, 7/2
+    ("PDF[HistogramDistribution[{1, 2, 2, 3, 3, 3}, {{0, 2, 4}}], 1]", "1/12"),
+    ("CDF[HistogramDistribution[{1, 2, 2, 3, 3, 3}, {0, 4, 2}], 1]", "1/12"),
+    ("HistogramDistribution[{1, 2, 3}]", Raises(NotImplementedError)),
+    ("HistogramDistribution[{1, 2, 3}, {-1}]", Raises(ValueError)),
+    # KernelMixtureDistribution / SmoothKernelDistribution: (1/(n h)) Sum K((x - x_i)/h)
+    ("KernelMixtureDistribution[{0, 1}, w17h]", "KernelMixtureDistribution[{0, 1}, w17h]"),
+    ("PDF[KernelMixtureDistribution[{0, 1}, 1], 0]", "(PDF[NormalDistribution[], 0] + PDF[NormalDistribution[], 1])/2"),
+    ("PDF[KernelMixtureDistribution[{0, 1}, 1, \"Gaussian\"], 0.3]",
+     M(lambda: (mpmath.npdf(0.3) + mpmath.npdf(-0.7)) / 2)),
+    ("CDF[KernelMixtureDistribution[{0, 2}, 1, \"Rectangular\"], 1/2]", "3/8"),
+    ("PDF[KernelMixtureDistribution[{0, 1}, 1, \"Epanechnikov\"], 1/2]", "9/16"),  # 3/4 (1 - 1/4) twice, halved
+    ("Variance[KernelMixtureDistribution[{0, 1, 5}, 1]]", "14/3 + 1"),  # population variance + h^2 Var[K]
+    ("Variance[KernelMixtureDistribution[{0, 1, 5}, 1, \"Epanechnikov\"]]", "14/3 + 1/5"),
+    ("KernelMixtureDistribution[{0, 1}]", Raises(NotImplementedError)),
+    ("KernelMixtureDistribution[{0, 1}, -1]", Raises(ValueError)),
+    ("KernelMixtureDistribution[{0, 1}, 1, \"Foo\"]", Raises(ValueError)),
+    ("SmoothKernelDistribution[{0, 1}, w17h]", "SmoothKernelDistribution[{0, 1}, w17h]"),
+    ("PDF[SmoothKernelDistribution[{0, 1}, 1], 0]", "(PDF[NormalDistribution[], 0] + PDF[NormalDistribution[], 1])/2"),
+    ("CDF[SmoothKernelDistribution[{0, 1}, 1/2, \"Triangular\"], 1/2]", "1/2"),  # symmetric about 1/2
+    ("Mean[SmoothKernelDistribution[{0, 1, 5}, 1]]", "2"),
+    ("SmoothKernelDistribution[{0, 1}]", Raises(NotImplementedError)),
+    # SurvivalDistribution (uncensored: Kaplan-Meier = empirical distribution)
+    ("SurvivalDistribution[{1, 2, 2, 5}]", "SurvivalDistribution[{1, 2, 2, 5}]"),
+    ("CDF[SurvivalDistribution[{1, 2, 2, 5}], 2]", "CDF[EmpiricalDistribution[{1, 2, 2, 5}], 2]"),
+    ("Mean[SurvivalDistribution[{1, 2, 2, 5}]]", "5/2"),
+    ("SurvivalFunction[SurvivalDistribution[{1, 2, 2, 5}], 3]", "1/4"),
+    ("SurvivalDistribution[{{1, 0}, {2, 1}}]", Raises(NotImplementedError)),
+    # ProbabilityDistribution (self-check: normalisation)
+    ("ProbabilityDistribution[2 w17x, {w17x, 0, 1}]", "ProbabilityDistribution[2 w17x, {w17x, 0, 1}]"),
+    ("CDF[ProbabilityDistribution[2 w17x, {w17x, 0, 1}], 1/2]", "1/4"),
+    ("Mean[ProbabilityDistribution[2 w17x, {w17x, 0, 1}]]", "2/3"),
+    ("PDF[ProbabilityDistribution[(1/2)^w17k, {w17k, 1, Infinity, 1}], 3]", "1/8"),
+    ("Mean[ProbabilityDistribution[(1/2)^w17k, {w17k, 1, Infinity, 1}]]", "2"),  # geometric on {1, 2, ...}
+    ("CDF[ProbabilityDistribution[w17x, {w17x, 0, 1}, Method -> \"Normalize\"], 1/2]", "1/4"),
+    ("ProbabilityDistribution[w17x, {w17x, 0, 1}]", Raises(ValueError)),  # mass 1/2: the self-check
+    ("ProbabilityDistribution[{\"CDF\", w17x}, {w17x, 0, 1}]", Raises(NotImplementedError)),
+    # ReliabilityDistribution / FailureDistribution: series, parallel and mixed systems of exponentials
+    ("ReliabilityDistribution[w17x && w17y, " + _REL2 + "]", "ReliabilityDistribution[w17x && w17y, " + _REL2 + "]"),
+    ("SurvivalFunction[ReliabilityDistribution[w17x && w17y, " + _REL2 + "], 1]", "E^-3"),  # series: min ~ Exp[3]
+    ("SurvivalFunction[ReliabilityDistribution[w17x || w17y, " + _REL2 + "], 1]", "E^-1 + E^-2 - E^-3"),
+    ("Mean[ReliabilityDistribution[w17x || w17y, " + _REL2 + "]]", "1 + 1/2 - 1/3"),
+    ("PDF[ReliabilityDistribution[w17x && w17y, " + _REL2 + "], 1]", "3 E^-3"),
+    ("SurvivalFunction[ReliabilityDistribution[(w17x || w17y) && w17z, {{w17x, ExponentialDistribution[1]}, "
+     "{w17y, ExponentialDistribution[1]}, {w17z, ExponentialDistribution[1]}}], 1]", "(1 - (1 - E^-1)^2) E^-1"),
+    ("SurvivalFunction[ReliabilityDistribution[w17x, {{w17x, ExponentialDistribution[w17l]}}], 1]", "E^-w17l"),
+    ("ReliabilityDistribution[w17x && w17q, {{w17x, ExponentialDistribution[1]}}]", Raises(ValueError)),
+    ("ReliabilityDistribution[w17x, {{w17x, PoissonDistribution[1]}}]", Raises(NotImplementedError)),
+    ("FailureDistribution[w17x || w17y, " + _REL2 + "]", "FailureDistribution[w17x || w17y, " + _REL2 + "]"),
+    ("SurvivalFunction[FailureDistribution[w17x || w17y, " + _REL2 + "], 1]", "E^-3"),  # Or gate: first failure
+    ("Mean[FailureDistribution[w17x || w17y, " + _REL2 + "]]", "1/3"),
+    ("Mean[FailureDistribution[w17x && w17y, " + _REL2 + "]]", "7/6"),  # And gate: last failure
+    ("CDF[FailureDistribution[w17x && w17y, {{w17x, ExponentialDistribution[1]}, {w17y, ExponentialDistribution[1]}}], 1]",
+     "(1 - E^-1)^2"),
+    ("FailureDistribution[w17x, {w17x, ExponentialDistribution[1]}]", Raises(ValueError)),
+    ("FailureDistribution[3, {{w17x, ExponentialDistribution[1]}}]", Raises(NotImplementedError)),
+    # SplicedDistribution = Mixture of truncations
+    ("SplicedDistribution[" + _SPL + "]", "SplicedDistribution[" + _SPL + "]"),
+    ("PDF[SplicedDistribution[" + _SPL + "], 1/2]", "1/2"),
+    ("PDF[SplicedDistribution[" + _SPL + "], 2]", "PDF[TruncatedDistribution[{1, Infinity}, ExponentialDistribution[1]], 2]/2"),
+    ("CDF[SplicedDistribution[{1, 3}, {0, 1, Infinity}, {UniformDistribution[], ExponentialDistribution[1]}], 1]", "1/4"),
+    ("Mean[SplicedDistribution[" + _SPL + "]]", "(1/2 + 2)/2"),
+    ("SplicedDistribution[{1, 1}, {0, 1}, {UniformDistribution[], ExponentialDistribution[1]}]", Raises(ValueError)),
+    ("SplicedDistribution[{1, 1}, {0, 1, 2}, {PoissonDistribution[1], ExponentialDistribution[1]}]", Raises(ValueError)),
+    # StandbyDistribution: cold standby of exponentials = HypoexponentialDistribution
+    ("StandbyDistribution[ExponentialDistribution[w17l], {ExponentialDistribution[2]}]",
+     "StandbyDistribution[ExponentialDistribution[w17l], {ExponentialDistribution[2]}]"),
+    ("PDF[StandbyDistribution[ExponentialDistribution[1], {ExponentialDistribution[2]}], 1]",
+     "PDF[HypoexponentialDistribution[{1, 2}], 1]"),
+    ("PDF[StandbyDistribution[ExponentialDistribution[1], {ExponentialDistribution[2]}], 1]", "2 (E^-1 - E^-2)"),
+    ("Mean[StandbyDistribution[ExponentialDistribution[1], {ExponentialDistribution[2], ExponentialDistribution[3]}]]",
+     "1 + 1/2 + 1/3"),
+    ("Variance[StandbyDistribution[ExponentialDistribution[1], {ExponentialDistribution[2]}]]", "1 + 1/4"),
+    ("CDF[StandbyDistribution[ExponentialDistribution[1], {ExponentialDistribution[1]}], 1]", "1 - 2/E"),  # Erlang[2, 1]
+    ("StandbyDistribution[ExponentialDistribution[1], {ExponentialDistribution[2]}, 0.9]", Raises(NotImplementedError)),
+    ("StandbyDistribution[ExponentialDistribution[1], 3]", Raises(ValueError)),
+    # TracyWidomDistribution: Painleve II reference (independent of the Fredholm-determinant implementation)
+    ("TracyWidomDistribution[w17b]", "TracyWidomDistribution[w17b]"),
+    ("CDF[TracyWidomDistribution[2], -2.]", _tw_painleve(-2.0)[2], 1e-11),
+    ("CDF[TracyWidomDistribution[1], -1.]", _tw_painleve(-1.0)[1], 1e-11),
+    ("CDF[TracyWidomDistribution[4], -2.]", _tw_painleve(-2.0 * math.sqrt(2))[4], 1e-11),
+    ("Mean[TracyWidomDistribution[2]]", -1.7710868074116, 1e-12),  # Bornemann (2010), Table 1
+    ("Variance[TracyWidomDistribution[1]]", 1.6077810345810, 1e-12),
+    ("Mean[TracyWidomDistribution[4]]", -2.3068848932410, 1e-12),
+    ("CDF[TracyWidomDistribution[2], w17x]", "CDF[TracyWidomDistribution[2], w17x]"),
+    ("TracyWidomDistribution[3]", Raises(ValueError)),
+    ("CDF[TracyWidomDistribution[2], 1/2]", Raises(NotImplementedError)),  # exact x: no closed form
+    ("CDF[TracyWidomDistribution[2], -10.]", Raises(NotImplementedError)),  # beyond the verified left tail
+]
+if HAVE_SCIPY:
+    # check: PDF = CDF' (central difference) and the median inverts the CDF (bisection is slow without SciPy)
+    DERIVED += [
+        ("(CDF[TracyWidomDistribution[2], -1.999] - CDF[TracyWidomDistribution[2], -2.001])/0.002 - "
+         "PDF[TracyWidomDistribution[2], -2.]", near(0.0, 1e-6)),
+        ("CDF[TracyWidomDistribution[1], Median[TracyWidomDistribution[1]]]", near(0.5, 1e-10)),
+    ]
+
+GROUPS = [CONT, SPECIAL, DISC, MULTI, MATRIX, DERIVED]
 
 
 def _resolve(cases):
