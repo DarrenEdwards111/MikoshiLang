@@ -120,6 +120,7 @@ PREDICATES = [
     ("Undefined", Pred(lambda g: isinstance(g, Symbol) and g.name == "Undefined", "Undefined")),
     ("ConditionalExpression[x, False]", Pred(lambda g: isinstance(g, Symbol) and g.name == "Undefined",
                                              "Undefined")),
+    ("Piecewise[{{1, x > 0}}, Undefined] /. x -> -1", Pred(lambda g: g == Symbol("Undefined"), "Undefined")),
     ("Head[Undefined]", Pred(lambda g: isinstance(g, Symbol) and g.name == "Symbol", "Symbol")),
 ]
 
@@ -253,6 +254,9 @@ SOLVING = [
     ("NSolveValues[x^2 == 2, x]", Floats([-2 ** 0.5, 2 ** 0.5])),
     ("NSolveValues[{x + y == 1, x - y == 0}, {x, y}]", Floats([0.5, 0.5])),
     ("NSolveValues[x^3 == 1, x, Reals]", Floats([1.0])),
+    ("NSolveValues[x^3 == 1, x, MaxRoots -> 1]", Floats([complex(-0.5, -3 ** 0.5 / 2)])),
+    ("NSolveValues[x^4 == 16, x, MaxRoots -> 2]", Floats([-2, -2j])),
+    ("MaxRoots[1]", Raises()),
     ("RootIntervals[x^2 - 2]", Pred(lambda g: [S(i.args[0]) <= v <= S(i.args[1]) for i, v in
                                                zip(g.args[0].args, (-sp.sqrt(2), sp.sqrt(2)))] == [True, True],
                                     "isolating intervals of -Sqrt[2], Sqrt[2]")),
@@ -278,6 +282,8 @@ CAD = [
     ("GenericCylindricalDecomposition[y > x^2, {x, y}]", "{y > x^2, False}"),
     ("CylindricalDecompositionFunction[x^2 + y^2 < 1, {x, y}][0, 0]", True),
     ("CylindricalDecomposition[x^2 + y^2 < 1, {x, y}, \"Function\"][1, 1]", False),
+    ("CylindricalDecompositionFunction[x^2 < 4, {x}][1]", True),
+    ("CylindricalDecompositionFunction[x^2 < 4, {x}][3]", False),
     ("Normal[CylindricalDecomposition[x^2 < 4, x, \"Function\"]]", "Less[-2, x, 2]"),
     ("Head[CylindricalDecomposition[x^2 < 4, x, \"Function\"]]",
      Pred(lambda g: g == Symbol("CylindricalDecompositionFunction"), "CylindricalDecompositionFunction")),

@@ -5342,6 +5342,7 @@ _option_name("Trig", "Expand / Factor[..., Trig -> True] expand multiple angles 
                      "Trig -> False] simplifies without trigonometric identities")
 _option_name("ZeroTest", "RowReduce, MatrixRank, NullSpace[..., ZeroTest -> f]: f[entry] decides whether a pivot "
                          "candidate is zero (default Automatic: exact)")
+_option_name("MaxRoots", "NSolveValues[..., MaxRoots -> n] gives at most n solutions (in Wolfram's order)")
 _option_name("IncludeSingularSolutions", "DSolve[ode, y[x], x, IncludeSingularSolutions -> True] adds the singular "
                                          "solutions (envelopes) of a first-order nonlinear ODE, each checked by "
                                          "substitution")
