@@ -76,6 +76,18 @@ authors can register global heads with `@mikoshilang.function`. Machine-number a
 NumPy (a 200×200 `Dot` takes milliseconds instead of tens of seconds). `ExternalEvaluate` and other
 code-string evaluation raise `NotImplementedError`: there is no `eval`/`exec`.
 
+## Verification
+
+`Verify[expr]` checks a result independently and labels it `Certified` (an exact certificate was checked),
+`Checked` (symbolic or numerical evidence) or `Unchecked`; a failed check raises. Each reviewed head's `Check:`
+note is executable: `python scripts/verify_library.py`. Guide: [docs/verification.md](docs/verification.md).
+
+```wolfram
+Verify[FactorInteger[2^64 + 1]]   (* Certified[{{274177, 1}, {67280421310721, 1}}, <|... primality proofs ...|>] *)
+Verify[Solve[x^2 == 2, x]]        (* Certified[..., <|"Method" -> "Substitution of every solution", ..., "Completeness" -> "not checked"|>] *)
+Verify[Integrate[Sin[x]^2, x]]    (* Checked[x/2 - Cos[x] Sin[x]/2, <|"Method" -> "Differentiation", ...|>] *)
+```
+
 ## Language contract
 
 What is implemented, and checked by value-level tests (see `tests/`):
