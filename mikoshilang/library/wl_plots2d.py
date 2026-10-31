@@ -178,7 +178,7 @@ def _graphics_option_names(dim):
     return set(G.GRAPHICS_OPTIONS[dim])
 
 
-def split_options(fname, opts, defaults, dim=2):
+def split_options(fname, opts, defaults, dim=2, own_validation=()):
     """Split option rules into (plot options {name: value} with defaults filled, graphics options [rules]).
 
     * names in ``defaults`` are this plot's own options (validated with W15's validators);
@@ -200,7 +200,7 @@ def split_options(fname, opts, defaults, dim=2):
         val = r.args[1]
         if n in defaults:
             v = PO.OPTION_VALIDATORS.get(n)
-            if v is not None and r.head == "Rule":
+            if v is not None and r.head == "Rule" and n not in own_validation:
                 v(val, fname)
             mine[n] = val
         elif n in gnames:
@@ -1857,3 +1857,474 @@ def _stackeddatelistplot(data: Expr, *rest: Expr | Option) -> Expr:
     extra = [] if "Filling" in have else [Expr("Rule", Symbol("Filling"), _stacked_defaults(n))]
     return list_plot("StackedDateListPlot", d, list(o) + extra, joined_default=True, dates=True, xform=xs,
                      frame=True, stacked=True)
+
+
+# ───────────────────────────── DiscretePlot ─────────────────────────────
+
+def discrete_values(spec, fname):
+    """Standard iterator {n, nmax} / {n, nmin, nmax} / {n, nmin, nmax, dn} / {n, {n1, ...}} -> (var, [values])."""
+    if not K.is_list(spec) or len(spec.args) < 2 or len(spec.args) > 4:
+        raise ValueError(f"{fname}: the iterator must be {{n, nmax}}, {{n, nmin, nmax}}, {{n, nmin, nmax, dn}} or "
+                         f"{{n, {{n1, ...}}}}, not {K_input(spec)}")
+    v = var_symbol(spec.args[0], fname)
+    a = [ev(x) for x in spec.args[1:]]
+    if len(a) == 1 and K.is_list(a[0]):
+        vals = [real_arg(x, fname, "iterator value") for x in a[0].args]
+        return v, vals, list(a[0].args)
+    if len(a) == 1:
+        lo, hi, d = 1, a[0], 1
+    elif len(a) == 2:
+        lo, hi, d = a[0], a[1], 1
+    else:
+        lo, hi, d = a
+    lo_f, hi_f = real_arg(lo, fname, "iterator minimum"), real_arg(hi, fname, "iterator maximum")
+    d_f = real_arg(d, fname, "iterator step")
+    if d_f == 0:
+        raise ValueError(f"{fname}: the iterator step must be non-zero")
+    cnt = math.floor((hi_f - lo_f) / d_f + 1e-12) + 1
+    if cnt > 100000:
+        raise ValueError(f"{fname}: the iterator has {cnt} values (at most 100000 are plotted)")
+    exact = all(isinstance(x, int) and not isinstance(x, bool) for x in (lo, d))
+    vals = [lo_f + k * d_f for k in range(max(cnt, 0))]
+    raw = [lo + k * d for k in range(max(cnt, 0))] if exact else [fl(x) for x in vals]
+    return v, vals, raw
+
+
+_DISCRETE_DEFAULTS = {"PlotRange": AUTO, "PlotStyle": AUTO, "Filling": Symbol("Axis"), "FillingStyle": AUTO,
+                      "PlotLegends": NONE, "Joined": False, "ExtentSize": NONE, "PlotMarkers": NONE,
+                      "ClippingStyle": NONE, "PlotTheme": AUTO, "Mesh": NONE, "ColorFunction": AUTO,
+                      "PlotHighlighting": AUTO, "Method": AUTO, "PerformanceGoal": AUTO, "ScalingFunctions": NONE,
+                      "ExtentMarkers": NONE, "ExtentElementFunction": AUTO, "PlotLabels": NONE,
+                      "LabelingFunction": AUTO, "PlotLayout": AUTO, "PlotFit": NONE, "IntervalMarkers": AUTO}
+
+K.BUILTIN_ATTRIBUTES["DiscretePlot"] = {"HoldAll", "Protected"}
+
+
+def _kernel_values(held, var, raw, fname):
+    """Exact kernel values f(n) for the iterator values (DiscretePlot evaluates f at the actual n)."""
+    out = []
+    d = Symbol("plot$w16$n")
+    h = K.substitute(held, {var.name: d})
+    for r in raw:
+        y = ev(K.substitute(h, {d.name: r}))
+        v = num(y)
+        if v is None:
+            if isinstance(y, Symbol) and not is_missing(y) or (isinstance(y, Expr) and _has_user_symbol(y)):
+                raise Unevaluated()
+            out.append(None)
+        else:
+            out.append(v)
+    return out
+
+
+def _has_user_symbol(e):
+    if isinstance(e, Symbol):
+        return e.name not in ("Pi", "E", "I", "Infinity", "ComplexInfinity", "Indeterminate", "GoldenRatio",
+                              "EulerGamma", "Catalan", "Degree", "Khinchin", "Glaisher", "True", "False", "None")
+    if isinstance(e, Expr):
+        if e.head in ("Missing", "Complex", "DirectedInfinity"):
+            return False
+        return any(_has_user_symbol(a) for a in e.args)
+    return False
+
+
+@fn("DiscretePlot", area=AREA, status="added", hold=True,
+    notes="DiscretePlot[f, {n, nmax}], {n, nmin, nmax}, {n, nmin, nmax, dn}, {n, {n1, ...}} and lists {f1, ...} "
+          "(HoldAll; n is localised): points {n, f(n)} with stems to the axis (Filling -> Axis by default; "
+          "Filling -> None, Bottom, Top, c, {i -> ...}); f is evaluated by the kernel at each exact n; non-real or "
+          "undefined values are omitted; a value with free symbols leaves the call unevaluated. Joined -> True "
+          "draws lines. ExtentSize other than None, PlotMarkers, Mesh, ColorFunction and PlotTheme settings raise "
+          "NotImplementedError. At most 100000 values. Check: reference (the plotted points equal the kernel's "
+          "f(n); tests compare them with independently computed sequences).")
+def _discreteplot(f: Held, spec: Held, *opts: Held | Option) -> Expr:
+    fname = "DiscretePlot"
+    pos, o_ = hold_args((f, spec) + opts)
+    if len(pos) != 2:
+        raise ValueError(f"{fname}: expected DiscretePlot[f, {{n, nmin, nmax}}, options]")
+    f, spec = pos
+    var, vals, raw = discrete_values(spec, fname)
+    held, _ = _curves_of(f, var)
+    o, gopts = split_options(fname, o_, _DISCRETE_DEFAULTS)
+    _check_list_unsupported(o, fname)
+    if not is_sym(o["ExtentSize"], "None"):
+        raise NotImplementedError(f"{fname}: ExtentSize -> {K_input(o['ExtentSize'])} is not supported")
+    if not is_sym(o["ScalingFunctions"], "None", "Automatic"):
+        raise NotImplementedError(f"{fname}: ScalingFunctions is not supported")
+    curves = []
+    for h in held:
+        ys = _kernel_values(h, var, raw, fname)
+        curves.append([[(x, y)] for x, y in zip(vals, ys) if y is not None])
+    joined = o["Joined"] is True
+    if joined:
+        curves = [[[p[0] for p in cv]] if cv else [] for cv in curves]
+    allp = [p for cv in curves for r in cv for p in r]
+    xr = data_range([p[0] for p in allp])
+    yr = data_range([p[1] for p in allp] + [0.0])
+    prange = resolve_plot_range(o["PlotRange"], fname, [xr, yr], auto=[xr, yr], full=[xr, yr])
+    styles = style_list(o["PlotStyle"], len(curves), fname, "line" if joined else "point")
+    content = []
+    fill = o["Filling"]
+    if not is_sym(fill, "None"):
+        if joined:
+            content += filling_content(fill, o["FillingStyle"], curves, styles, prange, fname)
+        else:
+            content += stems(fill, o["FillingStyle"], curves, styles, prange, fname)
+    for st, cv in zip(styles, curves):
+        if st is None:
+            continue
+        if joined:
+            content.append(L(st, *[Expr("Line", pts(r)) for r in cv if len(r) >= 2]))
+        else:
+            flat = [p for r in cv for p in r]
+            content.append(L(st, Expr("Point", pts(flat))) if flat else L(st))
+    defaults = [("AspectRatio", GOLDEN), ("Axes", L(True, True)), ("PlotRange", range_expr(prange)),
+                ("PlotRangeClipping", True),
+                ("PlotRangePadding", L(L(Expr("Scaled", 0.02), Expr("Scaled", 0.02)),
+                                       L(Expr("Scaled", 0.05), Expr("Scaled", 0.05))))]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], styles, [Expr("HoldForm", h) for h in held], fname,
+                       "line" if joined else "point")
+
+
+# ───────────────────────────── colours for array/density plots ─────────────────────────────
+
+def blend(stops, t):
+    """Piecewise-linear colour gradient through RGB stops (t in [0, 1])."""
+    t = 0.0 if not math.isfinite(t) else min(1.0, max(0.0, t))
+    n = len(stops) - 1
+    k = min(int(t * n), n - 1)
+    u = t * n - k
+    a, b = stops[k], stops[k + 1]
+    return tuple(a[i] + (b[i] - a[i]) * u for i in range(3))
+
+
+# Approximations of Wolfram's default gradients (the exact Wolfram colour tables are not published).
+DENSITY_GRADIENT = ((0.26, 0.15, 0.44), (0.27, 0.42, 0.71), (0.45, 0.69, 0.72), (0.86, 0.86, 0.51),
+                    (0.96, 0.75, 0.37), (0.94, 0.49, 0.24))
+MATRIX_NEG = ((0.95, 0.95, 0.95), (0.26, 0.47, 0.75), (0.07, 0.17, 0.45))
+MATRIX_POS = ((0.95, 0.95, 0.95), (0.93, 0.58, 0.29), (0.70, 0.13, 0.11))
+RELIEF_GRADIENT = ((0.20, 0.38, 0.28), (0.53, 0.66, 0.40), (0.85, 0.80, 0.55), (0.70, 0.55, 0.40),
+                   (0.95, 0.95, 0.95))
+
+
+def color_function(spec, fname, default):
+    """ColorFunction setting -> Python f(t) -> (r, g, b). Automatic: ``default`` (a callable); a colour scheme
+    head such as Hue/GrayLevel or a pure function is applied by the kernel to each value."""
+    if spec is None or is_sym(spec, "Automatic"):
+        return default
+    if isinstance(spec, str):
+        raise NotImplementedError(f"{fname}: the named colour scheme {spec!r} is not supported; use a function")
+    if isinstance(spec, Symbol) or (isinstance(spec, Expr) and spec.head == "Function"):
+        cache = {}
+
+        def f(t):
+            key = round(t, 6)
+            if key not in cache:
+                c = ev(Expr(spec, float(t)))
+                if parse_color(c) is None:
+                    raise ValueError(f"{fname}: ColorFunction gave {K_input(c)}, which is not a colour")
+                r, g, b, _ = _rgba(c)
+                cache[key] = (r, g, b)
+            return cache[key]
+        return f
+    raise ValueError(f"{fname}: ColorFunction must be a function or Automatic, not {K_input(spec)}")
+
+
+def _rgba(c):
+    from .wl_graphics_color import to_rgba
+    r = to_rgba(c)
+    return tuple(float(v) for v in r)
+
+
+def _raster(rows_rgb, rect):
+    """Raster of RGB cells; ``rows_rgb`` is bottom row first."""
+    return Expr("Raster", L(*[L(*[L(*[fl(round(v, 6)) for v in c]) for c in row]) for row in rows_rgb]),
+                L(L(fl(rect[0][0]), fl(rect[0][1])), L(fl(rect[1][0]), fl(rect[1][1]))))
+
+
+def matrix_cells(m, fname, allow_colors=True):
+    """Array argument -> rows of cells: float, None (background) or an (r, g, b) colour; ragged rows padded."""
+    if isinstance(m, Expr) and m.head == "SparseArray":
+        m = ev(Expr("Normal", m))
+    if not K.is_list(m):
+        if isinstance(m, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the argument must be an array (a list of lists), not {K_input(m)}")
+    rows = list(m.args)
+    if not rows:
+        raise ValueError(f"{fname}: the array is empty")
+    if not all(K.is_list(r) for r in rows):
+        if all(not K.is_list(r) for r in rows):
+            rows = [m]                                    # a vector is one row
+        else:
+            raise ValueError(f"{fname}: the argument must be an array (a list of lists)")
+    out = []
+    for r in rows:
+        row = []
+        for c in r.args:
+            if is_missing(c):
+                row.append(None)
+            elif allow_colors and parse_color(c) is not None:
+                row.append(_rgba(c)[:3])
+            elif K.is_list(c):
+                raise ValueError(f"{fname}: array elements must be numbers, not {K_input(c)}")
+            else:
+                v = scalar(c, fname, "array element")
+                row.append(v)
+        out.append(row)
+    width = max(len(r) for r in out)
+    if width == 0:
+        raise ValueError(f"{fname}: the array is empty")
+    return [r + [None] * (width - len(r)) for r in out]
+
+
+_ARRAY_DEFAULTS = {"PlotRange": AUTO, "ColorFunction": AUTO, "ColorFunctionScaling": True, "ColorRules": AUTO,
+                   "DataRange": AUTO, "DataReversed": False, "Mesh": False, "MeshStyle": AUTO, "PlotLegends": NONE,
+                   "ClippingStyle": AUTO, "MaxPlotPoints": AUTO, "PlotTheme": AUTO, "TargetUnits": AUTO,
+                   "Method": AUTO, "PerformanceGoal": AUTO}
+
+
+def _color_rules(spec, fname):
+    if spec is None or is_sym(spec, "Automatic", "None"):
+        return []
+    if not K.is_list(spec) or not all(is_rule(r) for r in spec.args):
+        raise NotImplementedError(f"{fname}: ColorRules -> {K_input(spec)} is not supported (give {{v -> colour, ...}})")
+    out = []
+    for r in spec.args:
+        v = num(r.args[0])
+        if v is None:
+            raise NotImplementedError(f"{fname}: ColorRules patterns other than numbers are not supported")
+        if parse_color(r.args[1]) is None:
+            raise ValueError(f"{fname}: ColorRules {K_input(r)} does not give a colour")
+        out.append((v, _rgba(r.args[1])[:3]))
+    return out
+
+
+def _array_rect(dr, nrows, ncols, fname):
+    if dr is None or is_sym(dr, "All", "Automatic"):
+        return ((0.0, 0.0), (float(ncols), float(nrows)))
+    if K.is_list(dr) and len(dr.args) == 2 and all(K.is_list(a) and len(a.args) == 2 for a in dr.args):
+        (x0, x1), (y0, y1) = [[real_arg(v, fname, "DataRange") for v in a.args] for a in dr.args]
+        return ((x0, y0), (x1, y1))
+    raise ValueError(f"{fname}: DataRange must be All or {{{{xmin, xmax}}, {{ymin, ymax}}}}, not {K_input(dr)}")
+
+
+def array_plot(fname, m, opts, kind):
+    o, gopts = split_options(fname, opts, _ARRAY_DEFAULTS, own_validation=("Mesh",))
+    for n in ("MaxPlotPoints", "PlotTheme", "TargetUnits", "Method", "PerformanceGoal", "ClippingStyle",
+              "MeshStyle"):
+        v = o[n]
+        if not (is_sym(v, "Automatic", "None", "Infinity") or (n == "PlotTheme" and v == "Default") or
+                (n == "PerformanceGoal" and v in ("Quality", "Speed"))):
+            raise NotImplementedError(f"{fname}: the option {n} -> {K_input(v)} is not supported")
+    if o["Mesh"] not in (False, True) and not is_sym(o["Mesh"], "None", "All", "Automatic"):
+        raise NotImplementedError(f"{fname}: Mesh -> {K_input(o['Mesh'])} is not supported")
+    if not is_sym(o["PlotLegends"], "None"):
+        raise NotImplementedError(f"{fname}: PlotLegends is not supported")
+    cells = matrix_cells(m, fname)
+    if o["DataReversed"] is True:
+        cells = cells[::-1]
+    elif o["DataReversed"] is not False:
+        raise NotImplementedError(f"{fname}: DataReversed -> {K_input(o['DataReversed'])} is not supported")
+    nrows, ncols = len(cells), len(cells[0])
+    vals = [v for r in cells for v in r if isinstance(v, float)]
+    rules = _color_rules(o["ColorRules"], fname)
+    pr = o["PlotRange"]
+    scale = o["ColorFunctionScaling"]
+    if scale not in (True, False):
+        raise ValueError(f"{fname}: ColorFunctionScaling must be True or False")
+    background = (1.0, 1.0, 1.0)
+    explicit = None
+    if not is_sym(pr, "Automatic", "All", "Full"):
+        if K.is_list(pr) and len(pr.args) == 2 and all(num(a) is not None for a in pr.args):
+            explicit = (num(pr.args[0]), num(pr.args[1]))
+        elif num(pr) is not None and kind == "matrix":
+            r = abs(num(pr))
+            explicit = (-r, r)
+        else:
+            raise NotImplementedError(f"{fname}: PlotRange -> {K_input(pr)} is not supported (give {{min, max}})")
+    if kind == "array":
+        if explicit is None:
+            mx = max([abs(v) for v in vals] or [1.0]) or 1.0
+
+            def tscale(v):
+                return abs(v) / mx
+        else:
+            lo, hi = explicit
+
+            def tscale(v):
+                return (v - lo) / (hi - lo) if hi > lo else 0.0
+        if is_sym(o["ColorFunction"], "Automatic"):
+            def cf(t):
+                g = 1.0 - min(1.0, max(0.0, t))
+                return (g, g, g)
+        else:
+            cf = color_function(o["ColorFunction"], fname, None)
+            if explicit is None:
+                lo_, hi_ = (min(vals), max(vals)) if vals else (0.0, 1.0)
+
+                def tscale(v, lo_=lo_, hi_=hi_):
+                    return (v - lo_) / (hi_ - lo_) if hi_ > lo_ else 0.0
+    else:
+        mx = max([abs(v) for v in vals] or [1.0]) or 1.0
+        if explicit is not None:
+            lo, hi = explicit
+            mx = max(abs(lo), abs(hi)) or 1.0
+
+        def tscale(v):
+            return 0.5 + 0.5 * max(-1.0, min(1.0, v / mx))
+        if is_sym(o["ColorFunction"], "Automatic"):
+            def cf(t):
+                return blend(MATRIX_NEG, (0.5 - t) * 2) if t < 0.5 else blend(MATRIX_POS, (t - 0.5) * 2)
+        else:
+            cf = color_function(o["ColorFunction"], fname, None)
+    if scale is False:
+        def tscale(v):
+            return v
+
+    def cell_color(v):
+        if v is None:
+            return background
+        if isinstance(v, tuple):
+            return v
+        for rv, col in rules:
+            if abs(rv - v) <= 1e-12 * max(1.0, abs(v)):
+                return col
+        if explicit is not None and not (explicit[0] <= v <= explicit[1]):
+            return background if kind == "array" else cf(tscale(v))
+        return cf(tscale(v))
+    rows_rgb = [[cell_color(v) for v in r] for r in cells][::-1]     # bottom row first
+    rect = _array_rect(o["DataRange"], nrows, ncols, fname)
+    content = [_raster(rows_rgb, rect)]
+    if o["Mesh"] is True or is_sym(o["Mesh"], "All"):
+        (x0, y0), (x1, y1) = rect
+        lines = [Expr("Line", pts([(x0 + (x1 - x0) * j / ncols, y0), (x0 + (x1 - x0) * j / ncols, y1)]))
+                 for j in range(ncols + 1)]
+        lines += [Expr("Line", pts([(x0, y0 + (y1 - y0) * i / nrows), (x1, y0 + (y1 - y0) * i / nrows)]))
+                  for i in range(nrows + 1)]
+        content.append(L(Expr("GrayLevel", 0.618034), *lines))
+    (x0, y0), (x1, y1) = rect
+    defaults = [("AspectRatio", Symbol("Automatic")), ("Frame", kind == "matrix"),
+                ("PlotRange", range_expr([(x0, x1), (y0, y1)])), ("PlotRangePadding", 0)]
+    if kind == "matrix":
+        rt = [L(fl(y1 - (i - 0.5) * (y1 - y0) / nrows), i) for i in _tick_indices(nrows)]
+        ct = [L(fl(x0 + (j - 0.5) * (x1 - x0) / ncols), j) for j in _tick_indices(ncols)]
+        defaults.append(("FrameTicks", L(L(L(*rt), L(*rt)), L(L(*ct), L(*ct)))))
+    return finish_graphics(L(*content), gopts, defaults)
+
+
+def _tick_indices(n):
+    if n <= 10:
+        return list(range(1, n + 1))
+    step = max(1, round(n / 5))
+    return sorted({1, n} | set(range(step, n, step)))
+
+
+@fn("ArrayPlot", area=AREA, status="added",
+    notes="ArrayPlot[array]: Graphics[Raster[RGB cells, {{0, 0}, {ncols, nrows}}]] with row 1 at the top; by "
+          "default 0 is white and the largest |value| black (GrayLevel 1 - |v|/max|v|, so 0/1 arrays are white/"
+          "black); with PlotRange -> {min, max} min is white, max black and values outside are background; "
+          "colour directives in the array are used as given, None is background (white); ragged rows are padded. "
+          "Options: ColorFunction (a colour head or pure function of the scaled value), ColorFunctionScaling, "
+          "ColorRules {v -> colour}, DataRange, DataReversed, Mesh -> True and all Graphics options; other "
+          "settings raise NotImplementedError. Symbolic entries leave the call unevaluated. Check: reference "
+          "(cell colours of 0/1 and graded arrays against the documented rule).")
+def _arrayplot(m: MatrixOf[Real] | ListOf[Real], *opts: Option) -> Expr:
+    pos, o = _list_args((m,) + opts, "ArrayPlot")
+    return array_plot("ArrayPlot", pos[0], o, "array")
+
+
+@fn("MatrixPlot", area=AREA, status="added",
+    notes="MatrixPlot[m]: like ArrayPlot with a framed plot and row/column index ticks; zero is (near) white, "
+          "negative values bluish and positive reddish, scaled by value/max|v| (Wolfram also mixes in the rank of "
+          "each value; the colours here are an approximation of Wolfram's gradient); PlotRange -> r clips to "
+          "[-r, r]. Large matrices are not downsampled (MaxPlotPoints other than Automatic/Infinity raises). "
+          "Options as ArrayPlot. Check: reference (signs and ordering of the cell colours in tests).")
+def _matrixplot(m: MatrixOf[Real], *opts: Option) -> Expr:
+    pos, o = _list_args((m,) + opts, "MatrixPlot")
+    return array_plot("MatrixPlot", pos[0], o, "matrix")
+
+
+_RELIEF_DEFAULTS = {"PlotRange": AUTO, "ColorFunction": AUTO, "ColorFunctionScaling": True, "DataRange": AUTO,
+                    "DataReversed": False, "LightingAngle": AUTO, "Mesh": False, "MeshStyle": AUTO,
+                    "PlotLegends": NONE, "ClippingStyle": NONE, "MaxPlotPoints": AUTO, "Method": AUTO,
+                    "PerformanceGoal": AUTO, "PlotTheme": AUTO, "BoxRatios": AUTO}
+
+
+@fn("ReliefPlot", area=AREA, status="added",
+    notes="ReliefPlot[array]: shaded relief of a rectangular array of heights, rows going up the page (row 1 at "
+          "the bottom, unlike ArrayPlot), cell (i, j) centred at {j, i} (DataRange {{xmin, xmax}, {ymin, ymax}} "
+          "rescales); colour = height gradient (low green to high white; approximates Wolfram's) times Lambert "
+          "shading from a light at LightingAngle (default 3 Pi/4 from the upper left, 45 degrees elevation); "
+          "non-numeric cells are holes (background). Options: ColorFunction, ColorFunctionScaling, DataRange, "
+          "DataReversed, LightingAngle -> theta or {theta, phi} and Graphics options. Check: reference (a flat "
+          "array is uniformly shaded; brighter colours on slopes facing the light, in tests).")
+def _reliefplot(m: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "ReliefPlot"
+    pos, o_ = _list_args((m,) + opts, fname)
+    o, gopts = split_options(fname, o_, _RELIEF_DEFAULTS, own_validation=("Mesh",))
+    for n in ("MaxPlotPoints", "Method", "PerformanceGoal", "PlotTheme", "ClippingStyle", "MeshStyle", "BoxRatios",
+              "PlotRange"):
+        v = o[n]
+        if not (is_sym(v, "Automatic", "None", "All", "Infinity") or (n == "PlotTheme" and v == "Default") or
+                (n == "PerformanceGoal" and v in ("Quality", "Speed"))):
+            raise NotImplementedError(f"{fname}: the option {n} -> {K_input(v)} is not supported")
+    if o["Mesh"] is not False and not is_sym(o["Mesh"], "None"):
+        raise NotImplementedError(f"{fname}: Mesh -> {K_input(o['Mesh'])} is not supported")
+    if not is_sym(o["PlotLegends"], "None"):
+        raise NotImplementedError(f"{fname}: PlotLegends is not supported")
+    cells = matrix_cells(pos[0], fname, allow_colors=False)
+    if len({len(r) for r in cells}) != 1 or any(len(r) == 0 for r in cells):
+        raise ValueError(f"{fname}: the array must be rectangular")
+    if o["DataReversed"] is True:
+        cells = cells[::-1]
+    np = _np()
+    Z = np.array([[np.nan if v is None else v for v in r] for r in cells], dtype=float)
+    la = o["LightingAngle"]
+    if is_sym(la, "Automatic"):
+        az, el = 3 * math.pi / 4, math.pi / 4
+    elif num(la) is not None:
+        az, el = num(la), math.pi / 4
+    elif K.is_list(la) and len(la.args) == 2 and all(num(a) is not None for a in la.args):
+        az, el = num(la.args[0]), num(la.args[1])
+    else:
+        raise ValueError(f"{fname}: LightingAngle must be Automatic, an angle or {{theta, phi}}")
+    fin = np.isfinite(Z)
+    if not fin.any():
+        raise ValueError(f"{fname}: the array has no numeric heights")
+    lo, hi = float(np.nanmin(Z)), float(np.nanmax(Z))
+    span = hi - lo if hi > lo else 1.0
+    Zf = np.where(fin, Z, lo)
+    nr, nc = Z.shape
+    dzdx = np.gradient(Zf, axis=1) if nc > 1 else np.zeros_like(Zf)
+    dzdy = np.gradient(Zf, axis=0) if nr > 1 else np.zeros_like(Zf)
+    rel = max(nr, nc) / span
+    nx, ny, nz = -dzdx * rel, -dzdy * rel, np.ones_like(Zf)
+    nn = np.sqrt(nx ** 2 + ny ** 2 + nz ** 2)
+    lx, ly, lz = math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el)
+    shade = np.clip((nx * lx + ny * ly + nz * lz) / nn / lz, 0.0, 1.6)
+    cf = color_function(o["ColorFunction"], fname, lambda t: blend(RELIEF_GRADIENT, t))
+    scale = o["ColorFunctionScaling"]
+    rows = []
+    for i in range(nr):                      # row 1 at the bottom: Raster's first row is the bottom row
+        row = []
+        for j in range(nc):
+            if not fin[i, j]:
+                row.append((1.0, 1.0, 1.0))
+                continue
+            t = (Z[i, j] - lo) / span if scale is not False else Z[i, j]
+            c = cf(float(t))
+            s = float(shade[i, j])
+            row.append(tuple(min(1.0, max(0.0, ch * (0.55 + 0.45 * s))) for ch in c))
+        rows.append(row)
+    dr = o["DataRange"]
+    if is_sym(dr, "Automatic", "All"):
+        rect = ((0.5, 0.5), (nc + 0.5, nr + 0.5))
+    else:
+        (x0, y0), (x1, y1) = _array_rect(dr, nr, nc, fname)
+        dx, dy = (x1 - x0) / max(nc - 1, 1) / 2, (y1 - y0) / max(nr - 1, 1) / 2
+        rect = ((x0 - dx, y0 - dy), (x1 + dx, y1 + dy))
+    (x0, y0), (x1, y1) = rect
+    defaults = [("AspectRatio", Symbol("Automatic")), ("Frame", True), ("FrameTicks", NONE),
+                ("PlotRange", range_expr([(x0, x1), (y0, y1)])), ("PlotRangePadding", 0)]
+    return finish_graphics(L(_raster(rows, rect)), gopts, defaults)
