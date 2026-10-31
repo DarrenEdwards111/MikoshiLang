@@ -516,8 +516,172 @@ DIRICHLET = [
     ("LatticeReduce[{{1.5, 2}}]", Raises()),
 ]
 
+# ─────────────────────────── algebraic numbers and number fields ───────────────────────────
+# Reference: the ref pages of AlgebraicNumber, ToNumberField, the AlgebraicNumber* functions, the NumberField*
+# functions, RootOfUnityQ, RootReduce, RootSum and RootApproximant; class numbers, discriminants, units and
+# regulators agree with the LMFDB tables for the quadratic and cubic fields used.
+
+ALGEBRAIC = [
+    ("AlgebraicNumber[Sqrt[2], {1, 2}]", "AlgebraicNumber[Sqrt[2], {1, 2}]"),
+    ("AlgebraicNumber[Sqrt[2], {1, 2}] + AlgebraicNumber[Sqrt[2], {3, 1}]", "AlgebraicNumber[Sqrt[2], {4, 3}]"),
+    ("AlgebraicNumber[Sqrt[2], {0, 1}]^2", "AlgebraicNumber[Sqrt[2], {2, 0}]"),
+    ("AlgebraicNumber[Root[#^3 - 2 &, 1], {1, 1, 1}] AlgebraicNumber[Root[#^3 - 2 &, 1], {0, 1}]",
+     "AlgebraicNumber[2^(1/3), {2, 1, 1}]"),
+    ("ToNumberField[Sqrt[2] + 1, Sqrt[2]]", "AlgebraicNumber[Sqrt[2], {1, 1}]"),
+    ("ToNumberField[Sqrt[8], Sqrt[2]]", "AlgebraicNumber[Sqrt[2], {0, 2}]"),
+    ("ToNumberField[Sqrt[3], Sqrt[2]]", Raises()),
+    ("With[{t = ToNumberField[{Sqrt[2], Sqrt[3]}]}, RootReduce[Normal[t] - {Sqrt[2], Sqrt[3]}]]", "{0, 0}"),
+    ("AlgebraicIntegerQ[(1 + Sqrt[5])/2]", "True"),
+    ("AlgebraicIntegerQ[Sqrt[2]/2]", "False"),
+    ("AlgebraicIntegerQ[3]", "True"),
+    ("AlgebraicIntegerQ[1/2]", "False"),
+    ("AlgebraicNumberDenominator[Sqrt[2]/2]", "2"),
+    ("AlgebraicNumberDenominator[(1 + Sqrt[5])/2]", "1"),
+    ("AlgebraicNumberDenominator[1/6]", "6"),
+    ("AlgebraicNumberNorm[1 + Sqrt[2]]", "-1"),
+    ("AlgebraicNumberNorm[AlgebraicNumber[Sqrt[2], {1, 3}]]", "-17"),            # 1 - 9*2
+    ("AlgebraicNumberNorm[2^(1/3)]", "2"),
+    ("AlgebraicNumberTrace[1 + Sqrt[2]]", "2"),
+    ("AlgebraicNumberTrace[2^(1/3)]", "0"),
+    ("AlgebraicNumberTrace[AlgebraicNumber[Sqrt[2], {1, 3}]]", "2"),
+    ("AlgebraicNumberPolynomial[AlgebraicNumber[Sqrt[2], {1, 3}], x]", "1 + 3 x"),
+    ("AlgebraicNumberPolynomial[AlgebraicNumber[Root[#^3 - 2 &, 1], {1, 0, 5}], t]", "1 + 5 t^2"),
+    ("AlgebraicNumberPolynomial[AlgebraicNumber[Sqrt[2], {1, 3}], x] /. x -> Sqrt[2]", "1 + 3 Sqrt[2]"),
+    ("AlgebraicUnitQ[1 + Sqrt[2]]", "True"),
+    ("AlgebraicUnitQ[2]", "False"),
+    ("AlgebraicUnitQ[(1 + Sqrt[5])/2]", "True"),
+    ("AlgebraicUnitQ[Sqrt[2]]", "False"),
+    ("NumberFieldClassNumber[Sqrt[-5]]", "2"),
+    ("NumberFieldClassNumber[Sqrt[-23]]", "3"),
+    ("NumberFieldClassNumber[Sqrt[2]]", "1"),
+    ("NumberFieldClassNumber[Sqrt[10]]", "2"),
+    ("NumberFieldDiscriminant[Sqrt[2]]", "8"),
+    ("NumberFieldDiscriminant[Sqrt[5]]", "5"),
+    ("NumberFieldDiscriminant[2^(1/3)]", "-108"),
+    ("NumberFieldDiscriminant[Sqrt[-3]]", "-3"),
+    ("NumberFieldFundamentalUnits[Sqrt[2]]", "{AlgebraicNumber[Sqrt[2], {1, 1}]}"),
+    ("NumberFieldFundamentalUnits[Sqrt[5]]", "{AlgebraicNumber[Sqrt[5], {1/2, 1/2}]}"),
+    ("NumberFieldFundamentalUnits[Sqrt[3]]", "{AlgebraicNumber[Sqrt[3], {2, 1}]}"),
+    ("NumberFieldFundamentalUnits[Sqrt[-1]]", "{}"),
+    ("NumberFieldIntegralBasis[Sqrt[5]]", "{1, AlgebraicNumber[Sqrt[5], {1/2, 1/2}]}"),
+    ("NumberFieldIntegralBasis[Sqrt[2]]", "{1, AlgebraicNumber[Sqrt[2], {0, 1}]}"),
+    ("NumberFieldIntegralBasis[Sqrt[-3]]", "{1, AlgebraicNumber[I Sqrt[3], {1/2, 1/2}]}"),
+    ("NumberFieldRegulator[Sqrt[2]]", "Log[1 + Sqrt[2]]"),
+    ("NumberFieldRegulator[Sqrt[5]]", "Log[(1 + Sqrt[5])/2]"),
+    ("NumberFieldRegulator[I]", "1"),
+    ("NumberFieldRootsOfUnity[Sqrt[2]]", "{-1, 1}"),
+    ("Length[NumberFieldRootsOfUnity[I]]", "4"),
+    ("Length[NumberFieldRootsOfUnity[Sqrt[-3]]]", "6"),
+    ("NumberFieldRootsOfUnity[I]", "{-1, 1, AlgebraicNumber[I, {0, -1}], AlgebraicNumber[I, {0, 1}]}"),
+    ("NumberFieldSignature[Sqrt[2]]", "{2, 0}"),
+    ("NumberFieldSignature[2^(1/3)]", "{1, 1}"),
+    ("NumberFieldSignature[I]", "{0, 1}"),
+    ("NumberFieldSignature[Root[#^4 - 2 &, 1]]", "{2, 1}"),
+    ("NumberFieldNormRepresentatives[Sqrt[2], 7]", Raises()),
+    ("RootOfUnityQ[(-1)^(2/7)]", "True"),
+    ("RootOfUnityQ[(1 + I)/Sqrt[2]]", "True"),
+    ("RootOfUnityQ[-1]", "True"),
+    ("RootOfUnityQ[2]", "False"),
+    ("RootOfUnityQ[(3 + 4 I)/5]", "False"),                # |z| = 1 but not a root of unity
+    ("RootReduce[Sqrt[2] + Sqrt[3]]", "Root[1 - 10 #^2 + #^4 &, 4]"),
+    ("RootReduce[(Sqrt[2] + 1)^2]", "3 + 2 Sqrt[2]"),
+    ("RootReduce[Root[#^2 - 2 &, 2]^2]", "2"),
+    ("RootReduce[Sqrt[2] Sqrt[3] - Sqrt[6]]", "0"),
+    ("RootSum[#^2 - 2 &, #^2 &]", "4"),
+    ("RootSum[#^3 + # + 1 &, #^2 &]", "-2"),
+    ("RootSum[#^3 - 2 &, # &]", "0"),
+    ("RootApproximant[1.4142135623730951]", "Sqrt[2]"),
+    ("RootApproximant[N[GoldenRatio, 20]]", "(1 + Sqrt[5])/2"),
+    ("RootApproximant[1.2599210498948732]", "2^(1/3)"),
+    ("RootApproximant[0.5]", "1/2"),
+    ("Element[2^(1/3), Algebraics]", "True"),
+]
+
+# ─────────────────────────── group theory ───────────────────────────
+# Reference: the ref pages of the sporadic group heads (orders from the ATLAS of Finite Groups), GroupStabilizer,
+# GroupSetwiseStabilizer, GroupCentralizer, RightCosetRepresentative, GroupStabilizerChain, GroupActionBase,
+# GroupElementFromWord / GroupElementToWord (PermutationProduct applies left to right) and CycleIndexPolynomial.
+
+SPORADIC = [("MathieuGroupM11", 7920, True), ("MathieuGroupM12", 95040, True), ("MathieuGroupM22", 443520, True),
+            ("MathieuGroupM23", 10200960, True), ("MathieuGroupM24", 244823040, True),
+            ("JankoGroupJ1", 175560, None), ("JankoGroupJ2", 604800, None), ("JankoGroupJ3", 50232960, None),
+            ("JankoGroupJ4", 86775571046077562880, None), ("HigmanSimsGroupHS", 44352000, None),
+            ("McLaughlinGroupMcL", 898128000, None), ("HeldGroupHe", 4030387200, None),
+            ("RudvalisGroupRu", 145926144000, None), ("SuzukiGroupSuz", 448345497600, None),
+            ("ONanGroupON", 460815505920, None), ("ConwayGroupCo3", 495766656000, None),
+            ("ConwayGroupCo2", 42305421312000, None), ("ConwayGroupCo1", 4157776806543360000, None),
+            ("FischerGroupFi22", 64561751654400, None), ("FischerGroupFi23", 4089470473293004800, None),
+            ("FischerGroupFi24Prime", 1255205709190661721292800, None),
+            ("HaradaNortonGroupHN", 273030912000000, None), ("LyonsGroupLy", 51765179004000000, None),
+            ("ThompsonGroupTh", 90745943887872000, None),
+            ("BabyMonsterGroupB", 4154781481226426191177580544000000, None),
+            ("MonsterGroupM", 808017424794512875886459904961710757005754368000000000, None),
+            ("TitsGroupT", 17971200, None)]
+
+
+def _sporadic_cases():
+    out = []
+    for name, order, perm in SPORADIC:
+        out.append((f"GroupOrder[{name}[]]", str(order)))
+        out.append((f"{name}[] === {name}[]", "True"))
+        out.append((f"{name}[1]", Raises()))
+        if perm:
+            out.append((f"GroupOrder[PermutationGroup[GroupGenerators[{name}[]]]]", str(order)))
+    return out
+
+
+def _elements_ok(n):
+    def p(r):
+        return r.head == "List" and len(r.args) == n and len(set(map(str, r.args))) == n and str(r.args[0]) == "Cycles[{}]"
+    return Pred(p, f"{n} distinct elements starting with the identity")
+
+
+GROUPS = _sporadic_cases() + [
+    ("GroupGenerators[MonsterGroupM[]]", Raises()),
+    ("GroupOrder[GroupStabilizer[SymmetricGroup[4], {1}]]", "6"),
+    ("GroupOrder[GroupStabilizer[SymmetricGroup[5], {1, 2}]]", "6"),
+    ("GroupOrder[GroupStabilizer[MathieuGroupM11[], {1}]]", "720"),        # M11 is 4-transitive on 11 points
+    ("GroupStabilizer[SymmetricGroup[4], {x}]", Raises()),
+    ("GroupOrder[GroupSetwiseStabilizer[SymmetricGroup[5], {1, 2}]]", "12"),
+    ("GroupOrder[GroupSetwiseStabilizer[CyclicGroup[6], {1, 4}]]", "2"),
+    ("GroupOrder[GroupSetwiseStabilizer[SymmetricGroup[4], {1, 2, 3, 4}]]", "24"),
+    ("GroupOrder[GroupCentralizer[SymmetricGroup[4], Cycles[{{1, 2}}]]]", "4"),
+    ("GroupOrder[GroupCentralizer[SymmetricGroup[5], Cycles[{{1, 2, 3, 4, 5}}]]]", "5"),
+    ("GroupOrder[GroupCentralizer[DihedralGroup[4], Cycles[{{1, 3}, {2, 4}}]]]", "8"),   # the centre of D4
+    ("RightCosetRepresentative[SymmetricGroup[3], Cycles[{{1, 2}}]]", "Cycles[{}]"),
+    ("RightCosetRepresentative[PermutationGroup[{Cycles[{{1, 2}}]}], Cycles[{{1, 2, 3}}]]", "Cycles[{{1, 2, 3}}]"),
+    ("RightCosetRepresentative[PermutationGroup[{Cycles[{{1, 2}}]}], Cycles[{{1, 3}}]]", "Cycles[{{1, 2, 3}}]"),
+    ("GroupStabilizerChain[SymmetricGroup[3]]",
+     "{{} -> PermutationGroup[{Cycles[{{1, 2}}], Cycles[{{1, 2, 3}}]}], {1} -> PermutationGroup[{Cycles[{{2, 3}}]}], "
+     "{1, 2} -> PermutationGroup[{}]}"),
+    ("Length[GroupStabilizerChain[SymmetricGroup[5]]]", "5"),
+    ("Map[GroupOrder, Last /@ GroupStabilizerChain[MathieuGroupM11[]]]", "{7920, 720, 72, 8, 1}"),
+    ("First /@ GroupStabilizerChain[SymmetricGroup[4], GroupActionBase -> {4, 3}]", "{{}, {4}, {4, 3}, {4, 3, 1}}"),
+    ("Map[GroupOrder, Last /@ GroupStabilizerChain[SymmetricGroup[4], GroupActionBase -> {4, 3}]]", "{24, 6, 2, 1}"),
+    ("GroupElements[SymmetricGroup[3], GroupActionBase -> {3}]", _elements_ok(6)),
+    ("With[{e = GroupElements[SymmetricGroup[4], GroupActionBase -> {4, 2}]}, "
+     "Length[e] == 24 && And @@ (MemberQ[GroupElements[SymmetricGroup[4]], #] & /@ e)]", "True"),
+    ("GroupElements[PermutationGroup[{Cycles[{{1, 2}, {3, 4}}], Cycles[{{1, 3}}]}], GroupActionBase -> {4, 2}]",
+     _elements_ok(8)),
+    ("GroupElementFromWord[SymmetricGroup[4], {1, 2}]", "Cycles[{{1, 3, 4}}]"),
+    ("GroupElementFromWord[PermutationGroup[{Cycles[{{1, 2, 3}}]}], {1, 1}]", "Cycles[{{1, 3, 2}}]"),
+    ("GroupElementFromWord[PermutationGroup[{Cycles[{{1, 2, 3}}]}], {-1}]", "Cycles[{{1, 3, 2}}]"),
+    ("GroupElementFromWord[SymmetricGroup[4], {3}]", Raises()),
+    ("GroupElementToWord[PermutationGroup[{Cycles[{{1, 2, 3}}]}], Cycles[{{1, 3, 2}}]]", "{-1}"),
+    ("With[{G = SymmetricGroup[5], g = Cycles[{{1, 3, 5}, {2, 4}}]}, "
+     "GroupElementFromWord[G, GroupElementToWord[G, g]] == g]", "True"),
+    ("With[{G = MathieuGroupM11[], g = PermutationProduct @@ GroupGenerators[MathieuGroupM11[]]}, "
+     "GroupElementFromWord[G, GroupElementToWord[G, g]] == g]", "True"),
+    ("CycleIndexPolynomial[Cycles[{{1, 2}, {3, 4, 5}}], {x1, x2, x3}]", "x2 x3"),
+    ("CycleIndexPolynomial[Cycles[{{1, 2}}], {x1, x2}, 4]", "x1^2 x2"),
+    ("CycleIndexPolynomial[SymmetricGroup[3], {x1, x2, x3}]", "x1^3/6 + x1 x2/2 + x3/3"),
+    ("CycleIndexPolynomial[CyclicGroup[4], {x1, x2, x3, x4}]", "x1^4/4 + x2^2/4 + x4/2"),
+    # Polya: the number of 2-colourings of the 4-cycle up to rotation is 6
+    ("CycleIndexPolynomial[CyclicGroup[4], {x1, x2, x3, x4}] /. {x1 -> 2, x2 -> 2, x3 -> 2, x4 -> 2}", "6"),
+]
+
 CASES = (FINITE_FIELDS + FROBENIUS + INDICES + EMBEDDINGS + CURVES + MANDELBROT + NUMBERS + DOMAINS + OPTIONS +
-         SEQUENCES + DIRICHLET)
+         SEQUENCES + DIRICHLET + ALGEBRAIC + GROUPS)
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))

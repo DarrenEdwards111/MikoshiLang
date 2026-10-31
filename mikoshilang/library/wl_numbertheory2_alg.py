@@ -18,7 +18,7 @@ from sympy.polys.polyerrors import IsomorphismFailed, NotAlgebraic
 
 from ..expr import Expr, Symbol
 from .. import kernel as K
-from .core import fn, record, Unevaluated, S, R, L, is_list, has_float, is_numeric_value
+from .core import fn, record, error, Unevaluated, S, R, L, is_list, has_float, is_numeric_value
 from .wl_common import ev, split_options
 from . import wl_numbertheory2 as NT
 
@@ -857,8 +857,9 @@ def _nfroots(a):
     return L(-1, 1, *[make_an(th, P, cs) for cs in roots])
 
 
-record("NumberFieldNormRepresentatives", AREA, "error", "not implemented: the Wolfram Language's choice of norm "
-       "representatives is not documented")
+error("NumberFieldNormRepresentatives", AREA, "NumberFieldNormRepresentatives is not implemented: the Wolfram "
+      "Language's choice of norm "
+      "representatives is not documented")
 
 
 # ─────────────────────────── Root objects ───────────────────────────
