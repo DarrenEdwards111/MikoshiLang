@@ -3015,3 +3015,667 @@ def _histogramtransforminterpolation(x: Expr, ref: Expr = None, n: PosInteger = 
         pts = _lst([[float(a), float(b)] for a, b in zip(xs, ys)])
         funcs.append(_ev(Expr("Interpolation", pts, Expr("Rule", Symbol("InterpolationOrder"), 1))))
     return funcs[0] if len(funcs) == 1 else L(*funcs)
+
+
+# ───────────────────────────── geometry ─────────────────────────────
+
+def _side(x):
+    return x.name if isinstance(x, Symbol) and x.name in ("Left", "Right", "Bottom", "Top", "Center", "Front",
+                                                           "Back") else None
+
+
+def seq_indices(spec, n, fname):
+    """0-based indices of a standard sequence specification over n elements (clipped to those present)."""
+    if _is_sym(spec, "All"):
+        return list(range(n))
+    if isinstance(spec, Expr) and spec.head == "UpTo" and len(spec.args) == 1:
+        return list(range(min(int_arg(spec.args[0], fname, "UpTo bound", 0), n)))
+    if isinstance(spec, Expr) and spec.head == "Span":
+        parts = list(spec.args)
+        spec = L(*[(1 if i == 0 else -1) if _is_sym(v, "All") else v for i, v in enumerate(parts)])
+    if K.is_list(spec):
+        vals = [int_arg(v, fname, "index") for v in spec.args]
+        if not 1 <= len(vals) <= 3:
+            raise ValueError(f"{fname}: a sequence specification is {{n}}, {{m, n}} or {{m, n, s}}")
+        if len(vals) == 1:
+            vals = [vals[0], vals[0]]
+        m, k = (v if v > 0 else n + 1 + v for v in vals[:2])
+        s = vals[2] if len(vals) == 3 else 1
+        if s == 0:
+            raise ValueError(f"{fname}: the step must not be 0")
+        if 0 in vals[:2]:
+            raise ValueError(f"{fname}: indices count from 1 (or from the end with negative values)")
+        idx = list(range(m, k + (1 if s > 0 else -1), s))
+        return [i - 1 for i in idx if 1 <= i <= n]
+    v = int_arg(spec, fname, "count")
+    return list(range(min(v, n))) if v >= 0 else list(range(max(n + v, 0), n))
+
+
+def _empty_check(a, fname):
+    if 0 in a.shape[:-1]:
+        raise ValueError(f"{fname}: the result would have no pixels")
+    return a
+
+
+@fn("ImageTake", area=AREA, status="added",
+    notes="ImageTake[image, rows], ImageTake[image, rows, columns] and ImageTake[image3d, slices, rows, columns] with "
+          "the standard sequence specifications n, -n, {n}, {m, n}, {m, n, s}, m ;; n, All and UpTo[n]; rows count "
+          "from the top; indices beyond the image are dropped (elements present are returned); an empty result raises "
+          "ValueError. Check: exact (array slicing; compared with Take on ImageData) in tests.")
+def _imagetake(x: Expr, *specs: Integer | ListOf[Integer] | Expr) -> Expr:
+    fname = "ImageTake"
+    im = _img1(x, fname)
+    nax = 3 if im.d3 else 2
+    if not 1 <= len(specs) <= nax:
+        raise ValueError(f"{fname}: expected ImageTake[image, rows, columns]" + (" (slices, rows, columns for 3D)"
+                                                                                  if im.d3 else ""))
+    a = im.a
+    for ax, sp in enumerate(specs):
+        a = np.take(a, seq_indices(sp, a.shape[ax], fname), axis=ax)
+    return image_expr(im.new(_empty_check(a, fname)))
+
+
+def _side_pads(im, pads, fname):
+    """[(before, after)] for the array axes from {{left, right}, {bottom, top}} (2D) or a scalar."""
+    if K.is_list(pads):
+        if im.d3:
+            raise NotImplementedError(f"{fname}: per-side widths of 3D images are not supported (give one number)")
+        if not (len(pads.args) == 2 and all(K.is_list(p) and len(p.args) == 2 for p in pads.args)):
+            raise ValueError(f"{fname}: widths must be m or {{{{left, right}}, {{bottom, top}}}}")
+        (l, r), (b, t) = [[int_arg(v, fname, "width") for v in p.args] for p in pads.args]
+        return [(t, b), (l, r)]
+    m = int_arg(pads, fname, "width")
+    return [(m, m)] * (3 if im.d3 else 2)
+
+
+def pad_image(im, pads, padding, fname):
+    """Img padded by [(before, after)] per spatial axis (negative widths crop) with a padding value or method."""
+    a = im.a
+    crop = tuple(slice(max(-b, 0), a.shape[i] - max(-e, 0)) for i, (b, e) in enumerate(pads))
+    for i, (b, e) in enumerate(pads):
+        if max(-b, 0) + max(-e, 0) >= a.shape[i]:
+            raise ValueError(f"{fname}: the result would have no pixels")
+    a = a[crop]
+    grow = [(max(b, 0), max(e, 0)) for b, e in pads]
+    if not any(b or e for b, e in grow):
+        return im.new(a)
+    typ = im.type
+    if isinstance(padding, str):
+        if padding in ("Automatic", "TextureSynthesis"):
+            raise NotImplementedError(f"{fname}: Padding \"{padding}\" is not supported")
+        out = pad_array(a, grow, padding, fname)
+    else:
+        if isinstance(padding, Expr) and padding.head == "List" and padding.args and padding.args[0] == \
+                "TextureSynthesis":
+            raise NotImplementedError(f"{fname}: Padding \"TextureSynthesis\" is not supported")
+        if _is_sym(padding, "Automatic"):
+            raise NotImplementedError(f"{fname}: Padding -> Automatic is not supported (give a value or method)")
+        v = value_for(im, padding, fname)
+        full = list(grow) + [(0, 0)]
+        out = np.empty([a.shape[i] + full[i][0] + full[i][1] for i in range(a.ndim)])
+        out[...] = v
+        out[tuple(slice(p[0], p[0] + a.shape[i]) for i, p in enumerate(full))] = a
+        if typ == "Bit" and not np.all((v == 0) | (v == 1)):
+            typ = "Real32"
+        out = quantize(out, typ)
+    return im.new(out, typ=typ)
+
+
+@fn("ImagePad", area=AREA, status="added",
+    notes="ImagePad[image, m] pads every side with m black (0) pixels; ImagePad[image, m, padding] with padding a "
+          "value, colour, channel list, \"Fixed\" (edge pixels repeated, corners copied), \"Periodic\" (cyclic "
+          "repetition), \"Reflected\" (mirror without repeating the edge) or \"Reversed\" (mirror repeating the edge); "
+          "ImagePad[image, {{left, right}, {bottom, top}}, ...]; negative widths remove pixels. 3D images take one width "
+          "for every side. Padding a \"Bit\" image with a non-binary value gives \"Real32\"; integer types are rounded. "
+          "Automatic and \"TextureSynthesis\" padding raise NotImplementedError. Check: exact (array padding; "
+          "ImagePad[ImagePad[i, m], -m] == i) in tests.")
+def _imagepad(x: Expr, m: Integer | ListOf[ListOf[Integer]], padding: Real | ListOf[Real] | Expr | String = 0) -> Expr:
+    fname = "ImagePad"
+    im = _img1(x, fname)
+    return image_expr(pad_image(im, _side_pads(im, m, fname), padding, fname))
+
+
+def _line_uniform(lines, t):
+    """Number of leading lines (array of shape (n, k, c)) that stay within t of the mean of the first line."""
+    ref = lines[0].mean(axis=0)
+    n = 0
+    for ln in lines:
+        if np.max(np.abs(ln - ref)) <= t + 1e-12:
+            n += 1
+        else:
+            break
+    return n
+
+
+def border_dims(im, t):
+    a = im.a
+    h, w = a.shape[0], a.shape[1]
+    cols = np.transpose(a, (1, 0, 2))
+    left = _line_uniform(cols, t)
+    if left == w:
+        return (0, 0), (0, 0)
+    right = _line_uniform(cols[::-1], t)
+    top = _line_uniform(a, t)
+    bottom = _line_uniform(a[::-1], t)
+    return (left, right), (bottom, top)
+
+
+@fn("BorderDimensions", area=AREA, status="added",
+    notes="BorderDimensions[image] = BorderDimensions[image, 0.02] gives {{left, right}, {bottom, top}}: on each side "
+          "the number of outermost rows/columns whose channel values all lie within t of the mean of the outermost "
+          "line. A completely uniform image has no border ({{0, 0}, {0, 0}}). 2D only (3D images raise "
+          "NotImplementedError). Wolfram does not document how the border colour is estimated, so borders of noisy "
+          "images can differ. Check: ImagePad[i, -BorderDimensions[i]] recovers a padded image in tests.")
+def _borderdimensions(x: Expr, t: Real = 0.02) -> ListOf[ListOf[NonNegInteger]]:
+    fname = "BorderDimensions"
+    im = _img1(x, fname, allow3d=False)
+    tv = real_arg(t, fname, "tolerance")
+    if tv < 0:
+        raise ValueError(f"{fname}: the tolerance must be non-negative")
+    (l, r), (b, tp) = border_dims(im, tv)
+    return L(L(l, r), L(b, tp))
+
+
+def _crop_size(spec, n, fname):
+    """New length along one axis from a dimension specification."""
+    if _is_sym(spec, "Full") or _is_sym(spec, "All"):
+        return n
+    if _is_sym(spec, "Automatic"):
+        return None
+    if isinstance(spec, Expr) and spec.head == "UpTo" and len(spec.args) == 1:
+        return min(n, int_arg(spec.args[0], fname, "size", 1))
+    if K.is_list(spec) and len(spec.args) == 2:
+        lo, hi = (int_arg(v, fname, "size", 1) for v in spec.args)
+        if lo > hi:
+            raise ValueError(f"{fname}: the size range {{min, max}} must have min <= max")
+        return min(max(n, lo), hi)
+    return int_arg(spec, fname, "size", 1)
+
+
+def _crop_fraction(s, fname, vertical):
+    """Fraction of the change taken from the low side (left / bottom) for a side or a number in [-1, 1]."""
+    name = _side(s)
+    if name is not None:
+        table = {"Center": 0.5, ("Bottom" if vertical else "Left"): 1.0, ("Top" if vertical else "Right"): 0.0}
+        if name not in table:
+            raise ValueError(f"{fname}: {name} is not a {'vertical' if vertical else 'horizontal'} side")
+        return table[name]
+    v = real_arg(s, fname, "cropping fraction")
+    if not -1 <= v <= 1:
+        raise ValueError(f"{fname}: cropping fractions lie between -1 and 1")
+    return (1 - v) / 2
+
+
+def _crop_spec(spec, fname):
+    """(fx, fy): the fraction of the width/height change applied at the left / bottom."""
+    if spec is None or _is_sym(spec, "Center"):
+        return 0.5, 0.5
+    name = _side(spec)
+    if name in ("Left", "Right"):
+        return _crop_fraction(spec, fname, False), 0.5
+    if name in ("Bottom", "Top"):
+        return 0.5, _crop_fraction(spec, fname, True)
+    if K.is_list(spec) and len(spec.args) == 2:
+        a, b = spec.args
+        sa, sb = _side(a), _side(b)
+        if sa in ("Bottom", "Top") or sb in ("Left", "Right"):
+            a, b = b, a
+        return _crop_fraction(a, fname, False), _crop_fraction(b, fname, True)
+    raise ValueError(f"{fname}: the cropping specification must be a side, {{side1, side2}} or {{ax, ay}}")
+
+
+def _split(delta, frac):
+    lo = int(math.floor(delta * frac + 1e-9))
+    return lo, delta - lo
+
+
+@fn("ImageCrop", area=AREA, status="added",
+    notes="ImageCrop[image] removes the uniform borders found by BorderDimensions (tolerance 0.02); ImageCrop[image, "
+          "size] with size w (height from the aspect ratio, rounded half to even), {w, h}, each dimension d, UpTo[d], {dmin, dmax}, "
+          "Automatic or Full, removing or adding pixels symmetrically; ImageCrop[image, size, spec] with spec a side, "
+          "Center, {side1, side2} or fractions {ax, ay} in [-1, 1]. With an odd number of pixels to remove symmetrically "
+          "the extra pixel comes from the right/top (Wolfram does not document this). Added pixels use Padding (default "
+          "0). 2D only. Check: exact (array slicing, sizes verified) in tests.")
+def _imagecrop(x: Expr, *rest: Integer | ListOf[Integer] | Expr | Option) -> Expr:
+    fname = "ImageCrop"
+    p, o = opts_split(rest, {"Padding"}, fname)
+    im = _img1(x, fname, allow3d=False)
+    if len(p) > 2:
+        raise ValueError(f"{fname}: expected ImageCrop[image, size, spec]")
+    if not p:
+        (l, r), (b, t) = border_dims(im, 0.02)
+        return image_expr(pad_image(im, [(-t, -b), (-l, -r)], 0, fname))
+    size = p[0]
+    w, h = im.w, im.h
+    if K.is_list(size) and len(size.args) == 2:
+        nw = _crop_size(size.args[0], w, fname)
+        nh = _crop_size(size.args[1], h, fname)
+        if nw is None and nh is None:
+            nw, nh = w, h
+        elif nw is None:
+            nw = max(1, round(nh * w / h))
+        elif nh is None:
+            nh = max(1, round(nw * h / w))
+    elif K.is_list(size):
+        raise ValueError(f"{fname}: the size must be w or {{w, h}}")
+    else:
+        nw = _crop_size(size, w, fname)
+        nw = w if nw is None else nw
+        nh = max(1, round(nw * h / w))
+    fx, fy = _crop_spec(p[1] if len(p) > 1 else None, fname)
+    dl, dr = _split(w - nw, fx) if nw <= w else _split(nw - w, fx)
+    db, dt = _split(h - nh, fy) if nh <= h else _split(nh - h, fy)
+    sx = -1 if nw <= w else 1
+    sy = -1 if nh <= h else 1
+    pads = [(sy * dt, sy * db), (sx * dl, sx * dr)]
+    return image_expr(pad_image(im, pads, o.get("Padding", 0), fname))
+
+
+def _tile_sizes(spec, fname):
+    if K.is_list(spec) and len(spec.args) == 1:
+        s = int_arg(spec.args[0], fname, "tile size", 1)
+        return (s, s), True
+    if K.is_list(spec) and len(spec.args) == 2:
+        if any(not K.is_int(v) for v in spec.args):
+            raise NotImplementedError(f"{fname}: only integer tile sizes are supported")
+        return tuple(int_arg(v, fname, "tile size", 1) for v in spec.args), False
+    s = int_arg(spec, fname, "tile size", 1)
+    return (s, s), False
+
+
+@fn("ImagePartition", area=AREA, status="added",
+    notes="ImagePartition[image, s], [image, {w, h}] and [image, {w, h}, {dw, dh}] give the matrix of subimages "
+          "(rows of tiles from the top), dropping incomplete tiles; ImagePartition[image, {s}] keeps incomplete tiles "
+          "at the right/bottom edges. UpTo/Scaled/range tile specifications and Padding raise NotImplementedError; 2D "
+          "only. Check: exact (array slicing; ImageAssemble[ImagePartition[i, s]] == i when s divides the size) in "
+          "tests.")
+def _imagepartition(x: Expr, s: PosInteger | ListOf[PosInteger], d: PosInteger | ListOf[PosInteger] = None,
+                    *opts: Option) -> ListOf[ListOf[Expr]]:
+    fname = "ImagePartition"
+    _, o = opts_split(opts, set(), fname)
+    im = _img1(x, fname, allow3d=False)
+    (tw, th), keep = _tile_sizes(s, fname)
+    if d is None:
+        dw, dh = tw, th
+    elif K.is_list(d) and len(d.args) == 2:
+        dw, dh = (int_arg(v, fname, "offset", 1) for v in d.args)
+    else:
+        dw = dh = int_arg(d, fname, "offset", 1)
+    rows = []
+    for r0 in range(0, im.h, dh):
+        if not keep and r0 + th > im.h:
+            break
+        row = []
+        for c0 in range(0, im.w, dw):
+            if not keep and c0 + tw > im.w:
+                break
+            row.append(image_expr(im.new(im.a[r0:r0 + th, c0:c0 + tw])))
+        if row:
+            rows.append(L(*row))
+    if not rows:
+        return L()
+    return L(*rows)
+
+
+def common_space(imgs, fname):
+    """Images converted to one colour space / channel count (grayscale and RGB mix -> RGB)."""
+    keys = {(i.cs, i.c) for i in imgs}
+    if len(keys) == 1:
+        return imgs
+    if all(i.cs in ("Automatic", "Grayscale", "RGB") and not i.alpha and i.c in (1, 3) for i in imgs):
+        return [i if (i.cs == "RGB" and i.c == 3) else to_space(i, "RGB", fname) for i in imgs]
+    raise ValueError(f"{fname}: the images have incompatible colour spaces or channel counts")
+
+
+@fn("ImageAssemble", area=AREA, status="added",
+    notes="ImageAssemble[{{im11, ..., im1n}, ...}] and ImageAssemble[{im1, im2, ...}] (one row) join 2D images with "
+          "commensurate sizes (equal heights along a row, equal widths down a column); the result has the largest "
+          "type and a common colour space (grayscale with RGB gives RGB). Fitting methods, Missing[] tiles, "
+          "Spacings, PaddingSize and Background raise NotImplementedError; incommensurate sizes raise ValueError. "
+          "Check: exact (array concatenation) in tests.")
+def _imageassemble(tiles: ListOf[Expr] | ListOf[ListOf[Expr]], *rest: String | Option) -> Expr:
+    fname = "ImageAssemble"
+    p, o = opts_split(rest, {"Spacings", "PaddingSize", "Background", "Resampling"}, fname)
+    for name in ("Spacings", "PaddingSize"):
+        if name in o and o[name] != 0:
+            raise NotImplementedError(f"{fname}: option {name} is not supported")
+    if p:
+        raise NotImplementedError(f"{fname}: fitting methods are not supported (give commensurate images)")
+    if not K.is_list(tiles) or not tiles.args:
+        raise TypeError(f"{fname}: the argument must be a list or matrix of images")
+    grid = [list(r.args) for r in tiles.args] if all(K.is_list(r) for r in tiles.args) else [list(tiles.args)]
+    if len({len(r) for r in grid}) != 1 or not grid[0]:
+        raise ValueError(f"{fname}: the rows of the image array must have equal lengths")
+    for r in grid:
+        for t in r:
+            if isinstance(t, Expr) and t.head == "Missing":
+                raise NotImplementedError(f"{fname}: Missing[] tiles are not supported")
+    ims = [[_img1(t, fname, allow3d=False) for t in r] for r in grid]
+    flat = common_space([i for r in ims for i in r], fname)
+    typ = larger_type(*[i.type for i in flat])
+    n = len(grid[0])
+    ims = [flat[k * n:(k + 1) * n] for k in range(len(grid))]
+    for r in ims:
+        if len({i.h for i in r}) != 1:
+            raise ValueError(f"{fname}: the images in a row must have equal heights")
+    for c in range(n):
+        if len({ims[k][c].w for k in range(len(ims))}) != 1:
+            raise ValueError(f"{fname}: the images in a column must have equal widths")
+    a = np.concatenate([np.concatenate([i.a for i in r], axis=1) for r in ims], axis=0)
+    return image_expr(flat[0].new(a, typ=typ))
+
+
+def _reflect_array(a, spec, fname, d3):
+    """a reflected for ImageReflect specification spec (None: top-bottom)."""
+    rax, cax = (-3, -2)
+    if spec is None:
+        return np.flip(a, rax)
+    if _is_sym(spec, "All"):
+        return np.flip(a, tuple(range(a.ndim - 1)))
+    if isinstance(spec, Expr) and spec.head == "Rule" and len(spec.args) == 2:
+        s1, s2 = _side(spec.args[0]), _side(spec.args[1])
+        if s1 is None or s2 is None or "Center" in (s1, s2):
+            raise ValueError(f"{fname}: sides are Top, Bottom, Left, Right (and Front, Back in 3D)")
+        pair = frozenset((s1, s2))
+        if len(pair) == 1:
+            return a
+        if pair == frozenset(("Top", "Bottom")):
+            return np.flip(a, rax)
+        if pair == frozenset(("Left", "Right")):
+            return np.flip(a, cax)
+        if d3 or "Front" in pair or "Back" in pair:
+            raise NotImplementedError(f"{fname}: diagonal reflections of 3D images are not supported")
+        if pair in (frozenset(("Top", "Left")), frozenset(("Bottom", "Right"))):
+            return np.swapaxes(a, 0, 1)
+        return np.swapaxes(a[::-1, ::-1], 0, 1)
+    s = _side(spec)
+    if s in ("Top", "Bottom"):
+        return np.flip(a, rax)
+    if s in ("Left", "Right"):
+        return np.flip(a, cax)
+    if s in ("Front", "Back"):
+        if not d3:
+            raise ValueError(f"{fname}: Front and Back apply to 3D images")
+        return np.flip(a, 1)
+    if isinstance(spec, Symbol):
+        raise ValueError(f"{fname}: {spec.name} is not a side")
+    raise ValueError(f"{fname}: the reflection must be a side, side1 -> side2 or All")
+
+
+@fn("ImageReflect", area=AREA, status="added",
+    notes="ImageReflect[image] mirrors top-bottom; ImageReflect[image, side] mirrors so side goes to the opposite "
+          "side; side1 -> side2 interchanges the sides (Top <-> Left and Bottom <-> Right transpose; Top <-> Right and "
+          "Bottom <-> Left anti-transpose); All mirrors along every axis. 3D images support Top/Bottom, Left/Right, "
+          "Front/Back (rows of the slices: back first) and All. Check: exact (involution: reflecting twice gives the "
+          "image) in tests.")
+def _imagereflect(x: Expr, spec: Expr = None) -> Expr:
+    fname = "ImageReflect"
+    im = _img1(x, fname)
+    a = im.a
+    if im.d3:
+        # (slices, rows, columns, c): slices are vertical (Top/Bottom), rows depth (Front/Back)
+        if spec is None or _side(spec) in ("Top", "Bottom") or (isinstance(spec, Expr) and spec.head == "Rule" and
+                                                                {_side(v) for v in spec.args} == {"Top", "Bottom"}):
+            return image_expr(im.new(a[::-1]))
+        s = _side(spec)
+        if s in ("Left", "Right") or (isinstance(spec, Expr) and spec.head == "Rule" and
+                                      {_side(v) for v in spec.args} == {"Left", "Right"}):
+            return image_expr(im.new(a[:, :, ::-1]))
+        if s in ("Front", "Back") or (isinstance(spec, Expr) and spec.head == "Rule" and
+                                      {_side(v) for v in spec.args} == {"Front", "Back"}):
+            return image_expr(im.new(a[:, ::-1]))
+        if _is_sym(spec, "All"):
+            return image_expr(im.new(a[::-1, ::-1, ::-1]))
+        return image_expr(im.new(_reflect_array(a, spec, fname, True)))
+    return image_expr(im.new(np.ascontiguousarray(_reflect_array(a, spec, fname, False))))
+
+
+_SIDE_ANGLE = {"Right": 0, "Top": 1, "Left": 2, "Bottom": 3}
+
+
+def _bilinear(a, u, v, bg):
+    """Sample a (h, w, c) at continuous 0-based (column u, row v) arrays of pixel-centre coordinates; points outside
+    [-0.5, w - 0.5] x [-0.5, h - 0.5] give bg; inside the half-pixel rim the edge pixels are extended."""
+    h, w = a.shape[:2]
+    inside = (u >= -0.5 - 1e-9) & (u <= w - 0.5 + 1e-9) & (v >= -0.5 - 1e-9) & (v <= h - 0.5 + 1e-9)
+    uc = np.clip(u, 0, w - 1)
+    vc = np.clip(v, 0, h - 1)
+    c0 = np.floor(uc).astype(int)
+    r0 = np.floor(vc).astype(int)
+    c1 = np.minimum(c0 + 1, w - 1)
+    r1 = np.minimum(r0 + 1, h - 1)
+    fu = (uc - c0)[..., None]
+    fv = (vc - r0)[..., None]
+    out = (a[r0, c0] * (1 - fu) * (1 - fv) + a[r0, c1] * fu * (1 - fv) + a[r1, c0] * (1 - fu) * fv
+           + a[r1, c1] * fu * fv)
+    out[~inside] = bg
+    return out
+
+
+def _nearest_sample(a, u, v, bg):
+    h, w = a.shape[:2]
+    c = np.floor(u + 0.5).astype(int)
+    r = np.floor(v + 0.5).astype(int)
+    inside = (c >= 0) & (c < w) & (r >= 0) & (r < h)
+    out = a[np.clip(r, 0, h - 1), np.clip(c, 0, w - 1)]
+    out[~inside] = bg
+    return out
+
+
+def _resampling(o, fname):
+    m = o.get("Resampling", "Automatic")
+    if _is_sym(m, "Automatic"):
+        m = "Automatic"
+    if m in ("Linear", "Bilinear"):
+        return "Linear"
+    if m in ("Nearest", "Automatic"):
+        return m
+    if isinstance(m, str):
+        raise NotImplementedError(f"{fname}: Resampling {m!r} is not supported (\"Linear\" or \"Nearest\")")
+    raise ValueError(f"{fname}: Resampling must be a method name")
+
+
+def _sample(a, u, v, bg, method):
+    return _nearest_sample(a, u, v, bg) if method == "Nearest" else _bilinear(a, u, v, bg)
+
+
+def _angle(t, fname):
+    if is_real_value(t) or K.is_number(t):
+        return real_arg(t, fname, "angle")
+    v = _ev(Expr("N", t))
+    if is_real_value(v):
+        return real_value(v)
+    raise Unevaluated()
+
+
+@fn("ImageRotate", area=AREA, status="added",
+    notes="ImageRotate[image] rotates 90 degrees counterclockwise; ImageRotate[image, theta] (radians, Degree "
+          "allowed) about the centre, multiples of Pi/2 exactly (array rotation); ImageRotate[image, side] = Top -> "
+          "side and side1 -> side2. Other angles are resampled bilinearly (Resampling -> \"Nearest\" or \"Linear\") "
+          "onto the smallest enclosing rectangle (size Automatic, rounded up) or the input size (Full) or {w, h}, with "
+          "Background (default 0) outside; Wolfram's default resampling and rounding are not documented, so pixel "
+          "values near edges can differ. 3D rotation, Masking, All and cropping sizes raise NotImplementedError. "
+          "Check: exact for quarter turns (four quarter turns give the image), centre pixel preserved, in tests.")
+def _imagerotate(x: Expr, theta: Real | Expr = None, *rest: Expr | Option) -> Expr:
+    fname = "ImageRotate"
+    p, o = opts_split(rest, {"Background", "Resampling"}, fname)
+    im = _img1(x, fname, allow3d=False)
+    if len(p) > 1:
+        raise ValueError(f"{fname}: expected ImageRotate[image, theta, size]")
+    size = p[0] if p else AUTO
+    if theta is None:
+        k = 1
+        th = math.pi / 2
+    elif isinstance(theta, Expr) and theta.head == "Rule" and len(theta.args) == 2:
+        s1, s2 = _side(theta.args[0]), _side(theta.args[1])
+        if s1 not in _SIDE_ANGLE or s2 not in _SIDE_ANGLE:
+            raise ValueError(f"{fname}: sides are Top, Bottom, Left and Right")
+        k = (_SIDE_ANGLE[s2] - _SIDE_ANGLE[s1]) % 4
+        th = k * math.pi / 2
+    elif _side(theta) in _SIDE_ANGLE:
+        k = (_SIDE_ANGLE[_side(theta)] - 1) % 4
+        th = k * math.pi / 2
+    elif K.is_list(theta):
+        raise NotImplementedError(f"{fname}: 3D rotations are not supported")
+    else:
+        th = _angle(theta, fname)
+        q = th / (math.pi / 2)
+        k = int(round(q)) % 4 if abs(q - round(q)) < 1e-12 else None
+    method = _resampling(o, fname)
+    bg = value_for(im, o.get("Background", 0), fname)
+    if k is not None and (_is_sym(size, "Automatic") or (_is_sym(size, "Full") and (k % 2 == 0 or im.w == im.h))):
+        return image_expr(im.new(np.ascontiguousarray(np.rot90(im.a, k, axes=(0, 1)))))
+    w, h = im.w, im.h
+    c, s = math.cos(th), math.sin(th)
+    if _is_sym(size, "Automatic"):
+        W = max(1, int(math.ceil(abs(w * c) + abs(h * s) - 1e-9)))
+        H = max(1, int(math.ceil(abs(w * s) + abs(h * c) - 1e-9)))
+    elif _is_sym(size, "Full"):
+        W, H = w, h
+    elif K.is_list(size) and len(size.args) == 2:
+        W, H = (int_arg(v, fname, "size", 1) for v in size.args)
+    elif isinstance(size, (Symbol, str)):
+        raise NotImplementedError(f"{fname}: size {_short(size)} is not supported (Automatic, Full or {{w, h}})")
+    else:
+        raise ValueError(f"{fname}: the size must be Automatic, Full or {{w, h}}")
+    # output pixel centres in y-up coordinates about the output centre, mapped back by the inverse rotation
+    xs = np.arange(W) + 0.5 - W / 2
+    ys = H / 2 - (np.arange(H) + 0.5)
+    X, Y = np.meshgrid(xs, ys)
+    sx = c * X + s * Y
+    sy = -s * X + c * Y
+    u = sx + w / 2 - 0.5
+    v = h / 2 - sy - 0.5
+    out = _sample(im.a, u, v, bg, "Nearest" if method == "Nearest" else "Linear")
+    typ = im.type if im.type != "Bit" or method == "Nearest" else "Real32"
+    return image_expr(im.new(quantize(out, typ), typ=typ))
+
+
+def _resize_matrix(n_src, n_dst, method):
+    """(n_dst, n_src) linear resampling operator with pixel-centre alignment."""
+    M = np.zeros((n_dst, n_src))
+    scale = n_src / n_dst
+    if method == "Automatic" and n_dst < n_src:
+        # area averaging when shrinking: each output pixel averages the input it covers
+        for i in range(n_dst):
+            lo, hi = i * scale, (i + 1) * scale
+            for j in range(int(math.floor(lo)), min(int(math.ceil(hi)), n_src)):
+                M[i, j] = min(hi, j + 1) - max(lo, j)
+            M[i] /= M[i].sum()
+        return M
+    for i in range(n_dst):
+        x = (i + 0.5) * scale - 0.5
+        if method == "Nearest":
+            M[i, min(max(int(math.floor(x + 0.5)), 0), n_src - 1)] = 1.0
+            continue
+        x = min(max(x, 0.0), n_src - 1.0)
+        j = int(math.floor(x))
+        f = x - j
+        M[i, j] += 1 - f
+        if f > 0:
+            M[i, min(j + 1, n_src - 1)] += f
+    return M
+
+
+def resize_array(a, shape, method="Automatic"):
+    """Resample the spatial axes of a (..., c) array to `shape` (one entry per spatial axis)."""
+    out = a
+    for ax, n in enumerate(shape):
+        if out.shape[ax] != n:
+            M = _resize_matrix(out.shape[ax], n, method)
+            out = np.moveaxis(np.tensordot(M, np.moveaxis(out, ax, 0), axes=(1, 0)), 0, ax)
+    return out
+
+
+def resize_img(im, dims, method="Automatic"):
+    """Img resampled to dims [w, h] or [w, d, h]."""
+    shape = [dims[2], dims[1], dims[0]] if im.d3 else [dims[1], dims[0]]
+    out = resize_array(im.a, shape, method)
+    typ = im.type
+    if typ == "Bit" and method != "Nearest" and not np.all((out == 0) | (out == 1)):
+        typ = "Real32"
+    return im.new(quantize(out, typ), typ=typ)
+
+
+def _dim_value(spec, n, fname):
+    if _is_sym(spec, "All"):
+        return n
+    if _is_sym(spec, "Automatic"):
+        return None
+    if isinstance(spec, Expr) and spec.head == "Scaled" and len(spec.args) == 1:
+        return max(1, round(n * real_arg(spec.args[0], fname, "scale")))
+    if isinstance(spec, Symbol) and spec.name in ("Tiny", "Small", "Medium", "Large"):
+        raise NotImplementedError(f"{fname}: the named size {spec.name} is not supported")
+    if K.is_list(spec) and len(spec.args) == 1:
+        return ("max", int_arg(spec.args[0], fname, "size", 1))
+    return int_arg(spec, fname, "size", 1)
+
+
+def resize_dims(im, spec, fname):
+    dims = im.dims()
+    if K.is_list(spec) and len(spec.args) == 1:
+        m = int_arg(spec.args[0], fname, "size", 1)
+        f = m / max(dims)
+        return [max(1, round(d * f)) for d in dims]
+    if K.is_list(spec):
+        if len(spec.args) != len(dims):
+            raise ValueError(f"{fname}: the size must have {len(dims)} entries for this image")
+        vals = [_dim_value(s, d, fname) for s, d in zip(spec.args, dims)]
+    else:
+        vals = [_dim_value(spec, dims[0], fname)] + [None] * (len(dims) - 1)
+    caps = [v[1] if isinstance(v, tuple) else None for v in vals]
+    vals = [None if isinstance(v, tuple) else v for v in vals]
+    if all(v is None for v in vals):
+        if any(c is not None for c in caps):
+            f = min(c / d for c, d in zip(caps, dims) if c is not None)
+            return [max(1, round(d * f)) for d in dims]
+        return list(dims)
+    known = [(v, d) for v, d in zip(vals, dims) if v is not None]
+    f = known[0][0] / known[0][1]
+    out = [v if v is not None else max(1, round(d * f)) for v, d in zip(vals, dims)]
+    return [min(o_, c) if c is not None else o_ for o_, c in zip(out, caps)]
+
+
+@fn("ImageResize", area=AREA, status="added",
+    notes="ImageResize[image, w] (height from the aspect ratio, rounded half to even), {w, h}, {w, d, h}, {s} (largest dimension s) "
+          "and per-dimension d, {d} (at most d), Scaled[s], All and Automatic. Resampling -> \"Linear\" (bilinear, "
+          "pixel centres aligned, edges extended) or \"Nearest\"; the default Automatic averages pixel areas when "
+          "shrinking and interpolates linearly when enlarging. Wolfram's default resampling filter is not documented, "
+          "so resized pixel values can differ (sizes agree); named sizes Tiny..Large raise NotImplementedError. "
+          "Check: exact for identity sizes and constant images; integer shrink factors average blocks, in tests.")
+def _imageresize(x: Expr, spec: Integer | ListOf[Integer] | Expr, *opts: Option) -> Expr:
+    fname = "ImageResize"
+    _, o = opts_split(opts, {"Resampling", "Padding"}, fname)
+    im = _img1(x, fname)
+    method = _resampling(o, fname)
+    return image_expr(resize_img(im, resize_dims(im, spec, fname), method))
+
+
+@fn("Thumbnail", area=AREA, status="added",
+    notes="Thumbnail[image, n] and Thumbnail[image, UpTo[n]] shrink the image (area averaging) so its larger dimension "
+          "is n, keeping the aspect ratio; colour images become RGB (alpha kept). An image already within n is "
+          "returned unresized with Padding -> None or UpTo[n]; Wolfram pads it otherwise, with an undocumented layout, "
+          "so that raises NotImplementedError, as do Thumbnail[image] (the default size is undocumented), named sizes "
+          "and files/URLs. Check: sizes and constant images verified in tests.")
+def _thumbnail(x: Expr, n: PosInteger | Expr = None, *opts: Option) -> Expr:
+    fname = "Thumbnail"
+    _, o = opts_split(opts, {"Padding", "Background"}, fname)
+    if isinstance(x, str) or (isinstance(x, Expr) and x.head in ("File", "URL")):
+        raise NotImplementedError(f"{fname}: thumbnails of files and URLs are not supported")
+    im = _img1(x, fname)
+    if n is None:
+        raise NotImplementedError(f"{fname}: the default thumbnail size is not documented; give Thumbnail[image, n]")
+    upto = isinstance(n, Expr) and n.head == "UpTo" and len(n.args) == 1
+    if isinstance(n, Symbol) and n.name in ("Tiny", "Small", "Medium", "Large"):
+        raise NotImplementedError(f"{fname}: the named size {n.name} is not supported")
+    m = int_arg(n.args[0] if upto else n, fname, "size", 1)
+    if im.color().shape[-1] > 1 and im.cs != "RGB":
+        im = to_space(im, "RGB", fname)
+    dims = im.dims()
+    if max(dims) <= m:
+        if upto or _is_sym(o.get("Padding"), "None"):
+            return image_expr(im)
+        raise NotImplementedError(f"{fname}: padding a small image to the thumbnail size is not supported (use "
+                                  f"Padding -> None or UpTo[n])")
+    f = m / max(dims)
+    return image_expr(resize_img(im, [max(1, round(d * f)) for d in dims], "Automatic"))
