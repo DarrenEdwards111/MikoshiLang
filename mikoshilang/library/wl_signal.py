@@ -1346,3 +1346,254 @@ fn("MovingMap", area=AREA, status="added",
          "first time are dropped; result {t, f[...]}); alignment {r, Left | Right | Center} only affects time "
          "stamps (Right only for {t, v} data); padding and TimeSeries/TemporalData objects raise "
          "NotImplementedError. Check: exact; reference (Wolfram documentation examples) in tests.")(_moving_map)
+
+
+# ═══════════════════════════════════════════════════════════════ FIR filters ══
+_EXACT_WINDOWS = {
+    "DirichletWindow": lambda x: sp.Integer(1) if abs(x) <= sp.Rational(1, 2) else sp.Integer(0),
+    "HammingWindow": lambda x: sp.Rational(25, 46) + sp.Rational(21, 46) * sp.cos(2 * sp.pi * x),
+    "HannWindow": lambda x: (1 + sp.cos(2 * sp.pi * x)) / 2,
+    "BlackmanWindow": lambda x: sp.Rational(21, 50) + sp.cos(2 * sp.pi * x) / 2 + sp.Rational(2, 25) * sp.cos(4 * sp.pi * x),
+    "BartlettWindow": lambda x: 1 - 2 * abs(x),
+}
+
+
+def _exact_window(wfun, n, fname):
+    """Window samples at n points spanning [-1/2, 1/2] inclusive (Array[wfun, n, {-1/2, 1/2}]) as SymPy values."""
+    if wfun is None:
+        wfun = Symbol("HammingWindow")
+    if isinstance(wfun, Symbol) and wfun.name == "None":
+        return [sp.Integer(1)] * n
+    xs = [sp.Rational(-1, 2) + (sp.Rational(k, n - 1) if n > 1 else sp.Rational(1, 2)) for k in range(n)]
+    if is_list(wfun):
+        if len(wfun.args) != n:
+            raise ValueError(f"{fname}: the window list must have length {n}")
+        out = []
+        for v in wfun.args:
+            s = _elem(v, fname)
+            out.append(s)
+        return out
+    if isinstance(wfun, Symbol) and wfun.name in _EXACT_WINDOWS:
+        return [_EXACT_WINDOWS[wfun.name](t) for t in xs]
+    out = []
+    for t in xs:
+        v = apply(wfun, R(t))
+        s = S(v) if not isinstance(v, (int, float)) else sp.sympify(v)
+        if not (isinstance(s, sp.Basic) and s.is_number):
+            raise ValueError(f"{fname}: the window function {wfun!r} did not give a number at {t}")
+        out.append(s)
+    return out
+
+
+def _band_kernel(bands, n):
+    """Least-squares (ideal, zero-phase) FIR kernel: amplitudes a_i on [lo_i, hi_i] -> h(m), m = k - (n-1)/2."""
+    out = []
+    for k in range(n):
+        m = sp.Rational(2 * k - (n - 1), 2)
+        h = sp.Integer(0)
+        for lo, hi, a in bands:
+            if a == 0:
+                continue
+            if m == 0:
+                h += a * (hi - lo) / sp.pi
+            else:
+                h += a * (sp.sin(hi * m) - sp.sin(lo * m)) / (sp.pi * m)
+        out.append(h)
+    return out
+
+
+def _diff_kernel(wc, n):
+    out = []
+    for k in range(n):
+        m = sp.Rational(2 * k - (n - 1), 2)
+        out.append(sp.Integer(0) if m == 0 else (wc * m * sp.cos(wc * m) - sp.sin(wc * m)) / (sp.pi * m ** 2))
+    return out
+
+
+def _hilbert_kernel(wc, n):
+    out = []
+    for k in range(n):
+        m = sp.Rational(2 * k - (n - 1), 2)
+        out.append(sp.Integer(0) if m == 0 else (1 - sp.cos(wc * m)) / (sp.pi * m))
+    return out
+
+
+def _pad_index(j, n, mode):
+    """Map an out-of-range 0-based index to a source index (or None for constant padding)."""
+    if 0 <= j < n:
+        return j
+    if mode == "Fixed":
+        return 0 if j < 0 else n - 1
+    if mode == "Periodic":
+        return j % n
+    if mode in ("Reflected", "Reversed"):
+        if n == 1:
+            return 0
+        period = 2 * (n - 1) if mode == "Reflected" else 2 * n
+        j = j % period
+        if mode == "Reflected":
+            return j if j < n else period - j
+        return j if j < n else period - 1 - j
+    return None
+
+
+def _padding_opt(v, fname):
+    if v is None:
+        return "Fixed", None
+    if isinstance(v, Symbol) and v.name == "None":
+        return "None", None
+    if isinstance(v, Symbol) and v.name == "Automatic":
+        return "Fixed", None
+    if isinstance(v, str):
+        if v in ("Fixed", "Periodic", "Reflected", "Reversed"):
+            return v, None
+        raise NotImplementedError(f"{fname}: Padding -> {v!r} is not supported")
+    if _is_plain_number(S(v)) if not isinstance(v, (int, float)) else True:
+        return "const", (S(v) if not isinstance(v, (int, float)) else sp.sympify(v))
+    raise ValueError(f"{fname}: invalid Padding setting {v!r}")
+
+
+def _fir_1d(vec, ker, mode, cval):
+    """ListConvolve[ker, vec, Ceiling[n/2], padding] (padding None: no overhang) on a list of SymPy values."""
+    n = len(ker)
+    c = (n + 1) // 2          # 1-based alignment position of the kernel
+    N = len(vec)
+    out = []
+    if mode == "None":
+        rng = range(n - c, N - c + 1)
+    else:
+        rng = range(N)
+    for s in rng:
+        acc = sp.Integer(0)
+        for r in range(n):
+            j = s + (c - 1) - r           # ker[r] (0-based) multiplies list[s + c - 1 - r]
+            if 0 <= j < N:
+                v = vec[j]
+            elif mode == "const":
+                v = cval
+            else:
+                v = vec[_pad_index(j, N, mode)]
+            acc += ker[r] * v
+        out.append(acc)
+    return out
+
+
+def _filter_impl(fname, kind):
+    def impl(data: ListOf[Number], spec: Expr, *rest: Expr) -> ListOf[Number]:
+        args, opts = _opts(rest, {"Padding", "SampleRate"}, fname)
+        if len(args) > 2:
+            raise ValueError(f"{fname}: called with too many arguments")
+        flat, shape = _array(data, fname)
+        sr = opts.get("SampleRate")
+        if sr is None or (isinstance(sr, Symbol) and sr.name == "Automatic"):
+            srv = sp.Integer(1)
+        else:
+            srv = _num_param(sr, fname, "SampleRate")
+            if not (srv.is_real and srv > 0):
+                raise ValueError(f"{fname}: SampleRate must be a positive number")
+
+        def freq(v):
+            if isinstance(v, Expr) and v.head == "Quantity":
+                raise NotImplementedError(f"{fname}: Quantity frequencies are not supported")
+            w = _num_param(v, fname, "the frequency") / srv
+            if not (w.is_real and 0 <= w <= sp.pi):
+                raise ValueError(f"{fname}: frequencies must lie between 0 and SampleRate π")
+            return w
+        if kind in ("Lowpass", "Highpass", "Differentiator", "Hilbert"):
+            if is_list(spec):
+                raise NotImplementedError(f"{fname}: per-dimension frequency lists are not supported")
+            wc = freq(spec)
+            bands = [(sp.Integer(0), wc, 1)] if kind == "Lowpass" else [(wc, sp.pi, 1)]
+        else:
+            if is_list(spec) and len(spec.args) == 1 and is_list(spec.args[0]) and len(spec.args[0].args) == 2:
+                w0 = freq(spec.args[0].args[0])
+                q = _num_param(spec.args[0].args[1], fname, "the quality factor")
+                if not (q.is_real and q > 0):
+                    raise ValueError(f"{fname}: the quality factor must be positive")
+                # q = w0/(w2 - w1), w0 = Sqrt[w1 w2]
+                d = w0 / q
+                w1 = (-d + sp.sqrt(d ** 2 + 4 * w0 ** 2)) / 2
+                w2 = w1 + d
+                if w2 > sp.pi:
+                    raise ValueError(f"{fname}: the band extends beyond π")
+            elif is_list(spec) and len(spec.args) == 2:
+                w1, w2 = freq(spec.args[0]), freq(spec.args[1])
+                if not w1 <= w2:
+                    raise ValueError(f"{fname}: the band edges must be in increasing order")
+            else:
+                raise ValueError(f"{fname}: the band must be {{ω1, ω2}} or {{{{ω, q}}}}")
+            bands = [(w1, w2, 1)] if kind == "Bandpass" else [(sp.Integer(0), w1, 1), (w2, sp.pi, 1)]
+        exact = _prec(flat + [b[0] for b in bands] + [b[1] for b in bands]) is None
+        # trivial bands (no kernel length needed): all-pass / all-stop
+        allpass = kind in ("Lowpass", "Highpass", "Bandpass", "Bandstop") and \
+            sum((hi - lo) for lo, hi, _ in bands) == sp.pi
+        allstop = kind in ("Lowpass", "Highpass", "Bandpass", "Bandstop", "Hilbert", "Differentiator") and \
+            all(hi - lo == 0 for lo, hi, _ in bands) if kind not in ("Differentiator", "Hilbert") else \
+            (bands[0][1] - bands[0][0] == sp.pi and False)
+        if kind in ("Differentiator", "Hilbert") and wc == 0:
+            allstop = True
+        if not args:
+            if allpass or allstop:
+                vals = flat if allpass else [sp.Integer(0)] * len(flat)
+                arr = np.empty(len(vals), dtype=object)
+                arr[:] = vals
+                arr = arr.reshape(shape)
+                return _nest(arr, lambda v: R(v) if exact else (float(sp.N(v)) if sp.sympify(v).is_real else R(complex(sp.N(v)))))
+            raise NotImplementedError(f"{fname}: the automatic kernel length is not documented; give the kernel "
+                                      f"length n explicitly ({fname}[data, ω, n])")
+        n = _int_arg(args[0], fname, "the kernel length")
+        win = _exact_window(args[1] if len(args) > 1 else None, n, fname)
+        if kind in ("Lowpass", "Highpass", "Bandpass", "Bandstop"):
+            h = _band_kernel(bands, n)
+        elif kind == "Differentiator":
+            h = _diff_kernel(wc, n)
+        else:
+            h = _hilbert_kernel(wc, n)
+        ker = [sp.sympify(a) * b for a, b in zip(win, h)]
+        if kind == "Lowpass":
+            tot = sp.Add(*ker)
+            if tot == 0:
+                ker = [sp.Integer(0)] * n
+            else:
+                ker = [k / tot for k in ker]
+        if not exact:
+            ker = [sp.N(k, 20) for k in ker]
+        mode, cval = _padding_opt(opts.get("Padding"), fname)
+        arr = np.empty(len(flat), dtype=object)
+        arr[:] = flat
+        arr = arr.reshape(shape)
+        for ax in range(len(shape)):
+            a = np.moveaxis(arr, ax, 0)
+            res = []
+            idxs = list(np.ndindex(*a.shape[1:]))
+            cols = [_fir_1d([a[(k,) + idx] for k in range(a.shape[0])], ker, mode, cval) for idx in idxs]
+            L0 = len(cols[0]) if cols else 0
+            out = np.empty((L0,) + a.shape[1:], dtype=object)
+            for idx, col in zip(idxs, cols):
+                for k in range(L0):
+                    out[(k,) + idx] = col[k]
+            arr = np.moveaxis(out, 0, ax)
+        if exact:
+            return _nest(arr, lambda v: R(v))
+        return _nest(arr, lambda v: float(sp.N(v)) if sp.sympify(v).is_real is not False else R(complex(sp.N(v))))
+    return impl
+
+
+_FILTER_NOTE = ("FIR filter by the window method: kernel = window × LeastSquaresFilterKernel (the ideal zero-phase "
+                "{kind} response sampled at m = k - (n-1)/2){norm}, applied as ListConvolve[ker, data, "
+                "Ceiling[n/2], padding] along every dimension; the kernel length n is required (Wolfram's automatic "
+                "length is undocumented: omitting it raises NotImplementedError, except for the exact all-pass / "
+                "all-stop cases); window wfun (default HammingWindow, sampled as Array[wfun, n, {{-1/2, 1/2}}]), a "
+                "list of weights or None; Padding -> \"Fixed\" (default), \"Periodic\", \"Reflected\", "
+                "\"Reversed\", a constant or None (no overhang); SampleRate -> sr divides the frequencies; exact "
+                "data and frequencies give exact results; Quantity frequencies raise NotImplementedError. Check: "
+                "reference (Wolfram documentation examples, exact and numeric) and the explicit kernel/ListConvolve "
+                "identity in tests.")
+for _name, _kind, _resp, _norm in (
+        ("LowpassFilter", "Lowpass", "lowpass (passband 0..ωc)", ", normalized to unit sum"),
+        ("HighpassFilter", "Highpass", "highpass (passband ωc..π)", ""),
+        ("BandpassFilter", "Bandpass", "bandpass ({ω1, ω2} or {{ω, q}} with q = ω/(ω2 - ω1), ω = √(ω1 ω2))", ""),
+        ("BandstopFilter", "Bandstop", "bandstop ({ω1, ω2} or {{ω, q}})", ""),
+        ("DifferentiatorFilter", "Differentiator", "differentiator (iω for |ω| < ωc)", ""),
+        ("HilbertFilter", "Hilbert", "Hilbert (-i sgn ω for |ω| < ωc)", "")):
+    fn(_name, area=AREA, status="added", notes=_FILTER_NOTE.format(kind=_resp, norm=_norm))(_filter_impl(_name, _kind))
