@@ -1477,6 +1477,8 @@ def apply_derivative(head, args, ev):
 
 
 def _rules_list(r):
+    if isinstance(r, Expr) and r.head == "Dispatch" and len(r.args) == 1:     # Dispatch[{rules}] (W03)
+        r = r.args[0]
     if is_list(r):
         if r.args and all(is_list(x) for x in r.args):
             return None  # list of rule lists handled by caller
@@ -2273,7 +2275,8 @@ def _b_sameq(a, ev, expr):
 
 @builtin("UnsameQ")
 def _b_unsameq(a, ev, expr):
-    return not all(same(a[0], y) for y in a[1:])
+    # Wolfram: True when no two of the arguments are identical (UnsameQ[x] is True)
+    return not any(same(a[i], a[j]) for i in range(len(a)) for j in range(i + 1, len(a)))
 
 
 @builtin("Equal", "Unequal")
