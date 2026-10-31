@@ -55,6 +55,7 @@ _TOKEN_SPEC = [
     ("APPLY", r'@@'),
     ("AT",        r'@'),
     ("TWOWAYRULE", r'<->'),
+    ("VECTOROP",  r'\\\[Vector(?:LessEqual|GreaterEqual|Less|Greater)\]'),
     ("NAMEDOP",   r'\\\[(?:DirectedEdge|UndirectedEdge|Distributed|TwoWayRule)\]'),
     ("RULE",      r'->'),
     ("REPLACEREPEATED", r'//\.'),
@@ -86,6 +87,7 @@ _TOKEN_SPEC = [
     ("DECREMENT", r'--'),
     ("SUBTRACTFROM", r'-='),
     ("MINUS",     r'-'),
+    ("NCMULT",    r'\*\*'),
     ("TIMESBY",   r'\*='),
     ("TIMES",     r'\*'),
     ("RIGHTCOMPOSITION", r'/\*'),
@@ -453,8 +455,19 @@ class Parser:
     def parse_comparison(self) -> Any:
         expr = self.parse_span()
         comparisons = []
-        while self.peek() is not None and self.peek().type in self._COMP_OPS:
-            op = self._COMP_OPS[self.advance().type]
+        while self.peek() is not None and (self.peek().type in self._COMP_OPS or self.peek().type == "VECTOROP"):
+            tok = self.advance()
+            if tok.type == "VECTOROP":                    # x \[VectorLess] y  ->  VectorLess[{x, y}]
+                op = tok.value[2:-1]
+                rhs = self.parse_span()
+                last = comparisons[-1] if comparisons else None
+                if last is not None and last.head == op and last.args[0].args[-1] is expr:
+                    comparisons[-1] = Expr(op, Expr("List", *last.args[0].args, rhs))
+                else:
+                    comparisons.append(Expr(op, Expr("List", expr, rhs)))
+                expr = rhs
+                continue
+            op = self._COMP_OPS[tok.type]
             rhs = self.parse_span()
             comparisons.append(Expr(op, expr, rhs))
             expr = rhs
@@ -530,14 +543,25 @@ class Parser:
 
     def parse_dot(self) -> Any:
         """Handle a . b . c (Dot, precedence 490: between Times and Power/Map), flat."""
-        expr = self.parse_map()
+        expr = self.parse_ncmult()
         if not self.at("DOT"):
             return expr
         args = [expr]
         while self.at("DOT"):
             self.advance()
-            args.append(self.parse_map())
+            args.append(self.parse_ncmult())
         return Expr("Dot", *args)
+
+    def parse_ncmult(self) -> Any:
+        """Handle a ** b ** c (NonCommutativeMultiply, precedence 510: above Dot, below Power), flat."""
+        expr = self.parse_map()
+        if not self.at("NCMULT"):
+            return expr
+        args = [expr]
+        while self.at("NCMULT"):
+            self.advance()
+            args.append(self.parse_map())
+        return Expr("NonCommutativeMultiply", *args)
 
     def parse_map(self) -> Any:
         expr = self.parse_power()
