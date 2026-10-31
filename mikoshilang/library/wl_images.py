@@ -1706,3 +1706,183 @@ def _colorize(x: Expr, *opts: Option) -> Expr:
     if np.all(out[..., 3] == 1):
         out = out[..., :3]
     return image_expr(Img(quantize(out, "Byte"), "Byte", "RGB", d3))
+
+
+# ───────────────────────────── image arithmetic ─────────────────────────────
+
+def _operand(x, ref, fname):
+    """(array broadcastable against ref's colour channels, Img or None) for an image, number, colour or list."""
+    if isinstance(x, Expr) and x.head in IMAGE_HEADS:
+        im = parse_image(x, fname)
+        if im.d3 != ref.d3 or im.a.shape[:-1] != ref.a.shape[:-1]:
+            raise NotImplementedError(f"{fname}: images of different dimensions are not supported (Wolfram centres "
+                                      f"the second image)")
+        return im.color(), im
+    v = value_for(ref.new(ref.color(), cs=ref.cs if not ref.alpha else ref.cs), x, fname)
+    n = ref.color().shape[-1]
+    return v[:n], None
+
+
+def _arith(fname, op, args, clip_real=False):
+    items = list(args[0].args) if len(args) == 1 and K.is_list(args[0]) else list(args)
+    if len(items) < 2:
+        raise ValueError(f"{fname}: expected an image and at least one more operand")
+    im = parse_image(items[0], fname)
+    col = np.array(im.color(), dtype=float)
+    typ, cs, alpha = im.type, im.cs, (im.alpha_array() if im.alpha else None)
+    for x in items[1:]:
+        b, other = _operand(x, Img(col, typ, cs if alpha is None else "Automatic", im.d3) if alpha is None
+                            else Img(np.concatenate([col, alpha], -1), typ, cs, im.d3), fname)
+        if other is not None:
+            typ = larger_type(typ, other.type)
+            if col.shape[-1] == 1 and b.shape[-1] > 1:
+                cs = other.cs
+                if other.alpha and alpha is None:
+                    alpha = other.alpha_array()
+            elif b.shape[-1] != 1 and b.shape[-1] != col.shape[-1]:
+                raise ValueError(f"{fname}: the images have different numbers of channels")
+        col = op(col, b)
+    if typ in MAXV:
+        col = np.clip(col, 0, 1)
+    out = np.concatenate([col, alpha], -1) if alpha is not None else col
+    return image_expr(Img(quantize(out, typ), typ, cs, im.d3))
+
+
+_ARITH_NOTES = ("Operands: images of the same dimensions (a single-channel image is applied to every channel of the "
+                "other; different channel counts raise ValueError; different dimensions NotImplementedError), "
+                "numbers, colours (converted to the image's colour space) or channel lists; folds over several "
+                "operands and accepts a single list. Alpha channels are kept from the first image. The result has "
+                "the largest type of the images; integer types are clipped to 0..1, real types are not.")
+
+
+@fn("ImageAdd", area=AREA, status="added",
+    notes="ImageAdd[image, x1, x2, ...] adds the operands to each channel value. " + _ARITH_NOTES +
+          " For \"Bit\" images it is the logical OR. Check: exact (pixelwise sums) in tests.")
+def _imageadd(*args: Expr | Real | ListOf[Real]) -> Expr:
+    return _arith("ImageAdd", lambda a, b: a + b, args)
+
+
+@fn("ImageSubtract", area=AREA, status="added",
+    notes="ImageSubtract[image, x1, x2, ...] subtracts the operands from each channel value. " + _ARITH_NOTES +
+          " Check: exact (pixelwise differences; ImageAdd[ImageSubtract[i, j], j] == i for real images) in tests.")
+def _imagesubtract(*args: Expr | Real | ListOf[Real]) -> Expr:
+    return _arith("ImageSubtract", lambda a, b: a - b, args)
+
+
+@fn("ImageMultiply", area=AREA, status="added",
+    notes="ImageMultiply[image, x1, x2, ...] multiplies each channel value by the operands. " + _ARITH_NOTES +
+          " For \"Bit\" images it is the logical AND. Check: exact (pixelwise products) in tests.")
+def _imagemultiply(*args: Expr | Real | ListOf[Real]) -> Expr:
+    return _arith("ImageMultiply", lambda a, b: a * b, args)
+
+
+@fn("ImageDifference", area=AREA, status="added",
+    notes="ImageDifference[image1, image2] gives |image1 - image2| per channel for images of equal dimensions (a "
+          "single-channel image is compared with every channel of the other); largest type; for \"Bit\" images the "
+          "logical XOR. Check: exact (symmetry and |a - b|) in tests.")
+def _imagedifference(a: Expr, b: Expr) -> Expr:
+    for v in (a, b):
+        if not (isinstance(v, Expr) and v.head in IMAGE_HEADS):
+            _img1(v, "ImageDifference")
+    return _arith("ImageDifference", lambda u, v: np.abs(u - v), (a, b))
+
+
+def _per_channel(x, n, fname, what, allow_auto=False):
+    """List of n floats (or None for Automatic) from a scalar or a per-channel list."""
+    if K.is_list(x):
+        vals = list(x.args)
+        if len(vals) != n:
+            raise ValueError(f"{fname}: {what} lists must have one value per channel ({n})")
+    else:
+        vals = [x] * n
+    out = []
+    for v in vals:
+        if allow_auto and _is_sym(v, "Automatic"):
+            out.append(None)
+        else:
+            out.append(real_arg(v, fname, what))
+    return out
+
+
+def _range_spec(spec, n, fname, what):
+    """[(lo_i, hi_i)] (None for Automatic) of {min, max} with scalar or per-channel entries."""
+    if not (K.is_list(spec) and len(spec.args) == 2):
+        raise ValueError(f"{fname}: {what} must be {{min, max}}")
+    lo = _per_channel(spec.args[0], n, fname, what, True)
+    hi = _per_channel(spec.args[1], n, fname, what, True)
+    return list(zip(lo, hi))
+
+
+@fn("ImageClip", area=AREA, status="added",
+    notes="ImageClip[image] clips channel values to [0, 1]; ImageClip[image, {min, max}] to [min, max] (per-channel "
+          "lists allowed); ImageClip[image, {min, max}, {vmin, vmax}] gives vmin below min and vmax above max. Type "
+          "kept. Check: exact in tests.")
+def _imageclip(x: Expr, rng: ListOf[Real] = None, vals: ListOf[Real] = None) -> Expr:
+    im = _img1(x, "ImageClip")
+    n = im.c
+    r = [(0.0, 1.0)] * n if rng is None else _range_spec(rng, n, "ImageClip", "the range")
+    v = r if vals is None else _range_spec(vals, n, "ImageClip", "the values")
+    a = np.array(im.a, dtype=float)
+    for i in range(n):
+        lo, hi = r[i]
+        if lo is None or hi is None:
+            raise ValueError("ImageClip: the clipping range must be numeric")
+        vlo, vhi = v[i]
+        ch = a[..., i]
+        below, above = ch < lo, ch > hi
+        ch[below] = vlo
+        ch[above] = vhi
+    return image_expr(im.new(quantize(a, im.type)))
+
+
+@fn("ImageAdjust", area=AREA, status="added",
+    notes="ImageAdjust[image] rescales each colour channel from its own min..max to 0..1; ImageAdjust[image, c], "
+          "{c, b} and {c, b, gamma} apply Clip[(b + 1)(c + 1) x^gamma - c/2, {0, 1}] (the documented formula; zero "
+          "adjustment {0, 0, 1}); ImageAdjust[image, corr, {inmin, inmax}] first rescales inmin..inmax to 0..1 and "
+          "ImageAdjust[image, corr, {inmin, inmax}, {outmin, outmax}] to outmin..outmax (clipped), Automatic meaning "
+          "the channel minimum or maximum, per-channel lists allowed for every parameter. Colour images in spaces "
+          "other than Grayscale/RGB are converted to RGB first; alpha is kept; type kept. A constant channel "
+          "rescales to 0. Check: exact (ImageAdjust[i, -2] == ColorNegate[i], documented formula) in tests.")
+def _imageadjust(x: Expr, corr: Real | ListOf[Real] = None, inr: ListOf[Real] = None,
+                 outr: ListOf[Real] = None) -> Expr:
+    fname = "ImageAdjust"
+    im = _img1(x, fname)
+    if im.cs not in ("Automatic", "Grayscale", "RGB"):
+        im = to_space(im, "RGB", fname)
+    col = np.array(im.color(), dtype=float)
+    n = col.shape[-1]
+    flat = col.reshape(-1, n)
+    mins, maxs = flat.min(axis=0), flat.max(axis=0)
+    if inr is None and outr is None and corr is None:
+        inl = list(zip(mins, maxs))
+    elif inr is not None:
+        inl = [(mins[i] if lo is None else lo, maxs[i] if hi is None else hi)
+               for i, (lo, hi) in enumerate(_range_spec(inr, n, fname, "the input range"))]
+    else:
+        inl = None
+    outl = [(0.0, 1.0)] * n if outr is None else [
+        (0.0 if lo is None else lo, 1.0 if hi is None else hi)
+        for lo, hi in _range_spec(outr, n, fname, "the output range")]
+    if inl is not None:
+        for i in range(n):
+            lo, hi = inl[i]
+            olo, ohi = outl[i]
+            t = (col[..., i] - lo) / (hi - lo) if hi != lo else np.zeros_like(col[..., i])
+            col[..., i] = np.clip(olo + t * (ohi - olo), min(olo, ohi), max(olo, ohi))
+    if corr is not None:
+        if K.is_list(corr):
+            parts = list(corr.args)
+            if not 1 <= len(parts) <= 3:
+                raise ValueError("ImageAdjust: the correction must be c, {c, b} or {c, b, gamma}")
+        else:
+            parts = [corr]
+        defaults = [0, 0, 1]
+        vals = [_per_channel(parts[k], n, fname, "correction") if k < len(parts) else [defaults[k]] * n
+                for k in range(3)]
+        for i in range(n):
+            c, b, g = vals[0][i], vals[1][i], vals[2][i]
+            if g <= 0:
+                raise ValueError("ImageAdjust: gamma must be positive")
+            col[..., i] = np.clip((b + 1) * (c + 1) * np.power(np.clip(col[..., i], 0, None), g) - c / 2, 0, 1)
+    out = np.concatenate([col, im.alpha_array()], -1) if im.alpha else col
+    return image_expr(im.new(quantize(out, im.type)))
