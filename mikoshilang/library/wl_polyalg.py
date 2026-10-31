@@ -4920,11 +4920,20 @@ def _sym_array(name_e, dims, fname):
     return build(()), back
 
 
+def _dimlist(d):
+    """Explicit dimensions: an integer n (a vector, as VectorSymbol[v, n] / Vectors[n]) or a list of integers."""
+    if K.is_int(d) and not isinstance(d, bool):
+        return [int(d)]
+    if is_list(d) and all(K.is_int(x) for x in d.args):
+        return [int(x) for x in d.args]
+    return None
+
+
 def _dims_of(spec, fname):
-    d = spec.args[0] if spec.args else None
-    if not is_list(d) or not all(K.is_int(x) for x in d.args):
+    d = _dimlist(spec.args[0]) if spec.args else None
+    if d is None:
         raise NotImplementedError(f"{fname}: symbolic dimensions are not supported")
-    return [int(x) for x in d.args]
+    return d
 
 
 @fn("ComponentExpand", area=AREA, status="added",
@@ -4948,8 +4957,9 @@ def _compexpand(e, *rest):
     def walk(x):
         if isinstance(x, Expr) and isinstance(x.head, str) and x.head in ("VectorSymbol", "MatrixSymbol",
                                                                          "ArraySymbol"):
-            if len(x.args) >= 2 and is_list(x.args[1]) and all(K.is_int(d) for d in x.args[1].args):
-                arr, b = _sym_array(x, [int(d) for d in x.args[1].args], fname)
+            dl = _dimlist(x.args[1]) if len(x.args) >= 2 else None
+            if dl is not None and (x.head == "VectorSymbol" or is_list(x.args[1])):
+                arr, b = _sym_array(x, dl, fname)
                 back.extend(b)
                 return arr
             raise NotImplementedError(f"{fname}: symbolic dimensions are not supported")
