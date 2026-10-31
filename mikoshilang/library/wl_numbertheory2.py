@@ -1547,7 +1547,8 @@ def _groupings_fn(lst, spec, wrapper=None):
     def build(shape, leaves):
         if isinstance(shape, int):
             return leaves[shape]
-        return K.call(head, *[build(s, leaves) for s in shape.args])
+        kids = [build(s, leaves) for s in shape.args]
+        return Expr(head, *kids) if isinstance(head, str) else K.call(head, *kids)
     out = []
     for sh in shapes:
         for lv in lists:
@@ -2076,8 +2077,7 @@ def _latticereduce(m):
 def _integer_row_basis(M):
     """A basis of the integer row lattice of M (via the Hermite normal form)."""
     from sympy.matrices.normalforms import hermite_normal_form
-    H = hermite_normal_form(M.T).T
-    rows = [H.row(i) for i in range(H.rows) if any(H.row(i))]
+    H = hermite_normal_form(M.T)  # columns of H span the column lattice of M.T, i.e. the row lattice of M
     rows = [r for r in (H.col(j).T for j in range(H.cols)) if any(r)]
     B = sp.Matrix.vstack(*rows) if rows else sp.zeros(0, M.cols)
     if B.rank() != M.rank():

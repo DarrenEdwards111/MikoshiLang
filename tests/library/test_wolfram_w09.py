@@ -297,7 +297,227 @@ MANDELBROT = [
     ("Head[N[JuliaSetBoettcher[I/2, -0.1]]]", "JuliaSetBoettcher"),
 ]
 
-CASES = FINITE_FIELDS + FROBENIUS + INDICES + EMBEDDINGS + CURVES + MANDELBROT
+# ─────────────────────────── numbers, domains and number parts ───────────────────────────
+# Reference: the ref pages of Overflow, Underflow, RealValuedNumberQ, RealValuedNumericQ, RealSign, RealExponent
+# (machine-number results), MixedFractionParts, NumeratorDenominator, NumberDecompose, NumberCompose, MixedRadix,
+# Element with the domains, and the $MaxPrecision/$MinPrecision variables.
+
+NUMBERS = [
+    ("Overflow[] + 5", "Overflow[]"),
+    ("2 Overflow[]", "Overflow[]"),
+    ("Overflow[] === Overflow[]", "True"),
+    ("Overflow[1]", Raises()),
+    ("2 Underflow[]", "Underflow[]"),
+    ("Underflow[] === Underflow[]", "True"),
+    ("Underflow[1]", Raises()),
+    ("RealValuedNumberQ[3/4]", "True"),
+    ("RealValuedNumberQ[2.5]", "True"),
+    ("RealValuedNumberQ[I]", "False"),
+    ("RealValuedNumberQ[Pi]", "False"),           # Pi is numeric but not a number
+    ("RealValuedNumberQ[Overflow[]]", "True"),
+    ("RealValuedNumberQ[Underflow[]]", "True"),
+    ("RealValuedNumericQ[Pi]", "True"),
+    ("RealValuedNumericQ[Sqrt[2] + E]", "True"),
+    ("RealValuedNumericQ[I]", "False"),
+    ("RealValuedNumericQ[x]", "False"),
+    ("RealSign[-3.5]", "-1"),
+    ("RealSign[0]", "0"),
+    ("RealSign[Pi]", "1"),
+    ("RealSign[{-2, 0, 7}]", "{-1, 0, 1}"),
+    ("RealSign[I]", "RealSign[I]"),
+    ("RealExponent[1000]", 3.0),
+    ("RealExponent[0.01]", -2.0),
+    ("RealExponent[8, 2]", 3.0),
+    ("RealExponent[-100]", 2.0),
+    ("RealExponent[123.456]", 2.091512201627772),
+    ("RealExponent[0]", "-Infinity"),
+    ("MixedFractionParts[7/3]", "{2, 1/3}"),
+    ("MixedFractionParts[-7/3]", "{-2, -1/3}"),
+    ("MixedFractionParts[2.75]", "{2, 0.75}"),
+    ("NumeratorDenominator[3/4]", "{3, 4}"),
+    ("NumeratorDenominator[(x + 1)/(x - 1)]", "{1 + x, -1 + x}"),
+    ("NumeratorDenominator[{2/3, 5}]", "{{2, 5}, {3, 1}}"),
+    ("NumberDecompose[37, {10, 1}]", "{3, 7}"),
+    ("NumberDecompose[100, {60, 7, 1}]", "{1, 5, 5}"),
+    ("NumberDecompose[3661, {3600, 60, 1}]", "{1, 1, 1}"),
+    ("NumberCompose[{3, 7}, {10, 1}]", "37"),
+    ("NumberCompose[{1, 2, 3}, {100, 10, 1}]", "123"),
+    ("NumberCompose[{2, 5}, {3, 1}]", "11"),
+    ("NumberCompose[NumberDecompose[100, {60, 7, 1}], {60, 7, 1}]", "100"),
+    ("IntegerDigits[100, MixedRadix[{24, 60, 60}]]", "{1, 40}"),
+    ("IntegerDigits[3661, MixedRadix[{24, 60, 60}]]", "{1, 1, 1}"),
+    ("FromDigits[{1, 2, 3}, MixedRadix[{24, 60, 60}]]", "3723"),
+    ("FromDigits[IntegerDigits[86399, MixedRadix[{24, 60, 60}]], MixedRadix[{24, 60, 60}]]", "86399"),
+    ("MixedRadix[{2, 3}]", "MixedRadix[{2, 3}]"),
+    ("$MaxPrecision", "Infinity"),
+    ("$MaxPrecision === Infinity", "True"),
+    ("$MaxPrecision = 20", Raises()),
+    ("$MinPrecision", "0"),
+    ("$MinPrecision === 0", "True"),
+    ("$MinPrecision = 5", Raises()),
+]
+
+DOMAINS = [
+    ("Element[3, PositiveIntegers]", "True"),
+    ("Element[-3, PositiveIntegers]", "False"),
+    ("Element[0, PositiveIntegers]", "False"),
+    ("Element[0, NonNegativeIntegers]", "True"),
+    ("Element[7, NonNegativeIntegers]", "True"),
+    ("Element[-1, NonNegativeIntegers]", "False"),
+    ("Element[-5, NegativeIntegers]", "True"),
+    ("Element[5, NegativeIntegers]", "False"),
+    ("Element[0, NegativeIntegers]", "False"),
+    ("Element[2, NonPositiveIntegers]", "False"),
+    ("Element[0, NonPositiveIntegers]", "True"),
+    ("Element[-4, NonPositiveIntegers]", "True"),
+    ("Element[1/3, PositiveRationals]", "True"),
+    ("Element[Sqrt[2], PositiveRationals]", "False"),
+    ("Element[-1/3, PositiveRationals]", "False"),
+    ("Element[-1/2, NegativeRationals]", "True"),
+    ("Element[1/2, NegativeRationals]", "False"),
+    ("Element[-Sqrt[2], NegativeRationals]", "False"),
+    ("Element[0, NonNegativeRationals]", "True"),
+    ("Element[5/2, NonNegativeRationals]", "True"),
+    ("Element[-5/2, NonNegativeRationals]", "False"),
+    ("Element[-2/3, NonPositiveRationals]", "True"),
+    ("Element[-2, NonPositiveRationals]", "True"),
+    ("Element[2/3, NonPositiveRationals]", "False"),
+    ("Element[Pi, PositiveReals]", "True"),
+    ("Element[-Pi, PositiveReals]", "False"),
+    ("Element[I, PositiveReals]", "False"),
+    ("Element[-Pi, NegativeReals]", "True"),
+    ("Element[0, NegativeReals]", "False"),
+    ("Element[E, NegativeReals]", "False"),
+    ("Element[Pi, NonNegativeReals]", "True"),
+    ("Element[0, NonNegativeReals]", "True"),
+    ("Element[-1, NonNegativeReals]", "False"),
+    ("Element[0, NonPositiveReals]", "True"),
+    ("Element[-E, NonPositiveReals]", "True"),
+    ("Element[1, NonPositiveReals]", "False"),
+    ("Element[I, Complexes]", "True"),
+    ("Element[1 + I, Complexes]", "True"),
+    ("Element[Pi, Complexes]", "True"),
+    ("Element[True, Booleans]", "True"),
+    ("Element[False, Booleans]", "True"),
+    ("Element[1, Booleans]", "False"),
+    ("Element[x, Booleans]", "Element[x, Booleans]"),
+    ("Element[7, Primes]", "True"),
+    ("Element[9, Primes]", "False"),
+    ("Element[1/2, Primes]", "False"),
+    ("Element[Sqrt[2], Algebraics]", "True"),
+    ("Element[Sqrt[2] + Sqrt[3], Algebraics]", "True"),
+    ("Element[Pi, Algebraics]", "False"),
+    ("Element[E, Algebraics]", "False"),
+    ("Element[2/3, Rationals]", "True"),
+    ("Element[Sqrt[2], Rationals]", "False"),
+    ("Element[-7, Rationals]", "True"),
+    ("Element[Pi, Reals]", "True"),
+    ("Element[I, Reals]", "False"),
+    ("Element[Sqrt[2], Reals]", "True"),
+    ("Element[3, Integers]", "True"),
+    ("Element[1/2, Integers]", "False"),
+    ("Element[-12, Integers]", "True"),
+]
+
+# Reference: the ref pages of GaussianIntegers, Modulus and Extension (documented factorisations).
+OPTIONS = [
+    ("Factor[x^2 + 1, GaussianIntegers -> True]", "(x - I) (x + I)"),
+    ("FactorInteger[5, GaussianIntegers -> True]", "{{-I, 1}, {1 + 2 I, 1}, {2 + I, 1}}"),
+    ("PrimeQ[3, GaussianIntegers -> True]", "True"),
+    ("PrimeQ[5, GaussianIntegers -> True]", "False"),
+    ("PrimeQ[5, GaussianIntegers -> False]", "True"),
+    ("Factor[x^4 + 1, Modulus -> 2]", "(1 + x)^4"),
+    ("Det[{{1, 2}, {3, 4}}, Modulus -> 5]", "3"),
+    ("Inverse[{{1, 2}, {3, 4}}, Modulus -> 7]", "{{5, 1}, {5, 3}}"),
+    ("Mod[{{1, 2}, {3, 4}} . Inverse[{{1, 2}, {3, 4}}, Modulus -> 7], 7]", "{{1, 0}, {0, 1}}"),
+    ("PolynomialGCD[x^2 + 1, x + 1, Modulus -> 2]", "1 + x"),
+    ("Factor[x^2 - 2, Extension -> Sqrt[2]]", "(x - Sqrt[2]) (x + Sqrt[2])"),
+    ("Factor[x^4 + 1, Extension -> I]", "(x^2 - I) (x^2 + I)"),
+    ("Expand[Factor[x^4 - 5 x^2 + 6, Extension -> {Sqrt[2], Sqrt[3]}]]", "x^4 - 5 x^2 + 6"),
+]
+
+# ─────────────────────────── polynomials, sequences, counts ───────────────────────────
+# Reference: the ref pages of Cyclotomic, PrimitivePolynomialQ, ContinuedFractionK, DeBruijnSequence,
+# ShiftRegisterSequence, FiniteGroupCount / FiniteAbelianGroupCount (OEIS A000001 / A000688), Groupings
+# (Catalan numbers count the binary groupings), RandomComplex.
+
+def _all_in_rect(lo, hi):
+    def p(r):
+        vals = [complex(v) if not hasattr(v, "args") or v.args == () else None for v in r.args]
+        return all(v is not None and lo.real <= v.real <= hi.real and lo.imag <= v.imag <= hi.imag for v in vals)
+    return Pred(p, f"complex numbers in the rectangle {lo} .. {hi}")
+
+
+SEQUENCES = [
+    ("Cyclotomic[6, x]", "1 - x + x^2"),
+    ("Cyclotomic[12, x]", "1 - x^2 + x^4"),
+    ("Cyclotomic[1, x]", "-1 + x"),
+    ("Cyclotomic[5, 2]", "31"),
+    ("Expand[Cyclotomic[1, x] Cyclotomic[2, x] Cyclotomic[3, x] Cyclotomic[6, x]]", "x^6 - 1"),
+    ("PrimitivePolynomialQ[x^4 + x + 1, 2]", "True"),
+    ("PrimitivePolynomialQ[x^4 + x^3 + x^2 + x + 1, 2]", "False"),   # irreducible, but x has order 5
+    ("PrimitivePolynomialQ[x^2 + x + 2, 3]", "True"),
+    ("PrimitivePolynomialQ[x^2 + 1, 3]", "False"),
+    ("ContinuedFractionK[1, {i, 1, 3}]", "2/3"),
+    ("ContinuedFractionK[2, {i, 1, 2}]", "2/5"),
+    ("ContinuedFractionK[i, i^2, {i, 1, 2}]", "2/3"),
+    ("ContinuedFractionK[1, {i, 1, Infinity}]", "(Sqrt[5] - 1)/2"),
+    ("DeBruijnSequence[{0, 1}, 3]", "{0, 0, 0, 1, 0, 1, 1, 1}"),
+    ("DeBruijnSequence[{a, b}, 2]", "{a, a, b, b}"),
+    ("Length[DeBruijnSequence[{0, 1, 2}, 3]]", "27"),
+    ("With[{s = DeBruijnSequence[{0, 1}, 4]}, Length[Union[Partition[Join[s, Take[s, 3]], 4, 1]]]]", "16"),
+    ("ShiftRegisterSequence[3]", "{0, 0, 1, 0, 1, 1, 1}"),
+    ("Length[ShiftRegisterSequence[5]]", "31"),
+    ("Total[ShiftRegisterSequence[5]]", "16"),          # an m-sequence of length 2^n - 1 has 2^(n-1) ones
+    ("FiniteGroupCount[{1, 4, 8, 12, 16, 32}]", "{1, 2, 5, 5, 14, 51}"),
+    ("FiniteGroupCount[64]", "267"),
+    ("FiniteGroupCount[p]", "FiniteGroupCount[p]"),
+    ("FiniteAbelianGroupCount[{8, 16, 72, 1}]", "{3, 5, 6, 1}"),
+    ("FiniteAbelianGroupCount[32]", "7"),
+    ("FiniteAbelianGroupCount[30]", "1"),
+    ("Groupings[3, 2]", "{{{1, 2}, 3}, {1, {2, 3}}}"),
+    ("Groupings[{a, b, c}, 2]", "{{{a, b}, c}, {a, {b, c}}}"),
+    ("Groupings[{a, b, c}, f -> 2]", "{f[f[a, b], c], f[a, f[b, c]]}"),
+    ("Length[Groupings[5, 2]]", "14"),
+    ("Length[Groupings[4, 3]]", "0"),
+    ("Length[Groupings[{a, b, c, d, e}, 3]]", "3"),
+    ("SeedRandom[1]; Head[RandomComplex[]]", "Complex"),
+    ("SeedRandom[1]; RandomComplex[{0, 1 + I}, 50]", _all_in_rect(0j, 1 + 1j)),
+    ("SeedRandom[2]; RandomComplex[{-1 - I, 1 + 2 I}, 50]", _all_in_rect(-1 - 1j, 1 + 2j)),
+    ("Dimensions[RandomComplex[2 + 2 I, {3, 4}]]", "{3, 4}"),
+]
+
+# ─────────────────────────── Dirichlet characters and series, integer relations ───────────────────────────
+# Reference: ref pages of DirichletCharacter, DirichletL (L(2, chi_4) = Catalan), DirichletConvolve,
+# DirichletTransform, FindIntegerNullVector and LatticeReduce (documented example).
+
+DIRICHLET = [
+    ("DirichletCharacter[4, 2, 3]", "-1"),
+    ("DirichletCharacter[4, 2, 2]", "0"),
+    ("DirichletCharacter[5, 1, 7]", "1"),
+    ("Table[DirichletCharacter[3, 2, n], {n, 6}]", "{1, -1, 0, 1, -1, 0}"),
+    ("DirichletL[1, 1, 2]", "Pi^2/6"),
+    ("N[DirichletL[4, 2, 2]]", 0.915965594177219),
+    ("DirichletL[3, 1, s]", "(1 - 3^-s) Zeta[s]"),
+    ("DirichletConvolve[1, 1, n, 12]", "6"),
+    ("DirichletConvolve[n, 1, n, 6]", "12"),
+    ("DirichletConvolve[MoebiusMu[n], 1, n, 30]", "0"),
+    ("DirichletConvolve[1, 1, n, m]", "DivisorSigma[0, m]"),
+    ("DirichletTransform[1, n, s]", "Zeta[s]"),
+    ("DirichletTransform[MoebiusMu[n], n, s]", "1/Zeta[s]"),
+    ("DirichletTransform[DivisorSigma[0, n], n, s]", "Zeta[s]^2"),
+    ("FindIntegerNullVector[{1, Sqrt[2], 1 + Sqrt[2]}]", "{1, 1, -1}"),
+    ("FindIntegerNullVector[{N[GoldenRatio, 30]^2, N[GoldenRatio, 30], 1}]", "{1, -1, -1}"),
+    ("With[{v = FindIntegerNullVector[{1, Sqrt[2], Sqrt[8]}]}, Simplify[v . {1, Sqrt[2], Sqrt[8]}] == 0 && v != {0, 0, 0}]", "True"),
+    ("LatticeReduce[{{1, 0, 0, 1345}, {0, 1, 0, 35}, {0, 0, 1, 154}}]", "{{0, 9, -2, 7}, {1, 1, -9, -6}, {1, -3, -8, 8}}"),
+    ("Abs[Det[LatticeReduce[{{1, 1}, {2, 3}}]]]", "1"),
+    ("LatticeReduce[{{1, 2, 3}, {2, 4, 6}}]", "{{1, 2, 3}}"),
+    ("LatticeReduce[{{2, 0}, {0, 3}, {1, 1}}]", Pred(lambda r: sorted(tuple(abs(int(c)) for c in v.args) for v in r.args) == [(0, 1), (1, 0)], "a unimodular basis of Z^2")),
+    ("LatticeReduce[{{1.5, 2}}]", Raises()),
+]
+
+CASES = (FINITE_FIELDS + FROBENIUS + INDICES + EMBEDDINGS + CURVES + MANDELBROT + NUMBERS + DOMAINS + OPTIONS +
+         SEQUENCES + DIRICHLET)
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
