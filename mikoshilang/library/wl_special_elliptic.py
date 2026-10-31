@@ -439,6 +439,26 @@ def _check_q(q, name):
         raise ValueError(f"{name}: the nome q must satisfy Abs[q] < 1")
 
 
+def _rel_stable(f, name):
+    """Evaluate f() at increasing working precision until two successive values agree to the current precision
+    in the *relative* sense (guards against cancellation in theta-type series, e.g. q close to 1)."""
+    P = mpmath.mp.prec
+    work, prev = P, None
+    while True:
+        with mpmath.workprec(work):
+            v = f()
+        if prev is not None:
+            if v == 0 and prev == 0:
+                return v
+            if abs(v - prev) <= mpmath.mpf(2) ** (-(P - 6)) * abs(v):
+                return v
+        prev = v
+        if work > max(8 * P, P + 4000):
+            raise ArithmeticError(f"{name}: catastrophic cancellation; the value could not be computed to the "
+                                  "requested precision")
+        work = P + 64 if work == P else 2 * work
+
+
 def _theta(a, u, q, d=0, name="EllipticTheta"):
     a = _realval(a, name, "a")
     if not mpmath.isint(a) or not 1 <= a <= 4:
@@ -448,7 +468,9 @@ def _theta(a, u, q, d=0, name="EllipticTheta"):
         if d == 0:
             return mpmath.mpf(1) if int(a) in (3, 4) else mpmath.mpf(0)
         return mpmath.mpf(0)
-    return mpmath.jtheta(int(a), u, q, d)
+    if u == 0 and (int(a) == 1) == (d % 2 == 0):
+        return mpmath.mpf(0)      # odd function of u (theta_1 and odd derivatives of theta_2..4) vanishes at 0
+    return _rel_stable(lambda: mpmath.jtheta(int(a), u, q, d), name)
 
 
 def _theta_exact(a, u, q, d=0):
@@ -565,6 +587,9 @@ def _neville(kind):
             return {"S": mpmath.sin(z), "C": mpmath.cos(z), "D": mpmath.mpf(1), "N": mpmath.mpf(1)}[kind]
         if m == 1:
             raise NotImplementedError(f"{name}: m = 1 (infinite quarter period) is not supported numerically")
+        return _rel_stable(lambda: _nev(z, m), name)
+
+    def _nev(z, m):
         K = mpmath.ellipk(m)
         q = mpmath.qfrom(m=m)
         v = mpmath.pi * z / (2 * K)
@@ -2033,3 +2058,166 @@ def _sph_radial(j, deriv):
 for _j in (1, 2):
     _sph_radial(_j, False)
     _sph_radial(_j, True)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Spheroidal joining and radial factors.
+#   SpheroidalRadialFactor[n, m, c] = A_n^m(c) = Sum_k (-1)^k a^m_{n,k}(c^2) (DLMF 30.11.4), the normalising factor
+#   of the Bessel series of the radial functions, where Ps_n^m = Sum_k (-1)^k a^m_{n,k} P^m_{n+2k}.
+#   SpheroidalJoiningFactor[n, 0, c] = SpheroidalS1[n, 0, c, z] / SpheroidalPS[n, 0, c, z] (the documented
+#   relation); only m = 0 is supported, because Wolfram's continuation of SpheroidalPS off [-1, 1] for m != 0
+#   (and so the phase of the factor) could not be confirmed.
+# ---------------------------------------------------------------------------------------------------------------
+
+def _sph_A(n, m, g2):
+    am = abs(m)
+    b = _sph_system(n, am, g2)[1] if g2 != 0 else {n: mpmath.mpf(1)}
+    if m >= 0:
+        return mpmath.fsum(b.values())
+    c = mpmath.factorial(n - am) / mpmath.factorial(n + am)
+    return mpmath.fsum(bl * c * mpmath.factorial(l + am) / mpmath.factorial(l - am) for l, bl in b.items())
+
+
+def _sph_radial_factor(n, m, g):
+    n, m = _sph_nm(n, m, "SpheroidalRadialFactor")
+    g2 = _sph_g2(g, "SpheroidalRadialFactor")
+    if g2 == 0:
+        return mpmath.mpf(1)
+    return _verified(lambda: _sph_A(n, m, g2), "SpheroidalRadialFactor")
+
+
+mpfun("SpheroidalRadialFactor", 3, _sph_radial_factor,
+      lambda n, m, g: sp.Integer(1) if (not isinstance(g, list) and g == 0 and not isinstance(n, list) and n.is_integer
+                                        and not isinstance(m, list) and m.is_integer and n >= abs(m)) else None,
+      notes="spheroidal radial factor A_n^m(c) = Sum_k (-1)^k a^m_{n,k}(c^2) (DLMF 30.11.4) with the Meixner-Schaefke "
+            "normalised Legendre coefficients of SpheroidalPS; integer n >= |m|, real or imaginary c (others raise)")
+
+
+def _sph_joining(n, m, g):
+    n, m = _sph_nm(n, m, "SpheroidalJoiningFactor")
+    if m != 0:
+        raise NotImplementedError("SpheroidalJoiningFactor: only m = 0 is supported (the phase convention for m != 0 "
+                                  "could not be confirmed)")
+    g2 = _sph_g2(g, "SpheroidalJoiningFactor")
+    if g2 == 0:
+        if n == 0:
+            return mpmath.mpf(1)
+        raise ValueError("SpheroidalJoiningFactor: c = 0 with n > 0 is a degenerate limit")
+
+    def run():
+        a, A = _sph_radial_coeffs(n, 0, g2)
+        b = _sph_system(n, 0, g2)[1]
+        out = []
+        for z in (mpmath.mpf(2), mpmath.mpf(3)):
+            s1 = mpmath.fsum(al * _sph_bessel(1, l, g * z, False) for l, al in a.items()) / A
+            ps = mpmath.fsum(bl * mpmath.legendre(l, z) for l, bl in b.items())
+            out.append(s1 / ps)
+        if abs(out[0] - out[1]) > mpmath.mpf(2) ** (-mpmath.mp.prec // 2) * (1 + abs(out[0])):
+            raise ArithmeticError("SpheroidalJoiningFactor: inconsistent ratio (numerical failure)")
+        return out[1]
+    return _verified(run, "SpheroidalJoiningFactor")
+
+
+mpfun("SpheroidalJoiningFactor", 3, _sph_joining,
+      notes="joining factor with SpheroidalS1[n, 0, c, z] == SpheroidalJoiningFactor[n, 0, c] SpheroidalPS[n, 0, c, z] "
+            "(the documented relation); integer n >= 0 and m = 0 only (m != 0 raises), real or imaginary c")
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# SiegelTheta[Omega, s] = Sum_{n in Z^p} Exp[Pi I n.Omega.n + 2 Pi I n.s];
+# SiegelTheta[{nu1, nu2}, Omega, s] = Sum Exp[Pi I (n+nu1).Omega.(n+nu1) + 2 Pi I (n+nu1).(s+nu2)].
+# The lattice sum is truncated to the ellipsoid outside which every term is below 2^-(prec+20) of the largest.
+# ---------------------------------------------------------------------------------------------------------------
+
+_SIEGEL_MAX_TERMS = 400000
+
+
+def _siegel_sum(nu, Om, s, bits):
+    name = "SiegelTheta"
+    if not (isinstance(Om, list) and Om and all(isinstance(r, list) and len(r) == len(Om) for r in Om)):
+        raise ValueError(f"{name}: Omega must be a square matrix")
+    p = len(Om)
+    if not (isinstance(s, list) and len(s) == p and not any(isinstance(x, list) for x in s)):
+        raise ValueError(f"{name}: s must be a vector of length {p}")
+    if nu is None:
+        nu1 = nu2 = [mpmath.mpf(0)] * p
+    else:
+        if not (isinstance(nu, list) and len(nu) == 2 and all(isinstance(v, list) and len(v) == p for v in nu)):
+            raise ValueError(f"{name}: the characteristics must be {{nu1, nu2}} with vectors of length {p}")
+        nu1, nu2 = nu
+    Om = [[mpmath.mpmathify(x) for x in r] for r in Om]
+    tol = mpmath.mpf(2) ** (-mpmath.mp.prec + 8)
+    for i in range(p):
+        for j in range(i + 1, p):
+            if abs(Om[i][j] - Om[j][i]) > tol * (1 + abs(Om[i][j])):
+                raise ValueError(f"{name}: Omega must be a symmetric matrix")
+    Y = mpmath.matrix([[mpmath.im(Om[i][j]) for j in range(p)] for i in range(p)])
+    try:
+        ev = mpmath.eigsy(Y, eigvals_only=True)
+    except Exception:
+        raise ValueError(f"{name}: Im[Omega] must be positive definite")
+    lmin = min(ev)
+    if lmin <= 0:
+        raise ValueError(f"{name}: Im[Omega] must be positive definite")
+    # exponent real part: -Pi [ (n+nu1).Y.(n+nu1) + 2 (n+nu1).Im(s+nu2) ] = -Pi [ (v-c).Y.(v-c) - c.Y.c ], c = -Y^-1 Im
+    w = mpmath.matrix([mpmath.im(mpmath.mpmathify(s[i]) + mpmath.mpmathify(nu2[i])) for i in range(p)])
+    c = -(mpmath.inverse(Y) * w)
+    R2 = bits * mpmath.log(2) / mpmath.pi + 2
+    half = mpmath.sqrt(R2 / lmin) + 1
+    centre = [c[i] - mpmath.re(mpmath.mpmathify(nu1[i])) for i in range(p)]
+    ranges = [range(int(mpmath.floor(centre[i] - half)), int(mpmath.ceil(centre[i] + half)) + 1) for i in range(p)]
+    total = 1
+    for r in ranges:
+        total *= len(r)
+    if total > _SIEGEL_MAX_TERMS:
+        raise NotImplementedError(f"{name}: Im[Omega] is too close to singular for the lattice sum "
+                                  f"({total} terms would be needed)")
+    import itertools
+    ipi = mpmath.mpc(0, 1) * mpmath.pi
+    s2 = [mpmath.mpmathify(s[i]) + mpmath.mpmathify(nu2[i]) for i in range(p)]
+    n1 = [mpmath.mpmathify(x) for x in nu1]
+    acc = []
+    for nvec in itertools.product(*ranges):
+        v = [nvec[i] + n1[i] for i in range(p)]
+        q = mpmath.fsum(v[i] * Om[i][j] * v[j] for i in range(p) for j in range(p))
+        lin = mpmath.fsum(v[i] * s2[i] for i in range(p))
+        e = ipi * (q + 2 * lin)
+        if mpmath.re(e) < -bits * mpmath.log(2) - mpmath.pi * mpmath.fsum(c[i] * w[i] for i in range(p)) - 10:
+            continue
+        acc.append(mpmath.exp(e))
+    total = mpmath.fsum(acc)
+    big = max((abs(t) for t in acc), default=mpmath.mpf(0))
+    return total, big
+
+
+def _siegel(nu, Om, s):
+    """Lattice sum with the working precision raised until cancellation between terms is covered."""
+    target = mpmath.mp.prec
+    work, bits = target, target + 30
+    while True:
+        with mpmath.workprec(work):
+            total, big = _siegel_sum(nu, Om, s, bits)
+        if big == 0:
+            return total
+        loss = 0 if total == 0 else int(mpmath.log(big / abs(total), 2))
+        if total != 0 and work - loss >= target + 20:
+            return total
+        if total == 0:
+            loss = work
+        if work > max(8 * target, target + 6000):
+            break
+        work = max(2 * work, target + loss + 40)
+        bits = work + 30
+    raise ArithmeticError("SiegelTheta: cancellation in the lattice sum could not be resolved")
+
+
+def _siegel_dispatch(*args):
+    if len(args) == 2:
+        return _verified(lambda: _siegel(None, args[0], args[1]), "SiegelTheta")
+    return _verified(lambda: _siegel(args[0], args[1], args[2]), "SiegelTheta")
+
+
+mpfun("SiegelTheta", (2, 3), _siegel_dispatch, listable=False,
+      notes="Siegel (Riemann) theta function Sum_n Exp[Pi I n.Omega.n + 2 Pi I n.s] over Z^p, with characteristics "
+            "{nu1, nu2}; Omega symmetric with positive definite imaginary part (otherwise raises); numerical "
+            "lattice sum (exact input stays unevaluated, N gives digits)")
