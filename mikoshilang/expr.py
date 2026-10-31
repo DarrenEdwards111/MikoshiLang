@@ -125,10 +125,12 @@ class Expr:
 
 
 def _wrap(x):
-    """Ensure x is an Expr or Symbol; pass through atoms."""
+    """Operand of a Python operator (x + 1, 2 * x): MikoshiLang values pass through, other Python values are
+    converted by the interop table (Fraction(1, 3) -> 1/3, numpy.int64(2) -> 2) or raise TypeError."""
     if isinstance(x, (Expr, Symbol, int, float, str, bool)):
         return x
-    return x
+    from .interop import from_python
+    return from_python(x)
 
 
 def _format_atom(a):
