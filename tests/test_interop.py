@@ -284,7 +284,7 @@ def test_function_vocabulary_hints_and_keywords():
         return math.comb(n, k)
 
     @s.function
-    def scale(v: list, *, factor: float = 1.0) -> list:
+    def scale_list(v: list, *, factor: float = 1.0) -> list:
         return [factor * t for t in v]
 
     @s.function
@@ -298,12 +298,12 @@ def test_function_vocabulary_hints_and_keywords():
     with pytest.raises(TypeError, match=r"^Binom: argument 2 must be NonNegInteger"):
         s.eval('Binom[5, "a"]')
     assert str(s.eval("Binom[n, 2]")) == "Binom[n, 2]"
-    assert s.eval("Scale[{1, 2}, Factor -> 2]") == [2.0, 4.0]
-    with pytest.raises(ValueError, match="^Scale: unknown option Bogus"):
-        s.eval("Scale[{1, 2}, Bogus -> 2]")
+    assert s.eval("ScaleList[{1, 2}, Factor -> 2]") == [2.0, 4.0]
+    with pytest.raises(ValueError, match="^ScaleList: unknown option Bogus"):
+        s.eval("ScaleList[{1, 2}, Bogus -> 2]")
     assert s.eval("AsReal[Pi]") == pytest.approx(math.pi)          # numeric constants convert to float
     assert str(s.eval("AsReal[y]")) == "AsReal[y]"
-    assert set(s.functions()) == {"Binom", "Scale", "AsReal"}
+    assert set(s.functions()) == {"Binom", "ScaleList", "AsReal"}
 
 
 def test_function_registration_guards():

@@ -81,7 +81,8 @@ class Session:
                   ndarray).
 
         Integers -> int, exact rationals -> fractions.Fraction, machine reals -> float, bignum reals ->
-        sympy.Float (precision kept), strings -> str, Null -> None, lists -> list, associations -> dict.
+        sympy.Float (precision kept), strings -> str, Null -> None, lists -> list, associations -> dict,
+        PythonObject handles -> the Python object they stand for.
         Errors raise with their Python class (TypeError, ValueError, NotImplementedError, ArithmeticError,
         PermissionError) and a "Name: " message.
         """
@@ -89,7 +90,10 @@ class Session:
         check_modes(out, symbolic, arrays)
         expr = source if isinstance(source, str) else from_python(source)
         result = self.evaluate(expr)
-        return result if out == "expr" else to_python(result, symbolic=symbolic, arrays=arrays)
+        if out == "expr":
+            return result
+        with self._active():                 # PythonObject handles resolve in this session
+            return to_python(result, symbolic=symbolic, arrays=arrays)
 
     @property
     def ns(self):
