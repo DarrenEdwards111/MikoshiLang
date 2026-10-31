@@ -100,8 +100,10 @@ def _is_inf(v):
 _OPTION_NOTES = {
     "PrincipalValue": "option of Integrate (and ContourIntegrate): PrincipalValue -> True gives Cauchy principal "
                       "values (default False); handled by Integrate (batch 4); an inert symbol otherwise",
-    "SeriesTermGoal": "option of Asymptotic and the Asymptotic* functions: the number of terms of the asymptotic "
-                      "approximation to return (default Automatic: the leading term for x -> x0)",
+    "SeriesTermGoal": "option of Asymptotic and the Asymptotic* functions: the number of (non-zero) terms of the "
+                      "asymptotic approximation to return for x -> x0 specifications (the expansion order is raised "
+                      "until that many terms appear, then the most dominant are kept; default Automatic: the "
+                      "leading term)",
     "InterpolationOrder": "option of Interpolation, ListInterpolation and FunctionInterpolation: the polynomial "
                           "order of the interpolation (default 3)",
     "InterpolationPoints": "option of FunctionInterpolation: the number of sample points (default 31, refined until "
@@ -1600,6 +1602,115 @@ def _asym_out(v):
     return out(_exp_to_pow(v) if isinstance(v, sp.Basic) else v)
 
 
+# ───────────────────────────── SeriesTermGoal (number of terms) ─────────────────────────────
+
+def _goal_split(rest):
+    """(k or None, rest without SeriesTermGoal)."""
+    k, keep = None, []
+    for r_ in rest:
+        if is_rule(r_) and _is(r_.args[0], "SeriesTermGoal"):
+            v = r_.args[1]
+            if _is(v, "Automatic"):
+                continue
+            if not (K.is_int(v) and int(v) >= 1):
+                raise ValueError("SeriesTermGoal must be a positive integer")
+            k = int(v)
+        else:
+            keep.append(r_)
+    return k, keep
+
+
+def _dominance_sort(terms, x, x0):
+    import functools
+
+    def cmp(a, b):
+        try:
+            v = sp.limit(sp.Abs(a / b), x, x0) if not _is_inf(x0) else sp.limit(sp.Abs(a / b), x, x0)
+        except Exception:
+            raise _GoalFail()
+        if v == sp.oo:
+            return -1
+        if v == 0:
+            return 1
+        if v.is_finite:
+            return 0
+        raise _GoalFail()
+    return sorted(terms, key=functools.cmp_to_key(cmp))
+
+
+class _GoalFail(Exception):
+    pass
+
+
+def _goal_trunc(e, x, x0, k):
+    """(truncated expression, enough) keeping the k most dominant additive terms of e."""
+    v = SX(e, "SeriesTermGoal")
+    terms = [t for t in sp.Add.make_args(sp.expand(v)) if t != 0]
+    if len(terms) < k:
+        return e, False
+    if len(terms) == k:
+        return e, True
+    srt = _dominance_sort(terms, x, x0)
+    return out(sp.Add(*srt[:k])), True
+
+
+def _term_goal(fname):
+    """SeriesTermGoal -> k: the first k terms of the expansion (orders increased until k terms appear)."""
+    import functools
+
+    def deco(f):
+        @functools.wraps(f)
+        def wrapper(*args):
+            k, keep = _goal_split(args)
+            if k is None:
+                return f(*keep)
+            # the expansion spec is the last positional rule v -> v0 that is not an option
+            idx = None
+            for i in range(len(keep) - 1, -1, -1):
+                a = keep[i]
+                if is_rule(a) and isinstance(a.args[0], Symbol) and a.args[0].name not in _KNOWN_OPTIONS:
+                    idx = i
+                    break
+            if idx is None:
+                return f(*keep)
+            var, pt = keep[idx].args
+            x = _svar(var, fname)
+            x0 = _point(pt, fname)
+            last = None
+            for order in range(k - 1 if k > 1 else 0, 3 * k + 8):
+                a2 = list(keep)
+                a2[idx] = L(var, pt, order)
+                try:
+                    res = f(*a2)
+                except NotImplementedError:
+                    if last is not None:
+                        break
+                    raise
+                last = res
+                try:
+                    if is_list(res):
+                        # AsymptoticSolve: {{y -> series}, ...}
+                        outs, ok = [], True
+                        for branch in res.args:
+                            rules = []
+                            for rr in (branch.args if is_list(branch) else [branch]):
+                                t_, enough = _goal_trunc(rr.args[1], x, x0, k)
+                                ok = ok and enough
+                                rules.append(Expr("Rule", rr.args[0], t_))
+                            outs.append(L(*rules) if is_list(branch) else rules[0])
+                        if ok:
+                            return L(*outs)
+                        continue
+                    t_, enough = _goal_trunc(res, x, x0, k)
+                    if enough:
+                        return t_
+                except _GoalFail:
+                    return res
+            return last
+        return wrapper
+    return deco
+
+
 def _run_asym(f, x, x0, order, fname, discrete=False):
     try:
         return asym(f, x, x0, order, discrete)
@@ -1609,9 +1720,10 @@ def _run_asym(f, x, x0, order, fname, discrete=False):
 
 @fn("Asymptotic", area=AREA, status="added",
     notes="Asymptotic[f, x -> x0]: the leading term of the asymptotic expansion (verified: f/term -> 1); "
-          "Asymptotic[f, {x, x0, n}] / SeriesTermGoal -> n: the expansion to order n (Taylor, Laurent or Puiseux "
+          "Asymptotic[f, {x, x0, n}]: the expansion to order n; SeriesTermGoal -> k: the first k terms (Taylor, Laurent or Puiseux "
           "at finite x0; at Infinity down to x^-n, with exponential/power prefactors and Stirling-type expansions "
           "of Gamma, Factorial, Binomial, HarmonicNumber via LogGamma); unexpandable input raises")
+@_term_goal("Asymptotic")
 def _asymptotic(f, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "Asymptotic")
     if pos:
@@ -1625,6 +1737,7 @@ def _asymptotic(f, spec, *rest):
           "integer): Fibonacci, LucasL, factorials, binomials, HarmonicNumber, CatalanNumber are rewritten "
           "(Binet, Stirling/LogGamma), (-1)^n-type factors are kept as oscillating factors; dominated terms are "
           "dropped; leading terms are verified")
+@_term_goal("DiscreteAsymptotic")
 def _discasym(f, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "DiscreteAsymptotic")
     if pos:
@@ -2098,6 +2211,7 @@ def _termwise_param_sum(F, k, a, b, x, x0, n):
           "convergent sums, else Sum over 0..k-1); computed from SymPy's closed form (checked numerically against "
           "direct summation) with Euler-Maclaurin expansions of Hurwitz zeta / generalized harmonic numbers; "
           "no closed form -> error")
+@_term_goal("AsymptoticSum")
 def _asymsum(f, rng, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticSum")
     if pos:
@@ -2176,6 +2290,7 @@ def _asymsum(f, rng, spec, *rest):
           "Infinity}, {p, p0, m}] and the indefinite AsymptoticProduct[f, k, {k, Infinity, m}] (= Product over "
           "1..k-1): from SymPy's closed form (Gamma / rising factorials, checked numerically) expanded with "
           "Stirling's series (Product[k, {k, 2, n}] ~ Sqrt[2 Pi] n^(n + 1/2) E^-n); no closed form -> error")
+@_term_goal("AsymptoticProduct")
 def _asymprod(f, rng, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticProduct")
     if pos:
@@ -2226,6 +2341,7 @@ def _num_integral(F, t, a, b):
           "0); AsymptoticIntegrate[f, {t, a, b}, {p, p0, n}]: expansion of a parametric integral (exact integral "
           "checked numerically, else term-wise integration of the expansion in p (finite p0, each term finite; the "
           "result is checked against numerical quadrature near p0)); divergent term-wise integrals raise")
+@_term_goal("AsymptoticIntegrate")
 def _asymint(f, rng, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions", "PrincipalValue"},
                    "AsymptoticIntegrate")
@@ -2346,6 +2462,7 @@ def _branches(F, y, x, x0, n, fname):
           "function theorem, requires D[eqn, y] != 0 there; Newton iteration on truncated series, residual checked); "
           "AsymptoticSolve[eqn, y | {y}, {x, x0, n} | x -> x0]: every branch, from SymPy's closed-form roots "
           "expanded in Puiseux series; systems raise")
+@_term_goal("AsymptoticSolve")
 def _asymsolve(eqn, ys, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticSolve")
     if pos and not (len(pos) == 1 and isinstance(pos[0], Symbol) and pos[0].name in ("Reals", "Complexes")):
@@ -2531,6 +2648,7 @@ def _perturb_ode(ode, yname, x, order, icd, eps, e0, n, fname):
           "equation; missing initial values become C[1], C[2], ...); AsymptoticDSolveValue[{ode, ics}, y[x], x, "
           "{e, 0, n}]: regular perturbation expansion in a parameter (each order solved with DSolve, residual "
           "checked); singular points, singular perturbations and systems raise")
+@_term_goal("AsymptoticDSolveValue")
 def _asymdsolve(eqs, target, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticDSolveValue")
     fname = "AsymptoticDSolveValue"
@@ -2616,6 +2734,7 @@ def _first_order_linear(eq, yname, nv):
           "product (Gamma functions, verified); others via RSolveValue (verified by substitution); each free "
           "constant's part is expanded separately (Stirling / exponential scales; Fibonacci -> GoldenRatio^n/Sqrt[5]); "
           "parameter (perturbation) forms and recurrences without a verified closed form raise")
+@_term_goal("AsymptoticRSolveValue")
 def _asymrsolve(eqs, target, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticRSolveValue")
     fname = "AsymptoticRSolveValue"
@@ -2707,6 +2826,7 @@ def _dist_arg(d, fname):
     notes="AsymptoticExpectation[expr, x \\[Distributed] dist, a -> a0 | {a, a0, n}]: the asymptotic expansion in a "
           "parameter of the exact Expectation (computed by Expectation, then expanded); raises when the "
           "expectation has no closed form")
+@_term_goal("AsymptoticExpectation")
 def _asymexp(expr, d, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "AsymptoticExpectation")
     if pos:
@@ -2783,6 +2903,7 @@ def _prob_closed(pred, d, fname):
           "parameter of the exact probability (Probability, or 1 - CDF / CDF for one-sided bounds of continuous "
           "distributions); e.g. the Gaussian tail Erfc[a/Sqrt[2]]/2 ~ E^(-a^2/2)/(a Sqrt[2 Pi]); no closed form -> "
           "error")
+@_term_goal("AsymptoticProbability")
 def _asymprob(pred, d, spec, *rest):
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "AsymptoticProbability")
     if pos:

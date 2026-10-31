@@ -76,6 +76,25 @@ def lyap_ok(a, c, kind):
     return Pred(f, f"{kind} Lyapunov residual 0")
 
 
+def terms_of(src):
+    def f(g):
+        w = ev(src)
+        ga = g.args if isinstance(g, Expr) and g.head == "Plus" else [g]
+        wa = w.args if isinstance(w, Expr) and w.head == "Plus" else [w]
+        return sorted(map(str, ga)) == sorted(map(str, wa))
+    return Pred(f, src)
+
+
+def at_n(src, pts=(5, 8, 13)):
+    """Equal to src as a function of n (checked exactly at a few integers)."""
+    def f(g):
+        n = sp.Symbol("n")
+        return all(sp.simplify(sp.nsimplify(to_sympy(g).subs(n, k)) - to_sympy(ev(src)).subs(n, k)) == 0
+                   or abs(complex(sp.N(to_sympy(g).subs(n, k) - to_sympy(ev(src)).subs(n, k), 30))) < 1e-20
+                   for k in pts)
+    return Pred(f, src)
+
+
 def quad1(f, a, b):
     return complex(mpmath.quad(f, [a, b]))
 
@@ -99,7 +118,9 @@ ARRAYS = [
     ("Antihermitian[{1, 2}]", "Antihermitian[{1, 2}]"), ("Antihermitian[{1}]", Raises()),
     ("Antihermitian[{1, 2}] === Antihermitian[{1, 2}]", True),
     ("ZeroSymmetric[{1, 2}]", "ZeroSymmetric[{1, 2}]"), ("ZeroSymmetric[{-1}]", Raises()),
+    ("ZeroSymmetric[x]", Raises()), ("Head[ZeroSymmetric[{2, 3}]]", "ZeroSymmetric"),
     ("TensorSymmetry[{{0, 0}, {0, 0}}]", "ZeroSymmetric[{1, 2}]"),
+    ("TensorSymmetry[ConstantArray[0, {2, 2, 2}]]", "ZeroSymmetric[{1, 2, 3}]"),
     ("TensorSymmetry[{{1, 2}, {2, 1}}]", "Symmetric[{1, 2}]"), ("TensorSymmetry[{{0, 2}, {-2, 0}}]", "Antisymmetric[{1, 2}]"),
     ("TensorSymmetry[{{1, 2}, {3, 4}}]", "{}"), ("TensorSymmetry[LeviCivitaTensor[3]]", "Antisymmetric[{1, 2, 3}]"),
     ("TensorSymmetry[MatrixSymbol[\"A\", {n, n}, Reals, Symmetric[{1, 2}]]]", "Symmetric[{1, 2}]"),
@@ -143,7 +164,8 @@ ARRAYS = [
     ("HodgeDual[{1, 2}]", "{-2, 1}"),
     ("TensorExpand[TensorProduct[a + b, c]]", "TensorProduct[a, c] + TensorProduct[b, c]"),
     ("TensorExpand[TensorWedge[VectorSymbol[\"v\", 3], 2 VectorSymbol[\"w\", 3] + VectorSymbol[\"u\", 3]]]",
-     "2 TensorWedge[VectorSymbol[\"v\", 3], VectorSymbol[\"w\", 3]] + TensorWedge[VectorSymbol[\"v\", 3], VectorSymbol[\"u\", 3]]"),
+     terms_of("2 TensorWedge[VectorSymbol[\"v\", 3], VectorSymbol[\"w\", 3]] + "
+              "TensorWedge[VectorSymbol[\"v\", 3], VectorSymbol[\"u\", 3]]")),
     ("TensorExpand[TensorWedge[VectorSymbol[\"v\", 3], 3 VectorSymbol[\"w\", 3]]]",
      "3 TensorWedge[VectorSymbol[\"v\", 3], VectorSymbol[\"w\", 3]]"),
     ("TensorReduce[TensorWedge[VectorSymbol[\"v\", 3], VectorSymbol[\"v\", 3]]]", "0"),
@@ -189,14 +211,21 @@ COORDS = [
 
 ASYMPTOTIC = [
     ("Asymptotic[Sin[x]/x, x -> 0]", "1"), ("Asymptotic[Sin[x], {x, 0, 5}]", "x - x^3/6 + x^5/120"),
-    ("Asymptotic[Sin[x], x -> 0, SeriesTermGoal -> 3]", "x - x^3/6"),
+    ("Asymptotic[Sin[x], x -> 0, SeriesTermGoal -> 3]", "x - x^3/6 + x^5/120"),
+    ("Asymptotic[x E^x, x -> 0, SeriesTermGoal -> 1]", "x"),
+    ("Asymptotic[x E^x, x -> 0, SeriesTermGoal -> 4]", "x + x^2 + x^3/2 + x^4/6"),
+    ("Asymptotic[Sin[x], x -> 0, SeriesTermGoal -> 0]", Raises()),
+    ("AsymptoticSolve[y^2 == x + 1, {y, 1}, x -> 0, SeriesTermGoal -> 3]", "{{y -> 1 + x/2 - x^2/8}}"),
+    ("AsymptoticDSolveValue[{y'[x] == y[x], y[0] == 1}, y[x], x -> 0, SeriesTermGoal -> 3]", "1 + x + x^2/2"),
+    ("AsymptoticSum[1/k^2, {k, 1, n}, n -> Infinity, SeriesTermGoal -> 3]", "Pi^2/6 - 1/n + 1/(2 n^2)"),
+    ("DiscreteAsymptotic[HarmonicNumber[n], n -> Infinity, SeriesTermGoal -> 2]", "Log[n] + EulerGamma"),
     ("Asymptotic[Exp[x], x -> 0, SeriesTermGoal -> 2]", "1 + x"),
     ("Asymptotic[1/(1 - x), x -> 0, SeriesTermGoal -> 4]", "1 + x + x^2 + x^3"),
     ("Asymptotic[(x^2 + 1)/(x + 3), x -> Infinity]", "x"), ("Asymptotic[Exp[x] + x^10, x -> Infinity]", "E^x"),
     ("Asymptotic[Gamma[x], x -> Infinity]", "Sqrt[2 Pi] E^(x (Log[x] - 1))/Sqrt[x]"),
     ("Asymptotic[Sqrt[x + 1] - Sqrt[x], x -> Infinity]", "1/(2 Sqrt[x])"),
     ("DiscreteAsymptotic[n!, n -> Infinity]", "Sqrt[2 Pi n] E^(n (Log[n] - 1))"),
-    ("DiscreteAsymptotic[Fibonacci[n], n -> Infinity]", "GoldenRatio^n/Sqrt[5]"),
+    ("DiscreteAsymptotic[Fibonacci[n], n -> Infinity]", at_n("((1 + Sqrt[5])/2)^n/Sqrt[5]")),
     ("DiscreteAsymptotic[HarmonicNumber[n], n -> Infinity]", "Log[n]"),
     ("DiscreteAsymptotic[Binomial[2 n, n], n -> Infinity]", "4^n/Sqrt[Pi n]"),
     ("DiscreteLimit[(1 + 1/n)^n, n -> Infinity]", "E"), ("DiscreteLimit[(-1)^n, n -> Infinity]", "Indeterminate"),
@@ -236,7 +265,7 @@ ASYMPTOTIC = [
     ("AsymptoticDSolveValue[y'[x] == x y[x], y[x], {x, 0, 4}]", "C[1] (1 + x^2/2 + x^4/8)"),
     ("AsymptoticRSolveValue[{y[n + 1] == 2 y[n], y[1] == 1}, y[n], n -> Infinity]", "2^(n - 1)"),
     ("AsymptoticRSolveValue[{y[n + 2] == y[n + 1] + y[n], y[1] == 1, y[2] == 1}, y[n], n -> Infinity]",
-     "GoldenRatio^n/Sqrt[5]"),
+     at_n("((1 + Sqrt[5])/2)^n/Sqrt[5]")),
     ("AsymptoticRSolveValue[{y[n + 1] == (n + 1) y[n], y[0] == 1}, y[n], n -> Infinity]",
      "Sqrt[2 Pi n] E^(n (Log[n] - 1))"),
     ("AsymptoticExpectation[Exp[x/a], Distributed[x, NormalDistribution[0, 1]], {a, Infinity, 2}]", "1 + 1/(2 a^2)"),
@@ -500,7 +529,7 @@ CHANGE = [
     ("DSolveChangeVariables[Inactive[DSolve][y''[x] == 0, y[x], x], u, t, t == Cos[x]]",
      S("Inactive[DSolve][(1 - t^2) u''[t] - t u'[t] == 0, u[t], t]")),
     ("DSolveChangeVariables[Inactive[DSolve][x^2 y''[x] - (2 x Tan[x] - 1) x y'[x] - (x Tan[x] + a) y[x] == 0, y, x], "
-     "u, x, y[x] == u[x]/Cos[x]]", S("Inactive[DSolve][x^2 u''[x] + x u'[x] + (x^2 - a) u[x] == 0, u, x]")),
+     "u, x, y[x] == u[x]/Cos[x]]", S("Inactive[DSolve][(x^2 u''[x] + x u'[x] + (x^2 - a) u[x])/Cos[x] == 0, u, x]")),
     ("DSolveChangeVariables[Inactive[DSolve][D[u[x, t], t] == D[u[x, t], x, x], u, {x, t}], v, {a, b}, "
      "{a == x - t, b == x + t}]", Raises()),
     ("DSolveChangeVariables[Inactive[DSolve][y'[x] == y[x], y, x], u, t, \"Cartesian\" -> \"Polar\"]", Raises()),
