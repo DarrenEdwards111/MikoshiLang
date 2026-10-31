@@ -473,6 +473,8 @@ OPTIONS = [
     ("BooleanStrings", Pred(lambda g: g == Symbol("BooleanStrings"), "inert symbol")),
     ("(BooleanStrings -> {\"yes\", \"no\"})[[2]]", "{\"yes\", \"no\"}"),
     ("BooleanStrings[True]", Raises()),
+    ("TextString[{True, False}, BooleanStrings -> {\"yes\", \"no\"}]", Pred(lambda g: g == "{yes, no}", "{yes, no}")),
+    ("TextString[True, BooleanStrings -> {\"T\", \"F\"}]", Pred(lambda g: g == "T", "T")),
     ("Solve[a x == 1, x, MaxExtraConditions -> 0]", "{{x -> 1/a}}"),
     ("Solve[a x == 1, x, MaxExtraConditions -> All]", Raises()),
     ("MaxExtraConditions[0]", Raises()),
