@@ -1672,3 +1672,364 @@ mpfun("MathieuCharacteristicExponent", 2, lambda a, q: _verified(lambda: _mathie
       notes="characteristic exponent r with Cos[Pi r] = y_e(Pi) (even solution, y_e(0) = 1), r in [n, n+1] in the "
             "n-th stability band and r = n + I mu in the n-th instability gap (Wolfram's branch); real a, q "
             "(complex raise)")
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Lame functions: y'' + (h - nu(nu+1) m sn(z|m)^2) y = 0, 4K-periodic solutions.  In w = Pi (K - z)/(2K) the
+# equation is a Hill equation with m sn^2 = 1 - E/K + Sum d_n Cos[2 n w]; LameC = Sum A_k Cos[k w] (even about
+# z = K), LameS = Sum B_k Sin[k w]; normalisation (1/Pi) Integrate[y^2, {w, 0, 2 Pi}] = 1, signs fixed by
+# LameC[nu, j, K, m] > 0 and LameSPrime[nu, j, K, m] < 0 (the m = 0 limits Cos[j(Pi/2 - z)], Sin[j(Pi/2 - z)]).
+# ---------------------------------------------------------------------------------------------------------------
+
+def _lame_j(j, name, allow_zero):
+    if isinstance(j, mpmath.mpc) and j.imag != 0 or not mpmath.isint(mpmath.re(j)) or mpmath.re(j) < (0 if allow_zero else 1):
+        raise ValueError(f"{name}: j must be a {'non-negative' if allow_zero else 'positive'} integer")
+    return int(mpmath.re(j))
+
+
+def _lame_setup(nu, m):
+    if mpmath.im(nu) != 0 or mpmath.im(m) != 0:
+        raise NotImplementedError("Lame functions: complex order or parameter is not supported")
+    nu, m = mpmath.re(nu), mpmath.re(m)
+    if m >= 1:
+        raise NotImplementedError("Lame functions: only parameters m < 1 are supported")
+    K = mpmath.ellipk(m)
+    E = mpmath.ellipe(m)
+    q = mpmath.qfrom(m=m)
+    if isinstance(q, mpmath.mpc):
+        q = q.real          # m < 0: real negative nome
+    L = nu * (nu + 1)
+    return nu, m, K, E, q, L
+
+
+def _lame_system(nu, j, m, kind):
+    """Return (eigenvalue, list of (k, coefficient)) for LameC (kind 'C') or LameS (kind 'S')."""
+    nu, m, K, E, q, L = _lame_setup(nu, m)
+    p = j % 2
+    if kind == "C":
+        ks0 = [p]
+    else:
+        ks0 = [p if p else 2]
+    idx = (j - ks0[0]) // 2
+    tol = mpmath.mpf(2) ** (-mpmath.mp.prec - 10)
+    # Fourier coefficients of m sn^2 in w
+    d = []
+    n = 1
+    while True:
+        dn = -(2 * mpmath.pi ** 2 / K ** 2) * (-1) ** n * n * q ** n / (1 - q ** (2 * n))
+        if abs(dn) * (1 + abs(L)) < tol and n > 2:
+            break
+        d.append(dn)
+        n += 1
+        if n > 20000:
+            raise ArithmeticError("Lame: nome too close to 1")
+    c0 = 1 - E / K
+    s = (mpmath.pi / (2 * K)) ** 2
+    nb = idx + 12 + int(mpmath.mp.prec / max(1, -float(mpmath.log(max(abs(q), mpmath.mpf(2) ** -60), 2)))) + \
+        int(mpmath.sqrt(abs(L)) / 2 + mpmath.sqrt(abs(L)) * mpmath.sqrt(abs(m)))
+    ks = [ks0[0] + 2 * i for i in range(nb)]
+
+    def tmat(coef):     # matrix of multiplication by Sum coef(t) Cos[2 t w] in the orthonormal basis
+        T = mpmath.matrix(nb, nb)
+        for a_, k in enumerate(ks):
+            for b_, kp in enumerate(ks):
+                v = 0
+                t1 = abs(k - kp) // 2
+                if t1 >= 1:
+                    v += coef(t1) / 2
+                t2 = (k + kp) // 2
+                if t2 >= 1:
+                    v += coef(t2) / 2 if kind == "C" else -coef(t2) / 2
+                if kind == "C" and (k == 0) != (kp == 0):
+                    v = v / mpmath.sqrt(2)
+                T[a_, b_] = v
+        return T
+
+    T = tmat(lambda t: d[t - 1] if t <= len(d) else 0)
+    M = L * T
+    for a_, k in enumerate(ks):
+        M[a_, a_] += s * k * k + L * c0
+    ev, U = mpmath.eigsy(M)
+    order = sorted(range(nb), key=lambda i: ev[i])
+    i = order[idx]
+    lam = ev[i]
+    vec = [U[r_, i] for r_ in range(nb)]
+    if abs(vec[-1]) + abs(vec[-2]) > mpmath.mpf(2) ** (-mpmath.mp.prec // 2) * 0 + mpmath.mpf(2) ** (-(mpmath.mp.prec * 3) // 4):
+        raise ArithmeticError("Lame: Fourier series truncated too early")
+    coeffs = []
+    for k, v in zip(ks, vec):
+        if kind == "C" and k == 0:
+            coeffs.append((k, v / mpmath.sqrt(2)))
+        else:
+            coeffs.append((k, v))
+    # Wolfram normalisation: (1/Pi) Integrate[y^2, {phi, 0, 2 Pi}] = 1 with phi = JacobiAmplitude[z, m];
+    # d phi = dn dz and dn = Pi/(2K) (1 + 4 Sum (-1)^n q^n/(1 + q^(2n)) Cos[2 n w])
+    G = tmat(lambda t: 4 * (-1) ** t * q ** t / (1 + q ** (2 * t)))
+    for a_ in range(nb):
+        G[a_, a_] += 1
+    vv = mpmath.matrix(vec)
+    nrm2 = (vv.T * G * vv)[0]
+    coeffs = [(k, c / mpmath.sqrt(nrm2)) for k, c in coeffs]
+    if kind == "C":
+        sgn = mpmath.fsum(c for k, c in coeffs)
+    else:
+        sgn = mpmath.fsum(k * c for k, c in coeffs)
+    if sgn < 0:
+        coeffs = [(k, -c) for k, c in coeffs]
+    return lam, coeffs, K
+
+
+def _lame_eig(kind):
+    name = "LameEigenvalue" + ("A" if kind == "C" else "B")
+
+    def f(nu, j, m):
+        jj = _lame_j(j, name, kind == "C")
+        if m == 0:
+            return mpmath.mpf(jj) ** 2
+        return _verified(lambda: _lame_system(nu, jj, m, kind)[0], name)
+
+    def ex(nu, j, m):
+        if m == 0 and not isinstance(j, list) and j.is_integer and (j >= 0 if kind == "C" else j >= 1):
+            return j ** 2
+        return None
+    mpfun(name, 3, f, ex, symbolic=lambda nu, j, m: ex(nu, j, m),
+          notes=f"Lame eigenvalue h for Lame{kind} (j-th 4K-periodic eigenvalue of y'' + (h - nu(nu+1) m sn^2) y = 0 "
+                f"of {'even' if kind == 'C' else 'odd'} symmetry about z = K); real nu and m < 1 (others raise); "
+                f"{name}[nu, j, 0] = j^2")
+
+
+def _lame_fun(kind, deriv):
+    name = "Lame" + kind + ("Prime" if deriv else "")
+
+    def f(nu, j, z, m):
+        jj = _lame_j(j, name, kind == "C")
+
+        def run():
+            lam, coeffs, K = _lame_system(nu, jj, m, kind)
+            w = mpmath.pi * (K - z) / (2 * K)
+            qq = mpmath.qfrom(m=mpmath.re(m))
+            if abs(mpmath.im(w)) > -mpmath.log(abs(qq)) / 4:
+                raise NotImplementedError(f"{name}: |Im z| too large (outside the Fourier convergence strip)")
+            dw = -mpmath.pi / (2 * K)
+            if kind == "C":
+                if deriv:
+                    return dw * mpmath.fsum(-c * k * mpmath.sin(k * w) for k, c in coeffs)
+                return mpmath.fsum(c * mpmath.cos(k * w) for k, c in coeffs)
+            if deriv:
+                return dw * mpmath.fsum(c * k * mpmath.cos(k * w) for k, c in coeffs)
+            return mpmath.fsum(c * mpmath.sin(k * w) for k, c in coeffs)
+        if m == 0:
+            w = mpmath.pi / 2 - z
+            if kind == "C":
+                if jj == 0:
+                    return mpmath.mpf(0) if deriv else 1 / mpmath.sqrt(2)
+                return jj * mpmath.sin(jj * w) if deriv else mpmath.cos(jj * w)
+            return -jj * mpmath.cos(jj * w) if deriv else mpmath.sin(jj * w)
+        return _verified(run, name)
+
+    def ex(nu, j, z, m):
+        if isinstance(j, list) or isinstance(m, list) or isinstance(z, list) or m != 0 or not j.is_integer:
+            return None
+        w = sp.pi / 2 - z
+        if kind == "C":
+            if j == 0:
+                return sp.Integer(0) if deriv else 1 / sp.sqrt(2)
+            return j * sp.sin(j * w) if deriv else sp.cos(j * w)
+        if j < 1:
+            return None
+        return -j * sp.cos(j * w) if deriv else sp.sin(j * w)
+    mpfun(name, 4, f, ex, symbolic=ex,
+          notes=f"{'z-derivative of the ' if deriv else ''}Lame function {'LameC (even about z = K)' if kind == 'C' else 'LameS (odd about z = K)'}; "
+                "Fourier (Hill) expansion with (1/Pi) Integrate[y^2, {w, 0, 2 Pi}] = 1, w = Pi (K - z)/(2K); real nu, "
+                "real m < 1 and z within half the Fourier strip (others raise)")
+
+
+for _k in "CS":
+    _lame_eig(_k)
+    _lame_fun(_k, False)
+    _lame_fun(_k, True)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Spheroidal wave functions (DLMF chapter 30 conventions, which Wolfram follows):
+# (1 - z^2) y'' - 2 z y' + (lambda + gamma^2 (1 - z^2) - m^2/(1 - z^2)) y = 0.
+# Ps_n^m(x, gamma^2) = Sum_k (-1)^k a_{n,k}^m P_{n+2k}^m(x) (Ferrers/LegendreP type 1), Meixner-Schaefke norm
+# Integrate[Ps^2, {x, -1, 1}] = 2 (n+m)!/((2n+1)(n-m)!), sign continuous from gamma = 0 (Ps -> LegendreP).
+# Integer n >= |m| and real gamma^2 (gamma real or purely imaginary) only.
+# ---------------------------------------------------------------------------------------------------------------
+
+def _sph_nm(n, m, name):
+    for v, w in ((n, "n"), (m, "m")):
+        if isinstance(v, mpmath.mpc) and v.imag != 0 or not mpmath.isint(mpmath.re(v)):
+            raise NotImplementedError(f"{name}: only integer n and m are supported")
+    n, m = int(mpmath.re(n)), int(mpmath.re(m))
+    if n < abs(m):
+        raise NotImplementedError(f"{name}: only n >= |m| is supported")
+    return n, m
+
+
+def _sph_g2(g, name):
+    g2 = g * g
+    if isinstance(g2, mpmath.mpc):
+        if abs(g2.imag) > abs(g2) * mpmath.mpf(2) ** (-mpmath.mp.prec + 8):
+            raise NotImplementedError(f"{name}: gamma must be real or purely imaginary")
+        g2 = g2.real
+    return g2
+
+
+def _sph_system(n, m, g2):
+    """Return (lambda, {l: b_l}) with Ps_n^m = Sum_l b_l P_l^m (m >= 0), Meixner-Schaefke normalised."""
+    m = abs(m)
+    p = (n - m) % 2
+    idx = (n - m) // 2
+    nb = idx + 20 + int(mpmath.sqrt(abs(g2))) + mpmath.mp.prec // 6
+    ls = [m + p + 2 * i for i in range(nb)]
+
+    def N(l):
+        return mpmath.mpf(2) / (2 * l + 1) * mpmath.factorial(l + m) / mpmath.factorial(l - m)
+
+    def beta(l):
+        return mpmath.mpf((l - m + 1) * (l + m + 1)) / ((2 * l + 1) * (2 * l + 3)) + \
+            mpmath.mpf((l + m) * (l - m)) / ((2 * l + 1) * (2 * l - 1))
+
+    def alpha(l):   # x^2 P_l -> alpha(l) P_{l+2}
+        return mpmath.mpf((l - m + 1) * (l - m + 2)) / ((2 * l + 1) * (2 * l + 3))
+    M = mpmath.matrix(nb, nb)
+    for i, l in enumerate(ls):
+        M[i, i] = l * (l + 1) - g2 + g2 * beta(l)
+        if i + 1 < nb:
+            # symmetric element in the orthonormal basis P_l/sqrt(N_l):  <l+2| x^2 |l> = alpha(l) sqrt(N_{l+2}/N_l)
+            e = g2 * alpha(l) * mpmath.sqrt(N(l + 2) / N(l))
+            M[i, i + 1] = M[i + 1, i] = e
+    ev, U = mpmath.eigsy(M)
+    order = sorted(range(nb), key=lambda i: ev[i])
+    i = order[idx]
+    lam = ev[i]
+    vec = [U[r, i] for r in range(nb)]
+    if abs(vec[-1]) > mpmath.mpf(2) ** (-mpmath.mp.prec):
+        raise ArithmeticError("Spheroidal: Legendre expansion truncated too early")
+    scale = mpmath.sqrt(N(n))
+    b = {l: scale * v / mpmath.sqrt(N(l)) for l, v in zip(ls, vec)}
+    # sign: continuous from gamma = 0 -> compare with LegendreP_n^m at 0 (n - m even) or its derivative (odd)
+    if p == 0:
+        ref = mpmath.fsum(bl * mpmath.legenp(l, m, 0) for l, bl in b.items())
+        ref0 = mpmath.legenp(n, m, 0)
+    else:
+        ref = mpmath.fsum(bl * mpmath.diff(lambda x: mpmath.legenp(l, m, x), 0) for l, bl in b.items())
+        ref0 = mpmath.diff(lambda x: mpmath.legenp(n, m, x), 0)
+    if ref * ref0 < 0:
+        b = {l: -v for l, v in b.items()}
+    return lam, b
+
+
+def _legP(l, m, x, deriv=False):
+    """Ferrers / LegendreP type-1 P_l^m(x) (Condon-Shortley phase), analytically continued off [-1, 1]."""
+    if not deriv:
+        return mpmath.legenp(l, m, x, type=2)
+    # (1 - x^2) P' = (l + 1) x P_l - (l - m + 1) P_{l+1}   ... (DLMF 14.10.5 with mu = m)
+    return ((l + 1) * x * mpmath.legenp(l, m, x, type=2) - (l - m + 1) * mpmath.legenp(l + 1, m, x, type=2)) / (1 - x * x)
+
+
+def _sph_eig(n, m, g):
+    n, m = _sph_nm(n, m, "SpheroidalEigenvalue")
+    g2 = _sph_g2(g, "SpheroidalEigenvalue")
+    if g2 == 0:
+        return mpmath.mpf(n * (n + 1))
+    return _verified(lambda: _sph_system(n, m, g2)[0], "SpheroidalEigenvalue")
+
+
+mpfun("SpheroidalEigenvalue", 3, _sph_eig,
+      lambda n, m, g: n * (n + 1) if (not isinstance(g, list) and g == 0 and not isinstance(n, list) and n.is_integer
+                                      and not isinstance(m, list) and m.is_integer and n >= abs(m)) else None,
+      notes="spheroidal eigenvalue lambda_n^m(gamma) of (1-z^2) y'' - 2 z y' + (lambda + gamma^2 (1-z^2) - "
+            "m^2/(1-z^2)) y = 0 (Legendre-basis matrix); integer n >= |m|, real or imaginary gamma (others raise)")
+
+
+def _sph_ps(deriv):
+    name = "SpheroidalPS" + ("Prime" if deriv else "")
+
+    def f(n, m, g, x):
+        n, m = _sph_nm(n, m, name)
+        g2 = _sph_g2(g, name)
+        if x in (1, -1) and m != 0 and not deriv:
+            return mpmath.mpf(0) if m > 0 else mpmath.inf
+        if deriv and x in (1, -1):
+            raise ValueError(f"{name}: x = +-1 is a singular point")
+
+        def run():
+            if g2 == 0:
+                b = {n: mpmath.mpf(1)}
+            else:
+                b = _sph_system(n, m, g2)[1]
+            am = abs(m)
+            out = mpmath.fsum(bl * _legP(l, am, x, deriv) for l, bl in b.items())
+            if m < 0:
+                out *= (-1) ** am * mpmath.factorial(n - am) / mpmath.factorial(n + am)
+            return out
+        return _verified(run, name)
+    mpfun(name, 4, f,
+          notes=f"{'x-derivative of the ' if deriv else ''}angular prolate spheroidal function Ps_n^m(gamma, x) "
+                "(Meixner-Schaefke normalisation; SpheroidalPS[n, m, 0, x] = LegendreP[n, m, x]); Legendre series, "
+                "integer n >= |m|, real or imaginary gamma (others raise)")
+
+
+_sph_ps(False)
+_sph_ps(True)
+
+
+def _sph_radial_coeffs(n, m, g2):
+    """a_{n,k}^{-m} up to a common factor, keyed by l = n + 2k, and A_n^{-m}."""
+    m = abs(m)
+    b = _sph_system(n, m, g2)[1] if g2 != 0 else {n: mpmath.mpf(1)}
+    # Ps^m = Sum (-1)^k a^m_k P^m_l, b_l = (-1)^k a^m_k;  a^{-m}_k  ~  a^m_k (l+m)!/(l-m)!
+    a = {}
+    for l, bl in b.items():
+        k = (l - n) // 2
+        a[l] = (-1) ** k * bl * mpmath.factorial(l + m) / mpmath.factorial(l - m)
+    A = mpmath.fsum((-1) ** ((l - n) // 2) * al for l, al in a.items())
+    return a, A
+
+
+def _sph_bessel(j, l, x, deriv):
+    def psi(k):
+        if j == 1:
+            return mpmath.sqrt(mpmath.pi / (2 * x)) * mpmath.besselj(k + mpmath.mpf(1) / 2, x)
+        return mpmath.sqrt(mpmath.pi / (2 * x)) * mpmath.bessely(k + mpmath.mpf(1) / 2, x)
+    if not deriv:
+        return psi(l)
+    return l / x * psi(l) - psi(l + 1)
+
+
+def _sph_radial(j, deriv):
+    name = f"SpheroidalS{j}" + ("Prime" if deriv else "")
+
+    def f(n, m, g, z):
+        n, m = _sph_nm(n, m, name)
+        g2 = _sph_g2(g, name)
+        if g == 0:
+            raise ValueError(f"{name}: gamma = 0 is not allowed (the Meixner-Schaefke radial functions vanish or blow up)")
+        if z == 0:
+            raise ValueError(f"{name}: z = 0 is a singular point of the series")
+        if j == 2 and abs(z) <= 1:
+            raise NotImplementedError(f"{name}: only |z| > 1 is supported (the Bessel series diverges for |z| <= 1)")
+
+        def run():
+            a, A = _sph_radial_coeffs(n, m, g2)
+            am = abs(m)
+            fac = (1 - 1 / (z * z)) ** (mpmath.mpf(am) / 2)
+            ser = mpmath.fsum(al * _sph_bessel(j, l, g * z, False) for l, al in a.items())
+            if not deriv:
+                return fac * ser / A
+            dser = g * mpmath.fsum(al * _sph_bessel(j, l, g * z, True) for l, al in a.items())
+            dfac = am / (z ** 3) * (1 - 1 / (z * z)) ** (mpmath.mpf(am) / 2 - 1) if am else 0
+            return (dfac * ser + fac * dser) / A
+        return _verified(run, name)
+    mpfun(name, 4, f,
+          notes=f"{'z-derivative of the ' if deriv else ''}radial spheroidal function S^({j})_n^m(gamma, z), DLMF 30.11.3 "
+                "(Meixner-Schaefke): (1 - z^-2)^(m/2)/A Sum a^(-m)_{n,k} psi^({j})_(n+2k)(gamma z); integer n >= |m|, "
+                f"real or imaginary gamma{', |z| > 1' if j == 2 else ''} (others raise)")
+
+
+for _j in (1, 2):
+    _sph_radial(_j, False)
+    _sph_radial(_j, True)
