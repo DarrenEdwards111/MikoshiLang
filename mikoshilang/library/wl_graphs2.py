@@ -1078,3 +1078,505 @@ def _incgraph(a: Expr, b: Expr = None) -> Expr:
         if [[int(x) for x in r.args] for r in chk.args] != [[int(x) for x in r] for r in rows]:
             raise ArithmeticError("IncidenceGraph: result failed verification")
     return out
+
+
+# ═══════════════════════════════════════ edges, tags and editing ═══════════════════════════════════════
+
+@fn("EdgeRules", area=AREA, status="added",
+    notes="EdgeRules[g] = {u -> v, ...}: one rule per edge in EdgeList order (undirected edges as u -> v in their "
+          "stored orientation; tags dropped). Check: exact (tests: EdgeRules of edge-rule input gives it back).")
+def _edgerules(g: Expr) -> ListOf[Rule]:
+    gr = _g(g, "EdgeRules")
+    return L(*(Expr("Rule", e.args[0], e.args[1]) for e in gr.edge_exprs))
+
+
+@fn("IncidenceList", area=AREA, status="added",
+    notes="IncidenceList[g, v]: the edges incident to v (either end), in EdgeList order; unknown vertices raise "
+          "ValueError; the pattern and distance forms IncidenceList[g, patt, d] raise NotImplementedError. "
+          "Check: exact (tests: counts equal VertexDegree for loop-free graphs).")
+def _inclist(g: Expr, v: Expr, *rest: Expr) -> ListOf[Expr]:
+    if rest:
+        raise NotImplementedError("IncidenceList: the distance form IncidenceList[g, v, d] is not supported")
+    gr = _g(g, "IncidenceList")
+    i = gr.vidx(v, "IncidenceList")
+    return L(*(gr.edge_exprs[k] for k, (a, b, _) in enumerate(gr.edges) if i in (a, b)))
+
+
+_tag_aware("EdgeTaggedGraph", "EdgeTags", "EdgeTaggedGraphQ", "IndexEdgeTaggedGraph", "EdgeRules", "IncidenceList")
+
+
+def _tagged(e, t):
+    h = "DirectedEdge" if e.head in ("Rule", "DirectedEdge") else "UndirectedEdge"
+    return Expr(h, e.args[0], e.args[1], t)
+
+
+@fn("EdgeTaggedGraph", area=AREA, status="added",
+    notes="EdgeTaggedGraph[{e1, ...} -> {t1, ...}] and EdgeTaggedGraph[{v...}, {e...} -> {t...}] give a Graph with "
+          "edges DirectedEdge[u, v, t] / UndirectedEdge[u, v, t]; EdgeTaggedGraph[{e...}] keeps edges that are "
+          "already tagged. Wolfram's automatic tags for untagged edges are not reproduced, so untagged edges without "
+          "a tag list raise NotImplementedError; tag lists of the wrong length raise ValueError. Tagged graphs are "
+          "accepted by Graph, VertexList, EdgeList, VertexCount, EdgeCount, EdgeRules, IncidenceList, EdgeTags and "
+          "the annotation functions; other graph functions raise for tagged edges rather than drop the tags. "
+          "Check: exact (tests: EdgeTags round trip).")
+def _etg(a: Expr, b: Expr = None, *opts: Option) -> Expr:
+    if b is not None and _is_rule(b) and isinstance(b.args[0], Symbol) and b.args[0].name in _GRAPH_OPTS:
+        opts, b = (b,) + opts, None
+    pos, o = _graph_opts(opts, "EdgeTaggedGraph")
+    vs = None
+    spec = a
+    if b is not None:
+        if not is_list(a):
+            raise TypeError("EdgeTaggedGraph: the vertices must be a list")
+        vs, spec = list(a.args), b
+    if _is_rule(spec):
+        es, ts = spec.args
+        if not (is_list(es) and is_list(ts)):
+            raise TypeError("EdgeTaggedGraph: expected {e1, ...} -> {t1, ...}")
+        if len(es.args) != len(ts.args):
+            raise ValueError("EdgeTaggedGraph: the edge and tag lists have different lengths")
+        edges = [_tagged(e, t) for e, t in zip(es.args, ts.args)]
+    elif is_list(spec):
+        edges = list(spec.args)
+        if not all(_is_edge(e) and len(e.args) == 3 for e in edges):
+            raise NotImplementedError("EdgeTaggedGraph: automatic tags for untagged edges are not supported; give "
+                                      "{e1, ...} -> {t1, ...}")
+    else:
+        if isinstance(spec, Symbol):
+            raise Unevaluated()
+        raise TypeError("EdgeTaggedGraph: expected a list of edges")
+    if vs is None:
+        vs, seen = [], set()
+        for e in edges:
+            for x in e.args[:2]:
+                if K.tag(x) not in seen:
+                    seen.add(K.tag(x))
+                    vs.append(x)
+    return WG(vs, edges, o, "EdgeTaggedGraph").expr()
+
+
+@fn("IndexEdgeTaggedGraph", area=AREA, status="added",
+    notes="IndexEdgeTaggedGraph[g] tags the edges 1, 2, ... in EdgeList order; IndexEdgeTaggedGraph[g, r] starts at r "
+          "(existing tags are replaced). Check: exact (tests: EdgeTags gives Range).")
+def _ietg(g: Expr, r: Integer = 1) -> Expr:
+    gr = _g(g, "IndexEdgeTaggedGraph")
+    r = _int(r, "IndexEdgeTaggedGraph", None, "the first tag")
+    es = [_tagged(e, r + k) for k, e in enumerate(gr.edge_exprs)]
+    return WG(gr.vertices, es, gr.opts, "IndexEdgeTaggedGraph").expr()
+
+
+@fn("EdgeTags", area=AREA, status="added",
+    notes="EdgeTags[g]: the tags of all edges in EdgeList order; EdgeTags[g, {u, v}]: tags of the edges between u and "
+          "v (an undirected edge in either orientation, a directed edge u -> v). Untagged edges raise "
+          "NotImplementedError (Wolfram's convention for them is not reproduced). Check: exact (tests: "
+          "EdgeTaggedGraph/IndexEdgeTaggedGraph round trips).")
+def _etags(g: Expr, uv: ListOf[Expr] = None) -> ListOf[Expr]:
+    gr = _g(g, "EdgeTags")
+    if any(len(e.args) != 3 for e in gr.edge_exprs):
+        raise NotImplementedError("EdgeTags: the graph has untagged edges")
+    if uv is None:
+        return L(*(e.args[2] for e in gr.edge_exprs))
+    if not (is_list(uv) and len(uv.args) == 2):
+        raise TypeError("EdgeTags: the second argument must be {u, v}")
+    a, b = gr.vidx(uv.args[0], "EdgeTags"), gr.vidx(uv.args[1], "EdgeTags")
+    return L(*(gr.edge_exprs[k].args[2] for k, (i, j, d) in enumerate(gr.edges)
+               if (i, j) == (a, b) or (not d and (j, i) == (a, b))))
+
+
+@fn("EdgeTaggedGraphQ", area=AREA, status="added",
+    notes="True for a Graph with at least one tagged edge (DirectedEdge[u, v, t] or UndirectedEdge[u, v, t]), False "
+          "for other graphs and non-graphs; symbols stay unevaluated. Check: exact.")
+def _etgq(g: Expr) -> Boolean:
+    if isinstance(g, Symbol):
+        raise Unevaluated()
+    if not is_graph_like(g):
+        return False
+    try:
+        gr = graph_of(g, "EdgeTaggedGraphQ")
+    except ValueError:
+        return False
+    return any(len(e.args) == 3 for e in gr.edge_exprs)
+
+
+def _data_opts(gr):
+    return {k: v for k, v in gr.opts.items() if k in ("EdgeWeight", "EdgeCapacity", "EdgeCost")}
+
+
+@fn("VertexReplace", area=AREA, status="added",
+    notes="VertexReplace[g, {v1 -> w1, ...}] renames vertices (others kept); edges follow, edge-indexed options "
+          "(EdgeWeight, EdgeCapacity, EdgeCost) are kept, vertex-keyed presentation options are dropped; renaming "
+          "two vertices to the same name raises ValueError. Check: exact (tests: IsomorphicGraphQ with the input "
+          "and the renamed vertex list).")
+def _vreplace(g: Expr, rules: Rule | ListOf[Rule]) -> Expr:
+    gr = _g(g, "VertexReplace")
+    rs = list(rules.args) if is_list(rules) else [rules]
+    if not all(_is_rule(r) for r in rs):
+        raise TypeError("VertexReplace: expected rules v -> w")
+    m = {}
+    for r in rs:
+        m.setdefault(K.tag(r.args[0]), r.args[1])
+    vs = [m.get(K.tag(v), v) for v in gr.vertices]
+    if len({K.tag(v) for v in vs}) != len(vs):
+        raise ValueError("VertexReplace: the replacement maps two vertices to the same name")
+    es = [Expr(e.head, *(m.get(K.tag(x), x) for x in e.args[:2]), *e.args[2:]) for e in gr.edge_exprs]
+    return WG(vs, es, _data_opts(gr), "VertexReplace").expr()
+
+
+def _contract(gr, groups, fname):
+    """Contract each group (list of vertex indices; the first index names the merged vertex)."""
+    if gr.weights is not None or gr.capacities is not None:
+        raise NotImplementedError(f"{fname}: weighted graphs are not supported")
+    rep = list(range(gr.n))
+    for grp in groups:
+        for i in grp:
+            rep[i] = grp[0]
+    keep = [i for i in range(gr.n) if rep[i] == i]
+    es, seen = [], set()
+    for i, j, d in gr.edges:
+        a, b = rep[i], rep[j]
+        if a == b and i != j:
+            continue
+        key = (a, b, d) if d else (min(a, b), max(a, b), d)
+        if key in seen:
+            raise NotImplementedError(f"{fname}: the contraction creates multiple edges, whose merging convention "
+                                      "is not reproduced")
+        seen.add(key)
+        es.append(gr.edge(a, b, d))
+    if gr.loops() and gr.multi():
+        raise NotImplementedError(f"{fname}: multigraphs are not supported")
+    return WG([gr.vertices[i] for i in keep], es, {}, fname).expr()
+
+
+@fn("VertexContract", area=AREA, status="added",
+    notes="VertexContract[g, {v1, v2, ...}] merges the vertices into v1 (kept at v1's place in VertexList; edges "
+          "between them are removed, the others are redirected to v1); VertexContract[g, {{...}, ...}] several "
+          "disjoint groups. Contractions that would create multiple edges, weighted graphs and overlapping groups "
+          "raise NotImplementedError/ValueError. Check: exact (tests: VertexContract[CycleGraph[n], {1, 2}] is a "
+          "cycle on n - 1 vertices, edge counts).")
+def _vcontract(g: Expr, spec: ListOf[Expr]) -> Expr:
+    gr = _g(g, "VertexContract")
+    gr.require_pure("VertexContract")
+    if not is_list(spec):
+        raise TypeError("VertexContract: the vertices must be given as a list")
+    raw = [list(s.args) for s in spec.args] if spec.args and all(is_list(s) for s in spec.args) else [list(spec.args)]
+    groups, used = [], set()
+    for grp in raw:
+        idx = [gr.vidx(v, "VertexContract") for v in grp]
+        if used & set(idx) or len(set(idx)) != len(idx):
+            raise ValueError("VertexContract: the vertex groups must be disjoint")
+        used |= set(idx)
+        if idx:
+            groups.append(idx)
+    return _contract(gr, groups, "VertexContract")
+
+
+@fn("EdgeContract", area=AREA, status="added",
+    notes="EdgeContract[g, e] / [g, {e1, ...}] contracts the edges: the endpoints of each connected set of contracted "
+          "edges merge into the vertex that comes first in VertexList (edges among them removed); contractions that "
+          "would create multiple edges and weighted graphs raise NotImplementedError; edges not in g raise "
+          "ValueError. Check: exact (tests: EdgeContract[CycleGraph[n], 1 <-> 2] is C_(n-1); contracting a spanning "
+          "tree leaves one vertex).")
+def _econtract(g: Expr, e: Expr) -> Expr:
+    gr = _g(g, "EdgeContract")
+    gr.require_pure("EdgeContract")
+    elist = list(e.args) if is_list(e) and not _is_edge(e) else [e]
+    ks = _edge_indices(gr, elist, "EdgeContract")
+    if ks is None:
+        raise ValueError(f"EdgeContract: {e} is not an edge (list) of the graph")
+    parent = list(range(gr.n))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    for k in ks:
+        i, j, _ = gr.edges[k]
+        a, b = find(i), find(j)
+        if a != b:
+            parent[max(a, b)] = min(a, b)
+    groups = {}
+    for i in range(gr.n):
+        groups.setdefault(find(i), []).append(i)
+    return _contract(gr, [sorted(v) for v in groups.values() if len(v) > 1], "EdgeContract")
+
+
+def _reach(gr, srcs, lo, hi, reverse):
+    adj = gr.in_adj() if reverse else gr.out_adj()
+    dist = {s: 0 for s in srcs}
+    order = list(dict.fromkeys(srcs))
+    q = deque(order)
+    while q:
+        u = q.popleft()
+        if hi is not None and dist[u] >= hi:
+            continue
+        for w, _, _ in adj[u]:
+            if w not in dist:
+                dist[w] = dist[u] + 1
+                order.append(w)
+                q.append(w)
+    return [i for i in order if dist[i] >= lo]
+
+
+def _kspec(k, fname):
+    if k is None or (isinstance(k, Symbol) and k.name == "Infinity"):
+        return 0, None
+    if is_list(k) and len(k.args) == 1:
+        v = _int(k.args[0], fname, 0, "the distance")
+        return v, v
+    return 0, _int(k, fname, 0, "the distance")
+
+
+def _component(g, vs, k, fname, reverse):
+    gr = _g(g, fname)
+    gr.require_pure(fname)
+    srcs = [gr.vidx(v, fname) for v in _vlist_arg(vs)]
+    lo, hi = _kspec(k, fname)
+    return gr, _reach(gr, srcs, lo, hi, reverse)
+
+
+@fn("VertexComponent", area=AREA, status="added",
+    notes="VertexComponent[g, {v1, ...}] the vertices with a path to at least one vi (for undirected graphs, the "
+          "union of their components); [g, vs, k] paths of length at most k; [g, vs, {k}] exactly k (shortest "
+          "distance); the given vertices first, then breadth-first order. Check: exact (tests: equals "
+          "VertexInComponent for directed graphs and ConnectedComponents for undirected ones).")
+def _vcomp(g: Expr, vs: Expr, k: Expr = None) -> ListOf[Expr]:
+    gr, idx = _component(g, vs, k, "VertexComponent", True)
+    return _verts(gr, idx)
+
+
+def _component_graph(name, reverse, what):
+    @fn(name, area=AREA, status="added",
+        notes=f"{name}[g, {{v1, ...}}] the subgraph induced by the vertices with a directed path {what} at least one "
+              f"vi; [g, vs, k] within distance k (vertices in VertexList order, as Subgraph). Check: exact (tests: "
+              f"VertexList equals Sort-compatible {'VertexInComponent' if reverse else 'VertexOutComponent'}).")
+    def impl(g: Expr, vs: Expr, k: Expr = None) -> Expr:
+        gr, idx = _component(g, vs, k, name, reverse)
+        return _subgraph(g, _verts(gr, idx))
+    return impl
+
+
+_component_graph("VertexInComponentGraph", True, "to")
+_component_graph("VertexOutComponentGraph", False, "from")
+
+
+@fn("WeaklyConnectedGraphComponents", area=AREA, status="added",
+    notes="WeaklyConnectedGraphComponents[g]: one induced Subgraph per weakly connected component, largest first; "
+          "[g, {v...}] only the components containing some vi. Pattern forms raise NotImplementedError. "
+          "Check: exact (tests: vertex lists equal WeaklyConnectedComponents).")
+def _wcgc(g: Expr, vs: Expr = None) -> ListOf[Expr]:
+    gr = _g(g, "WeaklyConnectedGraphComponents")
+    comps = _weak_components(gr)
+    comps.sort(key=lambda c: (-len(c), c[0]))
+    if vs is not None:
+        if not is_list(vs):
+            raise NotImplementedError("WeaklyConnectedGraphComponents: pattern forms are not supported")
+        want = {gr.vidx(v, "WeaklyConnectedGraphComponents") for v in vs.args}
+        comps = [c for c in comps if want & set(c)]
+    return L(*(_subgraph(g, _verts(gr, c)) for c in comps))
+
+
+@fn("HighlightGraph", area=AREA, status="added",
+    notes="HighlightGraph[g, {a1, ...}] returns g with GraphHighlight -> {a1, ...} (vertices, edges or subgraphs of "
+          "g; items not in g raise ValueError); a single item is wrapped in a list; extra Graph options are added. "
+          "Drawing the highlight is the graphics batch. Symbolic wrappers (Style[...]) raise NotImplementedError. "
+          "Check: exact (tests: AnnotationValue[h, GraphHighlight] and unchanged VertexList/EdgeList).")
+def _highlight(g: Expr, spec: Expr, *opts: Option) -> Expr:
+    gr = _g(g, "HighlightGraph")
+    pos, o = _graph_opts(opts, "HighlightGraph")
+    if pos:
+        raise ValueError("HighlightGraph: expected HighlightGraph[g, {items}]")
+    items = list(spec.args) if is_list(spec) else [spec]
+    for it in items:
+        if isinstance(it, Expr) and it.head == "Graph":
+            sub = _g(it, "HighlightGraph")
+            for v in sub.vertices:
+                gr.vidx(v, "HighlightGraph")
+            if _edge_indices(gr, sub.edge_exprs, "HighlightGraph") is None:
+                raise ValueError("HighlightGraph: a highlighted subgraph has edges that are not in the graph")
+        elif _is_edge(it):
+            if _edge_indices(gr, [it], "HighlightGraph") is None:
+                raise ValueError(f"HighlightGraph: {it} is not an edge of the graph")
+        elif isinstance(it, Expr) and it.head in ("Style", "Labeled", "Annotation"):
+            raise NotImplementedError("HighlightGraph: symbolic highlight wrappers are not supported")
+        else:
+            gr.vidx(it, "HighlightGraph")
+    opts2 = dict(gr.opts)
+    opts2["GraphHighlight"] = L(*items)
+    opts2.update(o)
+    return WG(gr.vertices, gr.edge_exprs, opts2, "HighlightGraph").expr()
+
+
+def _planar_nx(gr, fname):
+    nx = _nx()
+    X = nx.Graph()
+    X.add_nodes_from(range(gr.n))
+    X.add_edges_from((i, j) for i, j, _ in gr.edges if i != j)
+    ok, emb = nx.check_planarity(X)
+    return ok, emb
+
+
+@fn("PlanarGraph", area=AREA, status="added",
+    notes="PlanarGraph[{e...}], PlanarGraph[{v...}, {e...}] or PlanarGraph[g] give the Graph after checking that it "
+          "is planar (NetworkX's left-right test); non-planar input raises ValueError. The planar drawing itself is "
+          "the graphics batch. Check: delegated (networkx.check_planarity; tests: K4 and the cube accepted, K5 and "
+          "K3,3 rejected).")
+def _planarg(*args: Expr) -> Expr:
+    pos, o = _graph_opts(args, "PlanarGraph")
+    if len(pos) == 1:
+        gr = _g(pos[0], "PlanarGraph")
+    elif len(pos) == 2:
+        gr = _g(Expr("Graph", *pos), "PlanarGraph")
+    else:
+        raise ValueError("PlanarGraph: expected PlanarGraph[{e...}] or PlanarGraph[{v...}, {e...}]")
+    ok, _ = _planar_nx(gr, "PlanarGraph")
+    if not ok:
+        raise ValueError("PlanarGraph: the graph is not planar")
+    opts2 = dict(gr.opts)
+    opts2.update(o)
+    return WG(gr.vertices, gr.edge_exprs, opts2, "PlanarGraph").expr()
+
+
+def _point(x, fname):
+    if is_list(x):
+        return [float(S(_real(c, fname, "a coordinate"))) for c in x.args]
+    return [float(S(_real(x, fname, "an element")))]
+
+
+@fn("NearestNeighborGraph", area=AREA, status="added",
+    notes="NearestNeighborGraph[{e1, ...}] / [{e...}, k]: undirected graph on the elements (numbers or equal-length "
+          "numeric vectors, Euclidean distance) with ei <-> ej whenever ej is among the k (default 1) nearest "
+          "elements of ei or vice versa, edges in list order; [{e...}, {k, r}] keeps only neighbours within distance "
+          "r. Ties at the k-th distance and repeated elements raise NotImplementedError/ValueError (Wolfram's tie "
+          "rule is not reproduced); other element types raise NotImplementedError. Check: reference (tests compare "
+          "with brute-force distance tables).")
+def _nngraph(elems: ListOf[Expr], k: PosInteger | ListOf[Expr] = 1, *opts: Option) -> Expr:
+    if _is_rule(k):
+        opts, k = (k,) + opts, 1
+    pos, o = _graph_opts(opts, "NearestNeighborGraph")
+    if pos:
+        raise ValueError("NearestNeighborGraph: expected NearestNeighborGraph[elems, k]")
+    if not is_list(elems):
+        if isinstance(elems, Symbol):
+            raise Unevaluated()
+        raise TypeError("NearestNeighborGraph: the elements must be a list")
+    r = None
+    if is_list(k):
+        if len(k.args) != 2:
+            raise ValueError("NearestNeighborGraph: expected {k, r}")
+        k, r = k.args
+        r = float(_real(r, "NearestNeighborGraph", "the radius", lo=0))
+        if isinstance(k, Symbol) and k.name == "All":
+            k = None
+    if k is not None:
+        k = _int(k, "NearestNeighborGraph", 1, "k")
+    vl = list(elems.args)
+    for e in vl:
+        if isinstance(e, str) or not (is_numeric_value(e) or (is_list(e) and all(is_numeric_value(c) for c in e.args))):
+            raise NotImplementedError("NearestNeighborGraph: only numbers and numeric vectors are supported")
+    pts = [_point(e, "NearestNeighborGraph") for e in vl]
+    if len({len(p) for p in pts}) > 1:
+        raise ValueError("NearestNeighborGraph: the vectors must have the same length")
+    if len({tuple(p) for p in pts}) != len(pts):
+        raise ValueError("NearestNeighborGraph: repeated elements are not supported")
+    n = len(pts)
+    es = set()
+    for i in range(n):
+        ds = sorted((math.dist(pts[i], pts[j]), j) for j in range(n) if j != i)
+        if r is not None:
+            ds = [x for x in ds if x[0] <= r + 1e-12]
+        sel = ds if k is None else ds[:k]
+        if k is not None and len(ds) > k and abs(ds[k][0] - ds[k - 1][0]) <= 1e-12 * max(1.0, ds[k][0]):
+            raise NotImplementedError("NearestNeighborGraph: ties among the nearest neighbours are not supported")
+        for _, j in sel:
+            es.add((min(i, j), max(i, j)))
+    return _finish(vl, [UE(vl[a], vl[b]) for a, b in sorted(es)], o, "NearestNeighborGraph")
+
+
+def _reach_sets(gr):
+    adj = [[j for j, _, _ in a] for a in gr.out_adj()]
+    out = []
+    for s in range(gr.n):
+        seen, st = set(), list(adj[s])
+        while st:
+            u = st.pop()
+            if u not in seen:
+                seen.add(u)
+                st += adj[u]
+        out.append(seen)
+    return out
+
+
+@fn("TransitiveClosureGraph", area=AREA, status="added",
+    notes="TransitiveClosureGraph[g]: for a directed acyclic graph, u -> v for every v reachable from u (edges in "
+          "VertexList order); for an undirected graph, each connected component becomes a complete graph. Directed "
+          "graphs with cycles (whose closure would need self-loops) and mixed graphs raise NotImplementedError. "
+          "Check: exact (tests: closure of a path is the transitive tournament; idempotence).")
+def _tclosure(g: Expr) -> Expr:
+    gr = _g(g, "TransitiveClosureGraph")
+    gr.require_pure("TransitiveClosureGraph")
+    if not gr.directed:
+        es = []
+        for c in _weak_components(gr):
+            es += [(a, b) for a, b in itertools.combinations(sorted(c), 2)]
+        return _new(gr.vertices, [UE(gr.vertices[a], gr.vertices[b]) for a, b in sorted(es)])
+    if len(_topo(gr)) != gr.n:
+        raise NotImplementedError("TransitiveClosureGraph: directed graphs with cycles are not supported")
+    rs = _reach_sets(gr)
+    return _new(gr.vertices, [gr.edge(i, j, True) for i in range(gr.n) for j in sorted(rs[i])])
+
+
+@fn("TransitiveReductionGraph", area=AREA, status="added",
+    notes="TransitiveReductionGraph[g] for a directed acyclic graph: the unique minimal subgraph with the same "
+          "reachability (an edge u -> v is kept unless v is reachable from another successor of u; parallel edges "
+          "merged), edges in input order. Cyclic and undirected graphs (where the reduction is not unique) raise "
+          "NotImplementedError. Check: self-check (TransitiveClosureGraph of the result and of g are compared; "
+          "ArithmeticError on mismatch).")
+def _treduction(g: Expr) -> Expr:
+    gr = _g(g, "TransitiveReductionGraph")
+    gr.require_pure("TransitiveReductionGraph")
+    if gr.edges and not gr.directed:
+        raise NotImplementedError("TransitiveReductionGraph: undirected graphs are not supported")
+    if len(_topo(gr)) != gr.n:
+        raise NotImplementedError("TransitiveReductionGraph: directed graphs with cycles are not supported")
+    rs = _reach_sets(gr)
+    succ = [set() for _ in range(gr.n)]
+    for i, j, _ in gr.edges:
+        succ[i].add(j)
+    keep, seen = [], set()
+    for k, (i, j, _) in enumerate(gr.edges):
+        if (i, j) in seen:
+            continue
+        seen.add((i, j))
+        if not any(j in rs[w] for w in succ[i] if w != j):
+            keep.append(gr.edge_exprs[k])
+    out = _new(gr.vertices, keep)
+    if gr.edges and _tclosure(out) != _tclosure(_new(gr.vertices, gr.edge_exprs)):
+        raise ArithmeticError("TransitiveReductionGraph: result failed verification")
+    return out
+
+
+@fn("CayleyGraph", area=AREA, status="added",
+    notes="CayleyGraph[group] for PermutationGroup, SymmetricGroup, CyclicGroup, AlternatingGroup and "
+          "DihedralGroup (n >= 3): directed graph on 1..|G| (positions in GroupElements[group]) with an edge "
+          "i -> j when g_j = PermutationProduct[g_i, s] for a generator s (generators as GroupGenerators/the "
+          "standard ones, identities skipped; edges by element, then generator). Wolfram's generator styling is not "
+          "reproduced; groups above 5000 elements raise ValueError. Check: exact (tests: |G| vertices, out-degree = "
+          "number of generators, strongly connected, CayleyGraph[CyclicGroup[n]] = directed n-cycle).")
+def _cayley(group: Expr) -> Expr:
+    from . import wl_combinat as C
+    if not C._is_group(group):
+        if isinstance(group, Symbol) or isinstance(group, Expr):
+            raise Unevaluated()
+        raise TypeError("CayleyGraph: expected a group")
+    gens, deg = C._group_gens(group, "CayleyGraph")
+    elems = C._group_elements(group, "CayleyGraph")
+    if len(elems) > 5000:
+        raise ValueError("CayleyGraph: the group has more than 5000 elements")
+    pos = {e.key(): i + 1 for i, e in enumerate(elems)}
+    gl, seen = [], set()
+    for s in gens:
+        if s.m and s.key() not in seen:
+            seen.add(s.key())
+            gl.append(s)
+    es = [_de((pos[e.key()], pos[e.then(s).key()])) for e in elems for s in gl]
+    return _new(list(range(1, len(elems) + 1)), es)
