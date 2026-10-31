@@ -4721,3 +4721,591 @@ def _residuesum(fc, z, *rest):
         return out(sp.simplify(tot))
     f = SX(fc, fname)
     return out(_residue_sum_all(f, zv, fname))
+
+
+# ───────────────────────────── line, surface and contour integrals ─────────────────────────────
+
+_T = sp.Dummy("t", real=True)
+_U = sp.Dummy("u", real=True)
+_V = sp.Dummy("v", real=True)
+
+
+def _ptv(p, fname, n=None):
+    if not is_list(p) or not p.args or any(is_list(a) for a in p.args):
+        raise ValueError(f"{fname}: {p!r} is not a point")
+    v = [SX(a, fname) for a in p.args]
+    if n is not None and len(v) != n:
+        raise ValueError(f"{fname}: the point {p!r} does not have dimension {n}")
+    return v
+
+
+def _pts(p, fname, n=None):
+    if not is_list(p) or len(p.args) < 1 or not all(is_list(a) for a in p.args):
+        raise ValueError(f"{fname}: {p!r} is not a list of points")
+    return [_ptv(a, fname, n) for a in p.args]
+
+
+def _seg(p, q):
+    """Oriented segment p -> q, t in [0, 1]."""
+    return ([pi + _T * (qi - pi) for pi, qi in zip(p, q)], _T, 0, 1)
+
+
+def _int_spec(spec, fname):
+    """Element[{x, y, ...}, reg] -> ([sympy vars], reg)."""
+    if not _head(spec, "Element") or len(spec.args) != 2:
+        raise ValueError(f"{fname}: the second argument must be {{x, y, ...}} \u2208 region (Element[...])")
+    vs = spec.args[0]
+    if not is_list(vs):
+        raise NotImplementedError(f"{fname}: implicit vector variables are not supported; give {{x, y, ...}}")
+    xs = [_svar(v, fname) for v in vs.args]
+    if len(set(xs)) != len(xs):
+        raise ValueError(f"{fname}: the variables must be distinct")
+    reg = spec.args[1]
+    if _head(reg, "Inactive") or (isinstance(reg, Expr) and _head(reg.head, "Inactive")):
+        raise NotImplementedError(f"{fname}: inactive regions are not supported")
+    return xs, reg
+
+
+def _circle_parts(reg, fname, dim=2):
+    """(center, rx, ry, theta0, theta1) for Circle / Disk / 2-D Sphere."""
+    a = list(reg.args)
+    c = _ptv(a[0], fname, dim) if a else [sp.Integer(0)] * dim
+    if len(c) != 2:
+        raise NotImplementedError(f"{fname}: {reg.head} must be two-dimensional here")
+    r = a[1] if len(a) > 1 else 1
+    if is_list(r):
+        rx, ry = SX(r.args[0], fname), SX(r.args[1], fname)
+    else:
+        rx = ry = SX(r, fname)
+    th = (sp.Integer(0), 2 * sp.pi)
+    if len(a) > 2:
+        if not is_list(a[2]) or len(a[2].args) != 2:
+            raise ValueError(f"{fname}: the angle range must be {{theta1, theta2}}")
+        th = (SX(a[2].args[0], fname), SX(a[2].args[1], fname))
+    if len(a) > 3:
+        raise ValueError(f"{fname}: invalid {reg.head} specification")
+    return c, rx, ry, th
+
+
+def _ellipse_piece(c, rx, ry, th):
+    return ([c[0] + rx * sp.cos(_T), c[1] + ry * sp.sin(_T)], _T, th[0], th[1])
+
+
+def _polygon_vertices(reg, fname):
+    h = reg.head
+    a = list(reg.args)
+    if h == "Triangle":
+        pts = _pts(a[0], fname, 2) if a else [[0, 0], [1, 0], [0, 1]]
+        if len(pts) != 3:
+            raise ValueError(f"{fname}: Triangle needs three points")
+    elif h == "Rectangle":
+        p = _ptv(a[0], fname, 2) if a else [sp.Integer(0), sp.Integer(0)]
+        q = _ptv(a[1], fname, 2) if len(a) > 1 else [p[0] + 1, p[1] + 1]
+        pts = [[p[0], p[1]], [q[0], p[1]], [q[0], q[1]], [p[0], q[1]]]
+    elif h == "Polygon":
+        if len(a) != 1 or (is_list(a[0]) and a[0].args and is_list(a[0].args[0]) and is_list(a[0].args[0].args[0])):
+            raise NotImplementedError(f"{fname}: polygons with holes or several components are not supported")
+        pts = _pts(a[0], fname, 2)
+    else:
+        return None
+    pts = [[sp.sympify(x) for x in p] for p in pts]
+    area2 = sum(pts[i][0] * pts[(i + 1) % len(pts)][1] - pts[(i + 1) % len(pts)][0] * pts[i][1]
+                for i in range(len(pts)))
+    try:
+        sgn = complex(sp.N(area2)).real
+    except Exception:
+        raise NotImplementedError(f"{fname}: the polygon orientation depends on symbolic parameters")
+    if sgn == 0:
+        raise ValueError(f"{fname}: degenerate polygon")
+    if sgn < 0:
+        pts = pts[::-1]
+    return pts
+
+
+def _boundary_closed(reg, fname):
+    """Counterclockwise boundary pieces of a 2-D solid region plus an inside test (True/False/None on boundary)."""
+    h = reg.head
+    if h in ("Disk", "Circle") or (h == "Sphere" and reg.args and is_list(reg.args[0]) and len(reg.args[0].args) == 2):
+        c, rx, ry, th = _circle_parts(reg, fname)
+        if th != (0, 2 * sp.pi):
+            if h == "Circle":
+                return None
+            raise NotImplementedError(f"{fname}: disk sectors are not supported")
+        if (rx.free_symbols | ry.free_symbols | set().union(*[sp.sympify(v).free_symbols for v in c])):
+            return [_ellipse_piece(c, rx, ry, th)], None
+        cx, cy, a_, b_ = (complex(sp.N(v)).real for v in (c[0], c[1], rx, ry))
+
+        def inside(z):
+            d = ((z.real - cx) / a_) ** 2 + ((z.imag - cy) / b_) ** 2
+            return None if abs(d - 1) < 1e-10 else d < 1
+        return [_ellipse_piece(c, rx, ry, th)], inside
+    pts = _polygon_vertices(reg, fname)
+    if pts is None:
+        return None
+    pieces = [_seg(pts[i], pts[(i + 1) % len(pts)]) for i in range(len(pts))]
+    if any(sp.sympify(v).free_symbols for p in pts for v in p):
+        return pieces, None
+    P = [(complex(sp.N(p[0])).real, complex(sp.N(p[1])).real) for p in pts]
+
+    def inside(z):
+        x, y = z.real, z.imag
+        n = len(P)
+        for i in range(n):
+            (x1, y1), (x2, y2) = P[i], P[(i + 1) % n]
+            dx, dy = x2 - x1, y2 - y1
+            t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)))
+            if math.hypot(x - x1 - t * dx, y - y1 - t * dy) < 1e-10:
+                return None
+        wn = 0
+        for i in range(n):
+            (x1, y1), (x2, y2) = P[i], P[(i + 1) % n]
+            cr = (x2 - x1) * (y - y1) - (x - x1) * (y2 - y1)
+            if y1 <= y < y2 and cr > 0:
+                wn += 1
+            elif y2 <= y < y1 and cr < 0:
+                wn -= 1
+        if wn not in (0, 1):
+            raise NotImplementedError(f"{fname}: self-intersecting polygons are not supported")
+        return wn == 1
+    return pieces, inside
+
+
+def _param_region(reg, fname, nparams):
+    a = list(reg.args)
+    if len(a) != 2 or not is_list(a[0]) or not is_list(a[1]):
+        raise NotImplementedError(f"{fname}: ParametricRegion must be given as ParametricRegion[{{f1, ...}}, "
+                                  "{{u, umin, umax}, ...}]")
+    ranges = a[1].args
+    if len(ranges) != nparams:
+        raise ValueError(f"{fname}: expected a parametric region with {nparams} parameter(s)")
+    dums = [_T] if nparams == 1 else [_U, _V]
+    subs, lims = {}, []
+    for r, d in zip(ranges, dums):
+        if not is_list(r) or len(r.args) != 3 or not isinstance(r.args[0], Symbol):
+            raise NotImplementedError(f"{fname}: parameter ranges must be {{u, umin, umax}}")
+        subs[sp.Symbol(r.args[0].name)] = d
+        lims.append((d, SX(r.args[1], fname).subs(subs), SX(r.args[2], fname).subs(subs)))
+    for d, lo, hi in lims:
+        if (lo.free_symbols | hi.free_symbols) & set(dums):
+            raise NotImplementedError(f"{fname}: parameter ranges must not depend on other parameters")
+    vec = [SX(e, fname).subs(subs, simultaneous=True) for e in a[0].args]
+    return vec, lims
+
+
+def _curve_pieces(reg, n, fname):
+    """Oriented pieces (r(t), t, a, b) of a curve in R^n."""
+    if not isinstance(reg, Expr) or not isinstance(reg.head, str):
+        raise ValueError(f"{fname}: {reg!r} is not a region")
+    h, a = reg.head, list(reg.args)
+    if h == "Line":
+        if not a:
+            raise ValueError(f"{fname}: empty Line")
+        if is_list(a[0]) and a[0].args and is_list(a[0].args[0]) and is_list(a[0].args[0].args[0]):
+            out_ = []
+            for comp in a[0].args:
+                ps = _pts(comp, fname, n)
+                out_ += [_seg(ps[i], ps[i + 1]) for i in range(len(ps) - 1)]
+            return out_
+        ps = _pts(a[0], fname, n)
+        if len(ps) < 2:
+            raise ValueError(f"{fname}: a Line needs at least two points")
+        return [_seg(ps[i], ps[i + 1]) for i in range(len(ps) - 1)]
+    if h in ("HalfLine", "InfiniteLine"):
+        if len(a) == 1:
+            ps = _pts(a[0], fname, n)
+            if len(ps) != 2:
+                raise ValueError(f"{fname}: {h} needs two points")
+            p, v = ps[0], [q - r for q, r in zip(ps[1], ps[0])]
+        elif len(a) == 2:
+            p, v = _ptv(a[0], fname, n), _ptv(a[1], fname, n)
+        else:
+            raise ValueError(f"{fname}: invalid {h}")
+        lo = 0 if h == "HalfLine" else -sp.oo
+        return [([pi + _T * vi for pi, vi in zip(p, v)], _T, lo, sp.oo)]
+    if h == "Circle" or (h == "Sphere" and n == 2):
+        if n != 2:
+            raise ValueError(f"{fname}: a Circle is a curve in two dimensions")
+        c, rx, ry, th = _circle_parts(reg, fname)
+        return [_ellipse_piece(c, rx, ry, th)]
+    if h == "ParametricRegion":
+        vec, lims = _param_region(reg, fname, 1)
+        if len(vec) != n:
+            raise ValueError(f"{fname}: the region has dimension {len(vec)}, not {n}")
+        return [(vec, lims[0][0], lims[0][1], lims[0][2])]
+    raise NotImplementedError(f"{fname}: integration over {h} curves is not supported (use Line, HalfLine, "
+                              "InfiniteLine, Circle or a one-parameter ParametricRegion)")
+
+
+def _cross(a, b):
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+
+
+def _surface_pieces(reg, n, fname):
+    """Oriented pieces (r(u, v), normal(u, v) = r_u x r_v or an outward normal, area_element, [(u,..),(v,..)])."""
+    if not isinstance(reg, Expr) or not isinstance(reg.head, str):
+        raise ValueError(f"{fname}: {reg!r} is not a region")
+    h, a = reg.head, list(reg.args)
+    if n == 2:
+        # hypersurfaces of the plane are curves
+        if h == "ParametricRegion":
+            vec, lims = _param_region(reg, fname, 1)
+            if len(vec) != 2:
+                raise ValueError(f"{fname}: the region has dimension {len(vec)}, not 2")
+            d = [sp.diff(e, _T) for e in vec]
+            return [(vec, [-d[1], d[0]], None, lims)]
+        if h in ("Sphere", "Circle", "Disk", "Rectangle", "Triangle", "Polygon"):
+            bd = _boundary_closed(reg if h != "Circle" else Expr("Disk", *reg.args), fname)
+            if bd is None:
+                raise NotImplementedError(f"{fname}: arcs are not closed boundaries")
+            res = []
+            for vec, t, lo, hi in bd[0]:
+                d = [sp.diff(e, t) for e in vec]
+                res.append((vec, [d[1], -d[0]], None, [(t, lo, hi)]))
+            return res
+        raise NotImplementedError(f"{fname}: {h} is not supported in two dimensions")
+    if n != 3:
+        raise NotImplementedError(f"{fname}: only surfaces in two and three dimensions are supported")
+    if h in ("Sphere", "Ball"):
+        c = _ptv(a[0], fname, 3) if a else [sp.Integer(0)] * 3
+        r = SX(a[1], fname) if len(a) > 1 else sp.Integer(1)
+        if len(a) > 2:
+            raise ValueError(f"{fname}: invalid {h}")
+        vec = [c[0] + r * sp.sin(_U) * sp.cos(_V), c[1] + r * sp.sin(_U) * sp.sin(_V), c[2] + r * sp.cos(_U)]
+        nrm = [r ** 2 * sp.sin(_U) ** 2 * sp.cos(_V), r ** 2 * sp.sin(_U) ** 2 * sp.sin(_V),
+               r ** 2 * sp.sin(_U) * sp.cos(_U)]
+        return [(vec, nrm, r ** 2 * sp.sin(_U), [(_U, 0, sp.pi), (_V, 0, 2 * sp.pi)])]
+    if h in ("Cuboid", "Cube"):
+        if h == "Cuboid":
+            p = _ptv(a[0], fname, 3) if a else [sp.Integer(0)] * 3
+            q = _ptv(a[1], fname, 3) if len(a) > 1 else [x + 1 for x in p]
+        else:
+            if len(a) == 0:
+                cen, l_ = [sp.Integer(0)] * 3, sp.Integer(1)
+            elif len(a) == 1:
+                if is_list(a[0]):
+                    cen, l_ = _ptv(a[0], fname, 3), sp.Integer(1)
+                else:
+                    cen, l_ = [sp.Integer(0)] * 3, SX(a[0], fname)
+            else:
+                cen, l_ = _ptv(a[0], fname, 3), SX(a[1], fname)
+            p = [x - l_ / 2 for x in cen]
+            q = [x + l_ / 2 for x in cen]
+        res = []
+        for k in range(3):
+            i, j = [m for m in range(3) if m != k]
+            for side, sgn in ((q[k], 1), (p[k], -1)):
+                # parameters (s_i, s_j) ordered so that r_u x r_v points along sgn * e_k
+                vec = [None] * 3
+                vec[k] = side
+                first, second = (i, j) if sgn == 1 else (j, i)
+                if (k == 1):
+                    first, second = second, first
+                vec[first], vec[second] = _U, _V
+                nrm = [0, 0, 0]
+                nrm[k] = sgn
+                lims = [(_U, p[first], q[first]), (_V, p[second], q[second])]
+                res.append((vec, nrm, sp.Integer(1), lims))
+        return res
+    if h == "ParametricRegion":
+        vec, lims = _param_region(reg, fname, 2)
+        if len(vec) != 3:
+            raise ValueError(f"{fname}: the region has dimension {len(vec)}, not 3")
+        nrm = _cross([sp.diff(e, _U) for e in vec], [sp.diff(e, _V) for e in vec])
+        return [(vec, nrm, None, lims)]
+    if h == "Triangle":
+        ps = _pts(a[0], fname, 3)
+        if len(ps) != 3:
+            raise ValueError(f"{fname}: Triangle needs three points")
+        p1, p2, p3 = ps
+        vec = [p1[m] + _U * (p2[m] - p1[m]) + _U * _V * (p3[m] - p2[m]) for m in range(3)]
+        cr = _cross([p2[m] - p1[m] for m in range(3)], [p3[m] - p1[m] for m in range(3)])
+        area = sp.sqrt(sum(c_ ** 2 for c_ in cr))
+        return [(vec, None, _U * area, [(_U, 0, 1), (_V, 0, 1)])]
+    raise NotImplementedError(f"{fname}: integration over {h} surfaces is not supported (use Sphere, Ball, Cuboid, "
+                              "Cube, Triangle or a two-parameter ParametricRegion)")
+
+
+def _simp(e):
+    try:
+        e2 = sp.simplify(e)
+    except Exception:
+        return e
+    return e2
+
+
+def _speed(vec, t):
+    d = [sp.diff(e, t) for e in vec]
+    s2 = _simp(sp.trigsimp(sp.expand(sum(x ** 2 for x in d))))
+    return _simp(sp.sqrt(s2))
+
+
+def _integrate_ranges(e, lims, fname):
+    v = e
+    for d, lo, hi in reversed(lims) if len(lims) > 1 else lims:
+        try:
+            v = sp.integrate(v, (d, lo, hi))
+        except Exception:
+            raise NotImplementedError(f"{fname}: the integral could not be evaluated symbolically")
+        if v.has(sp.Integral) or v.has(sp.nan):
+            raise NotImplementedError(f"{fname}: the integral could not be evaluated symbolically")
+    return v
+
+
+def _quad(e, lims, fname, subs=None):
+    """Numerical value of the integral of e over the (rectangular) parameter ranges."""
+    if subs:
+        e = e.subs(subs)
+        lims = [(d, sp.sympify(lo).subs(subs), sp.sympify(hi).subs(subs)) for d, lo, hi in lims]
+    ds = [d for d, _lo, _hi in lims]
+    if e.free_symbols - set(ds):
+        raise ValueError(f"{fname}: the integrand has symbolic parameters {sorted(map(str, e.free_symbols - set(ds)))}")
+    f = sp.lambdify(ds, e, "mpmath")
+    rngs = []
+    for _d, lo, hi in lims:
+        lo, hi = sp.sympify(lo), sp.sympify(hi)
+        if lo.free_symbols or hi.free_symbols:
+            raise ValueError(f"{fname}: the parameter ranges are not numeric")
+        lo_ = -mpmath.inf if lo == -sp.oo else (mpmath.inf if lo == sp.oo else mpmath.mpf(float(sp.N(lo))))
+        hi_ = mpmath.inf if hi == sp.oo else (-mpmath.inf if hi == -sp.oo else mpmath.mpf(float(sp.N(hi))))
+        if mpmath.isinf(lo_) or mpmath.isinf(hi_):
+            rngs.append([lo_, hi_])
+        else:
+            rngs.append(list(mpmath.linspace(lo_, hi_, 5)))
+    with mpmath.workdps(20):
+        v = mpmath.quad(f, *rngs)
+    return complex(v)
+
+
+def _num_total(parts, fname, subs=None):
+    return sum(_quad(e, lims, fname, subs) for e, lims in parts)
+
+
+def _check_parts(val, parts, fname, extra_syms=()):
+    """Compare a symbolic value with independent numerical quadrature (parameters set to sample values)."""
+    params = set()
+    for e, lims in parts:
+        params |= e.free_symbols - {d for d, _a, _b in lims}
+        for _d, lo, hi in lims:
+            params |= sp.sympify(lo).free_symbols | sp.sympify(hi).free_symbols
+    params |= sp.sympify(val).free_symbols
+    subs = {p: sp.Rational(7 + 3 * i, 11 + 2 * i) for i, p in enumerate(sorted(params, key=lambda s_: s_.name))}
+    try:
+        num = _num_total(parts, fname, subs)
+        sv = complex(sp.N(sp.sympify(val).subs(subs), 20))
+    except NotImplementedError:
+        raise
+    except Exception:
+        raise NotImplementedError(f"{fname}: the result could not be verified numerically")
+    if not (math.isfinite(abs(num)) and abs(num - sv) <= 1e-7 * max(1.0, abs(num))):
+        raise NotImplementedError(f"{fname}: the symbolic result could not be verified numerically")
+
+
+def _finish(val, parts, fname):
+    val = _simp(val)
+    _check_parts(val, parts, fname)
+    return out(val)
+
+
+def _line_parts(f, spec, fname):
+    xs, reg = _int_spec(spec, fname)
+    n = len(xs)
+    pieces = _curve_pieces(reg, n, fname)
+    vector = is_list(f)
+    if vector:
+        F = [SX(c, fname) for c in f.args]
+        if len(F) != n:
+            raise ValueError(f"{fname}: the vector field must have {n} components")
+    else:
+        F = SX(f, fname)
+    parts = []
+    for vec, t, lo, hi in pieces:
+        sub = dict(zip(xs, vec))
+        if vector:
+            e = sum(Fi.subs(sub, simultaneous=True) * sp.diff(ri, t) for Fi, ri in zip(F, vec))
+        else:
+            e = F.subs(sub, simultaneous=True) * _speed(vec, t)
+        parts.append((e, [(t, lo, hi)]))
+    return parts
+
+
+def _surface_parts(f, spec, fname):
+    xs, reg = _int_spec(spec, fname)
+    n = len(xs)
+    pieces = _surface_pieces(reg, n, fname)
+    vector = is_list(f)
+    if vector:
+        F = [SX(c, fname) for c in f.args]
+        if len(F) != n:
+            raise ValueError(f"{fname}: the vector field must have {n} components")
+    else:
+        F = SX(f, fname)
+    parts = []
+    for vec, nrm, area, lims in pieces:
+        sub = dict(zip(xs, vec))
+        if vector:
+            if nrm is None:
+                raise NotImplementedError(f"{fname}: this surface has no defined orientation")
+            e = sum(Fi.subs(sub, simultaneous=True) * ni for Fi, ni in zip(F, nrm))
+        else:
+            if area is None:
+                if nrm is not None and n == 3:
+                    area = _simp(sp.sqrt(_simp(sp.trigsimp(sp.expand(sum(c_ ** 2 for c_ in nrm))))))
+                else:
+                    area = _speed(vec, lims[0][0])
+            e = F.subs(sub, simultaneous=True) * area
+        parts.append((e, lims))
+    return parts
+
+
+_INT_OPTS = {"GenerateConditions", "Assumptions"}
+
+
+@fn("LineIntegrate", area=AREA, status="added",
+    notes="LineIntegrate[f, {x, y, ...} \u2208 curve] (scalar, f |r'| dt) and LineIntegrate[{p, q, ...}, {x, y, ...} "
+          "\u2208 curve] (vector, F.r' dt) over Line (points in order), HalfLine, InfiniteLine, Circle (counterclockwise; "
+          "arcs and ellipses) and one-parameter ParametricRegion (increasing parameter); symbolic integration "
+          "checked against numerical quadrature (parameters sampled); unevaluable integrals raise")
+def _lineint(f, spec, *rest):
+    fname = "LineIntegrate"
+    rest, _o = _opts(rest, _INT_OPTS, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    parts = _line_parts(f, spec, fname)
+    val = sp.Add(*[_integrate_ranges(_simp(e), lims, fname) for e, lims in parts])
+    return _finish(val, parts, fname)
+
+
+@fn("NLineIntegrate", area=AREA, status="added",
+    notes="NLineIntegrate[f | {p, q, ...}, {x, ...} \u2208 curve]: numerical scalar or vector line integral over the "
+          "curves supported by LineIntegrate (adaptive Gauss-Legendre/tanh-sinh quadrature)")
+def _nlineint(f, spec, *rest):
+    fname = "NLineIntegrate"
+    rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal"}, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    return _num_result(_num_total(_line_parts(f, spec, fname), fname), fname)
+
+
+@fn("SurfaceIntegrate", area=AREA, status="added",
+    notes="SurfaceIntegrate[f, {x, y, z} \u2208 surface] (scalar, f dS) and SurfaceIntegrate[{p, q, r}, ...] (flux "
+          "F.n dS) over Sphere, Ball (its boundary), Cuboid and Cube (outward normals), Triangle (scalar only) and "
+          "two-parameter ParametricRegion (normal r_u x r_v); in the plane, boundaries of Disk/Circle/Rectangle/"
+          "Triangle/Polygon (outward normal) and parametric curves; results checked by numerical quadrature")
+def _surfint(f, spec, *rest):
+    fname = "SurfaceIntegrate"
+    rest, _o = _opts(rest, _INT_OPTS, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    parts = _surface_parts(f, spec, fname)
+    val = sp.Add(*[_integrate_ranges(_simp(e), lims, fname) for e, lims in parts])
+    return _finish(val, parts, fname)
+
+
+@fn("NSurfaceIntegrate", area=AREA, status="added",
+    notes="NSurfaceIntegrate[f | {p, q, r}, {x, y, z} \u2208 surface]: numerical scalar or flux surface integral over "
+          "the surfaces supported by SurfaceIntegrate")
+def _nsurfint(f, spec, *rest):
+    fname = "NSurfaceIntegrate"
+    rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal"}, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    return _num_result(_num_total(_surface_parts(f, spec, fname), fname), fname)
+
+
+def _num_result(v, fname):
+    if not math.isfinite(abs(v)):
+        raise ValueError(f"{fname}: the integral does not converge")
+    if abs(v.imag) <= 1e-13 * max(1.0, abs(v)):
+        return float(v.real)
+    return R(complex(v.real, v.imag))
+
+
+# contour integrals
+
+def _contour_spec(spec, fname):
+    if not _head(spec, "Element") or len(spec.args) != 2:
+        raise ValueError(f"{fname}: the second argument must be z \u2208 contour (Element[z, contour])")
+    return _svar(spec.args[0], fname), spec.args[1]
+
+
+def _contour_pieces(reg, fname):
+    """(pieces as complex z(t), closed?, inside-test or None)."""
+    if not isinstance(reg, Expr) or not isinstance(reg.head, str):
+        raise ValueError(f"{fname}: {reg!r} is not a contour")
+    h = reg.head
+    closed = None
+    if h in ("Disk", "Rectangle", "Triangle", "Polygon") or (h == "Circle" and (len(reg.args) < 3)):
+        bd = _boundary_closed(reg if h != "Circle" else Expr("Disk", *reg.args), fname)
+        pieces, inside = bd
+        closed = True
+    else:
+        pieces = _curve_pieces(reg, 2, fname)
+        inside = None
+    zp = [(vec[0] + sp.I * vec[1], t, lo, hi) for vec, t, lo, hi in pieces]
+    return zp, closed, inside
+
+
+def _contour_parts(f, zp, z):
+    return [(f.subs(z, zt) * sp.diff(zt, t), [(t, lo, hi)]) for zt, t, lo, hi in zp]
+
+
+@fn("ContourIntegrate", area=AREA, status="added",
+    notes="ContourIntegrate[f, z \u2208 cont]: complex contour integral; closed contours (Circle, Disk, Rectangle, "
+          "Triangle, Polygon boundaries, counterclockwise) of meromorphic f by the residue theorem (poles found "
+          "exactly); open contours (Line, HalfLine, InfiniteLine, arcs, ParametricRegion[{x[t], y[t]}, ...]) by an "
+          "antiderivative or direct parametrised integration; every result is checked against numerical "
+          "quadrature (parameters sampled); poles on the contour and symbolic pole locations raise")
+def _contourint(f, spec, *rest):
+    fname = "ContourIntegrate"
+    rest, o = _opts(rest, _INT_OPTS, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    z, reg = _contour_spec(spec, fname)
+    F = SX(f, fname)
+    zp, closed, inside = _contour_pieces(reg, fname)
+    parts = _contour_parts(F, zp, z)
+    kind = _mero_kind(F, z)
+    val = None
+    if closed and kind == "entire":
+        val = sp.Integer(0)
+    elif closed and kind == "mero" and inside is not None:
+        bound = max(abs(complex(sp.N(zt.subs(t, lo + (hi - lo) * k / 16)))) for zt, t, lo, hi in zp
+                    for k in range(17)) + 1e-6
+        if reg.head in ("Disk", "Circle"):
+            c, rx, ry, _th = _circle_parts(reg, fname)
+            bound = abs(complex(sp.N(c[0] + sp.I * c[1]))) + max(abs(complex(sp.N(rx))), abs(complex(sp.N(ry))))
+        poles = _poles_in(F, z, inside, bound + 1e-6, fname)
+        val = 2 * sp.pi * sp.I * sp.Add(*[_residue(F, z, p, fname) for p in poles])
+    else:
+        Fz = None
+        if kind == "entire" or (kind == "mero" and not closed):
+            try:
+                Fz = sp.integrate(F, z)
+                if Fz.has(sp.Integral):
+                    Fz = None
+            except Exception:
+                Fz = None
+        if Fz is not None and all(sp.sympify(lo).is_finite and sp.sympify(hi).is_finite for _zt, _t, lo, hi in zp):
+            cand = sp.Add(*[Fz.subs(z, zt.subs(t, hi)) - Fz.subs(z, zt.subs(t, lo)) for zt, t, lo, hi in zp])
+            try:
+                _check_parts(_simp(cand), parts, fname)
+                val = cand
+            except NotImplementedError:
+                val = None
+        if val is None:
+            val = sp.Add(*[_integrate_ranges(_simp(e), lims, fname) for e, lims in parts])
+    return _finish(val, parts, fname)
+
+
+@fn("NContourIntegrate", area=AREA, status="added",
+    notes="NContourIntegrate[f, z \u2208 cont]: numerical contour integral along the contours supported by "
+          "ContourIntegrate (Line, HalfLine, InfiniteLine, Circle, arcs, Disk/Rectangle/Triangle/Polygon "
+          "boundaries counterclockwise, ParametricRegion)")
+def _ncontourint(f, spec, *rest):
+    fname = "NContourIntegrate"
+    rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal", "MaxRecursion"}, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    z, reg = _contour_spec(spec, fname)
+    zp, _c, _i = _contour_pieces(reg, fname)
+    return _num_result(_num_total(_contour_parts(SX(f, fname), zp, z), fname), fname)
