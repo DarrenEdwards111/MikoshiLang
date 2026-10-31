@@ -4043,3 +4043,260 @@ def _dare(ab, qr):
     if res != sp.zeros(n, n):
         raise Unevaluated
     return mat_out(X)
+
+
+# ───────────────────────────── eigenproblems and Green's functions ─────────────────────────────
+
+def _interval_spec(rng, fname):
+    if is_list(rng) and len(rng.args) == 3:
+        return _svar(rng.args[0], fname), SX(rng.args[1], fname), SX(rng.args[2], fname)
+    if _head(rng, "Element") and len(rng.args) == 2 and _head(rng.args[1], "Interval"):
+        iv = rng.args[1].args[0]
+        if is_list(iv) and len(iv.args) == 2:
+            v = rng.args[0]
+            if is_list(v) and len(v.args) == 1:
+                v = v.args[0]
+            return _svar(v, fname), SX(iv.args[0], fname), SX(iv.args[1], fname)
+    raise NotImplementedError(f"{fname}: only one-dimensional intervals {{x, a, b}} are supported")
+
+
+def _split_neumann(e, fname):
+    """Drop NeumannValue[0, ...] terms; nonzero Neumann values raise."""
+    if _head(e, "Plus"):
+        keep = []
+        for a in e.args:
+            if _head(a, "NeumannValue"):
+                if not (len(a.args) == 2 and a.args[0] == 0):
+                    raise NotImplementedError(f"{fname}: only homogeneous NeumannValue[0, ...] is supported")
+                continue
+            keep.append(a)
+        return _ev(Expr("Plus", *keep)) if keep else 0
+    if _head(e, "NeumannValue"):
+        raise ValueError(f"{fname}: the operator is missing")
+    return e
+
+
+def _lin_coeffs(Lop, uname, xv, fname, max_order=None):
+    """L[u] = sum c_i(x) u^(i)(x): coefficients [c_0, c_1, ...] (raises for non-linear or inhomogeneous)."""
+    uf = sp.Function(uname)(xv)
+    e = sp.expand(SX(Lop, fname))
+    order = max([d.derivative_count for d in e.atoms(sp.Derivative) if d.expr == uf] or [0])
+    Ys = [sp.Symbol(f"__U{i}") for i in range(order + 1)]
+    for i in range(order, 0, -1):
+        e = e.subs(sp.Derivative(uf, (xv, i)), Ys[i])
+    e = e.subs(uf, Ys[0])
+    if e.has(sp.Function(uname)):
+        raise NotImplementedError(f"{fname}: the operator must be linear in {uname}")
+    try:
+        P = sp.Poly(e, *Ys)
+    except sp.PolynomialError:
+        raise NotImplementedError(f"{fname}: the operator must be linear in {uname}")
+    if P.total_degree() > 1 or any(sum(m) == 0 for m in P.monoms()):
+        raise NotImplementedError(f"{fname}: the operator must be linear and homogeneous in {uname}")
+    cs = [P.coeff_monomial(Ys[i]) for i in range(order + 1)]
+    if cs[-1] == 0 or order == 0:
+        raise NotImplementedError(f"{fname}: a differential operator is required")
+    return cs
+
+
+def _bc_list(items, uname, xv, a, b, fname):
+    """Boundary conditions -> list of (point, {derivative order: coefficient}) homogeneous linear conditions."""
+    out_ = []
+    uf = sp.Function(uname)
+    for c in items:
+        if _head(c, "DirichletCondition"):
+            if len(c.args) != 2 or not _head(c.args[0], "Equal"):
+                raise ValueError(f"{fname}: DirichletCondition[u == value, predicate] expected")
+            if SX(c.args[0].args[1], fname) != 0:
+                raise NotImplementedError(f"{fname}: only homogeneous boundary conditions are supported")
+            pred = c.args[1]
+            pts = []
+            if pred is True:
+                pts = [a, b]
+            else:
+                preds = list(pred.args) if _head(pred, "Or") else [pred]
+                for pr in preds:
+                    if not (_head(pr, "Equal") and len(pr.args) == 2):
+                        raise NotImplementedError(f"{fname}: Dirichlet predicates must be x == a or True")
+                    pts.append(SX(pr.args[1], fname))
+            for p in pts:
+                out_.append((p, {0: sp.Integer(1)}))
+            continue
+        if _head(c, "PeriodicBoundaryCondition"):
+            raise NotImplementedError(f"{fname}: periodic boundary conditions are not supported")
+        v = SX(c, fname)
+        if not isinstance(v, sp.Equality):
+            raise ValueError(f"{fname}: boundary conditions must be equations or DirichletCondition[...]")
+        d = sp.expand(v.lhs - v.rhs)
+        terms = {}
+        pt = None
+        rest = d
+        for t in sp.Add.make_args(d):
+            coef, atom = sp.Integer(1), None
+            subs_ = [f for f in t.atoms(sp.Subs) if isinstance(f.expr, sp.Derivative) and f.expr.expr.func == uf]
+            if subs_:
+                f = subs_[0]
+                atom, k, p = f, f.expr.derivative_count, f.point[0]
+            else:
+                for f in t.atoms(AppliedUndef):
+                    if f.func == uf and not f.args[0].has(xv):
+                        atom, k, p = f, 0, f.args[0]
+            if atom is None:
+                raise NotImplementedError(f"{fname}: only homogeneous boundary conditions are supported")
+            coef = sp.simplify(t / atom)
+            if coef.has(uf):
+                raise NotImplementedError(f"{fname}: boundary conditions must be linear")
+            if pt is not None and p != pt:
+                raise NotImplementedError(f"{fname}: each condition must involve a single boundary point")
+            pt = p
+            terms[k] = terms.get(k, 0) + coef
+        del rest
+        out_.append((pt, terms))
+    return out_
+
+
+def _deig_setup(op, u, rng, fname):
+    x, a, b = _interval_spec(rng, fname)
+    uname = _fname_of(u)
+    items = list(op.args) if is_list(op) else [op]
+    Lop = _split_neumann(items[0], fname)
+    bcs = _bc_list(items[1:], uname, x, a, b, fname)
+    cs = _lin_coeffs(Lop, uname, x, fname)
+    if len(cs) != 3:
+        raise NotImplementedError(f"{fname}: only second-order operators are supported")
+    if any(c.has(x) or not c.is_number for c in cs):
+        raise NotImplementedError(f"{fname}: only constant numeric coefficients are supported")
+    if not (a.is_number and b.is_number and (b - a).is_positive):
+        raise NotImplementedError(f"{fname}: the interval must be finite and numeric")
+    kinds = {}
+    for p, terms in bcs:
+        side = "a" if sp.simplify(p - a) == 0 else ("b" if sp.simplify(p - b) == 0 else None)
+        if side is None:
+            raise ValueError(f"{fname}: boundary conditions must be at the interval ends")
+        if set(terms) == {0}:
+            kd = "D"
+        elif set(terms) == {1}:
+            kd = "N"
+        else:
+            raise NotImplementedError(f"{fname}: only Dirichlet and Neumann conditions are supported")
+        if kinds.get(side, kd) != kd:
+            raise ValueError(f"{fname}: conflicting conditions at one end")
+        kinds[side] = kd
+    ka, kb = kinds.get("a", "N"), kinds.get("b", "N")
+    c0, c1, c2 = cs
+    if c1 != 0 and (ka, kb) != ("D", "D"):
+        raise NotImplementedError(f"{fname}: first-derivative terms are supported only with Dirichlet conditions")
+    return x, a, b, c0, c1, c2, ka, kb
+
+
+def _deig(op, u, rng, n, fname, vectors):
+    n = _num_opt(n, fname, "the number of eigenvalues")
+    x, a, b, c0, c1, c2, ka, kb = _deig_setup(op, u, rng, fname)
+    ell = b - a
+    beta = c0 - c1 ** 2 / (4 * c2)
+    alpha = -c2
+    half = (ka != kb)
+    j0 = 1 if (ka, kb) == ("D", "D") else 0
+    extra = int(math.ceil(math.sqrt(2 * abs(float(beta)) / abs(float(alpha))) / (math.pi / float(ell)))) + 3
+    modes = []
+    for j in range(j0, j0 + n + extra):
+        k = (j + sp.Rational(1, 2)) * sp.pi / ell if half else j * sp.pi / ell
+        lam = sp.simplify(alpha * k ** 2 + beta)
+        if ka == "D":
+            f = sp.sin(k * (x - a))
+        else:
+            f = sp.cos(k * (x - a))
+        if c1 != 0:
+            f = sp.exp(-c1 * x / (2 * c2)) * f
+        modes.append((lam, sp.simplify(f)))
+    modes.sort(key=lambda m: (abs(float(m[0])), float(m[0])))
+    modes = modes[:n]
+    vals = [m[0] for m in modes]
+    if vectors:
+        return L(out(vals), out([m[1] for m in modes]))
+    return out(vals)
+
+
+@fn("DEigenvalues", area=AREA, status="added",
+    notes="DEigenvalues[{L[u[x]], bcs}, u[x], {x, a, b}, n]: the n smallest-magnitude eigenvalues of L u == lambda u "
+          "for constant-coefficient second-order operators on an interval with Dirichlet (DirichletCondition or "
+          "u[a] == 0) or Neumann (u'[a] == 0, NeumannValue[0, ...], the default) ends, in closed form; other "
+          "regions, variable coefficients and Robin/periodic conditions raise")
+def _deigenvalues(op, u, rng, n):
+    return _deig(op, u, rng, n, "DEigenvalues", False)
+
+
+@fn("DEigensystem", area=AREA, status="added",
+    notes="DEigensystem[{L[u[x]], bcs}, u[x], {x, a, b}, n]: {eigenvalues, eigenfunctions} (unnormalised, e.g. "
+          "Sin[k x]) for the same class of problems as DEigenvalues")
+def _deigensystem(op, u, rng, n):
+    return _deig(op, u, rng, n, "DEigensystem", True)
+
+
+@fn("GreenFunction", area=AREA, status="added",
+    notes="GreenFunction[{L[u[x]], bcs}, u[x] | u, {x, a, b}, y]: the Green's function of a linear ODE of any order "
+          "with homogeneous two-point or initial conditions (homogeneous solutions by DSolve; continuity of the "
+          "first n-2 derivatives and the jump 1/c_n(y) of the (n-1)th), as HeavisideTheta pieces; u gives "
+          "Function[{x, y}, ...]; PDEs and problems without a unique Green's function raise")
+def _green(op, u, rng, y, *rest):
+    fname = "GreenFunction"
+    if rest:
+        raise NotImplementedError(f"{fname}: time-dependent and PDE forms are not supported")
+    x, a, b = _interval_spec(rng, fname)
+    yv = _svar(y, fname)
+    uname = _fname_of(u)
+    items = list(op.args) if is_list(op) else [op]
+    cs = _lin_coeffs(items[0], uname, x, fname)
+    bcs = _bc_list(items[1:], uname, x, a, b, fname)
+    n = len(cs) - 1
+    if len(bcs) != n:
+        raise NotImplementedError(f"{fname}: {n} homogeneous boundary/initial conditions are required")
+    uf = sp.Function("__u")
+    ode = sp.Add(*[c * sp.diff(uf(x), x, i) for i, c in enumerate(cs)])
+    try:
+        sol = sp.dsolve(ode, uf(x))
+    except Exception:
+        raise NotImplementedError(f"{fname}: the homogeneous equation could not be solved")
+    if isinstance(sol, list) or not isinstance(sol, sp.Equality):
+        raise NotImplementedError(f"{fname}: the homogeneous equation could not be solved")
+    gen = sp.expand(sol.rhs)
+    Cs = sorted([s_ for s_ in gen.free_symbols if s_.name.startswith("C") and s_.name[1:].isdigit()],
+                key=lambda s_: int(s_.name[1:]))
+    if len(Cs) != n:
+        raise NotImplementedError(f"{fname}: the homogeneous equation could not be solved")
+    basis = [sp.simplify(gen.coeff(c)) for c in Cs]
+    if any(sp.simplify(sp.Add(*[c * sp.diff(f, x, i) for i, c in enumerate(cs)])) != 0 for f in basis):
+        raise NotImplementedError(f"{fname}: the homogeneous solutions could not be verified")
+    P = sp.symbols(f"__p0:{n}")
+    Q = sp.symbols(f"__q0:{n}")
+    right = sp.Add(*[p * f for p, f in zip(P, basis)])     # x > y
+    left = sp.Add(*[q * f for q, f in zip(Q, basis)])      # x < y
+    eqs = []
+    for k in range(n - 1):
+        eqs.append(sp.diff(right - left, x, k).subs(x, yv))
+    eqs.append(sp.diff(right - left, x, n - 1).subs(x, yv) - 1 / cs[-1].subs(x, yv))
+    for p, terms in bcs:
+        if sp.simplify(p - a) == 0:
+            piece = left if not (_is_inf(b) and all(sp.simplify(q - a) == 0 for q, _t in bcs)) else left
+        elif sp.simplify(p - b) == 0:
+            piece = right
+        else:
+            raise ValueError(f"{fname}: conditions must be at the ends of the interval")
+        if _is_inf(p):
+            raise NotImplementedError(f"{fname}: conditions at infinity are not supported")
+        eqs.append(sp.Add(*[c * sp.diff(piece, x, k).subs(x, p) for k, c in terms.items()]))
+    sol = sp.solve(eqs, list(P) + list(Q), dict=True)
+    if len(sol) != 1 or any(v not in sol[0] for v in list(P) + list(Q)):
+        raise NotImplementedError(f"{fname}: there is no unique Green's function (the homogeneous problem has a "
+                                  "non-trivial solution)")
+    R_ = sp.simplify(sp.expand(right.subs(sol[0])))
+    Lf = sp.simplify(sp.expand(left.subs(sol[0])))
+    parts = []
+    if R_ != 0:
+        parts.append(Expr("Times", out(R_), Expr("HeavisideTheta", out(x - yv))))
+    if Lf != 0:
+        parts.append(Expr("Times", out(Lf), Expr("HeavisideTheta", out(yv - x))))
+    G = _ev(Expr("Plus", *parts)) if parts else 0
+    if isinstance(u, Symbol):
+        return Expr("Function", L(Symbol(x.name), Symbol(yv.name)), G)
+    return G
