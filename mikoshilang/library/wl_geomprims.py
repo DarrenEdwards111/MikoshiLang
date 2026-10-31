@@ -3396,3 +3396,633 @@ def _polygon_decomposition(poly: Expr, *typ: String) -> Expr:
     if abs(num(s - total)) > 1e-9 * max(1.0, abs(num(total))):
         raise ArithmeticError(f"{f}: result failed verification")
     return Expr("Polygon", out(pieces, poly))
+
+
+# ───────────────────────────── polyhedra ─────────────────────────────
+
+_POLYHEDRON_HEADS = ("Polyhedron", "Tetrahedron", "Cube", "Octahedron", "Dodecahedron", "Icosahedron", "Hexahedron",
+                     "Prism", "Pyramid", "Cuboid", "Parallelepiped", "Simplex", "UniformPolyhedron")
+_PLATONIC = ("Tetrahedron", "Cube", "Octahedron", "Dodecahedron", "Icosahedron")
+_HEX_FACES = [[4, 3, 2, 1], [1, 2, 6, 5], [2, 3, 7, 6], [3, 4, 8, 7], [4, 1, 5, 8], [5, 6, 7, 8]]
+_PRISM_FACES = [[1, 3, 6, 4], [2, 1, 4, 5], [6, 3, 2, 5], [1, 2, 3], [4, 6, 5]]
+_PYRAMID_FACES = [[4, 3, 2, 1], [1, 2, 5], [2, 3, 5], [3, 4, 5], [4, 1, 5]]
+_TET_FACES = [[1, 3, 2], [1, 2, 4], [2, 3, 4], [1, 4, 3]]
+
+
+def _platonic_vertices(h):
+    """Unit-edge vertices centred at the origin (one fixed orientation; Cube is Wolfram's axis-aligned one)."""
+    one = sp.Integer(1)
+    if h == "Cube":
+        return [[sx_ * one / 2, sy * one / 2, sz * one / 2] for sx_ in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
+    if h == "Tetrahedron":
+        s = 1 / (2 * sp.sqrt(2))
+        return [[s, s, s], [s, -s, -s], [-s, s, -s], [-s, -s, s]]
+    if h == "Octahedron":
+        a = 1 / sp.sqrt(2)
+        return [[a, 0, 0], [-a, 0, 0], [0, a, 0], [0, -a, 0], [0, 0, a], [0, 0, -a]]
+    phi = (1 + sp.sqrt(5)) / 2
+    if h == "Icosahedron":
+        V = []
+        for s1 in (-1, 1):
+            for s2 in (-1, 1):
+                V += [[0, s1 * one / 2, s2 * phi / 2], [s1 * one / 2, s2 * phi / 2, 0], [s2 * phi / 2, 0, s1 * one / 2]]
+        return V
+    # Dodecahedron, edge 2/phi for the standard coordinates -> scale phi/2
+    k = phi / 2
+    V = [[s1 * k, s2 * k, s3 * k] for s1 in (-1, 1) for s2 in (-1, 1) for s3 in (-1, 1)]
+    for s1 in (-1, 1):
+        for s2 in (-1, 1):
+            V += [[0, s1 * k / phi, s2 * k * phi], [s1 * k / phi, s2 * k * phi, 0], [s2 * k * phi, 0, s1 * k / phi]]
+    return V
+
+
+def _hull_faces(V):
+    """Faces (cyclically ordered, outward) of the convex hull of exact points V (all points are hull vertices)."""
+    import numpy as np
+    from scipy.spatial import ConvexHull
+    Vn = np.array([[num(c) for c in p] for p in V])
+    hull = ConvexHull(Vn)
+    groups = {}
+    for simplex, eq in zip(hull.simplices, hull.equations):
+        key = tuple(np.round(eq, 9))
+        groups.setdefault(key, set()).update(int(i) for i in simplex)
+    faces = []
+    for key, idx in groups.items():
+        n_ = np.array(key[:3])
+        idx = list(idx)
+        cen = Vn[idx].mean(axis=0)
+        u = Vn[idx[0]] - cen
+        u /= np.linalg.norm(u)
+        w = np.cross(n_, u)
+        idx.sort(key=lambda i: math.atan2(float((Vn[i] - cen) @ w), float((Vn[i] - cen) @ u)))
+        faces.append(idx)
+    return faces
+
+
+def _solid_params(a, f):
+    """Centre, edge length and whether a rotation is given, for Cube[...] and the other regular solids."""
+    rest = list(a)
+    c, rot, l_ = [sp.Integer(0)] * 3, False, sp.Integer(1)
+    if rest and K.is_list(rest[0]) and len(rest[0].args) == 3:
+        c = pt(rest[0], f, "centre")
+        rest = rest[1:]
+    if rest and K.is_list(rest[0]):
+        rot = True
+        rest = rest[1:]
+    if rest:
+        l_ = sx(rest[0], f, "edge length")
+    return c, l_, rot
+
+
+def polyhedron_data(x, f, need_orientation=False):
+    """(V, F): vertex coordinates (SymPy) and 0-based faces of a polyhedron-like region.  need_orientation: the
+    caller returns coordinates, so solids whose default orientation is not Wolfram's raise NotImplementedError."""
+    if not isinstance(x, Expr) or not isinstance(x.head, str) or x.head not in _POLYHEDRON_HEADS:
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{f}: expected a polyhedron (Polyhedron, Tetrahedron, Cube, Cuboid, ...), not {K_input(x)}")
+    _check_args(x.head, list(x.args))
+    h = x.head
+    a, _opts = split_trailing_options(list(x.args))
+    if h == "UniformPolyhedron":
+        raise NotImplementedError(f"{f}: UniformPolyhedron coordinates are not available")
+    if h == "Tetrahedron" and len(a) == 1 and _is_coord_list(a[0]):
+        if _is_coord_list(a[0].args[0]):
+            raise NotImplementedError(f"{f}: collections of tetrahedra are not supported")
+        V = pts(a[0], f, n=4, dim=3)
+        return V, [[i - 1 for i in fc] for fc in _TET_FACES]
+    if h in _PLATONIC:
+        c, l_, rot = _solid_params(a, f)
+        if need_orientation and (rot or h != "Cube"):
+            raise NotImplementedError(f"{f}: the coordinates of {h}[...] in Wolfram's default orientation are not "
+                                      "available; give the polyhedron explicitly")
+        V0 = _platonic_vertices(h)
+        V = [[c[i] + l_ * p[i] for i in range(3)] for p in V0]
+        return V, _hull_faces(V)
+    if h in ("Hexahedron", "Prism", "Pyramid"):
+        n, F = {"Hexahedron": (8, _HEX_FACES), "Prism": (6, _PRISM_FACES), "Pyramid": (5, _PYRAMID_FACES)}[h]
+        if _is_coord_list(a[0].args[0]) if a and K.is_list(a[0]) and a[0].args else False:
+            raise NotImplementedError(f"{f}: collections of {h} objects are not supported")
+        V = pts(a[0], f, n=n, dim=3)
+        return V, [[i - 1 for i in fc] for fc in F]
+    if h in ("Cuboid", "Parallelepiped"):
+        if h == "Cuboid":
+            p = pt(a[0], f, "corner", dim=3) if a else [sp.Integer(0)] * 3
+            q = pt(a[1], f, "corner", dim=3) if len(a) > 1 else [c + 1 for c in p]
+            vecs = [[q[0] - p[0], 0, 0], [0, q[1] - p[1], 0], [0, 0, q[2] - p[2]]]
+        else:
+            p = pt(a[0], f, "origin", dim=3)
+            vecs = pts(a[1], f, "vectors", n=3, dim=3)
+        V = [_add(_add(_add(p, _mul(i, vecs[0])), _mul(j, vecs[1])), _mul(k, vecs[2]))
+             for k in (0, 1) for j in (0, 1) for i in (0, 1)]
+        # order matches the Hexahedron convention: bottom 1-4 counterclockwise, top 5-8
+        V = [V[0], V[1], V[3], V[2], V[4], V[5], V[7], V[6]]
+        return V, [[i - 1 for i in fc] for fc in _HEX_FACES]
+    if h == "Simplex":
+        if not a or not K.is_list(a[0]):
+            n = int(a[0]) if a and K.is_int(a[0]) else 0
+            if n != 3:
+                raise NotImplementedError(f"{f}: only 3-dimensional simplices are polyhedra")
+            V = [[sp.Integer(0)] * 3] + [[sp.Integer(int(i == j)) for j in range(3)] for i in range(3)]
+        else:
+            V = pts(a[0], f, n=4, dim=3)
+        return V, [[i - 1 for i in fc] for fc in _TET_FACES]
+    # Polyhedron
+    if len(a) == 2:
+        V = pts(a[0], f, dim=3)
+        return V, _index_faces(a[1], len(V), f)
+    x0 = a[0]
+    if isinstance(x0, Expr) and x0.head == "Rule":
+        faces = list(x0.args[0].args)
+        vs = x0.args[1]
+        for v in (vs.args if vs.args and K.is_list(vs.args[0]) and vs.args[0].args and
+                  _is_coord_list(vs.args[0].args[0]) else [vs]):
+            faces += list(v.args)
+    else:
+        if x0.args and K.is_list(x0.args[0]) and x0.args[0].args and _is_coord_list(x0.args[0].args[0]):
+            faces = [fc for part in x0.args for fc in part.args]
+        else:
+            faces = list(x0.args)
+    V, F = [], []
+    for fc in faces:
+        P = pts(fc, f, "face", dim=3, lo=3)
+        idx = []
+        for p in P:
+            for k, q in enumerate(V):
+                if _same(p, q):
+                    idx.append(k)
+                    break
+            else:
+                V.append(p)
+                idx.append(len(V) - 1)
+        F.append(idx)
+    return V, F
+
+
+def _index_faces(d, n, f):
+    out_ = []
+
+    def walk(x):
+        if isinstance(x, Expr) and x.head == "Rule":
+            for y in x.args:
+                walk(y)
+            return
+        if K.is_list(x) and x.args and all(K.is_int(i) and not isinstance(i, bool) for i in x.args):
+            fc = [int(i) - 1 for i in x.args]
+            if any(not 0 <= i < n for i in fc):
+                raise ValueError(f"{f}: face index out of range 1..{n}")
+            if len(fc) < 3:
+                raise ValueError(f"{f}: a face needs at least three vertices")
+            out_.append(fc)
+            return
+        if K.is_list(x):
+            for y in x.args:
+                walk(y)
+            return
+        raise TypeError(f"{f}: faces must be lists of integer vertex indices")
+    walk(d)
+    return out_
+
+
+def _edges(F):
+    E = {}
+    for fi, fc in enumerate(F):
+        for k in range(len(fc)):
+            e = (fc[k], fc[(k + 1) % len(fc)])
+            E.setdefault(frozenset(e), []).append((fi, e))
+    return E
+
+
+def _closed_manifold(F, f):
+    E = _edges(F)
+    for e, uses in E.items():
+        if len(e) != 2 or len(uses) != 2:
+            raise ValueError(f"{f}: the polyhedron surface is not closed (every edge must be shared by exactly two "
+                             "faces)")
+    return E
+
+
+def _components(F):
+    E = _edges(F)
+    adj = {i: set() for i in range(len(F))}
+    for uses in E.values():
+        for a_, _ in uses:
+            for b_, _ in uses:
+                if a_ != b_:
+                    adj[a_].add(b_)
+    seen, comps = set(), []
+    for i in range(len(F)):
+        if i in seen:
+            continue
+        stack, comp = [i], []
+        seen.add(i)
+        while stack:
+            j = stack.pop()
+            comp.append(j)
+            for k in adj[j]:
+                if k not in seen:
+                    seen.add(k)
+                    stack.append(k)
+        comps.append(sorted(comp))
+    return comps
+
+
+def _orient(V, F, f):
+    """Consistently orient the faces of each closed component outward (positive signed volume)."""
+    F = [list(fc) for fc in F]
+    E = _closed_manifold(F, f)
+    for comp in _components(F):
+        flipped = {comp[0]: False}
+        stack = [comp[0]]
+        while stack:
+            i = stack.pop()
+            fc = F[i][::-1] if flipped[i] else F[i]
+            for k in range(len(fc)):
+                a_, b_ = fc[k], fc[(k + 1) % len(fc)]
+                for j, (u, v) in E[frozenset((a_, b_))]:
+                    if j == i:
+                        continue
+                    # neighbour must traverse the edge as (b, a)
+                    same_dir = (u, v) == (a_, b_)
+                    want = same_dir          # flip if it runs the same way
+                    if j in flipped:
+                        if flipped[j] != want:
+                            raise ValueError(f"{f}: the polyhedron surface is not orientable")
+                    else:
+                        flipped[j] = want
+                        stack.append(j)
+        for i in comp:
+            if flipped[i]:
+                F[i] = F[i][::-1]
+        vol = _signed_volume(V, [F[i] for i in comp])
+        if fsign(vol) < 0:
+            for i in comp:
+                F[i] = F[i][::-1]
+        elif fsign(vol) == 0:
+            raise ValueError(f"{f}: the polyhedron is degenerate (zero volume)")
+    return F
+
+
+def _signed_volume(V, F):
+    tot = sp.Integer(0)
+    for fc in F:
+        a_ = V[fc[0]]
+        for k in range(1, len(fc) - 1):
+            b_, c_ = V[fc[k]], V[fc[k + 1]]
+            tot += _dot(a_, _cross(b_, c_))
+    return tot / 6
+
+
+def _poly_arg(poly, f, need_orientation=False):
+    V, F = polyhedron_data(poly, f, need_orientation)
+    concrete(V)
+    return V, F
+
+
+@fn("PolyhedronCoordinates", area=AREA, status="added",
+    notes="PolyhedronCoordinates[poly] gives the distinct vertex coordinates of a Polyhedron (all forms), "
+          "Tetrahedron[{p1, ..., p4}], Hexahedron, Prism, Pyramid, Cuboid, Parallelepiped, Simplex or Cube[...] "
+          "(axis-aligned), in Sort order as in Wolfram's canonical form. Regular solids other than Cube (and rotated "
+          "Cubes) raise NotImplementedError because Wolfram's default orientation is not available; "
+          "self-intersecting polyhedra (where Wolfram adds intersection points) are not detected. Symbolic "
+          "coordinates stay unevaluated; non-polyhedra raise TypeError. Check: exact; reference values in tests.")
+def _polyhedron_coordinates(poly: Expr) -> MatrixOf[Real]:
+    f = "PolyhedronCoordinates"
+    V, F = _poly_arg(poly, f, need_orientation=True)
+    used = sorted({i for fc in F for i in fc})
+    return out(_sorted_unique([V[i] for i in used]), poly)
+
+
+@fn("PolyhedronGenus", area=AREA, status="added",
+    notes="PolyhedronGenus[poly]: the genus of the closed boundary surface, (2 - (V - E + F))/2 per connected "
+          "component, summed over components (voids included). The surface must be closed (every edge in exactly "
+          "two faces), else ValueError; works for every polyhedron head of PolyhedronCoordinates and the regular "
+          "solids. Symbolic coordinates stay unevaluated. Check: exact (Euler characteristic); reference values "
+          "(cube 0, polyhedral torus 1) in tests.")
+def _polyhedron_genus(poly: Expr) -> NonNegInteger:
+    f = "PolyhedronGenus"
+    V, F = _poly_arg(poly, f)
+    _closed_manifold(F, f)
+    g = 0
+    for comp in _components(F):
+        Fc = [F[i] for i in comp]
+        verts = {i for fc in Fc for i in fc}
+        edges = {frozenset((fc[k], fc[(k + 1) % len(fc)])) for fc in Fc for k in range(len(fc))}
+        chi = len(verts) - len(edges) + len(Fc)
+        if chi % 2 or chi > 2:
+            raise ValueError(f"{f}: the polyhedron surface is not a closed orientable surface")
+        g += (2 - chi) // 2
+    return g
+
+
+def _face_normal(V, fc):
+    n_ = [sp.Integer(0)] * 3
+    for k in range(len(fc)):
+        n_ = _add(n_, _cross(V[fc[k]], V[fc[(k + 1) % len(fc)]]))
+    return n_
+
+
+def _convex_polyhedron(V, F, f):
+    F = _orient(V, F, f)
+    if len(_components(F)) != 1:
+        return False
+    used = sorted({i for fc in F for i in fc})
+    for fc in F:
+        n_ = _face_normal(V, fc)
+        if _is_zero_vec(n_):
+            return False
+        for i in fc:
+            if fsign(_dot(n_, _sub(V[i], V[fc[0]]))) != 0:
+                return False                         # non-planar face
+        for i in used:
+            if fsign(_dot(n_, _sub(V[i], V[fc[0]]))) > 0:
+                return False
+    return True
+
+
+@fn("ConvexPolyhedronQ", area=AREA, status="added",
+    notes="ConvexPolyhedronQ[poly]: True when the polyhedron has one closed, orientable boundary component, planar "
+          "faces, and every vertex lies on the inner side of every face plane (after outward orientation); False "
+          "otherwise (voids, several components, dents). Regular solids, Cuboid, Hexahedron, Prism, Pyramid, "
+          "Tetrahedron, Simplex and Parallelepiped are accepted. An open surface or a zero-volume polyhedron raises "
+          "ValueError; symbolic coordinates stay unevaluated. Check: exact (exact orientation signs).")
+def _convex_polyhedron_q(poly: Expr) -> Boolean:
+    f = "ConvexPolyhedronQ"
+    V, F = _poly_arg(poly, f)
+    return _convex_polyhedron(V, F, f)
+
+
+def _tri_seg_intersect(T, a, b):
+    """Does the closed segment ab meet the triangle T (3-D, exact signs)?"""
+    p, q, r = T
+    n_ = _cross(_sub(q, p), _sub(r, p))
+    da, db = fsign(_dot(n_, _sub(a, p))), fsign(_dot(n_, _sub(b, p)))
+    if da * db > 0:
+        return False
+    if da == 0 and db == 0:
+        return False                                 # coplanar: handled by the edge tests of the other face
+    s1 = fsign(_dot(_cross(_sub(q, p), _sub(a, p)), _sub(b, p)))
+    s2 = fsign(_dot(_cross(_sub(r, q), _sub(a, q)), _sub(b, q)))
+    s3 = fsign(_dot(_cross(_sub(p, r), _sub(a, r)), _sub(b, r)))
+    return (s1 >= 0 and s2 >= 0 and s3 >= 0) or (s1 <= 0 and s2 <= 0 and s3 <= 0)
+
+
+@fn("SimplePolyhedronQ", area=AREA, status="added",
+    notes="SimplePolyhedronQ[poly]: True when the boundary is one closed orientable surface of genus 0 (no voids, "
+          "no handles) whose faces are planar simple polygons and no two faces without a common vertex intersect "
+          "(fan-triangulated faces tested with exact segment-triangle predicates). Faces that share a vertex are "
+          "assumed to meet only along shared vertices/edges. Open surfaces give False; symbolic coordinates stay "
+          "unevaluated. Check: exact (exact orientation signs).")
+def _simple_polyhedron_q(poly: Expr) -> Boolean:
+    f = "SimplePolyhedronQ"
+    V, F = _poly_arg(poly, f)
+    try:
+        F = _orient(V, F, f)
+    except ValueError:
+        return False
+    if len(_components(F)) != 1:
+        return False
+    verts = {i for fc in F for i in fc}
+    edges = {frozenset((fc[k], fc[(k + 1) % len(fc)])) for fc in F for k in range(len(fc))}
+    if len(verts) - len(edges) + len(F) != 2:
+        return False
+    for fc in F:
+        n_ = _face_normal(V, fc)
+        if _is_zero_vec(n_) or any(fsign(_dot(n_, _sub(V[i], V[fc[0]]))) != 0 for i in fc):
+            return False
+        try:
+            if not _simple_ring(_to_plane([V[i] for i in fc], f)):
+                return False
+        except ValueError:
+            return False
+    tris = [[(fc[0], fc[k], fc[k + 1]) for k in range(1, len(fc) - 1)] for fc in F]
+    for i in range(len(F)):
+        for j in range(i + 1, len(F)):
+            if set(F[i]) & set(F[j]):
+                continue
+            for k in range(len(F[j])):
+                a_, b_ = V[F[j][k]], V[F[j][(k + 1) % len(F[j])]]
+                for t in tris[i]:
+                    if _tri_seg_intersect([V[t[0]], V[t[1]], V[t[2]]], a_, b_):
+                        return False
+            for k in range(len(F[i])):
+                a_, b_ = V[F[i][k]], V[F[i][(k + 1) % len(F[i])]]
+                for t in tris[j]:
+                    if _tri_seg_intersect([V[t[0]], V[t[1]], V[t[2]]], a_, b_):
+                        return False
+    return True
+
+
+def _find_vertex(V, p, f):
+    for k, q in enumerate(V):
+        if len(q) == len(p) and _same(q, p):
+            return k
+    raise ValueError(f"{f}: {K_input(out(p))} is not a vertex of the polyhedron")
+
+
+@fn("PolyhedronAngle", area=AREA, status="added",
+    notes="PolyhedronAngle[poly, p] gives the solid angle at the vertex p (the cone of the incident faces, by the "
+          "Van Oosterom-Strackee formula over a fan of the vertex's edge directions) for convex vertices; "
+          "PolyhedronAngle[poly, {p, q}] gives the interior dihedral angle at the edge pq (Pi - angle between the "
+          "outward normals, or Pi + it at a reflex edge). Non-vertices, non-edges or open surfaces raise "
+          "ValueError, reflex vertices NotImplementedError; symbolic coordinates stay unevaluated. "
+          "Check: exact; reference values (cube: Pi/2 solid angle and Pi/2 dihedral angle; tetrahedron: "
+          "ArcCos[23/27] and ArcCos[1/3]) in tests.")
+def _polyhedron_angle(poly: Expr, spec: ListOf[Real] | MatrixOf[Real] | Expr) -> Real:
+    f = "PolyhedronAngle"
+    V, F = _poly_arg(poly, f)
+    F = _orient(V, F, f)
+    if isinstance(spec, Expr) and spec.head == "Line" and len(spec.args) == 1:
+        spec = spec.args[0]
+    if _is_coord_list(spec):
+        p, q = pts(spec, f, "edge", n=2, dim=3)
+        concrete(p, q)
+        i, j = _find_vertex(V, p, f), _find_vertex(V, q, f)
+        inc = [fc for fc in F if any({fc[k], fc[(k + 1) % len(fc)]} == {i, j} for k in range(len(fc)))]
+        if len(inc) != 2:
+            raise ValueError(f"{f}: {K_input(spec)} is not an edge of the polyhedron")
+        n1, n2 = _face_normal(V, inc[0]), _face_normal(V, inc[1])
+        c = sp.simplify(_dot(n1, n2) / (_norm(n1) * _norm(n2)))
+        inner = sp.acos(-c)                          # Pi - (angle between the outward normals)
+        other = next(k for k in inc[1] if k not in (i, j))
+        reflex = fsign(_dot(n1, _sub(V[other], V[i]))) > 0
+        return out(nice_angle(2 * sp.pi - inner if reflex else inner), poly, spec)
+    p = pt(spec, f, "vertex", dim=3)
+    concrete(p)
+    i = _find_vertex(V, p, f)
+    inc = [fc for fc in F if i in fc]
+    if not inc:
+        raise ValueError(f"{f}: {K_input(spec)} is not a vertex of the polyhedron")
+    for fc in inc:
+        n_ = _face_normal(V, fc)
+        for fc2 in inc:
+            for k in fc2:
+                if fsign(_dot(n_, _sub(V[k], V[i]))) > 0:
+                    raise NotImplementedError(f"{f}: solid angles at non-convex vertices are not supported")
+    # neighbours in cyclic order: follow the incident faces around the vertex
+    nxt = {}
+    for fc in inc:
+        k = fc.index(i)
+        nxt[fc[(k + 1) % len(fc)]] = fc[k - 1]
+    start = next(iter(nxt))
+    ring = [start]
+    while True:
+        w = nxt[ring[-1]]
+        if w == start:
+            break
+        ring.append(w)
+        if len(ring) > len(nxt):
+            raise ValueError(f"{f}: the faces around the vertex do not form a closed fan")
+    dirs = [_sub(V[w], V[i]) for w in ring]
+    tot = sp.Integer(0)
+    for k in range(1, len(dirs) - 1):
+        tot += _solid_triangle(dirs[0], dirs[k], dirs[k + 1])
+    return out(nice_angle(sp.simplify(sp.Abs(tot))), poly, spec)
+
+
+def _poly_out(V, F, inputs):
+    return Expr("Polyhedron", out(V, *inputs), L(*[L(*[i + 1 for i in fc]) for fc in F]))
+
+
+def _face_centroid(V, fc):
+    """Area centroid of a planar polygon face."""
+    p0 = V[fc[0]]
+    A, C = sp.Integer(0), [sp.Integer(0)] * 3
+    n_ = _face_normal(V, fc)
+    nn = _norm(n_)
+    for k in range(1, len(fc) - 1):
+        a_, b_ = V[fc[k]], V[fc[k + 1]]
+        w = _dot(_cross(_sub(a_, p0), _sub(b_, p0)), n_) / nn / 2
+        cen = _mul(sp.Rational(1, 3), _add(_add(p0, a_), b_))
+        A += w
+        C = _add(C, _mul(w, cen))
+    return [sp.simplify(c / A) for c in C]
+
+
+@fn("DualPolyhedron", area=AREA, status="added",
+    notes="DualPolyhedron[poly] for a convex polyhedron gives Polyhedron[{c1, ...}, faces]: one vertex per face at "
+          "the face centroid (the choice the Wolfram documentation describes) and one face per original vertex "
+          "joining the centroids of its incident faces in cyclic order. Non-convex polyhedra raise "
+          "NotImplementedError, as do regular solids other than the axis-aligned Cube (their orientation in Wolfram "
+          "is not available). Deviation: Wolfram may rescale the dual; this gives the face-centroid dual. Symbolic "
+          "coordinates stay unevaluated. Check: exact; tests verify the face/vertex counts swap and the dual of the "
+          "cube is an octahedron.")
+def _dual_polyhedron(poly: Expr, *opts: Option) -> Expr:
+    f = "DualPolyhedron"
+    V, F = _poly_arg(poly, f, need_orientation=True)
+    if not _convex_polyhedron(V, F, f):
+        raise NotImplementedError(f"{f}: only convex polyhedra are supported")
+    F = _orient(V, F, f)
+    C = [_face_centroid(V, fc) for fc in F]
+    newF = []
+    for i in sorted({i for fc in F for i in fc}):
+        inc = {fi: fc for fi, fc in enumerate(F) if i in fc}
+        nxt = {}
+        for fi, fc in inc.items():
+            k = fc.index(i)
+            nxt[fc[(k + 1) % len(fc)]] = (fc[k - 1], fi)
+        # walk faces around the vertex
+        start = next(iter(nxt))
+        order, w = [], start
+        while True:
+            w2, fi = nxt[w]
+            order.append(fi)
+            w = w2
+            if w == start:
+                break
+        newF.append(order)
+    return _poly_out(C, newF, (poly,))
+
+
+@fn("TruncatedPolyhedron", area=AREA, status="added",
+    notes="TruncatedPolyhedron[poly, l] cuts every vertex v of a convex polyhedron at the points v + l (w - v) on its "
+          "edges vw (0 < l <= 1/2; l = 1/2 is the rectified/ambo polyhedron) and adds a face in place of each vertex. "
+          "TruncatedPolyhedron[poly] (Wolfram's default ratio is undocumented) raises NotImplementedError, as do "
+          "non-convex polyhedra and regular solids other than the axis-aligned Cube; l outside (0, 1/2] raises "
+          "ValueError; symbolic l or coordinates stay unevaluated. "
+          "Check: self-check (Euler characteristic V - E + F == 2 of the result; ArithmeticError).")
+def _truncated_polyhedron(poly: Expr, *rest: Real | Option) -> Expr:
+    f = "TruncatedPolyhedron"
+    args, _opts = split_trailing_options(list(rest))
+    if not args:
+        raise NotImplementedError(f"{f}: the default truncation ratio is not supported; give "
+                                  "TruncatedPolyhedron[poly, l]")
+    if len(args) > 1:
+        raise ValueError(f"{f}: expected TruncatedPolyhedron[poly, l]")
+    l_ = sx(args[0], f, "ratio")
+    concrete(l_)
+    if not (0 < num(l_) <= 0.5):
+        raise ValueError(f"{f}: the ratio l must satisfy 0 < l <= 1/2")
+    V, F = _poly_arg(poly, f, need_orientation=True)
+    if not _convex_polyhedron(V, F, f):
+        raise NotImplementedError(f"{f}: only convex polyhedra are supported")
+    F = _orient(V, F, f)
+    half = fsign(l_ - sp.Rational(1, 2)) == 0
+    newV, key = [], {}
+
+    def P(v, w):
+        k = (min(v, w), max(v, w)) if half else (v, w)
+        if k not in key:
+            src, dst = (v, w) if not half else k
+            key[k] = len(newV)
+            newV.append([sp.simplify(c) for c in _add(V[src], _mul(l_, _sub(V[dst], V[src])))])
+        return key[k]
+
+    newF = []
+    for fc in F:
+        face = []
+        for k in range(len(fc)):
+            v, w = fc[k], fc[(k + 1) % len(fc)]
+            face += [P(v, w)] if half else [P(v, w), P(w, v)]
+        newF.append(face)
+    for i in sorted({i for fc in F for i in fc}):
+        nxt = {}
+        for fc in F:
+            if i in fc:
+                k = fc.index(i)
+                nxt[fc[(k + 1) % len(fc)]] = fc[k - 1]
+        start = next(iter(nxt))
+        ring, w = [], start
+        while True:
+            ring.append(P(i, w))
+            w = nxt[w]
+            if w == start:
+                break
+        newF.append(ring)
+    E = {frozenset((fc[k], fc[(k + 1) % len(fc)])) for fc in newF for k in range(len(fc))}
+    if len(newV) - len(E) + len(newF) != 2:
+        raise ArithmeticError(f"{f}: result failed verification")
+    return _poly_out(newV, newF, (poly, args[0]))
+
+
+@fn("AugmentedPolyhedron", area=AREA, status="added",
+    notes="AugmentedPolyhedron[poly, h] replaces every face of a polyhedron by a pyramid whose apex lies at height h "
+          "along the outward unit normal above the face centroid (h may be negative). AugmentedPolyhedron[poly] "
+          "(Wolfram's default height is undocumented) raises NotImplementedError, as do regular solids other than "
+          "the axis-aligned Cube; open surfaces raise ValueError; symbolic h or coordinates stay unevaluated. "
+          "Check: self-check (each apex is at distance |h| from its face plane; ArithmeticError).")
+def _augmented_polyhedron(poly: Expr, *rest: Real | Option) -> Expr:
+    f = "AugmentedPolyhedron"
+    args, _opts = split_trailing_options(list(rest))
+    if not args:
+        raise NotImplementedError(f"{f}: the default pyramid height is not supported; give "
+                                  "AugmentedPolyhedron[poly, h]")
+    if len(args) > 1:
+        raise ValueError(f"{f}: expected AugmentedPolyhedron[poly, h]")
+    h_ = sx(args[0], f, "height")
+    concrete(h_)
+    V, F = _poly_arg(poly, f, need_orientation=True)
+    F = _orient(V, F, f)
+    newV = [list(v) for v in V]
+    newF = []
+    for fc in F:
+        n_ = _face_normal(V, fc)
+        u = _mul(1 / _norm(n_), n_)
+        apex = [sp.simplify(c) for c in _add(_face_centroid(V, fc), _mul(h_, u))]
+        if abs(num(_dot(u, _sub(apex, V[fc[0]]))) - num(h_)) > 1e-9:
+            raise ArithmeticError(f"{f}: result failed verification")
+        newV.append(apex)
+        a = len(newV) - 1
+        for k in range(len(fc)):
+            newF.append([fc[k], fc[(k + 1) % len(fc)], a])
+    return _poly_out(newV, newF, (poly, args[0]))
