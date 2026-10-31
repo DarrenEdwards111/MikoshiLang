@@ -1235,3 +1235,567 @@ def _frenet(c, t):
         N = B.cross(T).applyfunc(sp.simplify)
         return L(L(S_(k), S_(tau)), L(L(*(S_(e) for e in T)), L(*(S_(e) for e in N)), L(*(S_(e) for e in B))))
     raise NotImplementedError("FrenetSerretSystem: only plane and space curves are supported")
+
+
+# ───────────────────────────── asymptotic engine ─────────────────────────────
+
+class _AsymFail(Exception):
+    pass
+
+
+def _point(v, fname):
+    p = SX(v, fname)
+    if p == sp.zoo:
+        raise NotImplementedError(f"{fname}: expansions at ComplexInfinity are not supported")
+    if p.free_symbols:
+        raise NotImplementedError(f"{fname}: the expansion point must be numeric or Infinity")
+    return p
+
+
+def _parse_point_spec(spec, opts, fname):
+    """x -> x0 (leading term unless SeriesTermGoal) or {x, x0, n} -> (x, x0, order or None)."""
+    goal = opts.get("SeriesTermGoal")
+    if goal is not None and not _is(goal, "Automatic"):
+        goal = _num_opt(goal, fname, "SeriesTermGoal")
+    else:
+        goal = None
+    if is_rule(spec):
+        x = _svar(spec.args[0], fname)
+        return x, _point(spec.args[1], fname), goal
+    if is_list(spec) and len(spec.args) == 3:
+        x = _svar(spec.args[0], fname)
+        n = int_arg(spec.args[2], fname, "order")
+        if n < 0:
+            raise ValueError(f"{fname}: the order must be a non-negative integer")
+        return x, _point(spec.args[1], fname), n
+    raise ValueError(f"{fname}: the expansion point must be x -> x0 or {{x, x0, n}}")
+
+
+def _rewrite_special(f, discrete=False):
+    reps = {}
+    for g in f.atoms(sp.Function):
+        if isinstance(g, sp.factorial):
+            reps[g] = sp.gamma(g.args[0] + 1)
+        elif isinstance(g, sp.binomial):
+            a, b = g.args
+            reps[g] = sp.gamma(a + 1) / (sp.gamma(b + 1) * sp.gamma(a - b + 1))
+        elif isinstance(g, sp.harmonic) and len(g.args) == 1:
+            reps[g] = sp.digamma(g.args[0] + 1) + sp.EulerGamma
+        elif isinstance(g, sp.fibonacci) and len(g.args) == 1:
+            phi = (1 + sp.sqrt(5)) / 2
+            reps[g] = (phi ** g.args[0] - (1 - phi) ** g.args[0]) / sp.sqrt(5)
+        elif isinstance(g, sp.lucas):
+            phi = (1 + sp.sqrt(5)) / 2
+            reps[g] = phi ** g.args[0] + (1 - phi) ** g.args[0]
+        elif isinstance(g, sp.RisingFactorial):
+            a, b = g.args
+            reps[g] = sp.gamma(a + b) / sp.gamma(a)
+        elif isinstance(g, sp.FallingFactorial):
+            a, b = g.args
+            reps[g] = sp.gamma(a + 1) / sp.gamma(a - b + 1)
+        elif isinstance(g, sp.catalan):
+            nn = g.args[0]
+            reps[g] = sp.gamma(2 * nn + 1) / (sp.gamma(nn + 1) * sp.gamma(nn + 2))
+    if reps:
+        f = f.xreplace(reps)
+    return f
+
+
+def _num_ratio_check(f, g, x, x0, tol=1e-2):
+    """Numerical check that f/g -> 1 as x -> x0 (fallback when SymPy's limit cannot decide)."""
+    if _is_inf(x0):
+        pts = [sp.Integer(10) ** k for k in (3, 5, 8)]
+        if x0 == -sp.oo:
+            pts = [-p for p in pts]
+    else:
+        pts = [x0 + sp.Rational(1, 10 ** k) for k in (3, 5, 8)]
+    errs = []
+    for p in pts:
+        try:
+            v = complex(sp.N((f / g).subs(x, p), 40))
+        except Exception:
+            return False
+        errs.append(abs(v - 1))
+    return errs[-1] < tol and errs[-1] <= errs[0] + 1e-30
+
+
+def _limit(e, x, x0, dirn=None):
+    try:
+        if _is_inf(x0):
+            return sp.limit(e, x, x0)
+        if dirn:
+            return sp.limit(e, x, x0, dirn)
+        try:
+            return sp.limit(e, x, x0, "+-")
+        except (ValueError, NotImplementedError):
+            lp, lm = sp.limit(e, x, x0, "+"), sp.limit(e, x, x0, "-")
+            if lp == lm:
+                return lp
+            return sp.nan
+    except Exception:
+        return None
+
+
+def _verify_lead(f, g, x, x0):
+    if g == 0:
+        return f == 0
+    r = _limit(sp.simplify(f / g) if f.count_ops() < 60 else f / g, x, x0, None if _is_inf(x0) else "+")
+    if r is not None and r == 1:
+        return True
+    if r is not None and r.is_number and r != 1 and not isinstance(r, sp.AccumBounds) and r is not sp.nan:
+        return False
+    return _num_ratio_check(f, g, x, x0)
+
+
+def _split_osc(t, x):
+    """t = osc * rest where osc collects (-1)^x-type factors (negative or complex bases raised to x)."""
+    osc, rest = sp.Integer(1), []
+    for fct in sp.Mul.make_args(t):
+        if isinstance(fct, sp.Pow) and fct.exp.has(x) and fct.base.is_number:
+            b = fct.base
+            if b.is_negative:
+                osc *= sp.Integer(-1) ** fct.exp
+                rest.append((-b) ** fct.exp)
+                continue
+            if b.is_real is False:
+                raise _AsymFail("complex exponential bases are not supported")
+        rest.append(fct)
+    return osc, sp.Mul(*rest)
+
+
+def _log_expand(t, x, order):
+    """Asymptotic representation c * exp(P) * (1 + Q) of a single positive-for-large-x term at +oo."""
+    c, rest = t.as_independent(x, as_Add=False)
+    if rest == 1:
+        return c
+    lg = sp.expand_log(sp.log(rest.rewrite(sp.gamma).xreplace(
+        {g: sp.exp(sp.loggamma(g.args[0])) for g in rest.rewrite(sp.gamma).atoms(sp.gamma)})), force=True)
+    try:
+        s = sp.series(lg, x, sp.oo, max(order, 1) + 2).removeO()
+    except Exception as exc:
+        raise _AsymFail(str(exc))
+    P, Q = sp.Integer(0), sp.Integer(0)
+    for term in sp.Add.make_args(sp.expand(s)):
+        lim = _limit(term, x, sp.oo)
+        if lim == 0:
+            Q += term
+        else:
+            P += term
+    P = sp.expand_log(sp.logcombine(P, force=True), force=True)
+    if order == 0:
+        corr = sp.Integer(1)
+    else:
+        w = sp.Symbol("w_", positive=True)
+        try:
+            corr = sp.series(sp.exp(Q.subs(x, 1 / w)), w, 0, order + 1).removeO().subs(w, 1 / x)
+        except Exception as exc:
+            raise _AsymFail(str(exc))
+    pref = sp.powsimp(sp.exp(P), force=True)
+    return c * pref * sp.expand(corr)
+
+
+def _dominant(terms, x, x0):
+    """Indices of the terms not dominated by another term (as x -> x0)."""
+    keep = []
+    for i, a in enumerate(terms):
+        dominated = False
+        for j, b in enumerate(terms):
+            if i == j:
+                continue
+            r = _limit(sp.Abs(sp.simplify(a / b)), x, x0)
+            if r is None:
+                r = _limit(a / b, x, x0)
+            if r is None:
+                raise _AsymFail("cannot compare the growth of the terms")
+            if r == 0:
+                dominated = True
+                break
+        if not dominated:
+            keep.append(i)
+    return keep
+
+
+def _lead_finite(f, x, x0):
+    t = sp.Dummy("t")
+    g = f.subs(x, x0 + t)
+    try:
+        ld = g.as_leading_term(t)
+    except Exception as exc:
+        raise _AsymFail(str(exc))
+    ld = ld.subs(t, x - x0)
+    if ld.has(sp.Order) or ld == 0:
+        raise _AsymFail("no leading term")
+    return ld
+
+
+def asym(f, x, x0, order=None, discrete=False):
+    """Asymptotic approximation of f as x -> x0: the leading term (order None) or the expansion to order n
+    (Taylor/Laurent/Puiseux order n at finite x0; at Infinity, terms down to x^-n, or relative corrections
+    down to x^-n times the leading exponential/power factor).  Raises _AsymFail when no verified result."""
+    f = _rewrite_special(sp.sympify(f), discrete)
+    if not f.has(x):
+        return f
+    if not _is_inf(x0):
+        if order is None:
+            ld = _lead_finite(f, x, x0)
+            if not _verify_lead(f, ld, x, x0):
+                raise _AsymFail("leading term could not be verified")
+            return ld
+        try:
+            s = sp.series(f, x, x0, order + 1)
+        except Exception as exc:
+            raise _AsymFail(str(exc))
+        return s.removeO()
+    sgn = 1
+    if x0 == -sp.oo:
+        y = sp.Dummy("y", positive=True)
+        return asym(f.subs(x, -y), y, sp.oo, order, discrete).subs(y, -x)
+    xp = sp.Symbol(x.name, positive=True)
+    g = f.xreplace({x: xp})
+    res = _asym_inf(g, xp, order)
+    return res.xreplace({xp: x})
+
+
+def _asym_inf(f, x, order):
+    # 1. SymPy's own expansion when it is informative
+    direct = None
+    if not any(isinstance(b, sp.Pow) and b.exp.has(x) and b.base.is_number and b.base.is_negative
+               for b in f.atoms(sp.Pow)) and not f.has(sp.gamma, sp.loggamma):
+        try:
+            s = sp.series(f, x, sp.oo, (order if order is not None else 2) + 1)
+            direct = s.removeO()
+            if direct.has(sp.Order):
+                direct = sp.expand(s).removeO()
+            if direct == 0 or direct.has(sp.Order):
+                direct = None
+        except Exception:
+            direct = None
+    if direct is not None:
+        if order is not None:
+            terms = sp.Add.make_args(sp.expand(direct))
+            keep = []
+            for t in terms:
+                # keep terms down to x^-order (relative to x^0)
+                r = _limit(t * x ** order, x, sp.oo)
+                if r is None or r != 0 or t.has(sp.exp):
+                    keep.append(t)
+            return sp.Add(*keep)
+        terms = list(sp.Add.make_args(sp.expand(direct)))
+        idx = _dominant(terms, x, sp.oo)
+        ld = sp.Add(*[terms[i] for i in idx])
+        if _verify_lead(f, ld, x, sp.oo):
+            return ld
+    # 2. term-wise: oscillating factors kept, log-exp expansion of each term, dominance
+    terms = list(sp.Add.make_args(sp.expand(f, power_exp=False, log=False, mul=True, multinomial=False)))
+    reps = []
+    for t in terms:
+        osc, rest = _split_osc(t, x)
+        reps.append((osc, _log_expand(rest, x, order or 0)))
+    mags = [r for _o, r in reps]
+    idx = _dominant(mags, x, sp.oo) if len(mags) > 1 else [0]
+    res = sp.Add(*[reps[i][0] * reps[i][1] for i in idx])
+    if order is None:
+        chk = sp.Add(*[reps[i][1] * reps[i][0] for i in idx])
+        if not _verify_lead(sp.Add(*[terms[i] for i in idx]), chk, x, sp.oo):
+            raise _AsymFail("leading term could not be verified")
+    return res
+
+
+def _exp_to_pow(v):
+    """E^(a Log[b] + rest) -> b^a E^rest for numeric b (GoldenRatio^n rather than E^(n Log[GoldenRatio]))."""
+    def conv(e):
+        terms = sp.Add.make_args(sp.expand(e.args[0]))
+        pw, rest = sp.Integer(1), []
+        for t in terms:
+            c, lg = t.as_independent(sp.log, as_Add=False)
+            if isinstance(lg, sp.log) and lg.args[0].is_number and lg.args[0].is_positive:
+                pw *= lg.args[0] ** c
+            else:
+                rest.append(t)
+        return pw * (sp.exp(sp.factor_terms(sp.Add(*rest))) if rest else 1)
+    return v.replace(lambda e: isinstance(e, sp.exp), conv)
+
+
+def _asym_out(v):
+    return out(_exp_to_pow(v) if isinstance(v, sp.Basic) else v)
+
+
+def _run_asym(f, x, x0, order, fname, discrete=False):
+    try:
+        return asym(f, x, x0, order, discrete)
+    except _AsymFail as exc:
+        raise NotImplementedError(f"{fname}: no asymptotic approximation found ({exc})")
+
+
+@fn("Asymptotic", area=AREA, status="added",
+    notes="Asymptotic[f, x -> x0]: the leading term of the asymptotic expansion (verified: f/term -> 1); "
+          "Asymptotic[f, {x, x0, n}] / SeriesTermGoal -> n: the expansion to order n (Taylor, Laurent or Puiseux "
+          "at finite x0; at Infinity down to x^-n, with exponential/power prefactors and Stirling-type expansions "
+          "of Gamma, Factorial, Binomial, HarmonicNumber via LogGamma); unexpandable input raises")
+def _asymptotic(f, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "Asymptotic")
+    if pos:
+        raise ValueError("Asymptotic: too many arguments")
+    x, x0, n = _parse_point_spec(spec, o, "Asymptotic")
+    return _asym_out(_run_asym(SX(f, "Asymptotic"), x, x0, n, "Asymptotic"))
+
+
+@fn("DiscreteAsymptotic", area=AREA, status="added",
+    notes="DiscreteAsymptotic[f, n -> Infinity] / {n, Infinity, k}: asymptotic approximation of a sequence (n an "
+          "integer): Fibonacci, LucasL, factorials, binomials, HarmonicNumber, CatalanNumber are rewritten "
+          "(Binet, Stirling/LogGamma), (-1)^n-type factors are kept as oscillating factors; dominated terms are "
+          "dropped; leading terms are verified")
+def _discasym(f, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "DiscreteAsymptotic")
+    if pos:
+        raise ValueError("DiscreteAsymptotic: too many arguments")
+    x, x0, n = _parse_point_spec(spec, o, "DiscreteAsymptotic")
+    if not _is_inf(x0):
+        raise ValueError("DiscreteAsymptotic: the limit point must be Infinity or -Infinity")
+    return _asym_out(_run_asym(SX(f, "DiscreteAsymptotic"), x, x0, n, "DiscreteAsymptotic", discrete=True))
+
+
+# ───────────────────────────── asymptotic relations ─────────────────────────────
+
+def _ratio_limit(f, g, x, x0, discrete=False):
+    """(lim |f/g|) as a SymPy value, an AccumBounds of |f/g|, or None (undecided)."""
+    if g == 0:
+        raise ValueError("comparison with the zero function")
+    r = sp.simplify(f / g)
+    if discrete:
+        v = _disc_limits(r, x)
+        if v is None:
+            return None
+        lo, hi = v
+        if lo == hi:
+            return sp.Abs(lo)
+        return ("osc", lo, hi)
+    L_ = _limit(sp.Abs(r), x, x0)
+    if L_ is None or L_ is sp.nan:
+        L_ = _limit(r, x, x0)
+        if L_ is None or L_ is sp.nan:
+            return None
+        if isinstance(L_, sp.AccumBounds):
+            return ("osc", L_.min, L_.max)
+        return sp.Abs(L_)
+    if isinstance(L_, sp.AccumBounds):
+        return ("osc", L_.min, L_.max)
+    return L_
+
+
+def _relation(kind, f, g, spec, rest, fname):
+    pos, _o = _opts(rest, {"Assumptions"}, fname)
+    if pos:
+        raise ValueError(f"{fname}: too many arguments")
+    if not is_rule(spec):
+        raise ValueError(f"{fname}: the third argument must be x -> x0")
+    x = _svar(spec.args[0], fname)
+    x0 = _point(spec.args[1], fname)
+    F, G = SX(f, fname), SX(g, fname)
+    other = (F.free_symbols | G.free_symbols) - {x}
+    if other:
+        raise Unevaluated()
+    L_ = _ratio_limit(_rewrite_special(F), _rewrite_special(G), x, x0)
+    if L_ is None:
+        raise Unevaluated()
+    if isinstance(L_, tuple):
+        _t, lo, hi = L_
+        bounded = lo.is_finite and hi.is_finite
+        if kind == "LessEqual":
+            if bounded:
+                return True
+            raise Unevaluated()
+        if kind in ("Less", "Equivalent"):
+            return False
+        if kind == "Greater":
+            if bounded:
+                return False
+            raise Unevaluated()
+        raise Unevaluated()
+    if L_.free_symbols:
+        raise Unevaluated()
+    zero = L_ == 0
+    inf = L_ in (sp.oo, sp.zoo) or L_.is_infinite
+    finite_nz = not zero and not inf
+    return {"Less": zero, "LessEqual": not inf, "Equal": finite_nz, "GreaterEqual": not zero, "Greater": inf,
+            "Equivalent": finite_nz and sp.simplify(L_ - 1) == 0 and _signed_one(F, G, x, x0)}[kind]
+
+
+def _signed_one(F, G, x, x0):
+    r = _limit(sp.simplify(F / G), x, x0)
+    return r is not None and r == 1
+
+
+for _k, _n, _d in (("Less", "AsymptoticLess", "f = o(g): f/g -> 0"),
+                   ("LessEqual", "AsymptoticLessEqual", "f = O(g): |f/g| bounded"),
+                   ("Equal", "AsymptoticEqual", "f = Theta(g): |f/g| bounded above and away from 0"),
+                   ("GreaterEqual", "AsymptoticGreaterEqual", "f = Omega(g): |f/g| bounded away from 0"),
+                   ("Greater", "AsymptoticGreater", "f = omega(g): |f/g| -> Infinity"),
+                   ("Equivalent", "AsymptoticEquivalent", "f ~ g: f/g -> 1")):
+    def _mkrel(kind, name):
+        def f(a, b, spec, *rest):
+            return _relation(kind, a, b, spec, rest, name)
+        return f
+    fn(_n, area=AREA, status="added",
+       notes=f"{_n}[f, g, x -> x0]: True when {_d} as x -> x0 (decided by the limit of |f/g|; oscillating ratios "
+             "with finite bounds are decided where the bounds suffice), False otherwise; unevaluated when the "
+             "limit cannot be decided or depends on parameters")(_mkrel(_k, _n))
+
+
+# ───────────────────────────── discrete limits ─────────────────────────────
+
+def _period(f, n):
+    """A period p such that f's oscillating parts depend only on n mod p ((-1)^n, Cos[Pi q n], E^(I Pi q n)),
+    or None when the oscillation is not periodic."""
+    p = 1
+    for a in f.atoms(sp.Pow):
+        if a.exp.has(n) and a.base.is_number and a.base.is_negative:
+            if a.base != -1:
+                return None
+            k = sp.Poly(a.exp, n) if a.exp.is_polynomial(n) else None
+            if k is None or k.degree() != 1:
+                return None
+            c = k.LC()
+            if not c.is_rational:
+                return None
+            p = sp.ilcm(p, 2 * sp.Rational(c).q)
+    for a in f.atoms(sp.sin, sp.cos, sp.tan, sp.exp):
+        arg = a.args[0] if not isinstance(a, sp.exp) else a.args[0] / sp.I
+        if not arg.has(n):
+            continue
+        if not arg.is_polynomial(n) or sp.degree(arg, n) != 1:
+            return None
+        c = sp.Poly(arg, n).LC() / sp.pi
+        if isinstance(a, sp.exp) and not (a.args[0] / sp.I).is_real:
+            if (a.args[0]).is_real:
+                continue          # a real exponential, not oscillating
+            return None
+        if not c.is_rational:
+            return None
+        p = sp.ilcm(p, 2 * sp.Rational(c).q)
+    return int(p)
+
+
+def _neg_bases(f, n):
+    """b^e with b a negative number and e depending on n -> (-1)^e (-b)^e."""
+    return f.replace(lambda e: isinstance(e, sp.Pow) and e.exp.has(n) and e.base.is_number and e.base.is_negative
+                     and e.base != -1, lambda e: sp.Pow(-1, e.exp, evaluate=False) * (-e.base) ** e.exp)
+
+
+def _osc_atom(a, n):
+    if isinstance(a, sp.Pow):
+        return a.base == -1 and a.exp.has(n)
+    if isinstance(a, (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)):
+        return a.args[0].has(n)
+    if isinstance(a, sp.exp):
+        return a.args[0].has(n) and (a.args[0] / sp.I).is_real is True
+    return False
+
+
+def _disc_limits(f, n):
+    """(liminf, limsup) of the sequence f(n) as n -> oo, or None when undecided."""
+    f = _neg_bases(f, n)
+    p = _period(f, n)
+    if p is None:
+        return None
+    m = sp.Symbol("m_", positive=True)
+    vals = []
+    atoms = [a for a in sp.preorder_traversal(f) if _osc_atom(a, n)]
+    for r in range(p):
+        reps = {a: a.subs(n, r) for a in atoms}
+        g = f.xreplace(reps).subs(n, p * m + r)
+        try:
+            v = sp.limit(g, m, sp.oo)
+        except Exception:
+            v = None
+        if v is None or isinstance(v, (sp.AccumBounds, sp.Limit)) or v is sp.nan:
+            try:
+                from sympy.series.limitseq import limit_seq
+                v = limit_seq(g.subs(m, sp.Symbol("m_", integer=True, positive=True)),
+                              sp.Symbol("m_", integer=True, positive=True))
+            except Exception:
+                v = None
+        if v is None or isinstance(v, (sp.AccumBounds, sp.Limit)) or v is sp.nan:
+            return None
+        if v.free_symbols:
+            return None
+        vals.append(sp.nsimplify(v) if isinstance(v, sp.Float) else v)
+    if any(v == sp.zoo for v in vals):
+        return None
+
+    def key(v):
+        if v == sp.oo:
+            return (1, 0)
+        if v == -sp.oo:
+            return (-1, 0)
+        return (0, float(v))
+    try:
+        return min(vals, key=key), max(vals, key=key)
+    except TypeError:
+        return None
+
+
+def _disc_spec(spec, fname):
+    if not is_rule(spec):
+        raise ValueError(f"{fname}: the second argument must be n -> Infinity")
+    nv = _svar(spec.args[0], fname)
+    p = SX(spec.args[1], fname)
+    if p != sp.oo:
+        raise ValueError(f"{fname}: only limits n -> Infinity are supported")
+    return nv
+
+
+def _disc_common(f, spec, rest, fname):
+    pos, _o = _opts(rest, {"Assumptions", "GenerateConditions"}, fname)
+    if pos:
+        raise ValueError(f"{fname}: too many arguments")
+    if is_list(f):
+        return [(_disc_common(g, spec, rest, fname)) for g in f.args]
+    if is_list(spec.args[0]) if is_rule(spec) else False:
+        raise NotImplementedError(f"{fname}: multivariate discrete limits are not supported")
+    nv = _disc_spec(spec, fname)
+    F = _rewrite_special(SX(f, fname), True)
+    ni = sp.Symbol(nv.name, integer=True, positive=True)
+    F = F.xreplace({nv: ni})
+    if (F.free_symbols - {ni}):
+        try:
+            v = sp.limit(F, ni, sp.oo)
+            if not isinstance(v, (sp.AccumBounds, sp.Limit)) and v is not sp.nan and _period(F, ni) == 1:
+                return (v, v)
+        except Exception:
+            pass
+        raise Unevaluated()
+    r = _disc_limits(F, ni)
+    if r is None:
+        raise Unevaluated()
+    return r
+
+
+def _disc_wrap(f, spec, rest, fname, pick):
+    r = _disc_common(f, spec, rest, fname)
+    if isinstance(r, list):
+        return L(*(out(pick(v)) for v in r))
+    return out(pick(r))
+
+
+@fn("DiscreteLimit", area=AREA, status="added",
+    notes="DiscreteLimit[f, n -> Infinity]: the limit of the sequence f(n) over integers n; sequences with periodic "
+          "oscillation ((-1)^n, Sin[Pi q n], ...) are split into residue classes n = p m + r (Indeterminate when the "
+          "subsequence limits differ); Fibonacci/factorial/binomial forms are rewritten; threads over lists; "
+          "unevaluated when undecided (e.g. Sin[n])")
+def _disclimit(f, spec, *rest):
+    return _disc_wrap(f, spec, rest, "DiscreteLimit", lambda r: r[0] if r[0] == r[1] else sp.nan)
+
+
+@fn("DiscreteMaxLimit", area=AREA, status="added",
+    notes="DiscreteMaxLimit[f, n -> Infinity]: lim sup of the sequence f(n) (residue-class splitting for periodic "
+          "oscillation; e.g. (-1)^n -> 1, Sin[n Pi/3] -> Sqrt[3]/2); unevaluated when undecided")
+def _discmaxlimit(f, spec, *rest):
+    return _disc_wrap(f, spec, rest, "DiscreteMaxLimit", lambda r: r[1])
+
+
+@fn("DiscreteMinLimit", area=AREA, status="added",
+    notes="DiscreteMinLimit[f, n -> Infinity]: lim inf of the sequence f(n) (residue-class splitting for periodic "
+          "oscillation); unevaluated when undecided")
+def _discminlimit(f, spec, *rest):
+    return _disc_wrap(f, spec, rest, "DiscreteMinLimit", lambda r: r[0])
