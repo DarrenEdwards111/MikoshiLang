@@ -2850,3 +2850,527 @@ def contour_graphics(fname, P, V, T, xr, yr, o, gopts):
             content.append(L(st, Expr("Line", L(*[pts(ln) for ln in lines]))))
     defaults = [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr([xr, yr])), ("PlotRangePadding", 0)]
     return finish_graphics(L(*content), gopts, defaults)
+
+
+# ───────────────────────────── statistical plots ─────────────────────────────
+
+def is_dist(x):
+    return isinstance(x, Expr) and isinstance(x.head, str) and x.head.endswith("Distribution") and \
+        x.head not in ("EmpiricalDistribution",)
+
+
+def sample_values(d, fname):
+    """Sorted finite floats of a dataset (missing values dropped); symbolic entries -> Unevaluated."""
+    d, _, _ = _unwrap(d, fname)
+    if isinstance(d, Expr) and d.head == "Association":
+        d = L(*[v for _, v in _assoc_items(d)])
+    if isinstance(d, Expr) and d.head in _UNSUPPORTED_DATA:
+        raise NotImplementedError(f"{fname}: {d.head} data is not supported")
+    if not K.is_list(d):
+        if isinstance(d, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of real numbers, not {K_input(d)}")
+    vals = []
+    for x in d.args:
+        if K.is_list(x):
+            raise ValueError(f"{fname}: the data must be a flat list of real numbers")
+        v = scalar(x, fname)
+        if v is not None:
+            vals.append(v)
+    if not vals:
+        raise ValueError(f"{fname}: the data has no numeric values")
+    return sorted(vals)
+
+
+def _num_or_raise(v, fname, what):
+    x = num(v)
+    if x is None:
+        if isinstance(v, Expr) and v.head == "DirectedInfinity" or is_sym(v, "Infinity"):
+            return math.inf
+        raise NotImplementedError(f"{fname}: could not evaluate the {what} numerically ({K_input(v)})")
+    return x
+
+
+def dist_quantiles(dist, ps, fname):
+    return [_num_or_raise(ev(Expr("N", Expr("InverseCDF", dist, float(p)))), fname, "quantile") for p in ps]
+
+
+def dist_cdf(dist, xs, fname):
+    return [_num_or_raise(ev(Expr("N", Expr("CDF", dist, float(x)))), fname, "CDF") for x in xs]
+
+
+def _has_free_symbols(e):
+    return _has_user_symbol(e)
+
+
+def resolve_reference(ref, data_vals, fname):
+    """A reference distribution: numeric parameters as given, symbolic parameters estimated from the data
+    (EstimatedDistribution, as Wolfram documents)."""
+    if not is_dist(ref):
+        raise TypeError(f"{fname}: the reference must be a distribution or a dataset, not {K_input(ref)}")
+    if _has_free_symbols(ref):
+        if data_vals is None:
+            raise Unevaluated()
+        est = ev(Expr("EstimatedDistribution", L(*data_vals), ref))
+        if not is_dist(est) or _has_free_symbols(est):
+            raise NotImplementedError(f"{fname}: could not estimate {K_input(ref)} from the data")
+        return est
+    return ref
+
+
+def normal_fit(vals):
+    """NormalDistribution[mean, ML standard deviation] (EstimatedDistribution's maximum-likelihood estimate)."""
+    n = len(vals)
+    m = sum(vals) / n
+    s = math.sqrt(sum((v - m) ** 2 for v in vals) / n)
+    if s == 0:
+        s = 1.0
+    return Expr("NormalDistribution", fl(m), fl(s))
+
+
+def empirical_quantile(sorted_vals, q):
+    """Wolfram's default Quantile[data, q] = x_(Ceiling[n q]) (x_(1) for q = 0)."""
+    n = len(sorted_vals)
+    k = max(1, min(n, math.ceil(n * q - 1e-12)))
+    return sorted_vals[k - 1]
+
+
+_STAT_DEFAULTS = {"PlotRange": AUTO, "PlotStyle": AUTO, "Joined": AUTO, "Filling": NONE, "FillingStyle": AUTO,
+                  "PlotLegends": NONE, "PlotMarkers": NONE, "ReferenceLineStyle": AUTO, "ScalingFunctions": NONE,
+                  "ClippingStyle": AUTO, "PlotTheme": AUTO, "Mesh": NONE, "ColorFunction": AUTO,
+                  "PlotHighlighting": AUTO, "Method": AUTO, "PerformanceGoal": AUTO,
+                  "WorkingPrecision": Symbol("MachinePrecision")}
+
+
+def _stat_check(o, fname):
+    for n in ("ScalingFunctions", "ClippingStyle", "Mesh", "ColorFunction", "PlotHighlighting", "Method",
+              "PerformanceGoal", "PlotTheme", "PlotMarkers", "WorkingPrecision", "Filling"):
+        v = o[n]
+        if is_sym(v, "Automatic", "None", "MachinePrecision") or (n == "PlotTheme" and v == "Default") or \
+                (n == "PerformanceGoal" and v in ("Quality", "Speed")):
+            continue
+        raise NotImplementedError(f"{fname}: the option {n} -> {K_input(v)} is not supported")
+
+
+def _dotted(st):
+    return Expr("Directive", *(st.args if st is not None else [Expr("GrayLevel", 0)]),
+                Expr("Dashing", L(0.005, 0.01)))
+
+
+def _stat_inputs(args, fname):
+    pos, opts = split_trailing_options(args)
+    if not 1 <= len(pos) <= 2:
+        raise ValueError(f"{fname}: expected {fname}[data] or {fname}[data, reference]")
+    d = pos[0]
+    du, _, _ = _unwrap(d, fname)
+    if is_dist(du):
+        items = [du]
+    elif K.is_list(du) and du.args and all(is_dist(_unwrap(x, fname)[0]) or K.is_list(_unwrap(x, fname)[0])
+                                           for x in du.args):
+        items = [_unwrap(x, fname)[0] for x in du.args]
+    else:
+        items = [du]
+    return items, (pos[1] if len(pos) == 2 else None), opts
+
+
+def _stat_graphics(fname, curves, joined, styles, o, gopts, ref_lines, labels, prange_data, extra_defaults=()):
+    content = []
+    rstyle = o["ReferenceLineStyle"]
+    for i, (seg, st) in enumerate(zip(ref_lines, styles)):
+        if seg is None or is_sym(rstyle, "None") or st is None:
+            continue
+        rs = _dotted(st) if is_sym(rstyle, "Automatic") else rstyle
+        if not is_sym(rstyle, "Automatic"):
+            G.directive_like(rstyle, fname, "ReferenceLineStyle")
+        content.append(L(rs, Expr("Line", pts(seg))))
+    for cv, j, st in zip(curves, joined, styles):
+        if st is None or not cv:
+            continue
+        content.append(L(st, Expr("Line", pts(cv)) if j else Expr("Point", pts(cv))))
+    allp = [p for cv in curves for p in cv]
+    xr = prange_data[0] or data_range([p[0] for p in allp])
+    yr = prange_data[1] or data_range([p[1] for p in allp])
+    prange = resolve_plot_range(o["PlotRange"], fname, [xr, yr], auto=[xr, yr])
+    defaults = [("AspectRatio", GOLDEN), ("Frame", True), ("Axes", L(False, False)), *extra_defaults,
+                ("PlotRange", range_expr(prange)), ("PlotRangePadding", L(L(Expr("Scaled", 0.02), Expr("Scaled", 0.02)),
+                                                                          L(Expr("Scaled", 0.05),
+                                                                            Expr("Scaled", 0.05))))]
+    gr = finish_graphics(L(*content), gopts, defaults)
+    return legend_wrap(gr, o["PlotLegends"], styles, labels, fname, "point")
+
+
+def _joined(o, n, defaults, fname):
+    j = o["Joined"]
+    if is_sym(j, "Automatic"):
+        return defaults
+    if j is True or j is False:
+        return [j] * n
+    raise ValueError(f"{fname}: Joined must be True, False or Automatic")
+
+
+_QP_PS = [0.005 + 0.99 * k / 120 for k in range(121)]
+
+
+@fn("QuantilePlot", area=AREA, status="added",
+    notes="QuantilePlot[data], QuantilePlot[dist], QuantilePlot[data, ref] and QuantilePlot[{data1, ...}, ref]: "
+          "Q-Q plot, points {Quantile[ref, p_i], x_(i)} with Hazen plotting positions p_i = (i - 1/2)/n (Wolfram "
+          "does not document its positions); the default reference is the maximum-likelihood NormalDistribution "
+          "of each dataset (EstimatedDistribution); a reference with symbolic parameters is estimated from the "
+          "data; a reference dataset uses Wolfram's default Quantile (x_(Ceiling[n p])); distributions are drawn "
+          "as joined curves (quantiles at p from 0.005 to 0.995) against the normal with the same mean and "
+          "standard deviation; reference line through the first and third quartiles (ReferenceLineStyle, "
+          "Automatic = dotted plot colour, None). Frame -> True. Options: PlotStyle, Joined, PlotLegends, "
+          "PlotRange, ReferenceLineStyle and Graphics options; others raise NotImplementedError. Check: "
+          "reference (quantiles from InverseCDF; data from a normal sample lie near the line in tests).")
+def _quantileplot(data: ListOf[Real] | Expr, *rest: Expr | Option) -> Expr:
+    fname = "QuantilePlot"
+    items, ref, opts = _stat_inputs((data,) + rest, fname)
+    o, gopts = split_options(fname, opts, _STAT_DEFAULTS)
+    _stat_check(o, fname)
+    curves, refl, is_d = [], [], []
+    for it in items:
+        if is_dist(it):
+            if _has_free_symbols(it):
+                raise Unevaluated()
+            ps = _QP_PS
+            ys = dist_quantiles(it, ps, fname)
+            if ref is None:
+                m = _num_or_raise(ev(Expr("N", Expr("Mean", it))), fname, "mean")
+                s = _num_or_raise(ev(Expr("N", Expr("StandardDeviation", it))), fname, "standard deviation")
+                if not (math.isfinite(m) and math.isfinite(s)) or s <= 0:
+                    raise NotImplementedError(f"{fname}: {K_input(it)} has no finite mean and variance; give a "
+                                              "reference distribution")
+                rdist = Expr("NormalDistribution", m, s)
+                xs = dist_quantiles(rdist, ps, fname)
+            elif is_dist(ref):
+                xs = dist_quantiles(resolve_reference(ref, None, fname), ps, fname)
+            else:
+                rv = sample_values(ref, fname)
+                xs = [empirical_quantile(rv, p) for p in ps]
+            curve = [(x, y) for x, y in zip(xs, ys) if math.isfinite(x) and math.isfinite(y)]
+            q1, q3 = (dist_quantiles(it, [0.25, 0.75], fname))
+            is_d.append(True)
+        else:
+            vals = sample_values(it, fname)
+            n = len(vals)
+            ps = [(i - 0.5) / n for i in range(1, n + 1)]
+            if ref is None:
+                rdist = normal_fit(vals)
+                xs = dist_quantiles(rdist, ps, fname)
+                rq = dist_quantiles(rdist, [0.25, 0.75], fname)
+            elif is_dist(_unwrap(ref, fname)[0]):
+                rdist = resolve_reference(_unwrap(ref, fname)[0], vals, fname)
+                xs = dist_quantiles(rdist, ps, fname)
+                rq = dist_quantiles(rdist, [0.25, 0.75], fname)
+            else:
+                rv = sample_values(ref, fname)
+                xs = [empirical_quantile(rv, p) for p in ps]
+                rq = [empirical_quantile(rv, 0.25), empirical_quantile(rv, 0.75)]
+            curve = [(x, y) for x, y in zip(xs, vals) if math.isfinite(x)]
+            q1, q3 = empirical_quantile(vals, 0.25), empirical_quantile(vals, 0.75)
+            is_d.append(False)
+        curves.append(curve)
+        xs_c = [p[0] for p in curve]
+        if is_d[-1]:
+            refl.append(None if not curve else _line_through(curve, q1, q3, it, ref, fname))
+        else:
+            if rq[1] != rq[0]:
+                slope = (q3 - q1) / (rq[1] - rq[0])
+                x0, x1 = min(xs_c), max(xs_c)
+                refl.append([(x0, q1 + slope * (x0 - rq[0])), (x1, q1 + slope * (x1 - rq[0]))])
+            else:
+                refl.append(None)
+    styles = style_list(o["PlotStyle"], len(curves), fname, "point")
+    joined = _joined(o, len(curves), is_d, fname)
+    labels = [f"{i + 1}" for i in range(len(curves))] if len(curves) > 1 else None
+    return _stat_graphics(fname, curves, joined, styles, o, gopts, refl, labels, (None, None))
+
+
+def _line_through(curve, q1, q3, dist, ref, fname):
+    """Reference line for a distribution curve: through the points at p = 1/4 and 3/4."""
+    xs = [p[0] for p in curve]
+    if ref is None:
+        m = _num_or_raise(ev(Expr("N", Expr("Mean", dist))), fname, "mean")
+        s = _num_or_raise(ev(Expr("N", Expr("StandardDeviation", dist))), fname, "standard deviation")
+        r1, r3 = dist_quantiles(Expr("NormalDistribution", m, s), [0.25, 0.75], fname)
+    elif is_dist(ref):
+        r1, r3 = dist_quantiles(resolve_reference(ref, None, fname), [0.25, 0.75], fname)
+    else:
+        rv = sample_values(ref, fname)
+        r1, r3 = empirical_quantile(rv, 0.25), empirical_quantile(rv, 0.75)
+    if r3 == r1:
+        return None
+    slope = (q3 - q1) / (r3 - r1)
+    x0, x1 = min(xs), max(xs)
+    return [(x0, q1 + slope * (x0 - r1)), (x1, q1 + slope * (x1 - r1))]
+
+
+@fn("ProbabilityPlot", area=AREA, status="added",
+    notes="ProbabilityPlot[data], ProbabilityPlot[dist], ProbabilityPlot[data, ref], ProbabilityPlot[{data1, ...}, "
+          "ref]: P-P plot, points {CDF[ref, x_(i)], i/n} (empirical CDF of the data against the reference CDF); "
+          "the default reference is the maximum-likelihood NormalDistribution; symbolic reference parameters "
+          "are estimated; a reference dataset uses its empirical CDF; a distribution is drawn as the joined "
+          "curve {CDF[ref, x], CDF[dist, x]} over its 0.5% - 99.5% quantile range; diagonal reference line "
+          "(ReferenceLineStyle). PlotRange {{0, 1}, {0, 1}}. Options as QuantilePlot. Check: reference (CDF "
+          "values from the kernel; a dataset compared with its own distribution lies near the diagonal).")
+def _probabilityplot(data: ListOf[Real] | Expr, *rest: Expr | Option) -> Expr:
+    fname = "ProbabilityPlot"
+    items, ref, opts = _stat_inputs((data,) + rest, fname)
+    o, gopts = split_options(fname, opts, _STAT_DEFAULTS)
+    _stat_check(o, fname)
+    curves, is_d = [], []
+    for it in items:
+        if is_dist(it):
+            if _has_free_symbols(it):
+                raise Unevaluated()
+            xs = dist_quantiles(it, _QP_PS, fname)
+            xs = [x for x in xs if math.isfinite(x)]
+            ys = dist_cdf(it, xs, fname)
+            if ref is None:
+                m = _num_or_raise(ev(Expr("N", Expr("Mean", it))), fname, "mean")
+                s = _num_or_raise(ev(Expr("N", Expr("StandardDeviation", it))), fname, "standard deviation")
+                if not (math.isfinite(m) and math.isfinite(s)) or s <= 0:
+                    raise NotImplementedError(f"{fname}: {K_input(it)} has no finite mean and variance; give a "
+                                              "reference distribution")
+                rx = dist_cdf(Expr("NormalDistribution", m, s), xs, fname)
+            elif is_dist(ref):
+                rx = dist_cdf(resolve_reference(ref, None, fname), xs, fname)
+            else:
+                rv = sample_values(ref, fname)
+                rx = [sum(1 for v in rv if v <= x) / len(rv) for x in xs]
+            curves.append(list(zip(rx, ys)))
+            is_d.append(True)
+        else:
+            vals = sample_values(it, fname)
+            n = len(vals)
+            if ref is None:
+                rx = dist_cdf(normal_fit(vals), vals, fname)
+            elif is_dist(_unwrap(ref, fname)[0]):
+                rx = dist_cdf(resolve_reference(_unwrap(ref, fname)[0], vals, fname), vals, fname)
+            else:
+                rv = sample_values(ref, fname)
+                rx = [sum(1 for v in rv if v <= x) / len(rv) for x in vals]
+            curves.append([(x, (i + 1) / n) for i, x in enumerate(rx)])
+            is_d.append(False)
+    styles = style_list(o["PlotStyle"], len(curves), fname, "point")
+    joined = _joined(o, len(curves), is_d, fname)
+    refl = [[(0.0, 0.0), (1.0, 1.0)]] + [None] * (len(curves) - 1)
+    labels = [f"{i + 1}" for i in range(len(curves))] if len(curves) > 1 else None
+    return _stat_graphics(fname, curves, joined, styles, o, gopts, refl, labels, ((0.0, 1.0), (0.0, 1.0)))
+
+
+def _erfcinv(y):
+    from mpmath import erfinv
+    return float(erfinv(1 - y))
+
+
+_PSP = {
+    "Normal": (lambda x: x, lambda y: 1 - math.sqrt(2) * _erfcinv(2 * y)),
+    "LogNormal": (lambda x: math.log(x) if x > 0 else math.nan, lambda y: 1 - math.sqrt(2) * _erfcinv(2 * y)),
+    "Exponential": (lambda x: x, lambda y: -math.log(1 - y)),
+    "Weibull": (lambda x: math.log(x) if x > 0 else math.nan, lambda y: math.log(-math.log(1 - y))),
+    "Gumbel": (lambda x: x, lambda y: math.log(-math.log(1 - y))),
+    "Frechet": (lambda x: math.log(x) if x > 0 else math.nan, lambda y: 1 - math.log(-math.log(y))),
+    "Rayleigh": (lambda x: x, lambda y: math.sqrt(math.sqrt(2) * (-math.log(1 - y)))),
+}
+
+
+@fn("ProbabilityScalePlot", area=AREA, status="added",
+    notes="ProbabilityScalePlot[data], ProbabilityScalePlot[data, \"dist\"] and ProbabilityScalePlot[{data1, ...}, "
+          "\"dist\"] for \"Normal\" (default), \"LogNormal\", \"Exponential\", \"Weibull\", \"Gumbel\", "
+          "\"Frechet\", \"Rayleigh\": points {g(x_(i)), h(y_i)} with the transformations g, h from the Wolfram "
+          "documentation (e.g. Normal: g = x, h = 1 - Sqrt[2] InverseErfc[2 y]; Weibull: g = Log[x], "
+          "h = Log[-Log[1 - y]]) and median ranks y_i = (i - 0.3)/(n + 0.4) (Benard's approximation; Wolfram's "
+          "constants are not documented); y ticks are labelled with probabilities. Points that the scale cannot "
+          "show (x <= 0 on log scales) are omitted. Distribution objects as data, ScalingFunctions and other "
+          "settings raise NotImplementedError. Check: reference (exact Weibull/exponential quantiles map to a "
+          "straight line in tests).")
+def _probabilityscaleplot(data: ListOf[Real], *rest: String | Option) -> Expr:
+    fname = "ProbabilityScalePlot"
+    pos, opts = split_trailing_options((data,) + rest)
+    if not 1 <= len(pos) <= 2:
+        raise ValueError(f"{fname}: expected {fname}[data] or {fname}[data, \"dist\"]")
+    name = "Normal"
+    if len(pos) == 2:
+        name = pos[1]
+        if not isinstance(name, str):
+            if is_dist(name):
+                raise NotImplementedError(f"{fname}: distribution objects as the scale are not supported; give a "
+                                          "name such as \"Weibull\"")
+            raise TypeError(f"{fname}: the scale must be a string such as \"Weibull\", not {K_input(name)}")
+        if name not in _PSP:
+            raise ValueError(f"{fname}: unknown scale {name!r}; use one of {', '.join(sorted(_PSP))}")
+    g, h = _PSP[name]
+    o, gopts = split_options(fname, opts, _STAT_DEFAULTS)
+    _stat_check(o, fname)
+    du, _, _ = _unwrap(pos[0], fname)
+    if is_dist(du):
+        raise NotImplementedError(f"{fname}: distributions as data are not supported")
+    sets = list(du.args) if K.is_list(du) and du.args and all(K.is_list(_unwrap(x, fname)[0]) for x in du.args) \
+        else [du]
+    curves = []
+    for s in sets:
+        vals = sample_values(s, fname)
+        n = len(vals)
+        cv = []
+        for i, x in enumerate(vals, 1):
+            y = (i - 0.3) / (n + 0.4)
+            gx, hy = g(x), h(y)
+            if math.isfinite(gx) and math.isfinite(hy):
+                cv.append((gx, hy))
+        curves.append(cv)
+    styles = style_list(o["PlotStyle"], len(curves), fname, "point")
+    ticks = []
+    for p in (0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.999):
+        try:
+            v = h(p)
+        except (ValueError, ZeroDivisionError):
+            continue
+        if math.isfinite(v):
+            ticks.append(L(fl(v), p))
+    ft = L(L(L(*ticks), Symbol("Automatic")), L(Symbol("Automatic"), Symbol("Automatic")))
+    labels = [f"{i + 1}" for i in range(len(curves))] if len(curves) > 1 else None
+    return _stat_graphics(fname, curves, [False] * len(curves), styles, o, gopts, [None] * len(curves), labels,
+                          (None, None), extra_defaults=(("FrameTicks", ft),))
+
+
+# ───────────────────────────── pairwise plots ─────────────────────────────
+
+def _columns(data, fname):
+    data, _, _ = _unwrap(data, fname)
+    if not K.is_list(data) or not data.args:
+        if isinstance(data, (Symbol, Expr)) and not K.is_list(data):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the data must be a non-empty matrix {{{{y11, ..., y1n}}, ...}}")
+    rows = [r for r in data.args]
+    if not all(K.is_list(r) for r in rows):
+        raise ValueError(f"{fname}: the data must be a matrix (a list of rows)")
+    n = len(rows[0].args)
+    if n < 2 or any(len(r.args) != n for r in rows):
+        raise ValueError(f"{fname}: every row must have the same number (>= 2) of columns")
+    cols = [[scalar(r.args[j], fname) for r in rows] for j in range(n)]
+    return cols
+
+
+def _headers(spec, n, fname):
+    if spec is None or is_sym(spec, "Automatic", "None"):
+        return [None] * n if is_sym(spec, "None") else [f"y{j + 1}" for j in range(n)]
+    if spec == "Indexed":
+        return [str(j + 1) for j in range(n)]
+    if K.is_list(spec) and len(spec.args) == n:
+        return list(spec.args)
+    raise ValueError(f"{fname}: Headers must be Automatic, None, \"Indexed\" or a list of {n} labels")
+
+
+_PAIR_DEFAULTS = {"PlotStyle": AUTO, "Headers": AUTO, "PlotLegends": NONE, "PlotTheme": AUTO, "Method": AUTO,
+                  "PlotHighlighting": AUTO, "HeaderStyle": NONE, "HeaderAlignment": AUTO,
+                  "HeaderBackground": AUTO, "HeaderDisplayFunction": AUTO, "PlotLayout": AUTO,
+                  "PlotMarkers": NONE, "GridLines": AUTO, "GridLinesStyle": AUTO, "Frame": AUTO, "FrameTicks": AUTO,
+                  "AspectRatio": 1}
+_EXTRA_KNOWN |= {"Headers", "HeaderStyle", "HeaderAlignment", "HeaderBackground", "HeaderDisplayFunction"}
+
+
+def pairwise(fname, args, panel):
+    pos, opts = split_trailing_options(args)
+    if len(pos) != 1:
+        raise ValueError(f"{fname}: expected {fname}[matrix]")
+    o, gopts = split_options(fname, opts, _PAIR_DEFAULTS)
+    for n in ("PlotLegends", "PlotTheme", "Method", "PlotHighlighting", "HeaderStyle", "HeaderAlignment",
+              "HeaderBackground", "HeaderDisplayFunction", "PlotLayout", "PlotMarkers", "GridLines",
+              "GridLinesStyle", "Frame", "FrameTicks"):
+        v = o[n]
+        if not (is_sym(v, "Automatic", "None") or (n == "PlotTheme" and v == "Default")):
+            raise NotImplementedError(f"{fname}: the option {n} -> {K_input(v)} is not supported")
+    du, _, _ = _unwrap(pos[0], fname)
+    groups = [du]
+    if K.is_list(du) and du.args and all(K.is_list(r) and r.args and all(K.is_list(c) for c in r.args)
+                                         for r in du.args):
+        groups = list(du.args)                         # several datasets (each a matrix)
+    colsets = [_columns(g, fname) for g in groups]
+    n = len(colsets[0])
+    if any(len(c) != n for c in colsets):
+        raise ValueError(f"{fname}: all datasets must have the same number of columns")
+    heads = _headers(o["Headers"], n, fname)
+    styles = style_list(o["PlotStyle"], len(colsets), fname, "point")
+    ar = o["AspectRatio"]
+    rows = []
+    for i in range(n):
+        row = []
+        for j in range(n):
+            if i == j:
+                content = [Expr("Text", heads[i], L(0.5, 0.5))] if heads[i] is not None else []
+                row.append(Expr("Graphics", L(*content), Expr("Rule", Symbol("PlotRange"), L(L(0, 1), L(0, 1))),
+                                Expr("Rule", Symbol("AspectRatio"), ar), Expr("Rule", Symbol("Frame"), True),
+                                Expr("Rule", Symbol("FrameTicks"), NONE)))
+                continue
+            content = []
+            allp = []
+            for cols, st in zip(colsets, styles):
+                p = panel(cols[i], cols[j])
+                allp += p
+                if p and st is not None:
+                    content.append(L(st, Expr("Point", pts(p))))
+            xr = data_range([q[0] for q in allp])
+            yr = data_range([q[1] for q in allp])
+            pr = resolve_plot_range(AUTO, fname, [xr, yr])
+            row.append(Expr("Graphics", L(*content), Expr("Rule", Symbol("Frame"), True),
+                            Expr("Rule", Symbol("AspectRatio"), ar),
+                            Expr("Rule", Symbol("PlotRange"), range_expr(pr)),
+                            Expr("Rule", Symbol("PlotRangePadding"), Expr("Scaled", 0.05))))
+        rows.append(L(*row))
+    return Expr("GraphicsGrid", L(*rows), *gopts)
+
+
+def _pair_points(yi, yj):
+    return [(b, a) for a, b in zip(yi, yj) if a is not None and b is not None]
+
+
+def _qq_points(yi, yj):
+    a = sorted(v for v in yi if v is not None)
+    b = sorted(v for v in yj if v is not None)
+    m = min(len(a), len(b))
+    if len(a) != len(b):
+        a = [empirical_quantile(a, (k + 0.5) / m) for k in range(m)] if len(a) > m else a
+        b = [empirical_quantile(b, (k + 0.5) / m) for k in range(m)] if len(b) > m else b
+    return [(b[k], a[k]) for k in range(m)]
+
+
+def _pp_points(yi, yj):
+    a = sorted(v for v in yi if v is not None)
+    b = sorted(v for v in yj if v is not None)
+    if not a or not b:
+        return []
+    m = len(b)
+    import bisect
+    return [((k + 1) / m, bisect.bisect_right(a, b[k]) / len(a)) for k in range(m)]
+
+
+_PAIR_NOTE = (" Output: GraphicsGrid of n x n panels (Graphics with Frame -> True); the diagonal panels show the "
+              "column headers (Headers: Automatic \"y1\", ..., \"Indexed\", None or a list). Several datasets "
+              "{m1, m2, ...} are drawn in each panel with the default colours. Missing/non-numeric values are "
+              "dropped; symbolic data leaves the call unevaluated. Options: PlotStyle, Headers, AspectRatio and "
+              "GraphicsGrid options; others raise NotImplementedError.")
+
+
+@fn("PairwiseListPlot", area=AREA, status="added",
+    notes="PairwiseListPlot[{{y11, ..., y1n}, ...}]: scatter-plot matrix; panel {i, j} shows the points {y_kj, "
+          "y_ki} (as documented)." + _PAIR_NOTE + " Check: reference (panel points equal the column pairs).")
+def _pairwiselistplot(data: MatrixOf[Real], *opts: Option) -> Expr:
+    return pairwise("PairwiseListPlot", (data,) + opts, _pair_points)
+
+
+@fn("PairwiseQuantilePlot", area=AREA, status="added",
+    notes="PairwiseQuantilePlot[matrix]: panel {i, j} is the Q-Q plot of column i against column j, points "
+          "{k-th smallest y_j, k-th smallest y_i} (as documented; unequal counts after dropping missing values "
+          "use Hazen positions)." + _PAIR_NOTE + " Check: reference (sorted columns in tests).")
+def _pairwisequantileplot(data: MatrixOf[Real], *opts: Option) -> Expr:
+    return pairwise("PairwiseQuantilePlot", (data,) + opts, _qq_points)
+
+
+@fn("PairwiseProbabilityPlot", area=AREA, status="added",
+    notes="PairwiseProbabilityPlot[matrix]: panel {i, j} is the P-P plot of column i against reference column j, "
+          "points {k/m, fraction of y_i <= the k-th smallest y_j} (the empirical CDF of y_i at the order "
+          "statistics of y_j)." + _PAIR_NOTE + " Check: reference (empirical CDFs computed in tests; a column "
+          "against itself lies on the diagonal).")
+def _pairwiseprobabilityplot(data: MatrixOf[Real], *opts: Option) -> Expr:
+    return pairwise("PairwiseProbabilityPlot", (data,) + opts, _pp_points)
