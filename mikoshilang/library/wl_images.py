@@ -1886,3 +1886,466 @@ def _imageadjust(x: Expr, corr: Real | ListOf[Real] = None, inr: ListOf[Real] = 
             col[..., i] = np.clip((b + 1) * (c + 1) * np.power(np.clip(col[..., i], 0, None), g) - c / 2, 0, 1)
     out = np.concatenate([col, im.alpha_array()], -1) if im.alpha else col
     return image_expr(im.new(quantize(out, im.type)))
+
+
+# ───────────────────────────── per-pixel functions ─────────────────────────────
+
+def _px_expr(v):
+    """A pixel's channel vector as a value for user functions: a number for one channel, else a list."""
+    v = [float(t) for t in v]
+    return v[0] if len(v) == 1 else L(*v)
+
+
+def _result_vec(r, fname):
+    if K.is_list(r):
+        return [real_arg(t, fname, "result value") for t in r.args]
+    if isinstance(r, Expr) and parse_color(r) is not None:
+        return list(to_rgba(r)[:3])
+    return [real_arg(r, fname, "result value")]
+
+
+def _apply_pixels(fname, f, ims, interleave, indexed=False):
+    """Array (h, w, n) of f applied to the pixels of the images (cached on the pixel values unless indexed)."""
+    ref = ims[0]
+    shape = ref.a.shape[:-1]
+    cache = {}
+    rows = []
+    if not interleave:
+        if len(ims) != 1:
+            raise NotImplementedError(f"{fname}: Interleaving -> False is supported for one image only")
+        out = np.zeros(ref.a.shape)
+        it = np.ndindex(*ref.a.shape)
+        for idx in it:
+            v = float(ref.a[idx])
+            args = [v] + ([L(*[i + 1 for i in idx[:-1]])] if indexed else [])
+            key = None if indexed else v
+            if key is not None and key in cache:
+                r = cache[key]
+            else:
+                r = _result_vec(_ev(K.call(f, *args)), fname)
+                if len(r) != 1:
+                    raise ValueError(f"{fname}: with Interleaving -> False the function must return a number")
+                if key is not None:
+                    cache[key] = r
+            out[idx] = r[0]
+        return out
+    n_out = None
+    for idx in np.ndindex(*shape):
+        vals = [tuple(im.a[idx]) for im in ims]
+        key = None if indexed else tuple(vals)
+        if key is not None and key in cache:
+            r = cache[key]
+        else:
+            args = [_px_expr(v) for v in vals] + ([L(*[i + 1 for i in idx])] if indexed else [])
+            r = _result_vec(_ev(K.call(f, *args)), fname)
+            if key is not None:
+                cache[key] = r
+        if n_out is None:
+            n_out = len(r)
+        elif len(r) != n_out:
+            raise ValueError(f"{fname}: the function returned lists of different lengths")
+        rows.append(r)
+    return np.array(rows, dtype=float).reshape(shape + (n_out,))
+
+
+def _image_list(x, fname):
+    if K.is_list(x):
+        ims = [parse_image(v, fname) for v in x.args]
+        if not ims:
+            raise ValueError(f"{fname}: the list of images is empty")
+        if len({(i.a.shape[:-1], i.d3) for i in ims}) != 1:
+            raise ValueError(f"{fname}: the images must have the same dimensions")
+        return ims, True
+    return [parse_image(x, fname)], False
+
+
+def _pixel_result(ims, a):
+    ref = ims[0]
+    typ = larger_type(*[i.type for i in ims])
+    cs = ref.cs if a.shape[-1] == ref.c else default_space(a.shape[-1])
+    if typ in MAXV:
+        a = np.clip(a, 0, 1)
+    return image_expr(Img(quantize(a, typ), typ, cs, ref.d3))
+
+
+def _interleave_opt(o, fname, default=True):
+    v = o.get("Interleaving", default)
+    if v not in (True, False):
+        raise ValueError(f"{fname}: Interleaving must be True or False")
+    return v
+
+
+@fn("ImageApply", area=AREA, status="added",
+    notes="ImageApply[f, image] applies f to each pixel's channel list (a number for single-channel images) on the 0..1 "
+          "scale and builds an image from the results (numbers or equal-length lists; colours give their RGB "
+          "values); ImageApply[f, {image1, image2, ...}] passes the corresponding pixels as a sequence (largest "
+          "type). Interleaving -> False applies f to each channel value. Evaluations are cached on the pixel value, "
+          "as Wolfram allows. Integer types are clipped. Masking raises NotImplementedError. Check: exact (identity "
+          "and closed-form maps) in tests.")
+def _imageapply(f: Fn, x: Expr | ListOf[Expr], *opts: Option) -> Expr:
+    _, o = opts_split(opts, {"Interleaving"}, "ImageApply")
+    if _:
+        raise ValueError("ImageApply: expected ImageApply[f, image, options]")
+    ims, _many = _image_list(x, "ImageApply")
+    return _pixel_result(ims, _apply_pixels("ImageApply", f, ims, _interleave_opt(o, "ImageApply")))
+
+
+@fn("ImageApplyIndexed", area=AREA, status="added",
+    notes="ImageApplyIndexed[f, image] applies f[pixel, {row, column}] (row 1 at the top; {slice, row, column} for "
+          "Image3D) and builds an image from the results; ImageApplyIndexed[f, {image1, ...}] gives f[p1, p2, ..., "
+          "{row, column}]. Interleaving -> False passes single channel values with {row, column, channel}. "
+          "Check: exact in tests.")
+def _imageapplyindexed(f: Fn, x: Expr | ListOf[Expr], *opts: Option) -> Expr:
+    _, o = opts_split(opts, {"Interleaving"}, "ImageApplyIndexed")
+    if _:
+        raise ValueError("ImageApplyIndexed: expected ImageApplyIndexed[f, image, options]")
+    ims, _many = _image_list(x, "ImageApplyIndexed")
+    return _pixel_result(ims, _apply_pixels("ImageApplyIndexed", f, ims,
+                                            _interleave_opt(o, "ImageApplyIndexed"), indexed=True))
+
+
+@fn("ImageScan", area=AREA, status="added",
+    notes="ImageScan[f, image] evaluates f on each pixel (channel list, or a number for one channel, on the 0..1 "
+          "scale) row by row from the top left and returns Null; Interleaving -> False scans single channel values. "
+          "Check: exact (side effects collected with Sow/Reap or assignments) in tests.")
+def _imagescan(f: Fn, x: Expr, *opts: Option) -> Expr:
+    _, o = opts_split(opts, {"Interleaving"}, "ImageScan")
+    if _:
+        raise ValueError("ImageScan: expected ImageScan[f, image, options]")
+    im = _img1(x, "ImageScan")
+    il = _interleave_opt(o, "ImageScan")
+    for idx in np.ndindex(*im.a.shape[:-1]):
+        if il:
+            _ev(K.call(f, _px_expr(im.a[idx])))
+        else:
+            for v in im.a[idx]:
+                _ev(K.call(f, float(v)))
+    return None
+
+
+def _axis_indices(v, n, fname):
+    """0-based pixel indices along one axis for a pixel coordinate (1-based centres; .5 lies between pixels)."""
+    t = real_arg(v, fname, "position")
+    f = math.floor(t)
+    if abs(t - f - 0.5) < 1e-12:
+        idx = [f, f + 1]                              # on the boundary between pixels f and f + 1
+    else:
+        idx = [int(math.floor(t + 0.5))]
+    out = [i - 1 for i in idx]
+    if any(i < 0 or i >= n for i in out):
+        return None
+    return out
+
+
+def _pixel_positions(spec, im, fname):
+    """List of lists of (row, col) 0-based array indices for a PixelValue position spec (one group per position)."""
+    def one(p):
+        if not (K.is_list(p) and len(p.args) == 2):
+            raise TypeError(f"{fname}: {_short(p)} is not a pixel position {{x, y}}")
+        if any(isinstance(v, Expr) and v.head == "Span" for v in p.args):
+            raise NotImplementedError(f"{fname}: span positions are not supported")
+        xs = _axis_indices(p.args[0], im.w, fname)
+        ys = _axis_indices(p.args[1], im.h, fname)
+        if xs is None or ys is None:
+            raise ValueError(f"{fname}: position {_short(p)} lies outside the {im.w} x {im.h} image")
+        return [(im.h - 1 - y, x) for y in ys for x in xs]
+    if K.is_list(spec) and spec.args and all(K.is_list(p) for p in spec.args):
+        return [one(p) for p in spec.args], True
+    if isinstance(spec, Expr) and spec.head in IMAGE_HEADS:
+        raise NotImplementedError(f"{fname}: marker images are not supported")
+    if isinstance(spec, Symbol):
+        raise Unevaluated()
+    return [one(spec)], False
+
+
+def _value_out(v, typ):
+    if typ is None:
+        vals = [float(t) for t in v]
+    elif typ in MAXV:
+        vals = [int(t) for t in stored(np.array(v), typ)]
+    else:
+        vals = [float(t) for t in v]
+    return vals[0] if len(vals) == 1 else L(*vals)
+
+
+@fn("PixelValue", area=AREA, status="added",
+    notes="PixelValue[image, {x, y}] gives the channel values (0..1 scale; a number for one channel) of the pixel in "
+          "column x and row y counted from the bottom (integer coordinates at pixel centres, {1, 1} the bottom-left "
+          "pixel); a non-integer position gives the nearest pixel and a position on a boundary the average of the "
+          "adjacent pixels; a list of positions gives a list; PixelValue[image, pos, type] converts (\"Byte\" gives "
+          "integers). Positions outside the image raise ValueError (no Padding); spans and marker images raise "
+          "NotImplementedError; 2D only. Check: exact (agreement with ImageData) in tests.")
+def _pixelvalue(x: Expr, pos: ListOf[Real] | ListOf[ListOf[Real]], typ: String = None) -> Real | ListOf[Real]:
+    im = _img1(x, "PixelValue", allow3d=False)
+    t = type_arg(typ, "PixelValue") if typ is not None else None
+    groups, many = _pixel_positions(pos, im, "PixelValue")
+    vals = [np.mean([im.a[r, c] for r, c in g], axis=0) for g in groups]
+    out = [_value_out(v, t) for v in vals]
+    return L(*out) if many else out[0]
+
+
+def _replace_positions(img, groups, val, typ, fname):
+    a = np.array(img.a, dtype=float)
+    v = _replacement_value(img, val, typ, fname)
+    for g in groups:
+        for r, c in g:
+            a[r, c] = v
+    return image_expr(img.new(quantize(a, img.type)))
+
+
+def _replacement_value(img, val, typ, fname):
+    if typ is not None and typ in MAXV and parse_color(val) is None:
+        ch = [real_arg(t, fname, "value") / MAXV[typ] for t in (val.args if K.is_list(val) else [val])]
+        v = np.array(ch if len(ch) > 1 else ch * img.c)
+        if len(v) != img.c:
+            raise ValueError(f"{fname}: {len(ch)} channel values given for a {img.c}-channel image")
+        return v
+    return value_for(img, val, fname)
+
+
+def _rules(spec, fname):
+    rl = list(spec.args) if K.is_list(spec) and all(isinstance(r, Expr) and r.head == "Rule" for r in spec.args) \
+        else [spec]
+    for r in rl:
+        if not (isinstance(r, Expr) and r.head in ("Rule", "RuleDelayed") and len(r.args) == 2):
+            if isinstance(r, Symbol):
+                raise Unevaluated()
+            raise TypeError(f"{fname}: expected position -> value rules, not {_short(r)}")
+    return rl
+
+
+def _span_groups(p, im, fname, coords):
+    """Groups of (row, col) for a position with Span coordinates (xmin ;; xmax, ...); coords 'pixel' or 'image'."""
+    out = []
+    axes = []
+    for i, v in enumerate(p.args):
+        n = im.w if i == 0 else im.h
+        if isinstance(v, Expr) and v.head == "Span":
+            lo = real_arg(v.args[0], fname, "position") if not _is_sym(v.args[0], "All") else (1 if coords == "pixel"
+                                                                                                else 0)
+            hi = real_arg(v.args[1], fname, "position") if len(v.args) > 1 and not _is_sym(v.args[1], "All") \
+                else (n if coords == "pixel" else n)
+            if coords == "pixel":
+                idx = [k for k in range(n) if lo - 1e-12 <= k + 1 <= hi + 1e-12]
+            else:
+                idx = [k for k in range(n) if k + 1 > lo and k < hi]
+        else:
+            idx = _axis_indices(v, n, fname) if coords == "pixel" else _image_axis(v, n, fname)
+            if idx is None:
+                raise ValueError(f"{fname}: position {_short(p)} lies outside the image")
+        axes.append(idx)
+    out.append([(im.h - 1 - y, x) for y in axes[1] for x in axes[0]])
+    return out
+
+
+def _image_axis(v, n, fname):
+    """0-based pixel indices along an axis containing the image coordinate v (both pixels on a boundary)."""
+    t = real_arg(v, fname, "position")
+    if t < 0 or t > n:
+        return None
+    f = math.floor(t)
+    if abs(t - round(t)) < 1e-12:
+        k = int(round(t))
+        return [i for i in (k - 1, k) if 0 <= i < n]
+    return [int(f)] if f < n else [n - 1]
+
+
+@fn("ReplacePixelValue", area=AREA, status="added",
+    notes="ReplacePixelValue[image, pos -> val] sets the pixel at pixel position pos ({x, y} with {1, 1} the bottom-left "
+          "pixel centre; a position on a boundary changes all adjacent pixels; spans xmin ;; xmax set a block) to val "
+          "(a number, a channel list or a colour converted to the image's colour space); a list of rules applies them "
+          "in turn; ReplacePixelValue[image, pos -> val, type] reads val in that type's range (\"Byte\": 0..255). Type "
+          "kept (values clipped and rounded for integer types). Positions outside the image raise ValueError. "
+          "Check: exact (read back with PixelValue) in tests.")
+def _replacepixelvalue(x: Expr, spec: Rule | ListOf[Rule], typ: String = None) -> Expr:
+    fname = "ReplacePixelValue"
+    im = _img1(x, fname, allow3d=False)
+    t = type_arg(typ, fname) if typ is not None else None
+    for r in _rules(spec, fname):
+        p, val = r.args
+        if K.is_list(p) and len(p.args) == 2 and any(isinstance(v, Expr) and v.head == "Span" for v in p.args):
+            groups = _span_groups(p, im, fname, "pixel")
+        else:
+            groups, _m = _pixel_positions(p, im, fname)
+        im = parse_image(_replace_positions(im, groups, val, t, fname), fname)
+    return image_expr(im)
+
+
+@fn("ReplaceImageValue", area=AREA, status="added",
+    notes="ReplaceImageValue[image, pos -> val] sets the pixel containing the image-coordinate position pos ({0, 0} the "
+          "bottom-left corner, {w, h} the top-right; a position on a pixel boundary changes all adjacent pixels; "
+          "spans set the pixels inside) to val (number, channel list or colour); lists of rules and a type argument "
+          "as for ReplacePixelValue. DataRange other than Full raises NotImplementedError; positions outside the "
+          "image raise ValueError. Check: exact (agreement with ReplacePixelValue at pos + 1/2) in tests.")
+def _replaceimagevalue(x: Expr, spec: Rule | ListOf[Rule], typ: String = None) -> Expr:
+    fname = "ReplaceImageValue"
+    im = _img1(x, fname, allow3d=False)
+    t = type_arg(typ, fname) if typ is not None else None
+    for r in _rules(spec, fname):
+        p, val = r.args
+        pts = list(p.args) if K.is_list(p) and p.args and all(K.is_list(q) for q in p.args) else [p]
+        groups = []
+        for q in pts:
+            if not (K.is_list(q) and len(q.args) == 2):
+                raise TypeError(f"{fname}: {_short(q)} is not a position {{x, y}}")
+            groups += _span_groups(q, im, fname, "image")
+        im = parse_image(_replace_positions(im, groups, val, t, fname), fname)
+    return image_expr(im)
+
+
+def _data_range(o, im, fname):
+    dr = o.get("DataRange", Symbol("Full"))
+    if _is_sym(dr, "Full"):
+        return (0.0, float(im.w)), (0.0, float(im.h))
+    if _is_sym(dr, "Automatic"):
+        return (0.0, 1.0), (0.0, im.h / im.w)
+    if K.is_list(dr) and len(dr.args) == 2 and all(K.is_list(v) and len(v.args) == 2 for v in dr.args):
+        (a, b), (c, d) = [[real_arg(t, fname, "DataRange") for t in v.args] for v in dr.args]
+        if a == b or c == d:
+            raise ValueError(f"{fname}: DataRange must have non-empty ranges")
+        return (a, b), (c, d)
+    raise ValueError(f"{fname}: DataRange must be Full, Automatic or {{{{left, right}}, {{bottom, top}}}}")
+
+
+def _padded(im, pad, fname):
+    """(h + 2, w + 2, c) array with one pixel of padding (a value/colour, or "Fixed")."""
+    a = im.a
+    if pad == "Fixed":
+        return np.pad(a, ((1, 1), (1, 1), (0, 0)), mode="edge")
+    v = _replacement_value(im, pad, None, fname) if not _is_sym(pad, "None") else None
+    if v is None:
+        raise NotImplementedError(f"{fname}: Padding -> None is not supported")
+    out = np.empty((a.shape[0] + 2, a.shape[1] + 2, a.shape[2]))
+    out[...] = v
+    out[1:-1, 1:-1] = a
+    return out
+
+
+def image_value(im, xs, ys, pad=0, method="Linear", fname="ImageValue"):
+    """Values (n, c) at image coordinates (pixel units, origin bottom-left) with padding outside the image."""
+    P = _padded(im, pad, fname)
+    out = []
+    for x, y in zip(xs, ys):
+        # continuous pixel index (0-based, centres at k + 0.5) in the padded array; rows from the top
+        u = x - 0.5 + 1
+        v = (im.h - y) - 0.5 + 1
+        if method == "Nearest":
+            cols = _nearest_axis(u, P.shape[1])
+            rows = _nearest_axis(v, P.shape[0])
+            out.append(np.mean([P[r, c] for r in rows for c in cols], axis=0))
+            continue
+        u = min(max(u, 0.0), P.shape[1] - 1.0)
+        v = min(max(v, 0.0), P.shape[0] - 1.0)
+        c0, r0 = int(math.floor(u)), int(math.floor(v))
+        c1, r1 = min(c0 + 1, P.shape[1] - 1), min(r0 + 1, P.shape[0] - 1)
+        fu, fv = u - c0, v - r0
+        out.append((P[r0, c0] * (1 - fu) * (1 - fv) + P[r0, c1] * fu * (1 - fv) + P[r1, c0] * (1 - fu) * fv
+                    + P[r1, c1] * fu * fv))
+    return np.array(out)
+
+
+def _nearest_axis(u, n):
+    f = math.floor(u)
+    if abs(u - f - 0.5) < 1e-12:
+        idx = [f, f + 1]
+    else:
+        idx = [int(math.floor(u + 0.5))]
+    return [min(max(i, 0), n - 1) for i in idx]
+
+
+@fn("ImageValue", area=AREA, status="added",
+    notes="ImageValue[image, {x, y}] gives the channel values at image coordinates {x, y} ({0, 0} the bottom-left "
+          "corner, pixel centres at half-integers) by bilinear interpolation between pixel centres (Resampling -> "
+          "\"Linear\", default) or the nearest pixel (\"Nearest\"; on a boundary the average of the adjacent pixels), "
+          "with Padding (default 0, a colour or \"Fixed\") one pixel beyond the edges, so positions near or outside "
+          "the border mix in the padding as the documented defaults imply; a list of positions gives a list; type "
+          "argument as for PixelValue; DataRange Full (default), Automatic or explicit ranges. Other resampling "
+          "methods and spans raise NotImplementedError. Check: exact (equals PixelValue at pixel centres, linear "
+          "between them) in tests.")
+def _imagevalue(x: Expr, pos: ListOf[Real] | ListOf[ListOf[Real]], *rest: String | Option) -> Real | ListOf[Real]:
+    fname = "ImageValue"
+    p_, o = opts_split(rest, {"DataRange", "Padding", "Resampling"}, fname)
+    if len(p_) > 1:
+        raise ValueError("ImageValue: expected ImageValue[image, pos, type, options]")
+    t = type_arg(p_[0], fname) if p_ else None
+    im = _img1(x, fname, allow3d=False)
+    method = o.get("Resampling", "Linear")
+    if method not in ("Linear", "Nearest", "Bilinear"):
+        if isinstance(method, str):
+            raise NotImplementedError(f"ImageValue: Resampling {method!r} is not supported")
+        raise ValueError("ImageValue: Resampling must be a method name")
+    method = "Linear" if method == "Bilinear" else method
+    pad = o.get("Padding", 0)
+    (x0, x1), (y0, y1) = _data_range(o, im, fname)
+    many = K.is_list(pos) and pos.args and all(K.is_list(p) for p in pos.args)
+    pts = list(pos.args) if many else [pos]
+    xs, ys = [], []
+    for p in pts:
+        if not (K.is_list(p) and len(p.args) == 2):
+            if isinstance(p, Symbol):
+                raise Unevaluated()
+            raise TypeError(f"ImageValue: {_short(p)} is not a position {{x, y}}")
+        if any(isinstance(v, Expr) and v.head == "Span" for v in p.args):
+            raise NotImplementedError("ImageValue: span positions are not supported")
+        px, py = (real_arg(v, fname, "position") for v in p.args)
+        xs.append((px - x0) / (x1 - x0) * im.w)
+        ys.append((py - y0) / (y1 - y0) * im.h)
+    vals = image_value(im, xs, ys, pad, method, fname)
+    out = [_value_out(v, t) for v in vals]
+    return L(*out) if many else out[0]
+
+
+def _intensity(im, fname):
+    col = im.color()
+    if col.shape[-1] == 1:
+        return col[..., 0]
+    if im.cs == "Automatic":
+        return col.mean(axis=-1)
+    return convert_array(col, source_space(im, fname), "Grayscale")[..., 0]
+
+
+def _value_positions(x, val, d, fname, shift):
+    im = _img1(x, fname, allow3d=False)
+    if val in ("Max", "Min"):
+        it = _intensity(im, fname)
+        target = it.max() if val == "Max" else it.min()
+        mask = it == target
+    else:
+        v = value_for(Img(im.color(), im.type, im.cs if not im.alpha else im.cs, im.d3)
+                      if not im.alpha else im, val, fname)
+        if im.alpha and len(v) == im.c and parse_color(val) is None and K.is_list(val):
+            pass
+        col = im.a if (len(v) == im.c) else im.color()
+        v = v[:col.shape[-1]]
+        dist = np.sqrt(((col - v) ** 2).sum(axis=-1))
+        tol = 0.0 if d is None else real_arg(d, fname, "distance")
+        if tol < 0:
+            raise ValueError(f"{fname}: the distance must be non-negative")
+        mask = dist <= tol if d is not None else np.all(col == v, axis=-1)
+    rows, cols = np.nonzero(mask)
+    pts = sorted((int(c) + 1, im.h - int(r)) for r, c in zip(rows, cols))
+    if shift:
+        return L(*[L(px - 0.5, py - 0.5) for px, py in pts])
+    return L(*[L(px, py) for px, py in pts])
+
+
+_POS_NOTES = ("val is a number, a channel list or a colour (converted to the image's space), or \"Max\" / \"Min\" "
+              "for the pixels of largest / smallest intensity (luma for colour images, the channel mean for "
+              "ColorSpace Automatic); with d, pixels whose channel vector lies within Euclidean distance d of val "
+              "(0..1 scale) match, otherwise values must be equal. Positions are sorted by x then y. 2D only.")
+
+
+@fn("PixelValuePositions", area=AREA, status="added",
+    notes="PixelValuePositions[image, val] and PixelValuePositions[image, val, d] give the pixel positions {x, y} "
+          "({1, 1} the bottom-left pixel) of the matching pixels. " + _POS_NOTES +
+          " Check: exact (PixelValue at every returned position matches) in tests.")
+def _pixelvaluepositions(x: Expr, val: Real | ListOf[Real] | Expr | String, d: Real = None) -> ListOf[ListOf[Integer]]:
+    return _value_positions(x, val, d, "PixelValuePositions", False)
+
+
+@fn("ImageValuePositions", area=AREA, status="added",
+    notes="ImageValuePositions[image, val] and ImageValuePositions[image, val, d] give the image coordinates of the "
+          "centres of the matching pixels (PixelValuePositions - 1/2, as documented). " + _POS_NOTES +
+          " Check: exact (the documented relation to PixelValuePositions) in tests.")
+def _imagevaluepositions(x: Expr, val: Real | ListOf[Real] | Expr | String, d: Real = None) -> ListOf[ListOf[Real]]:
+    return _value_positions(x, val, d, "ImageValuePositions", True)
