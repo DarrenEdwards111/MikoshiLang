@@ -1799,3 +1799,501 @@ def _discmaxlimit(f, spec, *rest):
           "oscillation); unevaluated when undecided")
 def _discminlimit(f, spec, *rest):
     return _disc_wrap(f, spec, rest, "DiscreteMinLimit", lambda r: r[0])
+
+
+# ───────────────────────────── Asymptotic* solvers ─────────────────────────────
+
+def _c_to_sym(e):
+    """C[k] -> symbol __C_k (for SymPy) ; returns the converted expression."""
+    if isinstance(e, Expr):
+        if e.head == "C" and len(e.args) == 1 and K.is_int(e.args[0]):
+            return Symbol(f"__C_{int(e.args[0])}")
+        h = _c_to_sym(e.head) if isinstance(e.head, Expr) else e.head
+        return Expr(h, *(_c_to_sym(a) for a in e.args))
+    return e
+
+
+def _sym_to_c(e):
+    if isinstance(e, Symbol) and e.name.startswith("__C_"):
+        return Expr("C", int(e.name[4:]))
+    if isinstance(e, Expr):
+        h = _sym_to_c(e.head) if isinstance(e.head, Expr) else e.head
+        return Expr(h, *(_sym_to_c(a) for a in e.args))
+    return e
+
+
+def _csyms(v):
+    return sorted([s for s in v.free_symbols if s.name.startswith("__C_")], key=lambda s: int(s.name[4:]))
+
+
+def _asym_with_constants(v, x, x0, order, fname, discrete=False):
+    """Asymptotics of a general solution sum C_i y_i(x): each constant's part is expanded separately."""
+    cs = _csyms(v)
+    if not cs:
+        return _run_asym(v, x, x0, order, fname, discrete)
+    v = sp.expand(v)
+    parts = []
+    rest = v
+    for c in cs:
+        part = sp.expand(v).coeff(c)
+        rest = sp.expand(rest - c * part)
+        if part != 0:
+            parts.append(c * _run_asym(part, x, x0, order, fname, discrete))
+    if sp.simplify(rest) != 0:
+        parts.append(_run_asym(rest, x, x0, order, fname, discrete))
+    return sp.Add(*parts)
+
+
+def _num_close(a, b, tol=1e-9):
+    return abs(a - b) <= tol * max(1, abs(b))
+
+
+def _check_sum_closed(S, f, k, a, nvar, fname):
+    for N in (a + 3, a + 6):
+        try:
+            direct = sum(complex(sp.N(f.subs(k, j), 30)) for j in range(int(a), int(N) + 1))
+            closed = complex(sp.N(S.subs(nvar, N), 30))
+        except Exception:
+            raise NotImplementedError(f"{fname}: the closed form could not be checked")
+        if not _num_close(closed, direct, 1e-8):
+            raise NotImplementedError(f"{fname}: the closed form of the sum failed a numerical check")
+
+
+def _sum_spec(spec, fname):
+    if not (is_list(spec) and len(spec.args) == 3):
+        raise ValueError(f"{fname}: the summation range must be {{k, a, b}}")
+    return _svar(spec.args[0], fname), SX(spec.args[1], fname), SX(spec.args[2], fname)
+
+
+def _eval_point(spec, opts, fname):
+    x, x0, n = _parse_point_spec(spec, opts, fname)
+    return x, x0, n
+
+
+def _hurwitz_em(v, x, order):
+    """Replace Hurwitz zeta(s, z) (z -> oo with x) by its Euler-Maclaurin expansion (exact asymptotics)."""
+    def em(e):
+        if len(e.args) != 2 or not e.args[1].has(x):
+            return e
+        s, z = e.args
+        J = order + 3
+        r = z ** (1 - s) / (s - 1) + z ** (-s) / 2
+        for j in range(1, J + 1):
+            r += sp.bernoulli(2 * j) / sp.factorial(2 * j) * sp.rf(s, 2 * j - 1) * z ** (-s - 2 * j + 1)
+        return r
+    v = v.replace(lambda e: isinstance(e, sp.harmonic) and len(e.args) == 2,
+                  lambda e: sp.zeta(e.args[1]) - sp.zeta(e.args[1], e.args[0] + 1))
+    return v.replace(lambda e: isinstance(e, sp.zeta) and len(e.args) == 2, em)
+
+
+def _asym_closed(S, x, x0, n, fname, discrete=True):
+    if _is_inf(x0):
+        S = _hurwitz_em(S, x, n if n is not None else 2)
+    return _run_asym(S, x, x0, n, fname, discrete)
+
+
+def _exp_pow(F, k):
+    """E^(c k) -> (E^c)^k so that SymPy recognises geometric sums."""
+    return F.replace(lambda e: isinstance(e, sp.exp) and e.args[0].has(k) and not sp.cancel(e.args[0] / k).has(k),
+                     lambda e: sp.Pow(sp.exp(sp.cancel(e.args[0] / k)), k))
+
+
+def _summation(F, k, a, b):
+    """sp.summation with E^(c k) -> q^k (geometric sums with symbolic ratio)."""
+    F = _exp_pow(F, k)
+    reps = {}
+    for pw in F.atoms(sp.Pow):
+        if pw.exp.has(k) and not pw.base.has(k) and not pw.base.is_number:
+            if pw.base not in reps:
+                reps[pw.base] = sp.Dummy("q")
+    if not reps:
+        return sp.summation(F, (k, a, b))
+    G = F.replace(lambda e: isinstance(e, sp.Pow) and e.base in reps, lambda e: reps[e.base] ** e.exp)
+    S = sp.summation(G, (k, a, b))
+    back = {v: kk for kk, v in reps.items()}
+    return S.xreplace(back)
+
+
+def _nsum(F, k, a, b):
+    f = sp.lambdify(k, F, "mpmath")
+    alt = any(isinstance(e, sp.Pow) and e.base == -1 for e in F.atoms(sp.Pow))
+    hi = mpmath.inf if b == sp.oo else int(b)
+    if alt:
+        return complex(mpmath.nsum(lambda j: f(int(j)), [int(a), hi]))
+    return complex(mpmath.nsum(f, [int(a), hi], method="euler-maclaurin"))
+
+
+def _partial_sum(F, k, a, b):
+    """Closed form of Sum[F, {k, a, b}] (b symbolic): partial fractions, power terms via Hurwitz zeta."""
+    F = _exp_pow(F, k)
+    S = _summation(F, k, a, b)
+    if not S.has(sp.Sum) and not isinstance(S, sp.Piecewise):
+        return S
+    tot = 0
+    Fe = sp.apart(F, k) if F.is_rational_function(k) else sp.expand(F)
+    for t in sp.Add.make_args(Fe):
+        c, pw = t.as_independent(k, as_Add=False)
+        sh = None
+        if isinstance(pw, sp.Pow) and pw.exp.is_number and pw.base.is_polynomial(k) and sp.degree(pw.base, k) == 1 \
+                and sp.Poly(pw.base, k).LC() == 1 and sp.Poly(pw.base, k).TC().is_Integer:
+            sh = int(sp.Poly(pw.base, k).TC())
+        if sh is not None and a.is_Integer and a + sh >= 1:
+            e = pw.exp
+            a, b = a + sh, b + sh
+            if e == -1:
+                st = sp.harmonic(b)
+            else:
+                st = sp.zeta(-e) - sp.zeta(-e, b + 1)
+            tot += c * (st - sum(sp.Integer(j) ** e for j in range(1, int(a))))
+            a, b = a - sh, b - sh
+            continue
+        if pw == k and a.is_Integer:
+            tot += c * sp.summation(k, (k, a, b))
+            continue
+        st = _summation(t, k, a, b)
+        if st.has(sp.Sum) or isinstance(st, sp.Piecewise):
+            return None
+        tot += st
+    return tot
+
+
+def _rational_tail(F, k):
+    """-Sum[F(j), {j, k, Infinity}] for a rational F = O(1/k^2), via polygamma functions of k - root."""
+    if not F.is_rational_function(k):
+        return None
+    num, den = sp.fraction(sp.cancel(F))
+    if sp.degree(den, k) < sp.degree(num, k) + 2:
+        return None
+    rts = sp.roots(sp.Poly(den, k))
+    if sum(rts.values()) != sp.degree(den, k):
+        return None
+    tail = 0
+    for r, mult in rts.items():
+        for m in range(1, mult + 1):
+            # coefficient of 1/(k - r)^m in the partial fraction expansion
+            c = sp.limit(sp.diff(sp.cancel(F * (k - r) ** mult), k, mult - m) / sp.factorial(mult - m), k, r)
+            # Sum_{j>=k} 1/(j - r)^m = (-1)^m/(m-1)! polygamma(m-1, k - r)   (m >= 2); digamma terms combine
+            if m == 1:
+                tail += -c * sp.polygamma(0, k - r)
+            else:
+                tail += c * (-1) ** m * sp.polygamma(m - 1, k - r) / sp.factorial(m - 1)
+    return -tail
+
+
+def _termwise_param_sum(F, k, a, b, x, x0, n):
+    m = n if n is not None else 3
+    try:
+        s = sp.series(F, x, x0, m + 1).removeO()
+    except Exception:
+        return None
+    res = 0
+    xs = x - x0
+    s = sp.expand(s)
+    for p in range(m + 1):
+        c = s.coeff(x, p) if x0 == 0 else sp.expand(s.subs(x, xs + x0)).coeff(xs, p)
+        if c == 0:
+            continue
+        st = sp.summation(c, (k, a, b))
+        if st.has(sp.Sum) or not st.is_finite:
+            return None
+        res += st * (x - x0) ** p
+    return res
+
+
+@fn("AsymptoticSum", area=AREA, status="added",
+    notes="AsymptoticSum[f, {k, a, n}, n -> Infinity | {n, Infinity, m}]: asymptotics of a partial sum, "
+          "AsymptoticSum[f, {k, a, Infinity}, {p, p0, m}]: expansion of a parametric infinite sum, "
+          "AsymptoticSum[f, k, {k, Infinity, m}]: the indefinite sum (the tail convention F(Infinity) = 0 for "
+          "convergent sums, else Sum over 0..k-1); computed from SymPy's closed form (checked numerically against "
+          "direct summation) with Euler-Maclaurin expansions of Hurwitz zeta / generalized harmonic numbers; "
+          "no closed form -> error")
+def _asymsum(f, rng, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticSum")
+    if pos:
+        raise ValueError("AsymptoticSum: too many arguments")
+    F = SX(f, "AsymptoticSum")
+    x, x0, n = _eval_point(spec, o, "AsymptoticSum")
+    if isinstance(rng, Symbol):
+        k = _svar(rng, "AsymptoticSum")
+        if x != k or x0 != sp.oo:
+            raise NotImplementedError("AsymptoticSum: indefinite sums are supported for k -> Infinity only")
+        j = sp.Dummy("j", integer=True)
+        tail = sp.summation(F.subs(k, j), (j, k, sp.oo))
+        rt = _rational_tail(F, k)
+        if rt is not None:
+            S = rt
+        elif not tail.has(sp.Sum) and tail.is_finite is not False and not tail.has(sp.oo, sp.zoo):
+            S = -tail
+        else:
+            lo = 0
+            while lo < 5 and not sp.sympify(F.subs(k, lo)).is_finite:
+                lo += 1
+            S = _partial_sum(F.subs(k, j), j, sp.Integer(lo), k - 1)
+            if S is None or S.has(sp.Sum):
+                raise NotImplementedError("AsymptoticSum: no closed form for the indefinite sum")
+        return _asym_out(_asym_closed(S, k, x0, n, "AsymptoticSum"))
+    k, a, b = _sum_spec(rng, "AsymptoticSum")
+    if b.has(x) and _is_inf(x0):
+        S = _partial_sum(F, k, a, b)
+        if S is None or S.has(sp.Sum):
+            raise NotImplementedError("AsymptoticSum: no closed form for the partial sum")
+        if a.is_Integer and b == x:
+            _check_sum_closed(S, F, k, a, x, "AsymptoticSum")
+        return _asym_out(_asym_closed(S, x, x0, n, "AsymptoticSum"))
+    if not F.has(x):
+        raise ValueError("AsymptoticSum: the expansion variable must be the upper limit or a parameter")
+    S = _summation(F, k, a, b)
+    pv = (x0 + sp.Rational(1, 7)) if not _is_inf(x0) else sp.Integer(7)
+    if isinstance(S, sp.Piecewise):
+        br = S.args[0]
+        S = br[0] if br[1].subs(x, pv) is sp.true else S
+    if not a.is_Integer:
+        raise NotImplementedError("AsymptoticSum: the lower limit must be an integer")
+
+    def numsum(v):
+        return _nsum(F.subs(x, v), k, a, b)
+    if not (S.has(sp.Sum) or S.has(sp.Piecewise)):
+        try:
+            ok = _num_close(numsum(pv), complex(sp.N(S.subs(x, pv), 30)), 1e-6)
+        except Exception:
+            ok = False
+        if ok:
+            try:
+                return _asym_out(_asym_closed(S, x, x0, n, "AsymptoticSum"))
+            except NotImplementedError:
+                pass
+    if _is_inf(x0):
+        raise NotImplementedError("AsymptoticSum: no verified expansion of the parametric sum found")
+    res = _termwise_param_sum(F, k, a, b, x, x0, n)
+    if res is None:
+        raise NotImplementedError("AsymptoticSum: the term-wise sums diverge or have no closed form")
+    m = n if n is not None else 3
+    try:
+        h = sp.Rational(1, 1000)
+        err = abs(numsum(x0 + h) - complex(sp.N(res.subs(x, x0 + h), 30)))
+    except Exception:
+        raise NotImplementedError("AsymptoticSum: the term-wise expansion could not be checked")
+    if err > 1e-3 ** (m + 0.5) * 1e3 + 1e-12:
+        raise NotImplementedError("AsymptoticSum: the term-wise expansion failed a numerical check")
+    if n is None:
+        return _asym_out(_lead_finite(res, x, x0))
+    return _asym_out(res)
+
+
+@fn("AsymptoticProduct", area=AREA, status="added",
+    notes="AsymptoticProduct[f, {k, a, n}, n -> Infinity | {n, Infinity, m}], AsymptoticProduct[f, {k, a, "
+          "Infinity}, {p, p0, m}] and the indefinite AsymptoticProduct[f, k, {k, Infinity, m}] (= Product over "
+          "1..k-1): from SymPy's closed form (Gamma / rising factorials, checked numerically) expanded with "
+          "Stirling's series (Product[k, {k, 2, n}] ~ Sqrt[2 Pi] n^(n + 1/2) E^-n); no closed form -> error")
+def _asymprod(f, rng, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticProduct")
+    if pos:
+        raise ValueError("AsymptoticProduct: too many arguments")
+    F = SX(f, "AsymptoticProduct")
+    x, x0, n = _eval_point(spec, o, "AsymptoticProduct")
+    if isinstance(rng, Symbol):
+        k = _svar(rng, "AsymptoticProduct")
+        if x != k or x0 != sp.oo:
+            raise NotImplementedError("AsymptoticProduct: indefinite products are supported for k -> Infinity only")
+        j = sp.Dummy("j", integer=True)
+        P = sp.product(F.subs(k, j), (j, 1, k - 1))
+        if P.has(sp.Product):
+            raise NotImplementedError("AsymptoticProduct: no closed form for the indefinite product")
+        return _asym_out(_run_asym(P, k, x0, n, "AsymptoticProduct", True))
+    k, a, b = _sum_spec(rng, "AsymptoticProduct")
+    P = sp.product(F, (k, a, b))
+    if P.has(sp.Product) or P.has(sp.Piecewise):
+        raise NotImplementedError("AsymptoticProduct: no closed form for the product")
+    if b.has(x) and _is_inf(x0):
+        if a.is_Integer and b == x:
+            for N in (a + 3, a + 6):
+                d = sp.prod([F.subs(k, j) for j in range(int(a), int(N) + 1)])
+                if not _num_close(complex(sp.N(P.subs(x, N), 30)), complex(sp.N(d, 30)), 1e-8):
+                    raise NotImplementedError("AsymptoticProduct: the closed form failed a numerical check")
+        return _asym_out(_run_asym(P, x, x0, n, "AsymptoticProduct", True))
+    return _asym_out(_run_asym(P, x, x0, n, "AsymptoticProduct", True))
+
+
+def _antideriv(F, x):
+    G = sp.integrate(F, x)
+    if G.has(sp.Integral):
+        return None
+    if sp.simplify(sp.diff(G, x) - F) != 0:
+        return None
+    return G
+
+
+def _num_integral(F, t, a, b):
+    f = sp.lambdify(t, F, "mpmath")
+    return complex(mpmath.quad(f, [float(a) if a.is_finite else (mpmath.inf if a == sp.oo else -mpmath.inf),
+                                   float(b) if b.is_finite else (mpmath.inf if b == sp.oo else -mpmath.inf)]))
+
+
+@fn("AsymptoticIntegrate", area=AREA, status="added",
+    notes="AsymptoticIntegrate[f, x, x -> x0 | {x, x0, n}]: asymptotic expansion of an antiderivative (SymPy's "
+          "antiderivative checked by differentiation, else term-wise integration of the expansion of f, constant "
+          "0); AsymptoticIntegrate[f, {t, a, b}, {p, p0, n}]: expansion of a parametric integral (exact integral "
+          "checked numerically, else term-wise integration of the expansion in p (finite p0, each term finite; the "
+          "result is checked against numerical quadrature near p0)); divergent term-wise integrals raise")
+def _asymint(f, rng, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions", "PrincipalValue"},
+                   "AsymptoticIntegrate")
+    if pos:
+        raise ValueError("AsymptoticIntegrate: too many arguments")
+    F = SX(f, "AsymptoticIntegrate")
+    x, x0, n = _eval_point(spec, o, "AsymptoticIntegrate")
+    if isinstance(rng, Symbol):
+        t = _svar(rng, "AsymptoticIntegrate")
+        if t != x:
+            raise ValueError("AsymptoticIntegrate: the expansion variable must be the integration variable")
+        G = _antideriv(F, x)
+        if G is not None:
+            try:
+                return _asym_out(asym(G, x, x0, n))
+            except _AsymFail:
+                pass
+        if _is_inf(x0):
+            raise NotImplementedError("AsymptoticIntegrate: no antiderivative expansion at Infinity found")
+        m = n if n is not None else 6
+        try:
+            s = sp.series(F, x, x0, m).removeO()
+        except Exception as exc:
+            raise NotImplementedError(f"AsymptoticIntegrate: cannot expand the integrand ({exc})")
+        G = sp.integrate(sp.expand(s), x)
+        if G.has(sp.Integral):
+            raise NotImplementedError("AsymptoticIntegrate: the term-wise integral failed")
+        if n is None:
+            return _asym_out(_lead_finite(G, x, x0))
+        return _asym_out(sp.series(G, x, x0, n + 1).removeO())
+    t, a, b = _sum_spec(rng, "AsymptoticIntegrate")
+    if t == x:
+        raise ValueError("AsymptoticIntegrate: the expansion variable must be a parameter")
+    pv = (x0 + sp.Rational(1, 7)) if not _is_inf(x0) else sp.Integer(7)
+    exact = sp.integrate(F, (t, a, b))
+    if not exact.has(sp.Integral) and not exact.has(sp.Piecewise):
+        try:
+            nv = _num_integral(F.subs(x, pv), t, a, b)
+            ok = _num_close(complex(sp.N(exact.subs(x, pv), 30)), nv, 1e-6)
+        except Exception:
+            ok = False
+        if ok:
+            try:
+                return _asym_out(asym(exact, x, x0, n))
+            except _AsymFail:
+                pass
+    if _is_inf(x0):
+        raise NotImplementedError("AsymptoticIntegrate: no verified expansion of the parametric integral found")
+    m = n if n is not None else 4
+    try:
+        s = sp.series(F, x, x0, m + 1).removeO()
+    except Exception as exc:
+        raise NotImplementedError(f"AsymptoticIntegrate: cannot expand the integrand ({exc})")
+    res = 0
+    for p in range(0, m + 1):
+        c = sp.expand(s).coeff(x - x0 if x0 != 0 else x, p) if p else s.subs(x, x0)
+        if c == 0:
+            continue
+        I_ = sp.integrate(c, (t, a, b))
+        if I_.has(sp.Integral) or not I_.is_finite:
+            raise NotImplementedError("AsymptoticIntegrate: a term-wise integral diverges or has no closed form "
+                                      "(non-uniform expansion)")
+        res += I_ * (x - x0) ** p
+    # numerical check near x0
+    errs = []
+    for h in (sp.Rational(1, 100), sp.Rational(1, 1000)):
+        try:
+            nv = _num_integral(F.subs(x, x0 + h), t, a, b)
+            errs.append(abs(complex(sp.N(res.subs(x, x0 + h), 30)) - nv))
+        except Exception:
+            raise NotImplementedError("AsymptoticIntegrate: the term-wise expansion could not be checked")
+    if errs[1] > 1e-3 ** (m + 0.5) * 1e3 + 1e-12:
+        raise NotImplementedError("AsymptoticIntegrate: the term-wise expansion failed a numerical check")
+    if n is None:
+        return _asym_out(_lead_finite(res, x, x0))
+    return _asym_out(res)
+
+
+def _texp(term, t):
+    c, pw = term.as_independent(t, as_Add=False)
+    if pw == 1:
+        return 0
+    if pw == t:
+        return 1
+    if isinstance(pw, sp.Pow) and pw.base == t and pw.exp.is_number:
+        return pw.exp
+    return -sp.oo
+
+
+def _branches(F, y, x, x0, n, fname):
+    try:
+        roots = sp.solve(F, y)
+    except Exception:
+        roots = []
+    if not roots:
+        raise NotImplementedError(f"{fname}: the branches could not be found")
+    res = []
+    for r in roots:
+        try:
+            if _is_inf(x0):
+                v = asym(r, x, x0, n)
+            else:
+                v = sp.series(r, x, x0, (n if n is not None else 0) + 1).removeO() if n is not None \
+                    else _lead_finite(r, x, x0)
+                if n is not None:
+                    t_ = sp.Dummy("t")
+                    v = sp.Add(*[term for term in sp.Add.make_args(sp.expand(v.subs(x, x0 + t_)))
+                                 if not (sp.Poly(term.subs(t_, t_), t_) if False else False)
+                                 and _texp(term, t_) <= n]).subs(t_, x - x0)
+        except Exception:
+            continue
+        res.append(sp.expand(v))
+    return res
+
+
+@fn("AsymptoticSolve", area=AREA, status="added",
+    notes="AsymptoticSolve[eqn, {y, y0}, {x, x0, n}]: the branch of y(x) through (x0, y0) as a Taylor series (implicit "
+          "function theorem, requires D[eqn, y] != 0 there; Newton iteration on truncated series, residual checked); "
+          "AsymptoticSolve[eqn, y | {y}, {x, x0, n} | x -> x0]: every branch, from SymPy's closed-form roots "
+          "expanded in Puiseux series; systems raise")
+def _asymsolve(eqn, ys, spec, *rest):
+    pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticSolve")
+    if pos and not (len(pos) == 1 and isinstance(pos[0], Symbol) and pos[0].name in ("Reals", "Complexes")):
+        raise ValueError("AsymptoticSolve: too many arguments")
+    dom = pos[0].name if pos else "Complexes"
+    if _head(eqn, "And") or is_list(eqn):
+        raise NotImplementedError("AsymptoticSolve: systems of equations are not supported")
+    E_ = SX(eqn, "AsymptoticSolve")
+    F = E_.lhs - E_.rhs if isinstance(E_, sp.Equality) else E_
+    x, x0, n = _eval_point(spec, o, "AsymptoticSolve")
+    if is_list(ys) and len(ys.args) == 2 and not is_list(ys.args[0]):
+        y = _svar(ys.args[0], "AsymptoticSolve")
+        y0 = SX(ys.args[1], "AsymptoticSolve")
+        if _is_inf(x0):
+            raise NotImplementedError("AsymptoticSolve: branch selection at Infinity is not supported")
+        if sp.simplify(F.subs({x: x0, y: y0})) != 0:
+            raise ValueError("AsymptoticSolve: the point {x0, y0} does not satisfy the equation")
+        Fy = sp.simplify(sp.diff(F, y).subs({x: x0, y: y0}))
+        if Fy == 0:
+            raise NotImplementedError("AsymptoticSolve: D[eqn, y] vanishes at the point (singular branch point)")
+        m = n if n is not None else 6
+        Y = y0
+        for _ in range(m + 1):
+            r = sp.series(F.subs(y, Y), x, x0, m + 1).removeO()
+            Y = sp.expand(Y - r / Fy)
+            Y = sp.series(Y, x, x0, m + 1).removeO() if Y.has(x) else Y
+        chk = sp.series(F.subs(y, Y), x, x0, m + 1).removeO()
+        if sp.simplify(chk) != 0:
+            raise NotImplementedError("AsymptoticSolve: the series did not converge")
+        if n is None:
+            Y = Y - y0
+            Y = y0 + (_lead_finite(Y, x, x0) if Y != 0 else 0)
+        return L(L(rule(Symbol(y.name), _asym_out(Y))))
+    if is_list(ys):
+        if len(ys.args) != 1:
+            raise NotImplementedError("AsymptoticSolve: only one unknown is supported")
+        ys = ys.args[0]
+    y = _svar(ys, "AsymptoticSolve")
+    brs = _branches(F, y, x, x0, n, "AsymptoticSolve")
+    if dom == "Reals":
+        brs = [b for b in brs if not b.has(sp.I)]
+    return L(*(L(rule(Symbol(y.name), _asym_out(b))) for b in brs))
