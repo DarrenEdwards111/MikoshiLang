@@ -3603,7 +3603,6 @@ SKIPPED = {
     "RuntimeAttributes": "Compile option (compiler not part of this batch)",
     "RuntimeOptions": "Compile option (compiler not part of this batch)",
     "EvaluationObject": "parallel-kernel evaluation objects (ParallelSubmit)",
-    "NextValue": "IncrementalObject protocol (another batch)",
     "InitializationObject": "persistence framework (PersistenceLocation) not available",
     "InitializationObjects": "persistence framework (PersistenceLocation) not available",
     "InitializationValue": "persistence framework (PersistenceLocation) not available",

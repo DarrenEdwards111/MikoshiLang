@@ -649,6 +649,19 @@ def _messages(s):
 
 
 _hold_first("Messages", "MessageName", "Message")
+
+
+def _assign_messagename(lhs, rhs, ev_):
+    """s::t = text (and :=) stores a message for s.  As in Wolfram this is allowed for Protected symbols too
+    (General::tag, built-in heads): messages are not definitions of the head MessageName or of s."""
+    if not isinstance(lhs, Expr):
+        raise ValueError("Symbol MessageName is protected")
+    if not (len(lhs.args) in (2, 3) and isinstance(lhs.args[0], Symbol)):
+        raise ValueError(f"Set: {input_text(lhs)} is not a valid message name")
+    K.store_definition(Expr("MessageName", lhs.args[0], *[ev_(a) for a in lhs.args[1:]]), rhs)
+
+
+K.ASSIGN_HOOKS["MessageName"] = _assign_messagename
 _hold_all("Off", "On", "Quiet", "Check")
 
 
