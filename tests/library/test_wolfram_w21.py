@@ -588,26 +588,35 @@ OPTIONS = [
 ]
 
 FILES = []
-TMP = tempfile.mkdtemp(prefix="w21")
+# A fixed directory (test ids must be identical in every pytest-xdist worker); inputs are written atomically and
+# each case writes its own output file, so parallel workers do not race.
+TMP = os.path.join(tempfile.gettempdir(), "mikoshilang-w21-tests")
 if HAVE_PIL:
     import numpy as np
     from PIL import Image as _PILImage
-    _PILImage.fromarray(np.array([[0, 128], [255, 64]], dtype=np.uint8)).save(os.path.join(TMP, "g.png"))
-    _PILImage.fromarray(np.array([[[255, 0, 0], [0, 255, 0]]], dtype=np.uint8)).save(os.path.join(TMP, "c.png"))
-    g, c = os.path.join(TMP, "g.png"), os.path.join(TMP, "c.png")
-    o1, o2, o3 = (os.path.join(TMP, f"o{k}.png") for k in (1, 2, 3))
+    os.makedirs(TMP, exist_ok=True)
+
+    def _save(arr, name):
+        fd, tmp = tempfile.mkstemp(dir=TMP, suffix=".png")
+        os.close(fd)
+        _PILImage.fromarray(np.array(arr, dtype=np.uint8)).save(tmp)
+        os.replace(tmp, os.path.join(TMP, name))
+        return os.path.join(TMP, name)
+    g = _save([[0, 128], [255, 64]], "g.png")
+    c = _save([[[255, 0, 0], [0, 255, 0]]], "c.png")
+    o = {k: os.path.join(TMP, f"out{k}.png") for k in range(1, 20)}
     FILES = [
-        (f"ImageFileApply[1 - # &, \"{g}\", \"{o1}\"]", f"\"{o1}\""),
-        (f"ImageFileApply[Reverse, \"{c}\", File[\"{o2}\"]]", f"File[\"{o2}\"]"),
-        (f"ImageFileApply[1 - # &, \"{g}\", \"{o3}\"]; Reap[ImageFileScan[Sow, \"{o3}\"]][[2, 1]]",
+        (f"ImageFileApply[1 - # &, \"{g}\", \"{o[1]}\"]", f"\"{o[1]}\""),
+        (f"ImageFileApply[Reverse, \"{c}\", File[\"{o[2]}\"]]", f"File[\"{o[2]}\"]"),
+        (f"ImageFileApply[1 - # &, \"{g}\", \"{o[3]}\"]; Reap[ImageFileScan[Sow, \"{o[3]}\"]][[2, 1]]",
          N([1, 127 / 255, 0, 191 / 255])),
-        (f"ImageFileApply[1 - # &, \"{TMP}/missing.png\", \"{o1}\"]", Raises(ValueError, "^ImageFileApply: ")),
+        (f"ImageFileApply[1 - # &, \"{TMP}/missing.png\", \"{o[4]}\"]", Raises(ValueError, "^ImageFileApply: ")),
         (f"ImageFileApply[1 - # &, \"{g}\"]", Raises(NotImplementedError, "^ImageFileApply: ")),
-        (f"ImageFileFilter[Max, \"{g}\", 1, \"{o1}\"]", f"\"{o1}\""),
-        (f"ImageFileFilter[Max, \"{g}\", 1, \"{o1}\"]; Reap[ImageFileScan[Sow, \"{o1}\"]][[2, 1]]", N([1, 1, 1, 1])),
-        (f"ImageFileFilter[Min, \"{g}\", 0, \"{o1}\"]; Reap[ImageFileScan[Sow, \"{o1}\"]][[2, 1]]",
+        (f"ImageFileFilter[Max, \"{g}\", 1, \"{o[5]}\"]", f"\"{o[5]}\""),
+        (f"ImageFileFilter[Max, \"{g}\", 1, \"{o[6]}\"]; Reap[ImageFileScan[Sow, \"{o[6]}\"]][[2, 1]]", N([1, 1, 1, 1])),
+        (f"ImageFileFilter[Min, \"{g}\", 0, \"{o[7]}\"]; Reap[ImageFileScan[Sow, \"{o[7]}\"]][[2, 1]]",
          N([0, 128 / 255, 1, 64 / 255])),
-        (f"ImageFileFilter[Max, \"{g}\", 1, \"{o1}\", Padding -> None]", Raises(ValueError, "^ImageFileFilter: ")),
+        (f"ImageFileFilter[Max, \"{g}\", 1, \"{o[8]}\", Padding -> None]", Raises(ValueError, "^ImageFileFilter: ")),
         (f"Reap[ImageFileScan[Sow, \"{g}\"]][[2, 1]]", N([0, 128 / 255, 1, 64 / 255])),
         (f"ImageFileScan[Sow, \"{c}\"]", "Null"),
         (f"Reap[ImageFileScan[Sow, File[\"{c}\"], Interleaving -> False]][[2, 1]]", N([1, 0, 0, 0, 1, 0])),
