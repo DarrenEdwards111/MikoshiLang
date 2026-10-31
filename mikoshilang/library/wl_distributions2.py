@@ -4928,7 +4928,16 @@ def _reliability(d, fname):
             raise ValueError(f"{head}: each component must be {{x, dist}}")
         names.append(c.args[0].name)
         ds.append(_base(c.args[1], head))
+    if any(dd.discrete for dd in ds):
+        raise NotImplementedError(f"{head}: discrete component lifetimes are not supported")
     f = _bool_vars(d.args[0], names)
+    import itertools
+    try:  # validate the structure function on every state now, so bad input raises at construction
+        for bits in itertools.product((True, False), repeat=len(names)):
+            if not isinstance(f(dict(zip(names, bits))), bool):
+                raise NotImplementedError(f"the Boolean structure function {d.args[0]} is not supported")
+    except (ValueError, NotImplementedError) as e:
+        raise type(e)(f"{head}: {e}") from None
     return Reliability(head, [], (f, names, ds, head == "FailureDistribution"))
 
 
@@ -5110,10 +5119,12 @@ _builder("ProbabilityDistribution", _prob_dist,
 _builder("FailureDistribution", _reliability,
          "FailureDistribution[bexpr, {{x1, dist1}, ...}] (fault tree: the top event occurs when bexpr is True): "
          "survival by exact enumeration of the Boolean structure function over independent components, PDF, CDF, "
-         "moments, RandomVariate. Check: exact; Or-gate = minimum of exponentials in tests.")
+         "moments, RandomVariate; continuous components only (discrete lifetimes raise NotImplementedError; variables "
+         "not declared in the component list raise ValueError). Check: exact; Or-gate = minimum of exponentials in tests.")
 _builder("ReliabilityDistribution", _reliability,
          "ReliabilityDistribution[bexpr, {{x1, dist1}, ...}] (block diagram: the system works while bexpr is True): "
-         "survival by exact enumeration of the structure function, PDF, CDF, moments, RandomVariate. Check: exact; "
+         "survival by exact enumeration of the structure function, PDF, CDF, moments, RandomVariate; continuous components "
+         "only (discrete lifetimes raise NotImplementedError; undeclared variables raise ValueError). Check: exact; "
          "series/parallel systems of exponentials in tests.")
 _builder("StandbyDistribution", _standby,
          "StandbyDistribution[dist1, {dist2, ...}] (cold standby, perfect switching): lifetime = sum of the component "
