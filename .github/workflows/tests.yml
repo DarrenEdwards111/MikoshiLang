@@ -26,3 +26,48 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install . pytest
       - run: python -m pytest -q
+  wheel-install:
+    # Build the wheel, install it into a fresh venv and run the tests from outside the source tree, so a
+    # module or data file missing from the wheel fails CI (pytest from the checkout imports ./mikoshilang).
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.9', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '${{ matrix.python }}'
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install build
+          python -m build --outdir dist
+      - name: Install the wheel into a fresh venv
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          WHEEL=$(ls dist/mikoshilang-*.whl)
+          "$RUNNER_TEMP/venv/bin/python" -m pip install "${WHEEL}[all,test]"
+      - name: Import and smoke test outside the checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" - <<'PY'
+          import os, mikoshilang
+          from mikoshilang import Session
+          from mikoshilang.library import REGISTRY
+          path = os.path.realpath(mikoshilang.__file__)
+          assert os.sep + "site-packages" + os.sep in path, path
+          s = Session()
+          assert s.evaluate("f[x_] := x^2; f[3]") == 9
+          assert str(s.evaluate("Integrate[x^2, x]")) == "x^3/3"
+          assert len(REGISTRY) > 1000
+          print("wheel OK:", mikoshilang.__version__, path, len(REGISTRY), "library heads")
+          PY
+      - name: Run the test suite against the installed wheel
+        run: |
+          # tests/test_language_correctness.py imports the root-level legacy runner test_all_functions.py.
+          cp -r tests test_all_functions.py "$RUNNER_TEMP/"
+          cd "$RUNNER_TEMP"
+          # test_roadmap reads docs/ and scripts/ from the checkout; it is covered by the offline job.
+          "$RUNNER_TEMP/venv/bin/python" -m pytest -q -p no:cacheprovider tests --ignore=tests/test_roadmap.py
+        env:
+          MPLBACKEND: Agg

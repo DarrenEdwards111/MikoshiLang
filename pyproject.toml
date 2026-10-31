@@ -40,8 +40,10 @@ Documentation = "https://github.com/DarrenEdwards111/MikoshiLang#readme"
 mikoshilang = "mikoshilang.repl:main"
 mikoshilang-install-kernel = "mikoshilang.jupyter.install:main"
 
-[tool.setuptools]
-packages = ["mikoshilang", "mikoshilang.jupyter"]
+[tool.setuptools.packages.find]
+# Discover every subpackage (mikoshilang.library, mikoshilang.jupyter, ...). A hand-written list
+# silently dropped mikoshilang.library from the wheel, so `import mikoshilang` failed after install.
+include = ["mikoshilang*"]
 
 [tool.setuptools.data-files]
 "share/mikoshilang/manual" = ["manual/*.pdf", "manual/*.tex", "manual/*.md"]
@@ -53,3 +55,4 @@ markers = ["live_service: depends on external knowledge APIs and mutable remote 
 
 [tool.setuptools.package-data]
 mikoshilang = ["quarantined.json"]
+"mikoshilang.jupyter" = ["kernel.json"]
