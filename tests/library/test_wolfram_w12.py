@@ -664,7 +664,7 @@ ROWKEY = [
     ('Normal[RowKey["a"][Tabular[Tabular[{{1, "a", 2.}, {4, "b", 3.}}, {"col1", "col2", "col3"}], '
      '<|"KeyColumns" -> {"col2"}|>]]]', '<|"col1" -> 1, "col2" -> "a", "col3" -> 2.|>'),
     ('RowKey["k"]', 'RowKey[{"k"}]'),
-    (f'Normal[{TABK.replace("{\"key\"}", "{\"key\", \"col1\"}")}[RowKey[{{"one", True}}]]]',
+    ('Normal[' + TABK.replace('{"key"}', '{"key", "col1"}') + '[RowKey[{"one", True}]]]',
      '<|"key" -> "one", "col1" -> True, "col2" -> "foo"|>'),
 ]
 EXTKEYS = ('Tabular[{{1, "fox", 2, "lynx"}, {3, "deer", 4, "fox"}}, {ExtendedKey["obs A", "time"], '
