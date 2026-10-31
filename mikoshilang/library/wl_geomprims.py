@@ -4026,3 +4026,361 @@ def _augmented_polyhedron(poly: Expr, *rest: Real | Option) -> Expr:
         for k in range(len(fc)):
             newF.append([fc[k], fc[(k + 1) % len(fc)], a])
     return _poly_out(newV, newF, (poly, args[0]))
+
+
+# ───────────────────────────── splines ─────────────────────────────
+
+def _int_arg(x, f, what, lo=0):
+    if isinstance(x, bool) or not K.is_int(x):
+        if isinstance(x, Symbol) or (isinstance(x, Expr) and not _bad_kind(x) and not K.is_list(x)):
+            raise Unevaluated()
+        raise TypeError(f"{f}: {what} must be an integer, not {K_input(x)}")
+    v = int(x)
+    if v < lo:
+        raise ValueError(f"{f}: {what} must be at least {lo}")
+    return v
+
+
+def _real_param(x, f, what="parameter"):
+    """A concrete real parameter (SymPy) or Unevaluated for symbolic input."""
+    v = sx(x, f, what)
+    concrete(v)
+    if v.is_real is False:
+        raise ValueError(f"{f}: {what} must be real")
+    return v
+
+
+def _bspline_basis(U, d, i, x):
+    """Cox-de Boor: value of the i-th degree-d basis function on knots U at x (exact); the last non-empty knot span
+    is closed on the right so the basis functions sum to 1 on the whole closed domain."""
+    m = len(U) - 1
+    last = max(j for j in range(m) if fsign(U[j + 1] - U[j]) > 0) if any(
+        fsign(U[j + 1] - U[j]) > 0 for j in range(m)) else -1
+    N = []
+    for j in range(m):
+        inside = fsign(x - U[j]) >= 0 and (fsign(U[j + 1] - x) > 0 or (j == last and fsign(U[j + 1] - x) == 0))
+        N.append(sp.Integer(1) if inside else sp.Integer(0))
+    for k in range(1, d + 1):
+        M = []
+        for j in range(m - k):
+            a = (x - U[j]) / (U[j + k] - U[j]) * N[j] if fsign(U[j + k] - U[j]) != 0 else 0
+            b = (U[j + k + 1] - x) / (U[j + k + 1] - U[j + 1]) * N[j + 1] if fsign(U[j + k + 1] - U[j + 1]) != 0 else 0
+            M.append(a + b)
+        N = M
+    return sp.simplify(N[i])
+
+
+@fn("BernsteinBasis", area=AREA, status="added",
+    notes="BernsteinBasis[d, n, x] = Binomial[d, n] x^n (1 - x)^(d - n) for 0 <= x <= 1 and 0 elsewhere (integers "
+          "d >= 0, 0 <= n <= d; n outside 0..d gives 0). Exact for exact x, machine numbers for inexact x; "
+          "symbolic x stays unevaluated (use PiecewiseExpand-style reasoning on the closed form). Non-integer d, n "
+          "raise TypeError, negative d ValueError. Check: Wolfram documentation example BernsteinBasis[4, 3, 0.5] "
+          "= 0.25 and partition of unity in tests.")
+def _bernstein_basis(d: NonNegInteger, n: Integer, x: Real) -> Real:
+    f = "BernsteinBasis"
+    dd = _int_arg(d, f, "degree d")
+    nn = _int_arg(n, f, "index n", lo=-10 ** 9)
+    xv = _real_param(x, f, "x")
+    if nn < 0 or nn > dd or fsign(xv) < 0 or fsign(xv - 1) > 0:
+        return out(sp.Integer(0), x)
+    return out(sp.binomial(dd, nn) * xv ** nn * (1 - xv) ** (dd - nn), x)
+
+
+def _knot_list(x, f):
+    U = [sx(u, f, "knot") for u in (x.args if K.is_list(x) else [])]
+    if not K.is_list(x) or not U:
+        raise TypeError(f"{f}: knots must be a list of numbers, not {K_input(x)}")
+    concrete(U)
+    for a, b in zip(U, U[1:]):
+        if fsign(b - a) < 0:
+            raise ValueError(f"{f}: knot positions must form a non-decreasing sequence")
+    return U
+
+
+@fn("BSplineBasis", area=AREA, status="added",
+    notes="BSplineBasis[d, n, x]: n-th uniform B-spline basis function of degree d, with knots k/(d + 1) "
+          "(k = n, ..., n + d + 1) so it is nonzero only for n/(d+1) < x < (n+d+1)/(d+1); BSplineBasis[d, x] = "
+          "BSplineBasis[d, 0, x]; BSplineBasis[{d, {u1, ..., um}}, n, x] uses the given non-decreasing knots, "
+          "0 <= n <= m - d - 2 (Cox-de Boor recursion; the last non-empty knot span is closed). Exact for exact "
+          "input, machine numbers otherwise; symbolic x stays unevaluated. Decreasing knots or n out of range raise "
+          "ValueError. Check: Wolfram documentation example BSplineBasis[3, 0.5] = 0.666667 and "
+          "scipy.interpolate.BSpline.basis_element comparisons in tests.")
+def _bspline_basis_fn(spec: NonNegInteger | ListOf[Expr], *rest: Integer | Real) -> Real:
+    f = "BSplineBasis"
+    if len(rest) == 1:
+        nn, x = 0, rest[0]
+    elif len(rest) == 2:
+        nn, x = _int_arg(rest[0], f, "index n"), rest[1]
+    else:
+        raise ValueError(f"{f}: expected BSplineBasis[d, x] or BSplineBasis[d, n, x]")
+    if K.is_list(spec):
+        if len(spec.args) != 2:
+            raise ValueError(f"{f}: expected {{d, {{u1, u2, ...}}}}")
+        dd = _int_arg(spec.args[0], f, "degree d")
+        U = _knot_list(spec.args[1], f)
+        if nn > len(U) - dd - 2:
+            raise ValueError(f"{f}: index n must be between 0 and {len(U) - dd - 2} for {len(U)} knots of degree {dd}")
+        xv = _real_param(x, f, "x")
+        return out(_bspline_basis(U, dd, nn, xv), x, spec)
+    dd = _int_arg(spec, f, "degree d")
+    xv = _real_param(x, f, "x")
+    U = [sp.Rational(nn + k, dd + 1) for k in range(dd + 2)]
+    return out(_bspline_basis(U, dd, 0, xv), x)
+
+
+def _control_array(arr, f, nvars=None):
+    """(nested list of control values, nvars, embedding dim or 0 for scalars)."""
+    if not K.is_list(arr) or not arr.args:
+        if isinstance(arr, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{f}: control points must be a non-empty list, not {K_input(arr)}")
+
+    def depth(x):
+        return 1 + depth(x.args[0]) if K.is_list(x) and x.args else 0
+    D = depth(arr)
+    if nvars is None:
+        nvars = D - 1
+        if nvars < 1:
+            raise NotImplementedError(f"{f}: a flat list of numbers is ambiguous; give points {{{{x1, ...}}, ...}} "
+                                      "or the number of variables")
+    if nvars > D:
+        raise ValueError(f"{f}: the control array has fewer than {nvars} levels")
+
+    def conv(x, lvl):
+        if lvl == nvars:
+            if K.is_list(x):
+                return [sx(c, f, "control point coordinate") for c in x.args]
+            return sx(x, f, "control value")
+        if not K.is_list(x) or not x.args:
+            raise ValueError(f"{f}: the control array must be rectangular")
+        return [conv(y, lvl + 1) for y in x.args]
+    A = conv(arr, 0)
+
+    def shape(a, lvl):
+        if lvl == nvars:
+            return ()
+        s = {shape(b, lvl + 1) for b in a}
+        if len(s) != 1:
+            raise ValueError(f"{f}: the control array must be rectangular")
+        return (len(a),) + s.pop()
+    shp = shape(A, 0)
+    leaves = []
+
+    def walk(a, lvl):
+        if lvl == nvars:
+            leaves.append(a)
+        else:
+            for b in a:
+                walk(b, lvl + 1)
+    walk(A, 0)
+    dims = {len(v) if isinstance(v, list) else 0 for v in leaves}
+    if len(dims) != 1:
+        raise ValueError(f"{f}: all control points must have the same dimension")
+    return A, shp, dims.pop()
+
+
+def _tensor_eval(A, bases, emb):
+    """Sum over the control array of prod_k bases[k][i_k] * A[i...]."""
+    def rec(a, k):
+        if k == len(bases):
+            return a if isinstance(a, list) else [a]
+        acc = None
+        for i, b in enumerate(a):
+            w = bases[k][i]
+            if w == 0:
+                continue
+            v = [w * c for c in rec(b, k + 1)]
+            acc = v if acc is None else [p + q for p, q in zip(acc, v)]
+        return acc if acc is not None else [sp.Integer(0)] * max(emb, 1)
+    return rec(A, 0)
+
+
+def _spline_obj_args(head, f):
+    a, opts = split_trailing_options(list(head.args))
+    return a, opts
+
+
+def _params(args, nv, f):
+    if len(args) != nv:
+        raise ValueError(f"{f}: expected {nv} parameter{'s' if nv != 1 else ''}, got {len(args)}")
+    vals = []
+    for x in args:
+        v = sx(x, f, "parameter")
+        if is_symbolic(v):
+            return None
+        vals.append(v)
+    return vals
+
+
+@fn("BezierFunction", area=AREA, status="added",
+    notes="BezierFunction[{p1, ..., pn}] (or an array of control points of depth k + 1 for a k-parameter Bezier "
+          "manifold; BezierFunction[array, k] for scalar control values) is an inert function object after "
+          "validation; BezierFunction[...][u, ...] evaluates the tensor-product Bernstein form of degree n - 1 in "
+          "each direction for 0 <= u <= 1 (de Casteljau-equivalent). Parameters outside [0, 1] raise "
+          "NotImplementedError; symbolic parameters stay unevaluated; ragged arrays and wrong parameter counts "
+          "raise ValueError. Options Method and WorkingPrecision are accepted. Check: Wolfram documentation example "
+          "BezierFunction[{{0, 0}, {1, 1}, {2, 0}, {3, 2}}][0.5] = {1.5, 0.625} (the Bernstein sum) in tests.")
+def _bezier_function(arr: Expr, *rest: PosInteger | Option) -> Expr:
+    f = "BezierFunction"
+    a, opts = split_trailing_options([arr] + list(rest))
+    for r in opts:
+        if opt_name(r) not in ("Method", "WorkingPrecision"):
+            raise ValueError(f"{f}: {opt_name(r)} is not a known option of {f}")
+    if len(a) > 2:
+        raise ValueError(f"{f}: expected BezierFunction[array] or BezierFunction[array, k]")
+    _control_array(a[0], f, _int_arg(a[1], f, "number of variables", lo=1) if len(a) == 2 else None)
+    raise Unevaluated()
+
+
+def _bezier_apply(head, args, ev_):
+    f = "BezierFunction"
+    a, _opts = split_trailing_options(list(head.args))
+    if not a or len(a) > 2:
+        return K.UNHANDLED
+    try:
+        A, shp, emb = _control_array(a[0], f, int(a[1]) if len(a) == 2 and K.is_int(a[1]) else None)
+    except Unevaluated:
+        return K.UNHANDLED
+    vals = _params(args, len(shp), f)
+    if vals is None:
+        return K.UNHANDLED
+    concrete(A)
+    bases = []
+    for u, n in zip(vals, shp):
+        if fsign(u) < 0 or fsign(u - 1) > 0:
+            raise NotImplementedError(f"{f}: parameters outside [0, 1] are not supported")
+        bases.append([sp.binomial(n - 1, i) * u ** i * (1 - u) ** (n - 1 - i) for i in range(n)])
+    v = _tensor_eval(A, bases, emb)
+    return out(v if emb else v[0], *args, a[0])
+
+
+KL_hooks = None
+
+
+def _install_hooks():
+    from .. import kernel_lists as KL
+    KL.COMPOUND_HEAD_HOOKS["BezierFunction"] = _bezier_apply
+    KL.COMPOUND_HEAD_HOOKS["BSplineFunction"] = _bspline_apply
+
+
+def _bspline_setup(head, f):
+    a, opts = split_trailing_options(list(head.args))
+    if not a or len(a) > 2:
+        raise ValueError(f"{f}: expected BSplineFunction[array] or BSplineFunction[array, k]")
+    nv = _int_arg(a[1], f, "number of variables", lo=1) if len(a) == 2 else None
+    A, shp, emb = _control_array(a[0], f, nv)
+    k = len(shp)
+    degs, knots, weights, closed = [None] * k, [None] * k, None, [False] * k
+    for r in opts:
+        n = opt_name(r)
+        v = r.args[1]
+        auto = isinstance(v, Symbol) and v.name == "Automatic"
+        if n == "SplineDegree":
+            if auto:
+                continue
+            vals = list(v.args) if K.is_list(v) else [v] * k
+            if len(vals) != k:
+                raise ValueError(f"{f}: SplineDegree needs one degree per parameter direction")
+            degs = [_int_arg(d, f, "SplineDegree", lo=1) if not (isinstance(d, Symbol) and d.name == "Automatic")
+                    else None for d in vals]
+        elif n == "SplineKnots":
+            if auto or (isinstance(v, str) and v == "Clamped"):
+                continue
+            if isinstance(v, str):
+                raise NotImplementedError(f"{f}: SplineKnots -> {K_input(v)} is not supported")
+            if k == 1 and K.is_list(v) and v.args and not K.is_list(v.args[0]):
+                knots = [_knot_list(v, f)]
+            elif K.is_list(v) and len(v.args) == k:
+                knots = [None if (isinstance(x, Symbol) and x.name == "Automatic") else _knot_list(x, f)
+                         for x in v.args]
+            else:
+                raise ValueError(f"{f}: SplineKnots needs one knot list per parameter direction")
+        elif n == "SplineWeights":
+            if auto:
+                continue
+            W, wshp, wemb = _control_array(v, f, k) if k > 1 or (K.is_list(v) and v.args and K.is_list(v.args[0])) \
+                else ([sx(w, f, "weight") for w in v.args] if K.is_list(v) else None, None, 0)
+            if W is None:
+                raise TypeError(f"{f}: SplineWeights must be an array of numbers")
+            if wshp is not None and (wshp != shp or wemb):
+                raise ValueError(f"{f}: SplineWeights must have the shape of the control array")
+            if wshp is None and len(W) != shp[0]:
+                raise ValueError(f"{f}: SplineWeights must have one weight per control point")
+            weights = W
+        elif n == "SplineClosed":
+            vals = list(v.args) if K.is_list(v) else [v] * k
+            for c in vals:
+                if c is not True and c is not False:
+                    raise ValueError(f"{f}: SplineClosed must be True or False")
+            if any(c is True for c in vals):
+                raise NotImplementedError(f"{f}: closed (periodic) B-splines are not supported")
+        else:
+            raise ValueError(f"{f}: {n} is not a known option of {f}")
+    U = []
+    for j in range(k):
+        n = shp[j]
+        if knots[j] is not None:
+            d = len(knots[j]) - n - 1
+            if d < 0 or (degs[j] is not None and degs[j] != d):
+                raise ValueError(f"{f}: {len(knots[j])} knots are inconsistent with {n} control points"
+                                 + (f" and degree {degs[j]}" if degs[j] is not None else ""))
+            degs[j] = d
+            U.append(knots[j])
+        else:
+            d = min(degs[j] if degs[j] is not None else 3, n - 1)
+            degs[j] = d
+            U.append([sp.Integer(0)] * (d + 1) + [sp.Rational(i, n - d) for i in range(1, n - d)] +
+                     [sp.Integer(1)] * (d + 1))
+    return A, shp, emb, degs, U, weights
+
+
+@fn("BSplineFunction", area=AREA, status="added",
+    notes="BSplineFunction[{p1, ..., pn}] (or a control array of depth k + 1 for a k-parameter B-spline manifold; "
+          "BSplineFunction[array, k] for scalar control values) is an inert function object after validation; "
+          "BSplineFunction[...][u, ...] evaluates the (rational, with SplineWeights) tensor-product B-spline. "
+          "Defaults as documented: cubic (degree min(3, n - 1)) with uniform clamped knots on [0, 1] so the curve "
+          "starts at p1 and ends at pn; SplineDegree, SplineKnots (explicit lists fix the degree as "
+          "#knots - n - 1), SplineWeights are supported. SplineClosed -> True and SplineKnots -> \"Unclamped\" "
+          "raise NotImplementedError, as do parameters outside the knot domain; inconsistent knots, ragged arrays "
+          "and wrong parameter counts raise ValueError; symbolic parameters stay unevaluated. "
+          "Check: compared with scipy.interpolate.BSpline and with an explicit Cox-de Boor sum in tests.")
+def _bspline_function(arr: Expr, *rest: PosInteger | Option) -> Expr:
+    f = "BSplineFunction"
+    _bspline_setup(Expr("BSplineFunction", arr, *rest), f)
+    raise Unevaluated()
+
+
+def _bspline_apply(head, args, ev_):
+    f = "BSplineFunction"
+    try:
+        A, shp, emb, degs, U, W = _bspline_setup(head, f)
+    except Unevaluated:
+        return K.UNHANDLED
+    vals = _params(args, len(shp), f)
+    if vals is None:
+        return K.UNHANDLED
+    concrete(A)
+    bases = []
+    for u, n, d, Uj in zip(vals, shp, degs, U):
+        if fsign(u - Uj[d]) < 0 or fsign(u - Uj[n]) > 0:
+            raise NotImplementedError(f"{f}: parameter {K_input(out(u))} is outside the domain "
+                                      f"[{K_input(out(Uj[d]))}, {K_input(out(Uj[n]))}]")
+        bases.append([_bspline_basis(Uj, d, i, u) for i in range(n)])
+    if W is None:
+        v = _tensor_eval(A, bases, emb)
+    else:
+        concrete(W)
+
+        def scale(a, w, lvl):
+            if lvl == len(shp):
+                return [w * c for c in a] + [w] if isinstance(a, list) else [w * a, w]
+            return [scale(b, ww, lvl + 1) for b, ww in zip(a, w)]
+        AW = scale(A, W, 0)
+        hv = _tensor_eval(AW, bases, (emb or 1) + 1)
+        if fsign(hv[-1]) == 0:
+            raise ValueError(f"{f}: the weighted denominator vanishes at this parameter")
+        v = [c / hv[-1] for c in hv[:-1]]
+    return out(v if emb else v[0], *args, head)
+
+
+_install_hooks()
