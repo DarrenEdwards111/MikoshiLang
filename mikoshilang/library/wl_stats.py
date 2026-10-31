@@ -1240,7 +1240,7 @@ def _simp(v, dd=None):
 # ─────────────────────────── distribution constructors ───────────────────────────
 
 def _register_dist(name):
-    def impl(*args):
+    def impl(*args: Expr) -> Expr:
         dist_of(Expr(name, *args), name)          # validates numeric parameters
         if name in ("CauchyDistribution", "LogisticDistribution", "ExtremeValueDistribution", "GumbelDistribution") \
                 and not args:
@@ -1251,7 +1251,9 @@ def _register_dist(name):
             return Expr(name, L(0, 1))
         raise Unevaluated()
     import inspect
-    impl.__signature__ = inspect.Signature([inspect.Parameter("args", inspect.Parameter.VAR_POSITIONAL)])
+    impl.__signature__ = inspect.Signature([inspect.Parameter("args", inspect.Parameter.VAR_POSITIONAL,
+                                                             annotation="Real | ListOf[Real] | Var")],
+                                           return_annotation="Expr")
     fn(name, area=AREA, status="added", notes=f"inert distribution object {name}; parameters validated")(impl)
 
 
@@ -1263,7 +1265,7 @@ for _n in sorted(NEW_DISTS - {"MultinormalDistribution", "MultinomialDistributio
 @fn("EmpiricalDistribution", area=AREA, status="added",
     notes="EmpiricalDistribution[{x1, ...}] (equal weights) or [{w...} -> {x...}]: discrete distribution of the data "
           "(PDF = relative frequency, population moments)")
-def _emp_ctor(a):
+def _emp_ctor(a: ListOf[Real] | Rule) -> Expr:
     dist_of(Expr("EmpiricalDistribution", a), "EmpiricalDistribution")
     raise Unevaluated()
 
@@ -1497,7 +1499,7 @@ def extend(name, impl, accepts, notes, status="fixed"):
     e = REGISTRY.get(name)
     old = list(e.impls) if e is not None else []
 
-    def f(*args):
+    def f(*args: Expr) -> Expr:
         if accepts(args):
             return impl(*args)
         for g, lo, hi in old:
@@ -1562,7 +1564,7 @@ extend("InverseCDF", lambda d, p: _invcdf(d, p), _new_dist_first,
 
 
 def _moment_fn(which):
-    def impl(d, *rest):
+    def impl(d: Expr, *rest: Expr) -> Expr:
         if d.head in MULTI:
             return _multi_moment(d, which)
         if d.head == "TransformedDistribution":
@@ -1600,7 +1602,7 @@ for _w in ("Skewness", "Kurtosis", "Median"):
 
 @fn("SurvivalFunction", area=AREA, status="added",
     notes="1 - CDF[dist, x] (P(X > x)); exact; Piecewise for symbolic x")
-def _surv(d, x):
+def _surv(d: Expr, x: Numeric | Var) -> Expr:
     dd = dist_of(d, "SurvivalFunction")
     xv = _x(x, "SurvivalFunction")
     return _out(_one_minus(cdf_value(dd, xv)), d, x)
@@ -1614,7 +1616,7 @@ def _one_minus(v):
 
 @fn("HazardFunction", area=AREA, status="added",
     notes="PDF/SurvivalFunction; exact; numeric x outside the support gives 0")
-def _hazard(d, x):
+def _hazard(d: Expr, x: Numeric | Var) -> Expr:
     dd = dist_of(d, "HazardFunction")
     xv = _x(x, "HazardFunction")
     if not (_num(xv) and dd.numeric()):
@@ -1634,7 +1636,7 @@ def _hazard(d, x):
 
 
 @fn("InverseSurvivalFunction", area=AREA, status="added", notes="InverseCDF[dist, 1 - q]")
-def _isurv(d, q):
+def _isurv(d: Expr, q: Real | Var) -> Expr:
     dd = dist_of(d, "InverseSurvivalFunction")
     qv = sym(q, "InverseSurvivalFunction")
     return _out(quantile_value(dd, 1 - qv, (d, q), "InverseSurvivalFunction"), d, q)
@@ -1642,28 +1644,28 @@ def _isurv(d, q):
 
 @fn("CharacteristicFunction", area=AREA, status="added",
     notes="E[Exp[I t X]] in closed form (exact); distributions without an elementary closed form stay unevaluated")
-def _cf(d, t):
+def _cf(d: Expr, t: Numeric | Var) -> Expr:
     dd = dist_of(d, "CharacteristicFunction")
     return _out(_simp(cf_value(dd, sym(t, "CharacteristicFunction"))), d, t)
 
 
 @fn("MomentGeneratingFunction", area=AREA, status="added",
     notes="E[Exp[t X]] in closed form (exact); distributions without one (Cauchy, LogNormal, ...) stay unevaluated")
-def _mgf(d, t):
+def _mgf(d: Expr, t: Numeric | Var) -> Expr:
     dd = dist_of(d, "MomentGeneratingFunction")
     return _out(_simp(mgf_value(dd, sym(t, "MomentGeneratingFunction"))), d, t)
 
 
 @fn("CentralMomentGeneratingFunction", area=AREA, status="added",
     notes="E[Exp[t (X - Mean)]] = Exp[-t mean] MomentGeneratingFunction")
-def _cmgf(d, t):
+def _cmgf(d: Expr, t: Numeric | Var) -> Expr:
     dd = dist_of(d, "CentralMomentGeneratingFunction")
     tv = sym(t, "CentralMomentGeneratingFunction")
     return _out(_simp(sp.exp(-tv * dd.mean()) * mgf_value(dd, tv)), d, t)
 
 
 @fn("CumulantGeneratingFunction", area=AREA, status="added", notes="Log[MomentGeneratingFunction]")
-def _cgf(d, t):
+def _cgf(d: Expr, t: Numeric | Var) -> Expr:
     dd = dist_of(d, "CumulantGeneratingFunction")
     m = _simp(mgf_value(dd, sym(t, "CumulantGeneratingFunction")), dd)
     v = m.args[0] if isinstance(m, sp.exp) else sp.log(m)
@@ -1705,7 +1707,7 @@ def _moment_data(x, r, central, fname):
 @fn("Moment", area=AREA, status="added",
     notes="Moment[data, r] = Mean[data^r]; Moment[dist, r] the r-th raw moment (exact; Indeterminate when it does "
           "not exist)")
-def _moment(x, r):
+def _moment(x: Expr | ListOf[Number], r: NonNegInteger | Var) -> Expr:
     r = _order_r(r, "Moment")
     if is_dist(x):
         if x.head == "TransformedDistribution":
@@ -1718,7 +1720,7 @@ def _moment(x, r):
 
 @fn("CentralMoment", area=AREA, status="added",
     notes="CentralMoment[data, r] = Mean[(data - Mean[data])^r]; CentralMoment[dist, r] exact")
-def _cmoment(x, r):
+def _cmoment(x: Expr | ListOf[Number], r: NonNegInteger | Var) -> Expr:
     r = _order_r(r, "CentralMoment")
     if is_dist(x):
         dd = dist_of(x, "CentralMoment")
@@ -1730,7 +1732,7 @@ def _cmoment(x, r):
 @fn("Cumulant", area=AREA, status="added",
     notes="Cumulant[dist, r] from the raw moments (exact); Cumulant[data, r] from the sample (biased) moments "
           "(Wolfram's moment-based definition: k1 = mean, k2 = second central moment, ...)")
-def _cumulant(x, r):
+def _cumulant(x: Expr | ListOf[Number], r: PosInteger | Var) -> Expr:
     r = _order_r(r, "Cumulant")
     if r == 0:
         raise ValueError("Cumulant: the order must be a positive integer")
@@ -1758,7 +1760,7 @@ _QPARAMS = ((sp.Rational(1, 2), 0), (0, 1))
 @fn("Quartiles", area=AREA, status="added",
     notes="Quantile[data, {1/4, 1/2, 3/4}, {{1/2, 0}, {0, 1}}] (Wolfram's definition); Quartiles[dist] = InverseCDF "
           "at 1/4, 1/2, 3/4")
-def _quartiles(x):
+def _quartiles(x: ListOf[Real] | Expr) -> ListOf[Real]:
     if is_dist(x):
         dd = dist_of(x, "Quartiles")
         return L(*(_out(quantile_value(dd, q, (x,), "Quartiles"), x) for q in
@@ -1770,7 +1772,7 @@ def _quartiles(x):
 
 @fn("InterquartileRange", area=AREA, status="added",
     notes="Q3 - Q1 with the Quartiles parameters {{1/2, 0}, {0, 1}}; InterquartileRange[dist] from the quantiles")
-def _iqr(x):
+def _iqr(x: ListOf[Real] | Expr) -> Real:
     if is_dist(x):
         dd = dist_of(x, "InterquartileRange")
         return _out(_simp(quantile_value(dd, sp.Rational(3, 4), (x,), "InterquartileRange")
@@ -1781,13 +1783,13 @@ def _iqr(x):
 
 
 @fn("QuartileDeviation", area=AREA, status="added", notes="InterquartileRange/2")
-def _qdev(x):
+def _qdev(x: ListOf[Real] | Expr) -> Real:
     r = _iqr(x)
     return numeric_out(S(r) / 2, x) if not is_dist(x) else _out(S(r) / 2, x)
 
 
 @fn("QuartileSkewness", area=AREA, status="added", notes="(Q1 - 2 Q2 + Q3)/(Q3 - Q1) with the Quartiles parameters")
-def _qskew(x):
+def _qskew(x: ListOf[Real] | Expr) -> Real:
     q = [S(a) for a in _quartiles(x).args]
     if q[2] == q[0]:
         raise ValueError("QuartileSkewness: the interquartile range is zero")
@@ -1795,7 +1797,7 @@ def _qskew(x):
 
 
 @fn("MeanDeviation", area=AREA, status="added", notes="Mean[Abs[data - Mean[data]]], exact")
-def _meandev(x):
+def _meandev(x: ListOf[Number]) -> Real:
     if _matrix_first((x,)):
         return _columns(x, _meandev)
     v, items = _data(x, "MeanDeviation")
@@ -1804,7 +1806,7 @@ def _meandev(x):
 
 
 @fn("MedianDeviation", area=AREA, status="added", notes="Median[Abs[data - Median[data]]], exact")
-def _meddev(x):
+def _meddev(x: ListOf[Real]) -> Real:
     if _matrix_first((x,)):
         return _columns(x, _meddev)
     from .statistics import _median
@@ -1814,7 +1816,7 @@ def _meddev(x):
 
 
 @fn("RootMeanSquare", area=AREA, status="added", notes="Sqrt[Mean[data^2]] (Abs[x]^2 for complex), exact")
-def _rms(x):
+def _rms(x: ListOf[Number]) -> Real:
     if _matrix_first((x,)):
         return _columns(x, _rms)
     items = list_arg(x, "RootMeanSquare", "data", 1)
@@ -1823,7 +1825,7 @@ def _rms(x):
 
 
 @fn("ContraharmonicMean", area=AREA, status="added", notes="Total[data^2]/Total[data], exact; zero total raises")
-def _chm(x):
+def _chm(x: ListOf[Number]) -> Number:
     v, items = _data(x, "ContraharmonicMean")
     s = sp.Add(*v)
     if s == 0:
@@ -1850,7 +1852,7 @@ def _frac(f, fname):
 @fn("WinsorizedMean", area=AREA, status="added",
     notes="mean after replacing the Floor[f n] smallest and largest values by the nearest remaining values "
           "(default f = 1/5); exact")
-def _wmean(x, f=None):
+def _wmean(x: ListOf[Real], f: Real | ListOf[Real] = None) -> Real:
     v, items = _data(x, "WinsorizedMean")
     ff = sp.Rational(1, 5) if f is None else _frac(f, "WinsorizedMean")
     w = _winsor(v, ff)
@@ -1859,7 +1861,7 @@ def _wmean(x, f=None):
 
 @fn("WinsorizedVariance", area=AREA, status="added",
     notes="unbiased variance of the winsorised data (default f = 1/5); exact")
-def _wvar(x, f=None):
+def _wvar(x: ListOf[Real], f: Real | ListOf[Real] = None) -> Real:
     v, items = _data(x, "WinsorizedVariance", 2)
     ff = sp.Rational(1, 5) if f is None else _frac(f, "WinsorizedVariance")
     w = _winsor(v, ff)
@@ -1869,7 +1871,7 @@ def _wvar(x, f=None):
 
 @fn("TrimmedVariance", area=AREA, status="added",
     notes="unbiased variance after dropping Floor[f n] values from each end (default f = 1/5); exact")
-def _tvar(x, f=None):
+def _tvar(x: ListOf[Real], f: Real | ListOf[Real] = None) -> Real:
     v, items = _data(x, "TrimmedVariance", 2)
     ff = sp.Rational(1, 5) if f is None else _frac(f, "TrimmedVariance")
     k = int(sp.floor(ff * len(v)))
@@ -1882,7 +1884,7 @@ def _tvar(x, f=None):
 
 @fn("Standardize", area=AREA, status="added",
     notes="(data - Mean)/StandardDeviation; Standardize[data, f1, f2] with location and scale functions; exact")
-def _standardize(x, f1=None, f2=None):
+def _standardize(x: ListOf[Number] | MatrixOf[Number], f1: Fn = None, f2: Fn = None) -> ListOf[Number] | MatrixOf[Number]:
     from .wl_common import apply
     items = list_arg(x, "Standardize", "data", 2)
     if any(is_list(i) for i in items):
@@ -1923,7 +1925,7 @@ def _pair(x, y, fname):
 
 @fn("SpearmanRho", area=AREA, status="added",
     notes="Pearson correlation of the (average) ranks, exact; SpearmanRho[matrix] the rank-correlation matrix")
-def _spearman(x, y=None):
+def _spearman(x: ListOf[Real] | MatrixOf[Real], y: ListOf[Real] = None) -> Real | MatrixOf[Real]:
     if y is None:
         return _matrix_pairs(x, _spearman, "SpearmanRho")
     a, b, items = _pair(x, y, "SpearmanRho")
@@ -1938,7 +1940,7 @@ def _spearman(x, y=None):
 
 @fn("KendallTau", area=AREA, status="added",
     notes="Kendall tau-b (ties corrected), exact; KendallTau[matrix] the matrix of coefficients")
-def _kendall(x, y=None):
+def _kendall(x: ListOf[Real] | MatrixOf[Real], y: ListOf[Real] = None) -> Real | MatrixOf[Real]:
     if y is None:
         return _matrix_pairs(x, _kendall, "KendallTau")
     a, b, items = _pair(x, y, "KendallTau")
@@ -1982,7 +1984,7 @@ def _colwise(name):
     e = REGISTRY[name]
     old = list(e.impls)
 
-    def f(*args):
+    def f(*args: Expr) -> Expr:
         if _matrix_first(args):
             return _columns(args[0], lambda col: _call_old(old, col))
         return _call_old(old, *args)
@@ -2075,14 +2077,14 @@ def _multinomial(d, fname):
 @fn("MultinormalDistribution", area=AREA, status="added",
     notes="MultinormalDistribution[mu, Sigma] (and [Sigma] with zero mean): PDF, CDF (numeric, SciPy), Mean, "
           "Variance (diagonal), Covariance, RandomVariate; Sigma must be symmetric positive definite")
-def _mvn_ctor(*args):
+def _mvn_ctor(*args: ListOf[Real] | MatrixOf[Real]) -> Expr:
     _mvn(Expr("MultinormalDistribution", *args), "MultinormalDistribution")
     raise Unevaluated()
 
 
 @fn("MultinomialDistribution", area=AREA, status="added",
     notes="MultinomialDistribution[n, {p1, ...}]: PDF, CDF, Mean, Variance, Covariance, RandomVariate")
-def _mult_ctor(*args):
+def _mult_ctor(*args: Integer | ListOf[Real]) -> Expr:
     _multinomial(Expr("MultinomialDistribution", *args), "MultinomialDistribution")
     raise Unevaluated()
 
@@ -2276,7 +2278,7 @@ def _range_spec(spec, fname, integer):
 @fn("RandomInteger", area=AREA, status="added",
     notes="RandomInteger[] (0 or 1), [imax] (0..imax), [{imin, imax}], with a count n or dimensions {n, m}; "
           "reproducible with SeedRandom (stream differs from Wolfram's)")
-def _rint(spec=None, n=None):
+def _rint(spec: Integer | ListOf[Integer] = None, n: PosInteger | ListOf[PosInteger] = None) -> Integer | ListOf[Integer]:
     a, b = (0, 1) if spec is None else _range_spec(spec, "RandomInteger", True)
     rng = _rng()
     dims = _dims(n, "RandomInteger")
@@ -2287,7 +2289,7 @@ def _rint(spec=None, n=None):
 @fn("RandomReal", area=AREA, status="added",
     notes="RandomReal[] in [0, 1), [xmax], [{xmin, xmax}], with a count n or dimensions; machine reals; "
           "reproducible with SeedRandom")
-def _rreal(spec=None, n=None, *opts):
+def _rreal(spec: Real | ListOf[Real] = None, n: PosInteger | ListOf[PosInteger] = None, *opts: Option) -> Real | ListOf[Real]:
     if opts:
         raise ValueError("RandomReal: options such as WorkingPrecision are not supported")
     a, b = _range_spec(spec, "RandomReal", False)
@@ -2372,7 +2374,7 @@ def _expect(f, pairs, fname, numeric=False):
 
 
 @fn("Distributed", area=AREA, status="added", notes="x \\[Distributed] dist, the inert random-variable declaration")
-def _distr(x, d):
+def _distr(x: Var, d: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -2385,7 +2387,7 @@ def _cond_split(f, fname):
 @fn("Expectation", area=AREA, status="added",
     notes="Expectation[f, x \\[Distributed] dist] (and lists of independent variables) by exact integration or "
           "summation (SymPy); expectations SymPy cannot do in closed form stay unevaluated")
-def _expectation(f, spec):
+def _expectation(f: Expr, spec: Expr | ListOf[Expr]) -> Expr:
     _cond_split(f, "Expectation")
     pairs = _distributed(spec, "Expectation")
     fv = sym(f, "Expectation")
@@ -2395,7 +2397,7 @@ def _expectation(f, spec):
 
 @fn("NExpectation", area=AREA, status="added",
     notes="numerical expectation (mpmath quadrature / summation) of f over x \\[Distributed] dist, machine reals")
-def _nexpectation(f, spec):
+def _nexpectation(f: Expr, spec: Expr | ListOf[Expr]) -> Number:
     pairs = _distributed(spec, "NExpectation")
     if len(pairs) != 1:
         raise NotImplementedError("NExpectation: only one random variable is supported")
@@ -2478,7 +2480,7 @@ def _pred(p, fname):
     notes="Probability[pred, x \\[Distributed] dist] for a univariate event (inequalities, equalities and their "
           "And/Or combinations, solved over the reals) via the exact CDF; other events use exact expectation of "
           "Boole[pred]")
-def _probability(pred, spec):
+def _probability(pred: Expr, spec: Expr | ListOf[Expr]) -> Expr:
     pairs = _distributed(spec, "Probability")
     if len(pairs) != 1:
         raise NotImplementedError("Probability: only one random variable is supported")
@@ -2498,7 +2500,7 @@ def _probability(pred, spec):
 
 
 @fn("NProbability", area=AREA, status="added", notes="N[Probability[...]] (machine real)")
-def _nprob(pred, spec):
+def _nprob(pred: Expr, spec: Expr | ListOf[Expr]) -> Real:
     r = _probability(pred, spec)
     return float(sp.N(S(r)))
 
@@ -2518,7 +2520,7 @@ def _transformed(d, fname):
 @fn("TransformedDistribution", area=AREA, status="added",
     notes="inert TransformedDistribution[f[x], x \\[Distributed] dist]; Mean, Variance, StandardDeviation, Moment, "
           "Expectation-based functions and RandomVariate (no simplification to a named distribution)")
-def _td(*args):
+def _td(*args: Expr) -> Expr:
     _transformed(Expr("TransformedDistribution", *args), "TransformedDistribution")
     raise Unevaluated()
 
@@ -2603,14 +2605,14 @@ def _mle(data, d, fname):
 @fn("FindDistributionParameters", area=AREA, status="added",
     notes="maximum-likelihood estimates {p1 -> v1, ...} in closed form for Normal, Exponential, Poisson, Bernoulli, "
           "Geometric, Uniform, LogNormal, Laplace and Rayleigh; exact for exact data; other families raise")
-def _fdp(data, d):
+def _fdp(data: ListOf[Real], d: Expr) -> ListOf[Rule]:
     syms, vals = _mle(data, d, "FindDistributionParameters")
     return L(*(rule(s, v) for s, v in zip(syms, vals)))
 
 
 @fn("EstimatedDistribution", area=AREA, status="added",
     notes="the distribution with the maximum-likelihood parameters (see FindDistributionParameters)")
-def _ed(data, d):
+def _ed(data: ListOf[Real], d: Expr) -> Expr:
     syms, vals = _mle(data, d, "EstimatedDistribution")
     sub = {s.name: v for s, v in zip(syms, vals)}
 
@@ -2627,7 +2629,7 @@ def _ed(data, d):
     notes="KolmogorovSmirnovTest[data, dist] = two-sided p-value of the one-sample KS test against a fully specified "
           "continuous distribution (exact distribution of D, SciPy); [data, dist, \"TestStatistic\"] the statistic D "
           "(exact for exact data and closed-form CDFs); estimated parameters and the two-sample form raise")
-def _ks(data, d=None, prop=None):
+def _ks(data: ListOf[Real], d: Expr = None, prop: String = None) -> Expr:
     if d is None:
         raise NotImplementedError("KolmogorovSmirnovTest: testing against an estimated distribution is not supported")
     v, items = _data(data, "KolmogorovSmirnovTest", 1)
@@ -2654,7 +2656,7 @@ def _ks(data, d=None, prop=None):
 @fn("LocationTest", area=AREA, status="added",
     notes="LocationTest[data, mu0, \"TTest\"] or \"ZTest\"-free explicit tests only: two-sided one-sample t-test p-value; "
           "Wolfram's automatic test selection is not reproduced, so LocationTest without an explicit test raises")
-def _loctest(data, mu0=None, test=None):
+def _loctest(data: ListOf[Real], mu0: Real = None, test: String | Expr = None) -> Expr:
     if test is None:
         raise NotImplementedError('LocationTest: give the test explicitly, e.g. LocationTest[data, mu0, "T"]; '
                                   "automatic test selection is not supported")
@@ -2673,7 +2675,7 @@ def _loctest(data, mu0=None, test=None):
     notes="VarianceTest[{d1, d2}, r0, \"FisherRatio\"]: two-sided F-test p-value for Var1/Var2 = r0; "
           "VarianceTest[data, s0, \"ChiSquare\"]: two-sided one-sample chi-square p-value; automatic test "
           "selection raises")
-def _vartest(data, r0=None, test=None):
+def _vartest(data: ListOf[Real], r0: Real = None, test: String | Expr = None) -> Expr:
     if test is None:
         raise NotImplementedError('VarianceTest: give the test explicitly ("FisherRatio" or "ChiSquare")')
     try:
@@ -2704,7 +2706,7 @@ def _vartest(data, r0=None, test=None):
 @fn("HistogramList", area=AREA, status="added",
     notes="HistogramList[data, {dx}] (bins aligned at multiples of dx covering the data), [data, {min, max, dx}] and "
           "[data, {{b1, b2, ...}}]: {bin edges, counts} with bins [b_i, b_(i+1)); automatic binning raises")
-def _histlist(data, spec=None):
+def _histlist(data: ListOf[Real], spec: Expr = None) -> ListOf[Expr]:
     v, items = _data(data, "HistogramList")
     if spec is None:
         raise NotImplementedError("HistogramList: automatic bin selection is not supported; give {dx}")
