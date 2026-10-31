@@ -418,7 +418,7 @@ def _drop_implied(conds):
     return kept
 
 
-def integrate_sym(v, specs, A, pv=False):
+def integrate_sym(v, specs, A, pv=False, generic_conds=False):
     """SymPy integration of v over Wolfram specifications (last innermost); returns (value, [conditions])."""
     conds = []
     definite = False
@@ -439,7 +439,13 @@ def integrate_sym(v, specs, A, pv=False):
                 raise Unevaluated()
         if not isinstance(s_, tuple) and isinstance(r, sp.Piecewise) and r.args[0][1] is not sp.true \
                 and all(isinstance(c, sp.Ne) for c in sp.And.make_args(r.args[0][1])):
-            r = r.args[0][0]          # Wolfram gives the generic antiderivative (Integrate[x^n, x] -> x^(1+n)/(1+n))
+            c = A.refine(r.args[0][1])
+            if c is sp.false:         # the assumptions rule out the generic case (n == -1): keep the special cases
+                pass
+            else:
+                if generic_conds and c is not sp.true:
+                    conds.append(c)   # GenerateConditions -> True keeps the genericity condition (n != -1)
+                r = r.args[0][0]      # Wolfram gives the generic antiderivative (Integrate[x^n, x] -> x^(1+n)/(1+n))
         if isinstance(r, sp.Piecewise):
             branches = [(e, c) for e, c in r.args if c is not sp.true]
             default = [e for e, c in r.args if c is sp.true]
@@ -521,7 +527,7 @@ def _integrate(f, *args):
     if pv and not (len(specs) == 1 and is_list(specs[0])):
         raise ValueError("Integrate: PrincipalValue -> True needs one definite specification {x, a, b}")
     integrand = to_heaviside(A.apply(sym(f, "Integrate")))
-    v, conds, definite = integrate_sym(integrand, specs, A, pv)
+    v, conds, definite = integrate_sym(integrand, specs, A, pv, generic_conds=is_true(gen))
     if isinstance(v, sp.Basic) and v.has(sp.Integral):
         raise Unevaluated()
     if not definite and len(specs) == 1:

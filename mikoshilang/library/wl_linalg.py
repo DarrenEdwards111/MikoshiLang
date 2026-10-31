@@ -1207,7 +1207,7 @@ def _sparse_rules(r):
     notes="SparseArray[{pos -> v, ...}], SparseArray[rules, dims], SparseArray[rules, dims, default] and "
           "SparseArray[list] (positions may be patterns such as {i_, i_} -> 1; the first matching rule wins). "
           "MikoshiLang has no sparse storage: the result is the equivalent dense array, i.e. Normal[SparseArray[...]] "
-          "in Wolfram (Head is List, not SparseArray); Band specifications raise")
+          "in Wolfram (Head is List, not SparseArray); Band[...] -> v specifications are expanded (see Band)")
 def _sparsearray(spec, *rest):
     if len(rest) > 2:
         raise ValueError("SparseArray called with too many arguments")
@@ -1223,7 +1223,8 @@ def _sparsearray(spec, *rest):
     for r in rules:
         lhs, rhs = r.args
         if isinstance(lhs, Expr) and lhs.head == "Band":
-            raise NotImplementedError("SparseArray: Band specifications are not supported")
+            patterns.append(("band", lhs, rhs))       # expanded once the dimensions are known (W08)
+            continue
         if K.is_int(lhs):
             lhs = L(lhs)
         if is_list(lhs) and all(K.is_int(i) for i in lhs.args):
@@ -1234,13 +1235,28 @@ def _sparsearray(spec, *rest):
             patterns.append(("pos", key, rhs))
         else:
             patterns.append(("pat", lhs, r))
+    from .wl_linalg_optim import band_entries, band_rank
+    bands = [(a, b) for kind, a, b in patterns if kind == "band"]
     if rest:
         if is_list(rest[0]):
             shape = [pos_int(v, "SparseArray", "dimension") for v in rest[0].args]
         else:
             n = pos_int(rest[0], "SparseArray", "dimension")
-            ranks = {len(k) for k in explicit} or {1}
+            ranks = {len(k) for k in explicit} | {band_rank(a, b) for a, b in bands} or {1}
+            if None in ranks or len(ranks) != 1:
+                raise ValueError("SparseArray: the rules have inconsistent ranks")
             shape = [n] * ranks.pop()
+    elif bands and not explicit:
+        rank = band_rank(*bands[0])
+        if rank is None:
+            raise ValueError("SparseArray: give the dimensions for this Band specification")
+        ext = [0] * rank
+        for a, b in bands:
+            if len(a.args) >= 2 or not is_list(b):
+                raise ValueError("SparseArray: give the dimensions when a Band repeats to the edge of the array")
+            for k in band_entries(a, b, rank, [None] * rank):
+                ext = [max(e, i) for e, i in zip(ext, k)]
+        shape = ext
     else:
         if not explicit or len({len(k) for k in explicit}) != 1:
             raise ValueError("SparseArray: give the dimensions when the rules use patterns or mixed ranks")
@@ -1252,9 +1268,16 @@ def _sparsearray(spec, *rest):
     if len(shape) > 1 and reduce(lambda a, b: a * b, shape) > 10 ** 6:
         raise ValueError("SparseArray: the dense array would be too large")
 
+    band_maps = {id(a): band_entries(a, b, len(shape), shape) for a, b in bands}
+
     def value(idx):
         pos = L(*idx)
         for kind, a, b in patterns:
+            if kind == "band":
+                m = band_maps[id(a)]
+                if idx in m:
+                    return m[idx]
+                continue
             if kind == "pos":
                 if a == idx:
                     return b
