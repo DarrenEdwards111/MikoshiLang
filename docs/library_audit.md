@@ -111,15 +111,15 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 | verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
 | fixed | 502 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
 | promoted | 24 | was quarantined; now properly implemented and tested |
-| added | 1841 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| added | 1909 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 1 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **2512** | 620 pre-audit inventory heads, all with a status, plus 1892 promoted/aliased heads |
+| **total reviewed** | **2580** | 620 pre-audit inventory heads, all with a status, plus 1960 promoted/aliased heads |
 
 Remaining unreviewed quarantined names: **5264** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **11658**.
+Differential test cases in tests/library: **12096**.
 
 
 ## By area
@@ -137,6 +137,7 @@ Differential test cases in tests/library: **11658**.
 | combinatorics | 5 | 12 | 6 | 0 | 0 | 0 | 0 |
 | combinatorics (batch 6) | 0 | 0 | 0 | 37 | 0 | 0 | 0 |
 | constants | 0 | 33 | 0 | 0 | 0 | 0 | 0 |
+| cryptography (W13) | 0 | 0 | 0 | 20 | 0 | 0 | 0 |
 | data structures (W03) | 0 | 0 | 0 | 4 | 0 | 0 | 0 |
 | discrete mathematics (batch 6) | 0 | 0 | 0 | 48 | 0 | 0 | 0 |
 | elementary | 28 | 12 | 1 | 1 | 0 | 0 | 0 |
@@ -148,6 +149,7 @@ Differential test cases in tests/library: **11658**.
 | graphs | 3 | 14 | 0 | 0 | 0 | 0 | 0 |
 | graphs (batch 5) | 0 | 0 | 0 | 110 | 0 | 0 | 0 |
 | group theory (W09) | 0 | 0 | 0 | 36 | 0 | 0 | 0 |
+| import/export & serialisation (W13) | 0 | 0 | 0 | 47 | 0 | 0 | 0 |
 | kernel | 0 | 34 | 0 | 0 | 24 | 0 | 0 |
 | language (batch 1) | 0 | 0 | 0 | 19 | 0 | 0 | 0 |
 | linear algebra | 8 | 40 | 1 | 0 | 0 | 0 | 0 |
@@ -164,7 +166,7 @@ Differential test cases in tests/library: **11658**.
 | number theory (batch 2) | 0 | 0 | 0 | 4 | 0 | 0 | 0 |
 | numerics | 4 | 5 | 0 | 0 | 0 | 0 | 0 |
 | numerics (batch 2) | 0 | 0 | 0 | 44 | 0 | 0 | 0 |
-| output forms & formatting (W04) | 0 | 0 | 0 | 105 | 0 | 0 | 0 |
+| output forms & formatting (W04) | 0 | 0 | 0 | 106 | 0 | 0 | 0 |
 | physics | 0 | 48 | 0 | 0 | 0 | 0 | 0 |
 | plots | 0 | 14 | 0 | 0 | 0 | 0 | 0 |
 | special functions | 11 | 28 | 5 | 0 | 0 | 0 | 0 |
@@ -410,7 +412,7 @@ Cases = number of differential test cases in which the head occurs.
 | `KeyTake` | added | 3 | entries for the given keys in the order the keys are listed (absent keys ignored); rule lists give rule lists; lists of associations thread |
 | `KeyUnion` | added | 3 | each association extended to the union of keys (in order of first appearance); absent keys get Missing["KeyAbsent", k] (or f[k] with KeyUnion[list, f]) |
 | `KeyValueMap` | added | 3 | {f[k1, v1], f[k2, v2], ...} |
-| `Keys` | added | 7 | keys of an association in order; Keys of a rule list gives each rule's key; lists of associations thread; Keys[a, f] applies f to each key |
+| `Keys` | added | 9 | keys of an association in order; Keys of a rule list gives each rule's key; lists of associations thread; Keys[a, f] applies f to each key |
 | `Lookup` | added | 7 | Lookup[assoc, key] (Missing["KeyAbsent", key] if absent), Lookup[assoc, key, default], a list of keys gives a list, a list of associations threads; rule lists act as associations |
 | `Merge` | added | 4 | Merge[{a1, a2, ...}, f] gives <\|k -> f[{values for k}]\|> with keys in order of first appearance; rule lists act as associations |
 | `MissingQ` | added | 3 | True for Missing[...] expressions |
@@ -448,7 +450,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PhasePlane` | fixed | 3 | equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped tuple-form solutions |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Table` | kernel | 47 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 56 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
@@ -696,6 +698,31 @@ Cases = number of differential test cases in which the head occurs.
 | `WienDisplacement` | fixed | 3 | Wien displacement constant b (m K), CODATA 2018; the legacy 1-argument form, which ignored its argument, now raises an arity error |
 | `WienDisplacementConstant` | fixed | 4 | CODATA 2018 (m K); only a 1-argument form existed, ignoring its argument |
 
+### cryptography (W13)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$CryptographicEllipticCurveNames` | added | 3 | list of the elliptic and Edwards curves the cryptographic functions support. Check: exact; tests verify each curve's parameters (G on the curve, n*G = O, n and p prime). |
+| `Decrypt` | added | 17 | Decrypt[key, EncryptedObject[...]] recovers the original string, ByteArray or expression; key is the SymmetricKey or password used, the RSA PrivateKey for public-key encryption or the PublicKey for private-key encryption; a wrong key raises Decrypt::failed rather than giving garbage when padding or decoding detects it; operator form Decrypt[key]. Check: exact (padding validation detects most wrong keys); Encrypt round trips in tests. |
+| `DecryptFile` | added | 6 | DecryptFile[key, "file.mx"] decrypts an EncryptFile result into file and DecryptFile[key, source, target] into target; OverwriteTarget (default False); returns the absolute output path. Check: exact; EncryptFile round trips in tests. |
+| `DerivedKey` | added | 7 | DerivedKey[<\|...\|>] is the result of GenerateDerivedKey (properties "Function", "DerivedKey", "Salt", "FunctionParameters", "PHCString", "Properties"); DerivedKey["$scrypt$ln=..$salt$hash"] rebuilds one from its PHC string. Check: exact; PHC string round trips in tests. |
+| `DigitalSignature` | added | 8 | DigitalSignature[<\|...\|>] is a signature from GenerateDigitalSignature (RSA: Type, HashingMethod, Padding, Signature; elliptic/Edwards curves: Type, CurveName, HashingMethod, SignatureType, R, S and RecoveryParameter on secp256k1); properties by name plus "DER" (ECDSA) and "Properties". Check: exact (validated wrapper). |
+| `Encrypt` | added | 41 | Encrypt[key, expr] with a SymmetricKey (random IV per call for CBC/CFB/OFB/CTR), a "password" (AES256 key derived with scrypt), an RSA PublicKey (PKCS1 or OAEP) or an RSA PrivateKey (PKCS1 type 1, decrypted with the public key); strings as UTF-8, ByteArrays literally, other expressions via Compress; Method -> <\|"Padding", "InitializationVector", "BlockMode"\|>; operator form Encrypt[key]; gives EncryptedObject[<\|"Data", "InitializationVector", "OriginalForm"\|>]. Elliptic-curve keys give a clear error. Check: reference (FIPS-197, SP 800-38A, Blowfish and RC4 vectors) and Decrypt round trips in tests. |
+| `EncryptFile` | added | 8 | EncryptFile[key, file] encrypts the bytes of file into file.mx (Import gives the EncryptedObject) and EncryptFile[key, source, target] into target; key as for Encrypt; OverwriteTarget (default False); returns the absolute output path. Check: exact; DecryptFile round trips in tests. |
+| `EncryptedObject` | added | 4 | EncryptedObject[<\|"Data", "InitializationVector", "OriginalForm", ...\|>] is the result of Encrypt (properties by name and "Properties"); validated, otherwise inert. Check: exact (validated wrapper). |
+| `GenerateAsymmetricKeyPair` | added | 27 | GenerateAsymmetricKeyPair[] (RSA 2048, exponent 65537), [type] or Method -> type \| <\|"Type", "KeySize", "PublicExponent", "CurveName", "Compressed"\|> with types "RSA", "EllipticCurve" (default secp256k1), "EdwardsCurve" (ed25519), "Bitcoin" (secp256k1, compressed) and "Ethereum" (secp256k1); gives <\|"PrivateKey" -> ..., "PublicKey" -> ...\|>. Check: exact; sign/verify and encrypt/decrypt round trips in tests. |
+| `GenerateDerivedKey` | added | 19 | GenerateDerivedKey[password] / [password, salt] derives a key with scrypt (RFC 7914; defaults KeySize 64, N 2^15, r 8, p 1, random 16-byte salt) giving DerivedKey[<\|"Function", "DerivedKey", "Salt", "FunctionParameters"\|>]; Method -> <\|"Function" -> "scrypt", "KeySize", "N", "r", "p"\|>. Argon2 functions raise a clear error. Check: reference (RFC 7914 scrypt vector) and VerifyDerivedKey in tests. |
+| `GenerateDigitalSignature` | added | 29 | GenerateDigitalSignature[expr, privatekey] signs expr (strings as UTF-8, ByteArrays literally, other expressions as their FullForm text): RSA PKCS#1 v1.5, ECDSA with RFC 6979 deterministic nonces (or "NonDeterministic"; low-s on secp256k1) or BIP-340 "Schnorr", ed25519 (RFC 8032); Method -> <\|"HashingMethod" (default SHA256; None for a precomputed ByteArray/hex digest), "SignatureType", "Padding" (PKCS1; X931 gives a clear error)\|>; operator form GenerateDigitalSignature[key]. Check: reference (RFC 6979, RFC 8032, BIP-340 vectors) and VerifyDigitalSignature in tests. |
+| `GenerateFileSignature` | added | 4 | GenerateFileSignature[file, privatekey] gives the DigitalSignature of the bytes of file (same methods and Method option as GenerateDigitalSignature); operator form GenerateFileSignature[key]. Check: reference; verified by VerifyFileSignature and an OpenSSL signature in tests. |
+| `GenerateSymmetricKey` | added | 38 | GenerateSymmetricKey[] (random AES256/CBC key), ["password"] (deterministic scrypt derivation), [ByteArray] (the given key bytes), [DerivedKey[...]]; Method -> cipher \| <\|"Cipher", "BlockMode", "KeySize", "InitializationVector"\|>; ciphers AES128/192/256, Blowfish, RC4 (DES, CAST5, IDEA give a clear error); gives SymmetricKey[<\|"Cipher", "BlockMode", "Key", "InitializationVector"\|>]. Check: exact; Encrypt/Decrypt round trips and published cipher vectors in tests. |
+| `PrivateKey` | added | 19 | PrivateKey[<\|...\|>] is a private key (RSA: PublicModulus/PublicExponent/PrivateExponent; EllipticCurve: CurveName and PrivateMultiplier \| PrivateHexString \| PrivateByteArray; EdwardsCurve ed25519: PrivateByteArray \| PrivateHexString); partial specifications are completed (public point, public key, RSA exponent); properties: stored fields plus PrivateByteArray, PublicByteArray, Private/PublicHexString, Private/PublicKeySize, "Properties". Check: exact (curve membership and private/public consistency are validated); RFC 6979 and RFC 8032 keys in tests. |
+| `PublicKey` | added | 11 | PublicKey[<\|...\|>] is a public key (RSA: PublicModulus, PublicExponent; EllipticCurve: CurveName and PublicCurvePoint \| PublicByteArray \| PublicHexString (compressed or not); EdwardsCurve: PublicByteArray \| PublicHexString); validated (points must lie on the curve) and normalised; properties as for PrivateKey. Check: exact (points are validated on the curve); reference keys in tests. |
+| `SecurityCertificate` | added | 5 | SecurityCertificate[<\|...\|>] represents an X.509 certificate imported from PEM (properties Version, SerialNumber, SignatureAlgorithm, Issuer, ValidityStartDate, ValidityEndDate, Subject, PublicKey, Extensions, DigitalSignature, SignedData, Certificate, Properties); SecurityCertificate["PEM text"] or SecurityCertificate[ByteArray (DER)] parses one; VerifyDigitalSignature[{cert["SignedData"], cert["DigitalSignature"]}, issuerKey] checks its signature. Check: reference (OpenSSL certificates; their signatures verify) in tests. |
+| `SymmetricKey` | added | 17 | SymmetricKey[<\|"Cipher", "BlockMode", "Key", "InitializationVector"\|>] represents a symmetric key (properties by name and "Properties"); validated, otherwise inert. Check: exact (validated wrapper). |
+| `VerifyDerivedKey` | added | 6 | VerifyDerivedKey[key, password] gives True when password derives the DerivedKey key (same function, salt and parameters; constant-time comparison), False otherwise. Check: delegated (hashlib.scrypt); RFC 7914 reference in tests. |
+| `VerifyDigitalSignature` | added | 16 | VerifyDigitalSignature[{expr, sig}, key] gives True when sig is a valid signature of expr for the public key (a PrivateKey or a SecurityCertificate also supplies it), False otherwise; a list of pairs gives a list; operator form VerifyDigitalSignature[key]. Check: reference (OpenSSL signatures and certificates) in tests. |
+| `VerifyFileSignature` | added | 5 | VerifyFileSignature[{file, sig}, key] verifies a GenerateFileSignature signature against the current bytes of file; a list of pairs gives a list; operator form VerifyFileSignature[key]. Check: reference (an OpenSSL ECDSA file signature) in tests. |
+
 ### data structures (W03)
 
 | Function | Status | Cases | Notes |
@@ -854,7 +881,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Full` | added | 3 | inert option value (e.g. PlotRange -> Full) |
 | `FullDefinition` | added | 10 | FullDefinition[f] prints the definitions of f and of every symbol they refer to, recursively (System` symbols excluded); options ExcludedContexts and IncludedContexts |
 | `General` | added | 7 | symbol to which general messages are attached (General::tag) |
-| `Get` | added | 5 | Get["file"] (<<file) reads a file of Wolfram Language input and evaluates each expression in turn, returning the last result (a relative file name is also searched for in PACKAGE_PATH and $MIKOSHILANG_PATH); Get["ctx`"] loads ctx.wl, ctx.m, ctx/init.m or ctx/Kernel/init.m from the working directory, PACKAGE_PATH or $MIKOSHILANG_PATH. A file that cannot be opened raises Get::noopen |
+| `Get` | added | 13 | Get["file"] (<<file) reads a file of Wolfram Language input and evaluates each expression in turn, returning the last result (a relative file name is also searched for in PACKAGE_PATH and $MIKOSHILANG_PATH); Get["ctx`"] loads ctx.wl, ctx.m, ctx/init.m or ctx/Kernel/init.m from the working directory, PACKAGE_PATH or $MIKOSHILANG_PATH. A file that cannot be opened raises Get::noopen |
 | `Goto` | added | 4 | Goto[tag] continues evaluation after Label[tag] in the enclosing compound expression (the innermost one containing that label, searching outwards); a missing label raises Goto::nolabel |
 | `Heads` | added | 8 | option Heads -> True/False of Inactivate, Activate (and the level functions) |
 | `HoldAllComplete` | added | 3 | attribute: no argument is evaluated, Sequence is not spliced, Unevaluated is kept and upvalues are not used |
@@ -875,7 +902,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LocalSymbol` | added | 6 | LocalSymbol["name"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol["name"] = val or := val; unevaluated when never assigned; LocalSymbol["name", "dir"] uses another base; =. deletes it |
 | `Locked` | added | 5 | attribute: the attributes of the symbol can no longer be changed (Protect/Unprotect, SetAttributes, ClearAttributes, Attributes[f] = ... raise) |
 | `Manual` | added | 3 | inert option value: selected manually |
-| `Method` | added | 16 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
+| `Method` | added | 86 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
 | `NHoldAll` | added | 3 | attribute: N does not affect any argument of f |
 | `NHoldFirst` | added | 3 | attribute: N does not affect the first argument of f |
 | `NHoldRest` | added | 3 | attribute: N affects only the first argument of f |
@@ -1199,6 +1226,58 @@ Cases = number of differential test cases in which the head occurs.
 | `ThompsonGroupTh` | added | 3 | ThompsonGroupTh[] represents the Thompson group Th, of order 90745943887872000; GroupOrder is supported; operations that need its permutation representation raise |
 | `TitsGroupT` | added | 3 | TitsGroupT[] represents the Tits group 2F4(2)', of order 17971200; GroupOrder is supported; operations that need its permutation representation raise |
 
+### import/export & serialisation (W13)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$CacheBaseDirectory` | added | 3 | directory where LocalCache stores cached copies (~/.mikoshilang/Caches or $MIKOSHILANG_CACHE_BASE). Check: exact (environment/home lookup). |
+| `$DefaultLocalBase` | added | 3 | default base directory for local object storage (~/.mikoshilang/Objects or $MIKOSHILANG_LOCAL_BASE). Check: exact (environment/home lookup). |
+| `$ExportFormats` | added | 3 | list of the formats Export supports. Check: exact (registry contents). |
+| `$ImportFormats` | added | 4 | list of the formats Import supports. Check: exact (registry contents). |
+| `$LocalBase` | added | 3 | base directory for local objects; initially $DefaultLocalBase. Check: exact. |
+| `$LocalSymbolBase` | added | 3 | directory where LocalSymbol values are stored (~/.mikoshilang/LocalSymbols or $MIKOSHILANG_LOCALSYMBOL_BASE). Check: exact (shared with LocalSymbol). |
+| `BinaryDeserialize` | added | 8 | BinaryDeserialize[ba] reads WXF data (compressed or not, including packed and numeric arrays) and evaluates the result; BinaryDeserialize[ba, h] wraps it in h before evaluation; data that is not WXF raises an error. Check: reference (documented WXF bytes) and serialise/deserialise round trips in tests. |
+| `BinarySerialize` | added | 13 | BinarySerialize[expr] gives a ByteArray with the WXF serialisation of expr (header 8:, documented tokens and varint lengths; System` symbols unqualified, others with their context); PerformanceGoal -> "Size" zlib-compresses (header 8C:); "Speed"/Automatic do not. Check: reference (documented WXF bytes) and the round trip BinaryDeserialize[BinarySerialize[e]] === e in tests. |
+| `Boxes` | added | 3 | element name for the box (typesetting) form of an expression in Import/Export; inert symbol. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `CachePersistence` | added | 3 | option for URL fetching functions: how long downloaded content may be cached (Automatic, Infinity, a Quantity or None); inert symbol. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `Compress` | added | 8 | Compress[expr] gives Wolfram's compressed string: "1:" <> Base64 of the zlib deflation of the !boR serialisation of expr (i/I integers, r/R reals, S strings with \ooo and \:xxxx escapes, s symbols, f expressions); Uncompress inverts it. Check: exact; the round trip Uncompress[Compress[e]] === e in tests. |
+| `ConversionRules` | added | 3 | option for Import/Export of some formats giving rules applied while converting; inert symbol (no MikoshiLang format uses it, so Import/Export reject it). Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `CreateArchive` | added | 6 | CreateArchive[src] compresses a file or directory (or a list of them) into src.zip; CreateArchive[src, dest] writes dest (.zip, .tar, .tar.gz/.tgz, .tar.bz2, or a directory to put src.zip in); returns the full archive path; OverwriteTarget -> False (default) refuses to replace. Check: exact (zipfile/tarfile); CreateArchive/ExtractArchive round trips in tests. |
+| `CreateUUID` | added | 4 | CreateUUID[] gives a new random (version 4) UUID string xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx; CreateUUID["base"] prefixes it with base. Check: exact (uuid4); format and uniqueness in tests. |
+| `DefaultElement` | added | 3 | option for importers naming the element imported by default; see FileFormatProperties[fmt, "DefaultImportElement"]; inert symbol. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `DumpSave` | added | 4 | DumpSave["file.mx", s] writes the full definitions of s (a symbol, name, context "ctx`" or list) to a binary MikoshiLang MX file and returns the list of symbols saved; Get["file.mx"] restores them (like Wolfram MX files, the dump is specific to the system that wrote it); HoldRest. Check: exact; definitions restored with Get after Clear in tests. |
+| `Export` | added | 13 | Export["file", expr], Export["file", expr, fmt], Export["file", expr, {fmt, elem}] writes expr in the format given or implied by the extension (file.csv.gz: GZIP of CSV) and returns the file name; an unknown extension raises Export::infer. Check: reference (documented text per format) and Import round trips in tests. |
+| `ExportByteArray` | added | 7 | ExportByteArray[expr, fmt] gives a ByteArray with the bytes of expr exported in the format, e.g. ExportByteArray[-1, "Integer8"] == ByteArray[{255}], ExportByteArray[4., "Real64"]. Check: reference (explicit byte layouts) and ImportByteArray round trips in tests. |
+| `ExportString` | added | 14 | ExportString[expr, fmt] gives the text of expr in the format (binary formats as a string of characters with codes 0..255, as Wolfram does); CSV/TSV quote fields only when needed, JSON is tab-indented unless "Compact" -> True. Check: reference (documented ExportString text) and ImportString round trips in tests. |
+| `ExtractArchive` | added | 5 | ExtractArchive["file.zip"] extracts a zip/tar/tar.gz/tar.bz2/gz archive into the current directory; ExtractArchive[src, dir] into dir; ExtractArchive[src, dir, patt] only members matching a string or "*" wildcard pattern; returns the list of extracted files (full paths); members with absolute or .. paths are refused; OverwriteTarget -> False (default) refuses to replace existing files. Check: exact (zipfile/tarfile); round trips with CreateArchive in tests. |
+| `FileConvert` | added | 4 | FileConvert["src" -> "fmt"] converts a file to the format, writing src with the format's extension; FileConvert["src" -> "dest"] infers the format from dest; returns the new file name. Check: self-check by construction (Import then Export); tests re-import the converted file. |
+| `FileFormat` | added | 4 | FileFormat["file"] gives the Import format of a file: from its extension when known, otherwise from its content (GZIP, BZIP2, ZIP, TAR, WXF, MX, PEM, XML, JSON, Text); a missing file without a known extension raises FileFormat::nffil. Check: exact (extension, then content sniffing); reference files in tests. |
+| `FileFormatProperties` | added | 7 | FileFormatProperties[fmt] gives <\|"FileNamePatterns", "MIMETypes", "ImportElements", "DefaultImportElement"\|>; FileFormatProperties[fmt, prop \| {props}]; lists of formats and All give associations keyed by format; FileFormatProperties[] gives every format. Check: exact (registry lookup); reference values in tests. |
+| `FileFormatQ` | added | 4 | FileFormatQ[file, fmt] is True when the file has format fmt (its FileFormat, or content that parses as fmt for JSON/XML/WXF/archives), False otherwise; an unknown format name raises. Check: exact; reference files in tests. |
+| `FileNameToFormatList` | added | 4 | FileNameToFormatList["name.ext"] gives the formats whose file name patterns match (e.g. {"CSV"} for *.csv); {} when none does. Check: exact (registry lookup); reference values in tests. |
+| `Import` | added | 51 | Import[src], Import[src, fmt], Import[src, elem], Import[src, {fmt, elem, sub...}] for files, File[], URL[], RemoteFile[] and http(s)/file URLs; format from the extension or the content; elements "Elements", "Rules" and each format's elements with row/column subelements; formats as in $ImportFormats (Package files are evaluated, as Get does). Check: reference (documented results per format) and Export/Import round trips in tests. |
+| `ImportByteArray` | added | 5 | ImportByteArray[ba, fmt or {fmt, elem, ...}] imports the bytes of a ByteArray in the given format (format sniffed from the content when omitted). Check: reference and ExportByteArray round trips in tests. |
+| `ImportOptions` | added | 3 | element/option name used in format registrations to describe import options; inert symbol. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `ImportString` | added | 19 | ImportString["data", fmt or {fmt, elem, ...}] imports from a string (binary formats read the characters as bytes 0..255); without a format the content is sniffed (WXF, JSON, XML, compressed data, else CSV/TSV when every line has commas/tabs, else Text). Check: reference (documented ImportString results) and ExportString round trips in tests. |
+| `ImportedObject` | added | 3 | ImportedObject[assoc] holds imported data with no Wolfram Language representation (e.g. unsupported PEM entries); obj["prop"] gives its properties, including "OriginalFormat" and "RawContent". Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `IncludeMetaInformation` | added | 3 | option for Import/Export of some formats controlling whether meta information is included; inert symbol (the supported formats carry none, so Import/Export reject it). Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `LocalCache` | added | 5 | LocalCache[URL[url]] downloads url (file:// or http(s)) into $CacheBaseDirectory and returns LocalObject["file:///..."], which Import and Get read; LocalCache[obj, LocalObject["name" or "file:///path"]] chooses the cache; re-evaluation refreshes the copy; CloudObject caches are not available (no Wolfram Cloud). Check: exact; the cached copy is re-imported in tests. |
+| `MIMETypeToFormatList` | added | 4 | MIMETypeToFormatList["type/subtype"] gives the formats with that MIME type (case-insensitive, parameters such as ;charset= ignored); {} when none. Check: exact (registry lookup); reference values in tests. |
+| `MetaInformation` | added | 4 | option for Export of formats that carry metadata; Export raises a clear error for every supported format since none can store it. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `PersistenceLocation` | added | 4 | PersistenceLocation["type"] for the documented types (KernelSession, FrontEndSession, Notebook, Local, LocalShared, Cloud, Installation); "Local" gets its default base LocalObject[file URL of $DefaultLocalBase/Persistence]; PersistenceLocation["type" -> base] is PersistenceLocation["type", base]; unknown types raise. Check: exact (inert wrapper with validation). |
+| `PersistenceTime` | added | 3 | option for persistent values: how long a value is kept (Infinity, a time in seconds or a DateObject); inert symbol. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `Put` | added | 5 | Put[e1, e2, ..., "file"] (expr >> file) writes each expression in InputForm on its own line, replacing the file (arbitrary-precision numbers keep their precision); Put["file"] empties it; Get reads the file back. Check: exact; Put/Get round trips in tests. |
+| `PutAppend` | added | 3 | PutAppend[e1, ..., "file"] (expr >>> file) appends the expressions in InputForm, one per line. Check: exact; PutAppend/Get round trips in tests. |
+| `RemoteFile` | added | 4 | RemoteFile[URL["url"]] (or RemoteFile["url"], normalised to URL form) is an inert reference to a remote file that Import reads. Check: exact (inert wrapper); Import through it in tests. |
+| `Save` | added | 4 | Save["file", s] appends the full definitions of s and the symbols it depends on (FullDefinition: values, attributes, options, messages) in InputForm; s may be a name, a "pattern*", a context "ctx`" or a list; Get restores them; HoldRest. Check: exact; definitions restored with Get after Clear in tests. |
+| `SetFileFormatProperties` | added | 4 | SetFileFormatProperties[fmt, prop -> val] or {rules} (or an association) changes "FileNamePatterns", "MIMETypes" or "DefaultImportElement" (which must be an import element) for the session; Import then uses the new default element. Check: exact; the change is read back with FileFormatProperties in tests. |
+| `ToMemory` | added | 4 | ToMemory[obj] gives the in-memory version of an out-of-core object; MikoshiLang keeps every object in memory, so it returns obj unchanged. Check: exact (identity). |
+| `URL` | added | 9 | URL["url"] is an inert symbolic URL accepted by Import, FileFormat and LocalCache (file:// URLs read local files); URL[URL[u]] is URL[u]; a non-string argument raises. Check: exact (inert wrapper with validation). |
+| `Uncompress` | added | 7 | Uncompress["1:..."] recovers and evaluates the expression from a Compress string (also reads packed real arrays 'e'); Uncompress[c, h] wraps it in h before evaluation; invalid data raises. Check: exact; Compress round trips in tests. |
+| `VerifySecurityCertificates` | added | 3 | option for URL functions: whether to verify the server's TLS certificate (True by default); inert symbol. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `XMLElement` | added | 5 | XMLElement[tag, {attr -> val, ...}, {data, ...}] represents a symbolic XML element; produced by Import of XML and accepted by Export. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+| `XMLObject` | added | 3 | XMLObject["type"][...] represents a symbolic XML object (Document, Declaration, Comment, ProcessingInstruction); produced by Import of XML and accepted by Export. Check: exact (inert symbol; tests check it stays unevaluated and is used as documented). |
+
 ### kernel
 
 | Function | Status | Cases | Notes |
@@ -1222,16 +1301,16 @@ Cases = number of differential test cases in which the head occurs.
 | `IntegerQ` | kernel | 18 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Join` | fixed | 6 | kernel builtin extended in batch 1: Join[..., n] at level n; associations merge (later values win) |
 | `Last` | fixed | 26 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
-| `Length` | fixed | 99 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
+| `Length` | fixed | 102 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
 | `Less` | fixed | 6 | kernel builtin extended in batch 1: more than two arguments chain |
 | `List` | fixed | 6 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
 | `ListQ` | kernel | 5 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Map` | fixed | 23 | kernel builtin extended in batch 1: level specifications (n, {n}, {m, n}, negative), associations, operator form Map[f] |
 | `MapAll` | fixed | 3 | kernel builtin extended in batch 1: f //@ expr |
 | `MapIndexed` | fixed | 3 | kernel builtin extended in batch 1: level specifications; associations index by Key[k] |
-| `MemberQ` | fixed | 28 | kernel builtin extended in batch 1: level specifications |
+| `MemberQ` | fixed | 31 | kernel builtin extended in batch 1: level specifications |
 | `Most` | fixed | 5 | kernel builtin extended in batch 1: any head; empty expressions raise |
-| `N` | kernel | 498 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `N` | kernel | 499 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Negative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NonNegative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NumberQ` | kernel | 6 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -1244,15 +1323,15 @@ Cases = number of differential test cases in which the head occurs.
 | `Power` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Prepend` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule; any head |
 | `PrimeQ` | kernel | 11 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Range` | fixed | 94 | kernel builtin extended in batch 1: rational, real and symbolic steps |
+| `Range` | fixed | 102 | kernel builtin extended in batch 1: rational, real and symbolic steps |
 | `ReplaceAll` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Rest` | fixed | 6 | kernel builtin extended in batch 1: any head; empty expressions raise |
 | `Reverse` | fixed | 13 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
 | `Select` | fixed | 15 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
 | `Sort` | fixed | 23 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
-| `StringJoin` | kernel | 12 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringLength` | kernel | 8 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringQ` | kernel | 10 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `StringJoin` | kernel | 13 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `StringLength` | kernel | 9 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `StringQ` | kernel | 14 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Take` | fixed | 10 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Thread` | fixed | 3 | kernel builtin extended in batch 1: Thread[f[...], h] and Thread[expr, h, n]; rules thread |
 | `Times` | kernel | 7 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -1530,7 +1609,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Comap` | added | 3 | Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys) |
 | `ComapApply` | added | 3 | ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...} |
 | `ComposeList` | added | 3 | ComposeList[{f1, f2, ...}, x] = {x, f1[x], f2[f1[x]], ...} |
-| `ConstantArray` | added | 13 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
+| `ConstantArray` | added | 15 | ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}] |
 | `Construct` | added | 4 | Construct[f, x, y, ...] = f[x, y, ...] |
 | `ContainsAll` | added | 3 | every element of e2 occurs in e1 (SameQ or SameTest) |
 | `ContainsAny` | added | 3 | some element of e2 occurs in e1 |
@@ -1628,7 +1707,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Accumulate` | fixed | 3 | exact running totals (legacy converted to floats and rounded to 10 digits); works on symbols |
 | `Cardinality` | fixed | 3 | number of distinct elements (legacy returned Length, counting duplicates) |
 | `Chunk` | verified | 3 | consecutive blocks of size n, last one possibly shorter (MikoshiLang) |
-| `Complement` | fixed | 4 | Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form); SameTest -> f |
+| `Complement` | fixed | 5 | Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form); SameTest -> f |
 | `DeleteDuplicates` | fixed | 5 | SameQ comparison keeping first occurrences (legacy compared string forms, so the string "x" and the symbol x were treated as duplicates); DeleteDuplicates[list, test] |
 | `Differences` | fixed | 6 | exact successive differences, Differences[list, n] for n-th differences (legacy used rounded floats) |
 | `ElementQ` | fixed | 3 | ElementQ[x, list]: SameQ membership (legacy used ==, so ElementQ[1, {1.0}] was True; MemberQ gives False) |
@@ -1828,7 +1907,7 @@ Cases = number of differential test cases in which the head occurs.
 | `MoebiusMu` | fixed | 6 | MoebiusMu[-n] = MoebiusMu[n]; 0 raises |
 | `MultiplicativeOrder` | fixed | 7 | raises a clear error when gcd(k, n) != 1; legacy truncated non-integer arguments with int(); now exact integers only |
 | `NextPrime` | fixed | 4 | legacy truncated reals and ignored negative primes; now NextPrime[x] is the smallest prime > x (primes include -2, -3, ... as in Wolfram) and NextPrime[x, k] the k-th |
-| `PowerMod` | fixed | 9 | negative exponents use the modular inverse and raise when it does not exist; rational exponents raise |
+| `PowerMod` | fixed | 10 | negative exponents use the modular inverse and raise when it does not exist; rational exponents raise |
 | `Prime` | fixed | 4 | Prime[n] for positive integers only; legacy truncated non-integer arguments with int(); now exact integers only |
 | `PrimeFactorization` | fixed | 3 | MikoshiLang alias of FactorInteger |
 | `PrimePi` | fixed | 5 | PrimePi[x] for real x counts primes <= x (legacy truncated with int(), wrong for negative floats) |
@@ -1982,6 +2061,7 @@ Cases = number of differential test cases in which the head occurs.
 | `After` | added | 4 | inert symbol: position symbol: Labeled/Placed position, same as Right |
 | `Alignment` | added | 13 | inert symbol: option of Column, Grid, Item, Multicolumn: Left, Center, Right or {h, v} (honoured in text) |
 | `AlignmentPoint` | added | 4 | inert symbol: option of Inset and related: alignment point of an object (inert) |
+| `AssociationFormat` | added | 4 | option of TextString: Automatic ({"<\|", ", ", "\|>", " -> "}), a separator string or {"left", "sep", "right"[, "arrow"]} for associations; other values raise ValueError. Check: exact; reference strings in tests. |
 | `Background` | added | 7 | inert symbol: option of Style, Grid, Framed, Item, ...: background colour; no effect on plain text |
 | `BaseForm` | added | 15 | BaseForm[expr, b] inert wrapper (2 <= b <= 36): integers and approximate reals in expr show as digits in base b with subscript _b (e.g. 100001_2); reals keep as many base-b digits as their decimal precision (6 digits for machine numbers) and drop trailing zeros |
 | `Baseline` | added | 3 | inert symbol: alignment symbol: vertical alignment on the text baseline (top line in plain text) |
@@ -1992,7 +2072,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Bottom` | added | 8 | inert symbol: position/alignment symbol: Labeled position (default, label below), vertical alignment |
 | `CForm` | added | 11 | CForm[expr] inert: C source for expr (Power(x,2), Sin(x), rationals as decimals, 1.5e10) |
 | `Center` | added | 13 | inert symbol: position/alignment symbol: centred alignment in Column, Grid, Item, TableForm |
-| `CharacterEncoding` | added | 11 | option of ToString and other output functions: the raw character encoding ("ASCII" writes other characters as \[Name] or \:xxxx escapes) |
+| `CharacterEncoding` | added | 12 | option of ToString and other output functions: the raw character encoding ("ASCII" writes other characters as \[Name] or \:xxxx escapes) |
 | `Column` | added | 23 | Column[{e1, e2, ...}, alignment, spacing, opts] inert layout: elements one per line (spacing blank lines between), aligned Left, Center or Right |
 | `ColumnAlignments` | added | 7 | inert symbol: option of Grid (GridBox): per-column horizontal alignment (honoured in text) |
 | `ColumnLines` | added | 8 | inert symbol: option of Grid (GridBox): draw \| between columns (honoured in text) |
@@ -2073,7 +2153,7 @@ Cases = number of differential test cases in which the head occurs.
 | `TeXForm` | added | 27 | TeXForm[expr] inert: shows the LaTeX of expr (TraditionalForm conventions: \frac, \sqrt, \sin (x), x^2+1); ToString[TeXForm[expr]] gives the TeX string |
 | `Text` | added | 7 | Text[expr] shows expr as plain text; Text[expr, coords, offset, dir] is an inert graphics primitive (coordinates a list of 2 or 3 numbers, Scaled[...] or Offset[...]) |
 | `TextElement` | added | 4 | TextElement[text, props] / TextElement[{e1, e2, ...}, props] inert: an element of text with a property association; text shows the elements' strings concatenated |
-| `TextString` | added | 25 | TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default ""), lists per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings |
+| `TextString` | added | 30 | TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default ""), lists per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings |
 | `Top` | added | 10 | inert symbol: position/alignment symbol: Labeled position (label above), vertical alignment in Grid rows |
 | `TotalWidth` | added | 7 | option of ToString: output longer than n characters is shortened with <<k>> skeletons |
 | `TraditionalForm` | added | 8 | TraditionalForm[expr] inert: shows expr in traditional mathematical notation (f(x), sin(x), e^x, π, i, polynomials in decreasing degree) |
@@ -2600,7 +2680,7 @@ Cases = number of differential test cases in which the head occurs.
 | `BioSequenceReverseComplement` | added | 5 | reverse of the complementary DNA/RNA strand (bond positions mirrored); unevaluated for peptides and invalid sequences |
 | `BioSequenceTranscribe` | added | 3 | DNA -> RNA (T -> U) and RNA -> DNA (U -> T), circular forms kept; unevaluated for peptides and invalid sequences |
 | `BioSequenceTranslate` | added | 12 | translates DNA/RNA codons to a Peptide (stop codons give ".", incomplete final codons dropped, a degenerate codon gives its amino acid if all its instances agree, else X); genetic codes 1-5 and 11 by number or name, a 64-letter TCAG-ordered string or codon rules; third argument True (start codons of codes 1, 2, 11 give M), a table, or rules for the first codon |
-| `ByteArray` | added | 26 | ByteArray[{b1, ...}] (bytes 0..255) and ByteArray["base64"]; the evaluated form is ByteArray["base64"] (Wolfram's InputForm); Normal and Length work on it |
+| `ByteArray` | added | 64 | ByteArray[{b1, ...}] (bytes 0..255) and ByteArray["base64"]; the evaluated form is ByteArray["base64"] (Wolfram's InputForm); Normal and Length work on it |
 | `ByteArrayFormat` | added | 5 | heuristic import format of a ByteArray (as StringFormat) |
 | `ByteArrayFormatQ` | added | 6 | whether a ByteArray is (heuristically) in the format or any of a list of formats |
 | `ByteArrayQ` | added | 3 | True for a valid ByteArray object, False otherwise |
@@ -2750,7 +2830,7 @@ Cases = number of differential test cases in which the head occurs.
 | `StringRotateLeft` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringRotateRight` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringSplit` | added | 15 | splits at whitespace or at matches of a string pattern; empty pieces at the ends are dropped (kept with StringSplit[s, p, All]), interior ones kept; p -> r inserts r at each split; StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists |
-| `StringStartsQ` | fixed | 6 | string patterns (legacy: literal prefix only); IgnoreCase |
+| `StringStartsQ` | fixed | 7 | string patterns (legacy: literal prefix only); IgnoreCase |
 | `StringTakeDrop` | added | 3 | {StringTake[s, spec], StringDrop[s, spec]} |
 | `StringTrim` | fixed | 7 | StringTrim[s] removes leading and trailing whitespace; StringTrim[s, p] removes a leading and a trailing match of the string pattern p |
 | `Symbol` | added | 10 | Symbol["name"] gives the symbol (evaluated); invalid names raise |
