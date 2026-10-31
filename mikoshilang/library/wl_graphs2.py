@@ -1385,7 +1385,8 @@ def _highlight(g: Expr, spec: Expr, *opts: Option) -> Expr:
     pos, o = _graph_opts(opts, "HighlightGraph")
     if pos:
         raise ValueError("HighlightGraph: expected HighlightGraph[g, {items}]")
-    items = list(spec.args) if is_list(spec) else [spec]
+    items = [_norm_edge(it, "HighlightGraph") if _is_edge(it) else it
+             for it in (list(spec.args) if is_list(spec) else [spec])]
     for it in items:
         if isinstance(it, Expr) and it.head == "Graph":
             sub = _g(it, "HighlightGraph")

@@ -119,6 +119,7 @@ class WG:
             self.edge_exprs.append(e)
         self.weights = self._edge_data("EdgeWeight")
         self.capacities = self._edge_data("EdgeCapacity")
+        self._edge_data("EdgeCost")  # validated here (one real per edge); read by W24's cost flows
         vw = self.opts.get("VertexWeight")
         self.vertex_weights = None
         if vw is not None and not (isinstance(vw, Symbol) and vw.name == "Automatic"):
