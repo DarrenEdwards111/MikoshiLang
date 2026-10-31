@@ -622,3 +622,351 @@ _register("MultipleHarmonicNumber", (1, 3), _multiple_harmonic,
           "MultipleHarmonicNumber[n, {r1, ..., rk}, {s1, ..., sk}] = Sum over n >= n1 > ... > nk >= 1 of "
           "s1^n1 ... sk^nk/(n1^r1 ... nk^rk) (exact for exact weights); MultipleHarmonicNumber[n] = "
           "HarmonicNumber[n]; n = Infinity gives MultipleZeta / MultiplePolyLog", listable=False, numeric=False)
+
+
+# ───────────────────────────── Bell and Nørlund polynomials, PascalBinomial ─────────────────────────────
+
+def _bell_partial(n, k, xs):
+    """Partial Bell polynomial B_{n,k}(x1, ..., x_{n-k+1}) by the standard recurrence."""
+    memo = {}
+
+    def B(n, k):
+        if (n, k) in memo:
+            return memo[(n, k)]
+        if n == 0 and k == 0:
+            v = sp.Integer(1)
+        elif n == 0 or k == 0 or k > n:
+            v = sp.Integer(0)
+        else:
+            v = sp.Add(*[sp.binomial(n - 1, i - 1) * xs[i - 1] * B(n - i, k - 1) for i in range(1, n - k + 2)])
+        memo[(n, k)] = v
+        return v
+    return sp.expand(B(n, k))
+
+
+def _bell_general(rows):
+    """Generalized Bell polynomial of a matrix: n-th derivative of f1(f2(...fm(t))) where row i holds the
+    derivatives f_i', ..., f_i^(n) (Faa di Bruno applied recursively)."""
+    n = len(rows[0])
+    if len(rows) == 1:
+        return rows[0][n - 1]
+    inner = [_bell_general([r[:j] for r in rows[1:]]) for j in range(1, n + 1)]
+    return sp.expand(sp.Add(*[rows[0][k - 1] * _bell_partial(n, k, inner) for k in range(1, n + 1)]))
+
+
+def _belly(*args):
+    name = "BellY"
+    if len(args) == 1:
+        m = args[0]
+        if not (is_list(m) and m.args and all(is_list(r) for r in m.args)):
+            raise Unevaluated() if isinstance(m, Symbol) else ValueError(f"{name}: expected a matrix")
+        rows = [[sym(x, name) for x in r.args] for r in m.args]
+        if len({len(r) for r in rows}) != 1 or not rows[0]:
+            raise ValueError(f"{name}: the matrix must be rectangular and non-empty")
+        return R(_bell_general(rows))
+    if len(args) != 3:
+        raise ValueError(f"{name}: expected BellY[n, k, {{x1, ...}}] or BellY[matrix]")
+    n, k, xs = args
+    nv, kv = sym(n, name), sym(k, name)
+    if not (nv.is_Integer and kv.is_Integer):
+        if nv.is_number and kv.is_number:
+            raise ValueError(f"{name}: n and k must be integers")
+        raise Unevaluated()
+    if not is_list(xs):
+        raise Unevaluated()
+    if xs.args and all(is_list(r) for r in xs.args):
+        raise ValueError(f"{name}: the generalized partial form BellY[n, k, matrix] is not supported")
+    n, k = int(nv), int(kv)
+    if n < 0 or k < 0:
+        raise ValueError(f"{name}: n and k must be non-negative")
+    vals = [sym(x, name) for x in xs.args]
+    need = n - k + 1
+    if k <= n and len(vals) < need and not (n == 0 and k == 0):
+        raise ValueError(f"{name}: BellY[{n}, {k}, list] needs at least {need} variables")
+    return R(_bell_partial(n, k, vals + [sp.Integer(0)] * max(0, need - len(vals))))
+
+
+_register("BellY", (1, 3), _belly,
+          "BellY[n, k, {x1, ..., x(n-k+1)}] partial Bell polynomial (standard recurrence); BellY[m] generalized "
+          "Bell polynomial of a matrix (n-th derivative of a composition, rows = derivatives of each function); "
+          "BellY[n, k, matrix] raises (not supported)", listable=False, numeric=False)
+
+
+def _series_log1(c, N):
+    """log of a power series with c[0] == 1, to order N."""
+    d = [sp.Integer(0)] * (N + 1)
+    for n in range(1, N + 1):
+        d[n] = sp.expand(c[n] - sp.Add(*[sp.Rational(k, n) * d[k] * c[n - k] for k in range(1, n)]))
+    return d
+
+
+def _series_exp(d, N):
+    """exp of a power series with d[0] == 0, to order N."""
+    e = [sp.Integer(0)] * (N + 1)
+    e[0] = sp.Integer(1)
+    for n in range(1, N + 1):
+        e[n] = sp.expand(sp.Add(*[sp.Rational(k, n) * d[k] * e[n - k] for k in range(1, n + 1)]))
+    return e
+
+
+def _norlund(n, a, x=None):
+    g = [sp.bernoulli(k) / sp.factorial(k) for k in range(n + 1)]
+    g[1] = sp.Rational(-1, 2)                   # t/(e^t - 1) convention
+    L = _series_log1(g, n)
+    d = [sp.expand(a * L[k]) for k in range(n + 1)]
+    if x is not None and n >= 1:
+        d[1] = sp.expand(d[1] + x)
+    e = _series_exp(d, n)
+    return sp.expand(sp.factorial(n) * e[n])
+
+
+def _norlundb(*args):
+    name = "NorlundB"
+    vals = [sym(a, name) for a in args]
+    n = vals[0]
+    if not n.is_number:
+        raise Unevaluated()
+    if not (n.is_Integer and n >= 0):
+        raise Unevaluated()
+    if int(n) > 200:
+        raise ValueError(f"{name}: degree too large")
+    out = _norlund(int(n), vals[1], vals[2] if len(vals) > 2 else None)
+    prec = input_precision(args[1:])
+    if prec is not None and out.is_number:
+        return R(sp.N(out, 15 if prec == "m" else mpmath.libmp.prec_to_dps(prec)))
+    return R(out)
+
+
+_register("NorlundB", (2, 3), _norlundb,
+          "NorlundB[n, a] Norlund polynomials and NorlundB[n, a, x] generalized Bernoulli polynomials from "
+          "(t/(E^t - 1))^a E^(x t) = Sum[NorlundB[n, a, x] t^n/n!] (exact power-series arithmetic) for "
+          "non-negative integer n; NorlundB[n, 1] = BernoulliB[n]", numeric=False)
+
+
+def _pascal_binomial(n, m):
+    name = "PascalBinomial"
+    nv, mv = sym(n, name), sym(m, name)
+    if nv.is_Integer and nv < 0:
+        if not mv.is_number:
+            raise Unevaluated()
+        if mv.is_Integer:
+            if mv < 0:
+                return 0
+            return R(sp.ff(nv, int(mv)) / sp.factorial(int(mv)))
+        if input_precision([m]) is None and mv.is_integer is False:
+            return Symbol("ComplexInfinity")
+        raise Unevaluated()
+    return Expr("Binomial", n, m)
+
+
+_register("PascalBinomial", 2, _pascal_binomial,
+          "PascalBinomial[n, m] agrees with Binomial except for negative integer n, where it is the iterated "
+          "limit that preserves Pascal's identity: n(n-1)...(n-m+1)/m! for integer m >= 0, 0 for negative "
+          "integer m, ComplexInfinity for non-integer m (reference definition)", numeric=False)
+
+
+# ───────────────────────────── Ramanujan tau and its L-function ─────────────────────────────
+
+def _sigma_table(N):
+    s = [0] * (N + 1)
+    for d in range(1, N + 1):
+        for m in range(d, N + 1, d):
+            s[m] += d
+    return s
+
+
+def _tau_prime(p, sig):
+    """tau(n) = n^4 sigma(n) - 24 Sum_{k=1}^{n-1} (35 k^4 - 52 k^3 n + 18 k^2 n^2) sigma(k) sigma(n - k)."""
+    n = p
+    acc = 0
+    for k in range(1, n):
+        acc += (35 * k ** 4 - 52 * k ** 3 * n + 18 * k * k * n * n) * sig[k] * sig[n - k]
+    return n ** 4 * sig[n] - 24 * acc
+
+
+def ramanujan_tau(n):
+    if n <= 0:
+        return 0
+    if n == 1:
+        return 1
+    f = sp.factorint(n)
+    if max(f) > 200000:
+        raise ValueError("RamanujanTau: argument has a prime factor that is too large")
+    sig = _sigma_table(max(f))
+    out = 1
+    for p, e in f.items():
+        tp = _tau_prime(p, sig)
+        a, b = 1, tp                     # tau(p^0), tau(p^1)
+        for _ in range(e - 1):
+            a, b = b, tp * b - p ** 11 * a
+        out *= b
+    return out
+
+
+def _tau_list(N):
+    """tau(1..N) from Delta = q prod (1 - q^n)^24 via eta^3 = Sum (-1)^m (2m+1) q^(m(m+1)/2)."""
+    e3 = [0] * N
+    m = 0
+    while m * (m + 1) // 2 < N:
+        e3[m * (m + 1) // 2] = (-1) ** m * (2 * m + 1)
+        m += 1
+
+    def mul(a, b):
+        c = [0] * N
+        for i, x in enumerate(a):
+            if x:
+                for j in range(N - i):
+                    if b[j]:
+                        c[i + j] += x * b[j]
+        return c
+    e6 = mul(e3, e3)
+    e12 = mul(e6, e6)
+    e24 = mul(e12, e12)
+    return [0] + e24[:N]           # tau(n) = coefficient of q^(n-1) in eta^24 / q
+
+
+def _tau(n):
+    v = sym(n, "RamanujanTau")
+    if not v.is_number:
+        raise Unevaluated()
+    if not v.is_Integer:
+        raise ValueError("RamanujanTau: the argument must be an integer")
+    return ramanujan_tau(int(v))
+
+
+_register("RamanujanTau", 1, _tau,
+          "RamanujanTau[n]: coefficients of Delta = q Prod[(1 - q^k)^24]; tau(p) from the divisor-sum identity "
+          "n^4 sigma(n) - 24 Sum (35k^4 - 52k^3 n + 18k^2 n^2) sigma(k) sigma(n-k), multiplicativity and "
+          "tau(p^(e+1)) = tau(p) tau(p^e) - p^11 tau(p^(e-1)); 0 for n <= 0", numeric=False)
+
+
+def _tau_L(s):
+    """L(s) = Sum tau(n)/n^s via Lambda(s) = (2 Pi)^-s Gamma(s) L(s) = Lambda(12 - s) and incomplete gammas."""
+    t = abs(mpmath.im(s))
+    extra = int(t * 2.3) + 20
+    with mpmath.workprec(mpmath.mp.prec + extra):
+        twopi = 2 * mpmath.pi
+        target = mpmath.mpf(2) ** (-(mpmath.mp.prec + 10))
+        N = int((mpmath.mp.prec * 0.6931 + t) / 6.28) + 12
+        taus = _tau_list(N + 1)
+        lam = mpmath.mpf(0)
+        for n in range(1, N + 1):
+            x = twopi * n
+            term = taus[n] * (mpmath.gammainc(s, x) * mpmath.power(x, -s)
+                              + mpmath.gammainc(12 - s, x) * mpmath.power(x, s - 12))
+            lam += term
+            if n > 6 and abs(term) < target * (abs(lam) + mpmath.mpf(2) ** -40):
+                break
+        if s == 0 or (mpmath.im(s) == 0 and mpmath.re(s) <= 0 and mpmath.re(s) == int(mpmath.re(s))):
+            return mpmath.mpf(0)            # trivial zeros at s = 0, -1, -2, ... (1/Gamma(s) = 0)
+        return lam * mpmath.power(twopi, s) * mpmath.rgamma(s)
+
+
+special("RamanujanTauL", 1, _tau_L,
+        notes="RamanujanTauL[s] = Sum[RamanujanTau[n]/n^s] (Re s > 13/2), continued to all s through the "
+              "functional equation Lambda(s) = (2 Pi)^-s Gamma(s) L(s) = Lambda(12 - s) (rapidly convergent "
+              "incomplete-gamma series)")
+
+
+def _tau_theta(t):
+    return mpmath.im(mpmath.loggamma(6 + 1j * t)) - t * mpmath.log(2 * mpmath.pi) if mpmath.im(t) == 0 else \
+        (-0.5j) * (mpmath.loggamma(6 + 1j * t) - mpmath.loggamma(6 - 1j * t)) - t * mpmath.log(2 * mpmath.pi)
+
+
+special("RamanujanTauTheta", 1, _tau_theta, lambda t: sp.Integer(0) if t == 0 else None,
+        notes="RamanujanTauTheta[t] = -I/2 (LogGamma[6 + I t] - LogGamma[6 - I t]) - t Log[2 Pi] (continuous "
+              "branch; RamanujanTauTheta[9.22] = 1.40372 as in the reference); RamanujanTauTheta[0] = 0")
+
+
+def _tau_Z(t):
+    return mpmath.exp(1j * _tau_theta(t)) * _tau_L(6 + 1j * t) if mpmath.im(t) != 0 else \
+        mpmath.re(mpmath.exp(1j * _tau_theta(t)) * _tau_L(6 + 1j * t))
+
+
+special("RamanujanTauZ", 1, _tau_Z,
+        notes="RamanujanTauZ[t] = Exp[I RamanujanTauTheta[t]] RamanujanTauL[6 + I t] (real for real t)")
+
+
+# ───────────────────────────── Zernike, Pauli, inert heads ─────────────────────────────
+
+def _zernike(n, m, r):
+    name = "ZernikeR"
+    nv, mv, rv = sym(n, name), sym(m, name), sym(r, name)
+    if nv.is_Integer and mv.is_Integer:
+        N, M = int(nv), int(mv)
+        if (N - M) % 2:
+            return 0
+        if 0 <= M <= N:
+            out = sp.Add(*[(-1) ** k * sp.factorial(N - k) / (sp.factorial(k) * sp.factorial((N + M) // 2 - k)
+                                                                 * sp.factorial((N - M) // 2 - k)) * rv ** (N - 2 * k)
+                           for k in range((N - M) // 2 + 1)])
+            out = sp.expand(out)
+            prec = input_precision([r])
+            if prec is not None and out.is_number:
+                return R(sp.N(out, 15 if prec == "m" else mpmath.libmp.prec_to_dps(prec)))
+            return R(out)
+        raise Unevaluated()
+    raise Unevaluated()
+
+
+_register("ZernikeR", 3, _zernike,
+          "ZernikeR[n, m, r]: explicit radial Zernike polynomial Sum[(-1)^k (n-k)!/(k! ((n+m)/2-k)! "
+          "((n-m)/2-k)!) r^(n-2k)] for integers 0 <= m <= n, 0 when n - m is odd; non-integer orders stay "
+          "unevaluated")
+
+_PAULI = {
+    0: [[1, 0], [0, 1]],
+    1: [[0, 1], [1, 0]],
+    2: [[0, -sp.I], [sp.I, 0]],
+    3: [[1, 0], [0, -1]],
+}
+
+
+def _pauli(k, *opts):
+    from .wl_common import split_options
+    _a, o = split_options(opts, {"TargetStructure", "WorkingPrecision"}, "PauliMatrix")
+    if _a:
+        raise ValueError("PauliMatrix: unexpected arguments")
+    ts = o.get("TargetStructure")
+    if ts is not None and not (isinstance(ts, str) and ts in ("Dense",)) and not (
+            isinstance(ts, Symbol) and ts.name == "Automatic"):
+        raise ValueError("PauliMatrix: only TargetStructure -> \"Dense\" is supported")
+    if is_list(k):
+        return Expr("List", *(_pauli(x, *opts) for x in k.args))
+    v = sym(k, "PauliMatrix")
+    if not v.is_number:
+        raise Unevaluated()
+    if not (v.is_Integer and 0 <= v <= 3):
+        raise ValueError("PauliMatrix: the index must be 0, 1, 2 or 3")
+    mat = sp.Matrix(_PAULI[int(v)])
+    wp = o.get("WorkingPrecision")
+    if wp is not None:
+        if isinstance(wp, Symbol) and wp.name == "MachinePrecision":
+            conv = lambda z: z if z == 0 else (complex(z) if sp.im(z) else float(z))
+        else:
+            d = sym(wp, "PauliMatrix")
+            if not d.is_number or not d > 0:
+                raise ValueError("PauliMatrix: invalid WorkingPrecision")
+            conv = lambda z: z if z == 0 else R(sp.N(z, int(d)))
+        return Expr("List", *(Expr("List", *(conv(z) for z in mat.row(i))) for i in range(2)))
+    return R(mat)
+
+
+fn("PauliMatrix", area=AREA, status=STATUS, listable=False,
+   notes="PauliMatrix[k]: k = 1, 2, 3 Pauli spin matrices, PauliMatrix[0] = IdentityMatrix[2]; threads over "
+         "lists; WorkingPrecision; TargetStructure -> \"Dense\" (other structures raise)")(_pauli)
+
+
+def _inert(name, notes, nargs=(0, 12)):
+    def impl(*args):
+        raise Unevaluated()
+    _register(name, nargs, impl, notes, listable=False, numeric=False)
+
+
+_inert("GeneralizedPower", "GeneralizedPower[f, x, k] represents Fold[f, Table[x, k]] (inert, as in the reference; "
+       "typeset as a power)")
+for _c, _rule in (("CombinatorS", "S x y z -> x z (y z)"), ("CombinatorK", "K x y -> x"), ("CombinatorI", "I x -> x"),
+                  ("CombinatorB", "B x y z -> x (y z)"), ("CombinatorC", "C x y z -> x z y"),
+                  ("CombinatorW", "W x y -> x y y"), ("CombinatorY", "Y f -> f (Y f)")):
+    _inert(_c, f"{_c} represents the {_c[-1]} combinator ({_rule}); no transformations are applied automatically "
+           f"(reference), so applications such as {_c}[x][y] stay unevaluated for rule-based reduction")
