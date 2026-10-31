@@ -38,6 +38,39 @@ print(s.evaluate('Sqrt[Pi]'), s.evaluate('Integrate[x^2, x]'))  # Sqrt[Pi] x^3/3
 print(s.evaluate('N[Pi,50]'))            # high-precision SymPy number, not float
 ```
 
+## Python interop
+
+`Session.eval` returns Python data and keeps symbolic results as expressions; your typed Python functions
+become MikoshiLang heads in one session; calling other Python code from MikoshiLang is off unless the session
+allows it. Full guide: [docs/python_interop.md](docs/python_interop.md).
+
+```python
+from fractions import Fraction
+from mikoshilang import Session
+
+s = Session()
+s.eval("1/3")                    # Fraction(1, 3); ints, floats, str, None, lists and dicts likewise
+s.eval("0.5 - 0.5")              # 0.0 (inexact zero stays inexact)
+s.eval("Integrate[x^2, x]")      # Expr x^3/3 (symbolic="sympy" gives a SymPy expression)
+ml = s.ns                        # Pythonic calls; keyword arguments become options
+x = ml.symbols("x")
+ml.D(x**3, x), ml.Total([1, 2, 3])          # (3*x^2, 6)
+
+@s.function(listable=True)       # session-local head CollatzSteps, typed from the hints
+def collatz_steps(n: int) -> int:
+    k = 0
+    while n != 1:
+        n, k = (n // 2 if n % 2 == 0 else 3 * n + 1), k + 1
+    return k
+
+s.eval("CollatzSteps[{1, 6, 27}]")          # [0, 8, 111]; CollatzSteps[n] stays unevaluated
+
+t = Session(allow_python={"math"})          # off by default; a module allow-list, not a sandbox
+t.eval('PythonFunction["math.gcd"][12, 18]')  # 6 (PermissionError without allow_python)
+```
+
+`ExternalEvaluate` and other code-string evaluation raise `NotImplementedError`: there is no `eval`/`exec`.
+
 ## Language contract
 
 What is implemented, and checked by value-level tests (see `tests/`):

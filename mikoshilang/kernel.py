@@ -1982,7 +1982,17 @@ def _sympy_arith(expr):
         return expr
     from .precision import input_precision, round_to
     p = input_precision(expr.args)
-    return round_to(out, p) if p is not None else out
+    if p is None:
+        return out
+    if _exact_zero(out) and not (expr.head == "Times" and any(_exact_zero(x) for x in expr.args)):
+        # SymPy collapses an inexact zero to exact 0 (Float(0.5) - Float(0.5) -> Zero). Wolfram keeps it inexact:
+        # 0.5 - 0.5 -> 0., 0. x -> 0.; only an exact 0 factor makes a product exactly 0 (0 * 1.5 -> 0).
+        return 0.0 if p == "m" else sp.Float(0, precision=p)
+    return round_to(out, p)
+
+
+def _exact_zero(x):
+    return (isinstance(x, int) and not isinstance(x, bool) and x == 0) or x is sp.S.Zero
 
 
 @builtin("Plus")
