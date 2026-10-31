@@ -2202,3 +2202,330 @@ def _arrayresample(a, dspec, *rest):
         n = _rs_count(s, m, fname)
         nested = _rs_dim(nested, axis, n, kind, fname, len(dims) - axis - 1)
     return _from_nested_any(nested)
+
+
+# ─────────────────────────── incremental functions and objects ───────────────────────────
+#
+# MikoshiLang has no Wolfram Compiler, so IncrementalFunction[f][args] creates the running instance directly
+# (Wolfram requires FunctionCompile[IncrementalFunction[f]][args]).  The instance runs f in its own thread that
+# strictly alternates with the caller, so only one of them evaluates at any time.
+
+import contextvars as _cv
+import threading as _th
+
+_INC_LOCAL = _th.local()
+
+
+def _inc_failure(tag, msg):
+    return Expr("Failure", tag, Expr("Association", Expr("Rule", "MessageTemplate", msg)))
+
+
+class _IncrementalFunctionInstance:
+    type = "IncrementalFunction"
+
+    def __init__(self, f, args):
+        self.f, self.args = f, args
+        self.state = "new"            # new | paused | done
+        self.msg = None
+        self.resume = None            # (sent?, value)
+        self.to_worker = _th.Semaphore(0)
+        self.to_caller = _th.Semaphore(0)
+
+    def copy(self):
+        raise ValueError("IncrementalFunction: a running incremental function cannot be copied")
+
+    def normal(self):
+        raise ValueError("IncrementalFunction: an incremental function instance has no Normal form")
+
+    def length(self):
+        raise ValueError("IncrementalFunction: an incremental function instance has no Length")
+
+    def _worker(self):
+        _INC_LOCAL.current = self
+        try:
+            apply(self.f, *self.args)
+            self.msg = ("done", None)
+        except BaseException as e:          # noqa: BLE001 -- re-raised in the caller's thread
+            self.msg = ("error", e)
+        self.to_caller.release()
+
+    def pause(self, kind, payload):
+        self.msg = (kind, payload)
+        self.to_caller.release()
+        self.to_worker.acquire()
+        return self.resume
+
+    def _run(self, sent, value):
+        if self.state == "done":
+            return _inc_failure("IncrementalFunctionTerminated", "The incremental function has terminated.")
+        self.resume = (sent, value)
+        if self.state == "new":
+            ctx = _cv.copy_context()
+            old = _th.stack_size()
+            _th.stack_size(256 * 1024 * 1024)
+            try:
+                t = _th.Thread(target=ctx.run, args=(self._worker,), daemon=True)
+                t.start()
+            finally:
+                _th.stack_size(old)
+        else:
+            self.to_worker.release()
+        self.to_caller.acquire()
+        kind, payload = self.msg
+        if kind == "yield":
+            self.state = "paused"
+            return payload
+        if kind == "receive":
+            self.state = "paused"
+            return None
+        self.state = "done"
+        if kind == "error":
+            raise payload
+        return _inc_failure("IncrementalFunctionTerminated", "The incremental function has terminated.")
+
+    def op_Next(self):
+        return self._run(False, None)
+
+    def op_Send(self, x):
+        if self.state == "new":
+            raise ValueError("IncrementalFunction: an incremental function must be started with \"Next\" "
+                             "before values can be sent to it")
+        return self._run(True, x)
+
+
+def _inc_current(fname):
+    cur = getattr(_INC_LOCAL, "current", None)
+    if cur is None:
+        raise ValueError(f"{fname}: can only be used inside a running IncrementalFunction")
+    return cur
+
+
+@fn("IncrementalFunction", **ADDED,
+    notes="IncrementalFunction[f] is an inert function that can pause; IncrementalFunction[f][args] creates a running "
+          "instance DataStructure[\"IncrementalFunction\", ...] (no FunctionCompile step is needed). ds[\"Next\"] runs "
+          "to the next IncrementalYield (giving its value) or IncrementalReceive (giving Null); ds[\"Send\", x] "
+          "resumes, making the pending IncrementalReceive return x; once the code ends the call gives "
+          "Failure[\"IncrementalFunctionTerminated\", ...]. Errors inside the function are raised to the caller")
+def _incfunction(f):
+    raise Unevaluated()
+
+
+def _incfunction_apply(head, args, ev_):
+    if len(head.args) != 1:
+        return K.UNHANDLED
+    from . import wl_datastruct as DS
+    return DS._wrap(_IncrementalFunctionInstance(head.args[0], list(args)))
+
+
+KL.COMPOUND_HEAD_HOOKS["IncrementalFunction"] = _incfunction_apply
+
+
+@fn("IncrementalYield", **ADDED,
+    notes="IncrementalYield[e] pauses the enclosing running IncrementalFunction, which then gives e; outside one it "
+          "raises")
+def _incyield(e):
+    _inc_current("IncrementalYield").pause("yield", e)
+    return None
+
+
+@fn("IncrementalReceive", **ADDED,
+    notes="IncrementalReceive[] / IncrementalReceive[default] pauses the enclosing running IncrementalFunction; when "
+          "resumed with \"Send\" it returns the sent value, with \"Next\" the default (Null if none); outside one it "
+          "raises")
+def _increceive(default=None):
+    sent, value = _inc_current("IncrementalReceive").pause("receive", None)
+    return value if sent else default
+
+
+_INC_OBJECTS = {}
+_INC_COUNTER = itertools.count(1)
+_INC_NAMES = ("Identity", "Range", "Select", "Take", "Map", "FoldList", "Permutations", "Subsets", "Tuples")
+_DONE = object()
+
+
+def _inc_obj(x):
+    if isinstance(x, Expr) and x.head == "IncrementalObject" and len(x.args) == 2 and \
+            isinstance(x.args[1], Expr) and x.args[1].head == "IncrementalObjectHandle" and \
+            isinstance(x.args[1].args[0], int):
+        return _INC_OBJECTS.get(x.args[1].args[0])
+    return None
+
+
+def _inc_fn_instance(x):
+    from . import wl_datastruct as DS
+    if DS.is_ds(x) and x.args[0] == "IncrementalFunction":
+        return DS._get(x, "NextValue")
+    return None
+
+
+def _source_iter(src, fname):
+    """A Python iterator over a source: an expression's elements, an incremental object or function instance."""
+    g = _inc_obj(src)
+    if g is not None:
+        def it_obj():
+            while True:
+                v = next(g, _DONE)
+                if v is _DONE:
+                    return
+                yield v
+        return it_obj()
+    inst = _inc_fn_instance(src)
+    if inst is not None:
+        def it_fn():
+            while True:
+                v = inst.op_Next()
+                if isinstance(v, Expr) and v.head == "Failure":
+                    return
+                yield v
+        return it_fn()
+    if is_assoc(src):
+        return iter(KL.assoc_values(src, ev))
+    if isinstance(src, Expr):
+        return iter(src.args)
+    raise ValueError(f"{fname}: {src!r} is not a list, an expression, an incremental object or an incremental "
+                     "function instance")
+
+
+def _finite_items(src, fname):
+    if isinstance(src, Expr) and _inc_obj(src) is None and _inc_fn_instance(src) is None and not is_assoc(src):
+        return list(src.args)
+    raise ValueError(f"{fname}: the source must be a list")
+
+
+def _inc_range(args, fname):
+    if not 1 <= len(args) <= 3:
+        raise ValueError(f"{fname}: \"Range\" takes 1 to 3 arguments as in Range")
+    vals = [real_number(a, fname, "Range bound") if not is_sym(a, "Infinity") else sp.oo for a in args]
+    if len(vals) == 1:
+        a, b, d = sp.Integer(1), vals[0], sp.Integer(1)
+    elif len(vals) == 2:
+        (a, b), d = vals, sp.Integer(1)
+    else:
+        a, b, d = vals
+    if d == 0:
+        raise ValueError(f"{fname}: the Range step must be nonzero")
+    exact = all(not isinstance(v, sp.Float) for v in (a, b, d))
+
+    def gen():
+        k = 0
+        while True:
+            v = a + k * d
+            if (d > 0 and v > b) or (d < 0 and v < b):
+                return
+            yield K.from_sp(v if exact else sp.Float(v))
+            k += 1
+    return gen()
+
+
+def _inc_permutations(items):
+    tags = [K.tag(x) for x in items]
+    distinct = len(set(tags)) == len(tags)
+    seen = set()
+    for p in itertools.permutations(range(len(items))):
+        if not distinct:
+            key = tuple(tags[i] for i in p)
+            if key in seen:
+                continue
+            seen.add(key)
+        yield L(*(items[i] for i in p))
+
+
+def _make_generator(name, args):
+    fname = f"IncrementalObject[\"{name}\"]"
+    if name == "Identity":
+        if len(args) != 1:
+            raise ValueError(f"{fname}: one source expected")
+        return _source_iter(args[0], fname)
+    if name == "Range":
+        return _inc_range(args, fname)
+    if name == "Select":
+        if len(args) != 2:
+            raise ValueError(f"{fname}: expected [source, crit]")
+        src, crit = _source_iter(args[0], fname), args[1]
+        return (x for x in src if true(crit, x))
+    if name == "Take":
+        if len(args) != 2:
+            raise ValueError(f"{fname}: expected [source, n]")
+        return itertools.islice(_source_iter(args[0], fname), int_value(args[1], fname, "count", 0))
+    if name == "Map":
+        if len(args) != 2:
+            raise ValueError(f"{fname}: expected [f, source]")
+        f, src = args[0], _source_iter(args[1], fname)
+        return (apply(f, x) for x in src)
+    if name == "FoldList":
+        if len(args) != 3:
+            raise ValueError(f"{fname}: expected [f, x, source]")
+        f, x0, src = args[0], args[1], _source_iter(args[2], fname)
+
+        def fold():
+            acc = x0
+            yield acc
+            for x in src:
+                acc = apply(f, acc, x)
+                yield acc
+        return fold()
+    if name == "Permutations":
+        if len(args) != 1:
+            raise ValueError(f"{fname}: expected [list]")
+        return _inc_permutations(_finite_items(args[0], fname))
+    if name == "Subsets":
+        if len(args) != 1:
+            raise ValueError(f"{fname}: expected [list]")
+        items = _finite_items(args[0], fname)
+        return (L(*c) for k in range(len(items) + 1) for c in itertools.combinations(items, k))
+    if name == "Tuples":
+        if len(args) == 2:
+            items = _finite_items(args[0], fname)
+            return (L(*t) for t in itertools.product(items, repeat=int_value(args[1], fname, "length", 0)))
+        if len(args) == 1:
+            lists = [_finite_items(x, fname) for x in _finite_items(args[0], fname)]
+            return (L(*t) for t in itertools.product(*lists))
+        raise ValueError(f"{fname}: expected [list, n] or [{{list1, list2, ...}}]")
+    raise ValueError(f"IncrementalObject: unknown name {name!r}; known: {', '.join(_INC_NAMES)}")
+
+
+@fn("IncrementalObject", **ADDED,
+    notes="IncrementalObject[\"name\"][args] for \"Identity\" [expr], \"Range\" [Range args], \"Select\" [src, crit], "
+          "\"Take\" [src, n], \"Map\" [f, src], \"FoldList\" [f, x, src], \"Permutations\" [list], \"Subsets\" [list], "
+          "\"Tuples\" [list, n | {lists}]: a lazy stateful iterator; sources may be expressions, incremental objects "
+          "or incremental function instances (consumed, not copied). Values are taken with NextValue; Table/Do "
+          "iteration over an incremental object is not supported")
+def _incobject(name, handle=None):
+    if handle is not None:
+        if isinstance(handle, Expr) and handle.head == "IncrementalObjectHandle":
+            raise Unevaluated()
+        raise ValueError("IncrementalObject: expected IncrementalObject[\"name\"]")
+    if name not in _INC_NAMES:
+        raise ValueError(f"IncrementalObject: unknown name {name!r}; known: {', '.join(_INC_NAMES)}")
+    raise Unevaluated()
+
+
+def _incobject_apply(head, args, ev_):
+    if len(head.args) != 1 or not isinstance(head.args[0], str):
+        return K.UNHANDLED
+    name = head.args[0]
+    gen = _make_generator(name, list(args))
+    h = next(_INC_COUNTER)
+    _INC_OBJECTS[h] = gen
+    return Expr("IncrementalObject", name, Expr("IncrementalObjectHandle", h))
+
+
+KL.COMPOUND_HEAD_HOOKS["IncrementalObject"] = _incobject_apply
+
+
+@fn("NextValue", **ADDED,
+    notes="NextValue[obj] gives the next value of an incremental object (Failure[\"IncrementalObjectTerminated\", "
+          "...] when exhausted) or of a running incremental function instance (as ds[\"Next\"])")
+def _nextvalue(obj):
+    g = _inc_obj(obj)
+    if g is not None:
+        v = next(g, _DONE)
+        if v is _DONE:
+            return _inc_failure("IncrementalObjectTerminated", "The incremental object has no more values.")
+        return v
+    inst = _inc_fn_instance(obj)
+    if inst is not None:
+        return inst.op_Next()
+    if isinstance(obj, Symbol):
+        raise Unevaluated()
+    raise ValueError(f"NextValue: {obj!r} is not an incremental object")
