@@ -2700,3 +2700,153 @@ def region_polygons(P, V, T, nx, ny):
         if len(c) >= 3:
             out.append([(p[0], p[1]) for p in c])
     return out
+
+
+# ───────────────────────────── list density / contour plots ─────────────────────────────
+
+def field_data(data, fname, dr):
+    """Array {{z11, ...}, ...} (z_ij at x = j, y = i, or DataRange) or {{x, y, z}, ...} -> (P, V, T, ranges)."""
+    np = _np()
+    data, _, _ = _unwrap(data, fname)
+    if not K.is_list(data) or not data.args:
+        if isinstance(data, (Symbol, Expr)) and not K.is_list(data):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the data must be a non-empty array or a list of {{x, y, z}} triples")
+    rows = data.args
+    if all(_is_pair(r, 3) for r in rows) and len(rows) > 3:
+        pts3 = []
+        for r in rows:
+            cs = [scalar(c, fname) for c in r.args]
+            if cs[0] is None or cs[1] is None:
+                continue
+            pts3.append((cs[0], cs[1], math.nan if cs[2] is None else cs[2]))
+        if len(pts3) < 3:
+            raise ValueError(f"{fname}: at least 3 points {{x, y, z}} are needed")
+        try:
+            from scipy.spatial import Delaunay
+        except ImportError:
+            raise NotImplementedError(f"{fname}: irregular {{x, y, z}} data needs scipy (pip install scipy)")
+        P = np.array([(p[0], p[1]) for p in pts3], dtype=float)
+        V = np.array([p[2] for p in pts3], dtype=float)
+        try:
+            T = Delaunay(P).simplices
+        except Exception as exc:
+            raise ValueError(f"{fname}: the points cannot be triangulated ({exc.__class__.__name__})")
+        xr = (float(P[:, 0].min()), float(P[:, 0].max()))
+        yr = (float(P[:, 1].min()), float(P[:, 1].max()))
+        return P, V, np.array(T, dtype=int), xr, yr
+    cells = matrix_cells(data, fname, allow_colors=False)
+    if len({len(r) for r in cells}) != 1:
+        raise ValueError(f"{fname}: the array must be rectangular")
+    ny, nx = len(cells), len(cells[0])
+    if nx < 2 or ny < 2:
+        raise ValueError(f"{fname}: the array must be at least 2 x 2")
+    if dr is None or is_sym(dr, "Automatic", "All"):
+        a, b, c, d = 1.0, float(nx), 1.0, float(ny)
+    elif K.is_list(dr) and len(dr.args) == 2 and all(K.is_list(q) and len(q.args) == 2 for q in dr.args):
+        (a, b), (c, d) = [[real_arg(v, fname, "DataRange") for v in q.args] for q in dr.args]
+    else:
+        raise ValueError(f"{fname}: DataRange must be Automatic or {{{{xmin, xmax}}, {{ymin, ymax}}}}")
+    P, T, _, _ = grid_mesh(a, b, c, d, nx, ny)
+    V = np.array([math.nan if v is None else v for r in cells for v in r], dtype=float)
+    return P, V, T, (a, b), (c, d)
+
+
+@fn("ListDensityPlot", area=AREA, status="added",
+    notes="ListDensityPlot[array] (z_ij at {j, i}, row 1 at the bottom, or DataRange {{xmin, xmax}, {ymin, "
+          "ymax}}) and ListDensityPlot[{{x, y, z}, ...}] (Delaunay triangulation; needs scipy; an n x 3 list is read as "
+          "triples when n > 3, as Wolfram's documented forms are ambiguous for 3 x 3 arrays): "
+          "Graphics[GraphicsComplex[points, {EdgeForm[], Polygon[triangles]}, VertexColors -> colours]], colours "
+          "interpolated linearly between data points (default gradient as DensityPlot). Missing values leave "
+          "holes. Options: ColorFunction, ColorFunctionScaling, DataRange, PlotRange (colour clipping) and "
+          "Graphics options; others raise NotImplementedError. Check: reference (vertex coordinates and colour "
+          "ordering against the data in tests).")
+def _listdensityplot(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "ListDensityPlot"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = split_options(fname, o_, _FIELD_DEFAULTS)
+    _check_field_unsupported(o, fname, ("ColorFunction", "ColorFunctionScaling", "DataRange", "InterpolationOrder"))
+    io = o["InterpolationOrder"]
+    if not (is_sym(io, "Automatic") or io == 1):
+        raise NotImplementedError(f"{fname}: InterpolationOrder -> {K_input(io)} is not supported (1)")
+    P, V, T, xr, yr = field_data(pos[0], fname, o["DataRange"])
+    np = _np()
+    fin = V[np.isfinite(V)]
+    vlo, vhi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    pr = o["PlotRange"]
+    if not is_sym(pr, "Automatic", "All", "Full"):
+        vlo, vhi = resolve_plot_range(pr, fname, [xr, yr, (vlo, vhi)], dims=3)[2]
+    cf = color_function(o["ColorFunction"], fname, lambda t: blend(DENSITY_GRADIENT, t))
+    g = density_complex(P, V, T, cf, vlo, vhi, o["ColorFunctionScaling"] is not False)
+    defaults = [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr([xr, yr])), ("PlotRangePadding", 0)]
+    return finish_graphics(L(g), gopts, defaults)
+
+
+def _contour_style(spec, k, fname):
+    if spec is None or is_sym(spec, "Automatic"):
+        return Expr("Directive", Expr("Opacity", 0.5), Expr("GrayLevel", 0))
+    if is_sym(spec, "None"):
+        return None
+    if K.is_list(spec):
+        if not spec.args:
+            return None
+        s = spec.args[k % len(spec.args)]
+        return None if is_sym(s, "None") else s
+    G.directive_like(spec, fname, "ContourStyle")
+    return spec
+
+
+@fn("ListContourPlot", area=AREA, status="added",
+    notes="ListContourPlot[array] / ListContourPlot[{{x, y, z}, ...}] (data forms as ListDensityPlot): filled "
+          "bands between contour levels plus the contour lines, from linear interpolation on the data triangles. "
+          "Contours: Automatic (FindDivisions-style nice levels inside the data range), n (n equally spaced "
+          "levels), or {c1, ...}. Output: {{EdgeForm[], colour_k, Polygon[{...}]} per band, {ContourStyle, "
+          "Line[...]} per level}. Options: Contours, ContourShading (Automatic gradient, None, or a list of "
+          "colours), ContourStyle (Automatic, None, directive or list), ColorFunction, DataRange and Graphics "
+          "options; others raise NotImplementedError. Check: reference (every contour vertex interpolates to its "
+          "level; tests compare levels and vertices with the data).")
+def _listcontourplot(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "ListContourPlot"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = split_options(fname, o_, _FIELD_DEFAULTS)
+    _check_field_unsupported(o, fname, ("Contours", "ContourShading", "ContourStyle", "ColorFunction",
+                                        "ColorFunctionScaling", "DataRange", "InterpolationOrder"))
+    P, V, T, xr, yr = field_data(pos[0], fname, o["DataRange"])
+    return contour_graphics(fname, P, V, T, xr, yr, o, gopts)
+
+
+def contour_graphics(fname, P, V, T, xr, yr, o, gopts):
+    np = _np()
+    fin = V[np.isfinite(V)]
+    vlo, vhi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    levels = contour_levels(o["Contours"], vlo, vhi, fname)
+    content = []
+    shading = o["ContourShading"]
+    cf = color_function(o["ColorFunction"], fname, lambda t: blend(DENSITY_GRADIENT, t))
+    if not is_sym(shading, "None") and shading is not False:
+        bs = bands(P, V, T, levels)
+        nb = len(bs)
+        for k, polys in enumerate(bs):
+            if not polys:
+                continue
+            if K.is_list(shading) and shading.args:
+                col = shading.args[k % len(shading.args)]
+                if is_sym(col, "None"):
+                    continue
+            elif is_sym(shading, "Automatic") or shading is True:
+                lo = vlo if k == 0 else levels[k - 1]
+                hi = vhi if k == nb - 1 else levels[k]
+                mid = ((lo + hi) / 2 - vlo) / (vhi - vlo) if vhi > vlo else 0.5
+                col = rgb(cf(mid))
+            else:
+                raise NotImplementedError(f"{fname}: ContourShading -> {K_input(shading)} is not supported")
+            content.append(L(Expr("EdgeForm"), col, multi_polygon(polys)))
+    for k, c in enumerate(levels):
+        st = _contour_style(o["ContourStyle"], k, fname)
+        if st is None:
+            continue
+        lines = iso_lines(P, V, T, c)
+        if lines:
+            content.append(L(st, Expr("Line", L(*[pts(ln) for ln in lines]))))
+    defaults = [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr([xr, yr])), ("PlotRangePadding", 0)]
+    return finish_graphics(L(*content), gopts, defaults)
