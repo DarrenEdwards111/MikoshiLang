@@ -356,7 +356,8 @@ def _function_of(cs):
     terms = []
     for i, c in enumerate(cs):
         if c:
-            terms.append(c if i == 0 else (Expr("Times", c, s) if i == 1 else Expr("Times", c, Expr("Power", s, i))))
+            m = s if i == 1 else Expr("Power", s, i)
+            terms.append(c if i == 0 else (m if c == 1 else Expr("Times", c, m)))
     body = ev(Expr("Plus", *terms)) if terms else 0
     return Expr("Function", body)
 
@@ -575,8 +576,7 @@ _orig_info = K._HELD.get("Information")
 
 
 def _info(a, ev_, expr):
-    if a and len(a) == 2 and isinstance(a[0], (Symbol, Expr)) and not (isinstance(a[0], Expr) and
-                                                                       a[0].head not in ("FiniteField", FFE)):
+    if a and len(a) == 2 and isinstance(a[0], (Symbol, Expr)):
         v = ev_(a[0])
         prop = ev_(a[1])
         if isinstance(v, Expr) and v.head == "FiniteField" and field_of(v) is not None:
@@ -957,6 +957,8 @@ def _frob(F, cs, k):
 def _frobenius(a, k=1):
     F, cs = _need_ffe(a, "FrobeniusAutomorphism")
     if not _intq(k):
+        if isinstance(k, (Symbol, Expr)) and not isinstance(k, bool):
+            raise Unevaluated()
         raise ValueError("FrobeniusAutomorphism: the power must be an integer")
     return make(F, _frob(F, cs, int(k)))
 
