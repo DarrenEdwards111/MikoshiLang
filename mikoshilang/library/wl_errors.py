@@ -478,7 +478,9 @@ def issue(s, t, *args, lang=None):
     own["$MessageList"] = L(*cur.args, Expr("HoldForm", mname(s, t)))
 
 
-_ERRORS = (ValueError, NotImplementedError, TypeError, ArithmeticError, RecursionError, KeyError, IndexError)
+# PermissionError: a capability the Session did not grant (allow_network, allow_python); Check catches it too.
+_ERRORS = (ValueError, NotImplementedError, TypeError, ArithmeticError, RecursionError, KeyError, IndexError,
+           PermissionError)
 
 
 def is_error(exc):
