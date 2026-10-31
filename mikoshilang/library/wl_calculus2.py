@@ -5539,3 +5539,310 @@ def _nfractionald(f, spec, x0, *rest):
           "defining integral of f^(m))")
 def _ncaputod(f, spec, x0, *rest):
     return _nfrac_fn(f, spec, x0, rest, "NCaputoD", True)
+
+
+# ───────────────────────────── changes of variables ─────────────────────────────
+
+def _inactive_head(e, names):
+    """The head name if e is Inactive[name][...] or an unevaluated name[...], else None."""
+    if not isinstance(e, Expr):
+        return None
+    h = e.head
+    if isinstance(h, Expr) and h.head == "Inactive" and len(h.args) == 1 and isinstance(h.args[0], Symbol) \
+            and h.args[0].name in names:
+        return h.args[0].name
+    if isinstance(h, str) and h in names:
+        return h
+    return None
+
+
+def _new_var(u, fname, what="new variable"):
+    if is_list(u):
+        if len(u.args) != 1:
+            raise NotImplementedError(f"{fname}: only one {what} is supported")
+        u = u.args[0]
+    if not isinstance(u, Symbol):
+        raise ValueError(f"{fname}: {u!r} is not a valid {what}")
+    return u
+
+
+def _eq_parts(tr, fname):
+    if not _head(tr, "Equal") or len(tr.args) != 2:
+        if _head(tr, "Rule") and isinstance(tr.args[0], str):
+            raise NotImplementedError(f"{fname}: named coordinate-system transformations are not supported")
+        raise ValueError(f"{fname}: the transformation must be an equation")
+    return SX(tr.args[0], fname), SX(tr.args[1], fname)
+
+
+def _inverse_maps(tvar, phi, x, fname):
+    """Candidates psi(t) with phi(psi(t)) == t."""
+    try:
+        sols = sp.solve(sp.Eq(tvar, phi), x, dict=False)
+    except Exception:
+        sols = []
+    if not sols:
+        raise NotImplementedError(f"{fname}: the transformation could not be inverted")
+    return list(sols)
+
+
+def _indep_map(lhs, rhs, x, tvar, fname):
+    """(phi or None, [psi candidates]) from t == phi(x) or x == psi(t) (either side order)."""
+    if lhs == x and not rhs.has(x) and rhs.has(tvar):
+        return None, [rhs]
+    if rhs == x and not lhs.has(x) and lhs.has(tvar):
+        return None, [lhs]
+    if lhs == tvar and rhs.has(x) and not rhs.has(tvar):
+        return rhs, _inverse_maps(tvar, rhs, x, fname)
+    if rhs == tvar and lhs.has(x) and not lhs.has(tvar):
+        return lhs, _inverse_maps(tvar, lhs, x, fname)
+    raise ValueError(f"{fname}: the transformation must have the form t == phi(x) or x == psi(t)")
+
+
+def _real_num(v):
+    try:
+        c = complex(sp.N(v, 20))
+    except Exception:
+        return None
+    return c.real if abs(c.imag) < 1e-12 * max(1.0, abs(c)) else None
+
+
+@fn("IntegrateChangeVariables", area=AREA, status="added",
+    notes="IntegrateChangeVariables[Inactive[Integrate][f, x | {x, a, b}], u, u == phi[x] | x == psi[u]]: "
+          "integration by substitution, f(psi(u)) psi'(u), returned as Inactive[Integrate][...]; for definite "
+          "integrals the inverse branch mapping [ua, ub] onto [a, b] is chosen and the result is checked by "
+          "quadrature; multiple integrals, regions and named coordinate charts raise")
+def _intchange(integral, u, trans, *rest):
+    fname = "IntegrateChangeVariables"
+    rest, _o = _opts(rest, {"Assumptions", "GenerateConditions"}, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    hn = _inactive_head(integral, ("Integrate", "NIntegrate"))
+    if hn is None:
+        raise ValueError(f"{fname}: the first argument must be Inactive[Integrate][...]")
+    if len(integral.args) != 2:
+        raise NotImplementedError(f"{fname}: multiple integrals are not supported")
+    f = SX(integral.args[0], fname)
+    it = integral.args[1]
+    if _head(it, "Element"):
+        raise NotImplementedError(f"{fname}: integrals over regions are not supported")
+    if is_list(it):
+        if len(it.args) != 3:
+            raise ValueError(f"{fname}: invalid integration range {it!r}")
+        x = _svar(it.args[0], fname)
+        a, b = SX(it.args[1], fname), SX(it.args[2], fname)
+    else:
+        x, a, b = _svar(it, fname), None, None
+    uu = _new_var(u, fname)
+    t = sp.Symbol(uu.name, real=True)
+    tplain = sp.Symbol(uu.name)
+    f = f.subs(tplain, t)
+    if t.name == x.name:
+        raise ValueError(f"{fname}: the new variable must differ from {x}")
+    if is_list(trans):
+        if len(trans.args) != 1:
+            raise NotImplementedError(f"{fname}: multivariate transformations are not supported")
+        trans = trans.args[0]
+    lhs, rhs = _eq_parts(trans, fname)
+    lhs, rhs = lhs.subs(tplain, t), rhs.subs(tplain, t)
+    phi, psis = _indep_map(lhs, rhs, x, t, fname)
+    if a is None:
+        psi = psis[0]
+        g = _simp(f.subs(x, psi) * sp.diff(psi, t))
+        return Expr(integral.head, _wlf(g.subs(t, tplain)), uu)
+    lims = None
+    choice = None
+    for psi in psis:
+        if phi is not None:
+            ua, ub = phi.subs(x, a), phi.subs(x, b)
+        else:
+            sa = [s_ for s_ in sp.solve(sp.Eq(psi, a), t)]
+            sb = [s_ for s_ in sp.solve(sp.Eq(psi, b), t)]
+            if not sa or not sb:
+                continue
+            ua, ub = sa[0], sb[0]
+            if len(sa) > 1 or len(sb) > 1:
+                # pick the pair giving a monotone map onto [a, b]
+                best = None
+                for p in sa:
+                    for q in sb:
+                        if _mono_ok(psi, t, p, q, a, b):
+                            best = (p, q)
+                            break
+                    if best:
+                        break
+                if best is None:
+                    continue
+                ua, ub = best
+        if sp.simplify(psi.subs(t, ua) - a) != 0 or sp.simplify(psi.subs(t, ub) - b) != 0:
+            if not (_real_num(psi.subs(t, ua) - a) == 0 and _real_num(psi.subs(t, ub) - b) == 0):
+                continue
+        if not _mono_ok(psi, t, ua, ub, a, b):
+            continue
+        choice, lims = psi, (ua, ub)
+        break
+    if choice is None:
+        raise NotImplementedError(f"{fname}: no branch of the inverse transformation maps the new interval onto "
+                                  "the old one")
+    psi = choice
+    ua, ub = (_simp(v) for v in lims)
+    g = _sqrt_sq_fix(_simp(f.subs(x, psi) * sp.diff(psi, t)), t, ua, ub)
+    # independent check
+    if not (f.free_symbols - {x}) and all(_real_num(v) is not None for v in (a, b, ua, ub)):
+        try:
+            v1 = _quad(f, [(x, a, b)], fname)
+            v2 = _quad(g, [(t, ua, ub)], fname)
+        except Exception:
+            v1 = v2 = None
+        if v1 is not None and not abs(v1 - v2) <= 1e-7 * max(1.0, abs(v1)):
+            raise NotImplementedError(f"{fname}: the transformed integral could not be verified")
+    return Expr(integral.head, _wlf(g.subs(t, tplain)), L(uu, _wlf(ua), _wlf(ub)))
+
+
+def _sqrt_sq_fix(g, t, ua, ub):
+    """Sqrt[h^2] -> h or -h when h has a fixed sign on the (numeric) interval."""
+    lo, hi = _real_num(ua), _real_num(ub)
+    if lo is None or hi is None or g.free_symbols - {t}:
+        return g
+
+    def fix(e):
+        h = e.args[0] if isinstance(e, sp.Abs) else e.base.base
+        try:
+            f = sp.lambdify(t, h, "mpmath")
+            vals = [complex(f(mpmath.mpf(lo + (hi - lo) * k / 50))).real for k in range(51)]
+        except Exception:
+            return e
+        if all(v >= 0 for v in vals):
+            return h
+        if all(v <= 0 for v in vals):
+            return -h
+        return e
+    g2 = g.replace(lambda e: isinstance(e, sp.Abs) or (isinstance(e, sp.Pow) and e.exp == sp.Rational(1, 2)
+                   and isinstance(e.base, sp.Pow) and e.base.exp == 2), fix)
+    return _simp(g2) if g2 != g else g
+
+
+def _mono_ok(psi, t, ua, ub, a, b):
+    """psi maps the samples of [ua, ub] into [a, b] (numeric limits only; symbolic limits are accepted)."""
+    vals = [_real_num(v) for v in (ua, ub, a, b)]
+    if any(v is None for v in vals) or psi.free_symbols - {t}:
+        return True
+    ua_, ub_, a_, b_ = vals
+    lo, hi = min(a_, b_), max(a_, b_)
+    try:
+        f = sp.lambdify(t, psi, "mpmath")
+        for k in range(1, 40):
+            s_ = ua_ + (ub_ - ua_) * k / 40
+            v = complex(f(mpmath.mpf(s_)))
+            if abs(v.imag) > 1e-9 or not (lo - 1e-9 <= v.real <= hi + 1e-9):
+                return False
+    except Exception:
+        return False
+    return True
+
+
+@fn("DSolveChangeVariables", area=AREA, status="added",
+    notes="DSolveChangeVariables[Inactive[DSolve][ode, y | y[x], x], u, t, trans]: changes the variables of a "
+          "single ODE by the chain rule; trans is t == phi[x] or x == psi[t] (independent variable), "
+          "y[x] == G[x, u[x]] (dependent variable, t = x) or a list of one of each; returns "
+          "Inactive[DSolve][ode', u | u[t], t]; PDEs, systems and named coordinate charts raise")
+def _dsolvechange(dsolve, u, t, trans, *rest):
+    fname = "DSolveChangeVariables"
+    rest, _o = _opts(rest, {"Assumptions"}, fname)
+    if rest:
+        raise ValueError(f"{fname}: unexpected arguments {rest}")
+    if _inactive_head(dsolve, ("DSolve",)) is None:
+        raise ValueError(f"{fname}: the first argument must be Inactive[DSolve][...]")
+    if len(dsolve.args) != 3:
+        raise ValueError(f"{fname}: expected Inactive[DSolve][eqn, y, x]")
+    eqn, yspec, xspec = dsolve.args
+    if is_list(xspec):
+        if len(xspec.args) != 1:
+            raise NotImplementedError(f"{fname}: partial differential equations are not supported")
+        xspec = xspec.args[0]
+    x = _svar(xspec, fname)
+    if is_list(eqn):
+        if len(eqn.args) != 1:
+            raise NotImplementedError(f"{fname}: systems of equations are not supported")
+        eqn = eqn.args[0]
+    if is_list(yspec):
+        if len(yspec.args) != 1:
+            raise NotImplementedError(f"{fname}: systems of equations are not supported")
+        yspec = yspec.args[0]
+    applied = isinstance(yspec, Expr) and not isinstance(yspec, Symbol)
+    yname = _fname_of(yspec)
+    uu = _new_var(u, fname, "new function")
+    tt = _new_var(t, fname)
+    tv = sp.Symbol(tt.name, real=True) if tt.name != x.name else x
+    tplain = sp.Symbol(tt.name)
+    yF, uF = sp.Function(yname), sp.Function("__newfn")
+    trs = list(trans.args) if is_list(trans) else [trans]
+    psi = None
+    Y = None
+    for tr in trs:
+        lhs, rhs = _eq_parts(tr, fname)
+        unew = sp.Function(uu.name)
+        lhs, rhs = (e.replace(lambda a: isinstance(a, AppliedUndef) and a.func == unew, lambda a: uF(*a.args))
+                    .subs(tplain, tv) for e in (lhs, rhs))
+        if lhs == yF(x) or rhs == yF(x):
+            G = rhs if lhs == yF(x) else lhs
+            if G.has(yF):
+                raise ValueError(f"{fname}: the dependent-variable transformation must express {yname}[{x}]")
+            Y = G
+            continue
+        if psi is not None:
+            raise NotImplementedError(f"{fname}: only one independent-variable transformation is supported")
+        phi, psis = _indep_map(lhs, rhs, x, tv, fname)
+        psi = psis[0]
+        if phi is not None and sp.simplify(phi.subs(x, psi) - tv) != 0:
+            raise NotImplementedError(f"{fname}: the transformation could not be inverted")
+    if psi is None:
+        if tv != x:
+            raise ValueError(f"{fname}: without an independent-variable transformation the new variable must be {x}")
+        psi = x
+    if Y is None:
+        Ynew = uF(tv)
+    else:
+        if tv != x and Y.has(uF(x)):
+            Y = Y.subs(uF(x), uF(tv))
+        Ynew = Y.subs(x, psi)
+        if not Ynew.has(uF(tv)):
+            raise ValueError(f"{fname}: the transformation must involve {uu.name}[{tt.name}]")
+    E = SX(eqn, fname)
+    if not isinstance(E, sp.Equality):
+        E = sp.Eq(E, 0)
+    order = 0
+    for d in E.atoms(sp.Derivative):
+        if d.expr == yF(x):
+            if d.variables != (x,) * len(d.variables):
+                raise NotImplementedError(f"{fname}: partial differential equations are not supported")
+            order = max(order, len(d.variables))
+        elif d.expr.has(yF):
+            raise NotImplementedError(f"{fname}: derivatives of composite expressions are not supported")
+    dpsi = sp.diff(psi, tv)
+    if dpsi == 0:
+        raise ValueError(f"{fname}: the transformation is degenerate")
+    ders = [Ynew]
+    for _k in range(order):
+        ders.append(sp.diff(ders[-1], tv) / dpsi)
+
+    def tr_side(e):
+        reps = {}
+        for d in e.atoms(sp.Derivative):
+            if d.expr == yF(x):
+                reps[d] = ders[len(d.variables)]
+        e = e.xreplace(reps)
+        e = e.xreplace({yF(x): Ynew})
+        if e.has(yF):
+            raise NotImplementedError(f"{fname}: {yname} must appear only as {yname}[{x}] and its derivatives")
+        return e.subs(x, psi) if psi != x else e
+    lhs_, rhs_ = tr_side(E.lhs), tr_side(E.rhs)
+    lhs_, rhs_ = _simp(lhs_), _simp(rhs_)
+    unew = sp.Function(uu.name)
+
+    def back(e):
+        e = e.replace(lambda a: isinstance(a, AppliedUndef) and a.func == uF, lambda a: unew(*a.args))
+        return e.subs(tv, tplain) if tv != x else e
+    lhs_, rhs_ = back(lhs_), back(rhs_)
+    head = dsolve.head
+    return Expr(head, Expr("Equal", _wlf(lhs_), _wlf(rhs_)),
+                Expr(uu.name, tt) if applied else uu, tt)
