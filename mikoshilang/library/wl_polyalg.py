@@ -4895,3 +4895,391 @@ def _nccollect(*args):
         terms.append(parts[0] if len(parts) == 1 else Expr(mult, *parts))
     head = alg.add.name if isinstance(alg.add, Symbol) else alg.add
     return ev(terms[0]) if len(terms) == 1 else ev(Expr(head, *terms))
+
+
+# ───────────────────────────── ComponentExpand ─────────────────────────────
+
+_VEC_REL = {"VectorLess": "Less", "VectorLessEqual": "LessEqual", "VectorGreater": "Greater",
+            "VectorGreaterEqual": "GreaterEqual"}
+
+
+def _sym_array(name_e, dims, fname):
+    """Nested list of placeholder symbols for the components, plus the back-substitution rules."""
+    back = []
+
+    def build(prefix):
+        if len(prefix) == len(dims):
+            ph = Symbol("w05comp$" + str(abs(hash((repr(name_e),) + prefix)) % 10 ** 12))
+            back.append(rule(ph, Expr("Indexed", name_e, L(*prefix))))
+            return ph
+        return L(*(build(prefix + (i,)) for i in range(1, dims[len(prefix)] + 1)))
+    if any(not isinstance(d, int) or d < 1 for d in dims):
+        raise NotImplementedError(f"{fname}: only explicit positive dimensions are supported")
+    if math.prod(dims) > 10000:
+        raise ValueError(f"{fname}: the array is too large")
+    return build(()), back
+
+
+def _dims_of(spec, fname):
+    d = spec.args[0] if spec.args else None
+    if not is_list(d) or not all(K.is_int(x) for x in d.args):
+        raise NotImplementedError(f"{fname}: symbolic dimensions are not supported")
+    return [int(x) for x in d.args]
+
+
+@fn("ComponentExpand", area=AREA, status="added",
+    notes="ComponentExpand[expr] / [expr, assumptions]: VectorSymbol/MatrixSymbol/ArraySymbol with explicit "
+          "dimensions, and symbols declared with Element[a, Vectors[{n}] | Matrices[{m, n}] | Arrays[dims]], are "
+          "replaced by arrays of their components Indexed[a, {i, ...}] and the expression is evaluated (Det, Dot, "
+          "Tr, ... then act on explicit arrays); VectorLess/VectorLessEqual/VectorGreater/VectorGreaterEqual "
+          "become componentwise And")
+def _compexpand(e, *rest):
+    fname = "ComponentExpand"
+    back = []
+    decl = {}
+    for r in rest:
+        for c in (r.args if _is_head(r, "And") else [r]):
+            if _is_head(c, "Element") and len(c.args) == 2 and _is_head(c.args[1], "Vectors", "Matrices",
+                                                                            "Arrays"):
+                decl[repr(c.args[0])] = (c.args[0], _dims_of(c.args[1], fname))
+            elif c is not True:
+                raise NotImplementedError(f"{fname}: unsupported assumption {c!r}")
+
+    def walk(x):
+        if isinstance(x, Expr) and isinstance(x.head, str) and x.head in ("VectorSymbol", "MatrixSymbol",
+                                                                         "ArraySymbol"):
+            if len(x.args) >= 2 and is_list(x.args[1]) and all(K.is_int(d) for d in x.args[1].args):
+                arr, b = _sym_array(x, [int(d) for d in x.args[1].args], fname)
+                back.extend(b)
+                return arr
+            raise NotImplementedError(f"{fname}: symbolic dimensions are not supported")
+        if repr(x) in decl and not isinstance(x, (int, float)):
+            arr, b = _sym_array(x, decl[repr(x)][1], fname)
+            back.extend(b)
+            return arr
+        if isinstance(x, Expr):
+            h = walk(x.head) if isinstance(x.head, Expr) else x.head
+            return Expr(h, *(walk(a) for a in x.args))
+        return x
+    w = walk(e)
+
+    def vrel(x):
+        if isinstance(x, Expr) and isinstance(x.head, str) and x.head in _VEC_REL and len(x.args) == 1 \
+                and is_list(x.args[0]):
+            items = [ev(a) for a in x.args[0].args]
+            flat = [list(_flatten_items(a)) for a in items]
+            n = {len(f) for f in flat if len(f) > 1}
+            if len(n) > 1:
+                raise ValueError(f"{fname}: incompatible dimensions")
+            m = n.pop() if n else 1
+            flat = [f if len(f) == m else f * m for f in flat]
+            conds = [Expr(_VEC_REL[x.head], *(f[i] for f in flat)) for i in range(m)]
+            return Expr("And", *conds)
+        if isinstance(x, Expr):
+            return Expr(x.head, *(vrel(a) for a in x.args))
+        return x
+    r = ev(vrel(w))
+    return ev(Expr("ReplaceAll", r, L(*back))) if back else r
+
+
+# ───────────────────────────── PolynomialSumOfSquaresList ─────────────────────────────
+
+def _ldl_psd(G):
+    """Exact LDL^T of a symmetric matrix: (L, D) if positive semidefinite, else None."""
+    n = G.shape[0]
+    A = G.copy()
+    Lm = sp.eye(n)
+    D = [sp.Integer(0)] * n
+    for j in range(n):
+        d = A[j, j]
+        if not d.is_Rational:
+            d = sp.nsimplify(d)
+        sg = _num(d) if not d.is_Rational else (True, int(sp.sign(d)))
+        if sg is None or not sg[0] or sg[1] < 0:
+            return None
+        if sg[1] == 0:
+            d = sp.Integer(0)
+        if d == 0:
+            if any(A[i, j] != 0 for i in range(j + 1, n)):
+                return None
+            continue
+        D[j] = d
+        for i in range(j + 1, n):
+            Lm[i, j] = A[i, j] / d
+        for i in range(j + 1, n):
+            for k in range(j + 1, n):
+                A[i, k] = sp.radsimp(sp.expand(A[i, k] - Lm[i, j] * d * Lm[k, j]))
+    return Lm, D
+
+
+@fn("PolynomialSumOfSquaresList", area=AREA, status="added",
+    notes="PolynomialSumOfSquaresList[p, {x, ...}]: polynomials {q1, ...} with p == q1^2 + q2^2 + ... (verified "
+          "exactly) from an exact LDL^T factorization of a positive semidefinite Gram matrix over the half-degree "
+          "monomials (ordered by degree, later variables first, so x^2 + x y + y^2 -> {x/2 + y, Sqrt[3] x/2} as "
+          "Wolfram); free Gram entries (at most 3) are searched over simple rationals. Wolfram picks a different "
+          "decomposition when the Gram matrix is not unique. Raises when no decomposition is found (p may not be a "
+          "sum of squares)")
+def _psos(p, vars_):
+    fname = "PolynomialSumOfSquaresList"
+    vs = _vars(vars_, fname)
+    X = [sp.Symbol(v.name) for v in vs]
+    ps = sp.expand(tosp(ev(p), fname))
+    if not ps.is_polynomial(*X):
+        raise ValueError(f"{fname}: {p!r} is not a polynomial in the variables")
+    P = sp.Poly(ps, *X)
+    if P.is_zero:
+        return L()
+    deg = P.total_degree()
+    if deg % 2:
+        raise ValueError(f"{fname}: a polynomial of odd degree is not a sum of squares")
+    h = deg // 2
+    mons = []
+    for d in range(h + 1):
+        for e in sorted(itertools.product(range(d + 1), repeat=len(X)), reverse=False):
+            if sum(e) == d:
+                mons.append(e)
+    # order inside a degree: later variables first (y before x)
+    mons.sort(key=lambda e: (sum(e), tuple(-c for c in reversed(e))))
+    # prune by Newton polytope (simple test: 2*mon must have degree <= deg in each variable)
+    maxd = [P.degree(x) for x in X]
+    mons = [m for m in mons if all(2 * m[i] <= maxd[i] for i in range(len(X)))]
+    n = len(mons)
+    pairs = {}
+    for i in range(n):
+        for j in range(i, n):
+            e = tuple(a + b for a, b in zip(mons[i], mons[j]))
+            pairs.setdefault(e, []).append((i, j))
+    coeffs = dict(zip(P.monoms(), P.coeffs()))
+    for e in coeffs:
+        if e not in pairs:
+            raise ValueError(f"{fname}: {p!r} is not a sum of squares (monomial outside the Newton polytope)")
+    params = []
+    G = sp.zeros(n, n)
+    for e, lst in pairs.items():
+        c = coeffs.get(e, 0)
+        if len(lst) == 1:
+            i, j = lst[0]
+            G[i, j] = G[j, i] = c if i == j else c / 2
+        else:
+            # first entry absorbs the remainder; the others are free parameters
+            free = []
+            for (i, j) in lst[1:]:
+                t = sp.Symbol(f"t{len(params)}")
+                params.append(t)
+                free.append(((i, j), t))
+                G[i, j] = G[j, i] = t
+            rest = sum((t if i == j else 2 * t) for (i, j), t in free)
+            i, j = lst[0]
+            val = (c - rest)
+            G[i, j] = G[j, i] = val if i == j else val / 2
+    if len(params) > 3:
+        raise NotImplementedError(f"{fname}: too many free Gram entries ({len(params)})")
+    m = sp.Matrix([sp.Mul(*(x ** k for x, k in zip(X, e))) for e in mons])
+
+    def attempt(combo):
+        Gc = G.subs(dict(zip(params, combo))) if params else G
+        r = _ldl_psd(Gc)
+        if r is None:
+            return None
+        Lm, D = r
+        qs = []
+        for j in range(n):
+            if D[j] == 0:
+                continue
+            qs.append(sp.expand(sp.sqrt(D[j]) * sum(Lm[i, j] * m[i] for i in range(n))))
+        if sp.expand(sum(q ** 2 for q in qs) - ps) != 0:
+            return None
+        return L(*(ev(fromsp(q)) for q in qs))
+    if not params:
+        res = attempt(())
+        if res is not None:
+            return res
+        raise NotImplementedError(f"{fname}: no sum-of-squares decomposition found (the Gram matrix is not "
+                                  f"positive semidefinite)")
+    # simple values first, then maximise the smallest eigenvalue numerically and round to nearby rationals
+    simple = [sp.Integer(0), sp.Rational(1, 2), sp.Rational(-1, 2), sp.Integer(1), sp.Integer(-1)]
+    for combo in itertools.product(simple, repeat=len(params)):
+        res = attempt(combo)
+        if res is not None:
+            return res
+    import numpy as _np
+    from scipy.optimize import minimize
+    Gf = sp.lambdify(params, G, "numpy")
+
+    def negmin(t):
+        try:
+            return -float(_np.linalg.eigvalsh(_np.array(Gf(*t), dtype=float)).min())
+        except Exception:  # noqa: BLE001
+            return 1e9
+    best = minimize(negmin, _np.zeros(len(params)), method="Nelder-Mead",
+                    options={"xatol": 1e-12, "fatol": 1e-14, "maxiter": 4000})
+    if best.fun > 1e-12:
+        raise NotImplementedError(f"{fname}: no sum-of-squares decomposition found (no positive semidefinite "
+                                  f"Gram matrix was found numerically)")
+    from fractions import Fraction
+    for den in (2, 4, 8, 10, 16, 32, 64, 100, 128, 256, 1000, 1024, 10 ** 4, 10 ** 5, 10 ** 6):
+        combo = [sp.Rational(Fraction(float(t)).limit_denominator(den).numerator,
+                             Fraction(float(t)).limit_denominator(den).denominator) for t in best.x]
+        res = attempt(combo)
+        if res is not None:
+            return res
+    raise NotImplementedError(f"{fname}: no sum-of-squares decomposition found")
+
+
+# ───────────────────────────── FindEquationalProof / ProofObject ─────────────────────────────
+
+def _eq_parts(e, fname):
+    """Equation or ForAll[vars, equation] -> (vars, lhs, rhs)."""
+    if _is_head(e, "ForAll") and len(e.args) >= 2:
+        vs = e.args[0]
+        vl = list(vs.args) if is_list(vs) else [vs]
+        body = e.args[-1]
+        if len(e.args) == 3:
+            raise NotImplementedError(f"{fname}: conditional ForAll is not supported")
+        _, l_, r_ = _eq_parts(body, fname)
+        return vl, l_, r_
+    if _is_head(e, "Equal") and len(e.args) == 2:
+        return [], e.args[0], e.args[1]
+    raise NotImplementedError(f"{fname}: only equations (optionally universally quantified) are supported")
+
+
+def _subterms(e, acc):
+    acc.setdefault(repr(e), e)
+    if isinstance(e, Expr):
+        if isinstance(e.head, Expr):
+            _subterms(e.head, acc)
+        for a in e.args:
+            _subterms(a, acc)
+    return acc
+
+
+def _cc_prove(goal_l, goal_r, ground_eqs):
+    """Congruence closure over the ground equations: True if goal_l == goal_r follows."""
+    terms = {}
+    for l_, r_ in ground_eqs + [(goal_l, goal_r)]:
+        _subterms(l_, terms)
+        _subterms(r_, terms)
+    parent = {k: k for k in terms}
+
+    def find(k):
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+            return True
+        return False
+    for l_, r_ in ground_eqs:
+        union(repr(l_), repr(r_))
+    changed = True
+    while changed:
+        changed = False
+        sig = {}
+        for k, t in terms.items():
+            if isinstance(t, Expr):
+                s = (find(repr(t.head)) if isinstance(t.head, Expr) else t.head,
+                     tuple(find(repr(a)) for a in t.args))
+                if s in sig:
+                    if union(k, sig[s]):
+                        changed = True
+                else:
+                    sig[s] = k
+    return find(repr(goal_l)) == find(repr(goal_r))
+
+
+def _instances(vl, l_, r_, terms, limit=4000):
+    if not vl:
+        return [(l_, r_)]
+    out_ = []
+    for combo in itertools.product(list(terms.values()), repeat=len(vl)):
+        sub = L(*(rule(v, t) for v, t in zip(vl, combo)))
+        out_.append((ev(Expr("ReplaceAll", Expr("Hold", l_), sub)).args[0] if False else
+                     _subst_struct(l_, vl, combo), _subst_struct(r_, vl, combo)))
+        if len(out_) > limit:
+            break
+    return out_
+
+
+def _subst_struct(e, vl, vals):
+    for v, t in zip(vl, vals):
+        if K.same(e, v):
+            return t
+    if isinstance(e, Expr):
+        h = _subst_struct(e.head, vl, vals) if isinstance(e.head, Expr) else e.head
+        return Expr(h, *(_subst_struct(a, vl, vals) for a in e.args))
+    return e
+
+
+@fn("FindEquationalProof", area=AREA, status="added",
+    notes="FindEquationalProof[thm, axioms]: for an equation thm (optionally ForAll-quantified, proved for fresh "
+          "constants) and equational axioms (ground or ForAll-quantified equations), searches a proof by "
+          "congruence closure over the ground axioms plus the instances of the quantified axioms on the subterms "
+          "of the problem (iterated twice); a found proof is sound and is returned as ProofObject[<|\"Logic\" -> "
+          "\"EquationalLogic\", \"Theorem\" -> thm, \"Axioms\" -> axioms, ...|>]. Predicate-logic statements "
+          "(Implies, predicates) raise; a failed search raises (it does not prove the statement false)")
+def _fep(thm, axioms, *rest):
+    fname = "FindEquationalProof"
+    if rest:
+        raise NotImplementedError(f"{fname}: options are not supported")
+    axl = list(axioms.args) if is_list(axioms) else (list(axioms.args) if _is_head(axioms, "And") else [axioms])
+    tv, tl, tr = _eq_parts(thm, fname)
+    if tv:
+        consts = [Symbol(f"{v.name}$sk") for v in tv]
+        tl, tr = _subst_struct(tl, tv, consts), _subst_struct(tr, tv, consts)
+    axs = [_eq_parts(a, fname) for a in axl]
+    terms = {}
+    _subterms(tl, terms)
+    _subterms(tr, terms)
+    for vl, l_, r_ in axs:
+        if not vl:
+            _subterms(l_, terms)
+            _subterms(r_, terms)
+    ground = []
+    for rnd in range(2):
+        ground = []
+        for vl, l_, r_ in axs:
+            ground += _instances(vl, l_, r_, terms)
+        if _cc_prove(tl, tr, ground):
+            used = [Expr("Equal", a, b) for a, b in ground]
+            return Expr("ProofObject", Expr("Association",
+                                            rule("Logic", "EquationalLogic"),
+                                            rule("Theorem", thm),
+                                            rule("Axioms", L(*axl)),
+                                            rule("Method", "CongruenceClosure"),
+                                            rule("GroundInstances", L(*used[:200]))))
+        for a, b in ground:
+            _subterms(a, terms)
+            _subterms(b, terms)
+        if len(terms) > 60:
+            break
+    raise NotImplementedError(f"{fname}: no proof found by the congruence-closure search")
+
+
+def _proof_hook(head, args, ev_):
+    if len(head.args) != 1 or len(args) != 1:
+        return K.UNHANDLED
+    items = _assoc_items(head.args[0]) or []
+    d = {k: v for k, v in items}
+    prop = args[0]
+    if prop == "Properties":
+        return L("Axioms", "Theorem", "Theorems", "Logic", "Method")
+    if prop == "Theorems":
+        return L(d.get("Theorem"))
+    if prop in d:
+        return d[prop]
+    raise NotImplementedError(f"ProofObject: the property {prop!r} is not supported")
+
+
+_KL.COMPOUND_HEAD_HOOKS["ProofObject"] = _proof_hook
+
+
+@fn("ProofObject", area=AREA, status="added",
+    notes="ProofObject[<|...|>] returned by FindEquationalProof; proof[\"Theorem\"], [\"Theorems\"], "
+          "[\"Axioms\"], [\"Logic\"], [\"Method\"], [\"Properties\"] (ProofGraph/ProofDataset/ProofNotebook are "
+          "not supported and raise)")
+def _proofobj(*args):
+    raise Unevaluated()
