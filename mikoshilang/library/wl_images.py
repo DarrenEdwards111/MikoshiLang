@@ -3484,7 +3484,7 @@ def _angle(t, fname):
         return real_arg(t, fname, "angle")
     v = _ev(Expr("N", t))
     if is_real_value(v):
-        return real_value(v)
+        return real_value(v, fname, "angle")
     raise Unevaluated()
 
 
@@ -3679,3 +3679,555 @@ def _thumbnail(x: Expr, n: PosInteger | Expr = None, *opts: Option) -> Expr:
                                   f"Padding -> None or UpTo[n])")
     f = m / max(dims)
     return image_expr(resize_img(im, [max(1, round(d * f)) for d in dims], "Automatic"))
+
+
+def _trim_axis(lo, hi, n, margin):
+    """0-based inclusive pixel range covering image coordinates [lo, hi] (integer coordinates touch two pixels)."""
+    a = int(math.floor(lo)) - (1 if abs(lo - round(lo)) < 1e-12 else 0)
+    b = int(math.floor(hi + 1e-12))
+    if abs(hi - round(hi)) < 1e-12:
+        b = int(round(hi))
+    a, b = a - margin, b + margin
+    return max(a, 0), min(b, n - 1)
+
+
+def _roi_points(roi, fname):
+    if isinstance(roi, Expr) and roi.head == "Rectangle" and len(roi.args) in (1, 2):
+        lo = roi.args[0]
+        hi = roi.args[1] if len(roi.args) == 2 else L(*[Expr("Plus", v, 1) for v in lo.args])
+        return [[real_arg(_ev(v), fname, "corner") for v in c.args] for c in (lo, hi)]
+    if isinstance(roi, Expr) and roi.head == "Point" and len(roi.args) == 1:
+        return _roi_points(roi.args[0], fname) if K.is_list(roi.args[0]) and roi.args[0].args and \
+            K.is_list(roi.args[0].args[0]) else _roi_points(L(roi.args[0]), fname)
+    if K.is_list(roi) and roi.args and all(K.is_list(p) and len(p.args) == 2 for p in roi.args):
+        return [[real_arg(v, fname, "coordinate") for v in p.args] for p in roi.args]
+    if isinstance(roi, Expr) and roi.head in IMAGE_HEADS:
+        return "mask"
+    if isinstance(roi, Symbol):
+        raise Unevaluated()
+    raise NotImplementedError(f"{fname}: the region {_short(roi)} is not supported (points, Point, Rectangle or a "
+                              f"mask image)")
+
+
+@fn("ImageTrim", area=AREA, status="added",
+    notes="ImageTrim[image, {{x1, y1}, ...}] gives the smallest subimage containing the points (image coordinates, "
+          "origin at the bottom-left corner, integer coordinates on pixel corners so they include every pixel they "
+          "touch); also Point[...], Rectangle[...] and a mask image (bounding box of its nonzero pixels); "
+          "ImageTrim[image, roi, r] and {rx, ry} add margins; ImageTrim[image, {roi1, roi2, ...}] gives a list. Parts "
+          "outside the image are dropped (Padding None). Other regions, DataRange and 3D images raise "
+          "NotImplementedError. Check: exact (array slicing, verified on known boxes) in tests.")
+def _imagetrim(x: Expr, roi: Expr, r: NonNegInteger | ListOf[NonNegInteger] = 0) -> Expr | ListOf[Expr]:
+    fname = "ImageTrim"
+    im = _img1(x, fname, allow3d=False)
+    if K.is_list(r):
+        if len(r.args) != 2:
+            raise ValueError(f"{fname}: margins are r or {{rx, ry}}")
+        rx, ry = (int_arg(v, fname, "margin", 0) for v in r.args)
+    else:
+        rx = ry = int_arg(r, fname, "margin", 0)
+    many = K.is_list(roi) and roi.args and all(
+        (K.is_list(q) and q.args and all(K.is_list(p) for p in q.args)) or
+        (isinstance(q, Expr) and q.head in ("Rectangle", "Point") + IMAGE_HEADS) for q in roi.args)
+    out = []
+    for q in (roi.args if many else [roi]):
+        pts = _roi_points(q, fname)
+        if pts == "mask":
+            m = parse_image(q, fname, allow3d=False)
+            if m.dims() != im.dims():
+                raise ValueError(f"{fname}: the mask must have the image's dimensions")
+            rows, cols = np.nonzero(np.any(m.a != 0, axis=-1))
+            if rows.size == 0:
+                raise ValueError(f"{fname}: the mask is empty")
+            r0, r1 = max(rows.min() - ry, 0), min(rows.max() + ry, im.h - 1)
+            c0, c1 = max(cols.min() - rx, 0), min(cols.max() + rx, im.w - 1)
+        else:
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            c0, c1 = _trim_axis(min(xs), max(xs), im.w, rx)
+            b0, b1 = _trim_axis(min(ys), max(ys), im.h, ry)        # rows from the bottom
+            r0, r1 = im.h - 1 - b1, im.h - 1 - b0
+        if c0 > c1 or r0 > r1:
+            raise ValueError(f"{fname}: the region lies outside the image")
+        out.append(image_expr(im.new(im.a[r0:r1 + 1, c0:c1 + 1])))
+    return L(*out) if many else out[0]
+
+
+def _place(spec, dims, fname, default):
+    """Pixel offset {x, y} from the bottom-left corner for a position spec in an object of dims (w, h)."""
+    if spec is None:
+        return default
+    if isinstance(spec, Expr) and spec.head == "Scaled" and len(spec.args) == 1 and K.is_list(spec.args[0]):
+        sx, sy = (real_arg(v, fname, "scaled position") for v in spec.args[0].args)
+        return sx * dims[0], sy * dims[1]
+    if _side(spec) is not None:
+        spec = L(spec, Symbol("Center")) if _side(spec) in ("Left", "Right", "Center") else L(Symbol("Center"), spec)
+    if K.is_list(spec) and len(spec.args) == 2:
+        out = []
+        for k, v in enumerate(spec.args):
+            s = _side(v)
+            if s is not None:
+                table = ({"Left": 0.0, "Center": 0.5, "Right": 1.0} if k == 0 else
+                         {"Bottom": 0.0, "Center": 0.5, "Top": 1.0})
+                if s not in table:
+                    raise ValueError(f"{fname}: {s} is not a {'horizontal' if k == 0 else 'vertical'} position")
+                out.append(table[s] * dims[k])
+            else:
+                out.append(real_arg(v, fname, "position"))
+        return tuple(out)
+    raise ValueError(f"{fname}: a position is {{x, y}}, Scaled[{{sx, sy}}] or named positions")
+
+
+def _over(base, ov, ox, oy, frac):
+    """Composite overlay img ov ("over") onto base img at pixel offset (ox, oy) of its bottom-left corner."""
+    out = base.a.copy()
+    H, W = base.h, base.w
+    h, w = ov.h, ov.w
+    top = H - (oy + h)                                     # row of the overlay's top edge in base
+    r0, r1 = max(top, 0), min(top + h, H)
+    c0, c1 = max(ox, 0), min(ox + w, W)
+    if r0 >= r1 or c0 >= c1:
+        return base
+    o = ov.a[r0 - top:r1 - top, c0 - ox:c1 - ox]
+    oc = o[..., :-1] if ov.alpha else o
+    oa = (o[..., -1:] if ov.alpha else np.ones(o.shape[:-1] + (1,))) * frac
+    blk = out[r0:r1, c0:c1]
+    if base.alpha:
+        bc, ba = blk[..., :-1], blk[..., -1:]
+        na = oa + ba * (1 - oa)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            nc = np.where(na > 0, (oc * oa + bc * ba * (1 - oa)) / np.where(na > 0, na, 1), 0.0)
+        out[r0:r1, c0:c1] = np.concatenate([nc, na], axis=-1)
+    else:
+        out[r0:r1, c0:c1] = oc * oa + blk * (1 - oa)
+    return base.new(out)
+
+
+@fn("ImageCompose", area=AREA, status="added",
+    notes="ImageCompose[image, overlay] alpha-blends (Duff-Porter \"over\") an overlay image centred on image; "
+          "{overlay, alpha} multiplies the overlay's opacity by alpha; ImageCompose[image, overlay, pos] puts the "
+          "overlay centre at pos and [image, overlay, pos, opos] puts point opos of the overlay at pos, positions "
+          "being pixel offsets {x, y} from the bottom-left, Scaled[{sx, sy}] or named positions; a list of overlays "
+          "is composed in turn. The result has image's size, type and colour space (the overlay is converted) and an "
+          "alpha channel only if image has one. Half-pixel offsets are rounded down (undocumented in Wolfram). "
+          "Graphics, text and expression overlays and compositing fractions other than {1, 1, 1} raise "
+          "NotImplementedError. Check: exact (opaque overlays copy pixels; alpha blends re-computed) in tests.")
+def _imagecompose(x: Expr, overlay: Expr | ListOf[Expr], pos: Expr = None, opos: Expr = None,
+                  mode: ListOf[Integer] = None) -> Expr:
+    fname = "ImageCompose"
+    if K.is_list(x) and len(x.args) == 2:
+        raise NotImplementedError(f"{fname}: {{image, alpha}} is not supported")
+    base = _img1(x, fname, allow3d=False)
+    if mode is not None and not (K.is_list(mode) and [real_arg(v, fname, "fraction") for v in mode.args] ==
+                                 [1, 1, 1]):
+        raise NotImplementedError(f"{fname}: only the \"over\" compositing {{1, 1, 1}} is supported")
+    if K.is_list(overlay) and len(overlay.args) == 2 and is_real_value(overlay.args[1]):
+        items = [overlay]
+    elif K.is_list(overlay):
+        items = list(overlay.args)
+    else:
+        items = [overlay]
+    for it in items:
+        frac = 1.0
+        if K.is_list(it) and len(it.args) == 2:
+            frac = real_arg(it.args[1], fname, "blending fraction")
+            it = it.args[0]
+        if not (isinstance(it, Expr) and it.head in IMAGE_HEADS):
+            if isinstance(it, Symbol):
+                raise Unevaluated()
+            raise NotImplementedError(f"{fname}: only image overlays are supported")
+        ov = _img1(it, fname, allow3d=False)
+        if source_space(ov, fname) != source_space(base, fname) or ov.color().shape[-1] != base.color().shape[-1]:
+            target = source_space(base, fname)
+            col = convert_array(ov.color(), source_space(ov, fname), target)
+            ov = Img(np.concatenate([col, ov.alpha_array()], axis=-1) if ov.alpha else col, ov.type,
+                     target if base.cs != "Automatic" or ov.alpha else base.cs, False)
+            if ov.alpha and base.cs == "Automatic" and not base.alpha:
+                ov = Img(ov.a, ov.type, target, False)
+        px, py = _place(pos, (base.w, base.h), fname, (base.w / 2, base.h / 2))
+        qx, qy = _place(opos, (ov.w, ov.h), fname, (ov.w / 2, ov.h / 2))
+        ox, oy = int(math.floor(px - qx + 1e-9)), int(math.floor(py - qy + 1e-9))
+        base = _over(base, ov, ox, oy, frac)
+    return image_expr(base.new(quantize(base.a, base.type)))
+
+
+def _median(vals):
+    return float(np.median(vals))
+
+
+@fn("ConformImages", area=AREA, status="added",
+    notes="ConformImages[{im1, im2, ...}] resizes every image (\"Stretch\": resampled with ImageResize's default) to "
+          "the median width and the height giving the median aspect ratio (rounded), and converts them to the "
+          "largest type and a common colour space (grayscale with RGB gives RGB); ConformImages[images, spec] with "
+          "spec an image (its dimensions, type and colour space), w, {w, h}, a type name, or a list of these. Other "
+          "fitting methods, 3D images and size functions raise NotImplementedError. Check: dimensions, types and "
+          "colour spaces of the results verified in tests.")
+def _conformimages(imgs: ListOf[Expr], spec: Expr = None, fitting: String = "Stretch", *opts: Option) -> ListOf[Expr]:
+    fname = "ConformImages"
+    if fitting != "Stretch":
+        if isinstance(fitting, str):
+            raise NotImplementedError(f"{fname}: fitting {fitting!r} is not supported (\"Stretch\")")
+        raise ValueError(f"{fname}: the fitting method must be a string")
+    if not K.is_list(imgs) or not imgs.args:
+        raise TypeError(f"{fname}: the first argument must be a non-empty list of images")
+    ims = [_img1(i, fname, allow3d=False) for i in imgs.args]
+    ims = common_space(ims, fname)
+    typ = larger_type(*[i.type for i in ims])
+    w = max(1, round(_median([i.w for i in ims])))
+    h = max(1, round(w * _median([i.h / i.w for i in ims])))
+    specs = list(spec.args) if K.is_list(spec) and spec.args and not all(K.is_int(v) for v in spec.args) else \
+        ([] if spec is None else [spec])
+    cs = None
+    for s in specs:
+        if isinstance(s, Expr) and s.head in IMAGE_HEADS:
+            r = _img1(s, fname, allow3d=False)
+            w, h, typ = r.w, r.h, r.type
+            cs = source_space(r, fname) if r.c in (1, 3) or r.cs != "Automatic" else None
+        elif s in TYPES:
+            typ = s
+        elif isinstance(s, str):
+            raise ValueError(f"{fname}: {s!r} is not an image type")
+        elif K.is_list(s) and len(s.args) == 2:
+            w, h = (int_arg(v, fname, "size", 1) for v in s.args)
+        elif K.is_int(s):
+            w = int_arg(s, fname, "width", 1)
+            h = max(1, round(w * _median([i.h / i.w for i in ims])))
+        else:
+            raise NotImplementedError(f"{fname}: the specification {_short(s)} is not supported")
+    out = []
+    for i in ims:
+        if cs is not None and source_space(i, fname) != cs:
+            i = to_space(i, cs, fname)
+        j = resize_img(i, [w, h])
+        out.append(image_expr(convert_type(j.new(j.a, typ=j.type), typ)))
+    return L(*out)
+
+
+# ───────────────────────────── coordinate transformations ─────────────────────────────
+
+def _coord_range(o, name, im, fname):
+    dr = o.get(name, AUTO)
+    if _is_sym(dr, "Automatic"):
+        return (0.0, 1.0), (0.0, im.h / im.w)
+    if _is_sym(dr, "Full"):
+        return (0.0, float(im.w)), (0.0, float(im.h))
+    if K.is_list(dr) and len(dr.args) == 2 and all(K.is_list(v) and len(v.args) == 2 for v in dr.args):
+        (a, b), (c, d) = [[real_arg(t, fname, name) for t in v.args] for v in dr.args]
+        if a == b or c == d:
+            raise ValueError(f"{fname}: {name} must have non-empty ranges")
+        return (a, b), (c, d)
+    raise NotImplementedError(f"{fname}: {name} -> {_short(dr)} is not supported")
+
+
+def _grid(W, H, rng):
+    """Coordinates (X, Y) of the pixel centres of a W x H grid spanning rng, rows from the top."""
+    (x0, x1), (y0, y1) = rng
+    xs = x0 + (np.arange(W) + 0.5) / W * (x1 - x0)
+    ys = y1 - (np.arange(H) + 0.5) / H * (y1 - y0)
+    return np.meshgrid(xs, ys)
+
+
+def _to_index(X, Y, im, rng):
+    """Continuous 0-based (column, row) of coordinates in the image's data range."""
+    (x0, x1), (y0, y1) = rng
+    return (X - x0) / (x1 - x0) * im.w - 0.5, (y1 - Y) / (y1 - y0) * im.h - 0.5
+
+
+def _matrix_of(f):
+    """A numeric 2x2 / 3x3 matrix from TransformationFunction[m] or a matrix, else None."""
+    if isinstance(f, Expr) and f.head == "TransformationFunction" and len(f.args) == 1:
+        f = f.args[0]
+    m = _numeric_array(f, "TransformationFunction") if K.is_list(f) else None
+    if m is not None and m.ndim == 2 and m.shape in ((2, 2), (3, 3)):
+        return m
+    return None
+
+
+def _apply_matrix(m, X, Y):
+    if m.shape == (2, 2):
+        return m[0, 0] * X + m[0, 1] * Y, m[1, 0] * X + m[1, 1] * Y
+    d = m[2, 0] * X + m[2, 1] * Y + m[2, 2]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return ((m[0, 0] * X + m[0, 1] * Y + m[0, 2]) / d, (m[1, 0] * X + m[1, 1] * Y + m[1, 2]) / d)
+
+
+def map_points(f, X, Y, fname):
+    """Arrays (fx, fy) of f applied to the points (X, Y): a matrix/TransformationFunction, a function evaluated once
+    symbolically and vectorised, or point by point."""
+    m = _matrix_of(f)
+    if m is not None:
+        return _apply_matrix(m, X, Y)
+    from ..math_ops import to_sympy
+    sx, sy = Symbol("w21$x"), Symbol("w21$y")
+    try:
+        r = _ev(K.call(f, L(sx, sy)))
+        if K.is_list(r) and len(r.args) == 2:
+            import sympy
+            exprs = [to_sympy(v) for v in r.args]
+            fx = sympy.lambdify((sympy.Symbol("w21$x"), sympy.Symbol("w21$y")), exprs, "numpy")
+            names = {str(s) for e in exprs for s in getattr(e, "free_symbols", ())}
+            if names <= {"w21$x", "w21$y"}:
+                u, v = fx(X, Y)
+                u = np.broadcast_to(np.asarray(u, dtype=float), X.shape)
+                v = np.broadcast_to(np.asarray(v, dtype=float), X.shape)
+                return u, v
+    except (TypeError, ValueError, NotImplementedError, AttributeError, KeyError, SyntaxError, NameError):
+        pass
+    U = np.empty(X.shape)
+    V = np.empty(X.shape)
+    for idx in np.ndindex(*X.shape):
+        r = _ev(K.call(f, L(float(X[idx]), float(Y[idx]))))
+        if not (K.is_list(r) and len(r.args) == 2 and all(is_real_value(t) for t in r.args)):
+            raise TypeError(f"{fname}: the function must return a numeric point {{x, y}}, not {_short(r)}")
+        U[idx], V[idx] = (real_value(t, fname) for t in r.args)
+    return U, V
+
+
+def _out_size(size, im, fname):
+    if size is None or _is_sym(size, "Automatic") or _is_sym(size, "All"):
+        return im.w, im.h
+    if K.is_list(size) and len(size.args) == 2:
+        return tuple(int_arg(v, fname, "size", 1) for v in size.args)
+    w = int_arg(size, fname, "width", 1)
+    return w, max(1, round(w * im.h / im.w))
+
+
+def _backward(im, F, size, o, fname):
+    """ImageTransformation core: output pixel at p samples the input at F(p) (F maps coordinate arrays)."""
+    if "PlotRange" in o and not _is_sym(o["PlotRange"], "Automatic"):
+        raise NotImplementedError(f"{fname}: PlotRange other than Automatic is not supported")
+    if "Masking" in o and not _is_sym(o["Masking"], "Full"):
+        raise NotImplementedError(f"{fname}: Masking is not supported")
+    rng = _coord_range(o, "DataRange", im, fname)
+    W, H = _out_size(size, im, fname)
+    X, Y = _grid(W, H, rng)
+    U, V = F(X, Y)
+    u, v = _to_index(np.asarray(U, dtype=float), np.asarray(V, dtype=float), im, rng)
+    bad = ~(np.isfinite(u) & np.isfinite(v))
+    u = np.where(bad, -10.0, u)
+    v = np.where(bad, -10.0, v)
+    pad = o.get("Padding", 0)
+    bgspec = o.get("Background", pad if not isinstance(pad, str) else 0)
+    if isinstance(pad, str) and pad != "Fixed":
+        raise NotImplementedError(f"{fname}: Padding {pad!r} is not supported (a value or \"Fixed\")")
+    bg = value_for(im, bgspec, fname)
+    method = _resampling(o, fname)
+    a = im.a
+    if pad == "Fixed":
+        u = np.where(bad, u, np.clip(u, -0.5, im.w - 0.5))
+        v = np.where(bad, v, np.clip(v, -0.5, im.h - 0.5))
+    out = _sample(a, u, v, bg, "Nearest" if method == "Nearest" else "Linear")
+    typ = im.type if not (im.type == "Bit" and method != "Nearest") else "Real32"
+    return image_expr(im.new(quantize(out, typ), typ=typ))
+
+
+_TF_OPTS = {"Background", "DataRange", "Masking", "Padding", "PlotRange", "Resampling"}
+
+
+@fn("ImageTransformation", area=AREA, status="added",
+    notes="ImageTransformation[image, f] (backward mapping): the output pixel centred at p takes the input value at "
+          "f[p], sampled bilinearly (Resampling -> \"Nearest\" or \"Linear\"), positions outside the image giving "
+          "Padding/Background (default 0; Padding -> \"Fixed\" extends the edges). Coordinates use DataRange "
+          "(Automatic {{0, 1}, {0, h/w}}, Full pixel units, or explicit ranges) and PlotRange Automatic; the output "
+          "has the input size or ImageTransformation[image, f, w | {w, h}]. f may be a function (evaluated once on "
+          "symbolic {x, y} and vectorised when possible, else point by point) or TransformationFunction[m]. 3D images, "
+          "other PlotRange and Masking settings raise NotImplementedError. Wolfram's default resampling is "
+          "undocumented. Check: exact (identity map gives the image; translations shift pixels) in tests.")
+def _imagetransformation(x: Expr, f: Fn | Expr, *rest: Integer | ListOf[Integer] | Option) -> Expr:
+    fname = "ImageTransformation"
+    p, o = opts_split(rest, _TF_OPTS, fname)
+    if len(p) > 1:
+        raise ValueError(f"{fname}: expected ImageTransformation[image, f, size]")
+    im = _img1(x, fname, allow3d=False)
+    return _backward(im, lambda X, Y: map_points(f, X, Y, fname), p[0] if p else None, o, fname)
+
+
+def _perspective_matrix(m, fname):
+    mm = _matrix_of(m)
+    if mm is None:
+        if isinstance(m, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the transformation must be a 2 x 2 or 3 x 3 numeric matrix or "
+                        f"TransformationFunction[m]")
+    if abs(np.linalg.det(mm)) < 1e-14:
+        raise ValueError(f"{fname}: the transformation matrix is singular")
+    return mm
+
+
+@fn("ImagePerspectiveTransformation", area=AREA, status="added",
+    notes="ImagePerspectiveTransformation[image, m] applies the forward map p -> m.p (2 x 2: linear; 3 x 3: linear "
+          "fractional) or TransformationFunction[m] to pixel positions in DataRange coordinates (Automatic {{0, 1}, "
+          "{0, h/w}}), i.e. the output at q samples the input at m^-1 q bilinearly, with the input size (size "
+          "argument w or {w, h}) and Padding/Background 0 outside. Wolfram's Automatic output size is undocumented "
+          "(the input size is used); PlotRange, Masking and 3D images raise NotImplementedError; singular matrices "
+          "raise ValueError. Check: exact (identity matrix gives the image; m then m^-1 round-trips the interior) in "
+          "tests.")
+def _imageperspectivetransformation(x: Expr, m: MatrixOf[Real] | Expr,
+                                    *rest: Integer | ListOf[Integer] | Option) -> Expr:
+    fname = "ImagePerspectiveTransformation"
+    p, o = opts_split(rest, _TF_OPTS, fname)
+    if len(p) > 1:
+        raise ValueError(f"{fname}: expected ImagePerspectiveTransformation[image, m, size]")
+    im = _img1(x, fname, allow3d=False)
+    inv = np.linalg.inv(_perspective_matrix(m, fname))
+    return _backward(im, lambda X, Y: _apply_matrix(inv, X, Y), p[0] if p else None, o, fname)
+
+
+@fn("ImageForwardTransformation", area=AREA, status="added",
+    notes="ImageForwardTransformation[image, f] moves the pixel at p to f[p] (coordinates {{0, 1}, {0, h/w}} by "
+          "default, DataRange Full/explicit), giving an image of the same size (or [image, f, w | {w, h}]) with "
+          "Background Black (0). For TransformationFunction[m] or a matrix the map is inverted exactly and sampled "
+          "bilinearly (Method Automatic, \"Interpolated\"); for other functions Method -> None assigns each pixel to "
+          "the nearest output pixel (later pixels win). Interpolating arbitrary forward maps (the default for general "
+          "f) raises NotImplementedError since Wolfram's interpolation scheme is not documented; PlotRange other than "
+          "Automatic too. Check: exact (identity and translations) in tests.")
+def _imageforwardtransformation(x: Expr, f: Fn | Expr, *rest: Integer | ListOf[Integer] | Option) -> Expr:
+    fname = "ImageForwardTransformation"
+    p, o = opts_split(rest, {"Background", "DataRange", "Method", "PlotRange"}, fname)
+    if len(p) > 1:
+        raise ValueError(f"{fname}: expected ImageForwardTransformation[image, f, size]")
+    im = _img1(x, fname, allow3d=False)
+    method = o.get("Method", AUTO)
+    o2 = {"Background": o.get("Background", 0), "PlotRange": o.get("PlotRange", AUTO)}
+    if "DataRange" in o:
+        o2["DataRange"] = o["DataRange"]
+    mm = _matrix_of(f)
+    if mm is not None and not _is_sym(method, "None"):
+        inv = np.linalg.inv(_perspective_matrix(f, fname))
+        return _backward(im, lambda X, Y: _apply_matrix(inv, X, Y), p[0] if p else None, o2, fname)
+    if not _is_sym(method, "None"):
+        raise NotImplementedError(f"{fname}: interpolated forward mapping of a general function is not supported; "
+                                  f"use Method -> None")
+    if not _is_sym(o2["PlotRange"], "Automatic"):
+        raise NotImplementedError(f"{fname}: PlotRange other than Automatic is not supported")
+    rng = _coord_range(o2, "DataRange", im, fname)
+    W, H = _out_size(p[0] if p else None, im, fname)
+    X, Y = _grid(im.w, im.h, rng)
+    U, V = map_points(f, X, Y, fname)
+    (x0, x1), (y0, y1) = rng
+    cols = np.floor((np.asarray(U, float) - x0) / (x1 - x0) * W)
+    rows = np.floor((y1 - np.asarray(V, float)) / (y1 - y0) * H)
+    out = np.empty((H, W, im.c))
+    out[...] = value_for(im, o2["Background"], fname)
+    ok = np.isfinite(cols) & np.isfinite(rows) & (cols >= 0) & (cols < W) & (rows >= 0) & (rows < H)
+    for idx in zip(*np.nonzero(ok)):
+        out[int(rows[idx]), int(cols[idx])] = im.a[idx]
+    return image_expr(im.new(out))
+
+
+# ───────────────────────────── 3D images ─────────────────────────────
+
+@fn("Image3DSlices", area=AREA, status="added",
+    notes="Image3DSlices[image] lists the slices (top to bottom) as 2D images; Image3DSlices[image, n], {s1, s2, ...}, "
+          "m ;; n and All; Image3DSlices[image, spec, d] slices along dimension d (1 slices, 2 rows back to front, 3 "
+          "columns), each 2D image keeping the remaining axes in order. Image3D[Image3DSlices[i]] == i. Check: exact "
+          "(round trip through Image3D) in tests.")
+def _image3dslices(x: Expr, spec: Integer | ListOf[Integer] | Expr = None, d: PosInteger = 1) -> Expr | ListOf[Expr]:
+    fname = "Image3DSlices"
+    im = _img1(x, fname, allow2d=False)
+    dd = int_arg(d, fname, "dimension", 1)
+    if dd > 3:
+        raise ValueError(f"{fname}: the dimension must be 1, 2 or 3")
+    a = np.moveaxis(im.a, dd - 1, 0)
+    n = a.shape[0]
+    one = K.is_int(spec)
+    if spec is None or _is_sym(spec, "All"):
+        idx = list(range(n))
+    elif one:
+        k = int(spec)
+        k = k if k > 0 else n + 1 + k
+        if not 1 <= k <= n:
+            raise ValueError(f"{fname}: slice {int(spec)} does not exist (1..{n})")
+        idx = [k - 1]
+    elif K.is_list(spec):
+        idx = []
+        for v in spec.args:
+            k = int_arg(v, fname, "slice")
+            k = k if k > 0 else n + 1 + k
+            if not 1 <= k <= n:
+                raise ValueError(f"{fname}: slice {k} does not exist (1..{n})")
+            idx.append(k - 1)
+    else:
+        idx = seq_indices(spec, n, fname)
+    out = [image_expr(Img(np.ascontiguousarray(a[k]), im.type, im.cs, False)) for k in idx]
+    return out[0] if one else L(*out)
+
+
+@fn("Image3DProjection", area=AREA, status="added",
+    notes="Image3DProjection[image] = Image3DProjection[image, Bottom, \"Max\"] projects onto the x-y plane (along the "
+          "slices; the result's top row is the back row); modes \"Max\" (colour of the pixel of maximum intensity), "
+          "\"MaxIntensity\" (maximum of the grayscale volume), \"Mean\" (per channel) and \"MeanIntensity\". Other "
+          "directions (their image orientation is not documented) raise NotImplementedError. Check: exact (constant "
+          "volumes; single bright voxel) in tests.")
+def _image3dprojection(x: Expr, d: Expr = None, mode: String = "Max") -> Expr:
+    fname = "Image3DProjection"
+    im = _img1(x, fname, allow2d=False)
+    if d is not None and not _is_sym(d, "Bottom"):
+        if isinstance(d, (Symbol,)) or K.is_list(d):
+            raise NotImplementedError(f"{fname}: only the Bottom projection is supported")
+        raise ValueError(f"{fname}: the direction must be a plane name or a vector")
+    if mode not in ("Max", "MaxIntensity", "Mean", "MeanIntensity"):
+        raise ValueError(f"{fname}: the mode must be \"Max\", \"MaxIntensity\", \"Mean\" or \"MeanIntensity\"")
+    if mode == "Mean":
+        return image_expr(Img(quantize(im.a.mean(axis=0), im.type) if im.type != "Bit" else im.a.mean(axis=0),
+                              im.type if im.type != "Bit" else "Real32", im.cs, False))
+    it = _intensity(im, fname)                                 # (slices, rows, cols)
+    if mode == "MaxIntensity":
+        return image_expr(Img(it.max(axis=0), im.type if im.c == 1 else larger_type(im.type, "Real32"),
+                              "Automatic" if im.c == 1 else "Grayscale", False))
+    if mode == "MeanIntensity":
+        return image_expr(Img(it.mean(axis=0), larger_type(im.type, "Real32"),
+                              "Automatic" if im.c == 1 else "Grayscale", False))
+    k = np.argmax(it, axis=0)
+    r, c = np.indices(k.shape)
+    return image_expr(Img(np.ascontiguousarray(im.a[k, r, c]), im.type, im.cs, False))
+
+
+# ───────────────────────────── ArrayComponents ─────────────────────────────
+
+def _depth_map(e, level, f, depth=1):
+    if K.is_list(e) and depth <= level:
+        return L(*[_depth_map(v, level, f, depth + 1) for v in e.args])
+    return f(e)
+
+
+@fn("ArrayComponents", area=AREA, status="added",
+    notes="ArrayComponents[array] replaces identical elements (SameQ: 8 and 8. differ) by consecutive integers 1, 2, ... "
+          "in order of first appearance (row-major), 0 and None always becoming 0; ArrayComponents[array, level] labels "
+          "the elements at that level (level 1: rows); ArrayComponents[array, level, rules] labels elements matching a "
+          "rule's pattern with its value (the remaining ones are numbered). Atoms above the level (ragged arrays) are "
+          "labelled as elements. Check: exact (labels re-derived in tests; idempotent on label matrices).")
+def _arraycomponents(arr: ListOf[Expr], level: PosInteger | Expr = None, rules: Rule | ListOf[Rule] = None) -> Expr:
+    fname = "ArrayComponents"
+    if not K.is_list(arr):
+        if isinstance(arr, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the argument must be a list")
+    lev = 10 ** 6 if level is None or _is_sym(level, "Infinity") else int_arg(level, fname, "level", 1)
+    rl = []
+    if rules is not None:
+        for r in (rules.args if K.is_list(rules) else [rules]):
+            if not (isinstance(r, Expr) and r.head in ("Rule", "RuleDelayed") and len(r.args) == 2):
+                raise TypeError(f"{fname}: labels must be given as rules pattern -> label")
+            rl.append(r)
+    labels = {}
+    counter = [0]
+
+    def label(e):
+        key = K_input(e) if not isinstance(e, (int, float, str)) or isinstance(e, bool) else (type(e).__name__, e)
+        if key in labels:
+            return labels[key]
+        for r in rl:
+            if _ev(Expr("MatchQ", e, r.args[0])) is True:
+                v = _ev(Expr("Replace", e, r))
+                labels[key] = v
+                return v
+        if (K.is_int(e) and int(e) == 0 and not isinstance(e, float)) or _is_sym(e, "None"):
+            labels[key] = 0
+            return 0
+        if isinstance(e, float) and e == 0:
+            labels[key] = 0
+            return 0
+        counter[0] += 1
+        labels[key] = counter[0]
+        return counter[0]
+    return _depth_map(arr, lev, label)
