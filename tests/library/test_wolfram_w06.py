@@ -16,6 +16,12 @@ from _harness import Pred, Raises, check, ids, ev, same
 from mikoshilang.expr import Expr, Symbol
 from mikoshilang.math_ops import to_sympy
 
+try:
+    import scipy  # noqa: F401
+    SCIPY = True
+except ImportError:  # minimal install: inexact Riccati solves need SciPy and must raise
+    SCIPY = False
+
 
 # ── helpers ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -347,10 +353,11 @@ DYNAMICS = [
     ("DiscreteLyapunovSolve[{{0, 1}, {0, 0}}, {{1, 0}, {0, 1}}]", lyap_ok([[0, 1], [0, 0]], [[1, 0], [0, 1]], "disc")),
     ("RiccatiSolve[{{{0, 1}, {0, 0}}, {{0}, {1}}}, {{{1, 0}, {0, 0}}, {{1}}}]", "{{Sqrt[2], 1}, {1, Sqrt[2]}}"),
     ("RiccatiSolve[{{{-1}}, {{1}}}, {{{1}}, {{1}}}]", "{{Sqrt[2] - 1}}"),
-    ("RiccatiSolve[{{{1.}}, {{1.}}}, {{{1.}}, {{1.}}}]", lst_close([1 + math.sqrt(2)])),
+    ("RiccatiSolve[{{{1.}}, {{1.}}}, {{{1.}}, {{1.}}}]", lst_close([1 + math.sqrt(2)]) if SCIPY else Raises()),
     ("DiscreteRiccatiSolve[{{{1}}, {{1}}}, {{{1}}, {{1}}}]", "{{GoldenRatio}}"),
     ("DiscreteRiccatiSolve[{{{2}}, {{1}}}, {{{1}}, {{1}}}]", "{{2 + Sqrt[5]}}"),
-    ("DiscreteRiccatiSolve[{{{1.}}, {{1.}}}, {{{1.}}, {{1.}}}]", lst_close([(1 + math.sqrt(5)) / 2])),
+    ("DiscreteRiccatiSolve[{{{1.}}, {{1.}}}, {{{1.}}, {{1.}}}]",
+     lst_close([(1 + math.sqrt(5)) / 2]) if SCIPY else Raises()),
     ("DEigenvalues[{-u''[x], DirichletCondition[u[x] == 0, True]}, u[x], {x, 0, Pi}, 4]", "{1, 4, 9, 16}"),
     ("DEigenvalues[-u''[x], u[x], {x, 0, 1}, 3]", "{0, Pi^2, 4 Pi^2}"),
     ("DEigenvalues[{-u''[x], u[0] == 0, u'[1] == 0}, u[x], {x, 0, 1}, 2]", "{Pi^2/4, 9 Pi^2/4}"),

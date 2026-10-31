@@ -4108,7 +4108,10 @@ def _care(ab, qr):
         mats = [_num_matrix(M) for M in (A, B, Q, Rm, P)]
         if any(M is None for M in mats):
             raise NotImplementedError(f"{fname}: mixed symbolic and inexact input is not supported")
-        from scipy.linalg import solve_continuous_are
+        try:
+            from scipy.linalg import solve_continuous_are
+        except ImportError:
+            raise NotImplementedError(f"{fname}: inexact input requires SciPy (pip install scipy)")
         try:
             X = solve_continuous_are(mats[0], mats[1], mats[2], mats[3], s=mats[4])
         except Exception as exc:
@@ -4163,7 +4166,10 @@ def _dare(ab, qr):
         mats = [_num_matrix(M) for M in (A, B, Q, Rm, P)]
         if any(M is None for M in mats):
             raise NotImplementedError(f"{fname}: mixed symbolic and inexact input is not supported")
-        from scipy.linalg import solve_discrete_are
+        try:
+            from scipy.linalg import solve_discrete_are
+        except ImportError:
+            raise NotImplementedError(f"{fname}: inexact input requires SciPy (pip install scipy)")
         try:
             X = solve_discrete_are(mats[0], mats[1], mats[2], mats[3], s=mats[4])
         except Exception as exc:
