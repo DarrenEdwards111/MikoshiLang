@@ -2672,3 +2672,346 @@ def _imagecooccurrence(x: Expr, n: PosInteger, ker: MatrixOf[Real] = None) -> Ma
     if tot == 0:
         raise ValueError("ImageCooccurrence: the kernel selects no neighbouring pixel pairs")
     return _lst((m / tot).tolist())
+
+
+# ───────────────────────────── measurements and histograms ─────────────────────────────
+
+_LEVEL_RANGES = {"XYZ": [(0, 0.97), (0, 1), (0, 0.83)], "LAB": [(0, 1), (-0.8, 0.94), (-1.13, 0.94)],
+                 "LCH": [(0, 1), (0, 1.3), (0, 1)], "LUV": [(0, 1), (-0.85, 1.76), (-1.26, 0.88)]}
+
+
+@fn("ImageLevels", area=AREA, status="added",
+    notes="ImageLevels[image] gives, per channel, {{lev1, k1}, {lev2, k2}, ...} with 256 equally spaced levels over the "
+          "channel range ({0, 1}; the documented CIE ranges for XYZ/LAB/LCH/LUV images) where k_i counts lev_i <= v < "
+          "lev_(i+1) and the last level counts v >= lev_n (\"IncludeOutOfRange\": values below the range go to the "
+          "first bin, above to the last; \"ExcludeOutOfRange\" drops them); \"Bit\" images give {{0, n0}, {1, n1}}. "
+          "ImageLevels[image, n], [image, All] (tally of the distinct values), [image, \"Byte\"] (256 levels after "
+          "conversion to bytes) and [image, bspec, {min, max}]. A single-channel image gives one list, others a list "
+          "per channel. Automatic binning raises NotImplementedError. Check: exact (counts total the pixel count) in "
+          "tests.")
+def _imagelevels(x: Expr, *rest: PosInteger | String | ListOf[Real] | Option) -> ListOf[Expr]:
+    fname = "ImageLevels"
+    pos, o = opts_split(rest, {"Method"}, fname)
+    if len(pos) > 2:
+        raise ValueError("ImageLevels: expected ImageLevels[image, bspec, range]")
+    meth = o.get("Method", "IncludeOutOfRange")
+    if meth not in ("IncludeOutOfRange", "ExcludeOutOfRange"):
+        raise ValueError("ImageLevels: Method must be \"IncludeOutOfRange\" or \"ExcludeOutOfRange\"")
+    im = _img1(x, fname)
+    bspec = pos[0] if pos else 256
+    res = []
+    ranges = _LEVEL_RANGES.get(im.cs, None)
+    for c in range(im.c):
+        v = im.a[..., c].reshape(-1)
+        if im.type == "Bit" and not pos:
+            res.append(L(L(0, int((v == 0).sum())), L(1, int((v == 1).sum()))))
+            continue
+        if _is_sym(bspec, "All"):
+            u, cnt = np.unique(v, return_counts=True)
+            res.append(L(*[L(float(a), int(b)) for a, b in zip(u, cnt)]))
+            continue
+        if bspec == "Byte":
+            b = stored(np.clip(v, 0, 1), "Byte")
+            cnt = np.bincount(b, minlength=256)
+            res.append(L(*[L(k / 255, int(cnt[k])) for k in range(256)]))
+            continue
+        if _is_sym(bspec, "Automatic"):
+            raise NotImplementedError("ImageLevels: Automatic binning is not supported")
+        n = int_arg(bspec, fname, "number of levels", 2)
+        lo, hi = ranges[c] if ranges and c < len(ranges) else (0.0, 1.0)
+        if len(pos) > 1:
+            r = pos[1]
+            if not (K.is_list(r) and len(r.args) == 2):
+                raise ValueError("ImageLevels: the range must be {min, max}")
+            lo, hi = (float(v.min()) if _is_sym(t, "All") and k == 0 else float(v.max()) if _is_sym(t, "All")
+                      else real_arg(t, fname, "range") for k, t in enumerate(r.args))
+        if hi <= lo:
+            raise ValueError("ImageLevels: the range must have min < max")
+        levs = lo + (hi - lo) * np.arange(n) / (n - 1)
+        inside = (v >= lo) & (v <= hi)
+        w = v if meth == "IncludeOutOfRange" else v[inside]
+        idx = np.searchsorted(levs, w, side="right") - 1
+        idx = np.clip(idx, 0, n - 1)
+        cnt = np.bincount(idx, minlength=n)
+        res.append(L(*[L(float(levs[k]), int(cnt[k])) for k in range(n)]))
+    return res[0] if im.c == 1 else L(*res)
+
+
+def _entropy(v):
+    _, cnt = np.unique(v, return_counts=True)
+    p = cnt / cnt.sum()
+    return float(-(p * np.log(p)).sum())
+
+
+def _per_chan(f, a):
+    vals = [f(a[..., c].reshape(-1)) for c in range(a.shape[-1])]
+    return vals
+
+
+def _num(v):
+    if isinstance(v, (list, tuple)):
+        return L(*[_num(t) for t in v])
+    if isinstance(v, (bool, np.bool_)):
+        return bool(v)
+    if isinstance(v, (int, np.integer)):
+        return int(v)
+    return float(v)
+
+
+_GLOBAL_PROPS = ("AspectRatio", "Channels", "ColorSpace", "DataType", "Dimensions", "ImageDimensions",
+                 "Interleaving", "Transparency")
+_HIST_PROPS = ("Min", "Max", "MinMax", "Mean", "Median", "StandardDeviation", "Total", "Entropy", "Energy")
+_INT_PROPS = ("MinIntensity", "MaxIntensity", "MinMaxIntensity", "MeanIntensity", "MedianIntensity",
+              "StandardDeviationIntensity", "TotalIntensity", "IntensityCentroid")
+
+
+def _measure(im, p, fname):
+    a = im.a
+    if p == "AspectRatio":
+        return K.from_sp(__import__("sympy").Rational(im.h, im.w))
+    if p == "Channels":
+        return im.c
+    if p == "ColorSpace":
+        return AUTO if im.cs == "Automatic" else im.cs
+    if p == "DataType":
+        return im.type
+    if p == "Dimensions":
+        return L(*([s for s in a.shape[:-1]] + ([im.c] if im.c > 1 else [])))
+    if p == "ImageDimensions":
+        return L(*im.dims())
+    if p == "Interleaving":
+        return NONE if im.c == 1 else True
+    if p == "Transparency":
+        return im.alpha
+    one = im.c == 1
+
+    def chan(f):
+        v = _per_chan(f, a)
+        return _num(v[0] if one else v)
+    if p == "Min":
+        return chan(np.min)
+    if p == "Max":
+        return chan(np.max)
+    if p == "MinMax":
+        v = _per_chan(lambda t: [t.min(), t.max()], a)
+        return _num(v[0] if one else [[x[0] for x in v], [x[1] for x in v]])
+    if p == "Mean":
+        return chan(np.mean)
+    if p == "Median":
+        return chan(np.median)
+    if p == "StandardDeviation":
+        if a[..., 0].size < 2:
+            raise ValueError(f"{fname}: StandardDeviation needs at least two pixels")
+        return chan(lambda t: np.std(t, ddof=1))
+    if p == "Total":
+        return chan(np.sum)
+    if p == "Entropy":
+        return chan(_entropy)
+    if p == "Energy":
+        return chan(lambda t: float(((np.unique(t, return_counts=True)[1] / t.size) ** 2).sum()))
+    if p in _INT_PROPS:
+        it = _intensity(im, fname).reshape(-1)
+        if p == "MinIntensity":
+            return float(it.min())
+        if p == "MaxIntensity":
+            return float(it.max())
+        if p == "MinMaxIntensity":
+            return L(float(it.min()), float(it.max()))
+        if p == "MeanIntensity":
+            return float(it.mean())
+        if p == "MedianIntensity":
+            return float(np.median(it))
+        if p == "StandardDeviationIntensity":
+            return float(np.std(it, ddof=1))
+        if p == "TotalIntensity":
+            return float(it.sum())
+        if im.d3:
+            raise NotImplementedError(f"{fname}: IntensityCentroid is not supported for Image3D")
+        I = _intensity(im, fname)
+        ys, xs = np.mgrid[0:im.h, 0:im.w]
+        tot = I.sum()
+        if tot == 0:
+            raise ValueError(f"{fname}: the image has zero total intensity")
+        cx = float(((xs + 0.5) * I).sum() / tot)
+        cy = float(((im.h - ys - 0.5) * I).sum() / tot)
+        return L(cx, cy)
+    if isinstance(p, str):
+        if p in ("Contours", "ContourHierarchy", "PerimeterPositions", "Skew", "DataRange", "SampleDepth"):
+            raise NotImplementedError(f"{fname}: the property {p!r} is not supported")
+        raise ValueError(f"{fname}: unknown property {p!r}")
+    if isinstance(p, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{fname}: {_short(p)} is not a property name")
+
+
+@fn("ImageMeasurements", area=AREA, status="added",
+    notes="ImageMeasurements[image, prop] for the global properties \"AspectRatio\", \"Channels\", \"ColorSpace\", "
+          "\"DataType\", \"Dimensions\", \"ImageDimensions\", \"Interleaving\", \"Transparency\"; per-channel "
+          "\"Min\", \"Max\", \"MinMax\", \"Mean\", \"Median\", \"StandardDeviation\" (n - 1), \"Total\", \"Entropy\" "
+          "(natural log over the distinct values) and \"Energy\" (sum of squared value frequencies) on the 0..1 scale "
+          "(a number for one channel, else a list); intensity properties (\"MinIntensity\", ..., "
+          "\"TotalIntensity\", \"IntensityCentroid\" in image coordinates) use the Rec. 601 luma of colour images "
+          "and the channel mean for ColorSpace Automatic. A list of properties gives a list; format \"List\", "
+          "\"Association\" or \"RuleList\"; \"Properties\" lists the names; images lists map. Contour, \"Skew\", "
+          "\"DataRange\" and \"SampleDepth\" raise NotImplementedError. Check: exact (agreement with Mean, Median, "
+          "Total of ImageData) in tests.")
+def _imagemeasurements(x: Expr, prop: String | ListOf[String], fmt: String = None) -> Expr:
+    fname = "ImageMeasurements"
+    if K.is_list(x):
+        return L(*[_imagemeasurements(v, prop, fmt) for v in x.args])
+    im = _img1(x, fname)
+    if prop == "Properties":
+        return L(*(_GLOBAL_PROPS + _HIST_PROPS + _INT_PROPS))
+    props = list(prop.args) if K.is_list(prop) else [prop]
+    vals = [_measure(im, p, fname) for p in props]
+    if fmt is None or _is_sym(fmt, "Automatic") or fmt == "List":
+        return L(*vals) if K.is_list(prop) else vals[0]
+    if fmt == "RuleList":
+        return L(*[Expr("Rule", p, v) for p, v in zip(props, vals)])
+    if fmt == "Association":
+        return Expr("Association", *[Expr("Rule", p, v) for p, v in zip(props, vals)])
+    if fmt == "Dataset":
+        raise NotImplementedError("ImageMeasurements: the \"Dataset\" format is not supported")
+    raise ValueError(f"ImageMeasurements: unknown format {_short(fmt)}")
+
+
+_DIST_FUNCS = ("EuclideanDistance", "SquaredEuclideanDistance", "ManhattanDistance", "CosineDistance",
+               "CorrelationDistance", "NormalizedSquaredEuclideanDistance", "ChessboardDistance", "BrayCurtisDistance",
+               "CanberraDistance")
+
+
+@fn("ImageDistance", area=AREA, status="added",
+    notes="ImageDistance[image1, image2] for images of the same dimensions gives DistanceFunction (default "
+          "EuclideanDistance) of the flattened channel values (0..1 scale; a single-channel image is replicated "
+          "to the other's channel count): any of EuclideanDistance, SquaredEuclideanDistance, ManhattanDistance, "
+          "ChessboardDistance, CosineDistance, CorrelationDistance, NormalizedSquaredEuclideanDistance, "
+          "BrayCurtisDistance, CanberraDistance (evaluated by the library functions of those names), "
+          "\"MeanEuclideanDistance\" and \"MeanSquaredEuclideanDistance\" (mean over pixels of the per-pixel "
+          "channel distance), or a function f[img1, img2] of the two images. Images of different dimensions and "
+          "positions, the other named measures and Masking raise NotImplementedError. Check: reference (direct "
+          "formulas in tests) and delegated (the named distance functions).")
+def _imagedistance(a: Expr, b: Expr, *opts: Option) -> Real:
+    fname = "ImageDistance"
+    pos, o = opts_split(opts, {"DistanceFunction"}, fname)
+    if pos:
+        raise NotImplementedError("ImageDistance: positions are not supported (only images of equal dimensions)")
+    A, B = _img1(a, fname), _img1(b, fname)
+    if A.a.shape[:-1] != B.a.shape[:-1] or A.d3 != B.d3:
+        raise NotImplementedError("ImageDistance: images of different dimensions are not supported")
+    u, v = A.a, B.a
+    if u.shape[-1] != v.shape[-1]:
+        if u.shape[-1] == 1:
+            u = np.repeat(u, v.shape[-1], -1)
+        elif v.shape[-1] == 1:
+            v = np.repeat(v, u.shape[-1], -1)
+        else:
+            raise ValueError("ImageDistance: the images must have the same number of channels or one channel")
+    f = o.get("DistanceFunction", Symbol("EuclideanDistance"))
+    if isinstance(f, Symbol) and f.name in _DIST_FUNCS:
+        r = _ev(Expr(f.name, _lst(u.reshape(-1).tolist()), _lst(v.reshape(-1).tolist())))
+        return r
+    if f in ("MeanEuclideanDistance", "MeanSquaredEuclideanDistance"):
+        d2 = ((u - v) ** 2).sum(-1).reshape(-1)
+        return float(np.sqrt(d2).mean() if f == "MeanEuclideanDistance" else d2.mean())
+    if isinstance(f, str) or K.is_list(f):
+        raise NotImplementedError(f"ImageDistance: the distance {_short(f)} is not supported")
+    if isinstance(f, (Symbol, Expr)):
+        return _ev(K.call(f, a, b))
+    raise TypeError(f"ImageDistance: {_short(f)} is not a distance function")
+
+
+def _quantiles_ref(ref, n, fname, nchan):
+    """List (per channel) of n reference quantiles for a HistogramTransform reference."""
+    qs = np.linspace(0, 1, n)
+    if ref is None:
+        return [qs] * nchan
+    if isinstance(ref, Expr) and ref.head in IMAGE_HEADS:
+        R = parse_image(ref, fname)
+        if R.c not in (1, nchan):
+            raise ValueError(f"{fname}: the reference image must have one channel or {nchan}")
+        return [np.quantile(R.a[..., min(c, R.c - 1)].reshape(-1), qs) for c in range(nchan)]
+    if K.is_list(ref):
+        vals = _numeric_array(ref, fname).reshape(-1)
+        return [np.quantile(vals, qs)] * nchan
+    if isinstance(ref, Expr) and isinstance(ref.head, str) and ref.head.endswith("Distribution"):
+        out = []
+        for q in qs:
+            if q in (0.0, 1.0):
+                q = 1e-9 if q == 0 else 1 - 1e-9
+            r = _ev(Expr("InverseCDF", ref, float(q)))
+            if not is_real_value(r):
+                raise NotImplementedError(f"{fname}: the reference distribution has no numeric InverseCDF")
+            out.append(real_value(r, fname))
+        return [np.array(out)] * nchan
+    if isinstance(ref, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{fname}: {_short(ref)} is not an image, a list of values or a distribution")
+
+
+def _transfer(src, refq, n):
+    qs = np.linspace(0, 1, n)
+    sq = np.quantile(src, qs)
+    xs, idx = np.unique(sq, return_index=True)
+    ys = np.asarray(refq)[idx]
+    return xs, ys
+
+
+def _hist_args(x, ref, n, fname):
+    nq = 256 if n is None else int_arg(n, fname, "number of quantiles", 2)
+    if isinstance(x, Expr) and x.head in IMAGE_HEADS:
+        im = parse_image(x, fname)
+        chans = [im.a[..., c].reshape(-1) for c in range(im.c)]
+        return im, chans, _quantiles_ref(ref, nq, fname, im.c), nq
+    a = _numeric_array(x, fname)
+    if a is None:
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: {_short(x)} is not an image or a list of values")
+    return None, [a.reshape(-1)], _quantiles_ref(ref, nq, fname, 1), nq, a.shape
+
+
+@fn("HistogramTransform", area=AREA, status="added",
+    notes="HistogramTransform[image] equalises each channel (reference UniformDistribution[{0, 1}]); "
+          "HistogramTransform[image, ref] matches the histogram of ref (an image, a list of values or a "
+          "distribution with a numeric InverseCDF) by mapping the n equally spaced quantiles (default 256) of the "
+          "image linearly onto those of ref; HistogramTransform[image, ref, n]; HistogramTransform[{x1, x2, ...}, "
+          "...] transforms values. Quantiles are numpy's linear-interpolation quantiles, so values can differ "
+          "slightly from Wolfram's. Same type as the input (integer types clipped). Check: self-check (the transfer "
+          "function is monotone, else ArithmeticError) and reference (equalised quantiles) in tests.")
+def _histogramtransform(x: Expr, ref: Expr = None, n: PosInteger = None) -> Expr:
+    fname = "HistogramTransform"
+    r = _hist_args(x, ref, n, fname)
+    im, chans, refs, nq = r[:4]
+    outs = []
+    for c, v in enumerate(chans):
+        xs, ys = _transfer(v, refs[c], nq)
+        if np.any(np.diff(ys) < -1e-12):
+            raise ArithmeticError("HistogramTransform: result failed verification")
+        outs.append(np.interp(v, xs, ys) if len(xs) > 1 else np.full_like(v, ys[0]))
+    if im is None:
+        return _lst(outs[0].reshape(r[4]).tolist())
+    a = np.stack(outs, -1).reshape(im.a.shape)
+    return image_expr(im.new(quantize(a, im.type)))
+
+
+@fn("HistogramTransformInterpolation", area=AREA, status="added",
+    notes="HistogramTransformInterpolation[data] gives the piecewise-linear InterpolatingFunction (via Interpolation "
+          "with InterpolationOrder -> 1) that maps the n equally spaced quantiles of data (default 256) onto those of "
+          "UniformDistribution[{0, 1}] (the empirical CDF), or of ref in HistogramTransformInterpolation[data, ref] "
+          "and [data, ref, n]; data may be a list of values or an image (one function per channel for multichannel "
+          "images). HistogramTransform applies the same map. Check: self-check (monotone, else ArithmeticError) and "
+          "exact (f[quantile] = reference quantile) in tests.")
+def _histogramtransforminterpolation(x: Expr, ref: Expr = None, n: PosInteger = None) -> Expr:
+    fname = "HistogramTransformInterpolation"
+    r = _hist_args(x, ref, n, fname)
+    im, chans, refs, nq = r[:4]
+    funcs = []
+    for c, v in enumerate(chans):
+        xs, ys = _transfer(v, refs[c], nq)
+        if np.any(np.diff(ys) < -1e-12):
+            raise ArithmeticError(f"{fname}: result failed verification")
+        if len(xs) < 2:
+            raise ValueError(f"{fname}: the data are constant, so no transformation function exists")
+        pts = _lst([[float(a), float(b)] for a, b in zip(xs, ys)])
+        funcs.append(_ev(Expr("Interpolation", pts, Expr("Rule", Symbol("InterpolationOrder"), 1))))
+    return funcs[0] if len(funcs) == 1 else L(*funcs)
