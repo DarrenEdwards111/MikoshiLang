@@ -1,0 +1,1117 @@
+"""Wolfram batch W07: special functions I -- elliptic, theta, Weierstrass, Carlson and ODE-defined functions
+(Heun, Mathieu, Lame, spheroidal, Coulomb, Kelvin, Lommel, Scorer, ...).
+
+Conventions follow the Wolfram Language reference pages (argument order, parameter m = k^2 for elliptic
+functions, nome q, half-periods {w1, w3} with w2 = -w1 - w3, branch cuts).  Numerical values come from mpmath
+at the precision of the inputs (machine numbers give machine numbers, N[f[exact], p] gives p digits); functions
+without an mpmath counterpart are computed here from their defining series / differential equations with
+working-precision checks.  Exact arguments give exact special values where Wolfram does and otherwise stay
+unevaluated.  Arguments outside the implemented domain raise a clear error instead of returning a guess.
+"""
+import mpmath
+import sympy as sp
+
+from ..expr import Expr, Symbol
+from ..precision import input_precision
+from .core import Unevaluated, fn, R, sym, is_list
+from .wl_special import MP_NUMERIC, _dispatcher, from_mp, special, to_mp
+
+AREA = "special functions: elliptic, theta & ODE-defined (W07)"
+
+
+# ───────────────────────────── infrastructure ─────────────────────────────
+
+def _flat(x, name):
+    """MikoshiLang argument -> SymPy value, or nested Python list of SymPy values for List arguments."""
+    if is_list(x):
+        return [_flat(a, name) for a in x.args]
+    return sym(x, name)
+
+
+def _all_numbers(v):
+    if isinstance(v, list):
+        return all(_all_numbers(a) for a in v)
+    return bool(v.is_number)
+
+
+def _to_mp(v):
+    if isinstance(v, list):
+        return [_to_mp(a) for a in v]
+    return to_mp(v)
+
+
+def _realify(out, vals):
+    """Drop round-off imaginary parts when every input is real (only for functions real on the real axis)."""
+    return out
+
+
+def mpfun(name, nargs, mpf, exact=None, notes="", listable=True, symbolic=None, extra=24, real=None,
+          status="added"):
+    """Register ``name`` with ``nargs`` (int or (lo, hi)) arguments, which may be numbers or Lists of numbers.
+
+    ``mpf(*mp_args)`` evaluates approximate input (lists arrive as Python lists of mpmath numbers);
+    ``exact(*sympy_args)`` returns an exact value (SymPy or MikoshiLang expression) or None to stay
+    unevaluated; ``symbolic`` is tried when some argument is symbolic.  ``real(*sympy_args)`` -> True when the
+    result is known to be real, so round-off imaginary parts are dropped.  Errors raised by mpf (ValueError,
+    NotImplementedError, ZeroDivisionError) surface as clear errors."""
+    lo, hi = (nargs, nargs) if isinstance(nargs, int) else nargs
+
+    def impl(*args):
+        vals = [_flat(a, name) for a in args]
+        if not all(_all_numbers(v) for v in vals):
+            if symbolic is not None:
+                out = symbolic(*vals)
+                if out is not None:
+                    return out if isinstance(out, (Expr, Symbol)) else R(out)
+            raise Unevaluated()
+        prec = input_precision(args)
+        if prec is None:
+            if exact is not None:
+                out = exact(*vals)
+                if out is not None:
+                    return out if isinstance(out, (Expr, Symbol)) else R(out)
+            raise Unevaluated()
+        bits = 53 if prec == "m" else prec
+        with mpmath.workprec(bits + extra):
+            try:
+                out = mpf(*[_to_mp(v) for v in vals])
+            except ZeroDivisionError:
+                raise ValueError(f"{name}: the arguments are at a singularity")
+            if real is not None and real(*vals):
+                out = _re(out)
+            elif _allreal(*vals):
+                out = _chop(out)
+        return from_mp(out, prec)
+
+    import inspect
+    for n in range(lo, hi + 1):
+        def make(n):
+            def f(*args):
+                return impl(*args)
+            f.__signature__ = inspect.Signature(
+                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD) for i in range(n)])
+            f.__name__ = f"_{name}_{n}"
+            return f
+        fn(name, area=AREA, status=status, notes=notes, listable=listable)(make(n))
+    MP_NUMERIC[name] = _dispatcher(name)
+    return impl
+
+
+def _chop(x):
+    """Drop an imaginary part that is round-off (relative size below 2^(-3/4 prec)); used for real input."""
+    if isinstance(x, (list, tuple)):
+        return type(x)(_chop(a) for a in x)
+    if isinstance(x, mpmath.mpc) and abs(x.imag) <= abs(x) * mpmath.mpf(2) ** (-(3 * mpmath.mp.prec) // 4):
+        return x.real
+    return x
+
+
+def _re(x):
+    if isinstance(x, (list, tuple)):
+        return type(x)(_re(a) for a in x)
+    if isinstance(x, mpmath.mpc):
+        return x.real
+    return x
+
+
+def _allreal(*vals):
+    def ok(v):
+        if isinstance(v, list):
+            return all(ok(a) for a in v)
+        return v.is_real is True
+    return all(ok(v) for v in vals)
+
+
+def _isint(x):
+    """mpmath number is an integer (exactly)."""
+    if isinstance(x, mpmath.mpc):
+        if x.imag != 0:
+            return False
+        x = x.real
+    return mpmath.isint(x)
+
+
+def _realval(x, name, what):
+    if isinstance(x, mpmath.mpc):
+        if x.imag != 0:
+            raise ValueError(f"{name}: {what} must be real")
+        return x.real
+    return x
+
+
+def _posint(x, name, what="k"):
+    x = _realval(x, name, what)
+    if not mpmath.isint(x) or x < 1:
+        raise ValueError(f"{name}: {what} must be a positive integer")
+    return int(x)
+
+
+def _eps():
+    return mpmath.mpf(2) ** (-mpmath.mp.prec)
+
+
+# ───────────────────────────── zeros of Airy and Bessel functions ─────────────────────────────
+
+def _airy_zero(which):
+    zero = mpmath.airyaizero if which == "Ai" else mpmath.airybizero
+    name = f"Airy{which}Zero"
+
+    def one(k):
+        return zero(_posint(k, name))
+
+    def two(k, x0):
+        k = _posint(k, name)
+        x0 = _realval(x0, name, "x0")
+        # number of zeros >= x0 (all zeros are negative); asymptotic estimate then correction
+        if x0 >= 0:
+            j0 = 0
+        else:
+            t = (-x0) ** mpmath.mpf(1.5)
+            off = 1 if which == "Ai" else 3
+            j0 = max(0, int(mpmath.floor((8 * t / (3 * mpmath.pi) + off) / 4)) - 2)
+            while j0 > 0 and zero(j0) < x0:
+                j0 -= 1
+            while zero(j0 + 1) >= x0:
+                j0 += 1
+        return zero(j0 + k)
+
+    mpfun(name, 1, one, notes=f"AiryAiZero-style: k-th (negative) zero of {which}; numerical (N) via mpmath "
+                              f"airy{which.lower()}zero; k must be a positive integer", listable=True)
+    mpfun(name, 2, two, notes=f"{name}[k, x0]: k-th zero of {which} less than x0", listable=True)
+
+
+_airy_zero("Ai")
+_airy_zero("Bi")
+
+
+def _bessel_zero(which):
+    zero = mpmath.besseljzero if which == "J" else mpmath.besselyzero
+    name = f"Bessel{which}Zero"
+
+    def order(n):
+        n = _realval(n, name, "the order n")
+        if n < 0:
+            raise NotImplementedError(f"{name}: negative orders are not supported")
+        return n
+
+    def two(n, k):
+        return zero(order(n), _posint(k, name))
+
+    def three(n, k, x0):
+        n = order(n)
+        k = _posint(k, name)
+        x0 = _realval(x0, name, "x0")
+        if x0 < 0:
+            x0 = mpmath.mpf(0)
+        # McMahon: j_{n,s} ~ (s + n/2 - 1/4) pi (J), (s + n/2 - 3/4) pi (Y)
+        shift = mpmath.mpf(1) / 4 if which == "J" else mpmath.mpf(3) / 4
+        j0 = max(0, int(mpmath.floor(x0 / mpmath.pi - n / 2 + shift)) - 2)
+        while j0 > 0 and zero(n, j0) > x0:
+            j0 -= 1
+        while zero(n, j0 + 1) <= x0:
+            j0 += 1
+        return zero(n, j0 + k)
+
+    mpfun(name, 2, two, notes=f"{name}[n, k]: k-th positive zero of Bessel{which}[n, x] (real n >= 0); "
+                              f"mpmath bessel{which.lower()}zero")
+    mpfun(name, 3, three, notes=f"{name}[n, k, x0]: k-th zero of Bessel{which}[n, x] greater than x0")
+
+
+_bessel_zero("J")
+_bessel_zero("Y")
+
+
+# ───────────────────────────── Anger, Weber, Struve L, Lommel, Kelvin, Scorer ─────────────────────────────
+
+def _anger3(nu, mu, z, weber=False):
+    trig = mpmath.sin if weber else mpmath.cos
+    return mpmath.quad(lambda t: (2 * mpmath.sin(t)) ** mu * trig(nu * t - z * mpmath.sin(t)),
+                       mpmath.linspace(0, mpmath.pi, 5)) / mpmath.pi
+
+
+def _anger_exact(nu, z):
+    if z == 0:
+        return sp.sin(sp.pi * nu) / (sp.pi * nu) if nu != 0 else sp.Integer(1)
+    if nu.is_Integer:
+        return sp.besselj(nu, z) if z.is_number and z == 0 else None
+    return None
+
+
+mpfun("AngerJ", 2, mpmath.angerj,
+      lambda nu, z: (sp.Integer(1) if nu == 0 else sp.sin(sp.pi * nu) / (sp.pi * nu)) if z == 0 else None,
+      real=_allreal, notes="AngerJ[nu, z] = 1/Pi Integrate[Cos[nu t - z Sin[t]], {t, 0, Pi}]; mpmath angerj")
+mpfun("AngerJ", 3, lambda nu, mu, z: _anger3(nu, mu, z),
+      notes="associated Anger function AngerJ[nu, mu, z] = 1/Pi Integrate[(2 Sin[t])^mu Cos[nu t - z Sin[t]], "
+            "{t, 0, Pi}] by quadrature (Re mu > -1)", real=_allreal)
+mpfun("WeberE", 2, mpmath.webere,
+      lambda nu, z: (sp.Integer(0) if nu == 0 else (1 - sp.cos(sp.pi * nu)) / (sp.pi * nu)) if z == 0 else None,
+      real=_allreal, notes="WeberE[nu, z] = 1/Pi Integrate[Sin[nu t - z Sin[t]], {t, 0, Pi}]; mpmath webere")
+mpfun("WeberE", 3, lambda nu, mu, z: _anger3(nu, mu, z, weber=True),
+      notes="associated Weber function WeberE[nu, mu, z] = 1/Pi Integrate[(2 Sin[t])^mu Sin[nu t - z Sin[t]], "
+            "{t, 0, Pi}] by quadrature (Re mu > -1)", real=_allreal)
+
+
+def _struvel_exact(n, z):
+    if z == 0 and (n.is_real and n > -1):
+        return sp.Integer(0)
+    if n == sp.Rational(1, 2):
+        return sp.sqrt(2 / (sp.pi * z)) * (sp.cosh(z) - 1)
+    if n == -sp.Rational(1, 2):
+        return sp.sqrt(2 / (sp.pi * z)) * sp.sinh(z)
+    return None
+
+
+mpfun("StruveL", 2, mpmath.struvel, _struvel_exact,
+      real=lambda n, z: _allreal(n, z) and z >= 0,
+      notes="modified Struve function L_n(z); mpmath struvel; half-integer orders 1/2, -1/2 in closed form")
+
+
+def _lommel_exact(mu, nu, z):
+    return sp.Integer(0) if z == 0 and mu.is_real and (mu + 1) > 0 else None
+
+
+mpfun("LommelS1", 3, mpmath.lommels1, _lommel_exact, real=lambda m, n, z: _allreal(m, n, z) and z > 0,
+      notes="Lommel function s_{mu,nu}(z) (solution of z^2 y'' + z y' + (z^2 - nu^2) y = z^(mu+1)); mpmath lommels1")
+mpfun("LommelS2", 3, mpmath.lommels2, real=lambda m, n, z: _allreal(m, n, z) and z > 0,
+      notes="Lommel function S_{mu,nu}(z); mpmath lommels2")
+
+
+def _kelvin(name, f):
+    def one(z):
+        return f(0, z)
+
+    def ex1(z):
+        if z == 0:
+            return {"KelvinBer": sp.Integer(1), "KelvinBei": sp.Integer(0), "KelvinKer": sp.oo,
+                    "KelvinKei": -sp.pi / 4}[name]
+        return None
+
+    def ex2(n, z):
+        return ex1(z) if n == 0 else (sp.Integer(0) if z == 0 and n.is_Integer and n > 0
+                                      and name in ("KelvinBer", "KelvinBei") else None)
+    realq = (lambda *v: _allreal(*v) and v[-1] >= 0)
+    mpfun(name, 1, one, ex1, real=realq,
+          notes=f"{name}[z] = {name}[0, z]; Kelvin function via mpmath ({name[6:].lower()})")
+    mpfun(name, 2, f, ex2, real=realq,
+          notes=f"{name}[n, z]: Kelvin function {name[6:].lower()}_n(z) (ber_n + i bei_n = J_n(z e^(3 Pi i/4))); "
+                "mpmath")
+
+
+_kelvin("KelvinBer", mpmath.ber)
+_kelvin("KelvinBei", mpmath.bei)
+_kelvin("KelvinKer", mpmath.ker)
+_kelvin("KelvinKei", mpmath.kei)
+
+
+_G23 = sp.gamma(sp.Rational(2, 3))
+_G13 = sp.gamma(sp.Rational(1, 3))
+
+
+def _scorer_prime(z, hi=False):
+    # Gi'(z) = Bi'(z) Integral[Ai, {t, z, Infinity}] + Ai'(z) Integral[Bi, {t, 0, z}]  (DLMF 9.12.?, from Gi);
+    # Hi = Bi - Gi (DLMF 9.12.15)
+    ai_int = mpmath.airyai(z, derivative=-1)
+    bi_int = mpmath.airybi(z, derivative=-1)
+    gip = mpmath.airybi(z, 1) * (mpmath.mpf(1) / 3 - ai_int) + mpmath.airyai(z, 1) * bi_int
+    return mpmath.airybi(z, 1) - gip if hi else gip
+
+
+mpfun("ScorerGi", 1, mpmath.scorergi, lambda z: 1 / (3 ** sp.Rational(7, 6) * _G23) if z == 0 else None,
+      real=_allreal, notes="Scorer function Gi(z) (Gi'' - z Gi = -1/Pi); mpmath scorergi; Gi(0) = 1/(3^(7/6) Gamma(2/3))")
+mpfun("ScorerHi", 1, mpmath.scorerhi, lambda z: 2 / (3 ** sp.Rational(7, 6) * _G23) if z == 0 else None,
+      real=_allreal, notes="Scorer function Hi(z) (Hi'' - z Hi = 1/Pi); mpmath scorerhi; Hi(0) = 2/(3^(7/6) Gamma(2/3))")
+mpfun("ScorerGiPrime", 1, lambda z: _scorer_prime(z), lambda z: 1 / (3 ** sp.Rational(5, 6) * _G13) if z == 0 else None,
+      real=_allreal, notes="Gi'(z) = Bi'(z) Integral[Ai, {z, Infinity}] + Ai'(z) Integral[Bi, {0, z}]; "
+                           "Gi'(0) = 1/(3^(5/6) Gamma(1/3))")
+mpfun("ScorerHiPrime", 1, lambda z: _scorer_prime(z, True),
+      lambda z: 2 / (3 ** sp.Rational(5, 6) * _G13) if z == 0 else None,
+      real=_allreal, notes="Hi'(z) = Bi'(z) - Gi'(z) (Gi + Hi = Bi); Hi'(0) = 2/(3^(5/6) Gamma(1/3))")
+
+
+# ───────────────────────────── Whittaker, parabolic cylinder, Coulomb ─────────────────────────────
+
+def _whitm_exact(k, m, z):
+    return sp.Integer(0) if z == 0 and (m + sp.Rational(1, 2)).is_positive else None
+
+
+mpfun("WhittakerM", 3, mpmath.whitm, _whitm_exact, real=lambda k, m, z: _allreal(k, m, z) and z > 0,
+      notes="WhittakerM[k, m, z] = E^(-z/2) z^(m+1/2) Hypergeometric1F1[1/2 + m - k, 1 + 2 m, z]; mpmath whitm")
+mpfun("WhittakerW", 3, mpmath.whitw, real=lambda k, m, z: _allreal(k, m, z) and z > 0,
+      notes="WhittakerW[k, m, z] (decays like E^(-z/2) z^k); mpmath whitw")
+
+
+def _pcfd_exact(nu, z):
+    if nu == 0:
+        return sp.exp(-z ** 2 / 4)
+    if z == 0:
+        g = sp.gamma((1 - nu) / 2)
+        return sp.Integer(0) if g is sp.zoo else 2 ** (nu / 2) * sp.sqrt(sp.pi) / g
+    return None
+
+
+mpfun("ParabolicCylinderD", 2, mpmath.pcfd, _pcfd_exact, symbolic=lambda nu, z: _pcfd_exact(nu, z) if nu == 0 else None,
+      real=_allreal, notes="parabolic cylinder function D_nu(z); mpmath pcfd; D_0(z) = E^(-z^2/4), "
+                           "D_nu(0) = 2^(nu/2) Sqrt[Pi]/Gamma[(1-nu)/2]")
+
+
+def _coulomb_real(l, eta, r):
+    return _allreal(l, eta, r) and r > 0
+
+
+mpfun("CoulombF", 3, mpmath.coulombf, lambda l, eta, r: sp.Integer(0) if r == 0 and l.is_real and l > -1 else None,
+      real=_coulomb_real, notes="regular Coulomb wave function F_l(eta, r); mpmath coulombf")
+mpfun("CoulombG", 3, mpmath.coulombg, real=_coulomb_real,
+      notes="irregular Coulomb wave function G_l(eta, r); mpmath coulombg")
+mpfun("CoulombH1", 3, lambda l, eta, r: mpmath.coulombg(l, eta, r) + 1j * mpmath.coulombf(l, eta, r),
+      notes="outgoing Coulomb wave function H+ = G + i F (~ exp(i (r - eta Log[2 r] ...)) for large r)")
+mpfun("CoulombH2", 3, lambda l, eta, r: mpmath.coulombg(l, eta, r) - 1j * mpmath.coulombf(l, eta, r),
+      notes="incoming Coulomb wave function H- = G - i F")
+
+
+# ───────────────────────────── arithmetic-geometric mean, Carlson integrals ─────────────────────────────
+
+def _agm_exact(a, b):
+    if a == 0 or b == 0:
+        return sp.Integer(0)
+    if a == b:
+        return a
+    return None
+
+
+mpfun("ArithmeticGeometricMean", 2, mpmath.agm, _agm_exact,
+      real=lambda a, b: _allreal(a, b) and a >= 0 and b >= 0,
+      notes="ArithmeticGeometricMean[a, b]; mpmath agm (principal branch, cut b/a on (-Infinity, 0])")
+
+
+def _carlson(name, nargs, f, exact=None, notes="", pv=False):
+    # pv: the last argument may be negative (Cauchy principal value, the real part of the limit)
+    def real(*v):
+        head = v[:-1] if pv else v
+        return _allreal(*v) and all(x >= 0 for x in head)
+    mpfun(name, nargs, f, exact, listable=True, real=real, notes=notes)
+
+
+def _rf_exact(x, y, z):
+    if x == y == z:
+        return 1 / sp.sqrt(x) if x != 0 else sp.oo
+    return None
+
+
+_carlson("CarlsonRC", 2, mpmath.elliprc,
+         lambda x, y: (1 / sp.sqrt(x) if x != 0 else None) if x == y else None,
+         notes="Carlson R_C(x, y) = 1/2 Integrate[(t + x)^(-1/2) (t + y)^(-1), {t, 0, Infinity}] (Cauchy "
+               "principal value for y < 0); mpmath elliprc", pv=True)
+_carlson("CarlsonRF", 3, mpmath.elliprf, _rf_exact,
+         notes="Carlson R_F(x, y, z) = 1/2 Integrate[((t+x)(t+y)(t+z))^(-1/2), {t, 0, Infinity}]; mpmath elliprf")
+_carlson("CarlsonRD", 3, mpmath.elliprd,
+         lambda x, y, z: (x ** sp.Rational(-3, 2) if x != 0 else None) if x == y == z else None,
+         notes="Carlson R_D(x, y, z) = R_J(x, y, z, z); mpmath elliprd")
+_carlson("CarlsonRJ", 4, mpmath.elliprj,
+         lambda x, y, z, p: (x ** sp.Rational(-3, 2) if x != 0 else None) if x == y == z == p else None,
+         notes="Carlson R_J(x, y, z, p) = 3/2 Integrate[(t+p)^-1 ((t+x)(t+y)(t+z))^(-1/2), {t, 0, Infinity}] "
+               "(principal value for p < 0); mpmath elliprj", pv=True)
+_carlson("CarlsonRG", 3, mpmath.elliprg,
+         lambda x, y, z: (sp.sqrt(x) if x == y == z else None),
+         notes="Carlson R_G(x, y, z); mpmath elliprg")
+_carlson("CarlsonRK", 2, lambda x, y: 2 / mpmath.pi * mpmath.elliprf(0, x, y),
+         lambda x, y: (1 / sp.sqrt(x) if x != 0 else None) if x == y else None,
+         notes="CarlsonRK[x, y] = 1/Pi Integrate[t^(-1/2) (t+x)^(-1/2) (t+y)^(-1/2), {t, 0, Infinity}] "
+               "= 2/Pi R_F(0, x, y)")
+_carlson("CarlsonRE", 2, lambda x, y: 4 / mpmath.pi * mpmath.elliprg(0, x, y),
+         lambda x, y: (sp.sqrt(x) if x == y else None),
+         notes="CarlsonRE[x, y] = 4/Pi R_G(0, x, y) (the Wolfram definition with the 1/Pi integral)")
+_carlson("CarlsonRM", 3, lambda x, y, p: 4 / (3 * mpmath.pi) * mpmath.elliprj(0, x, y, p),
+         lambda x, y, p: (x ** sp.Rational(-3, 2) if x != 0 else None) if x == y == p else None,
+         notes="CarlsonRM[x, y, rho] = 2/Pi Integrate[t^(-1/2) (t+x)^(-1/2) (t+y)^(-1/2) (t+rho)^(-1), "
+               "{t, 0, Infinity}] = 4/(3 Pi) R_J(0, x, y, rho) (principal value for rho < 0)", pv=True)
+
+
+# ───────────────────────────── theta functions, nome, modular functions ─────────────────────────────
+
+def _check_q(q, name):
+    if abs(q) >= 1:
+        raise ValueError(f"{name}: the nome q must satisfy Abs[q] < 1")
+
+
+def _theta(a, u, q, d=0, name="EllipticTheta"):
+    a = _realval(a, name, "a")
+    if not mpmath.isint(a) or not 1 <= a <= 4:
+        raise ValueError(f"{name}: the index a must be 1, 2, 3 or 4")
+    _check_q(q, name)
+    if q == 0:
+        if d == 0:
+            return mpmath.mpf(1) if int(a) in (3, 4) else mpmath.mpf(0)
+        return mpmath.mpf(0)
+    return mpmath.jtheta(int(a), u, q, d)
+
+
+def _theta_exact(a, u, q, d=0):
+    if a.is_Integer and a in (1, 2, 3, 4):
+        if q == 0:
+            return sp.Integer(1) if (d == 0 and a in (3, 4)) else sp.Integer(0)
+        if u == 0 and ((d == 0 and a == 1) or (d == 1 and a in (2, 3, 4))):
+            return sp.Integer(0)
+    return None
+
+
+def _theta_real(a, u, q):
+    return _allreal(a, u, q) and (q >= 0 or (a.is_Integer and a in (3, 4)))
+
+
+mpfun("EllipticTheta", 3, lambda a, u, q: _theta(a, u, q), _theta_exact, real=_theta_real,
+      notes="Jacobi theta function theta_a(u, q) (a = 1..4) in the nome convention of the Wolfram reference "
+            "(theta_1 = 2 q^(1/4) Sum[(-1)^n q^(n(n+1)) Sin[(2n+1) u]] ...); mpmath jtheta; Abs[q] < 1")
+mpfun("EllipticTheta", 2, lambda a, q: _theta(a, 0, q), lambda a, q: _theta_exact(a, sp.Integer(0), q),
+      real=lambda a, q: _theta_real(a, sp.Integer(0), q),
+      notes="theta constant EllipticTheta[a, q] = EllipticTheta[a, 0, q]")
+mpfun("EllipticThetaPrime", 3, lambda a, u, q: _theta(a, u, q, 1, "EllipticThetaPrime"),
+      lambda a, u, q: _theta_exact(a, u, q, 1), real=_theta_real,
+      notes="derivative of EllipticTheta[a, u, q] with respect to u; mpmath jtheta(..., 1)")
+mpfun("EllipticThetaPrime", 2, lambda a, q: _theta(a, 0, q, 1, "EllipticThetaPrime"),
+      lambda a, q: _theta_exact(a, sp.Integer(0), q, 1), real=lambda a, q: _theta_real(a, sp.Integer(0), q),
+      notes="EllipticThetaPrime[a, q] = EllipticThetaPrime[a, 0, q]")
+
+
+def _nome_exact(m):
+    if m == 0:
+        return sp.Integer(0)
+    if m == 1:
+        return sp.Integer(1)
+    if m == sp.Rational(1, 2):
+        return sp.exp(-sp.pi)
+    return None
+
+
+def _nome(m):
+    if m == 1:
+        return mpmath.mpf(1)
+    return mpmath.qfrom(m=m)
+
+
+def _inv_nome(q):
+    _check_q(q, "InverseEllipticNomeQ")
+    return mpmath.mfrom(q=q)
+
+
+mpfun("EllipticNomeQ", 1, _nome, _nome_exact, real=lambda m: _allreal(m) and m <= 1,
+      notes="nome q(m) = Exp[-Pi EllipticK[1 - m]/EllipticK[m]]; mpmath qfrom")
+mpfun("InverseEllipticNomeQ", 1, _inv_nome,
+      lambda q: sp.Integer(0) if q == 0 else (sp.Rational(1, 2) if sp.simplify(q - sp.exp(-sp.pi)) == 0 else None),
+      real=lambda q: _allreal(q), notes="parameter m with EllipticNomeQ[m] == q (Abs[q] < 1); mpmath mfrom")
+
+
+def _upper(tau, name):
+    if mpmath.im(tau) <= 0:
+        raise ValueError(f"{name}: the argument must lie in the upper half-plane (Im[tau] > 0)")
+
+
+def _eta(tau):
+    _upper(tau, "DedekindEta")
+    return mpmath.eta(tau)
+
+
+def _klein(tau):
+    _upper(tau, "KleinInvariantJ")
+    return mpmath.kleinj(tau)
+
+
+def _lambda(tau):
+    _upper(tau, "ModularLambda")
+    q = mpmath.exp(1j * mpmath.pi * tau)
+    return (mpmath.jtheta(2, 0, q) / mpmath.jtheta(3, 0, q)) ** 4
+
+
+_RHO = sp.Rational(1, 2) + sp.I * sp.sqrt(3) / 2
+
+
+def _eq(a, b):
+    try:
+        return sp.simplify(sp.nsimplify(a) - b) == 0 if a.is_number else False
+    except Exception:
+        return False
+
+
+def _im_tau(tau):
+    return sp.im(tau).is_positive
+
+
+mpfun("DedekindEta", 1, _eta,
+      lambda t: sp.gamma(sp.Rational(1, 4)) / (2 * sp.pi ** sp.Rational(3, 4)) if t == sp.I else None,
+      real=lambda t: _allreal(sp.re(t)) and sp.re(t) == 0,
+      notes="Dedekind eta(tau) = q^(1/24) Product[1 - q^n] with q = E^(2 Pi I tau), Im tau > 0; mpmath eta; "
+            "eta(I) = Gamma[1/4]/(2 Pi^(3/4))")
+mpfun("KleinInvariantJ", 1, _klein,
+      lambda t: sp.Integer(1) if t == sp.I else (sp.Integer(0) if (_eq(t, _RHO) or _eq(t, _RHO - 1)) else None),
+      real=lambda t: sp.re(t) == 0 or abs(sp.re(t)) == sp.Rational(1, 2),
+      notes="Klein invariant J(tau) = g2^3/(g2^3 - 27 g3^2) (J(I) = 1, J(E^(2 Pi I/3)) = 0); mpmath kleinj")
+mpfun("ModularLambda", 1, _lambda, lambda t: sp.Rational(1, 2) if t == sp.I else None,
+      real=lambda t: sp.re(t) == 0,
+      notes="modular lambda(tau) = EllipticTheta[2, 0, q]^4/EllipticTheta[3, 0, q]^4, q = E^(I Pi tau)")
+
+
+# ───────────────────────────── Neville theta functions ─────────────────────────────
+
+def _neville(kind):
+    name = "NevilleTheta" + kind
+
+    def mpf(z, m):
+        if m == 0:
+            return {"S": mpmath.sin(z), "C": mpmath.cos(z), "D": mpmath.mpf(1), "N": mpmath.mpf(1)}[kind]
+        if m == 1:
+            raise NotImplementedError(f"{name}: m = 1 (infinite quarter period) is not supported numerically")
+        K = mpmath.ellipk(m)
+        q = mpmath.qfrom(m=m)
+        v = mpmath.pi * z / (2 * K)
+        if kind == "S":
+            return mpmath.sqrt(2 * mpmath.pi) / (2 * (1 - m) ** 0.25 * m ** 0.25 * mpmath.sqrt(K)) * \
+                mpmath.jtheta(1, v, q)
+        if kind == "C":
+            return mpmath.sqrt(2 * mpmath.pi) / (2 * m ** 0.25 * mpmath.sqrt(K)) * mpmath.jtheta(2, v, q)
+        if kind == "D":
+            return mpmath.sqrt(mpmath.pi / (2 * K)) * mpmath.jtheta(3, v, q)
+        return mpmath.sqrt(mpmath.pi / (2 * K)) / (1 - m) ** 0.25 * mpmath.jtheta(4, v, q)
+
+    def ex(z, m):
+        if m == 0:
+            return {"S": sp.sin(z), "C": sp.cos(z), "D": sp.Integer(1), "N": sp.Integer(1)}[kind]
+        if z == 0:
+            return {"S": sp.Integer(0), "C": sp.Integer(1), "D": sp.Integer(1), "N": sp.Integer(1)}[kind]
+        return None
+    mpfun(name, 2, mpf, ex, symbolic=ex, real=lambda z, m: _allreal(z, m) and 0 <= m < 1,
+          notes=f"Neville theta function theta_{kind.lower()}(z | m) (normalised so that JacobiSN = theta_s/theta_n, "
+                "JacobiCN = theta_c/theta_n, JacobiDN = theta_d/theta_n); from EllipticTheta with v = Pi z/(2 K(m))")
+
+
+for _k in "SCDN":
+    _neville(_k)
+
+
+# ───────────────────────────── Jacobi amplitude, epsilon, zeta ─────────────────────────────
+
+def _am(u, m):
+    if isinstance(u, mpmath.mpc) or isinstance(m, mpmath.mpc):
+        if mpmath.im(u) != 0 or mpmath.im(m) != 0:
+            raise NotImplementedError("JacobiAmplitude: complex arguments are not supported")
+        u, m = mpmath.re(u), mpmath.re(m)
+    if m == 0:
+        return u
+    if m == 1:
+        return 2 * mpmath.atan(mpmath.tanh(u / 2))
+    if m > 1:
+        # |sn| <= 1/Sqrt[m] < 1, so am = ArcSin[sn] is continuous and bounded
+        return mpmath.asin(mpmath.re(mpmath.ellipfun("sn", u, m=m)))
+    K = mpmath.ellipk(m)
+    n = mpmath.nint(u / (2 * K))
+    r = u - 2 * n * K
+    sn, cn = mpmath.ellipfun("sn", r, m=m), mpmath.ellipfun("cn", r, m=m)
+    return mpmath.atan2(mpmath.re(sn), mpmath.re(cn)) + n * mpmath.pi
+
+
+def _am_exact(u, m):
+    if u == 0:
+        return sp.Integer(0)
+    if m == 0:
+        return u
+    return None
+
+
+mpfun("JacobiAmplitude", 2, _am, _am_exact, symbolic=_am_exact,
+      notes="Jacobi amplitude am(u | m) (the continuous inverse of EllipticF[phi, m] in phi): reduced by "
+            "am(u + 2K) = am(u) + Pi, ArcTan[cn, sn] on the principal interval; am(u|1) = Gudermannian; "
+            "real arguments only (complex arguments raise)")
+
+
+def _zeta_theta(u, m):
+    """Jacobi zeta Z(u | m) = d/du log theta_4(Pi u/(2K)) (DLMF 22.16.32)."""
+    K = mpmath.ellipk(m)
+    q = mpmath.qfrom(m=m)
+    v = mpmath.pi * u / (2 * K)
+    return mpmath.pi / (2 * K) * mpmath.jtheta(4, v, q, 1) / mpmath.jtheta(4, v, q)
+
+
+def _check_m_lt1(m, name):
+    if not isinstance(m, mpmath.mpc) or m.imag == 0:
+        if mpmath.re(m) > 1:
+            raise NotImplementedError(f"{name}: real m > 1 is not supported")
+
+
+def _zn(u, m):
+    if m == 0:
+        return mpmath.mpf(0)
+    if m == 1:
+        return mpmath.tanh(u)
+    _check_m_lt1(m, "JacobiZN")
+    return _zeta_theta(u, m)
+
+
+def _eps_fn(u, m):
+    if m == 0:
+        return u
+    if m == 1:
+        return mpmath.tanh(u)
+    _check_m_lt1(m, "JacobiEpsilon")
+    return _zeta_theta(u, m) + u * mpmath.ellipe(m) / mpmath.ellipk(m)
+
+
+mpfun("JacobiZN", 2, _zn, lambda u, m: sp.Integer(0) if (u == 0 or m == 0) else (sp.tanh(u) if m == 1 else None),
+      symbolic=lambda u, m: sp.Integer(0) if (u == 0 or m == 0) else (sp.tanh(u) if m == 1 else None),
+      real=lambda u, m: _allreal(u, m) and m <= 1,
+      notes="Jacobi zeta function Z(u | m) = Integrate[dn^2 - E(m)/K(m), {0, u}] via theta_4'/theta_4; "
+            "real m > 1 raises")
+mpfun("JacobiEpsilon", 2, _eps_fn,
+      lambda u, m: sp.Integer(0) if u == 0 else (u if m == 0 else (sp.tanh(u) if m == 1 else None)),
+      symbolic=lambda u, m: sp.Integer(0) if u == 0 else (u if m == 0 else (sp.tanh(u) if m == 1 else None)),
+      real=lambda u, m: _allreal(u, m) and m <= 1,
+      notes="Jacobi epsilon function Integrate[dn(t|m)^2, {t, 0, u}] = Z(u|m) + u E(m)/K(m); real m > 1 raises")
+
+
+def _jzeta(phi, m):
+    if m == 0:
+        return mpmath.mpf(0)
+    return mpmath.ellipe(phi, m) - mpmath.ellipe(m) / mpmath.ellipk(m) * mpmath.ellipf(phi, m)
+
+
+mpfun("JacobiZeta", 2, _jzeta, lambda p, m: sp.Integer(0) if (p == 0 or m == 0) else None,
+      symbolic=lambda p, m: sp.Integer(0) if (p == 0 or m == 0) else None,
+      real=lambda p, m: _allreal(p, m) and m < 1,
+      notes="Jacobi zeta Z(phi | m) = EllipticE[phi, m] - EllipticE[m] EllipticF[phi, m]/EllipticK[m] "
+            "(amplitude argument, as in Wolfram); mpmath ellipe/ellipf")
+
+
+# inverse Jacobi functions missing from the earlier batch (DC, DS, ND), as EllipticF[phi, m] on principal ranges
+def _inv_jacobi(kind):
+    name = "InverseJacobi" + kind
+
+    def mpf(v, m):
+        if isinstance(v, mpmath.mpc) or isinstance(m, mpmath.mpc):
+            raise NotImplementedError(f"{name}: complex arguments are not supported")
+        F = mpmath.ellipf
+        if kind == "ND":
+            # nd = 1/dn on [0, K]: from 1 up to 1/Sqrt[1 - m]  (0 < m < 1)
+            if not (0 < m < 1) or not (1 <= v <= 1 / mpmath.sqrt(1 - m)):
+                raise ValueError(f"{name}: needs 0 < m < 1 and 1 <= v <= 1/Sqrt[1 - m]")
+            return F(mpmath.asin(mpmath.sqrt((1 - 1 / v ** 2) / m)), m)
+        if kind == "DC":
+            # dc = dn/cn on [0, K): from 1 to Infinity  (0 <= m < 1)
+            if not (0 <= m < 1) or v < 1:
+                raise ValueError(f"{name}: needs 0 <= m < 1 and v >= 1")
+            return F(mpmath.asin(mpmath.sqrt((v ** 2 - 1) / (v ** 2 - m))), m)
+        # DS: ds = dn/sn, odd, decreasing from Infinity to Sqrt[1 - m] on (0, K]
+        if not (0 <= m < 1) or abs(v) < mpmath.sqrt(1 - m):
+            raise ValueError(f"{name}: needs 0 <= m < 1 and Abs[v] >= Sqrt[1 - m]")
+        r = F(mpmath.asin(1 / mpmath.sqrt(v ** 2 + m)), m)
+        return r if v > 0 else -r
+
+    def ex(v, m):
+        if kind in ("ND", "DC") and v == 1:
+            return sp.Integer(0)
+        if kind == "DC" and m == 0 and v.is_number:
+            return sp.acos(1 / v)
+        if kind == "DS" and m == 0 and v.is_number:
+            return sp.acot(v)
+        return None
+    mpfun(name, 2, mpf, ex, symbolic=ex,
+          notes=f"inverse of Jacobi{kind}(u | m) on its principal real range, via EllipticF (DLMF 22.15); "
+                "complex arguments and arguments outside that range raise")
+
+
+for _k in ("DC", "DS", "ND"):
+    _inv_jacobi(_k)
+
+
+# ───────────────────────────── Weierstrass lattice functions ─────────────────────────────
+#
+# Half-periods follow the Wolfram choice (checked against the reference examples): {w1, w3} is the lattice
+# basis with tau = w3/w1 reduced to the fundamental domain -1/2 < Re tau <= 1/2, |tau| >= 1 (Re tau >= 0 on
+# |tau| = 1), and Re w1 > 0 (Im w1 > 0 when w1 is imaginary); w2 = -w1 - w3.  e_i = P(w_i), eta_i = zeta(w_i).
+
+def _tol():
+    return mpmath.mpf(2) ** (-(mpmath.mp.prec * 2) // 3)
+
+
+def _invariants_pair(g, name):
+    if not isinstance(g, list) or len(g) != 2 or any(isinstance(x, list) for x in g):
+        raise ValueError(f"{name}: invariants must be a list {{g2, g3}}")
+    return g[0], g[1]
+
+
+def _reduce_basis(w1, w3):
+    """SL(2, Z) reduction of the half-period basis (w1, w3), Im(w3/w1) > 0, to the Wolfram fundamental domain."""
+    if mpmath.im(w3 / w1) < 0:
+        w3 = -w3
+    tol = _tol()
+    for _ in range(10000):
+        tau = w3 / w1
+        n = mpmath.nint(mpmath.re(tau))
+        if n:
+            w3 -= n * w1
+            tau = w3 / w1
+        if abs(tau) < 1 - tol:
+            w1, w3 = w3, -w1
+            continue
+        break
+    tau = w3 / w1
+    if mpmath.re(tau) < -mpmath.mpf(1) / 2 + tol:
+        w3 += w1
+        tau = w3 / w1
+    if abs(abs(tau) - 1) < tol and mpmath.re(tau) < -tol:
+        w1, w3 = w3, -w1
+    # among the bases with the same reduced tau (sign changes; rotations when |tau| = 1) take w1 with
+    # Arg[w1] in (-Pi/2, Pi/2] of least absolute value, ties to the positive argument
+    cands = [(w1, w3)]
+    if abs(abs(tau) - 1) < tol:
+        a, b = w1, w3
+        for _ in range(6):
+            a, b = b, -a
+            if mpmath.re(b / a) < -mpmath.mpf(1) / 2 + tol:
+                b += a
+            if abs(b / a - tau) < tol * 10:
+                cands.append((a, b))
+    cands += [(-a, -b) for a, b in cands]
+
+    def key(c):
+        arg = mpmath.arg(c[0])
+        if abs(arg + mpmath.pi / 2) < tol or abs(arg - mpmath.pi) < tol or arg < -mpmath.pi / 2 or arg > mpmath.pi / 2 + tol:
+            return (1, 0, 0)
+        return (0, abs(arg) - (0 if abs(arg) < tol else 0), -arg)
+    best = min(cands, key=lambda c: (key(c)[0], round(float(abs(mpmath.arg(c[0]))), 12), -float(mpmath.arg(c[0]))))
+    return best
+
+
+def _theta_e(w1, w3):
+    """e1, e2, e3 for the lattice with half-periods w1, w3 (DLMF 23.6.2-4)."""
+    tau = w3 / w1
+    q = mpmath.exp(1j * mpmath.pi * tau)
+    t2, t4 = mpmath.jtheta(2, 0, q) ** 4, mpmath.jtheta(4, 0, q) ** 4
+    c = mpmath.pi ** 2 / (12 * w1 ** 2)
+    return c * (t2 + 2 * t4), c * (t2 - t4), -c * (2 * t2 + t4)
+
+
+def _invariants(w1, w3):
+    if w1 == 0 or mpmath.im(w3 / w1) == 0:
+        raise ValueError("WeierstrassInvariants: the half-periods must have a non-real ratio")
+    if mpmath.im(w3 / w1) < 0:
+        w3 = -w3
+    w1, w3 = _reduce_basis(w1, w3)
+    e1, e2, e3 = _theta_e(w1, w3)
+    return 2 * (e1 ** 2 + e2 ** 2 + e3 ** 2), 4 * e1 * e2 * e3
+
+
+def _half_periods(g2, g3, name="WeierstrassHalfPeriods"):
+    disc = g2 ** 3 - 27 * g3 ** 2
+    scale = max(abs(g2) ** 3, 27 * abs(g3) ** 2, mpmath.mpf(1) * 0 + _eps())
+    if abs(disc) <= scale * _tol():
+        raise NotImplementedError(f"{name}: degenerate invariants (g2^3 == 27 g3^2) are not supported")
+    roots = mpmath.polyroots([4, 0, -g2, -g3], maxsteps=400, extraprec=2 * mpmath.mp.prec)
+    import itertools
+    best = None
+    for e1, e2, e3 in itertools.permutations(roots):
+        m = (e2 - e3) / (e1 - e3)
+        w = mpmath.sqrt(e1 - e3)
+        wa, wb = mpmath.ellipk(m) / w, 1j * mpmath.ellipk(1 - m) / w
+        if mpmath.im(wb / wa) == 0:
+            continue
+        try:
+            h2, h3 = _invariants(wa, wb)
+        except (ValueError, ZeroDivisionError):
+            continue
+        err = abs(h2 - g2) + abs(h3 - g3)
+        if best is None or err < best[0]:
+            best = (err, wa, wb)
+        if err <= _tol() * (1 + abs(g2) + abs(g3)):
+            break
+    if best is None or best[0] > mpmath.mpf(2) ** (-mpmath.mp.prec // 3) * (1 + abs(g2) + abs(g3)):
+        raise ArithmeticError(f"{name}: could not determine the period lattice")
+    return _reduce_basis(best[1], best[2])
+
+
+def _etas(w1, w3):
+    tau = w3 / w1
+    q = mpmath.exp(1j * mpmath.pi * tau)
+    eta1 = -mpmath.pi ** 2 * mpmath.jtheta(1, 0, q, 3) / (12 * w1 * mpmath.jtheta(1, 0, q, 1))
+    eta3 = (eta1 * w3 - 1j * mpmath.pi / 2) / w1          # Legendre relation eta1 w3 - eta3 w1 = I Pi/2
+    return eta1, -eta1 - eta3, eta3
+
+
+def _lattice(g):
+    g2, g3 = g
+    w1, w3 = _half_periods(g2, g3)
+    return w1, w3
+
+
+def _sigma_zeta(u, g, which):
+    w1, w3 = _lattice(g)
+    eta1 = _etas(w1, w3)[0]
+    q = mpmath.exp(1j * mpmath.pi * w3 / w1)
+    v = mpmath.pi * u / (2 * w1)
+    if which == "sigma":
+        return 2 * w1 / mpmath.pi * mpmath.exp(eta1 * u ** 2 / (2 * w1)) * mpmath.jtheta(1, v, q) / \
+            mpmath.jtheta(1, 0, q, 1)
+    t1 = mpmath.jtheta(1, v, q)
+    if t1 == 0:
+        raise ValueError("WeierstrassZeta: the argument is a lattice point (pole)")
+    if which == "zeta":
+        return eta1 * u / w1 + mpmath.pi / (2 * w1) * mpmath.jtheta(1, v, q, 1) / t1
+    c = mpmath.pi / (2 * w1)
+    d1, d2, d3 = (mpmath.jtheta(1, v, q, k) / t1 for k in (1, 2, 3))
+    if which == "p":            # P = -zeta'
+        return -eta1 / w1 - c ** 2 * (d2 - d1 ** 2)
+    return -c ** 3 * (d3 - 3 * d2 * d1 + 2 * d1 ** 3)       # P'
+
+
+def _gcheck(g, name):
+    return _invariants_pair(g, name)
+
+
+def _real_g(*vals):
+    return _allreal(*vals)
+
+
+_G13c = sp.gamma(sp.Rational(1, 3)) ** 3 / (4 * sp.pi)
+_G14c = sp.gamma(sp.Rational(1, 4)) ** 2 / (4 * sp.sqrt(sp.pi))
+_EXACT_HP = {(0, 1): (_G13c, sp.exp(sp.I * sp.pi / 3) * _G13c), (1, 0): (_G14c, sp.I * _G14c)}
+_EXACT_E1 = {(0, 1): 2 ** sp.Rational(-2, 3), (1, 0): sp.Rational(1, 2)}
+_EXACT_ETA1 = {(0, 1): 2 * sp.pi ** 2 / (sp.sqrt(3) * sp.gamma(sp.Rational(1, 3)) ** 3),
+               (1, 0): sp.pi ** sp.Rational(3, 2) / sp.gamma(sp.Rational(1, 4)) ** 2}
+
+
+def _key(g):
+    try:
+        return (int(g[0]), int(g[1])) if all(x.is_Integer for x in g) else None
+    except Exception:
+        return None
+
+
+def _wfun(name, f, exact_table=None, notes="", real_when_disc_pos=False):
+    def mpf(g):
+        g2, g3 = _gcheck(g, name)
+        return f(g2, g3)
+
+    def ex(g):
+        if not isinstance(g, list) or len(g) != 2:
+            raise ValueError(f"{name}: invariants must be a list {{g2, g3}}")
+        if exact_table is not None:
+            return exact_table(_key(g))
+        return None
+
+    def real(g):
+        return real_when_disc_pos and _allreal(g) and (g[0] ** 3 - 27 * g[1] ** 2) > 0
+    mpfun(name, 1, mpf, ex, listable=False, real=real, notes=notes)
+
+
+def _hp_table(i):
+    def t(k):
+        if k not in _EXACT_HP:
+            return None
+        w1, w3 = _EXACT_HP[k]
+        return {1: w1, 3: w3, 2: -w1 - w3, 0: [w1, w3]}[i]
+    return t
+
+
+_wfun("WeierstrassHalfPeriods", lambda g2, g3: list(_half_periods(g2, g3)), lambda k: _hp_table(0)(k),
+      notes="half-periods {w1, w3} for invariants {g2, g3}: the lattice basis with w3/w1 reduced to the "
+            "fundamental domain (as in Wolfram); periods from EllipticK of the roots, checked against the invariants")
+_wfun("WeierstrassHalfPeriodW1", lambda g2, g3: _half_periods(g2, g3)[0], _hp_table(1),
+      notes="half-period w1 (first of WeierstrassHalfPeriods)")
+_wfun("WeierstrassHalfPeriodW3", lambda g2, g3: _half_periods(g2, g3)[1], _hp_table(3),
+      notes="half-period w3 (second of WeierstrassHalfPeriods)")
+_wfun("WeierstrassHalfPeriodW2", lambda g2, g3: -sum(_half_periods(g2, g3)), _hp_table(2),
+      notes="half-period w2 = -w1 - w3")
+
+
+def _e_i(i):
+    def f(g2, g3):
+        return _theta_e(*_half_periods(g2, g3))[i - 1]
+    return f
+
+
+_wfun("WeierstrassE1", _e_i(1), lambda k: _EXACT_E1.get(k), real_when_disc_pos=True,
+      notes="e1 = WeierstrassP[w1, {g2, g3}] (theta-constant formula DLMF 23.6.2 on the Wolfram half-periods)")
+_wfun("WeierstrassE2", _e_i(2), real_when_disc_pos=True, notes="e2 = WeierstrassP[w2, {g2, g3}], w2 = -w1 - w3")
+_wfun("WeierstrassE3", _e_i(3), real_when_disc_pos=True, notes="e3 = WeierstrassP[w3, {g2, g3}]")
+
+
+def _eta_i(i):
+    def f(g2, g3):
+        return _etas(*_half_periods(g2, g3))[i - 1]
+    return f
+
+
+_wfun("WeierstrassEta1", _eta_i(1), lambda k: _EXACT_ETA1.get(k),
+      notes="eta1 = WeierstrassZeta[w1, {g2, g3}] = -Pi^2 theta1'''(0)/(12 w1 theta1'(0)) (DLMF 23.6.8)")
+_wfun("WeierstrassEta2", _eta_i(2), notes="eta2 = WeierstrassZeta[w2, {g2, g3}] = -eta1 - eta3")
+_wfun("WeierstrassEta3", _eta_i(3), notes="eta3 = WeierstrassZeta[w3, {g2, g3}], from the Legendre relation "
+                                          "eta1 w3 - eta3 w1 = I Pi/2")
+
+
+def _winv(name, idx):
+    def mpf(w):
+        if not isinstance(w, list) or len(w) != 2:
+            raise ValueError(f"{name}: half-periods must be a list {{w1, w3}}")
+        g2, g3 = _invariants(w[0], w[1])
+        return [g2, g3] if idx is None else (g2, g3)[idx]
+
+    def ex(w):
+        if not isinstance(w, list) or len(w) != 2:
+            raise ValueError(f"{name}: half-periods must be a list {{w1, w3}}")
+        k = None
+        for key, (a, b) in _EXACT_HP.items():
+            if sp.simplify(w[0] - a) == 0 and sp.simplify(w[1] - b) == 0:
+                k = key
+        if w[1] == sp.I * w[0] and w[0] == 1:
+            k = "i"
+        if w[0] == 1 and _eq(w[1], sp.exp(sp.I * sp.pi / 3)):
+            k = "rho"
+        if k is None:
+            return None
+        g = {(0, 1): [sp.Integer(0), sp.Integer(1)], (1, 0): [sp.Integer(1), sp.Integer(0)],
+             "i": [sp.gamma(sp.Rational(1, 4)) ** 8 / (256 * sp.pi ** 2), sp.Integer(0)],
+             "rho": [sp.Integer(0), sp.gamma(sp.Rational(1, 3)) ** 18 / (4096 * sp.pi ** 6)]}[k]
+        return Expr("List", *map(R, g)) if idx is None else g[idx]
+
+    def real(w):
+        # real lattices: w1 real and w3 imaginary, or w3 = w1/2 + imaginary
+        return False
+    mpfun(name, 1, mpf, ex, listable=False,
+          notes=f"{'{g2, g3}' if idx is None else ('g2' if idx == 0 else 'g3')} for the lattice with half-periods "
+                "{w1, w3}: g2 = 2 (e1^2 + e2^2 + e3^2), g3 = 4 e1 e2 e3 with e_i from theta constants")
+
+
+_winv("WeierstrassInvariants", None)
+_winv("WeierstrassInvariantG2", 0)
+_winv("WeierstrassInvariantG3", 1)
+
+
+def _wsz(name, which, exact0, notes):
+    def mpf(u, g):
+        g2, g3 = _gcheck(g, name)
+        return _sigma_zeta(u, (g2, g3), which)
+
+    def ex(u, g):
+        return exact0 if u == 0 else None
+
+    def real(u, g):
+        return _allreal(u, g)
+    mpfun(name, 2, mpf, ex, listable=False, real=real, notes=notes)
+
+
+_wsz("WeierstrassSigma", "sigma", sp.Integer(0),
+     "Weierstrass sigma(u; g2, g3) = (2 w1/Pi) Exp[eta1 u^2/(2 w1)] theta1(v)/theta1'(0), v = Pi u/(2 w1) "
+     "(DLMF 23.6.9)")
+_wsz("WeierstrassZeta", "zeta", sp.zoo,
+     "Weierstrass zeta(u; g2, g3) = eta1 u/w1 + (Pi/(2 w1)) theta1'(v)/theta1(v) (logarithmic derivative of sigma)")
+
+
+# EllipticExp / EllipticLog: the curve y^2 = x^3 + a x^2 + b x is x = P(u) - a/3, y = P'(u)/2 with
+# g2 = 4 (a^2/3 - b), g3 = 4 a b/3 - 8 a^3/27 (so dx/du = 2 y and EllipticLog' = 1/(2 y)).
+
+def _curve_g(a, b):
+    return 4 * (a ** 2 / 3 - b), 4 * a * b / 3 - 8 * a ** 3 / 27
+
+
+def _ellexp(u, ab, deriv=False):
+    if not isinstance(ab, list) or len(ab) != 2:
+        raise ValueError("EllipticExp: the curve parameters must be a list {a, b}")
+    a, b = ab
+    g2, g3 = _curve_g(a, b)
+    if u == 0:
+        raise ValueError("EllipticExp: u = 0 is a pole")
+    if g2 == 0 and g3 == 0:
+        p, dp, ddp = 1 / u ** 2, -2 / u ** 3, 6 / u ** 4
+    else:
+        p = _sigma_zeta(u, (g2, g3), "p")
+        dp = _sigma_zeta(u, (g2, g3), "dp")
+        ddp = 6 * p ** 2 - g2 / 2
+    if deriv:
+        return [dp, ddp / 2]
+    return [p - a / 3, dp / 2]
+
+
+def _ellexp_exact(u, ab, deriv=False):
+    if not isinstance(ab, list) or len(ab) != 2:
+        raise ValueError("EllipticExp: the curve parameters must be a list {a, b}")
+    if ab[0] == 0 and ab[1] == 0:
+        if u == 0:
+            return Expr("List", Symbol("ComplexInfinity"), Symbol("ComplexInfinity"))
+        return R([-2 / u ** 3, 3 / u ** 4]) if deriv else R([1 / u ** 2, -1 / u ** 3])
+    if u == 0:
+        return Expr("List", Symbol("ComplexInfinity"), Symbol("ComplexInfinity"))
+    return None
+
+
+mpfun("EllipticExp", 2, lambda u, ab: _ellexp(u, ab), _ellexp_exact,
+      symbolic=lambda u, ab: _ellexp_exact(u, ab) if isinstance(ab, list) and ab == [0, 0] else None,
+      listable=False, real=_allreal,
+      notes="EllipticExp[u, {a, b}] = {x, y} on y^2 = x^3 + a x^2 + b x with u == EllipticLog[{x, y}, {a, b}]: "
+            "x = WeierstrassP[u, {g2, g3}] - a/3, y = WeierstrassPPrime[u, {g2, g3}]/2, g2 = 4(a^2/3 - b), "
+            "g3 = 4ab/3 - 8a^3/27")
+mpfun("EllipticExpPrime", 2, lambda u, ab: _ellexp(u, ab, True), lambda u, ab: _ellexp_exact(u, ab, True),
+      symbolic=lambda u, ab: _ellexp_exact(u, ab, True) if isinstance(ab, list) and ab == [0, 0] else None,
+      listable=False, real=_allreal, notes="derivative of EllipticExp[u, {a, b}] with respect to u: {2 y, 3 x^2 + 2 a x + b}")
+
+
+def _rf_branch(p, q, roots, name):
+    """-sigma R_F(p - e1, p - e2, p - e3): the integral -Integrate[1/(2 Y), {t, p, Infinity}] with Y the branch
+    of Sqrt[(t - e1)(t - e2)(t - e3)] equal to q at t = p (q = 0 picks the branch giving +R_F)."""
+    s = mpmath.sqrt(p - roots[0]) * mpmath.sqrt(p - roots[1]) * mpmath.sqrt(p - roots[2])
+    if s == 0:
+        if q != 0:
+            raise ValueError(f"{name}: the point is not on the curve")
+        sigma = -1
+    else:
+        sigma = q / s
+        if abs(abs(sigma) - 1) > mpmath.mpf(2) ** (-mpmath.mp.prec // 3):
+            raise ValueError(f"{name}: the point is not on the curve")
+        sigma = 1 if mpmath.re(sigma) > 0 else -1
+    return -sigma * mpmath.elliprf(p - roots[0], p - roots[1], p - roots[2])
+
+
+def _elllog(xy, ab):
+    if not isinstance(xy, list) or len(xy) != 2 or not isinstance(ab, list) or len(ab) != 2:
+        raise ValueError("EllipticLog: arguments must be {x, y} and {a, b}")
+    (x, y), (a, b) = xy, ab
+    r = mpmath.polyroots([1, a, b], extraprec=2 * mpmath.mp.prec) if b != 0 or a != 0 else [0, 0]
+    u = _rf_branch(x, y, [mpmath.mpf(0)] + list(r), "EllipticLog")
+    g2, g3 = _curve_g(a, b)
+    if abs(g2 ** 3 - 27 * g3 ** 2) <= _tol() * (1 + abs(g2) ** 3 + abs(g3) ** 2):
+        return u
+    return _reduce_point(u, *_half_periods(g2, g3, "EllipticLog"))
+
+
+mpfun("EllipticLog", 2, _elllog, listable=False,
+      exact=lambda xy, ab: None,
+      notes="EllipticLog[{x, y}, {a, b}] = Integrate[1/(2 Y(t)), {t, Infinity, x}] with Y^2 = t^3 + a t^2 + b t and "
+            "Y(x) = y, evaluated as -sign R_F(x - e1, x - e2, x - e3) (Carlson; e_i the roots of the cubic)")
+
+
+def _inv_wp(pq, g, single):
+    g2, g3 = _gcheck(g, "InverseWeierstrassP")
+    if single:
+        p = pq
+        q = mpmath.sqrt(4 * p ** 3 - g2 * p - g3)
+    else:
+        if not isinstance(pq, list) or len(pq) != 2:
+            raise ValueError("InverseWeierstrassP: the first argument must be p or {p, q}")
+        p, q = pq
+    roots = mpmath.polyroots([4, 0, -g2, -g3], extraprec=2 * mpmath.mp.prec)
+    u = _rf_branch(p, q / 2, roots, "InverseWeierstrassP")
+    w1, w3 = _half_periods(g2, g3, "InverseWeierstrassP")
+    return _reduce_point(u, w1, w3)
+
+
+def _reduce_point(u, w1, w3):
+    """u modulo the lattice 2 w1 Z + 2 w3 Z, into u = 2 s w1 + 2 t w3 with -1/2 < s <= 1/2, -1/2 <= t < 1/2
+    (the representative Wolfram returns for points on the boundary of the period parallelogram)."""
+    M = mpmath.matrix([[mpmath.re(2 * w1), mpmath.re(2 * w3)], [mpmath.im(2 * w1), mpmath.im(2 * w3)]])
+    st = mpmath.lu_solve(M, mpmath.matrix([mpmath.re(u), mpmath.im(u)]))
+    tol = _tol()
+    s0 = mpmath.ceil(st[0] - mpmath.mpf(1) / 2 - tol)
+    t0 = mpmath.floor(st[1] + mpmath.mpf(1) / 2 + tol)
+    return u - 2 * s0 * w1 - 2 * t0 * w3
+
+
+mpfun("InverseWeierstrassP", 2, lambda pq, g: _inv_wp(pq, g, not isinstance(pq, list)), listable=False,
+      exact=lambda pq, g: Symbol("ComplexInfinity") if (not isinstance(pq, list) and pq == sp.zoo) else None,
+      notes="InverseWeierstrassP[p, {g2, g3}] / [{p, q}, {g2, g3}]: a u with WeierstrassP[u] == p (and "
+            "WeierstrassPPrime[u] == q; q defaults to Sqrt[4 p^3 - g2 p - g3]) from Carlson R_F, reduced to the "
+            "period parallelogram centred at 0; it can differ from Wolfram's representative by a period")
