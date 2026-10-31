@@ -473,7 +473,7 @@ def _treescan(*args):
                 apply(f, *(_elem(r, w, "TreeScan") for w in which.args))
             else:
                 apply(f, _elem(r, which, "TreeScan"))
-    return NULL
+    return None
 
 
 KL.operator_form("TreeScan", 1, "last")

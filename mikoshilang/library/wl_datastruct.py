@@ -19,7 +19,7 @@ from .core import fn, record, Unevaluated
 from .wl_common import L, ev, apply, is_sym, is_list, is_int, is_assoc, is_rule, int_value
 
 AREA = "data structures (W03)"
-NULL = Symbol("Null")
+NULL = None   # the kernel represents the value Null as Python None
 _STORE = {}
 _COUNTER = itertools.count(1)
 

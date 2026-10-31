@@ -828,14 +828,21 @@ def _match_seq_element(core, args, j, b, ev, head, flat):
     if core.head == "PatternSequence":
         orders = [core.args]
     elif core.head == "OrderlessPatternSequence":
-        if len(core.args) > 8:
-            raise NotImplementedError("OrderlessPatternSequence is limited to 8 patterns")
-        seen, orders = set(), []
-        for perm in itertools.permutations(core.args):
-            key = tuple(tag(q) for q in perm)
-            if key not in seen:
+        # like an Orderless head: the matched run of arguments may be taken in any order (the binding of a
+        # named OrderlessPatternSequence keeps the original order)
+        for end in range(j, len(args) + 1):
+            chunk = tuple(args[j:end])
+            if len(chunk) > 8:
+                raise NotImplementedError("OrderlessPatternSequence matching is limited to 8 arguments")
+            seen = set()
+            for perm in itertools.permutations(chunk):
+                key = tuple(tag(q) for q in perm)
+                if key in seen:
+                    continue
                 seen.add(key)
-                orders.append(perm)
+                for b2 in _match_seq(tuple(core.args), 0, perm, 0, b, ev, head, flat):
+                    yield b2, end - j
+        return
     else:                                   # Alternatives
         for alt in core.args:
             for end in range(j, len(args) + 1):
