@@ -3662,7 +3662,9 @@ def _knap_item(it, fname):
           "...}, capacity] and {payoff, cost, maxcount} items (or \"Payoff\"/\"Cost\"/\"MaxCount\" rules or "
           "associations) maximise the total payoff with total cost <= capacity, giving the item counts (an "
           "association of items gives an association); exact integer programming (branch and bound on the exact "
-          "simplex), ties broken by the smaller total cost; several capacities (vector costs) raise")
+          "simplex), ties broken by the smaller total cost; the constraints can be maxcost, {maxcost}, {maxpayoff, maxcost}, "
+          "{maxpayoff, maxcost, maxcount} or an association of \"MaxTotalPayoff\", \"MaxTotalCost\", "
+          "\"MaxTotalCount\"; Quantity payoffs/costs raise")
 def _knapsack(items, capacity, *rest):
     fname = "KnapsackSolve"
     if rest:
@@ -3678,20 +3680,41 @@ def _knapsack(items, capacity, *rest):
         specs = [r.args[1] for r in items.args]
     else:
         specs = _items(items, fname, "item list")
-    if is_list(capacity):
-        raise NotImplementedError(f"{fname}: several capacities (vector costs) are not supported")
+    maxpay = maxcount = None
+    if is_assoc(capacity):
+        cap = {r.args[0]: r.args[1] for r in ev(Expr("Normal", capacity)).args}
+        bad = set(cap) - {"MaxTotalPayoff", "MaxTotalCost", "MaxTotalCount"}
+        if bad:
+            raise ValueError(f"{fname}: unknown constraint keys {sorted(map(str, bad))}")
+        maxpay, capacity, maxcount = (cap.get("MaxTotalPayoff"), cap.get("MaxTotalCost", Symbol("Infinity")),
+                                      cap.get("MaxTotalCount"))
+    elif is_list(capacity):
+        c = list(capacity.args)
+        if len(c) == 1:
+            capacity = c[0]
+        elif len(c) == 2:
+            maxpay, capacity = c
+        elif len(c) == 3:
+            maxpay, capacity, maxcount = c
+        else:
+            raise ValueError(f"{fname}: the constraints must be maxcost, {{maxcost}}, {{maxpayoff, maxcost}} or "
+                             "{maxpayoff, maxcost, maxcount}")
     data = [_knap_item(it, fname) for it in specs]
     n = len(data)
     names = [Symbol(f"k$${i + 1}") for i in range(n)]
     pay = Expr("Plus", *(Expr("Times", p, v) for (p, _, _), v in zip(data, names))) if n else 0
     cost = Expr("Plus", *(Expr("Times", c, v) for (_, c, _), v in zip(data, names))) if n else 0
-    cons = [Expr("LessEqual", cost, capacity)]
+    cons = [] if is_sym(capacity, "Infinity") else [Expr("LessEqual", cost, capacity)]
+    if maxpay is not None and not is_sym(maxpay, "Infinity"):
+        cons.append(Expr("LessEqual", pay, maxpay))
+    if maxcount is not None and not is_sym(maxcount, "Infinity"):
+        cons.append(Expr("LessEqual", Expr("Plus", *names), maxcount))
     for (p, c, mc), v in zip(data, names):
         cons.append(Expr("GreaterEqual", v, 0))
         if mc is not None and not is_sym(mc, "Infinity"):
             cons.append(Expr("LessEqual", v, mc))
         if not _is_num(S(c)) or float(sp.N(S(c))) <= 0:
-            if mc is None:
+            if mc is None and maxcount is None and maxpay is None:
                 raise ValueError(f"{fname}: item costs must be positive (or the item needs a MaxCount)")
     dom = [Symbol("Integers")] * n
     prob = _build(ev(Expr("Times", -1, pay)), ev(L(*cons)), L(*names), fname, domains=dom)

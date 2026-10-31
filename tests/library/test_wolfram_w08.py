@@ -460,6 +460,275 @@ DECOMPOSITIONS = [
     ("TransformationMatrix[f]", "TransformationMatrix[f]"),
 ]
 
+
+
+def _flat_f(e):
+    from _harness import to_complex
+    return [to_complex(v).real for v in _flat(e)]
+
+VECTOR_INEQUALITIES = [
+    T("VectorLess[{{1, 2}, {3, 4}}]"),
+    ("VectorLess[{{1, 5}, {3, 4}}]", False),
+    ("VectorLess[{{1, 2}, {1, 4}}]", False),
+    ("VectorLess[{x, y}]", "VectorLess[{x, y}]"),
+    T("VectorLessEqual[{{1, 2}, {1, 4}}]"),
+    T("VectorLessEqual[{{1, 2}, {3, 4}}, \"NonNegativeCone\"]"),
+    ("VectorLessEqual[{{2, 2}, {1, 4}}]", False),
+    T("VectorGreater[{{3, 5}, {1, 4}}]"),
+    ("VectorGreater[{{1, 2}, {0, 3}}]", False),
+    T("VectorGreater[{{3, 5}, 0}]"),
+    T("VectorGreaterEqual[{{3, 4}, {3, 4}}]"),
+    T("VectorGreaterEqual[{{1, 2}, 0}]"),
+    ("VectorGreaterEqual[{{2, 1, 1}, 0}, \"NormCone\"]", False),
+    T("VectorGreaterEqual[{{1, 1, 2}, 0}, \"NormCone\"]"),
+    T("VectorGreaterEqual[{{{2, 1}, {1, 2}}, 0}, {\"SemidefiniteCone\", 2}]"),
+    ("VectorGreaterEqual[{{{1, 2}, {2, 1}}, 0}, {\"SemidefiniteCone\", 2}]", False),
+    ("Hold[x \\[VectorLess] y]", "Hold[VectorLess[{x, y}]]"),
+    T("{1, 2} \\[VectorLessEqual] {1, 4} \\[VectorLessEqual] {2, 5}"),
+    T("{3, 1} \\[VectorGreater] {1, 0}"),
+    ("{3, 1} \\[VectorGreaterEqual] {3, 2}", False),
+    ("Hold[a < b \\[VectorLess] c]", "Hold[a < b && VectorLess[{b, c}]]"),
+]
+
+LOCAL_OPTIMISATION = [
+    ("FindArgMin[(x - 1)^2 + 2, x]", near([1.0])),
+    ("FindArgMin[(x - 1)^2 + (y + 2)^2, {x, y}]", near([1.0, -2.0])),
+    ("FindArgMin[{x^2, x >= 1}, x]", near([1.0])),
+    ("FindArgMax[-(x - 3)^2, {x, 0}]", near([3.0])),
+    ("FindArgMax[{x + y, x^2 + y^2 <= 1}, {x, y}]", near([0.7071067811865476, 0.7071067811865476], 1e-5), "scipy"),
+    ("FindArgMax[Sin[x], {x, 1}]", near([1.5707963267948966], 1e-5), "scipy"),
+    ("FindMinValue[(x - 1)^2 + 2, x]", near(2.0)),
+    ("FindMinValue[{x^2, x >= 1}, x]", near(1.0)),
+    ("FindMinValue[x^4 - 2 x^2, {x, 2}]", near(-1.0), "scipy"),
+    ("FindMaxValue[Sin[x], {x, 1}]", near(1.0), "scipy"),
+    ("FindMaxValue[-(x - 1)^2 - (y - 2)^2 + 5, {x, y}]", near(5.0)),
+    ("FindMaxValue[{x, x^2 <= 4}, x]", near(2.0, 1e-5), "scipy"),
+]
+
+GLOBAL_NUMERIC_OPTIMISATION = [
+    ("NArgMin[(x - 2)^2, x]", near(2.0)),
+    ("NArgMin[{x + y, x >= 1, y >= 2}, {x, y}]", near([1.0, 2.0])),
+    ("NArgMin[{x^2 + y^2, x + y >= 2}, {x, y}]", near([1.0, 1.0], 1e-5)),
+    ("NArgMax[-(x - 1)^2, x]", near(1.0)),
+    ("NArgMax[{x + 2 y, x >= 0, y >= 0, x + y <= 1}, {x, y}]", near([0.0, 1.0])),
+    ("NArgMax[{x y, x + y == 2}, {x, y}]", Raises()),
+    ("NMinValue[(x - 3)^2 + 1, x]", near(1.0)),
+    ("NMinValue[{x + y, x^2 + y^2 <= 2}, {x, y}]", near(-2.0, 1e-6), "scipy"),
+    ("NMinValue[{x, x >= 3}, x]", near(3.0)),
+    ("NMaxValue[{x, x^2 <= 4}, x]", near(2.0, 1e-6), "scipy"),
+    ("NMaxValue[-(x - 1)^2 + 4, x]", near(4.0)),
+    ("NMaxValue[{x + y, x <= 1, y <= 2}, {x, y}]", near(3.0)),
+]
+
+LINEAR_OPTIMISATION = [
+    ("LinearOptimization[x + y, {x + 2 y >= 3, x >= 0, y >= 0}, {x, y}]", "{x -> 0, y -> 3/2}"),
+    ("LinearOptimization[-x - y, {x + 2 y <= 4, 3 x + y <= 6, x >= 0, y >= 0}, {x, y}]", "{x -> 8/5, y -> 6/5}"),
+    ("LinearOptimization[x + y, {x + 2 y >= 3, x >= 0, y >= 0}, {x, y}, \"PrimalMinimumValue\"]", "3/2"),
+    ("LinearOptimization[2 x + 3 y, {x + y >= 4, x - y <= 2, x >= 0, y >= 0}, {x, y}, \"PrimalMinimizerVector\"]",
+     "{3, 1}"),
+    ("LinearOptimization[x + y, {x + 2 y >= 3.5, x >= 0, y >= 0}, {Element[x, Integers], Element[y, Integers]}]",
+     "{x -> 0, y -> 2}"),
+    ("LinearOptimization[{1, 1}, {{{1, 2}, {1, 0}, {0, 1}}, {-3, 0, 0}}]", "{0, 3/2}"),
+    ("LinearOptimization[x, {x >= 1, x <= 0}, {x}]", Raises()),
+    ("LinearOptimization[-x, {x >= 0}, {x}]", Raises()),
+]
+
+QUADRATIC_OPTIMISATION = [
+    ("{x, y} /. QuadraticOptimization[x^2 + y^2, {x + y >= 1}, {x, y}]", near([0.5, 0.5])),
+    ("{x, y} /. QuadraticOptimization[(x - 1)^2 + (y - 2)^2, {x + y <= 1}, {x, y}]", near([0.0, 1.0])),
+    ("QuadraticOptimization[x^2 + y^2, {x + y == 2}, {x, y}, \"PrimalMinimumValue\"]", near(2.0)),
+    ("QuadraticOptimization[x^2 + 2 y^2 - x, {x >= 0, y >= 0}, {x, y}, {\"PrimalMinimizer\", \"PrimalMinimumValue\"}]",
+     near([0.5, 0.0, -0.25])),
+    ("QuadraticOptimization[-x^2, {x <= 1, x >= -1}, {x}]", Raises()),
+]
+
+LINEAR_FRACTIONAL_OPTIMISATION = [
+    ("LinearFractionalOptimization[(x + 1)/(y + 1), {x >= 1, y <= 2, x + y <= 4, y >= 0}, {x, y}]", "{x -> 1, y -> 2}"),
+    ("LinearFractionalOptimization[x/(x + y + 1), {x >= 1, y >= 1, x + y <= 3}, {x, y}]", "{x -> 1, y -> 2}"),
+    ("LinearFractionalOptimization[(x + 2)/(y + 1), {x >= 0, y >= 0, x <= 2, y <= 3}, {x, y}, \"PrimalMinimumValue\"]",
+     "1/2"),
+]
+
+CONVEX_OPTIMISATION = [
+    ("{x, y} /. ConvexOptimization[x^2 + y^2, {x + y >= 2}, {x, y}]", near([1.0, 1.0], 1e-6), "scipy"),
+    ("x /. ConvexOptimization[Exp[x] + x^2, {}, {x}]", near(-0.35173371124919584, 1e-6), "scipy"),
+    ("ConvexOptimization[Abs[x - 1] + Abs[y + 1], {x + y >= 3}, {x, y}, \"PrimalMinimumValue\"]", near(3.0, 1e-6),
+     "scipy"),
+    ("ConvexOptimization[-x^2, {-1 <= x <= 1}, {x}]", Raises()),
+    ("{x, y} /. ConicOptimization[x + y, {VectorGreaterEqual[{{x, y}, 0}], x + y >= 1}, {x, y}]",
+     Pred(lambda g: abs(sum(_flat_f(g)) - 1) < 1e-6, "x + y == 1"), "scipy"),
+    ("x /. ConicOptimization[x, {VectorGreaterEqual[{{x, 1, 1}, 0}, \"NormCone\"]}, {x}]", near(0.0, 1e-5), "scipy"),
+    ("ConicOptimization[-x - y, {VectorGreaterEqual[{{1, x, y}, 0}, \"NormCone\"]}, {x, y}]", Raises(), "scipy"),
+    ("{x, y} /. SecondOrderConeOptimization[-x - y, {Norm[{x, y}] <= 1}, {x, y}]",
+     near([0.7071067811865476, 0.7071067811865476], 1e-6), "scipy"),
+    ("{x, y} /. SecondOrderConeOptimization[x, {Norm[{x - 1, y}] <= 2}, {x, y}]", near([-1.0, 0.0], 1e-6), "scipy"),
+    ("SecondOrderConeOptimization[x + y, {Norm[{x, y}] <= 1}, {x, y}, \"PrimalMinimumValue\"]",
+     near(-1.4142135623730951, 1e-6), "scipy"),
+    ("x /. SemidefiniteOptimization[x, {VectorGreaterEqual[{{{x, 1}, {1, x}}, 0}, {\"SemidefiniteCone\", 2}]}, {x}]",
+     near(1.0, 1e-6), "scipy"),
+    ("{x, y} /. SemidefiniteOptimization[x + y, {VectorGreaterEqual[{{{x, 1}, {1, y}}, 0}, {\"SemidefiniteCone\", 2}]}, "
+     "{x, y}]", near([1.0, 1.0], 1e-5), "scipy"),
+    ("SemidefiniteOptimization[x, {VectorGreaterEqual[{{{x, 0}, {0, x}}, {{1, 0}, {0, 3}}}, {\"SemidefiniteCone\", 2}]}, "
+     "{x}, \"PrimalMinimumValue\"]", near(3.0, 1e-6), "scipy"),
+    ("{x, y} /. GeometricOptimization[x + y, {x y >= 1}, {x, y}]", near([1.0, 1.0], 1e-6), "scipy"),
+    ("x /. GeometricOptimization[1/x + x, {}, {x}]", near(1.0, 1e-6), "scipy"),
+    ("GeometricOptimization[x y, {x >= 2, y >= 3}, {x, y}, \"PrimalMinimumValue\"]", near(6.0, 1e-6), "scipy"),
+    ("GeometricOptimization[x - y, {x >= 1}, {x, y}]", Raises()),
+]
+
+PARAMETRIC_ROBUST = [
+    ("x /. ParametricConvexOptimization[(x - a)^2, {x >= 0}, {x}, {a}][3]", near(3.0, 1e-6), "scipy"),
+    ("x /. ParametricConvexOptimization[(x - a)^2, {x >= 0}, {x}, {a}][-2]", near(0.0, 1e-6), "scipy"),
+    ("ParametricConvexOptimization[x^2 + y^2, {x + y >= a}, {x, y}, {a}, \"PrimalMinimumValue\"][2]", near(2.0, 1e-6),
+     "scipy"),
+    ("Head[ParametricConvexOptimization[(x - a)^2, {x >= 0}, {x}, {a}]]", "ParametricFunction"),
+    ("x /. RobustConvexOptimization[x, {x >= a, -1 <= a <= 2}, {x}, {a}]", near(2.0, 1e-6), "scipy"),
+    ("RobustConvexOptimization[x + y, {x + a y >= 1, x >= 0, y >= 0, 0 <= a <= 1}, {x, y}, {a}, \"PrimalMinimumValue\"]",
+     near(1.0, 1e-6), "scipy"),
+    ("x /. RobustConvexOptimization[-x, {x <= 3 + a, -1 <= a <= 1}, {x}, {a}]", near(2.0, 1e-6), "scipy"),
+]
+
+KNAPSACK_TOURS = [
+    ("KnapsackSolve[{4, 2, 3}, 8]", "{0, 4, 0}"),
+    ("KnapsackSolve[{{3, 4}, {2, 5}}, 10]", "{2, 0}"),
+    ("KnapsackSolve[{{3, 2, 7}, {2, 1, 5}}, 10]", "{3, 4}"),
+    ("KnapsackSolve[{{3, 2, 7}, {2, 1, 5}}, {15, 10, 5}]", "{5, 0}"),
+    ("KnapsackSolve[<|\"apples\" -> {8, 3, 3}, \"oranges\" -> {9, 7, 5}|>, 25]", "<|\"apples\" -> 3, \"oranges\" -> 2|>"),
+    ("KnapsackSolve[{4, 2, 3}, 11]", "{0, 5, 0}"),
+    ("KnapsackSolve[{{3, 2}, {4, 3}, {5, 4}}, 6]", "{3, 0, 0}"),
+    ("KnapsackSolve[{{3, 2, 7}, {2, 1, 5}}, <|\"MaxTotalCost\" -> 10, \"MaxTotalCount\" -> 2|>]", "{2, 0}"),
+    ("FindShortestTour[{\"This\", \"finds\", \"the\", \"shortest\", \"tour\", \"through\", \"a\", \"list\", \"of\", "
+     "\"strings\"}]", "{38, {1, 8, 2, 10, 4, 6, 5, 9, 7, 3, 1}}"),
+    ("First[FindShortestTour[{{2, 2}, {5, 2}, {5, 3}, {4, 5}, {4, 4}, {3, 2}}]]", "5 + Sqrt[2] + Sqrt[13]"),
+    ("Sort[Last[FindShortestTour[{{2, 2}, {5, 2}, {5, 3}, {4, 5}, {4, 4}, {3, 2}}]]]", "{1, 1, 2, 3, 4, 5, 6}"),
+    ("First[FindShortestTour[{\"cat\", \"dog\", \"do\", \"cap\", \"dock\"}]]", "11"),
+    ("FindShortestTour[{{0, 0}, {3, 0}, {3, 4}}, 1, 3]", "{7, {1, 2, 3}}"),
+    ("First[FindShortestTour[{{0, 0}, {1, 0}, {1, 1}, {0, 1}}]]", "4"),
+    ("FindShortestTour[Graph[{1 -> 2}]]", Raises()),
+]
+
+BAYESIAN = [
+    ("Head[BayesianMinimization[(# - 2)^2 + 1 &, Interval[{0, 4}]]]", "BayesianMinimizationObject"),
+    T("Abs[BayesianMinimization[(# - 2)^2 + 1 &, Interval[{0, 4}]][\"MinimumConfiguration\"] - 2] < 0.1"),
+    T("BayesianMinimization[(# - 2)^2 + 1 &, Interval[{0, 4}]][\"MinimumValue\"] < 1.01"),
+    ("BayesianMinimization[(#^2 - 3*# + 2) &, {5.7, 1.1, 3.4, 6.8, 2.3, 1.2}][\"MinimumConfiguration\"]", "1.2"),
+    ("BayesianMinimization[(# - 2)^2 &, {0, 5}][\"Method\"]", "\"MaxExpectedImprovement\""),
+    ("BayesianMinimization[Norm, Range[2, 5]][\"MinimumConfiguration\"]", "2"),
+    T("BayesianMinimization[(#^2 - 5*# + 4) &, RandomReal[{0, 5}] &][\"MinimumValue\"] < -2.2"),
+    ("Head[BayesianMaximization[-(# - 1)^2 &, Interval[{-3, 3}]]]", "BayesianMaximizationObject"),
+    T("Abs[BayesianMaximization[-(# - 1)^2 &, Interval[{-3, 3}]][\"MaximumConfiguration\"] - 1] < 0.1"),
+    T("BayesianMaximization[-(# - 1)^2 &, Interval[{-3, 3}]][\"MaximumValue\"] > -0.01"),
+    ("BayesianMaximization[(#^2 - 3*# + 2) &, {5.7, 1.1, 3.4}][\"MaximumConfiguration\"]", "5.7"),
+    T("MemberQ[BayesianMinimization[#^2 &, {1, 2}][\"Properties\"], \"MinimumConfiguration\"]"),
+    T("MemberQ[BayesianMaximization[#^2 &, {1, 2}][\"Properties\"], \"MaximumValue\"]"),
+]
+
+MATRIX_GAMES = [
+    ("MatrixGame[{{1, -1}, {-1, 1}}][\"PayoffArray\"]", "{{{1, -1}, {-1, 1}}, {{-1, 1}, {1, -1}}}"),
+    ("MatrixGame[{{{1, 1}, {0, 0}}, {{0, 0}, {1, 1}}}][\"PayoffArray\"]", "{{{1, 1}, {0, 0}}, {{0, 0}, {1, 1}}}"),
+    ("Head[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}]]", "MatrixGame"),
+    ("MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}, GameActionLabels -> {{\"C\", \"D\"}, {\"C\", \"D\"}}]"
+     "[\"GameActionLabels\"]", "{{\"C\", \"D\"}, {\"C\", \"D\"}}"),
+    ("MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}, GamePlayerLabels -> {\"Ann\", \"Bob\"}][\"GamePlayerLabels\"]",
+     "{\"Ann\", \"Bob\"}"),
+    ("MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}, GameActionLabels -> {{\"C\", \"D\"}, {\"L\", \"R\"}}, "
+     "GamePlayerLabels -> {\"Ann\", \"Bob\"}][\"GameActionLabels\"]", "{{\"C\", \"D\"}, {\"L\", \"R\"}}"),
+    ("MatrixGame[{{1, 2}, {3, 4}}, GamePlayerLabels -> {\"P\", \"Q\"}][\"GamePlayerLabels\"]", "{\"P\", \"Q\"}"),
+    ("FindMatrixGameStrategies[MatrixGame[{{{1, 1}, {0, 0}}, {{0, 0}, {1, 1}}}]]",
+     "{{{0, 1}, {0, 1}}, {{1, 0}, {1, 0}}, {{1/2, 1/2}, {1/2, 1/2}}}"),
+    ("FindMatrixGameStrategies[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}]]", "{{{0, 1}, {0, 1}}}"),
+    ("FindMatrixGameStrategies[MatrixGame[{{1, -1}, {-1, 1}}]]", "{{{1/2, 1/2}, {1/2, 1/2}}}"),
+    ("FindMatrixGameStrategies[MatrixGame[{{0, -1, 1}, {1, 0, -1}, {-1, 1, 0}}]]",
+     "{{{1/3, 1/3, 1/3}, {1/3, 1/3, 1/3}}}"),
+    T("VerifyMatrixGameStrategy[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}], {{0, 1}, {0, 1}}]"),
+    ("VerifyMatrixGameStrategy[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}], {{1, 0}, {1, 0}}]", False),
+    T("VerifyMatrixGameStrategy[MatrixGame[{{1, -1}, {-1, 1}}], {{1/2, 1/2}, {1/2, 1/2}}]"),
+    ("MatrixGamePayoff[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}], {{1, 0}, {0, 1}}]", "{0, 5}"),
+    ("MatrixGamePayoff[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}], {{1/2, 1/2}, {1/2, 1/2}}]", "{9/4, 9/4}"),
+    ("MatrixGamePayoff[MatrixGame[{{1, -1}, {-1, 1}}], {{1, 0}, {1, 0}}]", "{1, -1}"),
+    ("Head[MatrixGamePlot[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}]]]", "Graphics"),
+    ("Count[MatrixGamePlot[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}]], _Rectangle, Infinity]", "12"),
+    ("MatrixGamePlot[MatrixGame[{{{3, 3}, {0, 5}}, {{5, 0}, {1, 1}}}], PlotLayout -> \"Row\"]", Raises()),
+]
+
+_ULTIMATUM = ("TreeGame[{1, {2, {0, 0} -> \"No\", {2, 0} -> \"Yes\"} -> \"A\", {2, {0, 0} -> \"No\", {1, 1} -> \"Yes\"} "
+              "-> \"B\", {2, {0, 0} -> \"No\", {0, 2} -> \"Yes\"} -> \"C\"}]")
+_RPS_TREE = ("TreeGame[{\"A\", {\"B\", {0, 0} -> \"Rock\", {-1, 1} -> \"Paper\", {1, -1} -> \"Scissors\"} -> \"Rock\", "
+             "{\"B\", {1, -1} -> \"Rock\", {0, 0} -> \"Paper\", {-1, 1} -> \"Scissors\"} -> \"Paper\", {\"B\", {-1, 1} "
+             "-> \"Rock\", {1, -1} -> \"Paper\", {0, 0} -> \"Scissors\"} -> \"Scissors\"}]")
+_INFO_TREE = "TreeGame[{1, {0, 5}, {2 -> 1, {5, 0}, {-1, -2}}, {2 -> 1, {5, 0}, {-3, -5}}}]"
+
+TREE_GAMES = [
+    (f"FindTreeGameStrategies[{_ULTIMATUM}]",
+     "{<|1 -> <|{} -> {0, 1, 0}|>, 2 -> <|{1} -> {0, 1}, {2} -> {0, 1}, {3} -> {0, 1}|>|>, <|1 -> <|{} -> {0, 1, 0}|>, "
+     "2 -> <|{1} -> {1, 0}, {2} -> {0, 1}, {3} -> {0, 1}|>|>, <|1 -> <|{} -> {1, 0, 0}|>, 2 -> <|{1} -> {0, 1}, {2} -> "
+     "{0, 1}, {3} -> {0, 1}|>|>, <|1 -> <|{} -> {1, 0, 0}|>, 2 -> <|{1} -> {1, 0}, {2} -> {0, 1}, {3} -> {0, 1}|>|>}"),
+    (f"FindTreeGameStrategies[{_RPS_TREE}]",
+     "{<|\"A\" -> <|{} -> {0, 0, 1}|>, \"B\" -> <|{1} -> {0, 1, 0}, {2} -> {0, 0, 1}, {3} -> {1, 0, 0}|>|>, <|\"A\" -> "
+     "<|{} -> {0, 1, 0}|>, \"B\" -> <|{1} -> {0, 1, 0}, {2} -> {0, 0, 1}, {3} -> {1, 0, 0}|>|>, <|\"A\" -> <|{} -> "
+     "{1, 0, 0}|>, \"B\" -> <|{1} -> {0, 1, 0}, {2} -> {0, 0, 1}, {3} -> {1, 0, 0}|>|>}"),
+    (f"FindTreeGameStrategies[{_INFO_TREE}]",
+     "{<|1 -> <|{} -> {0, 0, 1}|>, 2 -> <|{2} -> {1, 0}, {3} -> {1, 0}|>|>, <|1 -> <|{} -> {0, 1, 0}|>, 2 -> "
+     "<|{2} -> {1, 0}, {3} -> {1, 0}|>|>}"),
+    ("Length[FindTreeGameStrategies[TreeGame[{\"A\", {\"B\", {\"C\", {1, 2, 3}, {3, 2, 1}, {3, 1, 2}}, {\"C\", {0, 2, 4}, "
+     "{4, 2, 0}, {4, 0, 2}}}, {\"C\", {\"B\", {-1, 2, 5}, {5, 2, -1}, {5, -1, 2}}, {\"B\", {-2, 2, 6}, {6, 2, -2}, "
+     "{6, -2, 2}}}}]]]", "32"),
+    T(f"VerifyTreeGameStrategy[{_INFO_TREE}, <|1 -> <|{{}} -> {{0, 0, 1}}|>, 2 -> <|{{2}} -> {{1, 0}}, {{3}} -> {{1, 0}}|>|>]"),
+    (f"VerifyTreeGameStrategy[{_INFO_TREE}, <|1 -> <|{{}} -> {{1, 0, 0}}|>, 2 -> <|{{2}} -> {{1, 0}}, {{3}} -> {{1, 0}}|>|>]",
+     False),
+    ("VerifyTreeGameStrategy[TreeGame[{1, {2, {1, -1}, {2, -2}}, {2, {-2, 2}, {-1, 4}}}], <|1 -> <|{} -> {1, 0}|>, "
+     "2 -> <|{1} -> {0, 1}, {2} -> {1, 0}|>|>]", False),
+    T("VerifyTreeGameStrategy[TreeGame[{\"A\", {\"B\", {1, 1}, {2, 1}, {3, 1}}}], <|\"A\" -> <|{} -> {1}|>, \"B\" -> "
+      "<|{1} -> {0.3, 0.4, 0.3}|>|>]"),
+    ("VerifyTreeGameStrategy[TreeGame[{\"A\", {\"B\", {1, 1}, {2, 1}, {3, 1}}}], <|\"A\" -> <|{} -> {1}|>|>]", Raises()),
+]
+
+TURING_RULEPLOT = [
+    ("TuringMachine[2506, {1, {0, 0, 0, 0}}, 3]",
+     "{{{1, 1, 0}, {0, 0, 0, 0}}, {{2, 2, 1}, {1, 0, 0, 0}}, {{1, 1, 0}, {1, 1, 0, 0}}, {{2, 4, -1}, {0, 1, 0, 0}}}"),
+    ("TuringMachine[2506, {1, {{}, 0}}, 4]",
+     "{{{1, 3, 0}, {0, 0, 0, 0}}, {{2, 4, 1}, {0, 0, 1, 0}}, {{1, 3, 0}, {0, 0, 1, 1}}, {{2, 2, -1}, {0, 0, 0, 1}}, "
+     "{{1, 1, -2}, {0, 1, 0, 1}}}"),
+    ("TuringMachine[2506, {1, {{}, 0}}, 6]",
+     "{{{1, 3, 0}, {0, 0, 0, 0}}, {{2, 4, 1}, {0, 0, 1, 0}}, {{1, 3, 0}, {0, 0, 1, 1}}, {{2, 2, -1}, {0, 0, 0, 1}}, "
+     "{{1, 1, -2}, {0, 1, 0, 1}}, {{2, 2, -1}, {1, 1, 0, 1}}, {{1, 3, 0}, {1, 0, 0, 1}}}"),
+    ("TuringMachine[2506, {1, {0, 0, 0, 0}}]", "{{2, 2, 1}, {1, 0, 0, 0}}"),
+    ("TuringMachine[2506][{1, {0, 0, 0, 0}}]", "{{2, 2, 1}, {1, 0, 0, 0}}"),
+    ("TuringMachine[2506, {1, {0, 0, 0, 0}}, 1]", "{{{1, 1, 0}, {0, 0, 0, 0}}, {{2, 2, 1}, {1, 0, 0, 0}}}"),
+    ("TuringMachine[{{state_, color_?EvenQ} :> {state, color/2, -1}, {state_, color_?OddQ} :> {state, 3 color + 1, 1}}, "
+     "{1, {1, 2, 3, 4, 5}}, 5]",
+     "{{{1, 1, 0}, {1, 2, 3, 4, 5}}, {{1, 2, 1}, {4, 2, 3, 4, 5}}, {{1, 1, 0}, {4, 1, 3, 4, 5}}, {{1, 5, -1}, "
+     "{2, 1, 3, 4, 5}}, {{1, 1, 0}, {2, 1, 3, 4, 16}}, {{1, 5, -1}, {1, 1, 3, 4, 16}}}"),
+    ("TuringMachine[5000, {1, {0}}, 1]", Raises()),
+    ("Head[RulePlot[CellularAutomaton[30]]]", "Graphics"),
+    ("Count[RulePlot[CellularAutomaton[30]], _Rectangle, Infinity]", "32"),
+    ("Count[RulePlot[CellularAutomaton[{30, 2, 1}]], GrayLevel[0], Infinity]", "16"),
+    ("Count[RulePlot[TuringMachine[2506]], _Arrow, Infinity]", "4"),
+    ("RulePlot[Plus[1, 2]]", Raises()),
+]
+
+OPTION_NAMES = [
+    ("Normalized", "Normalized"),
+    T("OrthogonalMatrixQ[{{2, 0}, {0, 3}}, Normalized -> False]"),
+    ("OrthogonalMatrixQ[{{2, 0}, {0, 3}}]", False),
+    ("NormFunction", "NormFunction"),
+    ("Head[NormFunction -> (Norm[#, 1] &)]", "Rule"),
+    ("{NormFunction}", "{NormFunction}"),
+    ("FitRegularization", "FitRegularization"),
+    ("Head[FitRegularization -> {\"Tikhonov\", 1}]", "Rule"),
+    ("{FitRegularization}", "{FitRegularization}"),
+    ("Regularization", "Regularization"),
+    ("Head[Regularization -> \"Abel\"]", "Rule"),
+    ("{Regularization}", "{Regularization}"),
+    ("LossFunction", "LossFunction"),
+    ("Head[LossFunction -> \"MeanSquare\"]", "Rule"),
+    ("{LossFunction}", "{LossFunction}"),
+    ("UnconstrainedParameters", "UnconstrainedParameters"),
+    ("Head[UnconstrainedParameters -> {a}]", "Rule"),
+    ("{UnconstrainedParameters}", "{UnconstrainedParameters}"),
+]
+
+
 # ── GROUPS-END (new case groups are inserted above this line) ──
 
 _SCIPY_ONLY = ("WarpingDistance[{Pi",)
