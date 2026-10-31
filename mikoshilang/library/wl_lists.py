@@ -1142,7 +1142,19 @@ def _sortby_order(items, fs, p, fname):
     keys = [[apply(g, e) for g in fs] for e in items]
     idx = list(range(len(items)))
     if p is None:
-        return sorted(idx, key=lambda i: (_sort_key_list(keys[i], fname), canonical(items[i], fname)))
+        # ties are broken by the canonical order of the elements, computed only where keys tie (so elements with
+        # no canonical order, such as associations, sort fine when their keys differ)
+        ks = [_sort_key_list(k, fname) for k in keys]
+        order = sorted(idx, key=lambda i: ks[i])
+        out, j = [], 0
+        while j < len(order):
+            k = j + 1
+            while k < len(order) and ks[order[k]] == ks[order[j]]:
+                k += 1
+            grp = order[j:k]
+            out += sorted(grp, key=lambda i: canonical(items[i], fname)) if len(grp) > 1 else grp
+            j = k
+        return out
     if len(fs) != 1:
         raise ValueError(f"{fname}: an ordering function needs a single sort function")
     return KL.sort_items(idx, ev, p, fname, key=lambda i: keys[i][0])
