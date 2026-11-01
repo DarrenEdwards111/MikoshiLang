@@ -19,7 +19,7 @@ import urllib.parse
 
 import pytest
 
-from _harness import Pred, Via, check, ids
+from _harness import Pred, Via, check, ev, ids
 from mikoshilang.expr import Expr
 
 T = tempfile.mkdtemp(prefix="cbkio")
@@ -373,6 +373,24 @@ DATES = [
 ]
 
 CASES = FILES + STREAMS + URL + SYSTEM + COMPILE + DATES
+
+
+@pytest.fixture(scope="module", autouse=True)
+def cbkio_module():
+    """Remove the tasks and close the parallel kernels this module starts, so later modules see a clean session."""
+    from mikoshilang.library import wl_system as W
+    kernels = set(W._KERNELS)
+    tasks = set(W._TASKS)
+    yield
+    for uuid, t in list(W._TASKS.items()):
+        if uuid not in tasks:
+            t.remove()
+    ev("Unset[$DefaultParallelKernels]")
+    for kid in list(W._KERNELS):
+        if kid not in kernels:
+            ev("CloseKernels[%d]" % kid)
+    assert set(W._KERNELS) == kernels, "parallel kernels left running"
+    assert set(W._TASKS) <= tasks, "tasks left behind"
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
