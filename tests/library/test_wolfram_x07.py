@@ -344,6 +344,28 @@ CASES = [
     ("JuliaSetPlot[z^2, 3]", Raises(TypeError)),
     ("JuliaSetPlot[c]", "JuliaSetPlot[c]"),
 
+    # ── JuliaSetIterationCount (plain escape-time count; references by direct iteration in jsic below) ──
+    ("JuliaSetIterationCount[z^2 - 1, z, {0, 0.5 + 0.5 I, 1 + I, 1.5 + 1.5 I, 2 + 2 I}]",
+     pred(lambda r: py(r) == [jsic([1, 0, -1], z, 1000) for z in (0, .5 + .5j, 1 + 1j, 1.5 + 1.5j, 2 + 2j)],
+          "direct escape-time iteration, R = 2")),
+    ("JuliaSetIterationCount[0, 3]", "0"),
+    ("JuliaSetIterationCount[0, 1.5]", pred(lambda r: py(r) == 1, "1.5 -> 2.25 escapes |z| > 2")),
+    ("JuliaSetIterationCount[0, 1.01, MaxIterations -> 2000]",
+     pred(lambda r: py(r) == math.ceil(math.log2(math.log(2) / math.log(1.01))),
+          "closed form for z^2: |z0|^(2^k) > 2")),
+    ("JuliaSetIterationCount[-1, 1.5, EscapeRadius -> 100]", pred(lambda r: py(r) == jsic([1, 0, -1], 1.5, 1000, 100),
+                                                                 "explicit escape radius")),
+    ("JuliaSetIterationCount[z^2 - 1, z, .1 - .2 I, MaxIterations -> 50]", "51"),
+    ("JuliaSetIterationCount[z^3 - z + 1, z, {-2, 1 + I}]",
+     pred(lambda r: py(r) == [jsic([1, 0, -1, 1], z, 1000) for z in (-2, 1 + 1j)], "cubic, R = 4")),
+    ("JuliaSetIterationCount[0, 1.5, WorkingPrecision -> 30]", "1"),
+    ("JuliaSetIterationCount[-1, .1 - .2 I, Method -> \"OrbitDetection\"]", Raises(NotImplementedError)),
+    ("JuliaSetIterationCount[z^2/(z^2 - 1), z, 0]", Raises(NotImplementedError)),
+    ("JuliaSetIterationCount[0, 1.5, EscapeRadius -> 1]", Raises(ValueError)),
+    ("JuliaSetIterationCount[0, 1.5, MaxIterations -> 0]", Raises(ValueError)),
+    ("JuliaSetIterationCount[0, \"a\"]", Raises(TypeError)),
+    ("JuliaSetIterationCount[-1, w]", "JuliaSetIterationCount[-1, w]"),
+
     # ── BioSequencePlot ──
     ("BioSequencePlot[BioSequence[\"DNA\", \"ATAATCTGT\"]]",
      pred(lambda g: len(disks(g)) == 9 and len(prims(g, "Text")) == 9, "9 letters")),
@@ -380,6 +402,22 @@ CASES = [
     ("FullGraphics[3]", Raises(TypeError)),
     ("FullGraphics[gr]", "FullGraphics[gr]"),
 ]
+
+
+def jsic(coeffs, z, mx, R=None):
+    """Independent escape-time count: smallest k with |f^k(z)| > R, else mx + 1."""
+    z = complex(z)
+    R = R or max(1.0, (2 + sum(abs(c) for c in coeffs[1:])) / abs(coeffs[0]))
+    for k in range(mx + 1):
+        if abs(z) > R:
+            return k
+        if k == mx:
+            break
+        acc = 0j
+        for c in coeffs:
+            acc = acc * z + c
+        z = acc
+    return mx + 1
 
 
 def mandel(c, mx):
@@ -573,5 +611,5 @@ def test_x07_fullgraphics_matches_renderer():
 def test_x07_skipped_symbols():
     from mikoshilang.library import STATUS
     from mikoshilang.library.wl_graphplots import SKIPPED
-    assert set(SKIPPED) == {"JuliaSetIterationCount", "StatusCentrality"}
+    assert set(SKIPPED) == {"StatusCentrality"}
     assert not any(n in STATUS for n in SKIPPED)

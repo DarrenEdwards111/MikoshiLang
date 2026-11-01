@@ -2250,8 +2250,9 @@ _option_symbol("EdgeValueSizes", "EdgeValueSizes: option of GraphValuePlot (and 
                "here) for the \"EdgeThickness\" encoding: Automatic ({0.002, 0.012}), Tiny/Small/Medium/Large, "
                "{smin, smax} or s, thicknesses as fractions of the plot width (Thickness). Inert as an expression. "
                "Check: reference (tests read the Thickness directives).")
-_option_symbol("EscapeRadius", "EscapeRadius: option of MandelbrotSetPlot: iteration stops once |z_n| > r; r must "
-               "be a real number >= 2 (default 2). Inert as an expression. Check: reference (tests "
+_option_symbol("EscapeRadius", "EscapeRadius: option of MandelbrotSetPlot (and JuliaSetIterationCount): iteration "
+               "stops once |z_n| > r; for MandelbrotSetPlot r must be a real number >= 2 (default 2), for "
+               "JuliaSetIterationCount at least the map's escape radius. Inert as an expression. Check: reference (tests "
                "compare escape counts at two radii).")
 
 
@@ -3341,14 +3342,107 @@ def _fullgraphics(g: Expr) -> Expr:
     return out
 
 
+# ═══════════════════════════════════════ JuliaSetIterationCount ═══════════════════════════════════════
+
+def _escape_radius_poly(a):
+    """Escape radius of the monic-normalised polynomial with coefficients a (highest first): outside
+    R = max(1, (2 + sum_{i<d} |a_i|)/|a_d|) every orbit tends to infinity (|p(z)| >= 2|z| - ... > |z| once |z| > R)."""
+    return max(1.0, (2.0 + sum(abs(c) for c in a[1:])) / abs(a[0]))
+
+
+@fn("JuliaSetIterationCount", area=AREA, status="added",
+    notes="JuliaSetIterationCount[c, z0] (the map z^2 + c) and JuliaSetIterationCount[f, z, z0] for a polynomial f "
+          "of degree >= 2 with numeric coefficients; z0 may be a number or a (nested) list of numbers. Plain "
+          "escape-time count: the smallest k >= 0 with |f^k(z0)| > R, where the escape radius is "
+          "R = max(1, (2 + sum_{i<d} |a_i|)/|a_d|) for f = a_d z^d + ... + a_0 (outside it every orbit tends to "
+          "infinity) or EscapeRadius -> r (any r >= that R); MaxIterations -> n (default 1000) iterations at most, "
+          "and n + 1 when the orbit has not escaped (z0 in the filled Julia set). WorkingPrecision -> p iterates "
+          "with p-digit mpmath arithmetic (default machine precision). This is not Wolfram's default "
+          "\"OrbitDetection\" algorithm, which also stops when an attracting cycle is detected (so the documented "
+          "4 for .1 - .2 I under z^2 - 1 is 1001 here): Method -> \"OrbitDetection\" raises NotImplementedError, "
+          "Method -> Automatic, None or \"EscapeTime\" give this count; rational maps raise NotImplementedError. "
+          "Check: reference (tests compare with direct Python iteration and the closed form for z^2 at |z0| > 1).")
+def _juliasetiterationcount(*args: Expr | Option) -> Expr:
+    fname = "JuliaSetIterationCount"
+    pos, o = split_opts(args, fname)
+    meth = o.pop("Method", None)
+    if meth is not None and not (sym(meth, "Automatic", "None") or meth == "EscapeTime"):
+        if meth == "OrbitDetection":
+            raise NotImplementedError(f"{fname}: Method -> \"OrbitDetection\" (attracting-cycle detection) is not "
+                                      "supported; the plain escape-time count is used for Method -> Automatic")
+        raise ValueError(f"{fname}: unknown Method {K_input(meth)}")
+    mx = _posint(o.pop("MaxIterations", 1000), fname, "MaxIterations")
+    wp = o.pop("WorkingPrecision", None)
+    prec = None
+    if wp is not None and not sym(wp, "Automatic", "MachinePrecision"):
+        prec = _posint(wp, fname, "WorkingPrecision")
+    er = o.pop("EscapeRadius", None)
+    if o:
+        raise ValueError(f"{fname}: unknown options {sorted(o)}")
+    if len(pos) == 2:
+        fpart, zs = pos[:1], pos[1]
+    elif len(pos) == 3:
+        fpart, zs = pos[:2], pos[2]
+    else:
+        raise TypeError(f"{fname}: expected JuliaSetIterationCount[c, z0] or JuliaSetIterationCount[f, z, z0]")
+    pc, qc = _julia_map(fpart, fname)
+    if len(qc) != 1:
+        raise NotImplementedError(f"{fname}: rational maps are not supported (no escape radius); give a "
+                                  "polynomial")
+    a = [complex(c) / complex(qc[0]) for c in pc]
+    R = _escape_radius_poly(a)
+    if er is not None and not sym(er, "Automatic"):
+        r = _real(er, fname, "EscapeRadius", lo=0, lo_open=True)
+        if r < R - 1e-12:
+            raise ValueError(f"{fname}: EscapeRadius must be at least {R:g} for this map (orbits inside a smaller "
+                             "radius need not escape)")
+        R = r
+    from .wl_numbertheory2_fractals import _complex_value
+    import mpmath
+
+    def count(z0):
+        z = _complex_value(z0, fname, prec)
+        if z is None:
+            if isinstance(z0, (bool, str)) or is_list(z0):
+                raise TypeError(f"{fname}: the starting point must be a number, not {K_input(z0)}")
+            raise Unevaluated()
+        if prec is not None:
+            with mpmath.workdps(prec):
+                coeffs = [mpmath.mpc(c) for c in a]
+                for k in range(mx + 1):
+                    if abs(z) > R:
+                        return k
+                    if k == mx:
+                        break
+                    z = mpmath.polyval(coeffs, z)
+            return mx + 1
+        z = complex(z)
+        for k in range(mx + 1):
+            if abs(z) > R:
+                return k
+            if k == mx:
+                break
+            acc = 0j
+            for c in a:
+                acc = acc * z + c
+            z = acc
+            if not (math.isfinite(z.real) and math.isfinite(z.imag)):
+                return k + 1
+        return mx + 1
+
+    def thread(x):
+        if is_list(x):
+            return L(*(thread(y) for y in x.args))
+        return count(x)
+    return thread(zs)
+
+
 SKIPPED = {
-    "JuliaSetIterationCount": "its documented \"OrbitDetection\" algorithm (default) is unspecified: the "
-                              "documentation's value 4 for .1 - .2 I under z^2 - 1 counts iterations until an "
-                              "attracting cycle is detected with an undisclosed tolerance, which escape counting "
-                              "cannot reproduce; implementing a different count under the same name would be "
-                              "misleading",
-    "StatusCentrality": "the documented defining equation c = alpha A^T c + alpha beta is garbled in the "
-                        "documentation and its exact results (e.g. 160/(3 E^4), 128/(3 E^4), ...) contain E^-4, "
-                        "which no linear status equation of the stated form yields; the definition cannot be "
-                        "recovered from the reference",
+    "StatusCentrality": "the documented equation c = alpha A^T c + alpha beta (alpha from the inverse of the "
+                        "largest degree, beta the in-degrees) reproduces the documented rules example "
+                        "{1 -> 3, 2 -> 1, 3 -> 6, 4 -> 6, 1 -> 5, 5 -> 4, 6 -> 1} only up to a constant: with "
+                        "alpha = 1/2 it gives (29, 21, 0, 32, 17, 21)/13, while Wolfram gives exactly that vector "
+                        "times 4/(15 E^2) (0.0805071, 0.0582983, 0., 0.0888355, 0.0471938, 0.0582983), and the "
+                        "WorkingPrecision -> Infinity example has E^-4 (160/(3 E^4), ...); the normalisation "
+                        "producing these E factors is not documented, so the documented values cannot be matched",
 }
