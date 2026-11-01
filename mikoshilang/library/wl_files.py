@@ -201,7 +201,7 @@ def _documents():
 
 
 def _installation():
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _root():
@@ -1070,7 +1070,7 @@ def _fs_opts(o, fname):
 
 
 def _root_dir(root, fname):
-    p = _path(root, fname, "directory name")
+    p = _abs(_path(root, fname, "directory name"))
     if not os.path.isdir(p):
         raise ValueError(f"{fname}: {_name(root, fname)!r} is not an existing directory")
     return p
@@ -1096,10 +1096,9 @@ def _filesystemmap(f: Fn, root: Expr, *rest: Integer | ListOf[Integer] | Option)
 
     def walk(d, level):
         rules = []
-        entries = _listdir(d)
-        if mi is not None:
-            entries = entries[:mi]
-        for e in entries:
+        for e in _listdir(d):
+            if mi is not None and len(rules) >= mi:
+                break
             full = os.path.join(d, e)
             if os.path.isdir(full) and not os.path.islink(full):
                 if hi is None or level < hi:
@@ -1129,17 +1128,19 @@ def _filesystemscan(f: Fn, root: Expr, *rest: Integer | ListOf[Integer] | Option
     base = _root_dir(root, "FileSystemScan")
 
     def walk(d, level):
-        entries = _listdir(d)
-        if mi is not None:
-            entries = entries[:mi]
-        for e in entries:
+        count = 0
+        for e in _listdir(d):
+            if mi is not None and count >= mi:
+                break
             full = os.path.join(d, e)
             if os.path.isdir(full) and not os.path.islink(full):
+                count += 1
                 if incl and level >= lo and any(p(e) for p in preds):
                     apply(f, full)
                 if hi is None or level < hi:
                     walk(full, level + 1)
             elif level >= lo and any(p(e) for p in preds):
+                count += 1
                 apply(f, full)
     walk(base, 1)
     return NULL
@@ -2384,15 +2385,41 @@ def _check_types(t, fname):
     raise TypeError(f"{fname}: {_form(t)} is not a type or structure of types to read")
 
 
-def _read_struct(r, t, ro, fname, reader=None):
-    """Read the (nested) type structure t; _EOFV when nothing at all could be read."""
+class _Partial:
+    """A partially read type structure (head plus values that may include _EOFV)."""
+    __slots__ = ("head", "vals")
+
+    def __init__(self, head, vals):
+        self.head, self.vals = head, vals
+
+
+def _has_data(v):
+    if v is _EOFV:
+        return False
+    if isinstance(v, _Partial):
+        return any(_has_data(a) for a in v.vals)
+    return True
+
+
+def _fill_eof(v):
+    if v is _EOFV:
+        return EOF
+    if isinstance(v, _Partial):
+        return Expr(v.head, *(_fill_eof(a) for a in v.vals))
+    return v
+
+
+def _read_struct(r, t, ro, fname, reader=None, top=True):
+    """Read the (nested) type structure t depth-first; _EOFV when nothing at all could be read, otherwise
+    EndOfFile in every position that was not reached."""
     reader = reader or _read_type
-    if isinstance(t, Symbol):
+    if isinstance(t, (Symbol, str)):
         return reader(r, t, ro, fname)
-    vals = [_read_struct(r, a, ro, fname, reader) for a in t.args]
-    if all(v is _EOFV for v in vals):
-        return _EOFV
-    return Expr(t.head, *(EOF if v is _EOFV else v for v in vals))
+    vals = [_read_struct(r, a, ro, fname, reader, False) for a in t.args]
+    e = _Partial(t.head, vals)
+    if not top:
+        return e
+    return _fill_eof(e) if _has_data(e) else _EOFV
 
 
 def _finish(v):
@@ -2441,8 +2468,7 @@ def _read_all(r, t, ro, n, fname, record_lists=False):
                 if v is _EOFV:
                     break
                 items.append(v)
-            out.append(L(*(Expr(i.head, *(EOF if a is _EOFV else a for a in i.args))
-                           if isinstance(i, Expr) else i for i in items)))
+            out.append(L(*items))
         return ev(L(*out))
     while n is None or len(out) < n:
         v = _read_struct(r, t, ro, fname)
@@ -2940,7 +2966,9 @@ def _bin_read_one(r, t, bo, fname):
             else:
                 parts.append(_float_value(struct.unpack((">" if bo == "big" else "<") + ("f" if n == 4 else "d"),
                                                         h)[0]))
-        return ev(Expr("Complex", parts[0], parts[1]))
+        if all(isinstance(v, float) for v in parts):
+            return R_(complex(parts[0], parts[1])) if parts[1] != 0 else Expr("Complex", parts[0], 0.0)
+        return ev(Expr("Plus", parts[0], Expr("Times", parts[1], Symbol("I"))))
     if t in _BIN_CHARS:
         n = _BIN_CHARS[t]
         b = r.readbytes(n)
@@ -2978,17 +3006,16 @@ def _check_bin_types(t, fname):
     raise TypeError(f"{fname}: {_form(t)} is not a binary type or structure of types")
 
 
+def _bin_one(r, t, bo, fname):
+    p = r.tell()
+    v = _bin_read_one(r, t, bo, fname)
+    if v is _EOFV:
+        r.seek(p)
+    return v
+
+
 def _bin_struct(r, t, bo, fname):
-    if isinstance(t, str):
-        p = r.tell()
-        v = _bin_read_one(r, t, bo, fname)
-        if v is _EOFV:
-            r.seek(p)
-        return v
-    vals = [_bin_struct(r, a, bo, fname) for a in t.args]
-    if all(v is _EOFV for v in vals):
-        return _EOFV
-    return Expr(t.head, *(EOF if v is _EOFV else v for v in vals))
+    return _read_struct(r, t, bo, fname, reader=lambda rr, tt, oo, ff: _bin_one(rr, tt, oo, ff))
 
 
 @fn("BinaryRead", area=AREA, status="added",
