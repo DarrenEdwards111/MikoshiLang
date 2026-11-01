@@ -615,7 +615,7 @@ def _tabular(*args):
 
 
 @fn("TabularQ", **ADDED, notes="TabularQ[x]: True for a valid Tabular object")
-def _tabularq(x):
+def _tabularq(x: Expr) -> Boolean:
     try:
         return is_tabular(x)
     except (ValueError, NotImplementedError):
@@ -644,7 +644,7 @@ def col_expr(vals, t):
           "<|\"ConversionMethod\" -> \"Round\" | \"Floor\" | \"Ceiling\" | \"Truncate\"|>]; types Integer8-64, "
           "UnsignedInteger8-64, Real32/64, ComplexReal32/64, MachineInteger, MachineReal, String, Boolean, "
           "InertExpression; col[\"ElementType\"], col[\"Length\"], Normal, Length, Part, Total, Mean, Min, Max")
-def _tabularcolumn(vals, etype=None, method=None):
+def _tabularcolumn(vals: Expr, etype: Expr = None, method: Expr = None) -> Expr:
     if etype is None and parse_column(Expr("TabularColumn", vals)) is not None:
         vs, t = parse_column(Expr("TabularColumn", vals))
         if col_expr(vs, t) == Expr("TabularColumn", vals):
@@ -693,7 +693,7 @@ def _type_matches(t, sel):
 @fn("TabularColumnQ", **ADDED,
     notes="TabularColumnQ[col] and TabularColumnQ[col, tsel] (type pattern such as \"Integer*\" or a class: "
           "Numbers, Reals, Integers, MachineIntegers, FloatingPoint, Lists, Strings, ...)")
-def _tabularcolumnq(x, sel=None):
+def _tabularcolumnq(x: Expr, sel: Expr = None) -> Boolean:
     c = parse_column(x) if isinstance(x, Expr) and x.head == "TabularColumn" else None
     if c is None:
         return False
@@ -711,7 +711,7 @@ def parse_row(x):
 @fn("TabularRow", **ADDED,
     notes="TabularRow[<|k -> v, ...|>], TabularRow[{v...}], TabularRow[{v...}, {k...}] (= the association form); "
           "Normal gives the association or list; ColumnKeys (None when unnamed), ColumnTypes, Part and row[key]")
-def _tabularrow(data, keys=None):
+def _tabularrow(data: Expr, keys: Expr = None) -> Expr:
     if keys is not None:
         if not (is_list(data) and is_list(keys) and len(data.args) == len(keys.args)):
             raise ValueError("TabularRow: give a list of values and a list of the same number of keys")
@@ -724,7 +724,7 @@ def _tabularrow(data, keys=None):
 
 
 @fn("TabularRowQ", **ADDED, notes="TabularRowQ[x]: True for a valid TabularRow object")
-def _tabularrowq(x):
+def _tabularrowq(x: Expr) -> Boolean:
     return parse_row(x) is not None
 
 
@@ -1031,7 +1031,7 @@ def _columnkeys(data, sel=None):
 @fn("ColumnKeyExistsQ", **ADDED,
     notes="ColumnKeyExistsQ[data, key] for Tabular, Dataset and lists of associations; ColumnKeyExistsQ[key] is "
           "the operator form")
-def _columnkeyexistsq(*a):
+def _columnkeyexistsq(*a: Expr) -> Boolean:
     if len(a) == 1:
         raise Unevaluated()
     if len(a) != 2:
@@ -1095,7 +1095,7 @@ def _give(t, kind):
     notes="CastColumns[tab, col -> type] and CastColumns[tab, {col -> type, ...}] (also an association or a list of "
           "types, one per column): converts values (integers <-> reals, numbers <-> strings, strings to numbers or "
           "dates) or raises when a value cannot be converted")
-def _castcolumns(tab, spec):
+def _castcolumns(tab: Expr, spec: Expr) -> Expr:
     t, kind = _tab_or_rows(tab, "CastColumns")
     ts = _types_spec(spec, t, "CastColumns")
     cols, types = list(t.cols), list(t.types)
@@ -1111,7 +1111,7 @@ _opcall("CastColumns", (1,))
 @fn("DeleteColumns", **ADDED,
     notes="DeleteColumns[tab, col] and DeleteColumns[tab, {cols}] (keys, Key, ExtendedKey, positions, spans or "
           "patterns) for Tabular, Dataset and lists of associations; DeleteColumns[cspec] is the operator form")
-def _deletecolumns(*a):
+def _deletecolumns(*a: Expr) -> Expr:
     if len(a) == 1:
         raise Unevaluated()
     if len(a) != 2:
@@ -1164,7 +1164,7 @@ def _put_column(t, key, vals, after=None, fname="InsertColumns"):
           "a new one appended; a non-list value is repeated down the column), InsertColumns[tab, {anchor, col -> "
           "vals}] (insert after the anchor column), InsertColumns[atab, {vals1, ...}] for anonymous tables; operator "
           "form InsertColumns[spec]")
-def _insertcolumns(*a):
+def _insertcolumns(*a: Expr) -> Expr:
     if len(a) == 1:
         raise Unevaluated()
     if len(a) != 2:
@@ -1198,7 +1198,7 @@ _opcall("InsertColumns", (1,))
 @fn("RenameColumns", **ADDED,
     notes="RenameColumns[tab, {old -> new, ...}] (old by key or position), RenameColumns[tab, {new1, new2, ...}] "
           "(renames the first columns; also names anonymous columns) and the operator form RenameColumns[spec]")
-def _renamecolumns(*a):
+def _renamecolumns(*a: Expr) -> Expr:
     if len(a) == 1:
         raise Unevaluated()
     if len(a) != 2:
@@ -1319,7 +1319,7 @@ def _row_fn_values(t, f, fname):
           "association (#key), existing columns are replaced in place, new ones appended, rules applied in "
           "sequence; ColumnwiseThread/ColumnwiseValue parts of f are evaluated on whole columns; col -> Nothing "
           "deletes a column; operator form TransformColumns[spec]")
-def _transformcolumns(*a):
+def _transformcolumns(*a: Expr) -> Expr:
     if len(a) == 1:
         raise Unevaluated()
     if len(a) != 2:
@@ -1353,7 +1353,7 @@ _opcall("TransformColumns", (1,))
     notes="ConstructColumns[tab, {col, new -> f, ...}] keeps only the listed columns (existing columns by key or "
           "position, new ones computed row by row from #key, with ColumnwiseThread/ColumnwiseValue support), in the "
           "order given; ConstructColumns[tab, col] and the operator form ConstructColumns[spec]")
-def _constructcolumns(*a):
+def _constructcolumns(*a: Expr) -> Expr:
     if len(a) == 1:
         raise Unevaluated()
     if len(a) != 2:
@@ -1388,14 +1388,14 @@ _opcall("ConstructColumns", (1,))
 @fn("ColumnwiseThread", **ADDED,
     notes="ColumnwiseThread[body] inside a Function given to TransformColumns or ConstructColumns: body is evaluated "
           "once with #col standing for the whole column and its elements are used row by row; inert elsewhere")
-def _columnwisethread(*a):
+def _columnwisethread(*a: Expr) -> Expr:
     raise Unevaluated()
 
 
 @fn("ColumnwiseValue", **ADDED,
     notes="ColumnwiseValue[body] inside a Function given to TransformColumns or ConstructColumns: body is evaluated "
           "once on whole columns (#col) and the value is used in every row; inert elsewhere")
-def _columnwisevalue(*a):
+def _columnwisevalue(*a: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -1432,7 +1432,7 @@ def _agg_rules(spec, fname):
           "values of the columns gcols, which become key columns, in order of first appearance); f receives the "
           "association of the (sub)table's columns as lists (#col); lists of associations give lists of "
           "associations; operator forms AggregateRows[fspec] and AggregateRows[fspec, gspec]")
-def _aggregaterows(*a):
+def _aggregaterows(*a: Expr) -> Expr:
     if len(a) == 1 or (len(a) == 2 and not _is_tabular_data(a[0])):
         raise Unevaluated()
     if len(a) not in (2, 3):
@@ -1503,7 +1503,7 @@ def _pivot_to(t, varcol, valcols, fname):
     notes="PivotToColumns[tab, varcol -> valcol], varcol -> {valcol1, ...} and lists of such rules: spreads the "
           "values of valcol into new columns ExtendedKey[valcol, var] for each distinct var (first-appearance "
           "order); the remaining columns identify the rows; absent combinations give Missing[\"NotAvailable\"]")
-def _pivottocolumns(tab, spec):
+def _pivottocolumns(tab: Expr, spec: Expr) -> Expr:
     t, kind = _tab_or_rows(tab, "PivotToColumns")
     if t.keys is None:
         raise ValueError("PivotToColumns: the table needs named columns")
@@ -1520,7 +1520,7 @@ def _pivottocolumns(tab, spec):
     notes="PivotFromColumns[tab, {c1, c2, ...} -> {var, val}] (and lists of such rules): gathers the columns ci into "
           "a column var of their keys and a column val of their values, row by row; ExtendedKey[k, v] column keys "
           "can be gathered with a key pattern")
-def _pivotfromcolumns(tab, spec):
+def _pivotfromcolumns(tab: Expr, spec: Expr) -> Expr:
     t, kind = _tab_or_rows(tab, "PivotFromColumns")
     if t.keys is None:
         raise ValueError("PivotFromColumns: the table needs named columns")
@@ -1550,7 +1550,7 @@ def _pivotfromcolumns(tab, spec):
           "each (row, column) group with f (which receives the group's columns as lists) and spreads the results "
           "into columns (the colcols value, or ExtendedKey[...] for several colcols or functions); rowcols become "
           "key columns; IncludeGroupAggregates is not supported")
-def _pivottable(tab, f, rowcols, colcols, *opts):
+def _pivottable(tab: Expr, f: Expr, rowcols: Expr, colcols: Expr, *opts: Option) -> Expr:
     for o in opts:
         if is_rule(o) and is_sym(o.args[0], "IncludeGroupAggregates") and o.args[1] is False:
             continue
@@ -1594,7 +1594,7 @@ _added("IncludeGroupAggregates", "option of PivotTable; only False (the default)
           "\"Columns\"] (a list of columns, an association or list of key -> column rules, or TabularColumns), "
           "ToTabular[data, \"Dataset\"], ToTabular[data, form, <|\"ColumnKeys\" -> ..., \"HeaderRows\" -> n|>]; "
           "TimeSeries, TemporalData and SpatialPointData forms are not supported")
-def _totabular(data, form="Rows", spec=None):
+def _totabular(data: Expr, form: Expr = "Rows", spec: Expr = None) -> Expr:
     if form not in ("Rows", "Columns", "Dataset"):
         raise NotImplementedError(f"ToTabular: the form {form!r} is not supported (Rows, Columns, Dataset)")
     keys_override, header = None, 0
@@ -1645,7 +1645,7 @@ def _totabular(data, form="Rows", spec=None):
     notes="FromTabular[tab, \"Rows\"] (list of associations, or lists for anonymous columns), \"Columns\" "
           "(association of TabularColumn objects, or a list), \"Matrix\" (list of rows of values), \"Dataset\"; "
           "TimeSeries/EventSeries/TemporalData forms are not supported")
-def _fromtabular(tab, form="Rows", spec=None):
+def _fromtabular(tab: Expr, form: Expr = "Rows", spec: Expr = None) -> Expr:
     t = parse_tab(tab) if isinstance(tab, Expr) and tab.head == "Tabular" else None
     if t is None:
         if isinstance(tab, Symbol):
@@ -1714,7 +1714,7 @@ _SCHEMA_GLOBAL = ["Columns", "ColumnKeys", "ColumnTypes", "KeyColumns", "Backend
           "type; schema[\"prop\"] (Columns, ColumnKeys, ColumnTypes, KeyColumns, Backend, ColumnProperties, "
           "Properties) and schema[col, \"ElementType\" | \"Nullable\" | \"Properties\"]; ColumnKeys/ColumnTypes "
           "accept schemas; Tabular[data, schema] applies one")
-def _tabularschema(x, *mods):
+def _tabularschema(x: Expr, *mods: Expr) -> Expr:
     if isinstance(x, Expr) and x.head == "Tabular":
         t = parse_tab(x)
         if t is None:
@@ -1891,7 +1891,7 @@ _STRUCT_AUTO = ["ColumnType", "NonMissingCount", "MissingCount", "ByteCount"]
           "key column \"ColumnKey\" and the properties ColumnType, NonMissingCount, MissingCount, ByteCount "
           "(Automatic), DuplicateFreeQ, CountDistinct (All); cols as All, a list, a string pattern or a criterion; "
           "ByteCount is this implementation's size of the column")
-def _tabularstructure(tab, cols=None, props=None):
+def _tabularstructure(tab: Expr, cols: Expr = None, props: Expr = None) -> Expr:
     t, _ = _tab_or_rows(tab, "TabularStructure")
     js = _select_columns(t, cols, "TabularStructure")
     if props is None or is_sym(props, "Automatic"):
@@ -1945,7 +1945,7 @@ def _summary_value(t, j, p):
           "StandardDeviation, Min, Q1, Median, Q3, Max; default Min, Median, Max) and ExtendedKey[\"Structural\", "
           "p] columns; non-numeric columns give Missing[\"NotApplicable\"]; the graphical properties (CategoryPlot, "
           "Histogram, BoxWhiskerChart) are omitted")
-def _tabularsummary(tab, spec=None):
+def _tabularsummary(tab: Expr, spec: Expr = None) -> Expr:
     t, _ = _tab_or_rows(tab, "TabularSummary")
     pairs = []
     rules = [spec] if is_rule(spec) else (list(spec.args) if is_list(spec) and spec.args and
@@ -1998,7 +1998,7 @@ def _tabularsummary(tab, spec=None):
 @fn("RowKey", **ADDED,
     notes="RowKey[{k1, ...}] (RowKey[k] = RowKey[{k}]) selects the row of a Tabular with key columns whose key "
           "values are ki: tab[RowKey[...]] or RowKey[...][tab]")
-def _rowkey(*a):
+def _rowkey(*a: Expr) -> Expr:
     if len(a) == 1 and not is_list(a[0]):
         return Expr("RowKey", L(a[0]))
     if len(a) == 1:
@@ -2020,7 +2020,7 @@ KL.COMPOUND_HEAD_HOOKS["RowKey"] = _rowkey_call
     notes="ExtendedKey[k1, k2, ...]: a multilevel column key (inert); used by PivotToColumns, TabularSummary, "
           "ColumnwiseCombine and JoinAcross prefixes and matched as a pattern in tab[All, ExtendedKey[k, _]]; "
           "ExtendedKey[] raises")
-def _extendedkey(*a):
+def _extendedkey(*a: Expr) -> Expr:
     if not a:
         raise ValueError("ExtendedKey: at least one key is needed")
     raise Unevaluated()
@@ -2161,7 +2161,7 @@ def _join_args(a, fname, default_how):
           "for lists of associations, Datasets and Tabular objects (results in the same form); keyspec key, "
           "{k1, ...}, ka -> kb, {ka -> kb, ...} or a function; prefixes p -> obj give ExtendedKey[p, k] keys; "
           "absent values are Missing[\"Unmatched\"]; KeyCollisionFunction -> Left (default), Right, None or f")
-def _joinacross(*a):
+def _joinacross(*a: Expr) -> Expr:
     x, y, spec, how, kcf = _join_args(a, "JoinAcross", "Inner")
     return join_across(x, y, spec, how, kcf, "JoinAcross")
 
@@ -2170,7 +2170,7 @@ def _joinacross(*a):
     notes="LeftJoinAcross[a, b, keyspec] = JoinAcross[a, b, keyspec, \"Left\"] (unmatched rows of a kept with "
           "Missing[\"Unmatched\"] values); LeftJoinAcross[b, keyspec] is the operator form for a; "
           "KeyCollisionFunction as in JoinAcross")
-def _leftjoinacross(*a):
+def _leftjoinacross(*a: Expr) -> Expr:
     a = list(a)
     opts = [x for x in a if is_rule(x) and is_sym(x.args[0], "KeyCollisionFunction")]
     pos = [x for x in a if x not in opts]
@@ -2197,7 +2197,7 @@ KL.COMPOUND_HEAD_HOOKS["LeftJoinAcross"] = _lj_op
           "<|...|> -> crit (crit gets <|p1 -> row1, ...|>; True& = cross join), with required rows {} / \"Inner\", "
           "\"Outer\", \"Left\", \"Right\", i or {i...} (unmatched rows filled with missing values); join keys come "
           "first in the result")
-def _columnwisecombine(spec, required="Inner"):
+def _columnwisecombine(spec: Expr, required: Expr = "Inner") -> Expr:
     crit = None
     common = None
     if is_rule(spec) and (is_list(spec.args[0]) or is_assoc(spec.args[0])):

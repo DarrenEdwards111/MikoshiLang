@@ -80,7 +80,7 @@ def _sporadic_impl(name):
         ("GroupOrder is supported; operations that need its permutation representation raise")
 
     @fn(name, **ADDED, notes=f"{name}[] represents {_NAMES[name]}, of order {SPORADIC_ORDERS[name]}; {rep}")
-    def impl(*args):
+    def impl(*args: Expr) -> Expr:
         if args:
             raise ValueError(f"{name} takes no arguments")
         raise Unevaluated()
@@ -284,7 +284,7 @@ def _stab_points(G, n, pts):
 @fn("GroupStabilizer", **ADDED, notes="GroupStabilizer[group, {p1, ...}]: the pointwise stabilizer subgroup as a "
     "PermutationGroup (generators may differ from the Wolfram Language's choice); the Permute action form is not "
     "supported")
-def _gstab(g, pts, *action):
+def _gstab(g: Expr, pts: Expr, *action: Expr) -> Expr:
     if action:
         raise NotImplementedError("GroupStabilizer: actions other than the action on points are not supported")
     gens, deg = _group_arg(g, "GroupStabilizer")
@@ -301,7 +301,7 @@ def _gstab(g, pts, *action):
 @fn("GroupSetwiseStabilizer", **ADDED, notes="GroupSetwiseStabilizer[group, {p1, ...}]: the subgroup mapping the "
     "set of points to itself, as a PermutationGroup (generators may differ from the Wolfram Language's choice); "
     "the Permute action form is not supported")
-def _gsetstab(g, pts, *action):
+def _gsetstab(g: Expr, pts: Expr, *action: Expr) -> Expr:
     if action:
         raise NotImplementedError("GroupSetwiseStabilizer: actions other than the action on points are not "
                                   "supported")
@@ -326,7 +326,7 @@ def _gsetstab(g, pts, *action):
 
 @fn("GroupCentralizer", **ADDED, notes="GroupCentralizer[group, g]: the subgroup of elements commuting with the "
     "permutation g, as a PermutationGroup (generators may differ from the Wolfram Language's choice)")
-def _gcentral(g, x):
+def _gcentral(g: Expr, x: Expr) -> Expr:
     gens, deg = _group_arg(g, "GroupCentralizer")
     perm, _ = C.perm_of(x, "GroupCentralizer")
     n = max(deg, perm.degree(), 1)
@@ -343,7 +343,7 @@ def _less_key(n):
 
 @fn("RightCosetRepresentative", **ADDED, notes="RightCosetRepresentative[group, g]: the smallest permutation (in "
     "image-list order, as Sort[..., Less]) of the right coset {PermutationProduct[h, g] : h in group}")
-def _rcoset(g, x):
+def _rcoset(g: Expr, x: Expr) -> Expr:
     gens, deg = _group_arg(g, "RightCosetRepresentative")
     perm, kind = C.perm_of(x, "RightCosetRepresentative")
     n = max(deg, perm.degree())
@@ -374,7 +374,7 @@ def _rcoset(g, x):
     "base -> PermutationGroup[{}]} with the base chosen greedily (smallest point moved by the current stabilizer) "
     "or given by GroupActionBase; the stabilizers are PermutationGroup objects whose generators may differ from "
     "the Wolfram Language's choice")
-def _gstabchain(g, *opts):
+def _gstabchain(g: Expr, *opts: Option) -> ListOf[Expr]:
     pos, o = split_options(opts, ("GroupActionBase",), "GroupStabilizerChain")
     if pos:
         raise ValueError("GroupStabilizerChain takes one group argument")
@@ -414,7 +414,7 @@ def _word_value(gens, word, fname):
 
 @fn("GroupElementFromWord", **ADDED, notes="GroupElementFromWord[group, {i1, i2, ...}] = PermutationProduct of the "
     "generators GroupGenerators[group][[|ik|]] (inverted for negative ik), applied left to right")
-def _gfromword(g, word):
+def _gfromword(g: Expr, word: Expr) -> Expr:
     if not C._is_group(g):
         raise Unevaluated()
     if not is_list(word):
@@ -427,7 +427,7 @@ def _gfromword(g, word):
     "(negative for inverses) whose product is g -- a shortest word (breadth-first search) for groups of at most "
     "10^5 elements, otherwise a word from a stabilizer chain; words are not unique and may differ from the "
     "Wolfram Language's")
-def _gtoword(g, x):
+def _gtoword(g: Expr, x: Expr) -> ListOf[Expr]:
     if not C._is_group(g):
         raise Unevaluated()
     perm, _ = C.perm_of(x, "GroupElementToWord")
@@ -554,7 +554,7 @@ def _cycle_monomial(p, deg, xs):
 @fn("CycleIndexPolynomial", **ADDED, notes="CycleIndexPolynomial[perm, {x1, ..., xn}] = Product[x_k^(number of "
     "k-cycles)] (fixed points up to PermutationMax, or up to the degree given as a third argument, count as "
     "1-cycles); for a group the average over its elements")
-def _cycleindex(g, xs, d=None):
+def _cycleindex(g: Expr, xs: Expr, d: Expr = None) -> Expr:
     if not is_list(xs) or not xs.args:
         raise ValueError("CycleIndexPolynomial: the variables must be a non-empty list")
     vs = [S(v) for v in xs.args]

@@ -6,6 +6,8 @@ approximate arguments are evaluated with mpmath at the lowest input precision (m
 numbers); N[f[exact args], p] evaluates to p digits.
 """
 
+from __future__ import annotations
+
 import mpmath
 import sympy as sp
 
@@ -115,11 +117,12 @@ def special(name, nargs, mpf, exact=None, notes="", status="added", listable=Tru
     # register one implementation per arity
     for n in range(lo, hi + 1):
         def make(n):
-            def f(*args):
+            def f(*args: Expr) -> Expr:
                 return impl(*args)
             import inspect
-            params = [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD) for i in range(n)]
-            f.__signature__ = inspect.Signature(params)
+            params = [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation="Expr")
+                      for i in range(n)]
+            f.__signature__ = inspect.Signature(params, return_annotation="Expr")
             return f
         fn(name, area=AREA, status=status, notes=notes, listable=listable)(make(n))
     MP_NUMERIC[name] = _dispatcher(name)
@@ -545,7 +548,7 @@ def _pfq_impl(name, regularized):
         notes=("regularized " if regularized else "") + "generalized hypergeometric function "
               "pFq(a1, ..., ap; b1, ..., bq; z)" + ("/Prod[Gamma[bj]] (finite for non-positive integer bj)" if regularized else
               "; exact closed forms via SymPy hyperexpand; p = q + 1 has the branch cut [1, Infinity)"))
-    def impl(a, b, z):
+    def impl(a: Expr, b: Expr, z: Expr) -> Expr:
         av = [sym(x, name) for x in _params(a, name)]
         bv = [sym(x, name) for x in _params(b, name)]
         zv = sym(z, name)
@@ -630,7 +633,7 @@ _reg_named("Hypergeometric2F1Regularized", 2, 1)
     notes="MeijerG[{{a1, ..., an}, {an+1, ..., ap}}, {{b1, ..., bm}, {bm+1, ..., bq}}, z] (and the form with a "
           "final argument r) evaluated with mpmath meijerg for approximate arguments; exact arguments stay "
           "unevaluated (FunctionExpand is not implemented)")
-def _meijerg(a, b, z, r=None):
+def _meijerg(a: Expr, b: Expr, z: Expr, r: Expr = None) -> Expr:
     def two(x):
         if not (is_list(x) and len(x.args) == 2 and all(is_list(y) for y in x.args)):
             raise ValueError("MeijerG: parameters must be {{...}, {...}}")
@@ -786,13 +789,13 @@ def _wp_args(name):
     notes="WeierstrassP[u, {g2, g3}] via the Jacobi form e3 + (e1 - e3)/sn^2(Sqrt[e1 - e3] u | m), "
           "m = (e2 - e3)/(e1 - e3), with e_i the roots of 4 t^3 - g2 t - g3 (valid for any ordering of the roots); "
           "approximate arguments only; degenerate invariants raise")
-def _weierstrassp(u, g):
+def _weierstrassp(u: Expr, g: Expr) -> Expr:
     return _weier(u, g, False, "WeierstrassP")
 
 
 @fn("WeierstrassPPrime", area=AREA, status="added",
     notes="derivative of WeierstrassP[u, {g2, g3}] with respect to u")
-def _weierstrassprime(u, g):
+def _weierstrassprime(u: Expr, g: Expr) -> Expr:
     return _weier(u, g, True, "WeierstrassPPrime")
 
 

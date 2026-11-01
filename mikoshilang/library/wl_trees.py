@@ -120,7 +120,7 @@ def height(t):
 @fn("Tree", area=AREA, status="added",
     notes="Tree[data, {subtrees}] / Tree[data, <|k -> subtree|>] / Tree[data, None] (leaf); Tree[{...}] = "
           "Tree[Null, {...}]; non-Tree children become leaves; presentation options are kept")
-def _tree(*args):
+def _tree(*args: Expr) -> Expr:
     args = list(args)
     opts = []
     while args and _is_opt(args[-1]):
@@ -149,22 +149,22 @@ def _tree(*args):
 
 
 @fn("TreeQ", area=AREA, status="added", notes="True for a valid Tree object")
-def _treeq(x):
+def _treeq(x: Expr) -> Boolean:
     return is_tree(x)
 
 
 @fn("TreeData", area=AREA, status="added", notes="the data at the root of a tree")
-def _treedata(t):
+def _treedata(t: Expr) -> Expr:
     return data(_need_tree(t, "TreeData"))
 
 
 @fn("TreeChildren", area=AREA, status="added", notes="the children (list, association or None) of the root")
-def _treechildren(t):
+def _treechildren(t: Expr) -> Expr:
     return _need_tree(t, "TreeChildren").args[1]
 
 
 @fn("TreeLeafQ", area=AREA, status="added", notes="True for a leaf Tree[data, None]; False for anything else")
-def _treeleafq(t):
+def _treeleafq(t: Expr) -> Boolean:
     return is_tree(t) and kind(t) == "none"
 
 
@@ -298,7 +298,7 @@ def _elem(rec, which, fname):
 @fn("TreeLevel", area=AREA, status="added",
     notes="TreeLevel[tree, levelspec] subtrees on the levels (children before parents); levelspec -> \"Data\" | "
           "\"Subtree\" | \"Position\" | \"Level\" ...; \"Leaves\", \"NonLeaves\"; TreeTraversalOrder option")
-def _treelevel(*args):
+def _treelevel(*args: Expr) -> ListOf[Expr]:
     pos, opts = _with_opts(args, "TreeLevel", 1, 2)
     if len(pos) == 1:
         if is_tree(pos[0]):
@@ -339,25 +339,25 @@ def _dmatch(patt):
 
 @fn("TreeCases", area=AREA, status="added",
     notes="TreeCases[tree, pattern, levelspec, n] subtrees whose data match (default levels {0, Infinity})")
-def _treecases(*args):
+def _treecases(*args: Expr) -> ListOf[Expr]:
     return L(*(r[3] for r in _matching("TreeCases", args, _dmatch(args[1]) if len(args) > 1 else None)))
 
 
 @fn("TreeCount", area=AREA, status="added", notes="TreeCount[tree, pattern, levelspec] number of matching subtrees")
-def _treecount(*args):
+def _treecount(*args: Expr) -> Integer:
     return len(_matching("TreeCount", args, _dmatch(args[1]) if len(args) > 1 else None, 3))
 
 
 @fn("TreePosition", area=AREA, status="added",
     notes="TreePosition[tree, pattern, levelspec, n] positions (children before parents; {} is the root; "
           "association children are addressed by Key[k])")
-def _treeposition(*args):
+def _treeposition(*args: Expr) -> ListOf[Expr]:
     return L(*(L(*r[0]) for r in _matching("TreePosition", args, _dmatch(args[1]) if len(args) > 1 else None)))
 
 
 @fn("TreeSelect", area=AREA, status="added",
     notes="TreeSelect[tree, crit], [tree, crit, n], [tree, crit, levelspec, n] subtrees with crit[subtree] True")
-def _treeselect(*args):
+def _treeselect(*args: Expr) -> ListOf[Expr]:
     pos, opts = _with_opts(args, "TreeSelect", 2, 4)
     if len(pos) == 3:
         args = (pos[0], pos[1], Symbol("All"), pos[2]) + tuple(Expr("Rule", Symbol(k), v) for k, v in opts.items())
@@ -370,26 +370,26 @@ for _n in ("TreeCases", "TreeCount", "TreePosition", "TreeSelect", "TreeLevel"):
 
 
 @fn("TreeLeaves", area=AREA, status="added", notes="the leaves (level -1) in depth-first order")
-def _treeleaves(t):
+def _treeleaves(t: Expr) -> ListOf[Expr]:
     t = _need_tree(t, "TreeLeaves")
     return L(*(r[3] for r in nodes(t) if kind(r[3]) == "none"))
 
 
 @fn("TreeLeafCount", area=AREA, status="added", notes="number of leaves; Tree[d, {}] has 0")
-def _treeleafcount(t):
+def _treeleafcount(t: Expr) -> Expr:
     t = _need_tree(t, "TreeLeafCount")
     return sum(1 for r in nodes(t) if kind(r[3]) == "none")
 
 
 @fn("TreeSize", area=AREA, status="added", notes="number of subtrees (nodes)")
-def _treesize(t):
+def _treesize(t: Expr) -> Integer:
     return len(nodes(_need_tree(t, "TreeSize")))
 
 
 @fn("TreeDepth", area=AREA, status="added",
     notes="maximum level (empty child lists add a level; a leaf has depth 0); TreeDepth[tree, patt] maximum "
           "level of a subtree whose data matches patt")
-def _treedepth(t, patt=None):
+def _treedepth(t: Expr, patt: Expr = None) -> Expr:
     t = _need_tree(t, "TreeDepth")
     if patt is None:
         return height(t)
@@ -444,7 +444,7 @@ def _map_tree(f, t, ls, which, order, fname):
     notes="TreeMap[f, tree, levelspec -> elem] applies f to the data (or \"Subtree\", \"Position\", \"Level\", "
           "\"NegativeLevel\", \"LevelPair\", \"Children\", \"ChildrenData\", or a list of these as arguments) of "
           "the subtrees on the levels (default All); the result becomes the new data")
-def _treemap(*args):
+def _treemap(*args: Expr) -> Expr:
     pos, opts = _with_opts(args, "TreeMap", 1, 3)
     if len(pos) == 1:
         raise Unevaluated()
@@ -459,7 +459,7 @@ KL.operator_form("TreeMap", 1, "last")
 @fn("TreeScan", area=AREA, status="added",
     notes="TreeScan[f, tree, levelspec -> elem] evaluates f on the data (or elements) of each subtree in "
           "traversal order; returns Null")
-def _treescan(*args):
+def _treescan(*args: Expr) -> Expr:
     pos, opts = _with_opts(args, "TreeScan", 1, 3)
     if len(pos) == 1:
         raise Unevaluated()
@@ -498,7 +498,7 @@ def _fold(fs, t, h):
 @fn("TreeFold", area=AREA, status="added",
     notes="TreeFold[f, tree] folds bottom-up: f[data, {results of children}] (leaves give their data); "
           "TreeFold[{f, g}, tree] applies g to leaf data; TreeFold[f, tree, h] uses h[subtree] instead of the data")
-def _treefold(*args):
+def _treefold(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
     if len(args) not in (2, 3):
@@ -583,7 +583,7 @@ def _update(t, pos, g, fname):
 @fn("TreeExtract", area=AREA, status="added",
     notes="TreeExtract[tree, pos | {pos1, ...}, h] subtrees at positions (integer parts, negative parts, "
           "\"key\"/Key[k]); h is applied to each")
-def _treeextract(*args):
+def _treeextract(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
     if len(args) not in (2, 3):
@@ -603,7 +603,7 @@ KL.operator_form("TreeExtract", 1, "first")
 
 @fn("TreeDelete", area=AREA, status="added",
     notes="TreeDelete[tree, pos | {pos1, ...}] removes subtrees (deleting the only child leaves Tree[d, {}])")
-def _treedelete(*args):
+def _treedelete(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
     if len(args) != 2:
@@ -634,7 +634,7 @@ KL.operator_form("TreeDelete", 1, "first")
 @fn("TreeInsert", area=AREA, status="added",
     notes="TreeInsert[tree, child, pos | {pos1, ...}] inserts child (non-trees become leaves) so that it is at "
           "position pos (negative indices count from the end, like Insert); list children only")
-def _treeinsert(*args):
+def _treeinsert(*args: Expr) -> Expr:
     if len(args) == 2:
         raise Unevaluated()
     if len(args) != 3:
@@ -668,7 +668,7 @@ KL.operator_form("TreeInsert", 2, "first")
 @fn("TreeReplacePart", area=AREA, status="added",
     notes="TreeReplacePart[tree, pos -> new | {pos1 -> new1, ...} | {pos1, pos2} -> new] replaces subtrees "
           "(non-trees become leaves); explicit positions only (no patterns)")
-def _treereplacepart(*args):
+def _treereplacepart(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
     if len(args) != 2:
@@ -693,7 +693,7 @@ KL.operator_form("TreeReplacePart", 1, "first")
 @fn("TreeMapAt", area=AREA, status="added",
     notes="TreeMapAt[f, tree, pos | {pos1, ...}] applies f to the data at the positions (repeatedly for "
           "repeated positions)")
-def _treemapat(*args):
+def _treemapat(*args: Expr) -> Expr:
     if len(args) == 2:
         raise Unevaluated()
     if len(args) != 3:
@@ -716,7 +716,7 @@ def _rules_leafdata(d):
 @fn("TreeRules", area=AREA, status="added",
     notes="TreeRules[tree]: data -> {rules of children} (or an association); leaves give their data (data -> None "
           "when the data itself looks like such a rule)")
-def _treerules(t):
+def _treerules(t: Expr) -> Expr:
     t = _need_tree(t, "TreeRules")
 
     def go(s):
@@ -744,14 +744,14 @@ def rules_tree(r):
 
 @fn("RulesTree", area=AREA, status="added",
     notes="RulesTree[data -> {rules}] / [data -> <|k -> rule|>] / [data -> None]; other expressions are leaves")
-def _rulestree(r, *opts):
+def _rulestree(r: Expr, *opts: Option) -> Expr:
     out = rules_tree(r)
     return Expr("Tree", *out.args, *opts) if opts else out
 
 
 @fn("RootTree", area=AREA, status="added",
     notes="RootTree[tree] = Tree[data, {}] (leaves unchanged); RootTree[tree, n] keeps levels 0..n (n >= 0)")
-def _roottree(t, n=None):
+def _roottree(t: Expr, n: Expr = None) -> Expr:
     t = _need_tree(t, "RootTree")
     if n is None:
         n = 0
@@ -772,7 +772,7 @@ def _roottree(t, n=None):
 
 
 @fn("UnlabeledTree", area=AREA, status="added", notes="a tree of the same shape with Null as every node's data")
-def _unlabeledtree(t, *opts):
+def _unlabeledtree(t: Expr, *opts: Option) -> Expr:
     t = _need_tree(t, "UnlabeledTree")
 
     def go(s):
@@ -785,7 +785,7 @@ def _unlabeledtree(t, *opts):
     notes="NestTree[f, tree | expr, n, h] grows every leaf Tree[x, None] with children f[x] (list, association, "
           "None or {} ; other results r give {r}) for n levels (default 1, Infinity allowed); h maps the data of "
           "the leaves including the new ones")
-def _nesttree(f, t, n=1, h=None, *opts):
+def _nesttree(f: Fn, t: Expr, n: Expr = 1, h: Fn = None, *opts: Option) -> Expr:
     if is_sym(n, "Infinity"):
         n = None
     else:
@@ -871,7 +871,7 @@ def _struct_name(s, fname):
 @fn("ExpressionTree", area=AREA, status="added",
     notes="ExpressionTree[expr, struct] with struct \"Heads\" (default), \"Subexpressions\", \"Atoms\", Null, "
           "None, \"List\", \"Association\", \"Rules\"; Heads -> True and the XML/JSON/held forms raise")
-def _expressiontree(*args):
+def _expressiontree(*args: Expr) -> Expr:
     pos, opts = split_options(args, {"Heads"} | _OPTSET, "ExpressionTree")
     if not 1 <= len(pos) <= 2:
         raise TreeError("ExpressionTree: 1 or 2 arguments expected")
@@ -915,7 +915,7 @@ def _tree_expr(t, struct, fname):
 @fn("TreeExpression", area=AREA, status="added",
     notes="TreeExpression[tree, struct] with struct \"Heads\" (default: data[children...]), \"HeadTrees\", "
           "\"List\", \"Association\", \"Rules\"; other structures raise")
-def _treeexpression(*args):
+def _treeexpression(*args: Expr) -> Expr:
     pos, opts = split_options(args, {"Heads"}, "TreeExpression")
     if not 1 <= len(pos) <= 2:
         raise TreeError("TreeExpression: 1 or 2 arguments expected")
@@ -928,7 +928,7 @@ def _treeexpression(*args):
 
 @fn("TreeForm", area=AREA, status="added",
     notes="TreeForm[expr] / TreeForm[expr, n] is an inert display wrapper (no tree drawing in the terminal)")
-def _treeform(*args):
+def _treeform(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -942,7 +942,7 @@ def _wg():
 @fn("TreeGraph", area=AREA, status="added",
     notes="TreeGraph[{edges or rules}] / TreeGraph[{vertices}, {edges}] gives the Graph after checking it is a "
           "tree (DirectedEdges -> False makes rules undirected); the predecessor-list form and Tree objects raise")
-def _treegraph(*args):
+def _treegraph(*args: Expr) -> Expr:
     G = _wg()
     pos, opts = split_options(args, {"DirectedEdges"} | G._GRAPH_OPTS, "TreeGraph")
     de = opts.pop("DirectedEdges", None)
@@ -981,7 +981,7 @@ def _treegraph(*args):
     notes="GraphTree[g, root] converts a tree graph (TreeGraphQ) into a Tree rooted at root (default: the "
           "vertex with the largest out-component, i.e. the source of a directed tree, else the first vertex); "
           "siblings follow VertexList order; GraphTree[g, root, h] with h[v] = {data, sortkey}")
-def _graphtree(*args):
+def _graphtree(*args: Expr) -> Expr:
     G = _wg()
     pos, opts = split_options(args, _OPTSET, "GraphTree")
     if not 1 <= len(pos) <= 3:
@@ -1035,7 +1035,7 @@ def _graphtree(*args):
 @fn("NestGraph", area=AREA, status="added",
     notes="NestGraph[f, expr | {exprs} | graph, n] breadth-first graph with directed edges x -> y for y in f[x], "
           "n levels (default 1; Infinity allowed when finite); DirectedEdges -> False gives undirected edges")
-def _nestgraph(*args):
+def _nestgraph(*args: Expr) -> Expr:
     G = _wg()
     pos, opts = split_options(args, {"DirectedEdges"} | G._GRAPH_OPTS, "NestGraph")
     if not 2 <= len(pos) <= 3:
@@ -1100,7 +1100,7 @@ def _nestgraph(*args):
 @fn("RandomTree", area=AREA, status="added",
     notes="RandomTree[n | {e1, ..., en}, k | {k1, ...}] uniformly random ordered rooted trees with n nodes "
           "(via a random Dyck word and the cycle lemma); the data 1..n (or the ei) are assigned in pre-order")
-def _randomtree(spec, shape=None, *opts):
+def _randomtree(spec: Expr, shape: Expr = None, *opts: Option) -> Expr:
     if is_list(spec):
         labels = list(spec.args)
     else:
@@ -1273,7 +1273,7 @@ import sympy as sp  # noqa: E402
           "{label, prob}; information sets player -> ilabel) or TreeGame[Tree[<|\"Player\" -> p|>, {...}]] with "
           "\"Payoffs\", \"Label\", \"Probability\", \"InformationSet\" keys: validated (consistent payoff counts, "
           "complete probability distributions) and kept as the inert game object TreeGame[spec]")
-def _treegame(spec, *rest):
+def _treegame(spec: Expr, *rest: Expr) -> Expr:
     if rest:
         raise TreeError("TreeGame: options and extra arguments are not supported")
     _game_root(Expr("TreeGame", spec), "TreeGame")
@@ -1309,7 +1309,7 @@ def _strategy_table(strat, fname):
           "probabilities in the game use them unless the strategy overrides them; TreeGamePayoff[tgame, strat, "
           "\"RandomExpectation\"] averages unspecified nodes uniformly; \"Perfect\", \"PerfectExpectation\" and "
           "\"Random\" raise; an incomplete strategy without an adversary type raises")
-def _treegamepayoff(game, strat, adv=None):
+def _treegamepayoff(game: Expr, strat: Assoc, adv: Expr = None) -> Expr:
     fname = "TreeGamePayoff"
     root = _game_root(game, fname)
     table = _strategy_table(strat, fname)

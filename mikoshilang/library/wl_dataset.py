@@ -416,7 +416,7 @@ def run_query(ops, ctx, data):
           "Missing, too-short data gives Missing[\"Indeterminate\"], Apply[Times] with Missing gives "
           "Missing[\"Indeterminate\"]; None) and PartBehavior (Automatic: absent parts give Missing[\"PartAbsent\", "
           "i] / Missing[\"KeyAbsent\", k]; None: they fail)")
-def _query(*args):
+def _query(*args: Expr) -> Expr:
     ops, ctx = split_query(args)       # validates the options
     raise Unevaluated()
 
@@ -447,7 +447,7 @@ _DS_OPTS = {"DatasetTheme", "MaxItems", "HiddenItems", "ItemDisplayFunction", "I
           "wrapper of nested lists/associations; ds[ops...] = Query[ops...] on the data (structured results stay "
           "Datasets), Normal, Length, Part (ds[[...]] gives a Dataset for structured parts), Keys, Values; Dataset "
           "of a Tabular gives its rows; type and schema inference (TypeSystem) is not reproduced")
-def _dataset(*args):
+def _dataset(*args: Expr) -> Expr:
     if not args:
         raise ValueError("Dataset: expected Dataset[data]")
     data, opts = args[0], args[1:]
@@ -646,7 +646,7 @@ def _ref_assoc(spec):
           "user:pass@host:port/name\" and DatabaseReference[<|\"Backend\" -> ..., \"Name\" -> ..., ...|>] give the "
           "canonical DatabaseReference[<|...|>]; ref[prop] for Backend, Name, Host, Port, Username, Password and "
           "\"Connected\"; only SQLite databases can actually be opened (Python sqlite3)")
-def _databasereference(spec):
+def _databasereference(spec: Expr) -> Expr:
     if parse_ref(Expr("DatabaseReference", spec)) is not None:
         canon = _ref_assoc(spec)
         if canon == spec:
@@ -734,7 +734,7 @@ def _fail(tag, msg):
     notes="DatabaseConnect[db] (DatabaseReference or RelationalDatabase) opens an SQLite connection and gives "
           "Success[\"DatabaseConnect\", ...]; a missing file or another backend gives a Failure; ref[\"Connected\"] "
           "reports the state")
-def _databaseconnect(db):
+def _databaseconnect(db: Expr) -> Expr:
     a = _to_ref(db, "DatabaseConnect")
     if _ref_key(a) in _CONNECTIONS:
         return _success("DatabaseConnect", "The connection is already active.")
@@ -749,7 +749,7 @@ def _databaseconnect(db):
 @fn("DatabaseDisconnect", **ADDED,
     notes="DatabaseDisconnect[db] closes the connection opened by DatabaseConnect and gives Success[...]; a Failure "
           "if there is no active connection")
-def _databasedisconnect(db):
+def _databasedisconnect(db: Expr) -> Expr:
     a = _to_ref(db, "DatabaseDisconnect")
     con = _CONNECTIONS.pop(_ref_key(a), None)
     if con is None:
@@ -805,7 +805,7 @@ def _parse_rdb(x):
           "foreign keys); rdb[\"Tables\"], rdb[\"Connection\"], rdb[table, prop], rdb[table, \"PrimaryKey\", prop], "
           "rdb[table, col, \"NativeTypeString\" | \"Nullable\" | All]; Tabular[rdb -> table] and Tabular[<|"
           "\"RelationalDatabase\" -> rdb, \"Query\" -> table|>] load a table into memory")
-def _relationaldatabase(*args):
+def _relationaldatabase(*args: Expr) -> Expr:
     if _parse_rdb(Expr("RelationalDatabase", *args)) is not None:
         raise Unevaluated()
     args = list(args)
@@ -963,7 +963,7 @@ wrap_registry("Tabular", _tabular_db_pre)
           "association, Authentication option): an inert, validated reference; obj[\"ConnectionName\"], "
           "obj[\"Location\"], obj[\"Redownload\"] (default False), obj[\"Properties\"] and other keys; retrieving "
           "remote data (Import) is not available")
-def _dataconnectionobject(*args):
+def _dataconnectionobject(*args: Expr) -> Expr:
     args = list(args)
     while args and is_rule(args[-1]) and is_sym(args[-1].args[0], "Authentication"):
         args.pop()
