@@ -13,8 +13,9 @@ from .expr import Expr, Symbol
 
 # Wolfram precedences (higher binds tighter)
 P_COMPOUND, P_SET, P_FUNCTION, P_REPLACE, P_RULE, P_CONDITION = 10, 40, 90, 110, 120, 130
-P_OR, P_AND, P_NOT, P_COMPARE, P_SAMEQ = 215, 215, 230, 290, 290
+P_OR, P_AND, P_NOT, P_COMPARE, P_SAMEQ = 215, 215, 230, 290, 260
 P_PLUS, P_TIMES, P_UMINUS, P_DIVIDE, P_POWER, P_STRINGJOIN = 310, 400, 480, 470, 590, 600
+P_ADDTO = 100
 P_CALL, P_ATOM = 1000, 2000
 
 _INFIX = {
@@ -22,13 +23,13 @@ _INFIX = {
     "Greater": (">", P_COMPARE), "LessEqual": ("<=", P_COMPARE), "GreaterEqual": (">=", P_COMPARE),
     "SameQ": ("===", P_SAMEQ), "UnsameQ": ("=!=", P_SAMEQ), "And": ("&&", P_AND), "Or": ("||", P_OR),
     "StringJoin": ("<>", P_STRINGJOIN), "Alternatives": ("|", 160), "StringExpression": ("~~", 135),
-    "Composition": ("@*", 625), "RightComposition": ("/*", 624),
+    "Composition": ("@*", 655), "RightComposition": ("/*", 650),
 }
 _BINARY = {
     "Rule": ("->", P_RULE), "RuleDelayed": (":>", P_RULE), "Set": ("=", P_SET),
     "SetDelayed": (":=", P_SET), "ReplaceAll": ("/.", P_REPLACE), "ReplaceRepeated": ("//.", P_REPLACE),
-    "Condition": ("/;", P_CONDITION), "AddTo": ("+=", P_SET), "SubtractFrom": ("-=", P_SET),
-    "TimesBy": ("*=", P_SET), "DivideBy": ("/=", P_SET),
+    "Condition": ("/;", P_CONDITION), "AddTo": ("+=", P_ADDTO), "SubtractFrom": ("-=", P_ADDTO),
+    "TimesBy": ("*=", P_ADDTO), "DivideBy": ("/=", P_ADDTO),
 }
 
 
