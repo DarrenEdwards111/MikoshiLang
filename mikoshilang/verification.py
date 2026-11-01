@@ -393,6 +393,9 @@ def _run_delegated(r: Result, cases, harness):
         r.add("delegated", True)
         return
     path = m.group(1)
+    if "." not in path:                 # prose ("delegated (the stored function f)"), not a module path
+        r.add("delegated", True)
+        return
     parts = path.split(".")
     for i in range(len(parts), 0, -1):
         try:

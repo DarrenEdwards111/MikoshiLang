@@ -123,3 +123,12 @@ def test_selfcheck_finds_verification_steps_in_helpers_and_distribution_classes(
         H._run_selfcheck(r, [], None)
         assert r.status == "pass", (head, r.failures)
     assert not any("raise ArithmeticError" in s for s in H._impl_sources("GCD"))
+
+
+def test_delegated_prose_is_not_a_module_path():
+    r = H.Result("X", ["delegated"], "delegated (the stored function f) in tests.")
+    H._run_delegated(r, [], None)
+    assert r.status == "pass"
+    r = H.Result("Y", ["delegated"], "delegated (no.such.module_fn)")
+    H._run_delegated(r, [], None)
+    assert r.status == "fail"
