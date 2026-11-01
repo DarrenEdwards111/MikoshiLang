@@ -10,7 +10,7 @@ Sources of the expected values (never the implementation's own output):
   ``os.getpid``/``os.getppid``, ``os.cpu_count``, ``getpass.getuser``, ``socket.gethostname``, ``sys.maxsize``.
 * Wolfram reference pages for the documented type or default of the other $-variables ($Version is a string,
   $VersionNumber a real, $CreationDate a DateObject, $Pre/$Post/$Epilog have no value by default, $KernelID and
-  $KernelCount are 0 in the master kernel before LaunchKernels, $Language is "English", $DistributedContexts
+  $KernelID is 0 in the master kernel and $KernelCount a non-negative integer, $Language is "English", $DistributedContexts
   defaults to "Global`", $CompilationTarget to "WVM", $EvaluationEnvironment to "Session").
 
 $ScriptInputString, $UserAgent, $UserAgentString, $InitializationContexts and $SyntaxHandler are left out: the
@@ -113,7 +113,7 @@ DOLLAR = [
     ("$SystemWordLength", Eq(64 if sys.maxsize > 2 ** 32 else 32)),
     ("$OperatingSystem", Eq({"win32": "Windows", "darwin": "MacOSX"}.get(sys.platform, "Unix"))),
     # documented defaults
-    ("$KernelID", Eq(0)), ("$KernelCount", Eq(0)), ("$Language", Eq("English")),
+    ("$KernelID", Eq(0)), ("$KernelCount", NONNEG), ("$Language", Eq("English")),
     ("$DistributedContexts", Eq("Global`")), ("$CompilationTarget", Eq("WVM")),
     ("$EvaluationEnvironment", Eq("Session")), ("$Input", Eq("")), ("$InputFileName", Eq("")),
     # documented types
