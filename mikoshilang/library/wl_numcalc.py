@@ -368,7 +368,7 @@ def _tocomplex(v):
 @fn("NRoots", area=AREA, status="added",
     notes="NRoots[poly == 0, x] gives x == r1 || x == r2 || ... with roots repeated by multiplicity (machine "
           "precision, or the precision of approximate coefficients); non-polynomials raise")
-def _nroots(eq: Expr, x: Expr, *rest: Expr) -> Expr:
+def _nroots(eq: Expr, x: Var, *rest: Expr) -> Expr:
     pos, opts, prec, dps = _opts(rest, "NRoots")
     exprs = _equations(eq, "NRoots")
     if len(exprs) != 1:
@@ -662,7 +662,7 @@ def _fit(data: ListOf[Expr], funs: Expr, vs: Expr) -> Expr:
 @fn("FindFit", area=AREA, status="added",
     notes="FindFit[data, expr, pars, vars] nonlinear least squares -> {a -> a*, ...}; pars may be {{a, a0}, ...} "
           "with starting values (default 1); constraints FindFit[data, {expr, cons}, ...] are not supported")
-def _findfit(data: Expr, model: Expr, pars: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
+def _findfit(data: ListOf[Expr], model: Expr, pars: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     import numpy as np
     _need_scipy("FindFit")
     from scipy.optimize import least_squares
