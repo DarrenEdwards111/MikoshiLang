@@ -111,15 +111,15 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 | verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
 | fixed | 513 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
 | promoted | 25 | was quarantined; now properly implemented and tested |
-| added | 3335 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| added | 3428 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 16 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **4033** | 620 pre-audit inventory heads, all with a status, plus 3413 promoted/aliased heads |
+| **total reviewed** | **4126** | 620 pre-audit inventory heads, all with a status, plus 3506 promoted/aliased heads |
 
 Remaining unreviewed quarantined names: **5199** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **20241**.
+Differential test cases in tests/library: **20816**.
 
 
 ## By area
@@ -143,6 +143,7 @@ Differential test cases in tests/library: **20241**.
 | discrete mathematics (batch 6) | 0 | 0 | 0 | 48 | 0 | 0 | 0 |
 | elementary | 28 | 12 | 1 | 1 | 0 | 0 | 0 |
 | evaluation control, definitions, contexts (W01) | 0 | 0 | 0 | 119 | 0 | 0 | 0 |
+| files & streams (W27) | 0 | 0 | 0 | 94 | 0 | 0 | 0 |
 | finance | 0 | 20 | 0 | 0 | 0 | 0 | 0 |
 | finite fields (W09) | 0 | 0 | 0 | 11 | 0 | 0 | 0 |
 | fractals and paths (W09) | 0 | 0 | 0 | 12 | 0 | 0 | 0 |
@@ -200,7 +201,7 @@ Differential test cases in tests/library: **20241**.
 | strings & text (W11) | 0 | 0 | 0 | 108 | 0 | 0 | 0 |
 | strings (batch 1) | 0 | 7 | 0 | 58 | 0 | 0 | 0 |
 | strings and dates | 12 | 22 | 0 | 0 | 0 | 0 | 0 |
-| structural (W03) | 0 | 0 | 0 | 63 | 0 | 0 | 0 |
+| structural (W03) | 0 | 0 | 0 | 62 | 0 | 0 | 0 |
 | time series (W25) | 0 | 0 | 0 | 18 | 0 | 0 | 0 |
 | transforms | 4 | 15 | 0 | 6 | 0 | 0 | 0 |
 | trees (W03) | 0 | 0 | 0 | 54 | 0 | 0 | 0 |
@@ -435,11 +436,11 @@ Cases = number of differential test cases in which the head occurs.
 | `KeyTake` | added | 3 | entries for the given keys in the order the keys are listed (absent keys ignored); rule lists give rule lists; lists of associations thread |
 | `KeyUnion` | added | 3 | each association extended to the union of keys (in order of first appearance); absent keys get Missing["KeyAbsent", k] (or f[k] with KeyUnion[list, f]) |
 | `KeyValueMap` | added | 3 | {f[k1, v1], f[k2, v2], ...} |
-| `Keys` | added | 12 | keys of an association in order; Keys of a rule list gives each rule's key; lists of associations thread; Keys[a, f] applies f to each key |
+| `Keys` | added | 14 | keys of an association in order; Keys of a rule list gives each rule's key; lists of associations thread; Keys[a, f] applies f to each key |
 | `Lookup` | added | 7 | Lookup[assoc, key] (Missing["KeyAbsent", key] if absent), Lookup[assoc, key, default], a list of keys gives a list, a list of associations threads; rule lists act as associations |
 | `Merge` | added | 4 | Merge[{a1, a2, ...}, f] gives <\|k -> f[{values for k}]\|> with keys in order of first appearance; rule lists act as associations |
 | `MissingQ` | added | 3 | True for Missing[...] expressions |
-| `Values` | added | 10 | values of an association in order (RuleDelayed values evaluated); rule lists and lists of associations thread; Values[a, f] applies f to each value |
+| `Values` | added | 11 | values of an association in order (RuleDelayed values evaluated); rule lists and lists of associations thread; Values[a, f] applies f to each value |
 
 ### calculus
 
@@ -473,7 +474,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PhasePlane` | fixed | 3 | equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped tuple-form solutions |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Table` | kernel | 80 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 83 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
@@ -504,7 +505,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Limit` | fixed | 17 | batch 4: Limit[f, x -> a] (two-sided: Indeterminate when the one-sided limits differ), Direction -> "FromAbove" / "FromBelow" / -1 / 1 / "TwoSided", Assumptions, limits at +-Infinity, lists of functions, and multivariate limits Limit[f, {x, y} -> {a, b}] (continuity after cancellation, Indeterminate when two paths disagree, otherwise a clear error); oscillating limits raise (use MaxLimit/MinLimit); legacy rejected every option |
 | `MaxLimit` | added | 4 | upper limit (limsup) MaxLimit[f, x -> a] with Direction and Assumptions: the larger one-sided limit, or A + \|B\| for f = A + B Sin[g] / A + B Cos[g] with g -> +-Infinity (MaxLimit[Sin[1/x], x -> 0] -> 1); other oscillating functions raise |
 | `MinLimit` | added | 3 | lower limit (liminf) MinLimit[f, x -> a]; see MaxLimit (MinLimit[Sign[x], x -> 0] -> -1) |
-| `Normal` | fixed | 146 | batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate series) and evaluates the remaining polynomial; associations and other heads as before (batch 1) |
+| `Normal` | fixed | 147 | batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate series) and evaluates the remaining polynomial; associations and other heads as before (batch 1) |
 | `O` | added | 3 | order term O[x]^n / O[x - x0]^n / O[1/x]^n of Series results (stays symbolic); Normal removes it; SeriesCoefficient, InverseSeries and ComposeSeries read it |
 | `Product` | fixed | 7 | batch 4: as Sum (finite, symbolic and infinite products via SymPy; parametric products give the generic value, ConditionalExpression with GenerateConditions -> True) |
 | `RSolve` | fixed | 10 | batch 4: RSolve[eqns, a[n], n] -> {{a[n] -> ...}} and RSolve[eqns, a, n] -> {{a -> Function[{n}, ...]}}; linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every solution is substituted back into the recurrence and the initial conditions; free constants are C[1], C[2], ...; systems raise |
@@ -761,7 +762,7 @@ Cases = number of differential test cases in which the head occurs.
 |---|---|---|---|
 | `$DateStringFormat` | added | 4 | default DateString format ("DateTimeShort"); assignable to any named format or element list, and Block-able |
 | `$TimeZone` | added | 13 | time zone assumed by date functions: hours east of GMT (default the system zone, a real number) or an IANA zone name; assignable (validated) and Block-able |
-| `AbsoluteTime` | added | 15 | seconds since 1900-01-01 00:00 in $TimeZone: AbsoluteTime[] (machine real), AbsoluteTime[date] for DateObject (converted from its zone), date list (exact for exact input: AbsoluteTime[{2000, 1, 1}] = 3155673600), date string or absolute time; TimeZone -> z gives the value in zone z; leap seconds are not counted |
+| `AbsoluteTime` | added | 17 | seconds since 1900-01-01 00:00 in $TimeZone: AbsoluteTime[] (machine real), AbsoluteTime[date] for DateObject (converted from its zone), date list (exact for exact input: AbsoluteTime[{2000, 1, 1}] = 3155673600), date string or absolute time; TimeZone -> z gives the value in zone z; leap seconds are not counted |
 | `AggregateRows` | added | 5 | AggregateRows[tab, key -> f \| {key -> f, ...}] and AggregateRows[tab, fspec, gcols] (groups by the values of the columns gcols, which become key columns, in order of first appearance); f receives the association of the (sub)table's columns as lists (#col); lists of associations give lists of associations; operator forms AggregateRows[fspec] and AggregateRows[fspec, gspec] |
 | `AllowedDimensions` | added | 4 | option of Grid and Tabular restricting the displayed number of rows and columns; an inert option name |
 | `Cast` | added | 9 | Cast[val, type] and Cast[val, type, method] performed directly (there is no compiler, so this is what compiled code would compute): "ConversionCast" (default; checks ranges and refuses lossy real -> integer conversions), "CCast" (C semantics: wraps integers, truncates reals; numeric types only), "BitCast" (reinterprets the bits between same-size integer/real types; the source type is inferred as Integer64 / Real64, or give {val, srcType}); types Integer8-64, UnsignedInteger8-64, Real32, Real64, ComplexReal32/64, Boolean, String, InertExpression and TypeSpecifier["PackedArray"][elem, rank] |
@@ -787,8 +788,8 @@ Cases = number of differential test cases in which the head occurs.
 | `DateFunction` | added | 4 | option of TimeSeries, DateListPlot, DateScale, ... converting inputs to dates; an inert option name validated by DateScale |
 | `DateGranularity` | added | 4 | option of DateObject, RandomDate, RandomTime, TimeObject, FromJulianDate, ... giving the calendar granularity of generated dates (Automatic or a granularity) |
 | `DateInterval` | added | 11 | DateInterval[{start, end}], DateInterval[{start, end}, gran], DateInterval[{{s1, e1}, ...}] (union, sorted and merged) and DateInterval[gdate]; dates may be DateObjects, date lists, absolute times or strings; the finest granularity of the endpoints is used by default, the end date's period is included (its final instant excluded); canonical form DateInterval[{{startlist, endlist}, ...}, gran] (floating) or DateInterval[..., gran, cal, tz]; properties "DateBounds", "Granularity", "TimeZone", "CalendarType" |
-| `DateList` | added | 12 | DateList[] (now in $TimeZone), DateList[date] for DateObject, date list (out-of-range values reduced, fractional d/h/m/s allowed), absolute time (seconds since 1900 in $TimeZone), date string or {"string", {e1, sep, e2, ...}}; always {y, m, d, h, m, s} with real seconds; DateList[TimeZone -> z] |
-| `DateObject` | added | 96 | DateObject[] (now, "Instant" in $TimeZone), DateObject[date] for a date list, absolute time, date string, {"string", {e1, ...}} or DateObject, DateObject[date, gran] (all 20 calendar granularities, integer 0..9 precision, "MidpointInstant"), DateObject[date, gran, cal, tz, tsys] and the options CalendarType ("Gregorian" or "Julian"), DateFormat, DateGranularity, TimeSystem, TimeZone; out-of-range elements are reduced ({2022, 2, 31} -> {2022, 3, 3}); canonical forms are DateObject[list, gran] for floating day-and-coarser dates and DateObject[list, gran, cal, tz] otherwise; d["Date"], d["Granularity"], d["TimeZone"], d["CalendarType"], d["DateList"] and date elements such as d["Year"], d["DayName"] |
+| `DateList` | added | 16 | DateList[] (now in $TimeZone), DateList[date] for DateObject, date list (out-of-range values reduced, fractional d/h/m/s allowed), absolute time (seconds since 1900 in $TimeZone), date string or {"string", {e1, sep, e2, ...}}; always {y, m, d, h, m, s} with real seconds; DateList[TimeZone -> z] |
+| `DateObject` | added | 97 | DateObject[] (now, "Instant" in $TimeZone), DateObject[date] for a date list, absolute time, date string, {"string", {e1, ...}} or DateObject, DateObject[date, gran] (all 20 calendar granularities, integer 0..9 precision, "MidpointInstant"), DateObject[date, gran, cal, tz, tsys] and the options CalendarType ("Gregorian" or "Julian"), DateFormat, DateGranularity, TimeSystem, TimeZone; out-of-range elements are reduced ({2022, 2, 31} -> {2022, 3, 3}); canonical forms are DateObject[list, gran] for floating day-and-coarser dates and DateObject[list, gran, cal, tz] otherwise; d["Date"], d["Granularity"], d["TimeZone"], d["CalendarType"], d["DateList"] and date elements such as d["Year"], d["DayName"] |
 | `DateObjectQ` | added | 4 | True for a DateObject with a valid canonical specification, else False |
 | `DateOverlapsQ` | added | 3 | DateOverlapsQ[d1, d2] is True if the periods of two DateObjects (or DateIntervals) intersect; instants overlap a period they lie in; lists thread like Outer |
 | `DatePattern` | added | 5 | DatePattern[{"e1", ...}] and DatePattern[{...}, sep] as string patterns (StringMatchQ, StringCases, StringReplace, ...): elements Year (4 digits), Quarter, Month, MonthName (full or 3-letter), Day, DayName, Hour, AMPM, Minute, Second; consecutive elements are separated by one of / - : . (or by sep), literal strings in the list are matched exactly; inert as an expression |
@@ -904,7 +905,7 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Abs` | verified | 103 | verified against SymPy/mpmath |
+| `Abs` | verified | 105 | verified against SymPy/mpmath |
 | `ArcCos` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCosh` | verified | 3 | verified against SymPy/mpmath |
 | `ArcCot` | verified | 3 | verified against SymPy/mpmath |
@@ -930,7 +931,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Log10` | verified | 3 | log base 10; Log10[0] = -Infinity |
 | `Log2` | verified | 3 | log base 2; Log2[0] = -Infinity |
 | `Max` | fixed | 30 | returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; now exact, variadic, flattens lists, Max[] = -Infinity |
-| `Min` | fixed | 14 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
+| `Min` | fixed | 22 | returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity |
 | `Mod` | fixed | 31 | Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset form and complex arguments were missing |
 | `Quotient` | fixed | 12 | Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = Floor[(m - d)/n]; complex arguments use Round |
 | `QuotientRemainder` | added | 4 | {Quotient[m, n], Mod[m, n]} |
@@ -996,7 +997,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Full` | added | 10 | inert option value (e.g. PlotRange -> Full) |
 | `FullDefinition` | added | 10 | FullDefinition[f] prints the definitions of f and of every symbol they refer to, recursively (System` symbols excluded); options ExcludedContexts and IncludedContexts |
 | `General` | added | 7 | symbol to which general messages are attached (General::tag) |
-| `Get` | added | 13 | Get["file"] (<<file) reads a file of Wolfram Language input and evaluates each expression in turn, returning the last result (a relative file name is also searched for in PACKAGE_PATH and $MIKOSHILANG_PATH); Get["ctx`"] loads ctx.wl, ctx.m, ctx/init.m or ctx/Kernel/init.m from the working directory, PACKAGE_PATH or $MIKOSHILANG_PATH. A file that cannot be opened raises Get::noopen |
+| `Get` | added | 16 | Get["file"] (<<file) reads a file of Wolfram Language input and evaluates each expression in turn, returning the last result (a relative file name is also searched for in PACKAGE_PATH and $MIKOSHILANG_PATH); Get["ctx`"] loads ctx.wl, ctx.m, ctx/init.m or ctx/Kernel/init.m from the working directory, PACKAGE_PATH or $MIKOSHILANG_PATH. A file that cannot be opened raises Get::noopen |
 | `Goto` | added | 4 | Goto[tag] continues evaluation after Label[tag] in the enclosing compound expression (the innermost one containing that label, searching outwards); a missing label raises Goto::nolabel |
 | `Heads` | added | 8 | option Heads -> True/False of Inactivate, Activate (and the level functions) |
 | `HoldAllComplete` | added | 3 | attribute: no argument is evaluated, Sequence is not spliced, Unevaluated is kept and upvalues are not used |
@@ -1017,7 +1018,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LocalSymbol` | added | 6 | LocalSymbol["name"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol["name"] = val or := val; unevaluated when never assigned; LocalSymbol["name", "dir"] uses another base; =. deletes it |
 | `Locked` | added | 5 | attribute: the attributes of the symbol can no longer be changed (Protect/Unprotect, SetAttributes, ClearAttributes, Attributes[f] = ... raise) |
 | `Manual` | added | 3 | inert option value: selected manually |
-| `Method` | added | 142 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
+| `Method` | added | 154 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
 | `NHoldAll` | added | 3 | attribute: N does not affect any argument of f |
 | `NHoldFirst` | added | 3 | attribute: N does not affect the first argument of f |
 | `NHoldRest` | added | 3 | attribute: N affects only the first argument of f |
@@ -1070,6 +1071,105 @@ Cases = number of differential test cases in which the head occurs.
 | `UpValues` | added | 8 | UpValues[f]: rules attached to f by UpSet/TagSet (HoldPattern[lhs] :> rhs); UpValues[f] = {...} replaces them |
 | `Update` | added | 3 | Update[s] / Update[] tell the system that values depending on s may have changed; MikoshiLang keeps no evaluation caches that could go stale, so this returns Null |
 | `ValueQ` | added | 15 | ValueQ[expr] is True when expr has a value: a symbol with an OwnValue, or an expression changed by evaluation (Method -> "Legacy" default compares the result; "SymbolDefinitionsPresent" and "TrialEvaluation" also accepted) |
+
+### files & streams (W27)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `$BaseDirectory` | added | 3 | $BaseDirectory: the system-wide base directory: /usr/share/Mikoshilang on Linux, /Library/Mikoshilang on macOS, %PROGRAMDATA%\Mikoshilang on Windows, or $MIKOSHILANG_BASE when set. A user assignment takes precedence. Check: reference (Wolfram documentation of $BaseDirectory and the Python os/sys/tempfile values) in tests. |
+| `$ByteOrdering` | added | 3 | $ByteOrdering: the native byte ordering: -1 (little-endian, x86 and ARM) or +1 (big-endian); the default ByteOrdering of BinaryRead, BinaryWrite and BinaryReadList. A user assignment takes precedence. Check: reference (Wolfram documentation of $ByteOrdering and the Python os/sys/tempfile values) in tests. |
+| `$HomeDirectory` | added | 7 | $HomeDirectory: the user's home directory as an absolute name ($HOME on Unix, %USERPROFILE% on Windows). A user assignment takes precedence. Check: reference (Wolfram documentation of $HomeDirectory and the Python os/sys/tempfile values) in tests. |
+| `$InitialDirectory` | added | 3 | $InitialDirectory: the working directory when MikoshiLang was started (imported). A user assignment takes precedence. Check: reference (Wolfram documentation of $InitialDirectory and the Python os/sys/tempfile values) in tests. |
+| `$InputFileName` | added | 3 | $InputFileName: the absolute name of the file being read by Get (<<) or Needs, and "" otherwise. A user assignment takes precedence. Check: reference (Wolfram documentation of $InputFileName and the Python os/sys/tempfile values) in tests. |
+| `$InputStreamMethods` | added | 3 | $InputStreamMethods: the Method settings for OpenRead: "File" and the names defined with DefineInputStreamMethod. A user assignment takes precedence. Check: reference (Wolfram documentation of $InputStreamMethods and the Python os/sys/tempfile values) in tests. |
+| `$InstallationDirectory` | added | 3 | $InstallationDirectory: the directory MikoshiLang is installed in (the parent of the mikoshilang package). A user assignment takes precedence. Check: reference (Wolfram documentation of $InstallationDirectory and the Python os/sys/tempfile values) in tests. |
+| `$OutputStreamMethods` | added | 3 | $OutputStreamMethods: the Method settings for OpenWrite and OpenAppend: "File" and the names defined with DefineOutputStreamMethod. A user assignment takes precedence. Check: reference (Wolfram documentation of $OutputStreamMethods and the Python os/sys/tempfile values) in tests. |
+| `$Path` | added | 6 | $Path: directories searched by FindFile, OpenRead and the Read functions for relative file names: ".", the Kernel, Autoload and Applications subdirectories of $UserBaseDirectory and $BaseDirectory, then Get's PACKAGE_PATH and $MIKOSHILANG_PATH entries; assigning $Path (or Block) changes the search. A user assignment takes precedence. Check: reference (Wolfram documentation of $Path and the Python os/sys/tempfile values) in tests. |
+| `$PathnameSeparator` | added | 4 | $PathnameSeparator: the pathname separator, "/" ("\\" on Windows). A user assignment takes precedence. Check: reference (Wolfram documentation of $PathnameSeparator and the Python os/sys/tempfile values) in tests. |
+| `$RootDirectory` | added | 3 | $RootDirectory: the root directory of the file system ("/" on Unix; the current drive on Windows). A user assignment takes precedence. Check: reference (Wolfram documentation of $RootDirectory and the Python os/sys/tempfile values) in tests. |
+| `$StandardErrorStream` | added | 4 | $StandardErrorStream: OutputStream["stderr", 2]. A user assignment takes precedence. Check: reference (Wolfram documentation of $StandardErrorStream and the Python os/sys/tempfile values) in tests. |
+| `$StandardOutputStream` | added | 6 | $StandardOutputStream: OutputStream["stdout", 1]. A user assignment takes precedence. Check: reference (Wolfram documentation of $StandardOutputStream and the Python os/sys/tempfile values) in tests. |
+| `$TemporaryDirectory` | added | 6 | $TemporaryDirectory: the directory for temporary files (Python tempfile.gettempdir(), honouring TMPDIR); CreateFile[], CreateDirectory[] and OpenWrite[] use its current value, so it can be reassigned or localised with Block. A user assignment takes precedence. Check: reference (Wolfram documentation of $TemporaryDirectory and the Python os/sys/tempfile values) in tests. |
+| `$UserBaseDirectory` | added | 4 | $UserBaseDirectory: the per-user base directory: ~/.Mikoshilang on Linux, ~/Library/Mikoshilang on macOS, %APPDATA%\Mikoshilang on Windows, or $MIKOSHILANG_USERBASE when set (the Wolfram product name is replaced by Mikoshilang). A user assignment takes precedence. Check: reference (Wolfram documentation of $UserBaseDirectory and the Python os/sys/tempfile values) in tests. |
+| `$UserDocumentsDirectory` | added | 4 | $UserDocumentsDirectory: the user's documents directory, ~/Documents on every system as documented. A user assignment takes precedence. Check: reference (Wolfram documentation of $UserDocumentsDirectory and the Python os/sys/tempfile values) in tests. |
+| `$WolframDocumentsDirectory` | added | 3 | $WolframDocumentsDirectory: $UserDocumentsDirectory/Wolfram, as documented. A user assignment takes precedence. Check: reference (Wolfram documentation of $WolframDocumentsDirectory and the Python os/sys/tempfile values) in tests. |
+| `AbsoluteFileName` | added | 7 | AbsoluteFileName["name"] gives the absolute name of an existing file or directory (relative to Directory[], . and .. resolved); a name that does not exist raises ValueError (Wolfram: message and $Failed); File[...] accepted. Check: exact; tests check FileExistsQ of the result and agreement with ExpandFileName. |
+| `BinaryFormat` | added | 7 | BinaryFormat -> True opens a stream for binary data (OpenRead, OpenWrite, OpenAppend); no newline translation is done in either mode on any system. Check: reference (Wolfram documentation) in tests. |
+| `BinaryRead` | added | 16 | BinaryRead[stream] reads one byte; BinaryRead[stream, "type"] one object of a binary type: "Byte", "(Unsigned)Integer8\|16\|24\|32\|64\|128", "Real32", "Real64", "Real128" (IEEE quad, decoded exactly and given with 34 digits), "Complex64\|128\|256", "Character8\|16\|32", "TerminatedString" (null-terminated 8-bit characters); or a structure of types such as {"Integer16", "Real64"}; IEEE infinities give Infinity/-Infinity and NaN Indeterminate; EndOfFile at the end (an incomplete object is not consumed); ByteOrdering -> 1 \| -1 (default $ByteOrdering); a file name reuses its open stream or opens one. Check: reference (IEEE 754 and IntegerDigits[n, 256] byte layouts) and BinaryWrite round trips in tests. |
+| `BinaryReadList` | added | 31 | BinaryReadList[src] reads all remaining bytes; BinaryReadList[src, type] all objects of a binary type or structure of types (types as BinaryRead; a partly read structure gets EndOfFile in the missing positions); BinaryReadList[src, type, n] at most n; a file name is opened (BinaryFormat -> True), read from the start and closed unless it was already open; ByteOrdering option. Check: reference (explicit byte layouts) and BinaryWrite round trips in tests. |
+| `BinaryWrite` | added | 34 | BinaryWrite[channel, b] writes a byte or list of bytes (0-255), a ByteArray, or a string as "Character8"; BinaryWrite[channel, x, "type"] or a list of values with a type or a list of types (repeated cyclically); types as BinaryRead (exact numbers are rounded correctly to the IEEE format, Real128 included; Infinity, -Infinity and Indeterminate give IEEE infinities and NaN); ByteOrdering -> 1 \| -1; channel is an OutputStream, file name (opened with OpenWrite if not open, and left open) or File[...] or a list of them; returns the channel; a value that does not fit the type raises ValueError (the wrong kind: TypeError) and nothing is written. Check: reference (IEEE 754 encodings, IntegerDigits[n, 256]) and BinaryRead round trips in tests. |
+| `Byte` | added | 7 | Byte is the Read/ReadList/Skip type for one byte, returned as an integer (a character code for string streams); BinaryRead uses "Byte". Check: reference (Wolfram documentation) in tests. |
+| `ByteOrdering` | added | 20 | ByteOrdering -> 1 (big-endian) \| -1 (little-endian) is the option of BinaryRead, BinaryReadList and BinaryWrite (default $ByteOrdering) and of binary Import/Export formats. Check: reference (Wolfram documentation) in tests. |
+| `Character` | added | 5 | Character is the Read/ReadList/Skip type for one character, returned as a one-character string. Check: reference (Wolfram documentation) in tests. |
+| `Close` | added | 67 | Close[stream] closes an InputStream or OutputStream (file, string or method stream) and gives its name (the symbol String for StringToStream streams); Close["name"] closes the only open stream of that name; closing a closed or unknown stream, or a name with several open streams, raises ValueError; the standard streams stdout/stderr cannot be closed (ValueError). Check: exact; Streams[] before and after in tests. |
+| `CopyDirectory` | added | 6 | CopyDirectory["dir1", "dir2"] copies dir1 with all its files and subdirectories to dir2 (modification dates kept, symbolic links copied as links) and returns the absolute name of dir2; dir1 must be an existing directory and dir2 must not exist (ValueError otherwise); dir2 may not lie inside dir1. Check: exact; tests compare FileNames listings and contents of the two trees. |
+| `CopyFile` | added | 10 | CopyFile["src", "dest"] copies a file (contents, permissions and modification date) and returns the absolute name of dest; src must be an existing file (ValueError otherwise, also for a directory); dest must not exist unless OverwriteTarget -> True (an existing directory is never overwritten); URLs, cloud and local objects are not supported (TypeError for non-file specifications). Check: exact; tests compare contents (ReadString) and FileDate of source and copy. |
+| `CreateDirectory` | added | 11 | CreateDirectory["dir"] creates the directory (relative to Directory[]) and returns its absolute name; CreateDirectory[] creates a new directory in $TemporaryDirectory; CreateIntermediateDirectories -> True (default) creates missing parents, False raises ValueError when the parent is missing; an existing file or directory of that name raises ValueError (Wolfram: message and $Failed); Listable; File[...] accepted. Check: exact; tests check DirectoryQ and an empty FileNames listing. |
+| `CreateFile` | added | 14 | CreateFile["file"] creates an empty file (relative to Directory[]) and returns its absolute name; CreateFile[] creates a new file in $TemporaryDirectory; CreateIntermediateDirectories -> True (default) creates missing parent directories; an existing file raises ValueError unless OverwriteTarget -> True, which truncates it to zero size; an existing directory of that name raises ValueError; Listable; File[...] accepted. Check: exact; tests check FileExistsQ and FileByteCount == 0. |
+| `CreateIntermediateDirectories` | added | 4 | CreateIntermediateDirectories -> True \| False is the option of CreateFile and CreateDirectory (default True: missing parent directories are created). Check: reference (Wolfram documentation) in tests. |
+| `DefineInputStreamMethod` | added | 15 | DefineInputStreamMethod["name", {"ConstructorFunction" -> f, "ReadFunction" -> g, ...}] defines an input stream method used by OpenRead[..., Method -> "name"] (or Method -> {"name", opts}), or by OpenRead with Method -> Automatic when its "NameTestFunction" gives True; supported functions: ConstructorFunction (required; f[name, caller, opts] -> {True, state}), ReadFunction (g[state, n] -> {bytes, state}), EndOfFileQFunction, ErrorTextFunction/ClearErrorFunction (an error raises ValueError after clearing it), WaitForInputFunction, CloseFunction, NameTestFunction; Seek-, StreamPosition-, StreamSize-, SeekableQ- and OptionChangesFunction are accepted but not needed: the stream buffers what it has read, so StreamPosition/SetStreamPosition always work. An existing name raises ValueError. Returns Null. Check: reference (the Wolfram documentation's "StringName" example) in tests. |
+| `DefineOutputStreamMethod` | added | 12 | DefineOutputStreamMethod["name", {"ConstructorFunction" -> f, "WriteFunction" -> g, ...}] defines an output stream method used by OpenWrite/OpenAppend[..., Method -> "name"] or Method -> Automatic with a "NameTestFunction"; f[name, isAppend, caller, opts] -> {True, state}; g[state, {bytes}] -> {count, state} (a short count raises ValueError); FlushFunction and CloseFunction are called on Close; StreamPositionFunction is used by StreamPosition; without a WriteFunction output is ignored (as documented). An existing name raises ValueError. Returns Null. Check: reference (round trip through a collecting method) in tests. |
+| `DeleteContents` | added | 7 | DeleteContents -> True is the option of DeleteDirectory that deletes a non-empty directory with its contents (default False: a non-empty directory raises). Check: reference (Wolfram documentation) in tests. |
+| `DeleteDirectory` | added | 11 | DeleteDirectory["dir"] deletes an empty directory and returns Null; a non-empty directory raises ValueError unless DeleteContents -> True, which deletes it with everything in it (symbolic links inside are removed, not followed); a missing directory or a file raises ValueError (Wolfram: message and $Failed); the current directory's ancestors can be deleted like any other; File[...] accepted. Check: exact; tests check DirectoryQ before and after and that a non-empty directory survives without DeleteContents. |
+| `DeleteFile` | added | 7 | DeleteFile["file"] or DeleteFile[{file1, ...}] deletes files and returns Null; every name is checked first: a missing file or a directory (use DeleteDirectory) raises ValueError and nothing is deleted; File[...] accepted. Check: exact; tests check FileExistsQ before and after. |
+| `Directory` | added | 6 | Directory[] gives the current working directory (absolute name). Check: exact (os.getcwd); SetDirectory/ResetDirectory round trips in tests. |
+| `DirectoryName` | added | 14 | DirectoryName["dir/name"] gives the directory part including its trailing separator ("a/b/c" -> "a/b/", "/Users/steve/report.nb" -> "/Users/steve/"); "" when there is no directory part; DirectoryName[name, n] applies it n times; OperatingSystem option; File[...] accepted (a string is returned). Check: exact; reference values from the Wolfram documentation in tests. |
+| `DirectoryQ` | added | 22 | DirectoryQ["name"] is True if name is an existing directory, else False; File[...] accepted; symbolic input stays unevaluated; other non-strings raise TypeError. Check: exact (os.path.isdir); tests in a temporary directory. |
+| `DirectoryStack` | added | 4 | DirectoryStack[] gives the directories saved by SetDirectory, most recent first ({} initially). Check: exact; tests after SetDirectory/ResetDirectory. |
+| `EndOfBuffer` | added | 4 | EndOfBuffer as the terminator of ReadString/ReadByteArray reads what is available without waiting; for files and string streams that is the rest of the input. Check: reference (Wolfram documentation) in tests. |
+| `EndOfFile` | added | 3 | EndOfFile is returned by Read, ReadList, ReadLine, ReadString, ReadByteArray, BinaryRead, Find, ... at the end of a stream, and is the default terminator of ReadString and ReadByteArray. Check: reference (Wolfram documentation) in tests. |
+| `ExpandFileName` | added | 8 | ExpandFileName["name"] gives the absolute name: interpreted relative to Directory[], "~" expanded to $HomeDirectory, . and .. resolved textually (the file need not exist); File[...] accepted. URL[...] is not supported. Check: exact (os.path.normpath/join); tests compare with Directory[] and FileNameJoin. |
+| `Expression` | added | 3 | Expression is the Read/ReadList type for one complete Wolfram Language expression (evaluated; Hold[Expression] keeps it unevaluated) and the default type of Read and ReadList. Check: reference (Wolfram documentation) in tests. |
+| `File` | added | 47 | File["path"] is an inert wrapper for a local file name, accepted by every file function here (and by Import, Export, Get, ...); the path need not exist. Check: reference (Wolfram documentation) in tests. |
+| `FileBaseName` | added | 7 | FileBaseName["dir/name.ext"] gives "name": the last path element without its last ".ext" ("file.tar.gz" -> "file.tar", "file." -> "file"); OperatingSystem option; File[...] accepted. Check: exact; reconstruction with FileExtension in tests. |
+| `FileByteCount` | added | 22 | FileByteCount["file"] is the number of bytes in the file (os.stat size; for a directory the size of its directory entry); a missing file raises ValueError (Wolfram: message and $Failed); File[...] accepted. Check: exact; tests write known byte counts (BinaryWrite, WriteString) and compare. |
+| `FileDate` | added | 11 | FileDate["file"] gives the modification date as a DateObject in $TimeZone (seconds as a machine real with the file system's sub-second resolution); FileDate[file, "Access" \| "Modification" \| "Change" \| "Creation"] gives that date and "Rules" a list of rules for the types this system records ("Creation" raises NotImplementedError where the file system has no birth time, e.g. Linux; "Change" on Windows); a missing file raises ValueError. Check: reference; SetFileDate/FileDate round trips in tests. |
+| `FileExistsQ` | added | 22 | FileExistsQ["name"] is True if a file or directory of that name exists (relative to Directory[]; "~" expanded), else False; File[...] accepted; a symbol stays unevaluated; other non-strings raise TypeError (Wolfram: message and False). Check: exact (os.path.exists); tests create and delete files in a temporary directory. |
+| `FileExtension` | added | 11 | FileExtension["name.ext"] gives "ext", the text after the last "." of the last path element; "" when there is no ".", when the name ends with "." or has the form of a directory name (ends with a separator); directory parts are ignored; OperatingSystem option; File[...] accepted. Check: exact; FileBaseName <> "." <> FileExtension reproduces the last element in tests. |
+| `FileNameDepth` | added | 8 | FileNameDepth["name"] is the number of path elements, Length[FileNameSplit[name]] (an absolute name counts its leading root element ""); OperatingSystem option; File[...] accepted. Check: exact; equality with Length[FileNameSplit[...]] in tests. |
+| `FileNameDrop` | added | 11 | FileNameDrop["name"] drops the last path element; FileNameDrop[name, n] drops the first n, -n the last n, {m, n} elements m through n (more than present: drops those present); OperatingSystem option; File[...] accepted. Check: exact; FileNameTake/FileNameDrop complement each other in tests. |
+| `FileNameForms` | added | 5 | FileNameForms -> forms is the option of FileSystemMap and FileSystemScan selecting file names by the same forms as FileNames (default All). Check: reference (Wolfram documentation) in tests. |
+| `FileNameJoin` | added | 62 | FileNameJoin[{"n1", "n2", ...}] joins names (which may contain separators) with the pathname separator; {"", ...} gives an absolute name; FileNameJoin["name"] canonicalises the separators; OperatingSystem option as FileNameSplit. Elements must be strings or File[...] (TypeError otherwise); a symbolic element keeps the call unevaluated. Check: exact; FileNameJoin[FileNameSplit[s]] == s round trips in tests. |
+| `FileNameSplit` | added | 11 | FileNameSplit["name"] splits at the pathname separators; an absolute name gives a first element ""; repeated separators are ignored; OperatingSystem -> "Unix" \| "MacOSX" \| "Windows" (Windows accepts \ and /, a drive "C:" or share "\\server\share" is one part); File["name"] is accepted; symbolic input stays unevaluated; non-strings raise TypeError, a bad OperatingSystem ValueError. URL[...] is not supported. Check: exact (string operations); round trips with FileNameJoin in tests. |
+| `FileNameTake` | added | 14 | FileNameTake["name"] gives the last path element; FileNameTake[name, n] the first n, -n the last n, {m, n} elements m through n (more than present: those present), joined with the separator; OperatingSystem option; File[...] accepted. Check: exact; FileNameJoin of Take/Drop parts in tests. |
+| `FileNames` | added | 20 | FileNames[] lists the files and directories in Directory[]; FileNames[form] those whose names match (abbreviated patterns with * and @, Verbatim["s"], StringExpression, RegularExpression, Alternatives of these, All); a list of forms matches any; a form may start with a literal directory part ("dir/*.txt"); FileNames[forms, dir \| {dir1, ...}] searches those directories and gives FileNameJoin[{dir, name}]; FileNames[forms, dirs, n] also subdirectories down to level n, {n} exactly level n, Infinity all (symbolic links to directories are not followed); IgnoreCase -> True \| False \| Automatic (case-insensitive only on Windows); results sorted as by Sort; missing directories contribute nothing. Wildcards in a directory part raise NotImplementedError. Check: exact (directory listing); tests build a known tree in a temporary directory. |
+| `FilePrint` | added | 6 | FilePrint["file"] prints the lines of a UTF-8 text file (through $Output, like Print) and returns Null; FilePrint[file, n] the first n lines, -n the last n, m;;n;;s a span (s may be negative); a missing file raises ValueError, a file that is not valid UTF-8 raises ValueError. Check: exact; tests capture the printed text. |
+| `FileSize` | added | 4 | FileSize["file"] gives Quantity[n, "Bytes"] with the exact byte count. Deliberate deviation: Wolfram rescales to kilobytes, megabytes, ... for display; the quantity is the same. A missing file raises ValueError; File[...] accepted. Check: exact; equality with FileByteCount in tests. |
+| `FileSystemMap` | added | 13 | FileSystemMap[f, root] gives <\|name -> f[full name], ...\|> for the files directly in root; FileSystemMap[f, root, n] nests subdirectories down to level n as associations (Infinity: all); {m, n} includes only files from level m to n; options FileNameForms (forms as in FileNames), IncludeDirectories -> True (a directory's association gets All -> f[dir]; directories at the last level become name -> f[dir]) and MaxItems (at most n entries per directory, in sorted order); symbolic links to directories are not followed. The 4-argument form FileSystemMap[f, root, lev, r] raises NotImplementedError. Check: exact; tests compare with FileNames and FileByteCount on a known tree. |
+| `FileSystemScan` | added | 6 | FileSystemScan[f, root] evaluates f[full name] for each file directly in root (sorted order) and returns Null; FileSystemScan[f, root, n] goes down to level n ({m, n}: files from level m to n, Infinity: all); options FileNameForms, IncludeDirectories (f is also applied to directories) and MaxItems, as in FileSystemMap. Check: exact; tests collect the visited names with Sow/Reap. |
+| `FileType` | added | 7 | FileType["name"] gives File, Directory, Special (devices, pipes, sockets) or None when nothing of that name exists (symbolic links are followed); File[...] accepted. Check: exact (os.stat); tests in a temporary directory. |
+| `FindFile` | added | 13 | FindFile["name"] searches the directories of $Path (or the Path option) in order and gives the absolute name of the first file found; a directory resolves to its Kernel/init.wl, Kernel/init.m, init.wl or init.m; "ctx`" looks for ctx.wl, ctx.m or a ctx directory (MX files are not supported); absolute names are checked directly; the documented result $Failed when nothing is found. File[...] accepted. Check: exact; tests create files in a temporary directory and search with Path. |
+| `InputStream` | added | 3 | InputStream[name, n] is the inert object for an open input stream (OpenRead gives InputStream["full name", n], StringToStream InputStream[String, n]); Read, ReadList, ... act on it. Check: reference (Wolfram documentation) in tests. |
+| `Number` | added | 18 | Number is the Read/ReadList type for an integer or approximate real number (C/Fortran exponent forms allowed; an integer when there is no decimal point). Check: reference (Wolfram documentation) in tests. |
+| `OpenAppend` | added | 8 | OpenAppend["file"] opens a file for writing at its end (creating it if needed) and gives OutputStream["full name", n]; options as OpenWrite (a stream method's constructor gets isAppend = True). Check: exact; tests append to a file and read it back. |
+| `OpenRead` | added | 37 | OpenRead["file"] opens a file for reading and gives InputStream["full name", n] (n unique across all streams); relative names are looked up in Directory[] and then in $Path (or the Path option); options BinaryFormat, CharacterEncoding (UTF8 default, ASCII, ISOLatin1), Method ("File", a method of DefineInputStreamMethod, {method, opts}), and the stream defaults RecordSeparators, WordSeparators, NullRecords, NullWords, TokenWords used by Read; a missing file or a directory raises ValueError (Wolfram: message and $Failed); pipes "!cmd" raise NotImplementedError. Check: exact; Streams[] membership and Read round trips in tests. |
+| `OpenWrite` | added | 17 | OpenWrite["file"] opens a file for writing, deleting its contents, and gives OutputStream["full name", n]; OpenWrite[] opens a new file in $TemporaryDirectory; options BinaryFormat, CharacterEncoding (UTF8 default; ASCII writes non-ASCII characters as \:hhhh escapes), FormatType (InputForm default, OutputForm), Method ("File" or a DefineOutputStreamMethod method). Lines are never wrapped: PageWidth, TotalWidth and NumberMarks other than their no-op values raise NotImplementedError; a missing directory raises ValueError; pipes raise NotImplementedError. Check: exact; Write/Read round trips in tests. |
+| `OutputStream` | added | 3 | OutputStream[name, n] is the inert object for an open output stream (OpenWrite, OpenAppend; OutputStream["stdout", 1], OutputStream["stderr", 2]). Check: reference (Wolfram documentation) in tests. |
+| `OverwriteTarget` | added | 10 | OverwriteTarget -> True \| False is the option of CopyFile, RenameFile and CreateFile (default False: an existing target raises). Check: reference (Wolfram documentation) in tests. |
+| `ParentDirectory` | added | 11 | ParentDirectory[] is the parent of Directory[]; ParentDirectory[n] goes n levels up; ParentDirectory["dir"] and ParentDirectory["dir", n] give the full (absolute) name of the parent (relative names are taken relative to Directory[]); the root is its own parent; File[...] accepted. Check: exact; tests compare with DirectoryName/ExpandFileName. |
+| `Path` | added | 8 | Path -> {dir, ...} is the option of FindFile, OpenRead, Read, ReadList, BinaryRead and BinaryReadList giving the directories to search instead of $Path. Check: reference (Wolfram documentation) in tests. |
+| `Read` | added | 42 | Read[stream] reads one expression (Expression, evaluated); Read[stream, type] with type Byte (character code for string streams), Character, Expression, Number (an integer unless there is a decimal point; C/Fortran exponents e, E, d, D and *^; a negative exponent without a point gives a real), Real, Record, String (up to a newline), Word, or any structure of types such as {Number, Number} or Hold[Expression] (filled depth-first and then evaluated); EndOfFile at the end (and in the positions not reached); a file name reuses its open stream or opens one, as documented; options RecordSeparators, WordSeparators, NullRecords, NullWords, TokenWords (or the stream's); data that is not of the requested type and syntax errors raise ValueError (Wolfram: $Failed); begin/end separator pairs raise NotImplementedError. Check: reference (Wolfram documentation examples) and Write/Read round trips in tests. |
+| `ReadByteArray` | added | 10 | ReadByteArray[src] reads the remaining bytes as a ByteArray; ReadByteArray[src, n] up to n bytes; ReadByteArray[src, term] up to a terminator ByteArray[...], EndOfLine ("\r\n" or "\n"), EndOfBuffer (the rest, all content being available) or a list of these (the terminator is dropped); EndOfFile when the source is exhausted; a file name is opened and closed after reading to EndOfFile; string streams give their character codes (codes above 255 raise ValueError). Check: reference (explicit bytes) and BinaryWrite/ReadByteArray round trips in tests. |
+| `ReadLine` | added | 8 | ReadLine[src] reads the next line (up to "\n" or "\r\n", not included) from a stream, file name (opened with BinaryFormat -> True and left open) or File[...]; EndOfFile when the source is exhausted. Check: reference (Wolfram documentation) and ReadList[src, String] agreement in tests. |
+| `ReadList` | added | 48 | ReadList[src] reads all remaining expressions; ReadList[src, type] all objects of a type or structure of types (as in Read; partly read structures get EndOfFile in the missing positions); ReadList[src, type, n] at most n; src is a stream (read from its current position, left open), a file name or File[...] (opened, read from the start and closed unless it was already open) or a string stream; RecordLists -> True gives one sublist per record; options as Read; data that does not fit the type raises ValueError. Check: reference (Wolfram documentation examples) and Write/ReadList round trips in tests. |
+| `ReadString` | added | 21 | ReadString[src] reads everything remaining in a stream, file name or File[...] as a string; ReadString[src, term] reads up to the terminator (a string or string pattern; the terminator is consumed and dropped, the rest of the input when absent), EndOfFile (default) or EndOfBuffer (for files and strings all content is available, so the rest of the input); EndOfFile when the source is exhausted; a file name is opened with BinaryFormat -> True and closed after reading to EndOfFile, else left open. TimeConstraint raises NotImplementedError. Check: reference and WriteString/ReadString round trips in tests. |
+| `Record` | added | 9 | Record is the Read/ReadList type for the text between record separators (RecordSeparators). Check: reference (Wolfram documentation) in tests. |
+| `RecordLists` | added | 5 | RecordLists -> True makes ReadList return one sublist per record. Check: reference (Wolfram documentation) in tests. |
+| `RemoveInputStreamMethod` | added | 5 | RemoveInputStreamMethod["name"] removes a method defined with DefineInputStreamMethod (streams already open keep working) and returns Null; an unknown name raises ValueError. Check: exact; $InputStreamMethods before and after in tests. |
+| `RemoveOutputStreamMethod` | added | 4 | RemoveOutputStreamMethod["name"] removes a method defined with DefineOutputStreamMethod and returns Null; an unknown name raises ValueError. Check: exact; $OutputStreamMethods before and after in tests. |
+| `RenameDirectory` | added | 6 | RenameDirectory["dir1", "dir2"] renames (moves) a directory and returns the absolute new name; dir1 must be an existing directory, dir2 must not exist (ValueError otherwise) and may not lie inside dir1. Check: exact; tests check DirectoryQ of both names and the moved contents. |
+| `RenameFile` | added | 8 | RenameFile["old", "new"] renames (moves) a file, keeping its modification date, and returns the absolute new name; old must be an existing file (a directory raises ValueError: use RenameDirectory); new must not exist unless OverwriteTarget -> True (an existing directory is never replaced). Check: exact; tests check FileExistsQ of both names and the moved contents. |
+| `ResetDirectory` | added | 5 | ResetDirectory[] returns to the directory that was current before the last SetDirectory (popping DirectoryStack[]) and gives its name; an empty stack raises ValueError (Wolfram: message); a stacked directory that no longer exists raises ValueError (it stays popped). Check: exact; round trips in tests. |
+| `SetDirectory` | added | 14 | SetDirectory["dir"] makes dir (relative to the current directory) the working directory, pushes the previous one onto DirectoryStack[] and returns the new absolute name; SetDirectory[] goes to $HomeDirectory; a missing directory or a file raises ValueError; File[...] accepted. The working directory is process-wide, as in Wolfram. Check: self-check (Directory[] is compared with the target after changing; ArithmeticError on mismatch); round trips in tests. |
+| `SetFileDate` | added | 11 | SetFileDate["file"] sets the modification and access dates to now; SetFileDate[file, date] to the date (DateObject, date list or absolute time, in $TimeZone); SetFileDate[file, date, "Access" \| "Modification" \| All] sets only that type ("Creation" cannot be set: NotImplementedError); returns Null; a missing file raises ValueError. Check: self-check (the file's dates are read back and compared after setting; ArithmeticError on mismatch); FileDate round trips in tests. |
+| `SetStreamPosition` | added | 9 | SetStreamPosition[stream, n] moves the current point to position n (as given by StreamPosition) and SetStreamPosition[stream, Infinity] to the end; returns the new position; a position beyond the end of an input stream raises ValueError; stdout/stderr and output method streams raise NotImplementedError. Check: exact; reading again after repositioning gives the same objects in tests. |
+| `Skip` | added | 7 | Skip[stream, type] skips one object of the type (or structure of types) and Skip[stream, type, n] n of them, as Read would read them, and returns Null; EndOfFile if the end is reached first (the stream is then at its end); options as Read; a file name reuses or opens a stream. Check: exact; tests compare Skip followed by Read with ReadList. |
+| `StreamPosition` | added | 8 | StreamPosition[stream] gives the current position: bytes from the start for file and method streams (bytes written for output streams), characters for StringToStream streams; stdout/stderr raise NotImplementedError. Check: exact; SetStreamPosition round trips in tests. |
+| `Streams` | added | 8 | Streams[] lists the open streams: OutputStream["stdout", 1], OutputStream["stderr", 2], then the open string, file and method streams in order of their serial numbers; Streams["name"] only those with that name. Check: exact; tests after OpenRead/OpenWrite/Close. |
+| `Word` | added | 24 | Word is the Read/ReadList type for the text between word or record separators (WordSeparators, RecordSeparators, TokenWords). Check: reference (Wolfram documentation) in tests. |
+| `Write` | added | 9 | Write[channel, e1, e2, ...] writes the expressions one after another in the stream's FormatType (InputForm for files: strings in quotes; OutputForm for stdout/stderr), then a newline, and returns Null; channel is an OutputStream, a file name or File[...] (opened with OpenWrite if not already open, and left open, as documented) or a list of channels; lines are never wrapped. Check: exact; Write/Read and Write/Get round trips in tests. |
+| `WriteLine` | added | 6 | WriteLine[channel, "string"] writes the string followed by a newline and returns Null; a file name not already open is opened with OpenWrite and left open; a non-string raises TypeError. Check: exact; ReadLine round trips in tests. |
+| `WriteString` | added | 14 | WriteString[channel, e1, e2, ...] writes strings as they are (other expressions in OutputForm, as ToString) with no newline and returns Null; a file name not already open is opened with OpenWrite (erasing it) and left open; lists of channels accepted. Check: exact; ReadString round trips and FileByteCount in tests. |
 
 ### finance
 
@@ -2326,7 +2426,7 @@ Cases = number of differential test cases in which the head occurs.
 | Function | Status | Cases | Notes |
 |---|---|---|---|
 | `Apart` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Append` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule |
+| `Append` | fixed | 13 | kernel builtin extended in batch 1: associations merge the new rule |
 | `Apply` | fixed | 7 | kernel builtin extended in batch 1: level specifications (f @@@ expr); an association gives f[values] |
 | `AtomQ` | fixed | 6 | kernel builtin extended in batch 1: associations and rationals are atoms |
 | `Cancel` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -2338,22 +2438,22 @@ Cases = number of differential test cases in which the head occurs.
 | `Drop` | fixed | 7 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Equal` | fixed | 8 | kernel builtin extended in batch 1: more than two arguments chain |
 | `EvenQ` | kernel | 36 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `First` | fixed | 60 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
+| `First` | fixed | 68 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
 | `Flatten` | fixed | 24 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
 | `FreeQ` | fixed | 16 | kernel builtin extended in batch 1: level specifications, Heads -> False |
 | `IntegerQ` | kernel | 18 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Join` | fixed | 7 | kernel builtin extended in batch 1: Join[..., n] at level n; associations merge (later values win) |
-| `Last` | fixed | 31 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
-| `Length` | fixed | 147 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
+| `Last` | fixed | 33 | kernel builtin extended in batch 1: Last[expr, default]; associations give their last value |
+| `Length` | fixed | 166 | kernel builtin extended in batch 1: associations count their entries; atoms have length 0 |
 | `Less` | fixed | 9 | kernel builtin extended in batch 1: more than two arguments chain |
-| `List` | fixed | 7 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
+| `List` | fixed | 15 | kernel builtin extended in batch 1: drops Nothing and splices Splice[...] |
 | `ListQ` | kernel | 5 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
 | `Map` | fixed | 33 | kernel builtin extended in batch 1: level specifications (n, {n}, {m, n}, negative), associations, operator form Map[f] |
 | `MapAll` | fixed | 3 | kernel builtin extended in batch 1: f //@ expr |
 | `MapIndexed` | fixed | 3 | kernel builtin extended in batch 1: level specifications; associations index by Key[k] |
-| `MemberQ` | fixed | 51 | kernel builtin extended in batch 1: level specifications |
+| `MemberQ` | fixed | 62 | kernel builtin extended in batch 1: level specifications |
 | `Most` | fixed | 6 | kernel builtin extended in batch 1: any head; empty expressions raise |
-| `N` | kernel | 549 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `N` | kernel | 550 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Negative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NonNegative` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `NumberQ` | kernel | 7 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -2361,21 +2461,21 @@ Cases = number of differential test cases in which the head occurs.
 | `Part` | fixed | 4 | kernel builtin extended in batch 1: Span (i;;j;;k), All, position lists, negative indices, Key[k] and string keys of associations |
 | `PartialD` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Plus` | kernel | 26 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Position` | fixed | 5 | kernel builtin extended in batch 1: level specifications, a maximum count, Heads -> False |
+| `Position` | fixed | 6 | kernel builtin extended in batch 1: level specifications, a maximum count, Heads -> False |
 | `Positive` | kernel | 10 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Power` | kernel | 5 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Prepend` | fixed | 5 | kernel builtin extended in batch 1: associations merge the new rule; any head |
 | `PrimeQ` | kernel | 11 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `Range` | fixed | 156 | kernel builtin extended in batch 1: rational, real and symbolic steps |
 | `ReplaceAll` | kernel | 3 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
-| `Rest` | fixed | 6 | kernel builtin extended in batch 1: any head; empty expressions raise |
+| `Rest` | fixed | 7 | kernel builtin extended in batch 1: any head; empty expressions raise |
 | `Reverse` | fixed | 19 | kernel builtin extended in batch 1: Reverse[expr, n] and Reverse[expr, {n1, n2}] |
-| `Select` | fixed | 22 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
-| `Sort` | fixed | 33 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
+| `Select` | fixed | 23 | kernel builtin extended in batch 1: Select[list, crit, n]; associations; operator form |
+| `Sort` | fixed | 34 | kernel builtin extended in batch 1: associations sort by value; ordering function p |
 | `StringJoin` | kernel | 14 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringLength` | kernel | 9 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `StringQ` | kernel | 14 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
-| `Take` | fixed | 11 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
+| `StringLength` | kernel | 10 | evaluated by the kernel builtin; legacy library rule was unreachable |
+| `StringQ` | kernel | 20 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
+| `Take` | fixed | 21 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Thread` | fixed | 4 | kernel builtin extended in batch 1: Thread[f[...], h] and Thread[expr, h, n]; rules thread |
 | `Times` | kernel | 10 | evaluated by the kernel builtin; legacy library rule was unreachable |
 | `ToString` | kernel | 402 | kernel builtin (was listed as quarantined although the kernel evaluates it first); Wolfram results confirmed |
@@ -2713,8 +2813,8 @@ Cases = number of differential test cases in which the head occurs.
 | `PowerRange` | added | 3 | PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r] |
 | `PrependTo` | added | 3 | PrependTo[s, e] sets s = Prepend[s, e] and returns the new value |
 | `Ratios` | added | 3 | successive ratios a[i+1]/a[i]; Ratios[list, n] for n-th ratios |
-| `Reap` | added | 28 | Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list] |
-| `Replace` | added | 7 | Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives a list of results |
+| `Reap` | added | 34 | Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list] |
+| `Replace` | added | 15 | Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives a list of results |
 | `ReplaceList` | added | 5 | all results of applying the rules to the whole expression in every way they match (sequence patterns give one result per split; Orderless heads give each distinct binding once, in matcher order rather than Wolfram's); ReplaceList[expr, rules, n] keeps at most n |
 | `ReplacePart` | added | 3 | ReplacePart[expr, pos -> new], lists of rules, lists of positions, position patterns such as {i_, i_} -> 0 and pos :> new (evaluated per position) |
 | `ReverseApplied` | added | 3 | ReverseApplied[f][a, b, c] = f[c, b, a] |
@@ -2728,7 +2828,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SequenceReplace` | added | 3 | replaces non-overlapping runs matching a list pattern -> rhs (rhs is one element) |
 | `SequenceSplit` | added | 3 | splits at runs matching a list pattern (empty pieces at the ends dropped, as Wolfram); patt -> rhs keeps rhs between the pieces |
 | `SortBy` | added | 6 | sorts by canonical order of f[e] (ties by the canonical order of e); SortBy[list, {f1, f2, ...}] lexicographic; SortBy[list, f, p] uses ordering p; associations are sorted by value |
-| `Sow` | added | 31 | Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap (outside Reap, Sow just returns e) |
+| `Sow` | added | 41 | Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap (outside Reap, Sow just returns e) |
 | `Split` | added | 3 | runs of identical (SameQ) adjacent elements; Split[list, test] tests adjacent pairs |
 | `SplitBy` | added | 3 | runs with identical f values; SplitBy[list, {f1, f2, ...}] splits recursively |
 | `Subdivide` | added | 3 | Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values |
@@ -2829,7 +2929,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Assert` | added | 5 | Assert[test] / Assert[test, tag] (HoldAll): disabled by default (returns Null without evaluating test); after On[Assert] a test that is not True issues Assert::asrtf (Assert::asrtfl for a {line, file} tag) or evaluates $AssertFunction[HoldComplete[Assert[...]]] when that is set; returns Null |
 | `ByteCount` | added | 4 | ByteCount[expr] gives the bytes MikoshiLang uses to store expr (Python object sizes, every part counted separately, no sharing); symbols (including True, False, Null) are shared and count 0. Values differ from Wolfram's own memory layout, as the documentation allows between systems |
 | `CatchExceptions` | added | 8 | CatchExceptions[expr, spec] (HoldFirst) returns expr's value, or for a thrown exception matching spec (All, tag, {tags}, tag -> handler, {tagspec -> handler, ...}; first matching clause; subtypes match their parents) handler[exceptionData] or, without a handler, the exception's Failure; other exceptions propagate. The operator form CatchExceptions[spec][expr] holds expr |
-| `Check` | added | 21 | Check[expr, failexpr] / Check[expr, failexpr, msgs] (HoldAll): returns failexpr if expr generated a matching message that is not switched off and not quieted inside the Check; a raised MikoshiLang error counts as the message f::evalerr |
+| `Check` | added | 23 | Check[expr, failexpr] / Check[expr, failexpr, msgs] (HoldAll): returns failexpr if expr generated a matching message that is not switched off and not quieted inside the Check; a raised MikoshiLang error counts as the message f::evalerr |
 | `CheckAbort` | added | 14 | CheckAbort[expr, failexpr] (HoldAll) returns failexpr if an abort occurs in expr; option PropagateAborts: Automatic (default: absorb Abort[], propagate constraint aborts after failexpr), True (propagate all), False (absorb all) |
 | `ClearSystemCache` | added | 5 | ClearSystemCache[] clears MikoshiLang's internal caches (SymPy's cache and the evaluator memo table); ClearSystemCache["Symbolic"] / ["Numeric"] clear the symbolic (SymPy) / numeric (mpmath) caches; returns Null |
 | `Confirm` | added | 10 | Confirm[expr] returns expr unless it is a Failure, Missing, $Failed, $Canceled or $Aborted, in which case Failure["ConfirmationFailed", <\|...\|>] is thrown to the lexically enclosing Enclose (info is evaluated only on failure; a ConfirmationFailed failure with Null info is rethrown unchanged); Confirm[expr, info, tag] is caught dynamically by Enclose[..., f, tag]; with no tag and no Enclose: message confirmnotag |
@@ -2886,7 +2986,7 @@ Cases = number of differential test cases in which the head occurs.
 | `TestReportObject` | added | 4 | TestReportObject[<\|...\|>] is the inert result of TestReport; report["prop"] for "Results", "ResultsByOutcome", "ResultsByTestID", "ResultsByTestFileName", "ResultsDataset", "ReportSucceeded", "RuntimeFailures", "Title", timings, "TestsSucceededCount", the key lists ... |
 | `ThrowException` | added | 9 | ThrowException[args] throws Exception[args] (to CatchExceptions; Catch[..., _] also intercepts it); malformed arguments throw an "ErrorHandlingException" exception after an Exception:: message; uncaught exceptions reach the top level as an Uncaught Throw error |
 | `TimeConstrained` | added | 11 | TimeConstrained[expr, t] / TimeConstrained[expr, t, failexpr] (HoldAll) evaluates expr, aborting it after t seconds of real time and returning $Aborted (or failexpr, evaluated only then); t may be Infinity or a Quantity in seconds; AbortProtect postpones the abort |
-| `TimeConstraint` | added | 6 | option of the test functions: seconds a test may run (default Infinity; exceeding it gives TimeConstraintFailure); inert as an expression |
+| `TimeConstraint` | added | 7 | option of the test functions: seconds a test may run (default Infinity; exceeding it gives TimeConstraintFailure); inert as an expression |
 | `TimeRemaining` | added | 3 | TimeRemaining[] gives the seconds (real time) left before the earliest enclosing TimeConstrained aborts, or Infinity outside TimeConstrained |
 | `TimeUsed` | added | 4 | TimeUsed[] gives the CPU seconds used so far by the MikoshiLang (Python) process (time.process_time); Pause is not counted |
 | `Timing` | added | 4 | Timing[expr] (HoldAll) gives {CPU seconds used by this process while evaluating expr, result} (time.process_time); time spent in Pause is not counted |
@@ -3115,7 +3215,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Bottom` | added | 12 | inert symbol: position/alignment symbol: Labeled position (default, label below), vertical alignment |
 | `CForm` | added | 11 | CForm[expr] inert: C source for expr (Power(x,2), Sin(x), rationals as decimals, 1.5e10) |
 | `Center` | added | 18 | inert symbol: position/alignment symbol: centred alignment in Column, Grid, Item, TableForm |
-| `CharacterEncoding` | added | 12 | option of ToString and other output functions: the raw character encoding ("ASCII" writes other characters as \[Name] or \:xxxx escapes) |
+| `CharacterEncoding` | added | 14 | option of ToString and other output functions: the raw character encoding ("ASCII" writes other characters as \[Name] or \:xxxx escapes) |
 | `Column` | added | 24 | Column[{e1, e2, ...}, alignment, spacing, opts] inert layout: elements one per line (spacing blank lines between), aligned Left, Center or Right |
 | `ColumnAlignments` | added | 7 | inert symbol: option of Grid (GridBox): per-column horizontal alignment (honoured in text) |
 | `ColumnLines` | added | 8 | inert symbol: option of Grid (GridBox): draw \| between columns (honoured in text) |
@@ -3131,7 +3231,7 @@ Cases = number of differential test cases in which the head occurs.
 | `ExponentStep` | added | 8 | option of NumberForm and related number forms (inert symbol; default 1) |
 | `FontFamily` | added | 7 | inert symbol: option of Style: font family name (a string); validated, no effect on plain text |
 | `FontSize` | added | 13 | inert symbol: option of Style: font size (positive number, Scaled[s], Tiny/Small/Medium/Large); validated, no effect on plain text |
-| `FormatType` | added | 10 | option of ToString and Text: the format type (InputForm, OutputForm, TeXForm, ...) |
+| `FormatType` | added | 12 | option of ToString and Text: the format type (InputForm, OutputForm, TeXForm, ...) |
 | `FortranForm` | added | 6 | FortranForm[expr] inert: Fortran source for expr (x**2, Sin(x), rationals as decimals) |
 | `Framed` | added | 5 | Framed[expr, opts] inert display wrapper; text draws an ASCII box (+---+ / \| expr \|) around expr |
 | `Grid` | added | 57 | Grid[{{a, b}, ...}, opts] inert layout object; text: columns 3 spaces apart, rows separated by a blank line, left aligned (Wolfram's OutputForm), with Alignment, Spacings, Frame, Dividers and the GridBox options ColumnAlignments, ColumnSpacings, ColumnWidths, ColumnLines, RowAlignments, RowSpacings, RowLines, RowMinHeight honoured |
@@ -3163,10 +3263,10 @@ Cases = number of differential test cases in which the head occurs.
 | `NumberPoint` | added | 7 | option of NumberForm and related number forms (inert symbol; default ".") |
 | `NumberSeparator` | added | 3 | option of NumberForm and related number forms (inert symbol; default {",", " "}) |
 | `NumberSigns` | added | 8 | option of NumberForm and related number forms (inert symbol; default {"-", ""}) |
-| `OutputForm` | added | 7 | OutputForm[expr] inert: shows expr in linear OutputForm text (strings without quotes) |
+| `OutputForm` | added | 8 | OutputForm[expr] inert: shows expr in linear OutputForm text (strings without quotes) |
 | `Overlay` | added | 6 | Overlay[{e1, e2, ...}, {i, j, ...}] inert: the expressions drawn on top of each other (top-left aligned); text superimposes the blocks, later ones overwriting earlier ones where they are not blank |
 | `PaddedForm` | added | 5 | PaddedForm[expr, n \| {n, f}, opts]: numbers left-padded with spaces to n digits (room for a sign) |
-| `PageWidth` | added | 7 | option of ToString: lines longer than n characters are broken at spaces |
+| `PageWidth` | added | 8 | option of ToString: lines longer than n characters are broken at spaces |
 | `Pagination` | added | 4 | inert symbol: option of Multicolumn/GalleryView: items per page (accepted; plain text shows every item) |
 | `PercentForm` | added | 7 | PercentForm[expr, n \| {n, f}, opts]: numbers shown as percentages (x 100, then %) |
 | `Placed` | added | 18 | Placed[expr, pos] / Placed[{e1, ...}, pos, f] inert: an annotation at relative position pos (Top, Bottom, Left, Right, Center, Above, Below, Before, After, {x, y}, ...); text shows expr (f applied to each ei when given) |
@@ -3199,7 +3299,7 @@ Cases = number of differential test cases in which the head occurs.
 | `TextString` | added | 30 | TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default ""), lists per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings |
 | `Top` | added | 19 | inert symbol: position/alignment symbol: Labeled position (label above), vertical alignment in Grid rows |
 | `TotalWidth` | added | 7 | option of ToString: output longer than n characters is shortened with <<k>> skeletons |
-| `TraditionalForm` | added | 8 | TraditionalForm[expr] inert: shows expr in traditional mathematical notation (f(x), sin(x), e^x, π, i, polynomials in decreasing degree) |
+| `TraditionalForm` | added | 9 | TraditionalForm[expr] inert: shows expr in traditional mathematical notation (f(x), sin(x), e^x, π, i, polynomials in decreasing degree) |
 | `Visible` | added | 5 | inert symbol: option of Style and notebooks: whether shown (True/False); validated |
 
 ### physics
@@ -4249,7 +4349,7 @@ Cases = number of differential test cases in which the head occurs.
 | `BioSequenceReverseComplement` | added | 5 | reverse of the complementary DNA/RNA strand (bond positions mirrored); unevaluated for peptides and invalid sequences |
 | `BioSequenceTranscribe` | added | 3 | DNA -> RNA (T -> U) and RNA -> DNA (U -> T), circular forms kept; unevaluated for peptides and invalid sequences |
 | `BioSequenceTranslate` | added | 12 | translates DNA/RNA codons to a Peptide (stop codons give ".", incomplete final codons dropped, a degenerate codon gives its amino acid if all its instances agree, else X); genetic codes 1-5 and 11 by number or name, a 64-letter TCAG-ordered string or codon rules; third argument True (start codons of codes 1, 2, 11 give M), a table, or rules for the first codon |
-| `ByteArray` | added | 65 | ByteArray[{b1, ...}] (bytes 0..255) and ByteArray["base64"]; the evaluated form is ByteArray["base64"] (Wolfram's InputForm); Normal and Length work on it |
+| `ByteArray` | added | 68 | ByteArray[{b1, ...}] (bytes 0..255) and ByteArray["base64"]; the evaluated form is ByteArray["base64"] (Wolfram's InputForm); Normal and Length work on it |
 | `ByteArrayFormat` | added | 5 | heuristic import format of a ByteArray (as StringFormat) |
 | `ByteArrayFormatQ` | added | 6 | whether a ByteArray is (heuristically) in the format or any of a list of formats |
 | `ByteArrayQ` | added | 3 | True for a valid ByteArray object, False otherwise |
@@ -4297,11 +4397,11 @@ Cases = number of differential test cases in which the head occurs.
 | `MaxWordGap` | added | 3 | SearchAdjustment option: words of a phrase may be up to n words apart |
 | `NeedlemanWunschSimilarity` | added | 11 | score of an optimal global (Needleman-Wunsch/Gotoh) alignment as a machine real: +1 per match, -1 per mismatch/insertion/deletion (SimilarityRules overrides, patterns allowed), minus GapPenalty per gap run; IgnoreCase; strings, lists or BioSequences. Named matrices (BLOSUM62, ...) raise |
 | `NoWhitespace` | added | 3 | inert symbol: grammar pattern for the absence of whitespace (GrammarRules is not available) |
-| `NullRecords` | added | 3 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
-| `NullWords` | added | 3 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
+| `NullRecords` | added | 4 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
+| `NullWords` | added | 4 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
 | `OptionalElement` | added | 3 | inert symbol: grammar pattern for an optional element (GrammarRules is not available) |
 | `PreprocessingRules` | added | 3 | inert symbol: input preprocessing option; only the default is accepted by the search functions |
-| `RecordSeparators` | added | 3 | Find/FindList option: strings separating records (default line breaks) |
+| `RecordSeparators` | added | 4 | Find/FindList option: strings separating records (default line breaks) |
 | `RectangularRepeatingElement` | added | 3 | inert symbol: form/interpreter specification of a rectangular array (forms are not available) |
 | `SearchAdjustment` | added | 5 | SearchAdjustment[q, w] multiplies the score of q by w; SearchAdjustment[q, MaxWordGap -> n] lets phrase words be up to n words apart |
 | `SearchIndexObject` | added | 4 | handle to an index made by CreateSearchIndex; idx["DocumentCount"], idx["Documents"] |
@@ -4320,7 +4420,7 @@ Cases = number of differential test cases in which the head occurs.
 | `StringFormatQ` | added | 5 | whether the string is (heuristically) in the format or any of a list of formats; "Text" and "Binary" are the generic text/binary classes |
 | `StringTemplate` | added | 17 | TemplateObject[{pieces}, InsertionFunction -> TextString, CombinerFunction -> StringJoin] from a string or File: `` sequential slots, `n` positional, `name` named, <* expr *> template expressions with #name/#n slots; \` escapes; an optional association of default values |
 | `StringToByteArray` | added | 5 | bytes of a string in UTF-8 (default) or a named $CharacterEncodings encoding; a character the encoding cannot represent raises |
-| `StringToStream` | added | 19 | InputStream[String, n] reading from the string; Find and FindList read records from it (the stream keeps its position); Read/ReadList/Close belong to the stream I/O batch |
+| `StringToStream` | added | 93 | InputStream[String, n] reading from the string; Find and FindList read records from it (the stream keeps its position); Read/ReadList/Close belong to the stream I/O batch |
 | `SyntaxLength` | added | 3 | length of the longest prefix that is syntactically valid so far (the position of the first syntax error); StringLength + 1 when the whole string is valid but incomplete |
 | `SyntaxQ` | added | 4 | True if the string parses as one Wolfram Language expression (InputForm); other forms raise |
 | `TemplateApply` | added | 64 | applies a template (TemplateObject, string, File or any expression containing TemplateSlot, TemplateExpression, TemplateIf, TemplateSequence, TemplateWith or nested TemplateObject) to positional arguments (a list, or a single non-list value) and named values from associations; the template's own bound association is searched first; :> values are inserted unevaluated; a missing slot without "DefaultValue" inserts Missing["TemplateSlotAbsent", key] ("" in string templates) |
@@ -4331,7 +4431,7 @@ Cases = number of differential test cases in which the head occurs.
 | `TemplateSlot` | added | 28 | template construct: slot n or "name" with InsertionFunction and "DefaultValue" options |
 | `TemplateWith` | added | 3 | template construct: HoldAll; TemplateWith["name" -> value or list, body] binds named slots |
 | `TextSearch` | added | 35 | searches a SearchIndexObject, a list of them, a file, a directory, or ContentObjects; queries: "phrase", {all}, any \| alternatives, Except/Not, "field" -> q, FixedOrder, SearchAdjustment (boost, MaxWordGap), And/Or/ContainsAll/ContainsAny/ContainsNone, All, SearchQueryString; words are lower-cased with plural stemming; results ranked by BM25 (Lucene's formula, k1 = 1.2, b = 0.75); ContentFieldOptions weights, DocumentWeightingRules, MaxItems; third argument a property, "Count" or "ContentObject"; numeric range queries raise |
-| `TokenWords` | added | 3 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
+| `TokenWords` | added | 4 | inert symbol: Read option (stream reading belongs to the stream I/O batch) |
 | `UpdateSearchIndex` | added | 3 | re-reads the files and directories an index was built from (adding new files, dropping deleted ones); returns the index |
 | `ValuePreprocessingFunction` | added | 3 | inert symbol: PersistentSymbol option; accepted by CreateSearchIndex/TextSearch only with its default |
 | `WordCount` | added | 4 | number of words, identified as by TextWords (hyphenated and apostrophe words count once) |
@@ -4339,7 +4439,7 @@ Cases = number of differential test cases in which the head occurs.
 | `WordOrientation` | added | 3 | inert symbol: WordCloud option (WordCloud graphics are not available) |
 | `WordSearch` | added | 6 | Find/FindList option: the text must appear as a whole word |
 | `WordSelectionFunction` | added | 3 | inert symbol: WordCloud option (WordCloud graphics are not available) |
-| `WordSeparators` | added | 3 | Find/FindList option: strings separating words (default {" ", "\t"}) |
+| `WordSeparators` | added | 6 | Find/FindList option: strings separating words (default {" ", "\t"}) |
 | `WordSpacings` | added | 3 | inert symbol: WordCloud option (WordCloud graphics are not available) |
 | `WordStem` | added | 5 | Porter stemming algorithm (reference implementation: bli->ble, logi->log), preserving the word's case and surrounding punctuation; listable |
 | `XMLTemplate` | added | 26 | TemplateObject from XML/HTML text or File with <wolfram:slot id= inserter=>default</wolfram:slot>, expr, if test=, which/else, sequence (values, slot, index, delimiters, default, inserter), with, template (inserter, combiner), get path=, comment and verbatim, plus `slot` and <* expr *>; InsertionFunction "HTMLFragment" (escapes & < >) by default, "JSON" supported; block tags alone on a line drop that line |
@@ -4352,16 +4452,16 @@ Cases = number of differential test cases in which the head occurs.
 | `Capitalize` | added | 4 | upper-cases the first character and leaves the rest; Capitalize[s, "AllWords"] does that for every word, "LongWords" for words longer than three characters, "FirstWord" = default ("TitleCase" with its small-word rules is not supported) |
 | `CharacterRange` | added | 3 | characters from c1 to c2 by code point (strings or integer codes); empty when c2 < c1 |
 | `Decapitalize` | added | 3 | lower-cases the first character only |
-| `DigitCharacter` | added | 14 | string pattern object / option interpreted by the batch-1 string functions |
+| `DigitCharacter` | added | 15 | string pattern object / option interpreted by the batch-1 string functions |
 | `DigitQ` | added | 3 | True when every character of the string satisfies the test (so True for ""); non-strings False |
 | `EditDistance` | added | 33 | Levenshtein distance (insertions, deletions, substitutions) between strings or lists; IgnoreCase |
-| `EndOfLine` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
+| `EndOfLine` | added | 4 | string pattern object / option interpreted by the batch-1 string functions |
 | `EndOfString` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `FromLetterNumber` | added | 4 | the n-th lower-case English letter for 1 <= n <= 26 (negative n counts from z, 0 gives " "); other values raise; threads over lists |
 | `FromRomanNumeral` | added | 13 | integer value of a Roman numeral string ("N" -> 0) |
 | `HammingDistance` | added | 5 | number of differing positions between equal-length strings or lists (unequal lengths raise); IgnoreCase |
 | `HexadecimalCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
-| `IgnoreCase` | added | 23 | string pattern object / option interpreted by the batch-1 string functions |
+| `IgnoreCase` | added | 25 | string pattern object / option interpreted by the batch-1 string functions |
 | `IntegerString` | added | 10 | digits of \|n\| (the sign is dropped, as Wolfram) in base 2-36 with lower-case letters, padded with zeros or truncated to the last len digits; IntegerString[n, "Roman"]; threads over lists |
 | `LetterCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
 | `LetterNumber` | added | 3 | position of a letter in the English alphabet (either case), 0 for other characters; a string of several characters gives a list; threads over lists |
@@ -4375,7 +4475,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PalindromeQ` | added | 5 | True for a string, list or non-negative integer (decimal digits) equal to its reverse; other expressions False |
 | `PrintableASCIIQ` | added | 3 | True when every character of the string satisfies the test (so True for ""); non-strings False |
 | `PunctuationCharacter` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
-| `RegularExpression` | added | 4 | string pattern object / option interpreted by the batch-1 string functions |
+| `RegularExpression` | added | 5 | string pattern object / option interpreted by the batch-1 string functions |
 | `RemoveDiacritics` | added | 4 | drops combining marks after Unicode NFKD decomposition (ligatures such as æ are kept) |
 | `RomanNumeral` | added | 14 | Roman numeral string of n for 1-4999 (sign dropped); RomanNumeral[0] gives "N"; threads over lists; the overbar forms for n >= 5000 are not supported |
 | `Shortest` | added | 3 | string pattern object / option interpreted by the batch-1 string functions |
@@ -4399,7 +4499,7 @@ Cases = number of differential test cases in which the head occurs.
 | `StringRotateLeft` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringRotateRight` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringSplit` | added | 15 | splits at whitespace or at matches of a string pattern; empty pieces at the ends are dropped (kept with StringSplit[s, p, All]), interior ones kept; p -> r inserts r at each split; StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists |
-| `StringStartsQ` | fixed | 8 | string patterns (legacy: literal prefix only); IgnoreCase |
+| `StringStartsQ` | fixed | 9 | string patterns (legacy: literal prefix only); IgnoreCase |
 | `StringTakeDrop` | added | 3 | {StringTake[s, spec], StringDrop[s, spec]} |
 | `StringTrim` | fixed | 7 | StringTrim[s] removes leading and trailing whitespace; StringTrim[s, p] removes a leading and a trailing match of the string pattern p |
 | `Symbol` | added | 10 | Symbol["name"] gives the symbol (evaluated); invalid names raise |
@@ -4437,7 +4537,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SHA512` | verified | 3 | hex digest of the UTF-8 bytes (= Hash[s, "SHA512", "HexString"]) |
 | `StringCapitalize` | fixed | 3 | upper-cases the first character only (Wolfram Capitalize); legacy also lower-cased the rest ("iPhone" -> "Iphone") |
 | `StringCenter` | fixed | 3 | centres s in width n (extra padding on the right, MikoshiLang); single-character fill, width checked |
-| `StringDrop` | fixed | 3 | StringDrop[s, n], [s, -n], [s, {n}], [s, {m, n}] |
+| `StringDrop` | fixed | 4 | StringDrop[s, n], [s, -n], [s, {n}], [s, {m, n}] |
 | `StringInsert` | fixed | 3 | Wolfram argument order StringInsert[s, new, n]: new starts at position n (negative n counts from the end, -1 appends); legacy was StringInsert[s, i, new] with 0-based i |
 | `StringPadLeft` | fixed | 3 | pads on the left or truncates to the rightmost n characters, as Wolfram (legacy never truncated); single-character padding |
 | `StringPadRight` | fixed | 3 | pads on the right or truncates to the leftmost n characters, as Wolfram; single-character padding |
@@ -4449,7 +4549,7 @@ Cases = number of differential test cases in which the head occurs.
 | `StringToTitleCase` | fixed | 3 | capitalises the first letter of each whitespace-separated word and leaves the rest unchanged; legacy str.title() mangled words ("don't" -> "Don'T", "NASA" -> "Nasa") |
 | `StringToUpperCase` | verified | 3 | alias of ToUpperCase |
 | `TimeString` | fixed | 3 | TimeString[] -> "HH:MM:SS" (MikoshiLang); legacy only had a 1-argument form that ignored its argument |
-| `ToCharacterCode` | fixed | 5 | list of all character codes (legacy returned only the first code); lists of strings thread |
+| `ToCharacterCode` | fixed | 13 | list of all character codes (legacy returned only the first code); lists of strings thread |
 | `UnixTime` | fixed | 3 | UnixTime[] = whole seconds since 1970-01-01 00:00 UTC; UnixTime[{y, m, d, ...}] interprets the date in UTC; legacy only had a 1-argument form that ignored its argument |
 | `XORCipher` | fixed | 3 | hex string of UTF-8 bytes XOR the repeated key; empty key raises |
 
@@ -4471,7 +4571,6 @@ Cases = number of differential test cases in which the head occurs.
 | `ColumnsEqual` | added | 3 | option for GridBox (equal column widths); an inert option name |
 | `ComponentKeys` | added | 3 | option naming the data components of a time or event series; an inert option name |
 | `Cyclic` | added | 4 | Cyclic[{x1, ..., xn}] cyclic specification; Cyclic[{...}][k] = x[[Mod[k, n, 1]]] |
-| `DeleteContents` | added | 3 | option for DeleteDirectory (whether to delete the directory contents); an inert option name |
 | `Discard` | added | 4 | removes the elements for which crit is True (opposite of Select); Discard[data, crit, n] removes only the first n; data may be a list, any expression or an association; crit -> "Element" \| "Index" \| {props}; Discard[crit] operator form |
 | `Dispatch` | added | 5 | Dispatch[rules] is an optimised rule set usable wherever the rule list is (ReplaceAll, Replace, ReplaceRepeated, ...); Normal[Dispatch[rules]] gives the rules; Dispatch[<\|...\|>] takes the association's rules |
 | `Elementwise` | added | 3 | Elementwise[f][args...] threads f over all lists among the arguments to the deepest common level (makes non-listable functions behave as listable) |
