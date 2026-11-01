@@ -2071,11 +2071,11 @@ def _hostlookup(spec: Expr, prop: Expr = None) -> Expr:
         raise ValueError("HostLookup: internet access is disabled ($AllowInternet is False); only loopback names "
                          "can be looked up")
     try:
+        infos = socket.getaddrinfo(host, None)
         if is_ip:
             full = socket.gethostbyaddr(host)[0] if (internet_allowed() or _loopback(host)) else host
         else:
             full = socket.getfqdn(host) if host != "localhost" else "localhost"
-        infos = socket.getaddrinfo(host, None)
     except (socket.herror, socket.gaierror, OSError, UnicodeError):
         return Expr("Missing", "NotFound")
     v4, v6 = [], []
