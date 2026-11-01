@@ -610,6 +610,56 @@ CASES = [
     ("MomentEvaluate[Moment[2], w18d]", "MomentEvaluate[Moment[2], w18d]"),
     ("MomentEvaluate[Moment[2], 5]", Raises(TypeError)),
     ("MomentEvaluate[PowerSymmetricPolynomial[2], NormalDistribution[0, 1]]", Raises(ValueError)),
+    # ── PillaiTrace / WilksW (documented formulas) ──
+    ("PillaiTrace[{1., 2, 3, 4.5}, {2., 1, 4, 3}]", approx(0.31588785046728973)),
+    ("PillaiTrace[{1., 2, 3, 4.5}, {2., 1, 4, 3}] - Correlation[{1., 2, 3, 4.5}, {2., 1, 4, 3}]^2", approx(0.0)),  # Check
+    ("PillaiTrace[{{1., 2.}, {2., 1.}, {3., 5.}, {4., 3.}, {5., 7.}}, {1., 3., 2., 5., 4.}]",
+     approx(0.9963636363636363)),   # R^2 of the regression of the vector on both columns (numpy lstsq)
+    ("PillaiTrace[w18m, {1, 2}]", "PillaiTrace[w18m, {1, 2}]"),
+    ("PillaiTrace[{1, 2, 3}, {1, 2}]", Raises(ValueError)),
+    ('PillaiTrace[{1, 2, 3}, {"a", "b", "c"}]', Raises(TypeError)),
+    ("WilksW[{1., 2, 3, 4.5}, {2., 1, 4, 3}]", approx(0.31588785046728973)),
+    ("WilksW[{1., 2, 3, 4.5}, {2., 1, 4, 3}] - PillaiTrace[{1., 2, 3, 4.5}, {2., 1, 4, 3}]", approx(0.0)),  # Check: 1 var
+    ("WilksW[{{1., 2.}, {2., 1.}, {3., 5.}, {4., 3.}, {5., 7.}}, {1., 3., 2., 5., 4.}]", approx(0.9963636363636363)),
+    ("WilksW[w18m, {1, 2}]", "WilksW[w18m, {1, 2}]"),
+    ("WilksW[{1, 1, 1}, {1, 2, 3}]", Raises(ValueError)),
+    ('PillaiTraceTest[{1., 2, 3, 4.5}, {2., 1, 4, 3}, "TestStatistic"]', approx(0.31588785046728973)),
+    ('PillaiTraceTest[{1., 2, 3, 4.5}, {2., 1, 4, 3}, "TestStatistic"] - PillaiTrace[{1., 2, 3, 4.5}, {2., 1, 4, 3}]', approx(0.0)),
+    ('PillaiTraceTest[{1., 2, 3}, {1., 3, 2}, "TestStatistic"]', approx(0.25)),
+    ('PillaiTraceTest[w18m, {1, 2}, "TestStatistic"]', 'PillaiTraceTest[w18m, {1, 2}, "TestStatistic"]'),
+    ("PillaiTraceTest[{1., 2, 3, 4.5}, {2., 1, 4, 3}]", Raises(NotImplementedError)),
+    ('PillaiTraceTest[{1., 2, 3}, {1., 3}, "TestStatistic"]', Raises(ValueError)),
+    ('WilksWTest[{1., 2, 3, 4.5}, {2., 1, 4, 3}, "TestStatistic"]', approx(0.31588785046728973)),
+    ('WilksWTest[{1., 2, 3}, {1., 3, 2}, "TestStatistic"]', approx(0.25)),
+    ('WilksWTest[{1., 2, 3}, {1., 3, 2}, "TestStatistic"] - WilksW[{1., 2, 3}, {1., 3, 2}]', approx(0.0)),
+    ('WilksWTest[w18m, {1, 2}, "TestStatistic"]', 'WilksWTest[w18m, {1, 2}, "TestStatistic"]'),
+    ("WilksWTest[{1., 2, 3}, {1., 3, 2}]", Raises(NotImplementedError)),
+    ('WilksWTest[{1., 2, 3}, {1., 3}, "TestStatistic"]', Raises(ValueError)),
+    # ── AutocorrelationTest (statsmodels acorr_ljungbox, lags = Ceiling[Log[10]] = 3) ──
+    ('AutocorrelationTest[{1., 3, 2, 5, 4, 6, 5, 8, 7, 9}, Automatic, {"TestData", {"LjungBox", "BoxPierce"}}]',
+     approx_list([6.469048, 0.090891, 4.536111, 0.209092], 1e-5)),
+    ("AutocorrelationTest[{1., 3, 2, 5, 4, 6, 5, 8, 7, 9}]", approx(0.09089121460960711)),   # Automatic = LjungBox
+    ('AutocorrelationTest[{1., 3, 2, 5, 4, 6, 5, 8, 7, 9}, 3, "DegreesOfFreedom"]', "3"),
+    ("AutocorrelationTest[w18d]", "AutocorrelationTest[w18d]"),
+    ("AutocorrelationTest[{1, 2, 3, 4}, 7]", Raises(ValueError)),
+    ("AutocorrelationTest[{{1, 2}, {3, 4}, {5, 6}}]", Raises(NotImplementedError)),
+    ("AutocorrelationTest[{1, 2, 3, 4}, 1.5]", Raises(TypeError)),
+    # ── LogRankTest (WL doc) ──
+    ("LogRankTest[{{32, 34, 28, 26, 31, 25, 29, 31, 28, 25}, {30, 19, 28, 35, 35, 29, 33, 32, 31, 29}}]",
+     approx(0.192633)),
+    ('LogRankTest[{EventData[{32, 34, 28, 26, 31, 25, 29, 31, 28, 25}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 1}], '
+     'EventData[{30, 19, 28, 35, 35, 29, 33, 32, 31, 29}, {0, 0, 1, 0, 0, 1, 0, 1, 0, 1}]}, "Gehan", "TestData"]',
+     approx_list([3.35128, 0.0671529])),
+    ('LogRankTest[{EventData[{32, 34, 28, 26, 31, 25, 29, 31, 28, 25}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 1}], '
+     'EventData[{30, 19, 28, 35, 35, 29, 33, 32, 31, 29}, {0, 0, 1, 0, 0, 1, 0, 1, 0, 1}]}, {1, 0}, "TestData"]',
+     approx_list([3.54507, 0.0597226])),
+    # Check: "Equal" weights are the plain log-rank (rho = 0)
+    ("LogRankTest[{{3, 5, 7, 9}, {4, 6, 8, 10, 12}}, \"Equal\"] - LogRankTest[{{3, 5, 7, 9}, {4, 6, 8, 10, 12}}, 0]", approx(0.0)),
+    ("LogRankTest[w18d]", "LogRankTest[w18d]"),
+    ("LogRankTest[{{1, 2}, {3, 4}}, \"Bogus\"]", Raises(ValueError)),
+    ("LogRankTest[{EventData[{1, 2}, {0, 2}], {3, 4}}]", Raises(ValueError)),
+    ("LogRankTest[{{{1, 2}}, {3, 4}}]", Raises(NotImplementedError)),
+    ("LogRankTest[{1, 2}]", Raises(TypeError)),
 ]
 
 

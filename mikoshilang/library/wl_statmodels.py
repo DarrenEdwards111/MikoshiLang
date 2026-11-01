@@ -3334,3 +3334,232 @@ def _moment_evaluate(e: Expr, src: Expr | ListOf[Expr], data: ListOf[Expr] = Non
             return Expr(x.head, *(walk(a) for a in x.args))
         return x
     return ev(Expr("Simplify", walk(e)))
+
+
+# ─────────────────────────── multivariate dependence, autocorrelation, log-rank ───────────────────────────
+
+def _two_mats(m1, m2, fname):
+    def cols(m):
+        if isinstance(m, Symbol):
+            raise Unevaluated()
+        if is_matrix(m):
+            return [[fl(v) for v in r] for r in mat(m, fname)]
+        v, _ = vec(m, fname, min_len=2)
+        return [[fl(t)] for t in v]
+    a, b = cols(m1), cols(m2)
+    if len(a) != len(b):
+        raise ValueError(f"{fname}: the arguments must have the same length")
+    return a, b
+
+
+def _pooled_cov(a, b, fname):
+    import numpy as np
+    X = np.hstack([np.array(a), np.array(b)])
+    if X.shape[0] < 2:
+        raise ValueError(f"{fname}: at least two observations are needed")
+    C = np.cov(X, rowvar=False)
+    p = len(a[0])
+    S11, S12, S21, S22 = C[:p, :p], C[:p, p:], C[p:, :p], C[p:, p:]
+    if abs(np.linalg.det(S11)) < 1e-300 or abs(np.linalg.det(S22)) < 1e-300:
+        raise ValueError(f"{fname}: a covariance block is singular")
+    return C, S11, S12, S21, S22
+
+
+@fn("PillaiTrace", area=AREA, status="added",
+    notes="PillaiTrace[m1, m2] = Tr[Inverse[S11].S12.Inverse[S22].S21] for the blocks of the pooled covariance "
+          "matrix of the columns of m1 and m2 (vectors are one-column matrices); machine-precision result. Unequal "
+          "lengths or singular blocks raise ValueError; non-numeric data TypeError; symbolic arguments stay "
+          "unevaluated. Check: for two vectors PillaiTrace = Correlation^2 (tested).")
+def _pillai(m1: ListOf[Real] | MatrixOf[Real], m2: ListOf[Real] | MatrixOf[Real]) -> Real:
+    import numpy as np
+    a, b = _two_mats(m1, m2, "PillaiTrace")
+    _, S11, S12, S21, S22 = _pooled_cov(a, b, "PillaiTrace")
+    return float(np.trace(np.linalg.solve(S11, S12) @ np.linalg.solve(S22, S21)))
+
+
+@fn("WilksW", area=AREA, status="added",
+    notes="WilksW[m1, m2] = 1 - Det[S]/(Det[S11] Det[S22]) for the pooled covariance matrix S of the columns of m1 "
+          "and m2 (as documented); machine-precision result. Unequal lengths or singular blocks raise ValueError; "
+          "non-numeric data TypeError; symbolic arguments stay unevaluated. Check: for two vectors WilksW = "
+          "Correlation^2 (tested).")
+def _wilks(m1: ListOf[Real] | MatrixOf[Real], m2: ListOf[Real] | MatrixOf[Real]) -> Real:
+    import numpy as np
+    a, b = _two_mats(m1, m2, "WilksW")
+    C, S11, _, _, S22 = _pooled_cov(a, b, "WilksW")
+    return float(1 - np.linalg.det(C) / (np.linalg.det(S11) * np.linalg.det(S22)))
+
+
+def _stat_only_test(name, f):
+    def impl(m1: ListOf[Real] | MatrixOf[Real], m2: ListOf[Real] | MatrixOf[Real], *rest: String | Option) -> Real:
+        args, o = opts(rest, TEST_OPTS, name)
+        (), prop = prop_arg(args, name, 0)
+        if prop != "TestStatistic":
+            raise NotImplementedError(f'{name}: only the "TestStatistic" property is supported (the null '
+                                      "distribution Wolfram uses for the p-value is not documented)")
+        return f(m1, m2)
+    return impl
+
+
+fn("PillaiTraceTest", area=AREA, status="added",
+   notes="PillaiTraceTest[m1, m2, \"TestStatistic\"] gives PillaiTrace[m1, m2]; the p-value and other properties "
+         "raise NotImplementedError (Wolfram's null approximation is not documented). Check: identical to "
+         "PillaiTrace (tested).")(_stat_only_test("PillaiTraceTest", _pillai))
+fn("WilksWTest", area=AREA, status="added",
+   notes="WilksWTest[m1, m2, \"TestStatistic\"] gives WilksW[m1, m2]; the p-value and other properties raise "
+         "NotImplementedError (Wolfram's null approximation is not documented). Check: identical to WilksW "
+         "(tested).")(_stat_only_test("WilksWTest", _wilks))
+
+
+@fn("AutocorrelationTest", area=AREA, status="added",
+    notes="AutocorrelationTest[data], [data, k] and [data, k, spec] for univariate data: the Ljung-Box statistic "
+          "n (n + 2) Sum[r_i^2/(n - i), {i, k}] (the automatic test, as documented) or Box-Pierce n Sum[r_i^2] "
+          "against ChiSquareDistribution[k], r_i the sample autocorrelations; k = Automatic is Ceiling[Log[n]]; "
+          "spec is \"LjungBox\", \"BoxPierce\", a list of them or {prop, test}. Multivariate data, TemporalData and "
+          "All raise NotImplementedError; k >= n or k < 1 ValueError. Check: reference values from "
+          "statsmodels.stats.diagnostic.acorr_ljungbox (lb and bp statistics).")
+def _autocorr_test(x: ListOf[Real], *rest: Integer | Expr | String | ListOf[String] | Option) -> Real | Expr:
+    name = "AutocorrelationTest"
+    args, o = opts(rest, ("SignificanceLevel",), name)
+    if isinstance(x, Expr) and x.head in ("TemporalData", "TimeSeries", "EventSeries"):
+        raise NotImplementedError(f"{name}: TemporalData input is not supported (use a list of values)")
+    if is_matrix(x):
+        raise NotImplementedError(f"{name}: multivariate data is not supported")
+    v, _ = vec(x, name, min_len=3)
+    xs = _fvec(v)
+    n = len(xs)
+    k = args.pop(0) if args else Symbol("Automatic")
+    if str_or_sym(k) == "Automatic":
+        k = math.ceil(math.log(n))
+    if not isinstance(k, int) or isinstance(k, bool):
+        raise TypeError(f"{name}: the lag must be a positive integer or Automatic")
+    if not 1 <= k < n:
+        raise ValueError(f"{name}: the lag must satisfy 1 <= k < n")
+    if args and str_or_sym(args[0]) in ("Automatic",):
+        args = [] if len(args) == 1 else args
+    # the documented automatic test for univariate data is Ljung-Box
+    a0 = args[0] if args else None
+    if not args:
+        prop, chosen, several = None, ["LjungBox"], False
+    elif isinstance(a0, str) and a0 not in ("LjungBox", "BoxPierce"):
+        if len(args) > 1:
+            raise ValueError(f"{name}: too many arguments")
+        prop, chosen, several = a0, ["LjungBox"], False
+    elif is_list(a0) and len(a0.args) == 2 and str_or_sym(a0.args[1]) == "Automatic":
+        prop, chosen, several = a0.args[0], ["LjungBox"], False
+    else:
+        prop, chosen, several = test_spec(name, args, ("LjungBox", "BoxPierce"))
+    m = _fmean(xs)
+    c0 = math.fsum((t - m) ** 2 for t in xs)
+    if c0 == 0:
+        raise ValueError(f"{name}: the data is constant")
+    r = [math.fsum((xs[i] - m) * (xs[i + h] - m) for i in range(n - h)) / c0 for h in range(1, k + 1)]
+    res = []
+    for t in chosen:
+        if t == "LjungBox":
+            q = n * (n + 2) * math.fsum(r[h - 1] ** 2 / (n - h) for h in range(1, k + 1))
+        else:
+            q = n * math.fsum(rr ** 2 for rr in r)
+        res.append(test_result(name, q, chi2_sf(q, k), prop, o, k))
+    return L(*res) if several else res[0]
+
+
+def _event_groups(x, fname):
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if not is_list(x) or len(x.args) < 2:
+        raise TypeError(f"{fname}: expected a list of at least two datasets {{data1, data2, ...}}")
+    out_ = []
+    for g in x.args:
+        if isinstance(g, Expr) and g.head == "EventData" and len(g.args) == 2 and is_list(g.args[0]) and \
+                is_list(g.args[1]):
+            t, _ = vec(g.args[0], fname, "event times")
+            c = list(g.args[1].args)
+            if len(c) != len(t) or not all(q in (0, 1) for q in c):
+                raise ValueError(f"{fname}: EventData censoring flags must be 0 (event) or 1 (right-censored), one "
+                                 "per time")
+            out_.append([(fl(a), q == 0) for a, q in zip(t, c)])
+        elif isinstance(g, Expr) and g.head == "EventData":
+            raise NotImplementedError(f"{fname}: only EventData[times, {{0 | 1, ...}}] (right censoring) is supported")
+        elif is_list(g):
+            if any(is_list(a) for a in g.args):
+                raise NotImplementedError(f"{fname}: interval-censored or multivariate data is not supported")
+            t, _ = vec(g, fname, "event times")
+            out_.append([(fl(a), True) for a in t])
+        else:
+            raise TypeError(f"{fname}: each dataset must be a list or EventData")
+    return out_
+
+
+@fn("LogRankTest", area=AREA, status="added",
+    notes="LogRankTest[{data1, data2, ...}] and [{data1, ...}, wspec, prop]: the weighted log-rank test of equal "
+          "hazards, U = Sum[w (O - E)] over the distinct event times with the hypergeometric covariance, statistic "
+          "U'.Inverse[V].U (first k - 1 groups) against ChiSquareDistribution[k - 1]; datasets are lists of event "
+          "times or EventData[times, flags] (flag 1 = right-censored); wspec is rho or {rho, gamma} "
+          "(Fleming-Harrington S(t-)^rho (1 - S(t-))^gamma with the pooled Kaplan-Meier estimate; default 0 = "
+          "log-rank), \"Equal\", \"Gehan\" (number at risk), \"TaroneWare\" (its square root), \"Peto\" and "
+          "\"AndersenPeto\". Interval censoring and other EventData forms raise NotImplementedError. Check: "
+          "reference values from the Wolfram documentation (p = 0.192633; Gehan 3.35128, p = 0.0671529; {1, 0} "
+          "3.54507, p = 0.0597226).")
+def _logrank(x: ListOf[ListOf[Real]] | ListOf[Expr], *rest: Real | String | ListOf[Real] | Option) -> Real | Expr:
+    import numpy as np
+    name = "LogRankTest"
+    args, o = opts(rest, ("SignificanceLevel",), name)
+    gs = _event_groups(x, name)
+    w = args.pop(0) if args else 0
+    (), prop = prop_arg(args, name, 0)
+    k = len(gs)
+    allv = sorted({t for g in gs for t, e in g if e})
+    if not allv:
+        raise ValueError(f"{name}: there are no events")
+    # pooled Kaplan-Meier (left-continuous) for the weights
+    S_left, S = [], 1.0
+    St_left = []
+    St = 1.0
+    stats_ = []
+    for t in allv:
+        y = [sum(1 for tt, _ in g if tt >= t) for g in gs]
+        d = [sum(1 for tt, e in g if e and tt == t) for g in gs]
+        Y, Dn = sum(y), sum(d)
+        S_left.append(S)
+        St_left.append(St)
+        stats_.append((y, d, Y, Dn))
+        S *= 1 - Dn / Y
+        St *= 1 - Dn / (Y + 1)
+    ws = []
+    for (y, d, Y, Dn), sl, stl, st_after in zip(stats_, S_left, St_left, St_left[1:] + [St]):
+        ws_name = str_or_sym(w) if isinstance(w, (str, Symbol)) else None
+        if ws_name == "Equal":
+            ws.append(1.0)
+        elif ws_name == "Gehan":
+            ws.append(float(Y))
+        elif ws_name == "TaroneWare":
+            ws.append(math.sqrt(Y))
+        elif ws_name == "Peto":
+            ws.append(st_after)
+        elif ws_name == "AndersenPeto":
+            ws.append(st_after * Y / (Y + 1))
+        elif ws_name is not None:
+            raise ValueError(f"{name}: unknown weight specification {w!r}")
+        else:
+            if is_list(w):
+                if len(w.args) != 2:
+                    raise ValueError(f"{name}: Fleming-Harrington weights are {{rho, gamma}}")
+                rho, gam = (fl(_num(q, name, "weight parameter")) for q in w.args)
+            else:
+                rho, gam = fl(_num(w, name, "weight parameter")), 0.0
+            if rho < 0 or gam < 0:
+                raise ValueError(f"{name}: rho and gamma must be non-negative")
+            ws.append(sl ** rho * (1 - sl) ** gam)
+    U = np.zeros(k)
+    V = np.zeros((k, k))
+    for (y, d, Y, Dn), wt in zip(stats_, ws):
+        for i in range(k):
+            U[i] += wt * (d[i] - Dn * y[i] / Y)
+            if Y > 1:
+                for j in range(k):
+                    V[i, j] += wt * wt * Dn * (Y - Dn) / (Y - 1) * (y[i] / Y) * ((1.0 if i == j else 0.0) - y[j] / Y)
+    Ur, Vr = U[:-1], V[:-1, :-1]
+    if abs(np.linalg.det(Vr)) < 1e-300:
+        raise ValueError(f"{name}: the variance matrix is singular")
+    chi = float(Ur @ np.linalg.solve(Vr, Ur))
+    return test_result(name, chi, chi2_sf(chi, k - 1), prop, o, k - 1)
