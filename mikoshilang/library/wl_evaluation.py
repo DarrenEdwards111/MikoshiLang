@@ -3173,6 +3173,10 @@ def _hval(name):
     return v
 
 
+# Optional hook (text, parse) -> expr used by main_loop to parse each input (W29: $Echo, $SyntaxHandler).
+INPUT_HOOK = None
+
+
 def main_loop(source, whole=True):
     """Evaluate input lines as the Wolfram main loop does; returns [(n, value)] for each line.
 
@@ -3194,7 +3198,7 @@ def main_loop(source, whole=True):
         n = _line()
         h = _hist()
         h[n] = {"string": text}
-        expr = parse(text)
+        expr = parse(text) if INPUT_HOOK is None else INPUT_HOOK(text, parse)
         h[n]["in"] = expr
         tok = E._STACK.set([])
         try:
