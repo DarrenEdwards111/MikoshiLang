@@ -1518,6 +1518,13 @@ def _with(spec, body, ev):
 # ─────────────────────────── functions ───────────────────────────
 
 
+def _untyped(p):
+    """Typed[x, type] parameters (compiler annotations, W30) are plain parameters when evaluated."""
+    if isinstance(p, Expr) and p.head == "Typed" and len(p.args) == 2 and isinstance(p.args[0], Symbol):
+        return p.args[0]
+    return p
+
+
 def apply_function(f, args, ev):
     fa = f.args
     if len(fa) == 1:
@@ -1526,6 +1533,7 @@ def apply_function(f, args, ev):
         raise NotImplementedError("Function[params, body, attributes] is not supported")
     if len(fa) == 2:
         params = fa[0]
+        params = _untyped(params) if not is_list(params) else Expr("List", *map(_untyped, params.args))
         if isinstance(params, Symbol):
             names = [params.name]
         elif is_list(params) and all(isinstance(p, Symbol) for p in params.args):
@@ -1974,12 +1982,77 @@ def _listarg(x, name):
 # arithmetic ---------------------------------------------------------------
 
 
+def _opaque_arith(expr: Expr) -> Expr | None:
+    """Plus / Times / Power whose operands SymPy cannot represent (strings, rules, Hold[...], compound heads such
+    as f[x][y], graphics, ...): those operands become placeholder symbols, the rest is combined by SymPy, and the
+    operands are put back.  So the result is still in canonical form -- nested Plus/Times flattened (Flat), terms
+    and factors sorted (Orderless), numbers folded and like terms collected -- exactly as when every operand is
+    algebraic; previously the expression was returned unchanged, so ``Times[2, Times[x, f["s"]]]`` stayed nested
+    (for example after a user rule produced it).  Returns None when nothing could be converted."""
+    from .math_ops import to_sympy, from_sympy
+    items, provisional = [], []
+
+    def conv(e):
+        try:
+            v = to_sympy(e)
+            if not isinstance(v, list):
+                return v
+        except (ValueError, TypeError, AttributeError):
+            pass
+        if isinstance(e, Expr) and e.head in ("Plus", "Times") and e.args:
+            parts = [conv(x) for x in e.args]
+            return sp.Add(*parts) if e.head == "Plus" else sp.Mul(*parts)
+        if isinstance(e, Expr) and e.head == "Power" and len(e.args) == 2:
+            return sp.Pow(conv(e.args[0]), conv(e.args[1]))
+        for i, (t, x) in enumerate(items):
+            if t is type(e) and x == e:
+                return provisional[i]
+        items.append((type(e), e))
+        provisional.append(sp.Dummy("opaque"))
+        return provisional[-1]
+
+    try:
+        v = conv(expr)
+    except (ValueError, TypeError, AttributeError):
+        return None
+    if not items:
+        return None
+    # Placeholder names follow the canonical order of the operands, so the result does not depend on input order;
+    # an operand h[...] becomes the undefined function h(placeholder), so it is ordered among the other h[...].
+    order = sorted(range(len(items)), key=lambda i: order_key(items[i][1]))
+    final, back = {}, {}
+    for k, i in enumerate(order):
+        name, item = f"_opaque{k:05d}", items[i][1]
+        ph = sp.Symbol(name)
+        if isinstance(item, Expr) and isinstance(item.head, str):
+            ph = sp.Function(item.head)(ph)
+        final[provisional[i]] = ph
+        back[name] = item
+    try:
+        out = from_sympy(v.xreplace(final))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+    def put_back(e):
+        if isinstance(e, Symbol) and e.name in back:
+            return back[e.name]
+        if isinstance(e, Expr) and len(e.args) == 1 and isinstance(e.args[0], Symbol) and e.args[0].name in back \
+                and back[e.args[0].name].head == e.head:
+            return back[e.args[0].name]
+        if isinstance(e, Expr):
+            return Expr(put_back(e.head) if isinstance(e.head, Expr) else e.head, *(put_back(x) for x in e.args))
+        return e
+    return put_back(out)
+
+
 def _sympy_arith(expr):
     try:
         from .math_ops import to_sympy, from_sympy
         out = from_sympy(to_sympy(expr))
     except (ValueError, TypeError, AttributeError):
-        return expr
+        out = _opaque_arith(expr) if expr.head in ("Plus", "Times", "Power") else None
+        if out is None:
+            return expr
     from .precision import input_precision, round_to
     p = input_precision(expr.args)
     if p is None:

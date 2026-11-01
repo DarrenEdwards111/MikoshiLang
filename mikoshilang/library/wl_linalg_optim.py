@@ -38,7 +38,7 @@ from .. import kernel as K
 from .. import kernel_lists as KL
 from .core import (Unevaluated, fn, record, S, R, L, rule, is_list, int_arg, pos_int, nonneg_int, list_arg,
                    has_float, numeric_out, mat_out)
-from .wl_common import split_options, ev, apply, is_sym, is_rule, is_assoc
+from .wl_common import split_options, ev, apply, is_sym, is_rule, is_assoc, reject_options
 
 AREA = "linear algebra & optimisation (W08)"
 ADDED = dict(area=AREA, status="added")
@@ -382,6 +382,7 @@ def _elements(x, fname):
           "input precision)")
 def _distancematrix(us: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts = split_options(rest, _DM_OPTS, "DistanceMatrix")
+    reject_options(opts, ("WorkingPrecision",), "DistanceMatrix")
     if len(pos) > 1:
         raise ValueError("DistanceMatrix called with too many arguments")
     a = _elements(us, "DistanceMatrix")
@@ -3308,6 +3309,8 @@ def _opt_options(opts, fname):
     for k in ("StepMonitor", "EvaluationMonitor"):
         if k in opts:
             raise NotImplementedError(f"{fname}: the option {k} is not supported")
+    # accepted for compatibility but not implemented: only their default values
+    reject_options(opts, ("Method", "MaxIterations", "AccuracyGoal", "PrecisionGoal", "Tolerance"), fname)
 
 
 def _argopt(fname, sense, what, local):
@@ -3659,6 +3662,9 @@ fn("GeometricOptimization", **ADDED,
           "re-solves the problem; Wolfram's precompiled solver data are not reproduced)" + _FAMILY_NOTE)
 def _parametricconvex(f: Expr, cons: Expr, vars_: Expr, pars: Expr, *rest: Expr) -> Expr:
     args, opts = split_options(rest, _OPT_OPTS, "ParametricConvexOptimization")
+    # the options are not carried into the ParametricFunction: only their defaults are accepted
+    reject_options(opts, [k for k in opts if k not in ("PerformanceGoal", "RandomSeed")],
+                   "ParametricConvexOptimization")
     props = args[0] if args else None
     ps = list(pars.args) if is_list(pars) else [pars]
     for p in ps:
@@ -3768,6 +3774,7 @@ def _robustconvex(f: Held, spec: Held, vars_: Held, *rest: Held) -> Expr:
     f, spec, vars_ = ev(f), spec, ev(vars_)
     rest = [ev(r) for r in rest]
     args, opts = split_options(rest, _OPT_OPTS, fname)
+    _opt_options(opts, fname)
     if isinstance(spec, Expr) and spec.head == "ForAll" and len(spec.args) == 3:
         pv, cond, cons = spec.args
         pars = list(pv.args) if is_list(pv) else [pv]
@@ -3959,6 +3966,7 @@ def _tour_dist(opts, pts, fname):
 def _findshortesttour(pts: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "FindShortestTour"
     args, opts = split_options(rest, {"DistanceFunction", "Method"}, fname)
+    reject_options(opts, ("Method",), fname)
     if isinstance(pts, Expr) and pts.head == "Graph":
         raise NotImplementedError(f"{fname}: graph input is not supported")
     P = _items(pts, fname, "point list")
