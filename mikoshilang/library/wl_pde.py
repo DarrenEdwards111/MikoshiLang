@@ -59,7 +59,10 @@ def _curl(F, X):
 
 
 def _plus(*a):
-    a = [x for x in a if not _is_zero(x)]
+    flat = []
+    for x in a:
+        flat.extend(x.args if _head_is(x, "Plus") else [x])
+    a = [x for x in flat if not _is_zero(x)]
     if not a:
         return 0
     return a[0] if len(a) == 1 else Expr("Plus", *a)
@@ -517,3 +520,869 @@ def _source_term(vars_: Expr, f: Expr, *rest: Assoc) -> Expr:
             raise ValueError(f"{fname}: the source for one dependent variable must be a scalar")
         out = f
     return _apply_subs(ev(out), subs)
+
+
+# ───────────────────────────── PDE components ─────────────────────────────
+
+MU0 = Expr("Times", 4, Symbol("Pi"), Expr("Power", 10, -7))                     # pi / 2500000 (exact)
+EPS0 = Expr("Power", Expr("Times", MU0, Expr("Power", 299792458, 2)), -1)       # 625000 / (22468879468420441 pi)
+H_PLANCK = Expr("Times", 662607015, Expr("Power", 10, -42))                     # exact SI value
+
+
+def _p(keys, k, default):
+    return keys[k] if k in keys else default
+
+
+def _scale(keys, V, fname):
+    """Thickness (2-D) / CrossSectionalArea (1-D) factor."""
+    d = 1
+    if "Thickness" in keys:
+        if V.n != 2:
+            raise ValueError(f"{fname}: \"Thickness\" applies to 2-D models only")
+        d = keys["Thickness"]
+    if "CrossSectionalArea" in keys:
+        if V.n != 1:
+            raise ValueError(f"{fname}: \"CrossSectionalArea\" applies to 1-D models only")
+        d = keys["CrossSectionalArea"]
+    return d
+
+
+def _scaled(d, c):
+    """d * c for a scalar/vector/matrix coefficient (None = identity)."""
+    if c is None:
+        c = 1
+    if isinstance(d, int) and d == 1:
+        return c
+    return ev(Expr("Times", d, c))
+
+
+def _zero_vec(n):
+    return L(*([0] * n))
+
+
+def _material(keys, fname):
+    m = keys.get("Material", Symbol("Automatic"))
+    if not (isinstance(m, Symbol) and m.name in ("Automatic", "None")):
+        raise NotImplementedError(f"{fname}: \"Material\" data is not supported; give the material constants")
+
+
+def _model_form(keys, fname, default="NonConservative"):
+    f = keys.get("ModelForm", default)
+    if f not in ("NonConservative", "Conservative"):
+        raise ValueError(f"{fname}: \"ModelForm\" must be \"NonConservative\" or \"Conservative\", not {f}")
+    return f == "Conservative"
+
+
+def _component_args(vars_, pars, fname, known, unsupported=(), allow_freq=False, require_time=False,
+                    allow_system=False):
+    V = parse_vars(vars_, fname, allow_freq=allow_freq, allow_system=allow_system, require_time=require_time)
+    keys, subs = parse_pars(pars, fname, known=tuple(known) + tuple(unsupported), unsupported=unsupported)
+    _chart(keys, fname)
+    axi = _region_symmetry(keys, fname) if "RegionSymmetry" in keys else False
+    if "Material" in keys:
+        _material(keys, fname)
+    return V, keys, subs, axi
+
+
+def _finish(e, subs):
+    return _apply_subs(ev(e), subs)
+
+
+_HEAT_KEYS = ("HeatConvectionVelocity", "HeatSource", "MassDensity", "Material", "ModelForm", "RegionSymmetry",
+              "SpecificHeatCapacity", "ThermalConductivity", "Thickness", "CrossSectionalArea", "CoordinateChart",
+              # boundary-condition keys that may share the same association
+              "AmbientTemperature", "HeatTransferCoefficient", "Emissivity", "StefanBoltzmannConstant",
+              "HeatFlux", "Temperature", "SurfaceArea")
+
+
+@fn("HeatTransferPDEComponent", area=AREA, status="added",
+    notes="HeatTransferPDEComponent[vars, pars] -> rho Cp D[T, t] + Inactive[Div][-k . Inactive[Grad][T, X], X] "
+          "+ rho Cp v . Inactive[Grad][T, X] - Q (non-conservative, the default) or with Inactive[Div][rho Cp v T, X] "
+          "for \"ModelForm\" -> \"Conservative\"; parameters \"MassDensity\", \"SpecificHeatCapacity\", "
+          "\"ThermalConductivity\" (scalar, vector or matrix; default IdentityMatrix), \"HeatConvectionVelocity\", "
+          "\"HeatSource\", \"Thickness\" (2-D) / \"CrossSectionalArea\" (1-D) multiply every term, "
+          "\"RegionSymmetry\" -> \"Axisymmetric\"; zero terms are omitted; symbol keys are substituted. "
+          "\"Material\" entities raise NotImplementedError; unknown keys raise ValueError. Check: reference "
+          "(Wolfram documentation forms) and Activate compared with the written-out heat equation in tests.")
+def _heat_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "HeatTransferPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _HEAT_KEYS)
+    d = _scale(keys, V, fname)
+    rho, cp = _p(keys, "MassDensity", 1), _p(keys, "SpecificHeatCapacity", 1)
+    k = keys.get("ThermalConductivity")
+    v = _p(keys, "HeatConvectionVelocity", _zero_vec(V.n))
+    Q = _p(keys, "HeatSource", 0)
+    rc = ev(Expr("Times", d, rho, cp))
+    parts = []
+    if V.t is not None:
+        parts.append(_times(rc, _time_d(V.u, V.t)))
+    parts.append(_diffusion(V.u, V.XL, _scaled(d, k), fname, axi))
+    vv = _vector(v, V.n, fname, "\"HeatConvectionVelocity\"")
+    if _model_form(keys, fname):
+        parts.append(_cconvection(V.u, V.XL, ev(Expr("Times", -1, rc, vv)), fname, axi))
+    else:
+        parts.append(_convection(V.u, V.XL, ev(Expr("Times", rc, vv)), fname))
+    parts.append(_neg(_times(d, Q)))
+    return _finish(_plus(*parts), subs)
+
+
+_MASS_KEYS = ("MassConvectionVelocity", "DiffusionCoefficient", "MassReactionRate", "MassSource", "ModelForm",
+              "RegionSymmetry", "CoordinateChart", "Thickness", "CrossSectionalArea",
+              "AmbientConcentration", "MassTransferCoefficient", "MassFlux", "Concentration")
+
+
+@fn("MassTransportPDEComponent", area=AREA, status="added",
+    notes="MassTransportPDEComponent[vars, pars] -> D[c, t] + Inactive[Div][-d . Inactive[Grad][c, X], X] + "
+          "v . Inactive[Grad][c, X] + r c - R (non-conservative default) or Inactive[Div][v c, X] for "
+          "\"ModelForm\" -> \"Conservative\"; parameters \"DiffusionCoefficient\" (scalar, vector or matrix; default "
+          "IdentityMatrix), \"MassConvectionVelocity\", \"MassReactionRate\", \"MassSource\", \"RegionSymmetry\"; zero "
+          "terms omitted; symbol keys substituted; unknown keys raise ValueError. Check: reference (Wolfram "
+          "documentation forms) and Activate compared with the written-out transport equation in tests.")
+def _mass_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "MassTransportPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _MASS_KEYS)
+    d = _scale(keys, V, fname)
+    D = keys.get("DiffusionCoefficient")
+    v = _vector(_p(keys, "MassConvectionVelocity", _zero_vec(V.n)), V.n, fname, "\"MassConvectionVelocity\"")
+    r, R_ = _p(keys, "MassReactionRate", 0), _p(keys, "MassSource", 0)
+    parts = []
+    if V.t is not None:
+        parts.append(_times(d, _time_d(V.u, V.t)))
+    parts.append(_diffusion(V.u, V.XL, _scaled(d, D), fname, axi))
+    if _model_form(keys, fname):
+        parts.append(_cconvection(V.u, V.XL, ev(Expr("Times", -1, d, v)), fname, axi))
+    else:
+        parts.append(_convection(V.u, V.XL, ev(Expr("Times", d, v)), fname))
+    parts.append(_times(d, r, V.u))
+    parts.append(_neg(_times(d, R_)))
+    return _finish(_plus(*parts), subs)
+
+
+_ACOUSTIC_KEYS = ("DipoleSource", "MassDensity", "MonopoleSource", "SoundSpeed", "RegionSymmetry",
+                  "CoordinateChart", "Thickness", "CrossSectionalArea",
+                  "AcousticPressure", "NormalVelocity", "NormalAcceleration", "Impedance", "SpecificImpedance",
+                  "InwardPressure", "IncomingPressure")
+
+
+def _recip(x):
+    return ev(Expr("Power", x, -1))
+
+
+@fn("AcousticPDEComponent", area=AREA, status="added",
+    notes="AcousticPDEComponent[vars, pars]: time domain {p[t, x...], t, {x...}} -> 1/(rho c^2) D[p, {t, 2}] + "
+          "Inactive[Div][-(1/rho) Inactive[Grad][p, X], X] + Inactive[Div][-F/rho, X] - Q; frequency domain "
+          "{p[x...], omega, {x...}} -> Inactive[Div][...] + Inactive[Div][-F/rho, X] - omega^2/(rho c^2) p - Q; "
+          "stationary vars give the spatial part; parameters \"MassDensity\" rho, \"SoundSpeed\" c, "
+          "\"MonopoleSource\" Q, \"DipoleSource\" F, \"RegionSymmetry\"; unknown keys raise ValueError. Check: "
+          "reference (Wolfram documentation forms, e.g. rho = 1.2, c = 343 -> 1/(1.2 343^2) = 7.08322*10^-6) in tests.")
+def _acoustic_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "AcousticPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _ACOUSTIC_KEYS, allow_freq=True)
+    rho, c = _p(keys, "MassDensity", 1), _p(keys, "SoundSpeed", 1)
+    Q = _p(keys, "MonopoleSource", 0)
+    F = _vector(_p(keys, "DipoleSource", _zero_vec(V.n)), V.n, fname, "\"DipoleSource\"")
+    irho = _recip(rho)
+    parts = []
+    m = ev(Expr("Power", Expr("Times", rho, Expr("Power", c, 2)), -1))
+    if V.t is not None:
+        parts.append(_times(m, _time_d(V.u, V.t, 2)))
+    parts.append(_diffusion(V.u, V.XL, irho, fname, axi))
+    parts.append(_derivterm(V.XL, ev(Expr("Times", -1, irho, F)), fname, axi))
+    if V.w is not None:
+        parts.append(_times(-1, Expr("Power", V.w, 2), m, V.u))
+    parts.append(_neg(Q))
+    return _finish(_plus(*parts), subs)
+
+
+_ES_KEYS = ("Polarization", "RelativePermittivity", "RemanentPolarization", "Thickness", "CrossSectionalArea",
+            "VacuumPermittivity", "VolumeChargeDensity", "RegionSymmetry", "CoordinateChart", "Material",
+            "ElectricPotential", "SurfaceChargeDensity", "ElectricFluxDensity")
+
+
+@fn("ElectrostaticPDEComponent", area=AREA, status="added",
+    notes="ElectrostaticPDEComponent[vars, pars] (stationary vars) -> Inactive[Div][-(d eps0 epsr) . "
+          "Inactive[Grad][V, X], X] + Inactive[Div][d (P + Pr), X] - d rhov with \"VacuumPermittivity\" eps0 "
+          "(default exact 1/(mu0 c^2) = 625000/(22468879468420441 Pi)), \"RelativePermittivity\" epsr (scalar, "
+          "vector or matrix), \"Polarization\" P, \"RemanentPolarization\" Pr, \"VolumeChargeDensity\" rhov, "
+          "\"Thickness\" (2-D) / \"CrossSectionalArea\" (1-D) d, \"RegionSymmetry\"; time-dependent vars raise "
+          "NotImplementedError; unknown keys raise ValueError. Check: reference (Wolfram documentation forms) in "
+          "tests.")
+def _electrostatic_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "ElectrostaticPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _ES_KEYS)
+    if V.t is not None:
+        raise NotImplementedError(f"{fname}: time-dependent electrostatic models are not supported")
+    d = _scale(keys, V, fname)
+    eps = ev(Expr("Times", d, _p(keys, "VacuumPermittivity", EPS0), _p(keys, "RelativePermittivity", 1)))
+    P = _vector(_p(keys, "Polarization", _zero_vec(V.n)), V.n, fname, "\"Polarization\"")
+    Pr = _vector(_p(keys, "RemanentPolarization", _zero_vec(V.n)), V.n, fname, "\"RemanentPolarization\"")
+    parts = [_diffusion(V.u, V.XL, eps, fname, axi),
+             _derivterm(V.XL, ev(Expr("Times", d, Expr("Plus", P, Pr))), fname, axi),
+             _neg(_times(d, _p(keys, "VolumeChargeDensity", 0)))]
+    return _finish(_plus(*parts), subs)
+
+
+_EC_KEYS = ("CrossSectionalArea", "CurrentSource", "ElectricalConductivity", "ExternalCurrentSource", "Material",
+            "Thickness", "Polarization", "RelativePermittivity", "VacuumPermittivity", "RegionSymmetry",
+            "CoordinateChart", "ElectricPotential", "CurrentDensity", "ElectricCurrentDensity")
+
+
+@fn("ElectricCurrentPDEComponent", area=AREA, status="added",
+    notes="ElectricCurrentPDEComponent[vars, pars]: stationary -> Inactive[Div][-(d sigma) . Inactive[Grad][V, X], X] "
+          "+ Inactive[Div][d Je, X] - d Qv; time-dependent {V[t, ...], t, X} adds Inactive[Div][-(d eps0 epsr) . "
+          "Inactive[Grad][D[V, t], X], X]; frequency {V[...], omega, X} adds Inactive[Div][-(I d omega eps0 epsr) . "
+          "Inactive[Grad][V, X], X] + Inactive[Div][I omega d P, X]; parameters \"ElectricalConductivity\" sigma, "
+          "\"ExternalCurrentSource\" Je, \"CurrentSource\" Qv, \"RelativePermittivity\", \"VacuumPermittivity\", "
+          "\"Polarization\", \"Thickness\" / \"CrossSectionalArea\" d; \"Material\" entities raise "
+          "NotImplementedError. Check: reference (Wolfram documentation forms) in tests.")
+def _electric_current_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "ElectricCurrentPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _EC_KEYS, allow_freq=True)
+    d = _scale(keys, V, fname)
+    sigma = _p(keys, "ElectricalConductivity", 1)
+    Je = _vector(_p(keys, "ExternalCurrentSource", _zero_vec(V.n)), V.n, fname, "\"ExternalCurrentSource\"")
+    eps = ev(Expr("Times", _p(keys, "VacuumPermittivity", EPS0), _p(keys, "RelativePermittivity", 1)))
+    parts = [_diffusion(V.u, V.XL, _scaled(d, sigma), fname, axi)]
+    if V.t is not None:
+        parts.append(_diffusion(_time_d(V.u, V.t), V.XL, ev(Expr("Times", d, eps)), fname, axi))
+    if V.w is not None:
+        parts.append(_diffusion(V.u, V.XL, ev(Expr("Times", Symbol("I"), d, V.w, eps)), fname, axi))
+        P = _vector(_p(keys, "Polarization", _zero_vec(V.n)), V.n, fname, "\"Polarization\"")
+        parts.append(_derivterm(V.XL, ev(Expr("Times", Symbol("I"), V.w, d, P)), fname, axi))
+    parts.append(_derivterm(V.XL, ev(Expr("Times", d, Je)), fname, axi))
+    parts.append(_neg(_times(d, _p(keys, "CurrentSource", 0))))
+    return _finish(_plus(*parts), subs)
+
+
+_MS_KEYS = ("Magnetization", "RelativePermeability", "RecoilPermeability", "RemanentMagneticFluxDensity",
+            "Thickness", "CrossSectionalArea", "VacuumPermeability", "RegionSymmetry", "CoordinateChart", "Material",
+            "MagneticFluxDensity", "MagneticPotential")
+
+
+@fn("MagnetostaticPDEComponent", area=AREA, status="added",
+    notes="MagnetostaticPDEComponent[vars, pars] (stationary scalar potential Vm) -> Inactive[Div][-(d mu0 mur) . "
+          "Inactive[Grad][Vm, X], X] + Inactive[Div][d mu0 M, X]; with \"RemanentMagneticFluxDensity\" Br -> "
+          "Inactive[Div][-(d mu0 murec) . Inactive[Grad][Vm, X], X] + Inactive[Div][d Br, X] "
+          "(\"RecoilPermeability\" murec, default 1); \"VacuumPermeability\" mu0 defaults to the exact 4 Pi 10^-7 = "
+          "Pi/2500000; giving both M and Br raises ValueError; time-dependent vars raise NotImplementedError. "
+          "Check: reference (Wolfram documentation forms) in tests.")
+def _magnetostatic_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "MagnetostaticPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _MS_KEYS)
+    if V.t is not None:
+        raise NotImplementedError(f"{fname}: time-dependent models are not supported (use MagneticPDEComponent)")
+    d = _scale(keys, V, fname)
+    mu0 = _p(keys, "VacuumPermeability", MU0)
+    if "Magnetization" in keys and "RemanentMagneticFluxDensity" in keys:
+        raise ValueError(f"{fname}: give either \"Magnetization\" or \"RemanentMagneticFluxDensity\", not both")
+    if "RemanentMagneticFluxDensity" in keys:
+        Br = _vector(keys["RemanentMagneticFluxDensity"], V.n, fname, "\"RemanentMagneticFluxDensity\"")
+        c = ev(Expr("Times", d, mu0, _p(keys, "RecoilPermeability", 1)))
+        src = ev(Expr("Times", d, Br))
+    else:
+        M = _vector(_p(keys, "Magnetization", _zero_vec(V.n)), V.n, fname, "\"Magnetization\"")
+        c = ev(Expr("Times", d, mu0, _p(keys, "RelativePermeability", 1)))
+        src = ev(Expr("Times", d, mu0, M))
+    return _finish(_plus(_diffusion(V.u, V.XL, c, fname, axi), _derivterm(V.XL, src, fname, axi)), subs)
+
+
+_MAG_KEYS = ("ExternalCurrentSource", "Magnetization", "RelativePermeability", "RecoilPermeability",
+             "RemanentMagneticFluxDensity", "VacuumPermeability", "ElectricalConductivity", "CoordinateChart",
+             "Material", "MagneticFluxDensity", "MagneticPotential", "SurfaceCurrentDensity")
+
+
+def _curlcurl_rows(As, X, nu):
+    """Rows of Curl[nu Curl[A]] as Sum_j Inactive[Div][C_ij . Inactive[Grad][A_j, X], X] (Wolfram's form)."""
+    n = 3
+    rows = []
+    for i in range(n):
+        terms = []
+        for m in range(n):
+            if m == i:
+                C = [[(0 if (a == b and a == i) else (_neg(nu) if a == b else 0)) for b in range(n)] for a in range(n)]
+            else:
+                C = [[(nu if (a == m and b == i) else 0) for b in range(n)] for a in range(n)]
+            terms.append(_div(Expr("Dot", L(*(L(*r) for r in C)), _grad(As[m], X)), X))
+        rows.append(terms)
+    return rows
+
+
+@fn("MagneticPDEComponent", area=AREA, status="added",
+    notes="MagneticPDEComponent[vars, pars] for the magnetic vector potential {{Ax, Ay, Az}, {x, y, z}} -> rows of "
+          "Curl[(mu0 mur)^-1 Curl[A] - M] - Je written, as Wolfram does, as Sum_j Inactive[Div][C_ij . "
+          "Inactive[Grad][A_j, X], X]; frequency vars {A, omega, X} add I omega sigma A, time vars add sigma D[A, t]; "
+          "\"RemanentMagneticFluxDensity\" Br uses (mu0 murec)^-1 (Curl[A] - Br); \"VacuumPermeability\" defaults to "
+          "the exact Pi/2500000; scalar permeabilities only (matrices raise NotImplementedError), 3-D only (2-D "
+          "forms raise NotImplementedError). Check: Activate compared with the curl-curl identity Grad[Div[A]] - "
+          "Laplacian[A] (numeric cross-check of the coefficient form) in tests.")
+def _magnetic_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "MagneticPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _MAG_KEYS, allow_freq=True, allow_system=True)
+    if not V.system or len(V.deps) != 3 or V.n != 3:
+        raise NotImplementedError(f"{fname}: only the 3-D vector potential {{{{Ax, Ay, Az}}, {{x, y, z}}}} is "
+                                  "supported")
+    mu0 = _p(keys, "VacuumPermeability", MU0)
+    if "Magnetization" in keys and "RemanentMagneticFluxDensity" in keys:
+        raise ValueError(f"{fname}: give either \"Magnetization\" or \"RemanentMagneticFluxDensity\", not both")
+    for k in ("RelativePermeability", "RecoilPermeability"):
+        if k in keys and is_list(keys[k]):
+            raise NotImplementedError(f"{fname}: only scalar \"{k}\" values are supported")
+    if "RemanentMagneticFluxDensity" in keys:
+        mu = ev(Expr("Times", mu0, _p(keys, "RecoilPermeability", 1)))
+        M = ev(Expr("Times", Expr("Power", mu, -1),
+                    _vector(keys["RemanentMagneticFluxDensity"], 3, fname, "\"RemanentMagneticFluxDensity\"")))
+    else:
+        mu = ev(Expr("Times", mu0, _p(keys, "RelativePermeability", 1)))
+        M = _vector(_p(keys, "Magnetization", _zero_vec(3)), 3, fname, "\"Magnetization\"")
+    nu = _recip(mu)
+    Je = _vector(_p(keys, "ExternalCurrentSource", _zero_vec(3)), 3, fname, "\"ExternalCurrentSource\"")
+    sigma = _p(keys, "ElectricalConductivity", 1 if (V.t is not None or V.w is not None) else 0)
+    rows = _curlcurl_rows(V.deps, V.XL, nu)
+    eps = [[[0, 0, 0], [0, 0, 1], [0, -1, 0]], [[0, 0, -1], [0, 0, 0], [1, 0, 0]],
+           [[0, 1, 0], [-1, 0, 0], [0, 0, 0]]]       # eps[i][j][k]
+    out = []
+    for i in range(3):
+        parts = list(rows[i])
+        if not _is_zero(M):
+            # -(Curl M)_i = Inactive[Div][{-eps_ijk M_k}_j, X]
+            vec = ev(L(*(Expr("Times", -1, Expr("Plus", *[_times(eps[i][j][k], M.args[k]) for k in range(3)] + [0]))
+                         for j in range(3))))
+            if not _is_zero(vec):
+                parts.append(_div(vec, V.XL))
+        if V.t is not None:
+            parts.append(_times(sigma, _time_d(V.deps[i], V.t)))
+        if V.w is not None:
+            parts.append(_times(Symbol("I"), V.w, sigma, V.deps[i]))
+        parts.append(_neg(Je.args[i]))
+        out.append(_plus(*parts))
+    return _finish(L(*out), subs)
+
+
+@fn("PoissonPDEComponent", area=AREA, status="added",
+    notes="PoissonPDEComponent[vars, pars] -> Inactive[Div][IdentityMatrix[n] . Inactive[Grad][u, X], X] - f with "
+          "\"PoissonSourceTerm\" f (default 1) and \"RegionSymmetry\"; time-dependent vars add no time term (as "
+          "documented). Check: reference (Wolfram documentation: PoissonPDEComponent[{u[x], {x}}, <||>] -> "
+          "-1 + Inactive[Div][{{1}} . Inactive[Grad][u[x], {x}], {x}]) in tests.")
+def _poisson_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "PoissonPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, ("PoissonSourceTerm", "RegionSymmetry",
+                                                              "CoordinateChart"))
+    return _finish(_plus(_diffusion(V.u, V.XL, None, fname, axi, sign=1),
+                         _neg(_p(keys, "PoissonSourceTerm", 1))), subs)
+
+
+@fn("HelmholtzPDEComponent", area=AREA, status="added",
+    notes="HelmholtzPDEComponent[vars, pars] -> Inactive[Div][IdentityMatrix[n] . Inactive[Grad][u, X], X] + k^2 u "
+          "with \"HelmholtzEigenvalue\" k (default 1) and \"RegionSymmetry\". Check: reference (Wolfram "
+          "documentation forms) and the eigenvalue relation (NDEigenvalues) in tests.")
+def _helmholtz_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "HelmholtzPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, ("HelmholtzEigenvalue", "RegionSymmetry",
+                                                              "CoordinateChart"))
+    k = _p(keys, "HelmholtzEigenvalue", 1)
+    return _finish(_plus(_diffusion(V.u, V.XL, None, fname, axi, sign=1),
+                         _times(ev(Expr("Power", k, 2)), V.u)), subs)
+
+
+@fn("WavePDEComponent", area=AREA, status="added",
+    notes="WavePDEComponent[{u[t, x...], t, {x...}}, pars] -> D[u, {t, 2}] + Inactive[Div][-c^2 . Inactive[Grad][u, "
+          "X], X] with \"WaveCoefficient\" c (scalar, or an n x n matrix whose square c.c is used; default 1) and "
+          "\"RegionSymmetry\"; stationary vars raise ValueError. Check: reference (Wolfram documentation forms) in "
+          "tests.")
+def _wave_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "WavePDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, ("WaveCoefficient", "RegionSymmetry",
+                                                              "CoordinateChart"), require_time=True)
+    c = _p(keys, "WaveCoefficient", 1)
+    if _is_matrix(c):
+        c2 = ev(Expr("Dot", c, c))
+    elif is_list(c):
+        raise ValueError(f"{fname}: \"WaveCoefficient\" must be a scalar or a square matrix")
+    else:
+        c2 = ev(Expr("Power", c, 2))
+    return _finish(_plus(_time_d(V.u, V.t, 2), _diffusion(V.u, V.XL, c2, fname, axi)), subs)
+
+
+_SCH_KEYS = ("AzimuthalQuantumNumber", "MagneticVectorPotential", "Mass", "PlanckConstant", "ReducedPlanckConstant",
+             "SchrodingerPotential", "RegionSymmetry", "ParticleCharge", "CoordinateChart")
+
+
+@fn("SchrodingerPDEComponent", area=AREA, status="added",
+    notes="SchrodingerPDEComponent[vars, pars] -> -I hbar D[Psi, t] (time-dependent vars) + Inactive[Div][-(hbar^2/2) "
+          "(1/m) . Inactive[Grad][Psi, X], X] + V Psi with \"Mass\" m (scalar, or a matrix used elementwise as "
+          "1/m_ij), \"SchrodingerPotential\" V, \"ReducedPlanckConstant\" hbar or \"PlanckConstant\" h (hbar = "
+          "h/(2 Pi)); the default hbar is exact (h = 662607015*10^-42); \"MagneticVectorPotential\" and "
+          "\"AzimuthalQuantumNumber\" settings other than the defaults raise NotImplementedError. Check: reference "
+          "(Wolfram documentation forms, hbar^2/2 = 662607015^2/(8 Pi^2 10^84)) in tests.")
+def _schrodinger_component(vars_: Expr, pars: Assoc) -> Expr:
+    fname = "SchrodingerPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _SCH_KEYS)
+    if not _is_zero(keys.get("MagneticVectorPotential", 0)):
+        raise NotImplementedError(f"{fname}: \"MagneticVectorPotential\" is not supported")
+    if _sym_of(keys.get("AzimuthalQuantumNumber", Symbol("None"))) != "None":
+        raise NotImplementedError(f"{fname}: \"AzimuthalQuantumNumber\" is not supported")
+    if "ReducedPlanckConstant" in keys:
+        hbar = keys["ReducedPlanckConstant"]
+    else:
+        hbar = ev(Expr("Times", _p(keys, "PlanckConstant", H_PLANCK), Expr("Power", Expr("Times", 2, Symbol("Pi")),
+                                                                             -1)))
+    m = _p(keys, "Mass", 1)
+    if is_list(m):
+        if not _is_matrix(m, V.n):
+            raise ValueError(f"{fname}: a \"Mass\" matrix must be {V.n} x {V.n}")
+        inv = L(*(L(*(Expr("Power", e, -1) for e in r.args)) for r in m.args))
+    else:
+        inv = Expr("Power", m, -1)
+    c = ev(Expr("Times", Expr("Power", hbar, 2), Expr("Rational", 1, 2), inv))
+    parts = []
+    if V.t is not None:
+        parts.append(_times(-1, Symbol("I"), hbar, _time_d(V.u, V.t)))
+    parts.append(_diffusion(V.u, V.XL, c, fname, axi))
+    parts.append(_times(_p(keys, "SchrodingerPotential", 0), V.u))
+    return _finish(_plus(*parts), subs)
+
+
+# ───────────────────────────── boundary values and conditions ─────────────────────────────
+
+def _bc_args(pred, vars_, pars, rest, fname, known, allow_freq=False, allow_system=False):
+    """pred, vars, pars[, lkey or <|...|>] -> (V, keys, subs); localized values override the shared ones."""
+    if len(rest) > 1:
+        raise ValueError(f"{fname}: called with too many arguments")
+    if isinstance(pred, str):
+        raise TypeError(f"{fname}: the boundary predicate must be a predicate, not a string")
+    V = parse_vars(vars_, fname, allow_freq=allow_freq, allow_system=allow_system)
+    if not KL.is_assoc(pars):
+        if isinstance(pars, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the parameters must be an association")
+    local = None
+    if rest:
+        lk = rest[0]
+        if KL.is_assoc(lk):
+            local = lk
+        else:
+            hit = [r for r in pars.args if K.same(r.args[0], lk)]
+            if not hit:
+                raise ValueError(f"{fname}: the localization key {lk} is not in the parameters")
+            local = ev(hit[0].args[1])
+            if not KL.is_assoc(local):
+                raise ValueError(f"{fname}: the localized parameters pars[{lk}] must be an association")
+    rules = [r for r in pars.args if not (rest and not KL.is_assoc(rest[0]) and K.same(r.args[0], rest[0]))]
+    rules = [r for r in rules if not KL.is_assoc(r.args[1]) or not isinstance(r.args[0], str) or
+             r.args[0] in known]
+    merged = Expr("Association", *rules)
+    keys, subs = parse_pars(merged, fname, known=known)
+    if local is not None:
+        k2, s2 = parse_pars(local, fname, known=known)
+        keys.update(k2)
+        subs = [r for r in subs if not any(K.same(r.args[0], q.args[0]) for q in s2)] + s2
+    return V, keys, subs
+
+
+def _normal(V, keys):
+    n = keys.get("BoundaryUnitNormal", Symbol("Automatic"))
+    if isinstance(n, Symbol) and n.name == "Automatic":
+        return Expr("NeumannBoundaryUnitNormal", V.XL)
+    return _vector(n, V.n, "BoundaryUnitNormal", "\"BoundaryUnitNormal\"")
+
+
+def _ndot(V, keys, vec):
+    if _is_zero(vec):
+        return 0
+    return Expr("Dot", _normal(V, keys), vec)
+
+
+def _neumann(val, pred, subs):
+    return _apply_subs(ev(Expr("NeumannValue", ev(val), pred)), subs)
+
+
+def _dirichlet(lhs, rhs, pred, subs):
+    if is_list(lhs):
+        eqs = L(*(Expr("Equal", a, b) for a, b in zip(lhs.args, rhs.args)))
+    else:
+        eqs = Expr("Equal", lhs, rhs)
+    return _apply_subs(ev(Expr("DirichletCondition", eqs, pred)), subs)
+
+
+def _no_scale(keys, fname):
+    for k in ("Thickness", "CrossSectionalArea"):
+        if k in keys and not (is_numeric_value(keys[k]) and S(keys[k]) == 1):
+            raise NotImplementedError(f"{fname}: \"{k}\" scaling of boundary values is not supported")
+
+
+def _bc_doc(name, what, extra=""):
+    return (f"{name}[pred, vars, pars] and {name}[pred, vars, pars, lkey] (lkey: a key of pars holding a localized "
+            f"association, or an association) -> {what}; pars as for the PDE component; symbol keys are "
+            f"substituted; unknown keys raise ValueError; non-association pars raise TypeError. {extra}"
+            "Check: reference (Wolfram documentation forms) in tests.")
+
+
+# heat transfer
+
+def _heat_flux_core(V, keys, q, fname):
+    rc = ev(Expr("Times", _p(keys, "MassDensity", 1), _p(keys, "SpecificHeatCapacity", 1)))
+    v = _vector(_p(keys, "HeatConvectionVelocity", _zero_vec(V.n)), V.n, fname, "\"HeatConvectionVelocity\"")
+    if _model_form(keys, fname):
+        return q
+    return _plus(q, _times(rc, V.u, _ndot(V, keys, v)))
+
+
+_HEAT_BC_KEYS = _HEAT_KEYS + ("BoundaryUnitNormal", "SurfaceTemperature", "ReferenceTemperature",
+                              "BoltzmannConstant")
+
+
+@fn("HeatFluxValue", area=AREA, status="added",
+    notes=_bc_doc("HeatFluxValue", "NeumannValue[q + rho Cp T NeumannBoundaryUnitNormal[X] . v, pred] "
+                  "(non-conservative; \"HeatFlux\" q, default 0; the convective part only for a nonzero "
+                  "\"HeatConvectionVelocity\") or NeumannValue[q, pred] (\"ModelForm\" -> \"Conservative\")",
+                  "\"Thickness\"/\"CrossSectionalArea\" settings raise NotImplementedError. "))
+def _heat_flux_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "HeatFluxValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _HEAT_BC_KEYS)
+    _no_scale(keys, fname)
+    return _neumann(_heat_flux_core(V, keys, _p(keys, "HeatFlux", 0), fname), pred, subs)
+
+
+@fn("HeatInsulationValue", area=AREA, status="added",
+    notes=_bc_doc("HeatInsulationValue", "HeatFluxValue with zero heat flux: NeumannValue[rho Cp T n . v, pred] "
+                  "(non-conservative) or NeumannValue[0, pred]"))
+def _heat_insulation_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "HeatInsulationValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _HEAT_BC_KEYS)
+    _no_scale(keys, fname)
+    return _neumann(_heat_flux_core(V, keys, 0, fname), pred, subs)
+
+
+@fn("HeatOutflowValue", area=AREA, status="added",
+    notes=_bc_doc("HeatOutflowValue", "NeumannValue[0, pred] (non-conservative: no conductive flux) or "
+                  "NeumannValue[-rho Cp T n . v, pred] (\"ModelForm\" -> \"Conservative\")"))
+def _heat_outflow_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "HeatOutflowValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _HEAT_BC_KEYS)
+    _no_scale(keys, fname)
+    if _model_form(keys, fname):
+        rc = ev(Expr("Times", _p(keys, "MassDensity", 1), _p(keys, "SpecificHeatCapacity", 1)))
+        v = _vector(_p(keys, "HeatConvectionVelocity", _zero_vec(V.n)), V.n, fname, "\"HeatConvectionVelocity\"")
+        return _neumann(_neg(_times(rc, V.u, _ndot(V, keys, v))), pred, subs)
+    return _neumann(0, pred, subs)
+
+
+@fn("HeatSymmetryValue", area=AREA, status="added",
+    notes=_bc_doc("HeatSymmetryValue", "NeumannValue[0, pred] (mirror symmetry: no flux across the boundary)"))
+def _heat_symmetry_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "HeatSymmetryValue", _HEAT_BC_KEYS)
+    return _neumann(0, pred, subs)
+
+
+# Stefan-Boltzmann constant from the exact SI k, h, c: 2 Pi^5 k^4 / (15 h^3 c^2)
+_KB = Expr("Times", 1380649, Expr("Power", 10, -29))
+SIGMA_SB = Expr("Times", 2, Expr("Power", Symbol("Pi"), 5), Expr("Power", _KB, 4),
+                Expr("Power", Expr("Times", 15, Expr("Power", H_PLANCK, 3), Expr("Power", 299792458, 2)), -1))
+
+
+@fn("HeatRadiationValue", area=AREA, status="added",
+    notes=_bc_doc("HeatRadiationValue", "NeumannValue[eps sigma ((Tamb - Tref)^4 - (T - Tref)^4), pred] with "
+                  "\"Emissivity\" eps (default 1), \"AmbientTemperature\" Tamb, \"ReferenceTemperature\" Tref (default "
+                  "0) and \"BoltzmannConstant\" sigma (default the exact Stefan-Boltzmann constant 2 Pi^5 k^4/(15 h^3 "
+                  "c^2) from the SI-defined k, h, c)"))
+def _heat_radiation_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "HeatRadiationValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _HEAT_BC_KEYS)
+    _no_scale(keys, fname)
+    eps, sig = _p(keys, "Emissivity", 1), _p(keys, "BoltzmannConstant", SIGMA_SB)
+    ta, tr = _p(keys, "AmbientTemperature", 0), _p(keys, "ReferenceTemperature", 0)
+    val = Expr("Times", eps, sig, Expr("Plus", Expr("Power", Expr("Plus", ta, _neg(tr)), 4),
+                                       _neg(Expr("Power", Expr("Plus", V.u, _neg(tr)), 4))))
+    return _neumann(val, pred, subs)
+
+
+@fn("HeatTransferValue", area=AREA, status="added",
+    notes=_bc_doc("HeatTransferValue", "NeumannValue[h (Text - T), pred] with \"HeatTransferCoefficient\" h "
+                  "(required) and \"AmbientTemperature\" Text (default 0)",
+                  "A missing \"HeatTransferCoefficient\" raises ValueError. "))
+def _heat_transfer_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "HeatTransferValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _HEAT_BC_KEYS)
+    _no_scale(keys, fname)
+    if "HeatTransferCoefficient" not in keys:
+        raise ValueError(f"{fname}: the parameter \"HeatTransferCoefficient\" is required")
+    h, ta = keys["HeatTransferCoefficient"], _p(keys, "AmbientTemperature", 0)
+    return _neumann(Expr("Times", h, Expr("Plus", ta, _neg(V.u))), pred, subs)
+
+
+@fn("HeatTemperatureCondition", area=AREA, status="added",
+    notes=_bc_doc("HeatTemperatureCondition", "DirichletCondition[T == Ts, pred] with \"SurfaceTemperature\" Ts "
+                  "(default 0)"))
+def _heat_temperature_condition(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "HeatTemperatureCondition", _HEAT_BC_KEYS)
+    return _dirichlet(V.u, _p(keys, "SurfaceTemperature", 0), pred, subs)
+
+
+# mass transport
+
+_MASS_BC_KEYS = _MASS_KEYS + ("BoundaryUnitNormal", "MassConcentration")
+
+
+def _mass_v(V, keys, fname):
+    return _vector(_p(keys, "MassConvectionVelocity", _zero_vec(V.n)), V.n, fname, "\"MassConvectionVelocity\"")
+
+
+@fn("MassFluxValue", area=AREA, status="added",
+    notes=_bc_doc("MassFluxValue", "NeumannValue[q + c NeumannBoundaryUnitNormal[X] . v, pred] (non-conservative; "
+                  "\"MassFlux\" q) or NeumannValue[q, pred] (\"ModelForm\" -> \"Conservative\")"))
+def _mass_flux_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "MassFluxValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _MASS_BC_KEYS)
+    q = _p(keys, "MassFlux", 0)
+    if _model_form(keys, fname):
+        return _neumann(q, pred, subs)
+    return _neumann(_plus(_times(V.u, _ndot(V, keys, _mass_v(V, keys, fname))), q), pred, subs)
+
+
+@fn("MassImpermeableBoundaryValue", area=AREA, status="added",
+    notes=_bc_doc("MassImpermeableBoundaryValue", "MassFluxValue with zero flux: NeumannValue[c n . v, pred] "
+                  "(non-conservative) or NeumannValue[0, pred] (conservative)"))
+def _mass_impermeable_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "MassImpermeableBoundaryValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _MASS_BC_KEYS)
+    if _model_form(keys, fname):
+        return _neumann(0, pred, subs)
+    return _neumann(_times(V.u, _ndot(V, keys, _mass_v(V, keys, fname))), pred, subs)
+
+
+@fn("MassOutflowValue", area=AREA, status="added",
+    notes=_bc_doc("MassOutflowValue", "NeumannValue[0, pred] (non-conservative: no diffusive flux) or "
+                  "NeumannValue[-c n . v, pred] (\"ModelForm\" -> \"Conservative\")"))
+def _mass_outflow_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "MassOutflowValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _MASS_BC_KEYS)
+    if _model_form(keys, fname):
+        return _neumann(_neg(_times(V.u, _ndot(V, keys, _mass_v(V, keys, fname)))), pred, subs)
+    return _neumann(0, pred, subs)
+
+
+@fn("MassSymmetryValue", area=AREA, status="added",
+    notes=_bc_doc("MassSymmetryValue", "NeumannValue[0, pred] (mirror symmetry)"))
+def _mass_symmetry_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "MassSymmetryValue", _MASS_BC_KEYS)
+    return _neumann(0, pred, subs)
+
+
+@fn("MassTransferValue", area=AREA, status="added",
+    notes=_bc_doc("MassTransferValue", "NeumannValue[k (cext - c), pred] with \"MassTransferCoefficient\" k "
+                  "(default 1) and \"AmbientConcentration\" cext (default 0)"))
+def _mass_transfer_value(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "MassTransferValue", _MASS_BC_KEYS)
+    k, ca = _p(keys, "MassTransferCoefficient", 1), _p(keys, "AmbientConcentration", 0)
+    return _neumann(Expr("Times", k, Expr("Plus", ca, _neg(V.u))), pred, subs)
+
+
+@fn("MassConcentrationCondition", area=AREA, status="added",
+    notes=_bc_doc("MassConcentrationCondition", "DirichletCondition[c == cs, pred] with \"MassConcentration\" cs "
+                  "(default 0)"))
+def _mass_concentration_condition(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "MassConcentrationCondition", _MASS_BC_KEYS)
+    return _dirichlet(V.u, _p(keys, "MassConcentration", 0), pred, subs)
+
+
+# acoustics
+
+_AC_BC_KEYS = _ACOUSTIC_KEYS + ("BoundaryUnitNormal", "SpecificAcousticImpedance", "AcousticSoundParticleVelocity",
+                                "AcousticSourceDistance", "SoundDirectionVector", "SoundIncidentPressure", "Material")
+
+
+def _ac_args(pred, vars_, pars, rest, fname):
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _AC_BC_KEYS, allow_freq=True)
+    if "Material" in keys:
+        _material(keys, fname)
+    return V, keys, subs
+
+
+def _ac_rate(V, x, fname):
+    """d/dt x in the time domain, I omega x in the frequency domain."""
+    if V.t is not None:
+        return Expr("D", x, V.t)
+    if V.w is not None:
+        return Expr("Times", Symbol("I"), V.w, x)
+    raise ValueError(f"{fname}: time-dependent {{p[t, x...], t, {{x...}}}} or frequency {{p[x...], omega, "
+                     "{x...}} variables are required")
+
+
+@fn("AcousticSoundHardValue", area=AREA, status="added",
+    notes=_bc_doc("AcousticSoundHardValue", "NeumannValue[0, pred] (zero normal acceleration)"))
+def _ac_hard(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _ac_args(pred, vars_, pars, rest, "AcousticSoundHardValue")
+    return _neumann(0, pred, subs)
+
+
+@fn("AcousticSoundSoftCondition", area=AREA, status="added",
+    notes=_bc_doc("AcousticSoundSoftCondition", "DirichletCondition[p == 0, pred]"))
+def _ac_soft(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _ac_args(pred, vars_, pars, rest, "AcousticSoundSoftCondition")
+    return _dirichlet(V.u, 0, pred, subs)
+
+
+@fn("AcousticPressureCondition", area=AREA, status="added",
+    notes=_bc_doc("AcousticPressureCondition", "DirichletCondition[p == p0, pred] with \"AcousticPressure\" p0 "
+                  "(default 0)"))
+def _ac_pressure(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _ac_args(pred, vars_, pars, rest, "AcousticPressureCondition")
+    return _dirichlet(V.u, _p(keys, "AcousticPressure", 0), pred, subs)
+
+
+@fn("AcousticNormalVelocityValue", area=AREA, status="added",
+    notes=_bc_doc("AcousticNormalVelocityValue", "NeumannValer[D[vn, t], pred] in the time domain and "
+                  "NeumannValue[I omega vn, pred] in the frequency domain (\"AcousticSoundParticleVelocity\" vn)",
+                  "Stationary vars raise ValueError. ").replace("NeumannValer", "NeumannValue"))
+def _ac_velocity(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "AcousticNormalVelocityValue"
+    V, keys, subs = _ac_args(pred, vars_, pars, rest, fname)
+    return _neumann(_ac_rate(V, _p(keys, "AcousticSoundParticleVelocity", 0), fname), pred, subs)
+
+
+@fn("AcousticImpedanceValue", area=AREA, status="added",
+    notes=_bc_doc("AcousticImpedanceValue", "NeumannValue[-(1/z) D[p, t], pred] (time domain) or "
+                  "NeumannValue[-(I omega/z) p, pred] (frequency domain) with \"SpecificAcousticImpedance\" z "
+                  "(default Infinity: NeumannValue[0, pred])", "Stationary vars raise ValueError. "))
+def _ac_impedance(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "AcousticImpedanceValue"
+    V, keys, subs = _ac_args(pred, vars_, pars, rest, fname)
+    z = _p(keys, "SpecificAcousticImpedance", Symbol("Infinity"))
+    if isinstance(z, Symbol) and z.name == "Infinity":
+        return _neumann(0, pred, subs)
+    return _neumann(Expr("Times", -1, Expr("Power", z, -1), _ac_rate(V, V.u, fname)), pred, subs)
+
+
+@fn("AcousticAbsorbingValue", area=AREA, status="added",
+    notes=_bc_doc("AcousticAbsorbingValue", "NeumannValue[-(1/(rho c)) D[p, t] - (d/rho) p, pred] (time domain) or "
+                  "NeumannValue[-(I omega/(rho c)) p - (d/rho) p, pred] (frequency domain) with \"MassDensity\" rho, "
+                  "\"SoundSpeed\" c and \"AcousticSourceDistance\" d (the inverse source distance term, default 0)",
+                  "Stationary vars raise ValueError. "))
+def _ac_absorbing(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "AcousticAbsorbingValue"
+    V, keys, subs = _ac_args(pred, vars_, pars, rest, fname)
+    rho, c, d = _p(keys, "MassDensity", 1), _p(keys, "SoundSpeed", 1), _p(keys, "AcousticSourceDistance", 0)
+    val = _plus(Expr("Times", -1, Expr("Power", Expr("Times", rho, c), -1), _ac_rate(V, V.u, fname)),
+                _times(-1, d, Expr("Power", rho, -1), V.u))
+    return _neumann(val, pred, subs)
+
+
+@fn("AcousticRadiationValue", area=AREA, status="added",
+    notes=_bc_doc("AcousticRadiationValue", "NeumannValue[(1/(rho c)) ((1 + n . e/Sqrt[Total[e^2]]) D[pinc, t] - "
+                  "D[p, t]), pred] (time domain; I omega x for D[x, t] in the frequency domain) with "
+                  "\"SoundIncidentPressure\" pinc (default 0) and \"SoundDirectionVector\" e (required when pinc is "
+                  "nonzero)", "Stationary vars raise ValueError. "))
+def _ac_radiation(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "AcousticRadiationValue"
+    V, keys, subs = _ac_args(pred, vars_, pars, rest, fname)
+    rho, c = _p(keys, "MassDensity", 1), _p(keys, "SoundSpeed", 1)
+    pinc = _p(keys, "SoundIncidentPressure", 0)
+    inc = 0
+    if not _is_zero(pinc):
+        if "SoundDirectionVector" not in keys:
+            raise ValueError(f"{fname}: \"SoundDirectionVector\" is required for a nonzero incident pressure")
+        e = keys["SoundDirectionVector"]
+        ehat = Expr("Times", e, Expr("Power", Expr("Sqrt", Expr("Total", Expr("Power", e, 2))), -1))
+        inc = Expr("Times", _ac_rate(V, pinc, fname), Expr("Plus", 1, Expr("Dot", _normal(V, keys), ehat)))
+    val = Expr("Times", Expr("Power", Expr("Times", rho, c), -1), _plus(inc, _neg(_ac_rate(V, V.u, fname))))
+    return _neumann(val, pred, subs)
+
+
+# electrostatics and electric currents
+
+_E_BC_KEYS = tuple(set(_ES_KEYS + _EC_KEYS)) + ("BoundaryUnitNormal", "NormalCurrentDensity",
+                                                "SurfaceChargeDensity", "ElectricFluxDensity", "Current")
+
+
+@fn("ElectricPotentialCondition", area=AREA, status="added",
+    notes=_bc_doc("ElectricPotentialCondition", "DirichletCondition[V == Vs, pred] with \"ElectricPotential\" Vs "
+                  "(default 0)"))
+def _e_potential(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "ElectricPotentialCondition", _E_BC_KEYS, allow_freq=True)
+    return _dirichlet(V.u, _p(keys, "ElectricPotential", 0), pred, subs)
+
+
+@fn("ElectricSymmetryValue", area=AREA, status="added",
+    notes=_bc_doc("ElectricSymmetryValue", "NeumannValue[0, pred] (mirror symmetry: zero normal flux)"))
+def _e_symmetry(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "ElectricSymmetryValue", _E_BC_KEYS, allow_freq=True)
+    return _neumann(0, pred, subs)
+
+
+@fn("ElectricFluxDensityValue", area=AREA, status="added",
+    notes=_bc_doc("ElectricFluxDensityValue", "NeumannValue[-NeumannBoundaryUnitNormal[X] . D0, pred] for "
+                  "\"ElectricFluxDensity\" D0, or NeumannValue[rhos, pred] for \"SurfaceChargeDensity\" rhos "
+                  "(default NeumannValue[0, pred])", "Giving both raises ValueError. "))
+def _e_flux(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "ElectricFluxDensityValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _E_BC_KEYS)
+    if "ElectricFluxDensity" in keys and "SurfaceChargeDensity" in keys:
+        raise ValueError(f"{fname}: give either \"ElectricFluxDensity\" or \"SurfaceChargeDensity\"")
+    if "SurfaceChargeDensity" in keys:
+        return _neumann(keys["SurfaceChargeDensity"], pred, subs)
+    D0 = _vector(_p(keys, "ElectricFluxDensity", _zero_vec(V.n)), V.n, fname, "\"ElectricFluxDensity\"")
+    return _neumann(_neg(_ndot(V, keys, D0)), pred, subs)
+
+
+@fn("ElectricCurrentDensityValue", area=AREA, status="added",
+    notes=_bc_doc("ElectricCurrentDensityValue", "NeumannValue[Jn, pred] for \"NormalCurrentDensity\" Jn or "
+                  "NeumannValue[-NeumannBoundaryUnitNormal[X] . J0, pred] for \"CurrentDensity\" J0 (default 0)",
+                  "\"Current\" (needs the boundary area) raises NotImplementedError; giving two of them raises "
+                  "ValueError. "))
+def _e_current(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "ElectricCurrentDensityValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _E_BC_KEYS, allow_freq=True)
+    if "Current" in keys:
+        raise NotImplementedError(f"{fname}: \"Current\" (total current over the boundary) is not supported; give "
+                                  "\"NormalCurrentDensity\"")
+    if "NormalCurrentDensity" in keys and "CurrentDensity" in keys:
+        raise ValueError(f"{fname}: give either \"NormalCurrentDensity\" or \"CurrentDensity\"")
+    if "NormalCurrentDensity" in keys:
+        return _neumann(keys["NormalCurrentDensity"], pred, subs)
+    J0 = _vector(_p(keys, "CurrentDensity", _zero_vec(V.n)), V.n, fname, "\"CurrentDensity\"")
+    return _neumann(_neg(_ndot(V, keys, J0)), pred, subs)
+
+
+# magnetics
+
+_M_BC_KEYS = tuple(set(_MS_KEYS + _MAG_KEYS)) + ("BoundaryUnitNormal", "NormalMagneticFluxDensity")
+
+
+@fn("MagneticFluxDensityValue", area=AREA, status="added",
+    notes=_bc_doc("MagneticFluxDensityValue", "NeumannValue[-NeumannBoundaryUnitNormal[X] . B0, pred] for "
+                  "\"MagneticFluxDensity\" B0 or NeumannValue[Bn, pred] for \"NormalMagneticFluxDensity\" Bn (scalar "
+                  "potential models)", "Vector-potential vars raise NotImplementedError; giving both raises "
+                  "ValueError. "))
+def _m_flux(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "MagneticFluxDensityValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _M_BC_KEYS)
+    if "MagneticFluxDensity" in keys and "NormalMagneticFluxDensity" in keys:
+        raise ValueError(f"{fname}: give either \"MagneticFluxDensity\" or \"NormalMagneticFluxDensity\"")
+    if "NormalMagneticFluxDensity" in keys:
+        return _neumann(keys["NormalMagneticFluxDensity"], pred, subs)
+    B0 = _vector(_p(keys, "MagneticFluxDensity", _zero_vec(V.n)), V.n, fname, "\"MagneticFluxDensity\"")
+    return _neumann(_neg(_ndot(V, keys, B0)), pred, subs)
+
+
+@fn("MagneticSymmetryValue", area=AREA, status="added",
+    notes=_bc_doc("MagneticSymmetryValue", "NeumannValue[0, pred] (scalar potential models)",
+                  "Vector-potential vars raise NotImplementedError. "))
+def _m_symmetry(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "MagneticSymmetryValue", _M_BC_KEYS)
+    return _neumann(0, pred, subs)
+
+
+@fn("MagneticPotentialCondition", area=AREA, status="added",
+    notes=_bc_doc("MagneticPotentialCondition", "DirichletCondition[Vm == V0, pred] for a scalar potential or "
+                  "DirichletCondition[{Ax == A0x, Ay == A0y, Az == A0z}, pred] for a vector potential "
+                  "(\"MagneticPotential\", default 0 / {0, 0, 0})"))
+def _m_potential(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "MagneticPotentialCondition"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _M_BC_KEYS, allow_freq=True, allow_system=True)
+    if V.system:
+        m = len(V.deps)
+        val = _p(keys, "MagneticPotential", _zero_vec(m))
+        if not is_list(val) or len(val.args) != m:
+            raise ValueError(f"{fname}: \"MagneticPotential\" must be a vector of length {m}")
+        return _dirichlet(L(*V.deps), val, pred, subs)
+    return _dirichlet(V.u, _p(keys, "MagneticPotential", 0), pred, subs)
