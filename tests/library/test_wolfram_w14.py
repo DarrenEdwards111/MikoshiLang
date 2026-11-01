@@ -678,7 +678,9 @@ RASTER = [
     ("Rasterize[w14rz, \"Data\"]", "Rasterize[w14rz, \"Data\"]"),
     ("Rasterize[Graphics[{Disk[]}], \"Bogus\"]", Raises(ValueError)),
     ("Rasterize[Graphics[{Disk[]}], 3]", Raises(TypeError)),
-    ("Rasterize[Graphics[{Disk[]}], \"Image\"]", Raises(NotImplementedError)),
+    # W21 installs IMAGE_FACTORY, so "Image" gives an Image object when rendering is available
+    ("Rasterize[Graphics[{Disk[]}], \"Image\"]",
+     Pred(lambda g: isinstance(g, Expr) and g.head == "Image", "an Image") if HAVE_MPL else Raises(NotImplementedError)),
 ]
 if HAVE_MPL:
     RASTER += [

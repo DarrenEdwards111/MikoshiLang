@@ -149,7 +149,7 @@ ALPHA = [
     ("ImageDimensions[RandomImage[]]", "{150, 150}"),
     ("ImageDimensions[RandomImage[1, {3, 2}]]", "{3, 2}"),
     ("Max[ImageData[RandomImage[0.5, {4, 4}]]] <= 0.5", True),
-    ("SeedRandom[7]; a = ImageData[RandomImage[1, {3, 3}]]; SeedRandom[7]; a == ImageData[RandomImage[1, {3, 3}]]",
+    ("SeedRandom[7]; w21r = ImageData[RandomImage[1, {3, 3}]]; SeedRandom[7]; w21r == ImageData[RandomImage[1, {3, 3}]]",
      True),
     ("ImageColorSpace[RandomImage[1, {2, 2}, ColorSpace -> \"RGB\"]]", "\"RGB\""),
     ("RandomImage[1, {2, -1}]", Raises(ValueError, "^RandomImage: ")),
@@ -393,8 +393,8 @@ GEOMETRY = [
     ("BorderDimensions[ImagePad[Image[{{0.3, 0.4}, {0.5, 0.6}}], 1, 0.99], 0.02]", "{{1, 1}, {1, 1}}"),
     ("BorderDimensions[ConstantImage[0.5, {3, 3}]]", "{{0, 0}, {0, 0}}"),
     (f"BorderDimensions[{G}, -1]", Raises(ValueError, "^BorderDimensions: ")),
-    ("i = ImagePad[Image[{{0.3, 0.4}, {0.5, 0.6}}], {{1, 2}, {3, 0}}, 1]; "
-     "ImagePad[i, -BorderDimensions[i]] == Image[{{0.3, 0.4}, {0.5, 0.6}}]", True),
+    ("w21i = ImagePad[Image[{{0.3, 0.4}, {0.5, 0.6}}], {{1, 2}, {3, 0}}, 1]; "
+     "ImagePad[w21i, -BorderDimensions[w21i]] == Image[{{0.3, 0.4}, {0.5, 0.6}}]", True),
     ("ImageData[ImageCrop[ImagePad[Image[{{0.3, 0.4}, {0.5, 0.6}}], 2, 1]]]", N([[0.3, 0.4], [0.5, 0.6]])),
     ("ImageData[ImageCrop[Image[{{0.2, 0.4, 0.6, 0.8, 1.}}], 2]]", N([[0.4, 0.6]])),
     ("ImageData[ImageCrop[Image[{{0.2, 0.4, 0.6, 0.8, 1.}}], {2, 1}, Left]]", N([[0.8, 1.0]])),
