@@ -227,7 +227,8 @@ def _needs_fixtures(path: Path) -> bool:
 
 
 def load_cases(tests_dir: Path) -> Dict[str, list]:
-    """{head: [case, ...]} from the CASES lists in tests/library (cases are grouped by their outermost head)."""
+    """{head: [case, ...]} from the CASES lists in tests/library, grouped by ``_harness.head_of``: the outermost head,
+    a bare symbol or $-variable, or the inner head of a ``Via`` wrapper case."""
     harness = _harness(tests_dir)
     out: Dict[str, list] = {}
     for _m, cases in load_modules(tests_dir):
