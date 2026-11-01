@@ -271,6 +271,8 @@ def verify_opt(o, fname):
 
 def test_result(fname, stat, p, prop, o, dof=None):
     """the requested property of a hypothesis test with statistic `stat` and p-value `p`"""
+    if o and "SignificanceLevel" in o:
+        sig_level(o, fname)          # validates the setting even when it is not used
     if prop is None:
         return float(p)
     if is_list(prop):
@@ -3563,3 +3565,116 @@ def _logrank(x: ListOf[ListOf[Real]] | ListOf[Expr], *rest: Real | String | List
         raise ValueError(f"{name}: the variance matrix is singular")
     chi = float(Ur @ np.linalg.solve(Vr, Ur))
     return test_result(name, chi, chi2_sf(chi, k - 1), prop, o, k - 1)
+
+
+# ─────────────────────────── option symbols and Censoring ───────────────────────────
+
+def _inert_option(name, notes):
+    def _opt(*args: Expr) -> Expr:
+        raise Unevaluated()
+    fn(name, area=AREA, status="added", notes=notes + " Check: inert (stays unevaluated as a symbol, an expression or "
+                                                     "in a rule).")(_opt)
+
+
+for _n, _note in (
+        ("AlternativeHypothesis", "option of the hypothesis tests (ZTest, SignTest, MannWhitneyTest, the correlation "
+                                  "tests, ...): \"Unequal\" (default), \"Less\" or \"Greater\"; other values raise "
+                                  "ValueError in the tests; inert as an expression."),
+        ("SignificanceLevel", "option of the hypothesis tests: the cutoff (default 0.05) used by "
+                              "\"ShortTestConclusion\"; must be in (0, 1) (ValueError otherwise); inert as an "
+                              "expression."),
+        ("VerifyTestAssumptions", "option of the hypothesis tests (Automatic, All, None, True/False, or a list or "
+                                  "rules of assumptions); accepted, assumptions are not diagnosed; inert as an "
+                                  "expression."),
+        ("ConfidenceLevel", "option of fitting functions (LinearModelFit, NonlinearModelFit, "
+                            "GeneralizedLinearModelFit, ...) for confidence intervals (default 0.95); inert as an "
+                            "expression."),
+        ("ConfidenceRange", "option of SurvivalModelFit: the range for simultaneous confidence bands (All, Full or "
+                            "{tmin, tmax}); inert as an expression."),
+        ("ConfidenceTransform", "option of SurvivalModelFit: the transformation used for confidence intervals "
+                                "(Automatic, \"Log\", \"LogLog\", ...); inert as an expression."),
+        ("Weights", "option of the fitting functions and of MeanShift / estimators: weights for the data "
+                    "(Automatic, a list or a pure function); inert as an expression."),
+        ("IncludeGroupAggregates", "option of PivotTable and related functions specifying whether to add group "
+                                   "aggregates; inert as an expression."),
+        ("IntervalMarkers", "option of plotting functions for Around values (\"Bars\", \"Bands\", \"Ellipses\", "
+                            "...); inert as an expression."),
+        ("IntervalMarkersStyle", "option of plotting functions giving the style of interval markers; inert as an "
+                                 "expression."),
+        ("LinearOffsetFunction", "option of GeneralizedLinearModelFit: a known offset added to the linear "
+                                 "predictor (None by default); inert as an expression."),
+        ("LinkFunction", "option of GeneralizedLinearModelFit: the link (Automatic = canonical, \"LogitLink\", "
+                         "\"ProbitLink\", \"LogLink\", \"IdentityLink\", \"InverseLink\", ...); inert as an "
+                         "expression."),
+        ("ExponentialFamily", "option of GeneralizedLinearModelFit: \"Gaussian\" (default), \"Binomial\", "
+                              "\"Poisson\", \"Gamma\", \"InverseGaussian\", ...; inert as an expression."),
+        ("DispersionEstimatorFunction", "option of the fitting functions: how the dispersion is estimated; inert "
+                                        "as an expression."),
+        ("VarianceEstimatorFunction", "option of LinearModelFit / NonlinearModelFit: how the error variance is "
+                                      "estimated (default residual sum of squares / degrees of freedom); inert as an "
+                                      "expression."),
+        ("CovarianceEstimatorFunction", "option of the fitting functions: \"ExpectedInformation\" or "
+                                        "\"ObservedInformation\" for the parameter covariance; inert as an "
+                                        "expression."),
+        ("NominalVariables", "option of LinearModelFit and related functions: variables to treat as nominal "
+                             "(Automatic, All, None, {v1, ...}); inert as an expression."),
+        ("MissingDataMethod", "option of statistical functions specifying how Missing data is handled; inert as an "
+                              "expression."),
+        ("MissingDataRules", "option of SemanticImport and related functions: rules for values to read as "
+                             "Missing; inert as an expression."),
+        ("MissingValuePattern", "option of SynthesizeMissingValues and ToTabular: which elements count as missing "
+                                "(Automatic: Missing[...] and Indeterminate); inert as an expression."),
+        ("ParameterEstimator", "option of EstimatedDistribution / FindDistributionParameters: the estimator "
+                               "(\"MaximumLikelihood\", \"MethodOfMoments\", ...); inert as an expression."),
+        ("StrataVariables", "option of CoxModelFit: variables used to stratify the baseline hazard; inert as an "
+                            "expression."),
+        ("FitDegree", "option of LocalModelFit: the degree of the local polynomial; inert as an expression."),
+        ("ClusterDissimilarityFunction", "option of FindClusters / ClusteringTree / Dendrogram: the linkage "
+                                         "(\"Single\", \"Complete\", \"Average\", \"Centroid\", \"Ward\", ...); "
+                                         "inert as an expression."),
+        ("CriterionFunction", "option of ClusterClassify and related functions: the criterion used to choose a "
+                              "method (\"StandardDeviation\", \"RSquared\", \"Dunn\", ...); inert as an expression."),
+        ("DataReversed", "option of ArrayPlot and related functions: whether rows (and columns) are plotted in "
+                         "reverse; inert as an expression."),
+        ("ExcludedLines", "option of SemanticImport: line indices to ignore; inert as an expression."),
+        ("PlotFitElements", "option of ListPlot / ListPlot3D: which elements to show for fitted models; inert as "
+                            "an expression."),
+):
+    _inert_option(_n, _note)
+
+
+_CENS = {0: 0, 1: 1, -1: -1, "None": 0, "Right": 1, "Left": -1}
+
+
+def _cens_code(c, fname):
+    key = c if isinstance(c, int) and not isinstance(c, bool) else str_or_sym(c)
+    if key not in _CENS:
+        if isinstance(c, Symbol) and c.name not in _CENS:
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the censoring must be 0/None, 1/Right or -1/Left, not {c!r}")
+    return _CENS[key]
+
+
+@fn("Censoring", area=AREA, status="added",
+    notes="Censoring[t, c], Censoring[{t1, ...}, c] and Censoring[{t1, ...}, {c1, ...}] represent censored event "
+          "times with c = 0 or None (no censoring), 1 or Right (right censored), -1 or Left (left censored); the "
+          "arguments are validated and the object stays as entered (Censoring[{...}, c] with one c is kept as "
+          "given). Invalid censoring codes and mismatched lengths raise ValueError; non-numeric times TypeError; "
+          "symbolic times stay unevaluated. Check: validated against the documented codes (tested).")
+def _censoring(t: Real | ListOf[Real], c: Integer | Expr | ListOf[Integer]) -> Expr:
+    name = "Censoring"
+    if is_list(t):
+        vec(t, name, "event times")
+        if is_list(c):
+            if len(c.args) != len(t.args):
+                raise ValueError(f"{name}: the times and censoring codes must have the same length")
+            for q in c.args:
+                _cens_code(q, name)
+        else:
+            _cens_code(c, name)
+    else:
+        _num(t, name, "event time")
+        if is_list(c):
+            raise ValueError(f"{name}: a single time needs a single censoring code")
+        _cens_code(c, name)
+    raise Unevaluated()
