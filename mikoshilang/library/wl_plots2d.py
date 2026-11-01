@@ -5268,5 +5268,4 @@ def _surfacedensityplot3d(f: Held, reg: Held, *opts: Held | Option) -> Expr:
 # ───────────────────────────── not provided ─────────────────────────────
 
 SKIPPED = {
-    "BioSequencePlot": "needs BioSequence objects (not implemented) and an undocumented sequence-track layout",
 }
