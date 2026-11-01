@@ -5268,7 +5268,4 @@ def _surfacedensityplot3d(f: Held, reg: Held, *opts: Held | Option) -> Expr:
 # ───────────────────────────── not provided ─────────────────────────────
 
 SKIPPED = {
-    "BioSequencePlot": "needs BioSequence objects (not implemented) and an undocumented sequence-track layout",
-    "ListSurfacePlot3D": "Wolfram's surface reconstruction from unordered 3-D points is undocumented; any "
-                         "reconstruction would give a different surface",
 }

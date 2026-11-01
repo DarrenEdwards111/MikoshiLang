@@ -1008,8 +1008,8 @@ fn("InverseWaveletTransform", area=AREA, status="added",
          "DiscreteWaveletData with the remaining levels. Synthesis is the transpose of the periodic analysis "
          "(orthogonal for even lengths), the least-squares pseudo-inverse for odd lengths, the averaged "
          "undecimated synthesis for stationary transforms and the reversed lifting steps for lifting transforms. "
-         "Check: self-check (every forward transform verifies this inverse on its own data); reference (sum of "
-         "the single-index inverses equals the data, Wolfram documentation example) in tests.")(_iwt)
+         "Check: reference (sum of the single-index inverses equals the data, Wolfram documentation example) in "
+         "tests; WaveletTransform's own verification step also reconstructs its data with this inverse.")(_iwt)
 
 
 # ═══════════════════════════════════════════════════════════════ WaveletBestBasis ══

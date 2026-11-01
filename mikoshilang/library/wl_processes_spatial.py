@@ -5,8 +5,8 @@ MaternPointProcess are inert expressions validated by their constructors.  Obser
 Cuboid, Disk (circle or axis-aligned ellipse) and Ball in any dimension, with exact measures.
 RandomPointConfiguration simulates (reproducibly with SeedRandom) and returns an inert ``SpatialPointData`` object
 with a few properties; PointCountDistribution, RipleyK, BesagL, PairCorrelationG, NearestNeighborG, EmptySpaceF
-and SpatialJ give exact closed forms where they are known for the process.  Estimates from point data need
-Wolfram's boundary-correction defaults and are not supported (NotImplementedError).
+and SpatialJ give exact closed forms where they are known for the process.  Estimates from point data (with
+SpatialBoundaryCorrection) and PointStatisticFunction are provided by wl_spatial2_stats (batch X08).
 
 Every function returns a correct result, raises a clear error, or stays unevaluated for symbolic input (see
 CONVENTIONS.md).
@@ -534,11 +534,15 @@ def _rpc(proc: Expr, reg: Expr, n: Integer = None, *opts: Expr) -> Expr:
     fname = "RandomPointConfiguration"
     if isinstance(n, Expr) and n.head in ("Rule", "RuleDelayed"):
         opts, n = (n,) + opts, None
+    method = None
     for o in opts:
         if isinstance(o, Expr) and o.head in ("Rule", "RuleDelayed") and isinstance(o.args[0], Symbol) and \
                 o.args[0].name in ("Method", "WorkingPrecision"):
             if o.args[1] == Symbol("Automatic") or (o.args[0].name == "WorkingPrecision" and
                                                     o.args[1] == Symbol("MachinePrecision")):
+                continue
+            if o.args[0].name == "Method" and is_pproc(proc) and getattr(PCLASSES[proc.head], "takes_method", False):
+                method = o.args[1]       # Gibbs samplers (wl_spatial2, X08)
                 continue
             raise NotImplementedError(f"{fname}: {o.args[0].name} is not supported")
         raise ValueError(f"{fname}: unexpected argument {o}")
@@ -556,7 +560,7 @@ def _rpc(proc: Expr, reg: Expr, n: Integer = None, *opts: Expr) -> Expr:
     if not (pr.numeric() and rg.numeric):
         raise Unevaluated()
     rng = _np_rng()
-    confs = [pr.sample(rng, rg) for _ in range(n or 1)]
+    confs = [pr.sample(rng, rg) if method is None else pr.sample(rng, rg, method) for _ in range(n or 1)]
     return make_spd(confs, reg, n is not None)
 
 
@@ -591,8 +595,16 @@ def _radius(r, fname):
     return v
 
 
+DATA_STATS = {}      # name -> fn(pdata, r, opts): point-data estimates, registered by wl_spatial2_stats (X08)
+
+
 def _stat(fname, which):
-    def impl(proc, r=None):
+    def impl(proc, r=None, opts=()):
+        if (isinstance(proc, Expr) and proc.head == "SpatialPointData" or is_list(proc)) and fname in DATA_STATS and \
+                not (is_list(proc) and proc.args and is_pproc(proc.args[0])):
+            return DATA_STATS[fname](proc, r, opts)       # estimates from point data (wl_spatial2_stats, X08)
+        if opts:
+            raise ValueError(f"{fname}: options are only used with point data")
         if r is None:
             raise NotImplementedError(f"{fname}: PointStatisticFunction objects are not supported; give a radius")
         if isinstance(proc, Expr) and proc.head == "SpatialPointData" or is_list(proc):
@@ -632,11 +644,12 @@ def _stat(fname, which):
                     raise NotImplementedError(f"{fname}: no closed form is available for {pr.name}")
                 if not pr.stationary:
                     raise NotImplementedError(f"{fname}: {pr.name} is not stationary")
-                k = pr.K(rv)
                 if which == "K":
-                    v = k
+                    v = pr.K(rv)
                 elif which == "L":
-                    v = (k / _unit_ball(d)) ** sp.Rational(1, d)
+                    v = (pr.K(rv) / _unit_ball(d)) ** sp.Rational(1, d)
+                elif hasattr(pr, "g"):
+                    v = pr.g(rv)
                 else:
                     x = sp.Dummy("r", positive=True)
                     v = (sp.diff(pr.K(x), x) / (d * _unit_ball(d) * x ** (d - 1))).subs(x, rv)
@@ -673,12 +686,16 @@ def _register_stat(name):
     impl = _stat(name, which)
 
     @fn(name, area=AREA, status="added",
-        notes=note + ". The radius may be a list. Other processes (Matern, binomial, inhomogeneous, Gibbs ...), "
-                     "point-data estimates, {proc, reg} forms and PointStatisticFunction (no radius) raise "
-                     "NotImplementedError; negative radii raise ValueError. Check: exact; reference (closed forms; "
+        notes=note + ". The radius may be a list. Point data ({pts, reg}, {p1, ...} or SpatialPointData) give "
+                     "boundary-corrected estimates (SpatialBoundaryCorrection; without a radius a "
+                     "PointStatisticFunction), see wl_spatial2_stats (X08). Other processes (Matern, binomial, "
+                     "inhomogeneous, Gibbs ...) and {proc, reg} forms raise NotImplementedError; negative radii raise "
+                     "ValueError. Check: exact; reference (closed forms; "
                      "Wolfram documentation) in tests.")
-    def _s(proc: Expr, r: Real | ListOf[Real] | Var = None) -> Expr:
-        return impl(proc, r)
+    def _s(proc: Expr, r: Real | ListOf[Real] | Var | Option = None, *opts: Option) -> Expr:
+        if isinstance(r, Expr) and r.head in ("Rule", "RuleDelayed"):
+            r, opts = None, (r,) + opts
+        return impl(proc, r, opts)
     return _s
 
 
