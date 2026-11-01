@@ -29,7 +29,14 @@ import sympy as sp
 from ..expr import Expr, Symbol
 from .. import kernel as K
 from .core import Unevaluated, fn, record, REGISTRY, R, L, rule, S, number, is_list
-from .wl_common import split_options, ev
+from .wl_common import split_options as _split_options_rev, ev
+
+
+def split_options(args, names, fname):
+    """wl_common.split_options keeping the options in their given order (a Graph with several options must
+    normalise to a fixed point; the reversed order made Graph[..., o1, o2] re-evaluate forever)."""
+    pos, opts = _split_options_rev(args, names, fname)
+    return pos, dict(reversed(list(opts.items())))
 
 AREA = "graphs (batch 5)"
 INF = sp.oo
@@ -38,13 +45,19 @@ INF = sp.oo
 _PRESENTATION = {"VertexLabels", "EdgeLabels", "VertexStyle", "EdgeStyle", "GraphLayout", "ImageSize", "PlotLabel",
                  "VertexSize", "VertexShapeFunction", "EdgeShapeFunction", "VertexCoordinates", "PlotTheme",
                  "VertexLabelStyle", "EdgeLabelStyle", "GraphHighlight", "GraphHighlightStyle", "VertexShape",
-                 "ImagePadding", "Background", "BaseStyle", "AspectRatio", "GraphStyle", "Frame", "FrameStyle"}
-_DATA = {"EdgeWeight", "EdgeCapacity", "VertexWeight"}
+                 "ImagePadding", "Background", "BaseStyle", "AspectRatio", "GraphStyle", "Frame", "FrameStyle",
+                 "MultiedgeStyle", "SelfLoopStyle", "TaggedEdgeStyle"}
+_DATA = {"EdgeWeight", "EdgeCapacity", "VertexWeight", "EdgeCost", "VertexCapacity", "AnnotationRules"}
 _GRAPH_OPTS = _PRESENTATION | _DATA
 
 
 class GraphError(ValueError):
     pass
+
+
+# Heads that understand tagged edges DirectedEdge[u, v, tag] / UndirectedEdge[u, v, tag] (W24).  Every other graph
+# function keeps raising for tagged edges rather than silently dropping the tags.
+TAG_AWARE = {"Graph", "GraphQ", "VertexList", "EdgeList", "VertexCount", "EdgeCount"}
 
 
 def _is_edge(e):
@@ -56,10 +69,28 @@ def _norm_edge(e, fname):
         if is_list(e) and len(e.args) in (2, 3):
             raise GraphError(f"{fname}: {e} is not an edge; use u <-> v (UndirectedEdge) or u -> v (DirectedEdge)")
         raise GraphError(f"{fname}: {e} is not a valid edge")
+    if len(e.args) == 3 and e.head in ("DirectedEdge", "UndirectedEdge") and fname in TAG_AWARE:
+        return e
     if len(e.args) != 2:
         raise GraphError(f"{fname}: tagged or malformed edge {e} is not supported")
     h = "DirectedEdge" if e.head in ("Rule", "DirectedEdge") else "UndirectedEdge"
     return Expr(h, e.args[0], e.args[1])
+
+
+def _directed_edges(edges, de, fname):
+    """Apply the DirectedEdges option: True makes every edge directed, False every edge undirected."""
+    if isinstance(de, Symbol) and de.name == "Automatic":
+        return list(edges)
+    if de is not True and de is not False:
+        raise GraphError(f"{fname}: DirectedEdges must be True, False or Automatic")
+    h = "DirectedEdge" if de else "UndirectedEdge"
+    out = []
+    for e in edges:
+        if not _is_edge(e):
+            out.append(e)
+            continue
+        out.append(Expr(h, *e.args))
+    return out
 
 
 class WG:
@@ -80,7 +111,7 @@ class WG:
         self.edge_exprs = []
         for e in edges:
             e = _norm_edge(e, fname)
-            u, v = e.args
+            u, v = e.args[0], e.args[1]
             for x in (u, v):
                 if K.tag(x) not in self.index:
                     raise GraphError(f"{fname}: edge {e} uses {x}, which is not in the vertex list")
@@ -88,6 +119,7 @@ class WG:
             self.edge_exprs.append(e)
         self.weights = self._edge_data("EdgeWeight")
         self.capacities = self._edge_data("EdgeCapacity")
+        self._edge_data("EdgeCost")  # validated here (one real per edge); read by W24's cost flows
         vw = self.opts.get("VertexWeight")
         self.vertex_weights = None
         if vw is not None and not (isinstance(vw, Symbol) and vw.name == "Automatic"):
@@ -237,10 +269,10 @@ class WG:
 def _parse_graph_expr(g, fname):
     args = list(g.args)
     args, opts = split_options(args, _GRAPH_OPTS | {"DirectedEdges"}, fname)
-    if "DirectedEdges" in opts:
-        de = opts.pop("DirectedEdges")
-        if not (de is False or (isinstance(de, Symbol) and de.name == "Automatic")):
-            raise GraphError(f"{fname}: the DirectedEdges option is not supported; give DirectedEdge/Rule edges")
+    de = opts.pop("DirectedEdges", None)
+    if de is not None:
+        args = [L(*_directed_edges(a.args, de, fname)) if is_list(a) and k == len(args) - 1 else a
+                for k, a in enumerate(args)]
     if len(args) == 1 and is_list(args[0]):
         edges = list(args[0].args)
         if edges and not all(_is_edge(e) for e in edges):
@@ -300,7 +332,7 @@ def extend(name, impl, accepts, notes, status="fixed"):
     e = REGISTRY.get(name)
     old = list(e.impls) if e is not None else []
 
-    def f(*args):
+    def f(*args: Expr) -> ListOf[ListOf[Expr]]:
         if accepts(args):
             return impl(*args)
         for g, lo, hi in old:
@@ -330,19 +362,22 @@ def _first_graph(args):
           "TwoWayRule -> UndirectedEdge, vertices in order of first appearance); EdgeWeight/EdgeCapacity/VertexWeight "
           "options are used by the algorithms, presentation options are kept; unknown options, tagged edges and edges "
           "to unlisted vertices raise")
-def _graph(*args):
+def _graph(*args: Expr) -> Expr:
     if not args:
         raise ValueError("Graph: expected a list of edges")
     if isinstance(args[0], Expr) and args[0].head == "Graph":
         if len(args) == 1:
             return args[0]
         g = graph_of(args[0], "Graph")
-        pos, opts = split_options(list(args[1:]), _GRAPH_OPTS, "Graph")
+        pos, opts = split_options(list(args[1:]), _GRAPH_OPTS | {"DirectedEdges"}, "Graph")
         if pos:
             raise ValueError("Graph: invalid arguments")
+        edges = g.edge_exprs
+        if "DirectedEdges" in opts:
+            edges = _directed_edges(edges, opts.pop("DirectedEdges"), "Graph")
         merged = dict(g.opts)
         merged.update(opts)
-        return WG(g.vertices, g.edge_exprs, merged).expr()
+        return WG(g.vertices, edges, merged).expr()
     g = _parse_graph_expr(Expr("Graph", *args), "Graph")
     out = g.expr()
     return out
@@ -350,7 +385,7 @@ def _graph(*args):
 
 for _h in ("UndirectedEdge", "DirectedEdge", "TwoWayRule"):
     def _make(h):
-        def impl(*args):
+        def impl(*args: Expr) -> Expr:
             if len(args) not in (2, 3):
                 raise ValueError(f"{h} expects 2 arguments")
             raise Unevaluated()
@@ -360,7 +395,7 @@ for _h in ("UndirectedEdge", "DirectedEdge", "TwoWayRule"):
 
 
 @fn("GraphQ", area=AREA, status="added", notes="True for a valid Graph expression")
-def _graphq(x):
+def _graphq(x: Expr) -> Boolean:
     if not (isinstance(x, Expr) and x.head == "Graph"):
         return False
     try:
@@ -372,7 +407,7 @@ def _graphq(x):
 
 def _q(name, pred, notes):
     @fn(name, area=AREA, status="added", notes=notes)
-    def impl(g):
+    def impl(g: Expr) -> Boolean:
         if not is_graph_like(g):
             if isinstance(g, Symbol):
                 raise Unevaluated()
@@ -397,7 +432,7 @@ _q("WeightedGraphQ", lambda g: g.weights is not None or g.vertex_weights is not 
 
 @fn("CompleteGraphQ", area=AREA, status="added",
     notes="simple undirected graph with every pair of distinct vertices adjacent (directed: every ordered pair)")
-def _completeq(g):
+def _completeq(g: Expr) -> Boolean:
     if not is_graph_like(g):
         if isinstance(g, Symbol):
             raise Unevaluated()
@@ -411,27 +446,27 @@ def _completeq(g):
 
 
 @fn("VertexList", area=AREA, status="added", notes="vertices in Graph order")
-def _vlist(g):
+def _vlist(g: Expr) -> ListOf[Expr]:
     return L(*graph_of(g, "VertexList").vertices)
 
 
 @fn("EdgeList", area=AREA, status="added", notes="edges in Graph order (Rule given as DirectedEdge)")
-def _elist(g):
+def _elist(g: Expr) -> ListOf[Expr]:
     return L(*graph_of(g, "EdgeList").edge_exprs)
 
 
 @fn("VertexCount", area=AREA, status="added", notes="number of vertices")
-def _vcount(g):
+def _vcount(g: Expr) -> NonNegInteger:
     return graph_of(g, "VertexCount").n
 
 
 @fn("EdgeCount", area=AREA, status="added", notes="number of edges (multi-edges and self-loops counted)")
-def _ecount(g):
+def _ecount(g: Expr) -> NonNegInteger:
     return len(graph_of(g, "EdgeCount").edges)
 
 
 @fn("VertexQ", area=AREA, status="added", notes="True when v is a vertex of g")
-def _vertexq(g, v):
+def _vertexq(g: Expr, v: Expr) -> Boolean:
     gr = graph_of(g, "VertexQ")
     return K.tag(v) in gr.index
 
@@ -454,18 +489,18 @@ def _edge_match(gr, e):
 
 @fn("EdgeQ", area=AREA, status="added",
     notes="True when e is an edge of g (an undirected edge matches either orientation)")
-def _edgeq(g, e):
+def _edgeq(g: Expr, e: Expr) -> Boolean:
     return _edge_match(graph_of(g, "EdgeQ"), e)
 
 
 @fn("VertexIndex", area=AREA, status="added", notes="position of v in VertexList[g]; unknown vertices raise")
-def _vindex(g, v):
+def _vindex(g: Expr, v: Expr) -> PosInteger:
     gr = graph_of(g, "VertexIndex")
     return gr.vidx(v, "VertexIndex") + 1
 
 
 @fn("EdgeIndex", area=AREA, status="added", notes="position of e in EdgeList[g]; unknown edges raise")
-def _eindex(g, e):
+def _eindex(g: Expr, e: Expr) -> PosInteger:
     gr = graph_of(g, "EdgeIndex")
     ne = _norm_edge(e, "EdgeIndex")
     i, j = gr.vidx(ne.args[0], "EdgeIndex"), gr.vidx(ne.args[1], "EdgeIndex")
@@ -516,7 +551,7 @@ def _inout(name, which):
     @fn(name, area=AREA, status="added",
         notes=f"{which}-degrees in VertexList order or of one vertex; for undirected edges in- and out-degree equal "
               "the degree")
-    def impl(g, v=None):
+    def impl(g: Expr, v: Expr = None) -> NonNegInteger | ListOf[NonNegInteger]:
         gr = graph_of(g, name)
         _, ind, outd = _degree_lists(gr)
         d = ind if which == "in" else outd
@@ -531,7 +566,7 @@ _inout("VertexOutDegree", "out")
 
 
 @fn("DegreeCentrality", area=AREA, status="added", notes=_degree_centrality_doc)
-def _degc(g, kind=None):
+def _degc(g: Expr, kind: String | Expr = None) -> ListOf[NonNegInteger]:
     gr = graph_of(g, "DegreeCentrality")
     deg, ind, outd = _degree_lists(gr)
     if kind is None:
@@ -546,7 +581,7 @@ def _degc(g, kind=None):
 @fn("AdjacencyMatrix", area=AREA, status="added",
     notes="dense form (Normal) of Wolfram's SparseArray: a_ij = number of edges i -> j, an undirected edge counts both "
           "ways, a self-loop adds 1 on the diagonal; the empty graph raises")
-def _adjm(g):
+def _adjm(g: Expr) -> MatrixOf[Integer]:
     gr = graph_of(g, "AdjacencyMatrix")
     if gr.n == 0:
         raise ValueError("AdjacencyMatrix: the empty graph has no adjacency matrix")
@@ -560,7 +595,7 @@ def _adjm(g):
 
 @fn("WeightedAdjacencyMatrix", area=AREA, status="added",
     notes="a_ij = weight of the edge i -> j (0 when absent); multigraphs raise")
-def _wadjm(g):
+def _wadjm(g: Expr) -> MatrixOf[Real]:
     gr = graph_of(g, "WeightedAdjacencyMatrix")
     if gr.n == 0:
         raise ValueError("WeightedAdjacencyMatrix: the empty graph has no adjacency matrix")
@@ -578,7 +613,7 @@ def _wadjm(g):
 @fn("IncidenceMatrix", area=AREA, status="added",
     notes="vertices x edges: undirected 1 at each end (2 for a self-loop); directed -1 at the tail and 1 at the head; "
           "directed self-loops raise")
-def _incm(g):
+def _incm(g: Expr) -> MatrixOf[Integer]:
     gr = graph_of(g, "IncidenceMatrix")
     m = [[0] * len(gr.edges) for _ in range(gr.n)]
     for k, (i, j, d) in enumerate(gr.edges):
@@ -598,7 +633,7 @@ def _incm(g):
 @fn("KirchhoffMatrix", area=AREA, status="added",
     notes="Laplacian D - A of an undirected loop-free graph (multi-edges counted); directed graphs and self-loops "
           "raise")
-def _kirch(g):
+def _kirch(g: Expr) -> MatrixOf[Real]:
     gr = graph_of(g, "KirchhoffMatrix")
     gr.require_undirected("KirchhoffMatrix")
     if gr.loops():
@@ -650,7 +685,7 @@ def _adjacency_graph(vs, m, fname):
 @fn("AdjacencyGraph", area=AREA, status="added",
     notes="graph from an adjacency matrix (undirected when symmetric, else directed; entries > 1 give multi-edges, "
           "diagonal entries self-loops); AdjacencyGraph[{v...}, m] names the vertices")
-def _adjg(a, b=None):
+def _adjg(a: MatrixOf[Number] | Expr, b: ListOf[Expr] = None) -> Expr:
     if b is None:
         m = _matrix_ints(a, "AdjacencyGraph")
         return _adjacency_graph(list(range(1, len(m) + 1)), m, "AdjacencyGraph")
@@ -665,7 +700,7 @@ def _adjg(a, b=None):
 @fn("AdjacencyList", area=AREA, status="added",
     notes="AdjacencyList[g, v] = vertices adjacent to v (either direction), in VertexList order; AdjacencyList[g] "
           "for every vertex")
-def _adjl(g, v=None):
+def _adjl(g: Expr, v: Expr = None) -> ListOf[Expr] | ListOf[ListOf[Expr]]:
     gr = graph_of(g, "AdjacencyList")
     nb = gr.neighbor_sets(undirected=True)
     if v is None:
@@ -675,17 +710,17 @@ def _adjl(g, v=None):
 
 
 @fn("EdgeWeight", area=AREA, status="added", notes="Graph option; EdgeWeight[g] is not supported (use AnnotationValue)")
-def _ew(*args):
+def _ew(*args: Expr) -> ListOf[Real] | Real:
     raise Unevaluated()
 
 
 @fn("EdgeCapacity", area=AREA, status="added", notes="Graph option for FindMaximumFlow capacities")
-def _ec(*args):
+def _ec(*args: Expr) -> ListOf[Real] | Real:
     raise Unevaluated()
 
 
 @fn("VertexWeight", area=AREA, status="added", notes="Graph option for vertex weights")
-def _vw(*args):
+def _vw(*args: Expr) -> ListOf[Real] | Real:
     raise Unevaluated()
 
 
@@ -696,7 +731,7 @@ def _as_vertex_list(x):
 
 
 @fn("VertexAdd", area=AREA, status="added", notes="adds new vertices (existing ones are ignored)")
-def _vadd(g, v):
+def _vadd(g: Expr, v: Expr) -> Expr:
     gr = graph_of(g, "VertexAdd")
     vs = list(gr.vertices)
     seen = set(gr.index)
@@ -708,7 +743,7 @@ def _vadd(g, v):
 
 
 @fn("VertexDelete", area=AREA, status="added", notes="removes the vertices and their incident edges")
-def _vdel(g, v):
+def _vdel(g: Expr, v: Expr) -> Expr:
     gr = graph_of(g, "VertexDelete")
     drop = {K.tag(x) for x in _as_vertex_list(v)}
     vs = [x for x in gr.vertices if K.tag(x) not in drop]
@@ -717,7 +752,7 @@ def _vdel(g, v):
 
 
 @fn("EdgeAdd", area=AREA, status="added", notes="adds edges (and any new vertices); weights are not carried over")
-def _eadd(g, e):
+def _eadd(g: Expr, e: Expr) -> Expr:
     gr = graph_of(g, "EdgeAdd")
     if gr.weights is not None:
         raise ValueError("EdgeAdd: edge-weighted graphs are not supported")
@@ -734,7 +769,7 @@ def _eadd(g, e):
 
 @fn("EdgeDelete", area=AREA, status="added",
     notes="removes every edge matching the given edges (undirected edges match either orientation)")
-def _edel(g, e):
+def _edel(g: Expr, e: Expr) -> Expr:
     gr = graph_of(g, "EdgeDelete")
     if gr.weights is not None:
         raise ValueError("EdgeDelete: edge-weighted graphs are not supported")
@@ -758,7 +793,7 @@ def _edel(g, e):
 @fn("Subgraph", area=AREA, status="added",
     notes="Subgraph[g, {v...}] = subgraph induced by the vertices (VertexList order kept); edges in the list are "
           "included with their endpoints")
-def _subgraph(g, spec):
+def _subgraph(g: Expr, spec: Expr) -> Expr:
     gr = graph_of(g, "Subgraph")
     items = _as_vertex_list(spec)
     vs_t, extra_edges = set(), []
@@ -786,7 +821,7 @@ def _subgraph(g, spec):
 @fn("NeighborhoodGraph", area=AREA, status="added",
     notes="subgraph induced by the vertices within distance k (default 1) of v (undirected graphs; edges followed "
           "both ways for directed graphs)")
-def _nbg(g, v, k=1):
+def _nbg(g: Expr, v: Expr, k: NonNegInteger = 1) -> Expr:
     gr = graph_of(g, "NeighborhoodGraph")
     gr.require_pure("NeighborhoodGraph")
     if isinstance(k, bool) or not isinstance(k, int) or k < 0:
@@ -819,7 +854,7 @@ def _edge_key(gr, i, j, d):
 @fn("GraphComplement", area=AREA, status="added",
     notes="same vertices; undirected: u <-> v (VertexList order) for every non-adjacent pair; directed: every missing "
           "u -> v; requires a simple (loop-free, no multi-edge) graph")
-def _gcomp(g):
+def _gcomp(g: Expr) -> Expr:
     gr = graph_of(g, "GraphComplement")
     gr.require_pure("GraphComplement")
     if gr.loops() or gr.multi():
@@ -852,7 +887,7 @@ def _setop(name, op):
         notes={"GraphUnion": "vertices and edges of all the graphs (first occurrence order); multigraphs and weights raise",
                "GraphIntersection": "common vertices and common edges (order of the first graph); multigraphs raise",
                "GraphDifference": "vertices of g1 with the edges of g1 that are not in g2; multigraphs raise"}[name])
-    def impl(*gs):
+    def impl(*gs: Expr) -> Expr:
         if not gs:
             raise ValueError(f"{name}: expected graphs")
         if name == "GraphDifference" and len(gs) != 2:
@@ -899,7 +934,7 @@ _setop("GraphDifference", "difference")
 
 @fn("GraphDisjointUnion", area=AREA, status="added",
     notes="disjoint union with vertices relabelled 1, 2, ... in order (Wolfram's relabelling)")
-def _gdu(*gs):
+def _gdu(*gs: Expr) -> Expr:
     if not gs:
         raise ValueError("GraphDisjointUnion: expected graphs")
     vs, es, off = [], [], 0
@@ -915,7 +950,7 @@ def _gdu(*gs):
 
 @fn("UndirectedGraph", area=AREA, status="added",
     notes="every edge made undirected; for directed input, u -> v and v -> u become one edge (duplicates merged)")
-def _undg(g):
+def _undg(g: Expr) -> Expr:
     gr = graph_of(g, "UndirectedGraph")
     if gr.weights is not None:
         raise ValueError("UndirectedGraph: edge-weighted graphs are not supported")
@@ -932,7 +967,7 @@ def _undg(g):
 
 @fn("DirectedGraph", area=AREA, status="added",
     notes="each undirected edge u <-> v becomes the pair u -> v, v -> u (Wolfram's default conversion)")
-def _dirg(g, how=None):
+def _dirg(g: Expr, how: String | Expr = None) -> Expr:
     gr = graph_of(g, "DirectedGraph")
     if how is not None:
         raise ValueError("DirectedGraph: conversion methods are not supported")
@@ -947,14 +982,14 @@ def _dirg(g, how=None):
 
 
 @fn("ReverseGraph", area=AREA, status="added", notes="reverses every directed edge; undirected edges unchanged")
-def _revg(g):
+def _revg(g: Expr) -> Expr:
     gr = graph_of(g, "ReverseGraph")
     es = [Expr(e.head, e.args[1], e.args[0]) if e.head == "DirectedEdge" else e for e in gr.edge_exprs]
     return WG(gr.vertices, es, gr.opts).expr()
 
 
 @fn("IndexGraph", area=AREA, status="added", notes="vertices renamed 1, 2, ... in VertexList order (IndexGraph[g, r] starts at r)")
-def _idxg(g, r=1):
+def _idxg(g: Expr, r: Integer = 1) -> Expr:
     gr = graph_of(g, "IndexGraph")
     if isinstance(r, bool) or not isinstance(r, int):
         raise ValueError("IndexGraph: the start must be an integer")
@@ -965,7 +1000,7 @@ def _idxg(g, r=1):
 
 @fn("LineGraph", area=AREA, status="added",
     notes="undirected simple graphs: vertices 1..m for the edges, i <-> j when edges i and j share an endpoint")
-def _lineg(g):
+def _lineg(g: Expr) -> Expr:
     gr = graph_of(g, "LineGraph")
     gr.require_undirected("LineGraph")
     gr.require_simple("LineGraph")
@@ -998,7 +1033,7 @@ def _fsp(g, s, t):
 
 @fn("GraphDistance", area=AREA, status="added",
     notes="GraphDistance[g, s, t] shortest distance (Infinity when unreachable); GraphDistance[g, s] to every vertex")
-def _gdist(g, s, t=None):
+def _gdist(g: Expr, s: Expr, t: Expr = None) -> Real | ListOf[Real]:
     gr = graph_of(g, "GraphDistance")
     gr.require_pure("GraphDistance")
     a = gr.vidx(s, "GraphDistance")
@@ -1010,7 +1045,7 @@ def _gdist(g, s, t=None):
 
 @fn("GraphDistanceMatrix", area=AREA, status="added",
     notes="matrix of shortest distances in VertexList order (Infinity when unreachable)")
-def _gdm(g):
+def _gdm(g: Expr) -> MatrixOf[Real]:
     gr = graph_of(g, "GraphDistanceMatrix")
     gr.require_pure("GraphDistanceMatrix")
     if gr.n == 0:
@@ -1020,7 +1055,7 @@ def _gdm(g):
 
 @fn("VertexEccentricity", area=AREA, status="added",
     notes="maximum distance from v to the other vertices; Infinity when some vertex is unreachable")
-def _vecc(g, v):
+def _vecc(g: Expr, v: Expr) -> Real:
     gr = graph_of(g, "VertexEccentricity")
     gr.require_pure("VertexEccentricity")
     i = gr.vidx(v, "VertexEccentricity")
@@ -1029,7 +1064,7 @@ def _vecc(g, v):
 
 
 def _ecc_fn(name, which):
-    def impl(g):
+    def impl(g: Expr) -> ListOf[Expr]:
         gr = graph_of(g, name)
         gr.require_pure(name)
         if gr.n == 0:
@@ -1060,7 +1095,7 @@ fn("GraphPeriphery", area=AREA, status="added",
     notes="FindPath[g, s, t] = {path} with one simple path ({} when none); FindPath[g, s, t, k] paths of length at "
           "most k, [g, s, t, {k}] exactly k, [g, s, t, kspec, n] at most n paths (All for every path); paths are "
           "enumerated shortest first; unweighted lengths")
-def _fpath(g, s, t, kspec=None, nspec=1):
+def _fpath(g: Expr, s: Expr, t: Expr, kspec: Expr = None, nspec: PosInteger | Expr = 1) -> ListOf[ListOf[Expr]]:
     gr = graph_of(g, "FindPath")
     gr.require_pure("FindPath")
     if gr.weights is not None:
@@ -1207,7 +1242,7 @@ extend("ConnectedComponents", _cc, _first_graph,
 
 @fn("WeaklyConnectedComponents", area=AREA, status="added",
     notes="components ignoring edge direction, largest first, vertices in VertexList order")
-def _wcc(g):
+def _wcc(g: Expr) -> ListOf[ListOf[Expr]]:
     gr = graph_of(g, "WeaklyConnectedComponents")
     comps = _weak_components(gr)
     comps.sort(key=lambda c: (-len(c), c[0]))
@@ -1215,7 +1250,7 @@ def _wcc(g):
 
 
 @fn("ConnectedGraphComponents", area=AREA, status="added", notes="Subgraph for each ConnectedComponents element")
-def _cgc(g):
+def _cgc(g: Expr) -> ListOf[Expr]:
     gr = graph_of(g, "ConnectedGraphComponents")
     out = []
     for c in _components(gr):
@@ -1225,7 +1260,7 @@ def _cgc(g):
 
 @fn("ConnectedGraphQ", area=AREA, status="added",
     notes="True for a connected graph (strongly connected when directed); the empty graph is not connected")
-def _connq(g):
+def _connq(g: Expr) -> Boolean:
     if not is_graph_like(g):
         if isinstance(g, Symbol):
             raise Unevaluated()
@@ -1238,7 +1273,7 @@ def _connq(g):
 
 
 @fn("WeaklyConnectedGraphQ", area=AREA, status="added", notes="connected when edge directions are ignored")
-def _wconnq(g):
+def _wconnq(g: Expr) -> Boolean:
     if not is_graph_like(g):
         if isinstance(g, Symbol):
             raise Unevaluated()
@@ -1279,7 +1314,7 @@ def _topo(gr):
 
 @fn("AcyclicGraphQ", area=AREA, status="added",
     notes="undirected: a forest (self-loops and multi-edges are cycles); directed: no directed cycle")
-def _acyq(g):
+def _acyq(g: Expr) -> Boolean:
     if not is_graph_like(g):
         if isinstance(g, Symbol):
             raise Unevaluated()
@@ -1292,7 +1327,7 @@ def _acyq(g):
 @fn("TreeGraphQ", area=AREA, status="added",
     notes="connected acyclic undirected graph (n - 1 edges); directed graphs: True for an out-tree with every vertex "
           "reachable from one root along the underlying tree")
-def _treeq(g):
+def _treeq(g: Expr) -> Boolean:
     if not is_graph_like(g):
         if isinstance(g, Symbol):
             raise Unevaluated()
@@ -1313,7 +1348,7 @@ def _treeq(g):
 
 @fn("BipartiteGraphQ", area=AREA, status="added",
     notes="2-colourable (edge directions ignored; a self-loop makes it non-bipartite)")
-def _bipq(g):
+def _bipq(g: Expr) -> Boolean:
     if not is_graph_like(g):
         if isinstance(g, Symbol):
             raise Unevaluated()
@@ -1364,7 +1399,7 @@ def _to_nx(gr, undirected=False):
 
 @fn("PlanarGraphQ", area=AREA, status="added",
     notes="planarity test (edge directions ignored) via NetworkX's left-right planarity algorithm")
-def _planq(g):
+def _planq(g: Expr) -> Boolean:
     if not is_graph_like(g):
         if isinstance(g, Symbol):
             raise Unevaluated()
@@ -1380,7 +1415,7 @@ def _planq(g):
 @fn("TopologicalSort", area=AREA, status="added",
     notes="a topological order of a directed acyclic graph (Kahn's algorithm, ties broken by VertexList order); "
           "graphs with a cycle or undirected edges raise")
-def _toposort(g):
+def _toposort(g: Expr) -> ListOf[Expr]:
     gr = graph_of(g, "TopologicalSort")
     gr.require_pure("TopologicalSort")
     if gr.edges and not gr.directed:
@@ -1459,7 +1494,7 @@ def _cycle_edges(gr, cyc, start=None):
 @fn("FindCycle", area=AREA, status="added",
     notes="FindCycle[g] = {cycle} as a list of edges in traversal order ({} for acyclic graphs); [g, k] length at most "
           "k, [g, {k}] exactly k, [g, kspec, n] at most n cycles (All for all); shortest cycles first")
-def _fcycle(g, kspec=None, nspec=1):
+def _fcycle(g: Expr, kspec: Expr = None, nspec: PosInteger | Expr = 1) -> ListOf[ListOf[Expr]]:
     gr = graph_of(g, "FindCycle")
     gr.require_pure("FindCycle")
     lo, hi = _len_spec(kspec, gr.n, "FindCycle")
@@ -1512,7 +1547,7 @@ def _edge_between(gr, a, b):
 @fn("FindHamiltonianCycle", area=AREA, status="added",
     notes="{cycle} as edges in traversal order starting at the first vertex, {} when the graph is not Hamiltonian "
           "(exact backtracking; graphs above 30 vertices raise)")
-def _fham(g):
+def _fham(g: Expr) -> ListOf[ListOf[Expr]]:
     gr = graph_of(g, "FindHamiltonianCycle")
     gr.require_pure("FindHamiltonianCycle")
     if gr.n > 30:
@@ -1525,7 +1560,7 @@ def _fham(g):
 
 @fn("FindHamiltonianPath", area=AREA, status="added",
     notes="a Hamiltonian path as a vertex list, {} when none (exact backtracking; graphs above 30 vertices raise)")
-def _fhamp(g):
+def _fhamp(g: Expr) -> ListOf[Expr]:
     gr = graph_of(g, "FindHamiltonianPath")
     gr.require_pure("FindHamiltonianPath")
     if gr.n > 30:
@@ -1537,7 +1572,7 @@ def _fhamp(g):
 
 
 @fn("HamiltonianGraphQ", area=AREA, status="added", notes="True when a Hamiltonian cycle exists")
-def _hamq(g):
+def _hamq(g: Expr) -> Boolean:
     gr = graph_of(g, "HamiltonianGraphQ")
     gr.require_pure("HamiltonianGraphQ")
     if gr.n > 30:
@@ -1580,7 +1615,7 @@ class Sub:
 @fn("EulerianGraphQ", area=AREA, status="added",
     notes="True when there is a closed walk using every edge exactly once (even degrees / balanced in- and "
           "out-degrees, edges connected); edgeless graphs are not Eulerian")
-def _eulq(g):
+def _eulq(g: Expr) -> Boolean:
     gr = graph_of(g, "EulerianGraphQ")
     gr.require_pure("EulerianGraphQ")
     return _eulerian_ok(gr)
@@ -1589,7 +1624,7 @@ def _eulq(g):
 @fn("FindEulerianCycle", area=AREA, status="added",
     notes="{cycle} as edges in traversal order (Hierholzer, multigraphs and self-loops allowed), {} when the graph "
           "is not Eulerian")
-def _feul(g):
+def _feul(g: Expr) -> ListOf[ListOf[Expr]]:
     gr = graph_of(g, "FindEulerianCycle")
     gr.require_pure("FindEulerianCycle")
     if not _eulerian_ok(gr):
@@ -1621,7 +1656,7 @@ def _feul(g):
 @fn("FindSpanningTree", area=AREA, status="added",
     notes="a minimum spanning tree (forest when disconnected) as a Graph on all the vertices (Kruskal with EdgeWeight, "
           "edges kept in the input orientation); directed graphs use the underlying undirected graph")
-def _fst(g):
+def _fst(g: Expr) -> Expr:
     gr = graph_of(g, "FindSpanningTree")
     gr.require_pure("FindSpanningTree")
     parent = list(range(gr.n))
@@ -1748,7 +1783,7 @@ def _stoer_wagner(n, w):
     notes="{c, {part1, part2}}: a global minimum cut of a connected undirected graph (Stoer-Wagner, EdgeWeight "
           "respected; parts in VertexList order, the part with the first vertex first); disconnected graphs give 0; "
           "directed graphs raise")
-def _fmincut(g):
+def _fmincut(g: Expr) -> ListOf[Expr]:
     gr = graph_of(g, "FindMinimumCut")
     gr.require_undirected("FindMinimumCut")
     if gr.n < 2:
@@ -1776,7 +1811,7 @@ def _fmincut(g):
 @fn("EdgeConnectivity", area=AREA, status="added",
     notes="minimum number (total weight) of edges whose removal disconnects an undirected graph; s-t form "
           "EdgeConnectivity[g, s, t] via maximum flow")
-def _econn(g, s=None, t=None):
+def _econn(g: Expr, s: Expr = None, t: Expr = None) -> NonNegInteger:
     gr = graph_of(g, "EdgeConnectivity")
     gr.require_pure("EdgeConnectivity")
     if s is not None:
@@ -1832,7 +1867,7 @@ def _clique_graph(gr, fname):
     notes="FindClique[g] = {a largest clique}; [g, n] a maximal clique of at most n vertices... (largest found), "
           "[g, {n}] a clique of exactly n vertices, [g, nspec, All] every such clique; vertices in VertexList order; "
           "directed graphs need edges both ways")
-def _fclique(g, spec=None, count=1):
+def _fclique(g: Expr, spec: Expr = None, count: PosInteger | Expr = 1) -> ListOf[ListOf[Expr]]:
     gr = graph_of(g, "FindClique")
     nb = _clique_graph(gr, "FindClique")
     limit = _count_spec(count, "FindClique")
@@ -1867,7 +1902,7 @@ def _fclique(g, spec=None, count=1):
 @fn("FindIndependentVertexSet", area=AREA, status="added",
     notes="{a largest independent vertex set} (maximum clique of the complement; edge directions ignored); "
           "[g, {n}] an independent set of exactly n vertices; vertices in VertexList order")
-def _findep(g, spec=None, count=1):
+def _findep(g: Expr, spec: Expr = None, count: PosInteger | Expr = 1) -> ListOf[ListOf[Expr]]:
     gr = graph_of(g, "FindIndependentVertexSet")
     gr.require_pure("FindIndependentVertexSet")
     if gr.loops():
@@ -1898,7 +1933,7 @@ def _findep(g, spec=None, count=1):
 
 @fn("FindVertexCover", area=AREA, status="added",
     notes="a minimum vertex cover (complement of a maximum independent set), as a flat vertex list in VertexList order")
-def _fvc(g):
+def _fvc(g: Expr) -> ListOf[Expr]:
     gr = graph_of(g, "FindVertexCover")
     gr.require_pure("FindVertexCover")
     if gr.n == 0:
@@ -1919,7 +1954,7 @@ def _fvc(g):
 
 def _set_q(name, check, notes):
     @fn(name, area=AREA, status="added", notes=notes)
-    def impl(g, s):
+    def impl(g: Expr, s: Expr) -> Boolean:
         gr = graph_of(g, name)
         items = list(s.args) if is_list(s) else None
         if items is None:
@@ -1962,7 +1997,7 @@ def _iso_graphs(g1, g2, fname):
 
 @fn("IsomorphicGraphQ", area=AREA, status="added",
     notes="graph isomorphism (VF2 via NetworkX), direction-aware; multigraphs raise")
-def _isoq(g1, g2, *more):
+def _isoq(g1: Expr, g2: Expr, *more: Expr) -> Boolean:
     gs = [g1, g2] + list(more)
     base = None
     for x in gs[1:]:
@@ -1978,7 +2013,7 @@ def _isoq(g1, g2, *more):
 @fn("FindGraphIsomorphism", area=AREA, status="added",
     notes="{<|v1 -> w1, ...|>} for one isomorphism (VF2 via NetworkX), {} when none; [g1, g2, n] / All for several; "
           "keys in VertexList order of g1")
-def _fiso(g1, g2, count=1):
+def _fiso(g1: Expr, g2: Expr, count: PosInteger | Expr = 1) -> ListOf[Assoc]:
     a, b = _iso_graphs(g1, g2, "FindGraphIsomorphism")
     limit = _count_spec(count, "FindGraphIsomorphism")
     if (a.directed != b.directed and a.edges and b.edges) or a.n != b.n or len(a.edges) != len(b.edges):
@@ -2001,7 +2036,7 @@ def _fiso(g1, g2, count=1):
 @fn("ChromaticPolynomial", area=AREA, status="added",
     notes="chromatic polynomial in k (deletion-contraction with memoisation, expanded); multi-edges are merged, "
           "self-loops give 0; directions ignored; graphs with more than 30 edges raise")
-def _chrompoly(g, k):
+def _chrompoly(g: Expr, k: NonNegInteger) -> Expr:
     gr = graph_of(g, "ChromaticPolynomial")
     if gr.loops():
         return 0
@@ -2049,7 +2084,7 @@ def _floats(vals):
 
 @fn("ClosenessCentrality", area=AREA, status="added",
     notes="1/(mean distance to the reachable vertices), 0 for vertices that reach nothing; machine reals")
-def _closeness(g):
+def _closeness(g: Expr) -> ListOf[Real]:
     gr = graph_of(g, "ClosenessCentrality")
     gr.require_pure("ClosenessCentrality")
     out = []
@@ -2150,7 +2185,7 @@ def _principal(M, fname, symmetric):
     notes="principal eigenvector of the adjacency matrix normalised to total 1 (\"In\": left eigenvector, the default "
           "for directed graphs; \"Out\": right eigenvector); graphs whose principal eigenvalue is not simple (e.g. "
           "disconnected) raise; machine reals")
-def _eigc(g, kind=None):
+def _eigc(g: Expr, kind: String | Expr = None) -> ListOf[Real]:
     import numpy as np
     gr = graph_of(g, "EigenvectorCentrality")
     gr.require_pure("EigenvectorCentrality")
@@ -2172,7 +2207,7 @@ def _eigc(g, kind=None):
 @fn("HITSCentrality", area=AREA, status="added",
     notes="{authorities, hubs}: authority = principal eigenvector of A^T.A normalised to total 1, hub = A.authority "
           "(Wolfram's definition); degenerate principal eigenvalues raise; machine reals")
-def _hits(g):
+def _hits(g: Expr) -> ListOf[ListOf[Real]]:
     import numpy as np
     gr = graph_of(g, "HITSCentrality")
     gr.require_pure("HITSCentrality")
@@ -2189,7 +2224,7 @@ def _hits(g):
     notes="PageRankCentrality[g, alpha] (default 0.85): solution of c = alpha A^T D^-1 c + (1 - alpha)/n normalised "
           "to total 1, undirected edges counted both ways; graphs with a vertex of out-degree 0 raise (Wolfram's "
           "dangling-vertex convention is not reproduced); machine reals")
-def _pagerank(g, alpha=0.85, beta=None):
+def _pagerank(g: Expr, alpha: Real = 0.85, beta: Real | ListOf[Real] = None) -> ListOf[Real]:
     import numpy as np
     gr = graph_of(g, "PageRankCentrality")
     gr.require_pure("PageRankCentrality")
@@ -2223,15 +2258,29 @@ def _int_arg(x, fname, lo=0):
     return x
 
 
+# named graphs whose DirectedEdges -> True orientation is Wolfram's: trees point away from the root, paths and
+# cycles follow the vertex order (the cycle closes with n -> 1)
+_DIRECTABLE = {"PathGraph", "CycleGraph", "KaryTree", "CompleteKaryTree", "StarGraph"}
+
+
 def _named(name, notes):
     def deco(f):
-        def impl(*args):
-            pos, opts = split_options(list(args), _GRAPH_OPTS, name)
+        def impl(*args: Expr) -> Expr:
+            pos, opts = split_options(list(args), _GRAPH_OPTS | {"DirectedEdges"}, name)
             vs, es = f(*pos)
+            if "DirectedEdges" in opts:
+                de = opts.pop("DirectedEdges")
+                if de is True and name not in _DIRECTABLE:
+                    raise NotImplementedError(f"{name}: DirectedEdges -> True is not supported (Wolfram's edge "
+                                              "orientation for this graph is not reproduced)")
+                es = _directed_edges(es, de, name)
+                if de is True and name == "CycleGraph" and len(vs) >= 3:
+                    es[-1] = Expr("DirectedEdge", vs[-1], vs[0])      # 1 -> 2 -> ... -> n -> 1
             return WG(vs, es, opts, name).expr()
         import inspect
         impl.__signature__ = inspect.Signature(
-            [inspect.Parameter("args", inspect.Parameter.VAR_POSITIONAL)])
+            [inspect.Parameter("args", inspect.Parameter.VAR_POSITIONAL, annotation="Expr")],
+            return_annotation="Expr")
         fn(name, area=AREA, status="added", notes=notes)(impl)
         return f
     return deco
@@ -2398,7 +2447,7 @@ def _rgraph(spec, k=None):
 
 @fn("GraphDensity", area=AREA, status="added",
     notes="m / (n (n - 1)/2) for undirected, m / (n (n - 1)) for directed graphs (exact)")
-def _gdensity(g):
+def _gdensity(g: Expr) -> Real:
     gr = graph_of(g, "GraphDensity")
     gr.require_pure("GraphDensity")
     n = gr.n
@@ -2494,25 +2543,25 @@ def _scan(g, args, fname, bfs):
     notes="BreadthFirstScan[g, s, {\"event\" -> f, ...}] calls f on events (\"DiscoverVertex\" f[u, v, d], "
           "\"PrevisitVertex\", \"PostvisitVertex\", \"FrontierEdge\", \"CycleEdge\", \"UnvisitedVertex\") in "
           "breadth-first order (neighbours in edge order) and returns g; use with Reap/Sow")
-def _bfs(g, *args):
+def _bfs(g: Expr, *args: Expr) -> Expr:
     return _scan(g, args, "BreadthFirstScan", True)
 
 
 @fn("DepthFirstScan", area=AREA, status="added",
     notes="DepthFirstScan[g, s, {\"event\" -> f, ...}]: as BreadthFirstScan, in depth-first order; returns g")
-def _dfs(g, *args):
+def _dfs(g: Expr, *args: Expr) -> Expr:
     return _scan(g, args, "DepthFirstScan", False)
 
 
 @fn("VertexOutComponent", area=AREA, status="added",
     notes="vertices reachable from v (v first, then breadth-first order); VertexOutComponent[g, v, k] within k steps")
-def _voc(g, v, k=None):
+def _voc(g: Expr, v: Expr, k: NonNegInteger = None) -> ListOf[Expr]:
     return _component_dir(g, v, k, "VertexOutComponent", False)
 
 
 @fn("VertexInComponent", area=AREA, status="added",
     notes="vertices that can reach v (v first, then breadth-first order); VertexInComponent[g, v, k] within k steps")
-def _vic(g, v, k=None):
+def _vic(g: Expr, v: Expr, k: NonNegInteger = None) -> ListOf[Expr]:
     return _component_dir(g, v, k, "VertexInComponent", True)
 
 
@@ -2554,7 +2603,7 @@ def _local_cc(gr):
 
 @fn("LocalClusteringCoefficient", area=AREA, status="added",
     notes="fraction of pairs of neighbours that are adjacent (0 for degree < 2), exact; undirected simple graphs")
-def _lcc(g, v=None):
+def _lcc(g: Expr, v: Expr = None) -> Real | ListOf[Real]:
     gr = graph_of(g, "LocalClusteringCoefficient")
     gr.require_undirected("LocalClusteringCoefficient")
     c = _local_cc(gr)
@@ -2565,7 +2614,7 @@ def _lcc(g, v=None):
 
 @fn("MeanClusteringCoefficient", area=AREA, status="added",
     notes="mean of LocalClusteringCoefficient over all vertices, exact; undirected graphs")
-def _mcc(g):
+def _mcc(g: Expr) -> Real:
     gr = graph_of(g, "MeanClusteringCoefficient")
     gr.require_undirected("MeanClusteringCoefficient")
     if gr.n == 0:
@@ -2576,7 +2625,7 @@ def _mcc(g):
 
 @fn("GlobalClusteringCoefficient", area=AREA, status="added",
     notes="3 x triangles / connected triples (transitivity), exact; 0 when there are no triples; undirected graphs")
-def _gcc(g):
+def _gcc(g: Expr) -> Real:
     gr = graph_of(g, "GlobalClusteringCoefficient")
     gr.require_undirected("GlobalClusteringCoefficient")
     nb = gr.neighbor_sets(undirected=True)
