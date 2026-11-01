@@ -239,7 +239,8 @@ def _dt(f, spec, constants):
     notes="total derivatives: Dt[f, x] treats every other symbol as a function of x (Dt[x^2 y, x] -> "
           "2 x y + x^2 Dt[y, x]), Dt[f, {x, n}], Dt[f] is the total differential (Dt[x y] -> y Dt[x] + x Dt[y]); "
           "Constants -> {a, ...}; Dt[y, x] for an independent symbol y stays unevaluated; numeric constants "
-          "(Pi, E, ...) have derivative 0")
+          "(Pi, E, ...) have derivative 0"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _Dt(f, *args):
     pos, opts = split_opts(args, {"Constants"}, "Dt")
     consts = set()

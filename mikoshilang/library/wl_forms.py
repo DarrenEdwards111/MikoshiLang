@@ -414,7 +414,8 @@ _NUMBER_FORM_NOTES = {
     "NumberForm": "NumberForm[expr, n | {n, f}, opts] inert display wrapper; ToString/REPL show approximate reals to n "
                   "significant digits (f decimals), with DigitBlock, ExponentFunction, ExponentStep, NumberFormat, "
                   "NumberMultiplier, NumberPadding, NumberPoint, NumberSeparator, NumberSigns, "
-                  "ScientificNotationThreshold, SignPadding, DefaultPrintPrecision",
+                  "ScientificNotationThreshold, SignPadding, DefaultPrintPrecision"
+                  ". Check: reference (differential cases in tests/library).",
     "ScientificForm": "ScientificForm[expr, n | {n, f}, opts]: one digit before the point and an explicit exponent",
     "EngineeringForm": "EngineeringForm[expr, n | {n, f}, opts]: exponents that are multiples of 3",
     "AccountingForm": "AccountingForm[expr, n | {n, f}, opts]: no exponents, negative numbers in parentheses",
@@ -1043,7 +1044,8 @@ def _short_args(e):
 
 @fn("Short", area=AREA, status="added",
     notes="Short[expr, n] inert wrapper: shows expr in about n lines (n * 78 characters), omitted runs of k "
-          "elements written <<k>> (Skeleton[k]) and long strings elided with an ellipsis")
+          "elements written <<k>> (Skeleton[k]) and long strings elided with an ellipsis"
+          ". Check: reference (differential cases in tests/library).")
 def _short(*a: Expr) -> Expr:
     _short_args(Expr("Short", *a))
     raise Unevaluated()
@@ -1070,7 +1072,8 @@ def _stringskeleton(k: Expr) -> Expr:
 
 @fn("InsertLinebreaks", area=AREA, status="added",
     notes="InsertLinebreaks[s, n] (default 78) replaces whitespace by newlines so no line exceeds n characters; "
-          "words longer than n are broken every n characters")
+          "words longer than n are broken every n characters"
+          ". Check: reference (differential cases in tests/library).")
 def _insertlinebreaks(s: Expr, n: Expr = 78) -> Expr:
     if not isinstance(s, str):
         if isinstance(s, (Symbol, Expr)):
@@ -1287,7 +1290,8 @@ def _grid_rows(x, fname):
     notes="Grid[{{a, b}, ...}, opts] inert layout object; text: columns 3 spaces apart, rows separated by a blank "
           "line, left aligned (Wolfram's OutputForm), with Alignment, Spacings, Frame, Dividers and the GridBox "
           "options ColumnAlignments, ColumnSpacings, ColumnWidths, ColumnLines, RowAlignments, RowSpacings, "
-          "RowLines, RowMinHeight honoured")
+          "RowLines, RowMinHeight honoured"
+          ". Check: reference (differential cases in tests/library).")
 def _grid(x: Expr, *opts: Option) -> Expr:
     rest, o = split_opts(opts, GRID_OPTIONS, "Grid")
     if rest:
@@ -1309,7 +1313,8 @@ def _r_grid(e, c):
 
 @fn("Column", area=AREA, status="added",
     notes="Column[{e1, e2, ...}, alignment, spacing, opts] inert layout: elements one per line (spacing blank "
-          "lines between), aligned Left, Center or Right")
+          "lines between), aligned Left, Center or Right"
+          ". Check: reference (differential cases in tests/library).")
 def _column(x: Expr, *rest: Expr) -> Expr:
     _column_parts(Expr("Column", x, *rest))
     raise Unevaluated()
@@ -1477,7 +1482,8 @@ def _table_parts(e):
 @fn("TableForm", area=AREA, status="added",
     notes="TableForm[list, opts] inert display wrapper; text: rows separated by a blank line and columns by 3 spaces "
           "(Wolfram's OutputForm), with TableDepth, TableDirections, TableSpacing, TableAlignments and "
-          "TableHeadings")
+          "TableHeadings"
+          ". Check: reference (differential cases in tests/library).")
 def _tableform(*a: Expr) -> Expr:
     _table_parts(Expr("TableForm", *a))
     raise Unevaluated()
@@ -1610,7 +1616,8 @@ def _style_parts(e):
 
 @fn("Style", area=AREA, status="added",
     notes="Style[expr, styles...] inert display wrapper (Bold, Italic, colours, font size n, \"stylename\", "
-          "FontSize -> n, FontFamily -> \"name\", Background -> c, ...); plain text shows expr unchanged")
+          "FontSize -> n, FontFamily -> \"name\", Background -> c, ...); plain text shows expr unchanged"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _style(*a: Expr) -> Expr:
     _style_parts(Expr("Style", *a))
     raise Unevaluated()
@@ -1723,7 +1730,8 @@ TEXT_OPTIONS = ("FormatType", "Background", "BaseStyle", "BaselinePosition", "Al
 
 @fn("Text", area=AREA, status="added",
     notes="Text[expr] shows expr as plain text; Text[expr, coords, offset, dir] is an inert graphics primitive "
-          "(coordinates a list of 2 or 3 numbers, Scaled[...] or Offset[...])")
+          "(coordinates a list of 2 or 3 numbers, Scaled[...] or Offset[...])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _text(x: Expr, *rest: Expr) -> Expr:
     a, o = split_opts(rest, TEXT_OPTIONS, "Text")
     if len(a) > 3:
@@ -1814,7 +1822,8 @@ def _r_overlay(e, c):
 
 
 @fn("Item", area=AREA, status="added",
-    notes="Item[expr, opts] inert: an entry of Grid, Column, ... with its own options (Alignment honoured in text)")
+    notes="Item[expr, opts] inert: an entry of Grid, Column, ... with its own options (Alignment honoured in text)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _item(x: Expr, *opts: Option) -> Expr:
     rest, o = split_opts(opts, ITEM_OPTIONS, "Item")
     if rest:
@@ -1833,7 +1842,8 @@ def _r_item(e, c):
 @fn("Multicolumn", area=AREA, status="added",
     notes="Multicolumn[list, cols | {rows, Automatic} | {rows, cols}] evaluates to the corresponding Grid, filling "
           "the first column first (Appearance -> \"Horizontal\" fills by rows); Multicolumn[list] uses about "
-          "Sqrt[n] columns; {rows, cols} drops elements beyond rows*cols")
+          "Sqrt[n] columns; {rows, cols} drops elements beyond rows*cols"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _multicolumn(x: Expr, *rest: Expr) -> Expr:
     a, o = split_opts(rest, GRID_OPTIONS, "Multicolumn")
     if not is_list(x):
@@ -1925,7 +1935,8 @@ def string_form_text(tmpl, args, c=None):
 
 @fn("StringForm", area=AREA, status="added",
     notes="StringForm[\"... `` ... `n` ...\", e1, e2, ...] inert: shows the template with `` replaced by successive "
-          "ei and `n` by en (\\` is a literal backquote); out-of-range or unmatched placeholders raise")
+          "ei and `n` by en (\\` is a literal backquote); out-of-range or unmatched placeholders raise"
+          ". Check: reference (differential cases in tests/library).")
 def _stringform(tmpl: Expr, *args: Expr) -> Expr:
     if not isinstance(tmpl, str):
         if isinstance(tmpl, Symbol):
@@ -2044,7 +2055,8 @@ def text_string(x, opts):
 @fn("TextString", area=AREA, status="added",
     notes="TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits "
           "for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default \"\"), lists "
-          "per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings")
+          "per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings"
+          ". Check: reference (differential cases in tests/library).")
 def _textstring(x: Expr, *opts: Option) -> Expr:
     rest, o = split_opts(opts, TEXTSTRING_OPTIONS, "TextString")
     if rest:

@@ -524,7 +524,8 @@ def names(spec=None, use_aliases=True, ignore_case=False):
     notes="Names[\"pattern\"] (metacharacters * and @, a context prefix such as \"Global`*\", StringExpression or "
           "RegularExpression), Names[{p1, ...}], Names[] ; options IgnoreCase, ResolveContextAliases, "
           "SpellingCorrection -> False. Names are short when their context is $Context or on $ContextPath. "
-          "System` contains the symbols MikoshiLang implements")
+          "System` contains the symbols MikoshiLang implements"
+          ". Check: reference (differential cases in tests/library).")
 def _names(*args: Expr) -> ListOf[Expr]:
     pos, o = _opts_from(args, {"IgnoreCase", "ResolveContextAliases", "SpellingCorrection"}, "Names")
     if o.get("SpellingCorrection", False) is True:
@@ -538,7 +539,8 @@ def _names(*args: Expr) -> ListOf[Expr]:
 
 @fn("NameQ", area=AREA, status="added",
     notes="NameQ[\"string\"]: True if any symbol name matches (abbreviated string patterns); "
-          "ResolveContextAliases option")
+          "ResolveContextAliases option"
+          ". Check: reference (differential cases in tests/library).")
 def _nameq(*args: Expr) -> Boolean:
     pos, o = _opts_from(args, {"ResolveContextAliases", "IgnoreCase"}, "NameQ")
     if len(pos) != 1:
@@ -1561,7 +1563,8 @@ _BUILTIN_DEFAULTS = {"Plus": {(): 0}, "Times": {(): 1}, "Power": {(2,): 1}}
 
 @fn("Default", area=AREA, status="added",
     notes="Default[f], Default[f, i], Default[f, i, n]: the value an omitted x_. takes in f[...] (user values set "
-          "by Default[f, ...] = v; Plus 0, Times 1, Power exponent 1); unevaluated when none is defined")
+          "by Default[f, ...] = v; Plus 0, Times 1, Power exponent 1); unevaluated when none is defined"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _default(f: Expr, *pos: Expr) -> Expr:
     if not isinstance(f, Symbol):
         raise ValueError("Default: the first argument must be a symbol")
@@ -1915,7 +1918,8 @@ _added("OptionsPattern", "OptionsPattern[] matches a sequence of zero or more ru
 
 @fn("FilterRules", area=AREA, status="added",
     notes="FilterRules[rules, patt] keeps rules whose lhs matches patt; FilterRules[rules, {k1, ...}] keeps the "
-          "named options; FilterRules[rules, Except[...]] removes them; FilterRules[rules, Options[f]] keeps f's")
+          "named options; FilterRules[rules, Except[...]] removes them; FilterRules[rules, Options[f]] keeps f's"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _filterrules(rules: Expr, patt: Expr) -> ListOf[Expr]:
     rs = _flat_opts([rules])
 
@@ -2424,7 +2428,8 @@ def _activate(t, pred, heads):
 
 @fn("Activate", area=AREA, status="added",
     notes="Activate[expr] replaces Inactive[f] by f everywhere in expr and evaluates; Activate[expr, patt] only "
-          "for f matching patt; Heads -> False does not enter heads")
+          "for f matching patt; Heads -> False does not enter heads"
+          ". Check: reference (differential cases in tests/library).")
 def _activate_fn(e: Expr, *rest: Expr) -> Expr:
     rest = list(rest)
     patt = None
@@ -2531,7 +2536,8 @@ K._HELD["CompoundExpression"] = _h_compound
 
 @fn("Update", area=AREA, status="added",
     notes="Update[s] / Update[] tell the system that values depending on s may have changed; MikoshiLang keeps "
-          "no evaluation caches that could go stale, so this returns Null")
+          "no evaluation caches that could go stale, so this returns Null"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _update(*s: Expr) -> Expr:
     if len(s) > 1 or (s and not isinstance(s[0], Symbol)):
         raise ValueError("Update expects Update[] or Update[symbol]")
@@ -2613,7 +2619,8 @@ for _nm, _d in (("OperatorApplied", (2, [2, 1], [])), ("CurryApplied", None)):
 
 @fn("OperatorApplied", area=AREA, status="added",
     notes="OperatorApplied[f][y][x] = f[x, y]; OperatorApplied[f, n][x1]...[xn] = f[x1, ..., xn]; "
-          "OperatorApplied[f, {i1, ...}] and k -> {i1, ...} reorder; bracket structure is irrelevant")
+          "OperatorApplied[f, {i1, ...}] and k -> {i1, ...} reorder; bracket structure is irrelevant"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _operatorapplied(f: Expr, spec: Expr = None) -> Expr:
     _curry_spec(spec, "OperatorApplied", (2, [2, 1], []))
     raise Unevaluated()
@@ -2621,7 +2628,8 @@ def _operatorapplied(f: Expr, spec: Expr = None) -> Expr:
 
 @fn("CurryApplied", area=AREA, status="added",
     notes="CurryApplied[f, n][x1]...[xn] = f[x1, ..., xn]; CurryApplied[n][f] = CurryApplied[f, n]; "
-          "CurryApplied[f, {i1, ...}] and k -> {i1, ...} reorder")
+          "CurryApplied[f, {i1, ...}] and k -> {i1, ...} reorder"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _curryapplied(f: Expr, spec: Expr = None) -> Expr:
     if spec is None:
         if not (K.is_int(f) or K.is_list(f) or (is_rule(f) and K.is_int(f.args[0]))):
@@ -2697,7 +2705,8 @@ def _pure_inverse(f, n, tot):
     notes="InverseFunction[f]: ArcSin for Sin etc. (named inverses), the solved inverse of a pure function with "
           "a unique inverse (InverseFunction[2 # + 3 &] = (#1 - 3)/2 &), InverseFunction[InverseFunction[f]] = f; "
           "InverseFunction[f, n, tot] for the n-th of tot arguments; otherwise stays symbolic "
-          "(InverseFunction[f][x])")
+          "(InverseFunction[f][x])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _inversefunction(f: Expr, *nt: Expr) -> Expr:
     if len(nt) not in (0, 2):
         raise ValueError("InverseFunction expects InverseFunction[f] or InverseFunction[f, n, tot]")
@@ -2720,7 +2729,8 @@ def _inversefunction(f: Expr, *nt: Expr) -> Expr:
 
 @fn("Indexed", area=AREA, status="added",
     notes="Indexed[list, i] gives list[[i]], Indexed[list, {i, j, ...}] indexes recursively; for a symbolic "
-          "expr, Indexed[x, i] stays as the component x_i (Indexed[x, {i}] is the same as Indexed[x, i])")
+          "expr, Indexed[x, i] stays as the component x_i (Indexed[x, {i}] is the same as Indexed[x, i])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _indexed(e: Expr, i: Expr) -> Expr:
     idx = list(i.args) if K.is_list(i) else [i]
     if not idx:
@@ -2767,7 +2777,8 @@ def _hname(x, fname):
 @fn("Distribute", area=AREA, status="added",
     notes="Distribute[f[a + b, c + d]] = f[a, c] + f[a, d] + f[b, c] + f[b, d]; Distribute[expr, g] over g; "
           "Distribute[expr, g, f] only when the head is f; Distribute[expr, g, f, gp, fp] uses gp and fp in the "
-          "result")
+          "result"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _distribute_fn(e: Expr, *hs: Expr) -> Expr:
     if len(hs) > 4:
         raise ValueError("Distribute: 1 to 5 arguments expected")
@@ -2777,7 +2788,8 @@ def _distribute_fn(e: Expr, *hs: Expr) -> Expr:
 
 @fn("Prefix", area=AREA, status="added",
     notes="Prefix[f[x]] prints as f@x and Prefix[f[x], h] as h<>x (display wrapper; the expression inside is "
-          "evaluated)")
+          "evaluated)"
+          ". Check: reference (differential cases in tests/library).")
 def _prefix(e: Expr, *rest: Expr) -> Expr:
     if len(rest) > 3:
         raise ValueError("Prefix: 1 to 4 arguments expected")
@@ -3369,7 +3381,8 @@ def _ls_path(args, fname):
 @fn("LocalSymbol", area=AREA, status="added",
     notes="LocalSymbol[\"name\"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, "
           "or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol[\"name\"] = val or := val; unevaluated when never "
-          "assigned; LocalSymbol[\"name\", \"dir\"] uses another base; =. deletes it")
+          "assigned; LocalSymbol[\"name\", \"dir\"] uses another base; =. deletes it"
+          ". Check: reference (differential cases in tests/library).")
 def _localsymbol(*a: Expr) -> Expr:
     p = _ls_path(a, "LocalSymbol")
     if not os.path.exists(p):

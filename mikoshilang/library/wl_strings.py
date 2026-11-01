@@ -238,7 +238,8 @@ _OPTS = {"IgnoreCase", "Overlaps"}
 # ---------------------------------------------------------------- matching functions
 @fn("StringMatchQ", area=AREA, status="added",
     notes="whole-string match against a string pattern; literal patterns use the metacharacters * (any "
-          "characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists")
+          "characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _smatchq(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     _, o = split_options(opts, _OPTS, "StringMatchQ")
 
@@ -265,23 +266,27 @@ def _search(fname, s, p, opts, anchor):
 
 
 @fn("StringContainsQ", area=AREA, status="fixed",
-    notes="string patterns (legacy: literal substrings only); IgnoreCase; threads over lists")
+    notes="string patterns (legacy: literal substrings only); IgnoreCase; threads over lists"
+          ". Check: reference (differential cases in tests/library).")
 def _scontains(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringContainsQ", s, p, opts, None)
 
 
-@fn("StringFreeQ", area=AREA, status="added", notes="not StringContainsQ; string patterns; IgnoreCase")
+@fn("StringFreeQ", area=AREA, status="added", notes="not StringContainsQ; string patterns; IgnoreCase"
+                                                    ". Check: reference (differential cases in tests/library).")
 def _sfree(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     r = _search("StringFreeQ", s, p, opts, None)
     return L(*(not v for v in r.args)) if is_list(r) else (not r)
 
 
-@fn("StringStartsQ", area=AREA, status="fixed", notes="string patterns (legacy: literal prefix only); IgnoreCase")
+@fn("StringStartsQ", area=AREA, status="fixed", notes="string patterns (legacy: literal prefix only); IgnoreCase"
+                                                      ". Check: reference (differential cases in tests/library).")
 def _sstarts(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringStartsQ", s, p, opts, "start")
 
 
-@fn("StringEndsQ", area=AREA, status="fixed", notes="string patterns (legacy: literal suffix only); IgnoreCase")
+@fn("StringEndsQ", area=AREA, status="fixed", notes="string patterns (legacy: literal suffix only); IgnoreCase"
+                                                    ". Check: reference (differential cases in tests/library).")
 def _sends(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringEndsQ", s, p, opts, "end")
 
@@ -321,7 +326,8 @@ def _scan(fname, s, p, n, opts, default_overlaps, emit):
 
 @fn("StringCases", area=AREA, status="added",
     notes="substrings matching a string pattern, or rule right-hand sides with named parts substituted; "
-          "StringCases[s, p, n]; Overlaps -> False by default; IgnoreCase")
+          "StringCases[s, p, n]; Overlaps -> False by default; IgnoreCase"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _scases(s: Expr, p: Expr, *rest: Expr) -> Expr:
     n, opts = _count_arg(rest)
 
@@ -340,7 +346,8 @@ def _count_arg(rest):
 
 @fn("StringPosition", area=AREA, status="added",
     notes="{{start, end}, ...} 1-based; Overlaps -> True by default (one match per start position), "
-          "StringPosition[s, p, n]; IgnoreCase")
+          "StringPosition[s, p, n]; IgnoreCase"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _spos(s: Expr, p: Expr, *rest: Expr) -> Expr:
     n, opts = _count_arg(rest)
 
@@ -351,7 +358,8 @@ def _spos(s: Expr, p: Expr, *rest: Expr) -> Expr:
 
 @fn("StringCount", area=AREA, status="fixed",
     notes="non-overlapping matches of a string pattern (legacy: literal substrings only); Overlaps -> True "
-          "counts one match per start position; IgnoreCase; the empty literal raises")
+          "counts one match per start position; IgnoreCase; the empty literal raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _scount(s: Expr, p: Expr, *opts: Option) -> Expr:
     if p == "":
         raise ValueError("StringCount: substring must be non-empty")
@@ -402,7 +410,8 @@ def _replace(fname, st, rules, lim, o):
 @fn("StringReplace", area=AREA, status="fixed",
     notes="StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts "
           "substitute into the right-hand side; RegularExpression rules accept \"$1\" group references; "
-          "non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises")
+          "non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sreplace(s: Expr, r: Expr, *rest: Expr) -> Expr:
     if isinstance(r, str) and rest and isinstance(rest[0], str):
         raise ValueError("StringReplace[s, old, new] is not Wolfram syntax; use StringReplace[s, old -> new]")
@@ -414,7 +423,8 @@ def _sreplace(s: Expr, r: Expr, *rest: Expr) -> Expr:
 
 @fn("StringDelete", area=AREA, status="fixed",
     notes="deletes every match of a string pattern (or list of patterns); IgnoreCase; the legacy slice form "
-          "StringDelete[s, i, j] raises (use StringDrop[s, {i, j}])")
+          "StringDelete[s, i, j] raises (use StringDrop[s, {i, j}])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sdelete(s: Expr, p: Expr, *rest: Expr) -> Expr:
     if rest and not all(is_rule(x) for x in rest):
         raise ValueError("StringDelete[s, i, j] is not Wolfram syntax; use StringDrop[s, {i, j}]")
@@ -426,7 +436,8 @@ def _sdelete(s: Expr, p: Expr, *rest: Expr) -> Expr:
 
 @fn("StringTrim", area=AREA, status="fixed",
     notes="StringTrim[s] removes leading and trailing whitespace; StringTrim[s, p] removes a leading and a "
-          "trailing match of the string pattern p")
+          "trailing match of the string pattern p"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _strim(s: Expr, p: Expr = None, *opts: Option) -> Expr:
     if is_rule(p) and isinstance(p.args[0], Symbol) and p.args[0].name == "IgnoreCase":
         opts, p = (p,) + opts, None
@@ -450,7 +461,8 @@ def _strim(s: Expr, p: Expr = None, *opts: Option) -> Expr:
 @fn("StringSplit", area=AREA, status="added",
     notes="splits at whitespace or at matches of a string pattern; empty pieces at the ends are dropped "
           "(kept with StringSplit[s, p, All]), interior ones kept; p -> r inserts r at each split; "
-          "StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists")
+          "StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ssplit(s: Expr, p: Expr = None, *rest: Expr) -> Expr:
     rest = list(rest)
     n = rest.pop(0) if rest and not is_rule(rest[0]) else None
@@ -498,7 +510,8 @@ def _tostr(x):
     notes="StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per "
           "level above), StringRiffle[list, sep], "
           "StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings "
-          "are converted with ToString")
+          "are converted with ToString"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sriffle(lst: ListOf[Expr], *seps: Expr) -> Expr:
     if not is_list(lst):
         raise ValueError("StringRiffle: the first argument must be a list")
@@ -526,7 +539,8 @@ def _sriffle(lst: ListOf[Expr], *seps: Expr) -> Expr:
 
 
 @fn("StringPartition", area=AREA, status="added",
-    notes="substrings of length n (incomplete final piece dropped), offset d, or UpTo[n] keeping the remainder")
+    notes="substrings of length n (incomplete final piece dropped), offset d, or UpTo[n] keeping the remainder"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _spartition(s: String, n: Expr, d: Expr = None) -> ListOf[Expr]:
     st = _s(s, "StringPartition")
     if isinstance(n, Expr) and n.head == "UpTo" and len(n.args) == 1:
@@ -550,24 +564,31 @@ def _rotate(st, n):
     return st[n:] + st[:n]
 
 
-@fn("StringRotateLeft", area=AREA, status="added", notes="cyclic rotation by n characters (default 1)")
+@fn("StringRotateLeft", area=AREA, status="added", notes="cyclic rotation by n characters (default 1)"
+                                                         ". Check: exact (exact input gives exact results), "
+                                                         "reference (differential cases in tests/library).")
 def _srotl(s: Expr, n: Expr = 1) -> Expr:
     return _strmap(s, lambda x: _rotate(_s(x, "StringRotateLeft"), int_arg(n, "StringRotateLeft", "count")))
 
 
-@fn("StringRotateRight", area=AREA, status="added", notes="cyclic rotation by n characters (default 1)")
+@fn("StringRotateRight", area=AREA, status="added", notes="cyclic rotation by n characters (default 1)"
+                                                          ". Check: exact (exact input gives exact results), "
+                                                          "reference (differential cases in tests/library).")
 def _srotr(s: Expr, n: Expr = 1) -> Expr:
     return _strmap(s, lambda x: _rotate(_s(x, "StringRotateRight"), -int_arg(n, "StringRotateRight", "count")))
 
 
-@fn("StringTakeDrop", area=AREA, status="added", notes="{StringTake[s, spec], StringDrop[s, spec]}")
+@fn("StringTakeDrop", area=AREA, status="added", notes="{StringTake[s, spec], StringDrop[s, spec]}"
+                                                       ". Check: exact (exact input gives exact results), reference "
+                                                       "(differential cases in tests/library).")
 def _stakedrop(s: Expr, spec: Expr) -> ListOf[Expr]:
     return L(ev(Expr("StringTake", s, spec)), ev(Expr("StringDrop", s, spec)))
 
 
 @fn("StringReplacePart", area=AREA, status="added",
     notes="StringReplacePart[s, new, {m, n}], a list of ranges with one new string, or a list of new strings "
-          "matched to the ranges; negative positions count from the end")
+          "matched to the ranges; negative positions count from the end"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sreplacepart(s: String, new: Expr, spec: Expr) -> String:
     st = _s(s, "StringReplacePart")
     if is_list(spec) and spec.args and all(is_list(x) for x in spec.args):
@@ -599,12 +620,16 @@ def _sreplacepart(s: String, new: Expr, spec: Expr) -> String:
 
 
 # ---------------------------------------------------------------- case and character predicates
-@fn("ToUpperCase", area=AREA, status="added", notes="upper-cases every letter; threads over lists")
+@fn("ToUpperCase", area=AREA, status="added", notes="upper-cases every letter; threads over lists"
+                                                    ". Check: exact (exact input gives exact results), reference "
+                                                    "(differential cases in tests/library).")
 def _toupper(s: Expr) -> Expr:
     return _strmap(s, lambda x: _s(x, "ToUpperCase").upper())
 
 
-@fn("ToLowerCase", area=AREA, status="added", notes="lower-cases every letter; threads over lists")
+@fn("ToLowerCase", area=AREA, status="added", notes="lower-cases every letter; threads over lists"
+                                                    ". Check: exact (exact input gives exact results), reference "
+                                                    "(differential cases in tests/library).")
 def _tolower(s: Expr) -> Expr:
     return _strmap(s, lambda x: _s(x, "ToLowerCase").lower())
 
@@ -612,7 +637,8 @@ def _tolower(s: Expr) -> Expr:
 @fn("Capitalize", area=AREA, status="added",
     notes="upper-cases the first character and leaves the rest; Capitalize[s, \"AllWords\"] does that for every "
           "word, \"LongWords\" for words longer than three characters, \"FirstWord\" = default (\"TitleCase\" with "
-          "its small-word rules is not supported)")
+          "its small-word rules is not supported)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _capitalize(s: Expr, mode: Expr = None) -> Expr:
     def one(x):
         st = _s(x, "Capitalize")
@@ -627,7 +653,9 @@ def _capitalize(s: Expr, mode: Expr = None) -> Expr:
     return _strmap(s, one)
 
 
-@fn("Decapitalize", area=AREA, status="added", notes="lower-cases the first character only")
+@fn("Decapitalize", area=AREA, status="added", notes="lower-cases the first character only"
+                                                     ". Check: exact (exact input gives exact results), reference "
+                                                     "(differential cases in tests/library).")
 def _decapitalize(s: Expr) -> Expr:
     return _strmap(s, lambda x: _s(x, "Decapitalize")[:1].lower() + _s(x, "Decapitalize")[1:])
 
@@ -652,7 +680,8 @@ _all_chars("PrintableASCIIQ", lambda c: " " <= c <= "~")
 # ---------------------------------------------------------------- conversion
 @fn("ToExpression", area=AREA, status="added",
     notes="parses and evaluates InputForm text; ToExpression[s, InputForm, h] wraps the unevaluated parse in h "
-          "(e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated")
+          "(e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _toexpr(s: Expr, form: Expr = None, h: Expr = None) -> Expr:
     if not isinstance(s, str):
         return s
@@ -685,7 +714,8 @@ def _roman(n):
 
 @fn("IntegerString", area=AREA, status="added",
     notes="digits of |n| (the sign is dropped, as Wolfram) in base 2-36 with lower-case letters, padded with "
-          "zeros or truncated to the last len digits; IntegerString[n, \"Roman\"]; threads over lists")
+          "zeros or truncated to the last len digits; IntegerString[n, \"Roman\"]; threads over lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _intstring(n: Expr, b: Expr = 10, length: Expr = None) -> Expr:
     if is_list(n):
         return L(*(_intstring(x, b, length) for x in n.args))
@@ -711,7 +741,8 @@ def _intstring(n: Expr, b: Expr = 10, length: Expr = None) -> Expr:
 
 @fn("RomanNumeral", area=AREA, status="added",
     notes="Roman numeral string of n for 1-4999 (sign dropped); RomanNumeral[0] gives \"N\"; threads over "
-          "lists; the overbar forms for n >= 5000 are not supported")
+          "lists; the overbar forms for n >= 5000 are not supported"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _romannum(n: Expr) -> Expr:
     if is_list(n):
         return L(*(_romannum(x) for x in n.args))
@@ -719,7 +750,9 @@ def _romannum(n: Expr) -> Expr:
     return "N" if k == 0 else _roman(k)
 
 
-@fn("FromRomanNumeral", area=AREA, status="added", notes="integer value of a Roman numeral string (\"N\" -> 0)")
+@fn("FromRomanNumeral", area=AREA, status="added", notes="integer value of a Roman numeral string (\"N\" -> 0)"
+                                                         ". Check: exact (exact input gives exact results), "
+                                                         "reference (differential cases in tests/library).")
 def _fromroman(s: String) -> Expr:
     st = _s(s, "FromRomanNumeral").upper()
     if st == "N":
@@ -736,7 +769,8 @@ def _fromroman(s: String) -> Expr:
 
 @fn("TextWords", area=AREA, status="added",
     notes="words of the text: runs of letters/digits, keeping internal apostrophes and hyphens (rule-based; "
-          "Wolfram's tokenizer may differ on unusual punctuation)")
+          "Wolfram's tokenizer may differ on unusual punctuation)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _textwords(s: String, n: Expr = None) -> ListOf[Expr]:
     words = re.findall(r"[^\W_]+(?:['\u2019\-][^\W_]+)*", _s(s, "TextWords"))
     if n is not None:
@@ -755,7 +789,8 @@ def _alphabet(lang: Expr = "English") -> ListOf[Expr]:
 
 @fn("LetterNumber", area=AREA, status="added",
     notes="position of a letter in the English alphabet (either case), 0 for other characters; a string of "
-          "several characters gives a list; threads over lists")
+          "several characters gives a list; threads over lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _letternumber(s: Expr) -> Expr:
     def one(x):
         st = _s(x, "LetterNumber")
@@ -767,7 +802,8 @@ def _letternumber(s: Expr) -> Expr:
 @fn("FromLetterNumber", area=AREA, status="added",
     notes="the n-th lower-case English letter for 1 <= n <= 26 (negative n counts from z, 0 gives \" \"); other "
           "values raise; "
-          "threads over lists")
+          "threads over lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fromletternumber(n: Expr) -> Expr:
     if is_list(n):
         return L(*(_fromletternumber(x) for x in n.args))
@@ -782,7 +818,8 @@ def _fromletternumber(n: Expr) -> Expr:
 
 
 @fn("RemoveDiacritics", area=AREA, status="added",
-    notes="drops combining marks after Unicode NFKD decomposition (ligatures such as \u00e6 are kept)")
+    notes="drops combining marks after Unicode NFKD decomposition (ligatures such as \u00e6 are kept)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _removediacritics(s: Expr) -> Expr:
     def one(x):
         st = unicodedata.normalize("NFKD", _s(x, "RemoveDiacritics"))
@@ -791,7 +828,8 @@ def _removediacritics(s: Expr) -> Expr:
 
 
 @fn("CharacterRange", area=AREA, status="added",
-    notes="characters from c1 to c2 by code point (strings or integer codes); empty when c2 < c1")
+    notes="characters from c1 to c2 by code point (strings or integer codes); empty when c2 < c1"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _charrange(a: Expr, b: Expr) -> ListOf[Expr]:
     def code(x):
         if isinstance(x, str):
@@ -802,7 +840,9 @@ def _charrange(a: Expr, b: Expr) -> ListOf[Expr]:
     return L(*(chr(c) for c in range(code(a), code(b) + 1)))
 
 
-@fn("SymbolName", area=AREA, status="added", notes="name of a symbol as a string (no context prefix)")
+@fn("SymbolName", area=AREA, status="added", notes="name of a symbol as a string (no context prefix)"
+                                                   ". Check: exact (exact input gives exact results), reference "
+                                                   "(differential cases in tests/library).")
 def _symbolname(x: Expr) -> Expr:
     if isinstance(x, Symbol):
         return x.name.split("`")[-1]
@@ -811,7 +851,9 @@ def _symbolname(x: Expr) -> Expr:
     raise Unevaluated()
 
 
-@fn("Symbol", area=AREA, status="added", notes="Symbol[\"name\"] gives the symbol (evaluated); invalid names raise")
+@fn("Symbol", area=AREA, status="added", notes="Symbol[\"name\"] gives the symbol (evaluated); invalid names raise"
+                                               ". Check: exact (exact input gives exact results), reference "
+                                               "(differential cases in tests/library).")
 def _symbol(name: String) -> Expr:
     st = _s(name, "Symbol", "name")
     if not re.fullmatch(r"\$?[A-Za-z][A-Za-z0-9$]*|\$[A-Za-z0-9$]+", st):
@@ -835,7 +877,8 @@ def _eq(a, b, ignore_case):
 
 
 @fn("EditDistance", area=AREA, status="added",
-    notes="Levenshtein distance (insertions, deletions, substitutions) between strings or lists; IgnoreCase")
+    notes="Levenshtein distance (insertions, deletions, substitutions) between strings or lists; IgnoreCase"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _editdistance(a: Expr, b: Expr, *opts: Option) -> Expr:
     _, o = split_options(opts, {"IgnoreCase"}, "EditDistance")
     ic = _ignore_case(o)
@@ -852,7 +895,8 @@ def _editdistance(a: Expr, b: Expr, *opts: Option) -> Expr:
 
 @fn("HammingDistance", area=AREA, status="added",
     notes="number of differing positions between equal-length strings or lists (unequal lengths raise); "
-          "IgnoreCase")
+          "IgnoreCase"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hamming(a: Expr, b: Expr, *opts: Option) -> Expr:
     _, o = split_options(opts, {"IgnoreCase"}, "HammingDistance")
     x, _ = _seq(a, "HammingDistance")
@@ -868,7 +912,8 @@ def _wrap(items, is_str):
 
 @fn("LongestCommonSubsequence", area=AREA, status="added",
     notes="longest contiguous common run of two strings or lists (Wolfram's meaning; the non-contiguous one is "
-          "LongestCommonSequence); ties go to the earliest position in the first argument")
+          "LongestCommonSequence); ties go to the earliest position in the first argument"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lcsubstr(a: Expr, b: Expr) -> Expr:
     x, sx = _seq(a, "LongestCommonSubsequence")
     y, _ = _seq(b, "LongestCommonSubsequence")
@@ -887,7 +932,8 @@ def _lcsubstr(a: Expr, b: Expr) -> Expr:
 
 @fn("LongestCommonSequence", area=AREA, status="added",
     notes="longest common (not necessarily contiguous) subsequence of two strings or lists by dynamic "
-          "programming; among equal-length answers the one found by the standard back-trace is returned")
+          "programming; among equal-length answers the one found by the standard back-trace is returned"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lcseq(a: Expr, b: Expr) -> Expr:
     x, sx = _seq(a, "LongestCommonSequence")
     y, _ = _seq(b, "LongestCommonSequence")
@@ -911,7 +957,8 @@ def _lcseq(a: Expr, b: Expr) -> Expr:
 
 @fn("PalindromeQ", area=AREA, status="added",
     notes="True for a string, list or non-negative integer (decimal digits) equal to its reverse; other "
-          "expressions False")
+          "expressions False"
+          ". Check: reference (differential cases in tests/library).")
 def _palindromeq(x: Expr) -> Boolean:
     if isinstance(x, str):
         return x == x[::-1]
@@ -935,7 +982,8 @@ for _n in ("StringExpression", "Shortest", "Longest", "RegularExpression", "Digi
 
 @fn("StringExtract", area=AREA, status="added",
     notes="StringExtract[s, n] gives the n-th whitespace-separated piece (spans, lists and negative n allowed); "
-          "StringExtract[s, sep -> n] splits at sep")
+          "StringExtract[s, sep -> n] splits at sep"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _stringextract(s: String, spec: Expr) -> Expr:
     st = _s(s, "StringExtract")
     if _is_rule(spec):
@@ -948,7 +996,8 @@ def _stringextract(s: String, spec: Expr) -> Expr:
 
 @fn("StringReplaceList", area=AREA, status="added",
     notes="every string obtained by replacing a single match of the rules (one result per match position and "
-          "rule, left to right); StringReplaceList[s, rules, n] keeps at most n")
+          "rule, left to right); StringReplaceList[s, rules, n] keeps at most n"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _stringreplacelist(s: Expr, r: Expr, n: Expr = None) -> Expr:
     def one(x):
         st = _s(x, "StringReplaceList")
@@ -968,3 +1017,10 @@ def _stringreplacelist(s: Expr, r: Expr, n: Expr = None) -> Expr:
             out = out[:nonneg_int(n, "StringReplaceList", "count")]
         return L(*out)
     return _strmap(s, one)
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("reference (differential cases in tests/library).",
+          "DigitQ", "LetterQ", "LowerCaseQ", "PrintableASCIIQ", "UpperCaseQ")
