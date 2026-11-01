@@ -299,6 +299,9 @@ CASES += [
     ("MassFluxValue[x == 1, {c[x, y], {x, y}}, <|\"MassConvectionVelocity\" -> {v1, v2}, \"BoundaryUnitNormal\" -> "
      "{1, 0}|>]", "NeumannValue[v1 c[x, y], x == 1]"),
     ("NeumannBoundaryUnitNormal[{x, y}]", "NeumannBoundaryUnitNormal[{x, y}]"),
+    ("ElectricFluxDensityValue[x == 1, {V[x], {x}}, <|\"ElectricFluxDensity\" -> {d}|>] /. "
+     "NeumannBoundaryUnitNormal[{x}] -> {1}", "NeumannValue[-d, x == 1]"),
+    ("Head[NeumannBoundaryUnitNormal[{x}]]", "NeumannBoundaryUnitNormal"),
     # ── solid mechanics (Hooke's law, Navier-Cauchy; Wolfram documentation torsion example) ──
     ("Map[Simplify, Activate[SolidMechanicsPDEComponent[" + V3 + ", " + LM + "]] + (l + m) Grad[Div[{u[x, y, z], "
      "v[x, y, z], w[x, y, z]}, {x, y, z}], {x, y, z}] + m {Laplacian[u[x, y, z], {x, y, z}], Laplacian[v[x, y, z], "
