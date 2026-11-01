@@ -12,15 +12,15 @@ $AudioInputDevices,Core Language & Structure,infeasible,,audio / video,0,UsingCo
 $AudioOutputDevices,Core Language & Structure,infeasible,,audio / video,0,UsingConnectedDevices SystemInformation AudioRepresentation
 $BaseDirectory,System Operation & Setup,implemented,3,,0,WolframSystemSetup SettingPersistentValues DirectoriesAndDirectoryOperations
 $BasePacletsDirectory,System Operation & Setup,infeasible,,Wolfram paclet server / licensing,0,Paclets
-$BatchInput,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels
-$BatchOutput,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels
+$BatchInput,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels
+$BatchOutput,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels
 $BlockchainBase,Financial Data & Computation,infeasible,,Wolfram Cloud / external services,0,Blockchain
 $ByteOrdering,Core Language & Structure,implemented,2,,0,SystemInformation BinaryData
 $CacheBaseDirectory,System Operation & Setup,implemented,3,,0,LocalObjects
 $Canceled,"Options, system variables & unclassified",implemented,3,,0,
 $ChannelBase,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 $CharacterEncoding,System Operation & Setup,implemented,3,,0,LocaleAndInternationalization WolframSystemSessions WolframSystemSetup CharacterOperations
-$CharacterEncodings,Core Language & Structure,missing,1,,0,CharacterOperations SystemInformation InternationalCharacterSets
+$CharacterEncodings,Core Language & Structure,implemented,1,,0,CharacterOperations SystemInformation InternationalCharacterSets
 $CloudAccountName,Geographic Data & Computation,infeasible,,Wolfram Cloud / external services,0,CloudExecutionMetadata
 $CloudBase,System Operation & Setup,infeasible,,Wolfram Cloud / external services,0,WolframSystemSetup CloudFunctionsAndDeployment URLManipulation SystemInformation
 $CloudConnected,Cloud & Deployment,infeasible,,Wolfram Cloud / external services,0,CloudFunctionsAndDeployment
@@ -34,20 +34,20 @@ $CloudSymbolBase,System Operation & Setup,infeasible,,Wolfram Cloud / external s
 $CloudUserID,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,SystemInformation CloudExecutionMetadata
 $CloudUserUUID,Geographic Data & Computation,infeasible,,Wolfram Cloud / external services,0,CloudExecutionMetadata
 $CloudVersion,Geographic Data & Computation,infeasible,,Wolfram Cloud / external services,0,CloudExecutionMetadata
-$CommandLine,Core Language & Structure,missing,2,,0,ExternalOperations StandaloneWolframLanguageKernels WolframSystemSetup SystemInformation
+$CommandLine,Core Language & Structure,implemented,2,,0,ExternalOperations StandaloneWolframLanguageKernels WolframSystemSetup SystemInformation
 $CompilationTarget,"Options, system variables & unclassified",missing,3,,0,
 $CompilerEnvironment,Core Language & Structure,missing,2,,0,CodeCompilation
-$ConfiguredKernels,"Options, system variables & unclassified",missing,3,,0,
+$ConfiguredKernels,"Options, system variables & unclassified",implemented,3,,0,
 $Context,Core Language & Structure,implemented,2,,0,NamespaceManagement
 $ContextAliases,Core Language & Structure,implemented,2,,0,NamespaceManagement WolframSystemSessionInformation
 $ContextPath,Core Language & Structure,implemented,2,,0,PackageDevelopment NamespaceManagement WolframSystemSessionInformation
 $ControlActiveSetting,Core Language & Structure,infeasible,,front end / notebooks,0,DynamicInteractivityLanguage LowLevelInterfaceControl
 $CookieStore,Geographic Data & Computation,infeasible,,curated data,0,CookieManagement
 $Cookies,Geographic Data & Computation,missing,3,,0,WebOperations CloudFunctionsAndDeployment URLManipulation CloudExecutionMetadata
-$CreationDate,Core Language & Structure,missing,2,,0,SystemInformation
+$CreationDate,Core Language & Structure,implemented,2,,0,SystemInformation
 $CryptographicEllipticCurveNames,Higher Mathematical Computation,implemented,2,,0,CryptographicNumberTheory
 $CurrentLink,"Options, system variables & unclassified",infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,
-$CurrentTask,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
+$CurrentTask,System Operation & Setup,implemented,3,,0,BackgroundAndScheduledTasks
 $CurrentWebSession,Core Language & Structure,missing,2,,0,WebBrowserAutomation HTTPRequestsAndResponses
 $DataStructures,Core Language & Structure,implemented,2,,0,DataStructures
 $DateStringFormat,System Operation & Setup,implemented,3,,0,DateAndTime LocaleAndInternationalization WolframSystemSetup CloudExecutionMetadata
@@ -56,30 +56,30 @@ $DefaultAudioOutputDevice,Machine Learning & LLMs,infeasible,,ML models / LLM se
 $DefaultFrontEnd,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,ProgrammaticNotebookAndInterfaceCustomization
 $DefaultImagingDevice,Images,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",1,UsingConnectedDevices CreatingAndImportingImages
 $DefaultLocalBase,System Operation & Setup,implemented,3,,0,LocalObjects
-$DefaultLocalKernel,Core Language & Structure,missing,2,,0,ManagingRemoteAndParallelKernels
+$DefaultLocalKernel,Core Language & Structure,implemented,2,,0,ManagingRemoteAndParallelKernels
 $DefaultNetworkInterface,External Interfaces & Connections,missing,3,,0,NetworkProgramming
-$DefaultParallelKernels,Core Language & Structure,missing,2,,0,ParallelComputationSetupAndConfiguration ManagingRemoteAndParallelKernels
+$DefaultParallelKernels,Core Language & Structure,implemented,2,,0,ParallelComputationSetupAndConfiguration ManagingRemoteAndParallelKernels
 $DefaultProxyRules,External Interfaces & Connections,missing,3,,0,NetworkProgramming
 $DefaultRemoteBatchSubmissionEnvironment,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,RemoteBatchJobs
-$DefaultRemoteKernel,Core Language & Structure,missing,2,,0,RemoteComputation ManagingRemoteAndParallelKernels
+$DefaultRemoteKernel,Core Language & Structure,implemented,2,,0,RemoteComputation ManagingRemoteAndParallelKernels
 $DefaultSystemCredentialStore,Higher Mathematical Computation,infeasible,,ML models / LLM services,0,Cryptography PersistentStorage
-$Display,"Options, system variables & unclassified",missing,3,,0,
+$Display,"Options, system variables & unclassified",implemented,3,,0,
 $DisplayFunction,"Options, system variables & unclassified",implemented,3,,0,
-$DistributedContexts,"Options, system variables & unclassified",missing,3,,0,
-$DistributedDefinitions,"Options, system variables & unclassified",missing,3,,0,
+$DistributedContexts,"Options, system variables & unclassified",implemented,3,,0,
+$DistributedDefinitions,"Options, system variables & unclassified",implemented,3,,0,
 $DynamicEvaluation,User Interface Construction,infeasible,,front end / notebooks,0,DynamicInteractivityLanguage
-$Echo,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels
+$Echo,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels
 $EmbedCodeEnvironments,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,ExternalLanguageInterfaces
 $EmbeddableServices,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,AccessingExternalServicesAndAPIs
 $Epilog,System Operation & Setup,implemented,3,,0,SessionCustomization InitializationAndProvisioning
 $EvaluationCloudBase,Geographic Data & Computation,infeasible,,curated data,0,CloudExecutionMetadata
 $EvaluationCloudObject,Geographic Data & Computation,infeasible,,curated data,0,CloudExecutionMetadata
-$EvaluationEnvironment,Geographic Data & Computation,missing,3,,0,WolframSystemSetup CloudExecutionMetadata
+$EvaluationEnvironment,Geographic Data & Computation,implemented,3,,0,WolframSystemSetup CloudExecutionMetadata
 $ExportFormats,Core Language & Structure,implemented,2,,0,ImportingAndExporting SystemInformation
 $ExternalIdentifierTypes,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 $ExternalStorageBase,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,FileOperations
 $Failed,Core Language & Structure,implemented,2,,0,PackageDevelopment RobustnessAndErrorHandling Messages
-$FontFamilies,Core Language & Structure,missing,2,,1,SystemInformation FontOptions
+$FontFamilies,Core Language & Structure,implemented,2,,1,SystemInformation FontOptions
 $FrontEnd,System Operation & Setup,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming PersistentStorage LowLevelSystemSpelunking ProgrammaticNotebookAndInterfaceCustomization
 $FrontEndSession,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming ProgrammaticNotebookAndInterfaceCustomization WolframSystemSessionInformation SessionCustomization
 $GeneratedAssetLocation,Sound & Video,infeasible,,audio / video,1,VideoProcessing VideoCreation VideoEditing
@@ -89,7 +89,7 @@ $GeoLocationCountry,Geographic Data & Computation,infeasible,,curated data,0,Geo
 $GeoLocationSource,Geographic Data & Computation,infeasible,,curated data,0,CloudExecutionMetadata
 $HistoryLength,System Operation & Setup,implemented,3,,0,TuningAndDebugging WolframSystemSetup MemoryMeasurementAndOptimization WolframSystemSessionHistory
 $HomeDirectory,Core Language & Structure,implemented,2,,0,OperationsOnFileNames CloudExecutionMetadata DirectoriesAndDirectoryOperations
-$IgnoreEOF,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels SessionCustomization
+$IgnoreEOF,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels SessionCustomization
 $ImageFormattingWidth,Geographic Data & Computation,infeasible,,curated data,0,CloudExecutionMetadata
 $ImageResolution,Images,implemented,3,,0,CreatingAndImportingImages
 $ImagingDevice,Scientific and Medical Data & Computation,infeasible,,curated data,0,UsingConnectedDevices
@@ -98,18 +98,18 @@ $ImportFormats,Core Language & Structure,implemented,2,,1,ImportingAndExporting 
 $IncomingMailSettings,External Interfaces & Connections,missing,3,,0,HandlingLiveMailboxes
 $InitialDirectory,External Interfaces & Connections,implemented,3,,0,DirectoriesAndDirectoryOperations
 $Initialization,System Operation & Setup,missing,3,,0,PersistentStorage WolframSystemSetup SessionCustomization SettingPersistentValues
-$InitializationContexts,System Operation & Setup,missing,3,,0,WolframSystemSetup SessionCustomization SettingPersistentValues InitializationAndProvisioning
-$Input,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels
+$InitializationContexts,System Operation & Setup,implemented,3,,0,WolframSystemSetup SessionCustomization SettingPersistentValues InitializationAndProvisioning
+$Input,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels
 $InputFileName,"Options, system variables & unclassified",implemented,3,,0,
 $InputStreamMethods,"Options, system variables & unclassified",implemented,3,,0,
 $Inspector,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 $InstallationDirectory,External Interfaces & Connections,implemented,3,,0,DirectoriesAndDirectoryOperations
 $InterpreterTypes,Strings & Text,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),1,InterpretingStrings
 $IterationLimit,Core Language & Structure,implemented,1,,0,EvaluationControl GlobalComputationSettingsAndParameters TimeMeasurementAndOptimization MemoryMeasurementAndOptimization
-$KernelCount,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency
-$KernelID,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency
+$KernelCount,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency
+$KernelID,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency
 $LLMEvaluator,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions WolframSystemSetup
-$Language,System Operation & Setup,missing,3,,0,LocaleAndInternationalization WolframSystemSetup Messages CloudExecutionMetadata
+$Language,System Operation & Setup,implemented,3,,0,LocaleAndInternationalization WolframSystemSetup Messages CloudExecutionMetadata
 $LibraryPath,External Interfaces & Connections,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",0,CallingExternalPrograms LibraryLink CLanguageInterface
 $LicenseExpirationDate,System Operation & Setup,infeasible,,Wolfram paclet server / licensing,0,SystemAndLicenseManagement
 $LicenseID,System Operation & Setup,infeasible,,Wolfram paclet server / licensing,0,WolframSystemSetup SystemInformation SystemAndLicenseManagement
@@ -119,12 +119,12 @@ $Linked,System Operation & Setup,infeasible,,WSTP / MathLink protocol (Wolfram-p
 $LocalBase,System Operation & Setup,implemented,3,,0,WolframSystemSetup LocalObjects
 $LocalSymbolBase,System Operation & Setup,implemented,3,,0,WolframSystemSetup LocalObjects
 $MachineAddresses,External Interfaces & Connections,missing,3,,0,NetworkProgramming InternetAndWebRelatedData SystemInformation CloudExecutionMetadata
-$MachineDomains,Core Language & Structure,missing,2,,0,ExternalOperations NetworkProgramming InternetAndWebRelatedData SystemInformation
+$MachineDomains,Core Language & Structure,implemented,2,,0,ExternalOperations NetworkProgramming InternetAndWebRelatedData SystemInformation
 $MachineEpsilon,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
-$MachineID,System Operation & Setup,missing,3,,0,WolframSystemSetup SystemInformation SystemAndLicenseManagement
-$MachineName,System Operation & Setup,missing,3,,0,WolframSystemSetup SystemInformation CloudExecutionMetadata SystemAndLicenseManagement
+$MachineID,System Operation & Setup,implemented,3,,0,WolframSystemSetup SystemInformation SystemAndLicenseManagement
+$MachineName,System Operation & Setup,implemented,3,,0,WolframSystemSetup SystemInformation CloudExecutionMetadata SystemAndLicenseManagement
 $MachinePrecision,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
-$MachineType,Core Language & Structure,missing,2,,0,SystemInformation
+$MachineType,Core Language & Structure,implemented,2,,0,SystemInformation
 $MaxDisplayedChildren,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 $MaxExtraPrecision,Core Language & Structure,missing,2,,0,GlobalComputationSettingsAndParameters PrecisionAndAccuracyControl SessionCustomization
 $MaxMachineNumber,Symbolic & Numeric Computation,implemented,2,,0,SystemInformation RepresentationOfNumbers PrecisionAndAccuracyControl
@@ -146,17 +146,17 @@ $NetworkConnected,External Interfaces & Connections,infeasible,,ML models / LLM 
 $NetworkInterfaces,Core Language & Structure,infeasible,,ML models / LLM services,0,NetworkProgramming SystemInformation
 $NewMessage,System Operation & Setup,implemented,3,,0,SessionCustomization
 $NewSymbol,Core Language & Structure,implemented,2,,0,SymbolHandling SessionCustomization
-$NoValue,System Operation & Setup,missing,3,,0,InitializationAndProvisioning
+$NoValue,System Operation & Setup,implemented,3,,0,InitializationAndProvisioning
 $NotebookInlineStorageLimit,System Operation & Setup,infeasible,,front end / notebooks,0,WolframSystemSessionHistory
 $Notebooks,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 $NumberMarks,Core Language & Structure,implemented,2,,0,GlobalComputationSettingsAndParameters DisplayOfNumbers
-$OperatingSystem,Core Language & Structure,missing,2,,0,InternetAndWebRelatedData SystemInformation
-$Output,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels SessionCustomization
+$OperatingSystem,Core Language & Structure,implemented,2,,0,InternetAndWebRelatedData SystemInformation
+$Output,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels SessionCustomization
 $OutputSizeLimit,System Operation & Setup,implemented,3,,0,ManagingComputationsInNotebooks WolframSystemSessionHistory SessionCustomization EvaluationOptionsInNotebooks
 $OutputStreamMethods,"Options, system variables & unclassified",implemented,3,,0,
 $Packages,Core Language & Structure,implemented,2,,0,PackageDevelopment SystemInformation NamespaceManagement WolframSystemSessionInformation
 $ParentLink,Core Language & Structure,infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,WSTPWolframLanguageFunctions
-$ParentProcessID,Core Language & Structure,missing,2,,0,SystemInformation SystemAndLicenseManagement
+$ParentProcessID,Core Language & Structure,implemented,2,,0,SystemInformation SystemAndLicenseManagement
 $PasswordFile,System Operation & Setup,infeasible,,Wolfram paclet server / licensing,0,SystemAndLicenseManagement
 $Path,System Operation & Setup,implemented,3,,0,WolframSystemSessions WolframSystemSetup FileOperations OperationsOnFileNames
 $PathnameSeparator,"Options, system variables & unclassified",implemented,3,,0,
@@ -172,14 +172,14 @@ $PreInitialization,System Operation & Setup,missing,3,,0,PersistentStorage Wolfr
 $PrePrint,System Operation & Setup,implemented,3,,0,SessionCustomization
 $PreRead,System Operation & Setup,implemented,3,,0,SessionCustomization
 $Printout3DPreviewer,Geometry,infeasible,,Wolfram Cloud / external services,0,3DPrinting
-$ProcessID,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels WolframSystemSetup SystemInformation LowLevelSystemOptimization
-$ProcessorCount,Core Language & Structure,missing,2,,0,ParallelComputing WolframSystemSetup SystemInformation
-$ProcessorType,Core Language & Structure,missing,2,,0,InternetAndWebRelatedData SystemInformation CloudExecutionMetadata
-$ProgressReporting,Core Language & Structure,missing,2,,0,TuningAndDebugging TimeMeasurementAndOptimization
+$ProcessID,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels WolframSystemSetup SystemInformation LowLevelSystemOptimization
+$ProcessorCount,Core Language & Structure,implemented,2,,0,ParallelComputing WolframSystemSetup SystemInformation
+$ProcessorType,Core Language & Structure,implemented,2,,0,InternetAndWebRelatedData SystemInformation CloudExecutionMetadata
+$ProgressReporting,Core Language & Structure,implemented,2,,0,TuningAndDebugging TimeMeasurementAndOptimization
 $PublisherID,Core Language & Structure,infeasible,,Wolfram paclet server / licensing,0,WolframDataRepository WolframFunctionRepository
-$RandomGeneratorState,Core Language & Structure,missing,2,,0,TuningAndDebugging RandomNumberGeneration
+$RandomGeneratorState,Core Language & Structure,implemented,2,,0,TuningAndDebugging RandomNumberGeneration
 $RecursionLimit,Core Language & Structure,implemented,1,,0,WolframSystemSessions WolframSystemSetup EvaluationControl GlobalComputationSettingsAndParameters
-$ReleaseNumber,Core Language & Structure,missing,2,,0,SystemInformation
+$ReleaseNumber,Core Language & Structure,implemented,2,,0,SystemInformation
 $RequesterAddress,Cloud & Deployment,infeasible,,Wolfram Cloud / external services,0,CreatingFormsAndApps CloudFunctionsAndDeployment CreatingAnInstantAPI CloudExecutionMetadata
 $RequesterCloudUserID,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 $RequesterCloudUserUUID,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
@@ -189,13 +189,13 @@ $ResourceSystemBase,"Options, system variables & unclassified",infeasible,,Wolfr
 $ResourceSystemPath,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,WolframDataRepository WolframFunctionRepository
 $RootDirectory,Core Language & Structure,implemented,2,,0,OperationsOnFileNames ManagingContentInTheCloud DirectoriesAndDirectoryOperations
 $SSHAuthentication,External Interfaces & Connections,missing,3,,0,FileOperations CallingExternalPrograms Files
-$ScriptCommandLine,Core Language & Structure,missing,2,,0,PackageDevelopment StandaloneWolframLanguageKernels
-$ScriptInputString,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels
+$ScriptCommandLine,Core Language & Structure,implemented,2,,0,PackageDevelopment StandaloneWolframLanguageKernels
+$ScriptInputString,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels
 $ServiceCreditsAvailable,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 $Services,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,AccessingExternalServicesAndAPIs
-$SessionID,Core Language & Structure,missing,2,,0,GlobalComputationSettingsAndParameters WolframSystemSessionInformation
-$SharedFunctions,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration ResourceSharingInParallelComputing
-$SharedVariables,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration ResourceSharingInParallelComputing
+$SessionID,Core Language & Structure,implemented,2,,0,GlobalComputationSettingsAndParameters WolframSystemSessionInformation
+$SharedFunctions,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration ResourceSharingInParallelComputing
+$SharedVariables,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration ResourceSharingInParallelComputing
 $SoundDisplayFunction,"Options, system variables & unclassified",infeasible,,audio / video,0,
 $SourceLink,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 $StandardErrorStream,"Options, system variables & unclassified",implemented,3,,0,
@@ -203,14 +203,14 @@ $StandardOutputStream,"Options, system variables & unclassified",implemented,3,,
 $SubtitleDecoders,Sound & Video,infeasible,,audio / video,0,VideoProcessing
 $SubtitleEncoders,Sound & Video,infeasible,,audio / video,0,VideoProcessing VideoCreation VideoEditing
 $SynchronousEvaluation,Core Language & Structure,infeasible,,front end / notebooks,0,DynamicInteractivityLanguage LowLevelInterfaceControl
-$SyntaxHandler,System Operation & Setup,missing,3,,0,SessionCustomization
-$System,Core Language & Structure,missing,2,,0,WolframSystemSetup SystemInformation
+$SyntaxHandler,System Operation & Setup,implemented,3,,0,SessionCustomization
+$System,Core Language & Structure,implemented,2,,0,WolframSystemSetup SystemInformation
 $SystemCharacterEncoding,Notebook Documents & Presentation,implemented,3,,0,LocaleAndInternationalization SystemInformation CloudExecutionMetadata InternationalCharacterSets
 $SystemCredentialStore,Higher Mathematical Computation,infeasible,,ML models / LLM services,0,Cryptography PersistentStorage
-$SystemID,Core Language & Structure,missing,2,,0,PackageDevelopment SystemInformation PackageBulletproofing
-$SystemShell,Core Language & Structure,missing,2,,0,SystemInformation DirectControlOfExternalProcesses
+$SystemID,Core Language & Structure,implemented,2,,0,PackageDevelopment SystemInformation PackageBulletproofing
+$SystemShell,Core Language & Structure,implemented,2,,0,SystemInformation DirectControlOfExternalProcesses
 $SystemTimeZone,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
-$SystemWordLength,Core Language & Structure,missing,2,,0,SystemInformation
+$SystemWordLength,Core Language & Structure,implemented,2,,0,SystemInformation
 $TargetSystems,"Options, system variables & unclassified",missing,3,,0,
 $TemplatePath,"Options, system variables & unclassified",implemented,3,,0,
 $TemporaryDirectory,External Interfaces & Connections,implemented,3,,0,DirectoriesAndDirectoryOperations
@@ -220,16 +220,16 @@ $TimeZone,System Operation & Setup,implemented,3,,0,Geodesy DateAndTime LocaleAn
 $TimeZoneEntity,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 $TimedOut,Core Language & Structure,implemented,2,,0,Messages
 $UnitSystem,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,Units
-$Urgent,System Operation & Setup,missing,3,,0,SessionCustomization
+$Urgent,System Operation & Setup,implemented,3,,0,SessionCustomization
 $UserAgent,"Options, system variables & unclassified",missing,3,,0,
 $UserAgentString,External Interfaces & Connections,missing,3,,0,CreatingFormsAndApps InternetAndWebRelatedData CloudFunctionsAndDeployment CreatingAnInstantAPI
 $UserBaseDirectory,Core Language & Structure,implemented,2,,0,WolframSystemSetup OperationsOnFileNames CloudExecutionMetadata DirectoriesAndDirectoryOperations
 $UserBasePacletsDirectory,System Operation & Setup,infeasible,,Wolfram paclet server / licensing,0,Paclets
 $UserDocumentsDirectory,Geographic Data & Computation,implemented,3,,0,CloudExecutionMetadata DirectoriesAndDirectoryOperations
 $UserURLBase,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,URLManipulation CloudExecutionMetadata ManagingContentInTheCloud
-$Username,System Operation & Setup,missing,3,,0,ExternalOperations WolframSystemSetup SystemInformation CloudExecutionMetadata
-$Version,Core Language & Structure,missing,2,,0,WolframSystemSetup SystemInformation
-$VersionNumber,Core Language & Structure,missing,2,,0,PackageDevelopment SystemInformation PackageBulletproofing
+$Username,System Operation & Setup,implemented,3,,0,ExternalOperations WolframSystemSetup SystemInformation CloudExecutionMetadata
+$Version,Core Language & Structure,implemented,2,,0,WolframSystemSetup SystemInformation
+$VersionNumber,Core Language & Structure,implemented,2,,0,PackageDevelopment SystemInformation PackageBulletproofing
 $VideoDecoders,Sound & Video,infeasible,,audio / video,1,VideoProcessing
 $VideoEncoders,Sound & Video,infeasible,,audio / video,1,VideoProcessing VideoCreation VideoEditing
 $VoiceStyles,Machine Learning & LLMs,infeasible,,ML models / LLM services,1,SpeechComputation AudioRepresentation
@@ -246,7 +246,7 @@ ARPublish,"Options, system variables & unclassified",infeasible,,Wolfram Cloud /
 ASATriangle,Visualization & Graphics,implemented,3,,0,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
 AbelianGroup,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
 Abort,Core Language & Structure,implemented,1,,0,RobustnessAndErrorHandling LoopingConstructs FlowControl
-AbortKernels,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration
+AbortKernels,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration
 AbortProtect,Core Language & Structure,implemented,1,,0,PackageDevelopment RobustnessAndErrorHandling FlowControl PackageBulletproofing
 Above,Visualization & Graphics,implemented,3,,0,3DGraphicsOptions
 Abs,Symbolic & Numeric Computation,implemented,1,,3,MathematicalFunctions NumericalEvaluationAndPrecision ImageProcessing GPUComputing
@@ -607,7 +607,7 @@ AutoItalicWords,Notebook Documents & Presentation,infeasible,,front end / notebo
 AutoMultiplicationSymbol,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathTypesettingOptionsAndTweaking AutomaticTextStylingFeatures
 AutoOperatorRenderings,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathTypesettingOptionsAndTweaking AutomaticTextStylingFeatures
 AutoRefreshed,Data Manipulation & Analysis,infeasible,,Wolfram Cloud / external services,1,AutomatedReports CloudFunctionsAndDeployment
-AutoRemove,"Options, system variables & unclassified",missing,3,,0,
+AutoRemove,"Options, system variables & unclassified",implemented,3,,0,
 AutoScroll,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming
 AutoSpacing,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathTypesettingOptionsAndTweaking
 AutoSubmitting,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,CreatingFormsAndApps FormStructureAndLayout
@@ -774,7 +774,7 @@ Block,Core Language & Structure,implemented,1,,2,LanguageOverview ProceduralProg
 BlockDiagonalMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays
 BlockLowerTriangularMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays
 BlockMap,Core Language & Structure,implemented,1,,0,FunctionalProgramming HandlingArraysOfData ApplyingFunctionsToLists
-BlockRandom,Core Language & Structure,missing,1,,0,PackageDevelopment TuningAndDebugging ScopingConstructs PackageBulletproofing
+BlockRandom,Core Language & Structure,implemented,1,,0,PackageDevelopment TuningAndDebugging ScopingConstructs PackageBulletproofing
 BlockUpperTriangularMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays
 BlockchainAddressData,Financial Data & Computation,infeasible,,curated data,0,Blockchain
 BlockchainBase,Financial Data & Computation,infeasible,,Wolfram Cloud / external services,0,Blockchain
@@ -1089,7 +1089,7 @@ Clear,Core Language & Structure,implemented,1,,5,VariablesAndFunctions TuningAnd
 ClearAll,Core Language & Structure,implemented,1,,0,Assignments MemoryMeasurementAndOptimization
 ClearAttributes,Core Language & Structure,implemented,1,,0,Attributes
 ClearCookies,Geographic Data & Computation,infeasible,,curated data,0,CookieManagement
-ClearDistributedDefinitions,Core Language & Structure,missing,2,,0,ParallelComputationSetupAndConfiguration DataParallelism ResourceSharingInParallelComputing
+ClearDistributedDefinitions,Core Language & Structure,implemented,2,,0,ParallelComputationSetupAndConfiguration DataParallelism ResourceSharingInParallelComputing
 ClearPermissions,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,StructuredDataInTheCloud CloudPermissionsControl
 ClearSystemCache,Core Language & Structure,implemented,2,,0,TuningAndDebugging TimeMeasurementAndOptimization MemoryMeasurementAndOptimization LowLevelSystemOptimization
 ClebschGordan,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics CombinatorialFunctions
@@ -1105,7 +1105,7 @@ ClippingStyle,Visualization & Graphics,implemented,3,,0,VectorVisualization Grap
 Clock,Core Language & Structure,implemented,2,,0,DateAndTime DynamicInteractivityLanguage LowLevelInterfaceControl
 ClockGauge,Data Manipulation & Analysis,implemented,2,,0,DateAndTimeVisualization Gauges
 Close,External Interfaces & Connections,implemented,3,,0,NetworkProgramming LowLevelFileOperations
-CloseKernels,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration ManagingRemoteAndParallelKernels
+CloseKernels,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration ManagingRemoteAndParallelKernels
 ClosenessCentrality,Graphs & Networks,implemented,2,,0,GraphsAndNetworks GraphPropertiesAndMeasurements SocialNetworks ScientificDataAnalysis
 Closing,Images,implemented,3,,0,ImageProcessing MathematicalMorphology
 CloudAccountData,System Operation & Setup,infeasible,,curated data,0,CloudFunctionsAndDeployment ManagingContentInTheCloud
@@ -1453,7 +1453,7 @@ CreateVectorDatabase,Machine Learning & LLMs,infeasible,,ML models / LLM service
 CreateWindow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming
 CreditConstraint,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,RemoteBatchJobs
 CriterionFunction,Data Manipulation & Analysis,implemented,2,,0,ClusterAnalysis
-CriticalSection,Core Language & Structure,missing,2,,0,ParallelComputing Concurrency ResourceSharingInParallelComputing
+CriticalSection,Core Language & Structure,implemented,2,,0,ParallelComputing Concurrency ResourceSharingInParallelComputing
 CriticalityFailureImportance,Engineering Data & Computation,infeasible,,curated data,0,Reliability
 CriticalitySuccessImportance,Engineering Data & Computation,infeasible,,curated data,0,Reliability
 Cross,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra OperationsOnVectors SymbolicArrays
@@ -1812,9 +1812,9 @@ DistanceFunction,Data Manipulation & Analysis,implemented,2,,0,QuestionsAndAsses
 DistanceMatrix,Strings & Text,implemented,2,,0,TextAnalysis SequenceAlignmentAndComparison OperationsOnVectors DistanceAndSimilarityMeasures
 DistanceTransform,Images,implemented,3,,0,ImageProcessing MathematicalMorphology 3DImages DistanceAndSimilarityMeasures
 Distribute,Core Language & Structure,implemented,1,,0,Expressions StructuralOperationsOnExpressions FunctionCompositionAndOperatorForms
-DistributeDefinitions,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration DataParallelism ResourceSharingInParallelComputing
+DistributeDefinitions,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration DataParallelism ResourceSharingInParallelComputing
 Distributed,Symbolic & Numeric Computation,implemented,2,,0,Syntax ProbabilityAndStatistics RandomVariables RandomGraphs
-DistributedContexts,"Options, system variables & unclassified",missing,3,,0,
+DistributedContexts,"Options, system variables & unclassified",implemented,3,,0,
 DistributionChart,Data Manipulation & Analysis,implemented,2,,0,TimeSeries StatisticalVisualization DateAndTimeVisualization TabularVisualization
 DistributionFitTest,Data Manipulation & Analysis,implemented,2,,0,Statistics ProbabilityAndStatistics LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis
 DistributionParameterAssumptions,Symbolic & Numeric Computation,implemented,2,,0,StatisticalDistributionFunctions
@@ -2016,7 +2016,7 @@ EntityUnregister,Core Language & Structure,infeasible,,curated data,0,KnowledgeR
 EntityValue,Core Language & Structure,infeasible,,curated data,7,ComputationWithStructuredDatasets KnowledgeRepresentationAndAccess DatabaseConnectivity SocioeconomicAndDemographicData
 Entropy,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics
 EntropyFilter,Images,implemented,3,,0,ImageProcessing ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters
-Environment,Core Language & Structure,missing,2,,0,LLMFunctions StandaloneWolframLanguageKernels SystemInformation LowLevelSystemOptimization
+Environment,Core Language & Structure,implemented,2,,0,LLMFunctions StandaloneWolframLanguageKernels SystemInformation LowLevelSystemOptimization
 Epilog,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance CombiningGraphics
 EpilogFunction,"Options, system variables & unclassified",implemented,3,,0,
 Equal,Core Language & Structure,implemented,1,,9,LanguageOverview ProceduralProgramming Syntax FormulaManipulation
@@ -2061,7 +2061,7 @@ EvaluationElements,"Options, system variables & unclassified",missing,3,,0,
 EvaluationEnvironment,System Operation & Setup,missing,3,,0,InitializationAndProvisioning
 EvaluationMonitor,Symbolic & Numeric Computation,implemented,2,,0,TuningAndDebugging NumericalEvaluationAndPrecision DifferentialEquations
 EvaluationNotebook,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming ProgrammaticNotebookAndInterfaceCustomization
-EvaluationObject,Core Language & Structure,missing,2,,0,Concurrency
+EvaluationObject,Core Language & Structure,implemented,2,,0,Concurrency
 EvaluationPrivileges,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 Evaluator,Core Language & Structure,infeasible,,front end / notebooks,0,WolframSystemSetup EvaluationControl Stylesheets ManagingRemoteAndParallelKernels
 EvaluatorNames,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
@@ -2088,7 +2088,7 @@ ExcludedPhysicalQuantities,"Options, system variables & unclassified",infeasible
 Exclusions,User Interface Construction,implemented,3,,0,PlottingOptions OptionsAndStylingForInteractiveManipulation ControlsOptions
 ExclusionsStyle,Visualization & Graphics,implemented,3,,0,PlottingOptions
 Exists,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation LogicAndBooleanAlgebra TheoremProving AssumptionsAndDomains
-Exit,"Options, system variables & unclassified",missing,3,,0,
+Exit,"Options, system variables & unclassified",implemented,3,,0,
 ExoplanetData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Exp,Symbolic & Numeric Computation,implemented,1,,1,Syntax MathematicalFunctions GPUComputing FunctionsForSeparableCoordinateSystems
 ExpGammaDistribution,Symbolic & Numeric Computation,implemented,2,,0,ExponentialRelatedDistributions
@@ -2689,7 +2689,7 @@ GeometricTest,Visualization & Graphics,implemented,3,,0,PlaneGeometry SyntheticG
 GeometricTransformation,Geometry,implemented,2,,0,DerivedRegions GeometricTransforms GraphicsTransformations
 GestureHandler,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects CustomInterfaceConstruction LowLevelInterfaceControl
 Get,Core Language & Structure,implemented,1,,2,ExternalOperations Syntax StandaloneWolframLanguageKernels PersistentStorage
-GetEnvironment,Core Language & Structure,missing,2,,0,LowLevelSystemOptimization
+GetEnvironment,Core Language & Structure,implemented,2,,0,LowLevelSystemOptimization
 GibbsPointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialStatistics SpatialPointProcesses SpatialPointCollections
 Glaisher,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants
 GlobalClusteringCoefficient,Graphs & Networks,implemented,2,,0,GraphsAndNetworks GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
@@ -3128,7 +3128,7 @@ InheritScope,"Options, system variables & unclassified",missing,3,,0,
 Inherited,Core Language & Structure,implemented,2,,0,OptionsManagement
 InhomogeneousPoissonPointProcess,Symbolic & Numeric Computation,implemented,2,,0,SpatialStatistics SpatialPointProcesses
 InhomogeneousPoissonProcess,Higher Mathematical Computation,implemented,2,,0,ParametricRandomProcesses MarkovProcesses
-InitialEvaluationHistory,"Options, system variables & unclassified",missing,3,,0,
+InitialEvaluationHistory,"Options, system variables & unclassified",implemented,3,,0,
 InitialSeeding,"Options, system variables & unclassified",missing,3,,0,
 Initialization,Core Language & Structure,missing,2,,0,RemoteBatchJobs OptionsAndStylingForInteractiveManipulation
 InitializationCell,Core Language & Structure,infeasible,,front end / notebooks,0,WolframLanguageExpressionsInFiles EvaluationOptionsInNotebooks
@@ -3140,7 +3140,7 @@ Inner,Core Language & Structure,implemented,1,,0,Tensors ApplyingFunctionsToList
 InnerPolygon,Visualization & Graphics,implemented,3,,0,PlaneGeometry Polygons
 InnerPolyhedron,Visualization & Graphics,missing,3,,0,SolidGeometry Polyhedra
 Inpaint,Images,missing,3,,0,ImageProcessing ImageRestoration ComputationalPhotography ImageComputationForMicroscopy
-Input,Core Language & Structure,missing,1,,0,ProceduralProgramming CustomInterfaceConstruction StandaloneWolframLanguageKernels FlowControl
+Input,Core Language & Structure,implemented,1,,0,ProceduralProgramming CustomInterfaceConstruction StandaloneWolframLanguageKernels FlowControl
 InputAliases,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,GeneralizedInput Stylesheets DefiningCustomNotation ProgrammaticNotebookAndInterfaceCustomization
 InputAssumptions,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,WolframAlphaIntegration
 InputAutoReplacements,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,GeneralizedInput DefiningCustomNotation AutomaticTextStylingFeatures
@@ -3153,7 +3153,7 @@ InputOutputResponseData,Engineering Data & Computation,infeasible,,curated data,
 InputPacket,"Options, system variables & unclassified",infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,
 InputPorts,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkConstruction
 InputStream,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
-InputString,User Interface Construction,missing,3,,0,CustomInterfaceConstruction BasicInputAndOutputInPrograms DialogBoxes
+InputString,User Interface Construction,implemented,3,,0,CustomInterfaceConstruction BasicInputAndOutputInPrograms DialogBoxes
 InputStringPacket,"Options, system variables & unclassified",infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,
 InscribedBall,Geometry,implemented,2,,0,GeometricSpecialRegions
 Insert,Core Language & Structure,implemented,1,,0,ComputationWithStructuredDatasets ElementsOfLists PartsOfExpressions FunctionCompositionAndOperatorForms
@@ -3332,13 +3332,13 @@ KelvinKei,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 KelvinKer,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 KendallTau,Data Manipulation & Analysis,implemented,2,,0,DescriptiveStatistics StatisticalMomentsAndGeneratingFunctions
 KendallTauTest,Data Manipulation & Analysis,implemented,2,,0,HypothesisTests
-KernelConfiguration,Core Language & Structure,missing,2,,0,ManagingRemoteAndParallelKernels
+KernelConfiguration,Core Language & Structure,implemented,2,,0,ManagingRemoteAndParallelKernels
 KernelConfigurationEdit,"Options, system variables & unclassified",missing,3,,0,
 KernelEvaluate,Core Language & Structure,missing,2,,0,CodeCompilation
 KernelFunction,Core Language & Structure,missing,2,,0,CodeCompilation
 KernelMixtureDistribution,Core Language & Structure,implemented,2,,0,TabularModeling RandomVariables NonparametricStatisticalDistributions
 KernelModelFit,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
-KernelObject,Core Language & Structure,missing,2,,0,ManagingRemoteAndParallelKernels
+KernelObject,Core Language & Structure,implemented,2,,0,ManagingRemoteAndParallelKernels
 Ket,"Options, system variables & unclassified",implemented,3,,0,
 Key,Core Language & Structure,implemented,1,,4,Associations FunctionCompositionAndOperatorForms TabularObjects
 KeyCollisionFunction,"Options, system variables & unclassified",implemented,3,,0,
@@ -3361,7 +3361,7 @@ KeyframeActions,Sound & Video,infeasible,,audio / video,0,VideoCreation OptionsA
 KeypointStrength,"Options, system variables & unclassified",implemented,3,,0,
 Keys,Core Language & Structure,implemented,1,,2,LanguageOverview Associations ComputationWithStructuredDatasets UsingTheWolframDataDrop
 Khinchin,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants ContinuedFractionsAndRationalApproximations
-KillProcess,External Interfaces & Connections,missing,3,,0,CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
+KillProcess,External Interfaces & Connections,implemented,3,,0,CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
 KirchhoffGraph,Graphs & Networks,implemented,2,,0,GraphsAndMatrices GraphProgramming
 KirchhoffMatrix,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation GraphsAndMatrices GraphProgramming
 KleinInvariantJ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions QFunctions
@@ -3442,7 +3442,7 @@ Latitude,Geometry,implemented,2,,0,Geodesy AnglesAndPolarCoordinates
 LatitudeLongitude,Geometry,implemented,2,,0,Geodesy AnglesAndPolarCoordinates
 LatticeData,Symbolic & Numeric Computation,infeasible,,curated data,0,DiscreteMathematics MathematicalData PhysicsAndChemistryDataAndComputation ComputationalGeometry
 LatticeReduce,Higher Mathematical Computation,implemented,2,,0,DiscreteAndIntegerData MatrixDecompositions CryptographicNumberTheory NumberRecognition
-LaunchKernels,Core Language & Structure,missing,2,,0,ParallelComputing WolframSystemSetup ParallelComputationSetupAndConfiguration RemoteComputation
+LaunchKernels,Core Language & Structure,implemented,2,,0,ParallelComputing WolframSystemSetup ParallelComputationSetupAndConfiguration RemoteComputation
 LayerSizeFunction,"Options, system variables & unclassified",implemented,3,,0,
 LayeredGraph,"Options, system variables & unclassified",missing,3,,0,
 LayeredGraph3D,"Options, system variables & unclassified",missing,3,,0,
@@ -3638,12 +3638,12 @@ LoadCompiledComponent,Core Language & Structure,infeasible,,"hardware devices, G
 LocalAdaptiveBinarize,Images,implemented,3,,0,SegmentationAnalysis
 LocalCache,System Operation & Setup,implemented,2,,1,WolframDataRepository PersistentStorage WolframFunctionRepository LocalObjects
 LocalClusteringCoefficient,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
-LocalEvaluate,Core Language & Structure,missing,2,,0,ParallelComputing BackgroundAndScheduledTasks ManagingRemoteAndParallelKernels
+LocalEvaluate,Core Language & Structure,implemented,2,,0,ParallelComputing BackgroundAndScheduledTasks ManagingRemoteAndParallelKernels
 LocalModelFit,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
 LocalObject,System Operation & Setup,infeasible,,Wolfram Cloud / external services,2,PersistentStorage FileOperations LocalObjects
 LocalObjects,System Operation & Setup,infeasible,,Wolfram Cloud / external services,0,LocalObjects
 LocalResponseNormalizationLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
-LocalSubmit,Knowledge Representation & Natural Language,missing,3,,0,DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
+LocalSubmit,Knowledge Representation & Natural Language,implemented,3,,0,DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
 LocalSymbol,System Operation & Setup,implemented,3,,0,PersistentStorage FileOperations LocalObjects
 LocalTime,Geographic Data & Computation,infeasible,,curated data,2,MapsAndCartography GeographicData Geodesy WeatherData
 LocalTimeZone,Geographic Data & Computation,infeasible,,curated data,0,GeographicData Geodesy DateAndTime
@@ -4374,7 +4374,7 @@ Opener,User Interface Construction,infeasible,,front end / notebooks,0,ControlOb
 OpenerView,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,DynamicVisualization LayoutAndTables DocumentGeneration ViewersAndAnnotation
 Opening,Images,implemented,3,,0,ImageProcessing MathematicalMorphology 3DImages
 Operate,Core Language & Structure,implemented,1,,0,FunctionalProgramming StructuralOperationsOnExpressions FunctionCompositionAndOperatorForms
-OperatingSystem,"Options, system variables & unclassified",missing,3,,0,
+OperatingSystem,"Options, system variables & unclassified",implemented,3,,0,
 OperationDeclaration,Core Language & Structure,missing,2,,0,CodeCompilation
 OperatorApplied,Core Language & Structure,implemented,1,,3,FunctionalProgramming FunctionCompositionAndOperatorForms
 OptimumFlowData,Graphs & Networks,infeasible,,curated data,0,GraphPathsCyclesAndFlows
@@ -4492,24 +4492,24 @@ Paneled,User Interface Construction,infeasible,,front end / notebooks,0,OptionsA
 ParabolicCylinderD,Symbolic & Numeric Computation,implemented,2,,0,HypergeometricFunctions
 ParagraphIndent,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,TextLayoutOptions
 ParagraphSpacing,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,TextLayoutOptions
-ParallelArray,Core Language & Structure,missing,2,,0,DataParallelism
+ParallelArray,Core Language & Structure,implemented,2,,0,DataParallelism
 ParallelAxisPlot,Data Manipulation & Analysis,implemented,2,,0,GPUComputing DateAndTimeVisualization HighDimensionalVisualization TabularVisualization
-ParallelCases,Core Language & Structure,missing,2,,0,DataParallelism
-ParallelCombine,Core Language & Structure,missing,2,,0,ParallelComputing DataParallelism ManagingRemoteAndParallelKernels
-ParallelDo,Core Language & Structure,missing,2,,0,DataParallelism
-ParallelEvaluate,Core Language & Structure,missing,2,,0,ParallelComputing BackgroundAndScheduledTasks ParallelComputationSetupAndConfiguration ResourceSharingInParallelComputing
-ParallelKernels,Core Language & Structure,missing,2,,0,ParallelComputationSetupAndConfiguration ManagingRemoteAndParallelKernels
-ParallelMap,Core Language & Structure,missing,2,,0,ParallelComputing DataParallelism ManagingRemoteAndParallelKernels
-ParallelNeeds,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration DataParallelism ResourceSharingInParallelComputing
-ParallelProduct,Core Language & Structure,missing,2,,0,DataParallelism
-ParallelSelect,Core Language & Structure,missing,2,,0,DataParallelism
-ParallelSubmit,Core Language & Structure,missing,2,,0,ParallelComputing Concurrency
-ParallelSum,Core Language & Structure,missing,2,,0,ParallelComputing DataParallelism
-ParallelTable,Core Language & Structure,missing,2,,0,ParallelComputing DataParallelism RaspberryPi ManagingRemoteAndParallelKernels
-ParallelTry,Core Language & Structure,missing,2,,0,ParallelComputing RaspberryPi ManagingRemoteAndParallelKernels
+ParallelCases,Core Language & Structure,implemented,2,,0,DataParallelism
+ParallelCombine,Core Language & Structure,implemented,2,,0,ParallelComputing DataParallelism ManagingRemoteAndParallelKernels
+ParallelDo,Core Language & Structure,implemented,2,,0,DataParallelism
+ParallelEvaluate,Core Language & Structure,implemented,2,,0,ParallelComputing BackgroundAndScheduledTasks ParallelComputationSetupAndConfiguration ResourceSharingInParallelComputing
+ParallelKernels,Core Language & Structure,implemented,2,,0,ParallelComputationSetupAndConfiguration ManagingRemoteAndParallelKernels
+ParallelMap,Core Language & Structure,implemented,2,,0,ParallelComputing DataParallelism ManagingRemoteAndParallelKernels
+ParallelNeeds,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration DataParallelism ResourceSharingInParallelComputing
+ParallelProduct,Core Language & Structure,implemented,2,,0,DataParallelism
+ParallelSelect,Core Language & Structure,implemented,2,,0,DataParallelism
+ParallelSubmit,Core Language & Structure,implemented,2,,0,ParallelComputing Concurrency
+ParallelSum,Core Language & Structure,implemented,2,,0,ParallelComputing DataParallelism
+ParallelTable,Core Language & Structure,implemented,2,,0,ParallelComputing DataParallelism RaspberryPi ManagingRemoteAndParallelKernels
+ParallelTry,Core Language & Structure,implemented,2,,0,ParallelComputing RaspberryPi ManagingRemoteAndParallelKernels
 Parallelepiped,Visualization & Graphics,implemented,3,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
 Parallelization,Core Language & Structure,missing,2,,0,ParallelComputing
-Parallelize,Core Language & Structure,missing,2,,0,ParallelComputing TuningAndDebugging DataParallelism ManagingRemoteAndParallelKernels
+Parallelize,Core Language & Structure,implemented,2,,0,ParallelComputing TuningAndDebugging DataParallelism ManagingRemoteAndParallelKernels
 Parallelogram,Visualization & Graphics,implemented,1,,5,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
 ParameterEstimator,"Options, system variables & unclassified",implemented,3,,0,
 ParameterMixtureDistribution,Core Language & Structure,implemented,2,,0,DistributionsUsedInReliabilityAnalysis DerivedDistributions
@@ -4819,21 +4819,21 @@ ProbabilityDistribution,Symbolic & Numeric Computation,implemented,2,,0,RandomVa
 ProbabilityPlot,Data Manipulation & Analysis,implemented,2,,0,Reliability StatisticalVisualization RandomVariables
 ProbabilityScalePlot,Data Manipulation & Analysis,implemented,2,,0,Reliability StatisticalVisualization RandomVariables
 ProbitModelFit,Data Manipulation & Analysis,implemented,2,,0,StatisticalModelAnalysis SupervisedMachineLearning
-ProcessConnection,External Interfaces & Connections,missing,3,,0,CallingExternalPrograms DirectControlOfExternalProcesses
-ProcessDirectory,"Options, system variables & unclassified",missing,3,,0,
-ProcessEnvironment,"Options, system variables & unclassified",missing,3,,0,
+ProcessConnection,External Interfaces & Connections,implemented,3,,0,CallingExternalPrograms DirectControlOfExternalProcesses
+ProcessDirectory,"Options, system variables & unclassified",implemented,3,,0,
+ProcessEnvironment,"Options, system variables & unclassified",implemented,3,,0,
 ProcessEstimator,"Options, system variables & unclassified",implemented,3,,0,
-ProcessInformation,External Interfaces & Connections,missing,3,,0,ExternalLanguageInterfaces DirectControlOfExternalProcesses
-ProcessObject,External Interfaces & Connections,missing,3,,0,ExternalLanguageInterfaces DirectControlOfExternalProcesses
+ProcessInformation,External Interfaces & Connections,implemented,3,,0,ExternalLanguageInterfaces DirectControlOfExternalProcesses
+ProcessObject,External Interfaces & Connections,implemented,3,,0,ExternalLanguageInterfaces DirectControlOfExternalProcesses
 ProcessParameterAssumptions,Higher Mathematical Computation,implemented,2,,0,RandomProcesses
 ProcessParameterQ,Higher Mathematical Computation,implemented,2,,0,RandomProcesses
-ProcessStatus,External Interfaces & Connections,missing,3,,0,DirectControlOfExternalProcesses
-Processes,External Interfaces & Connections,missing,3,,0,DirectControlOfExternalProcesses
+ProcessStatus,External Interfaces & Connections,implemented,3,,0,DirectControlOfExternalProcesses
+Processes,External Interfaces & Connections,implemented,3,,0,DirectControlOfExternalProcesses
 Product,Higher Mathematical Computation,implemented,2,,0,Calculus DiscreteCalculus QFunctions MultiplicativeNumberTheory
 ProductDistribution,Core Language & Structure,implemented,2,,0,DerivedDistributions
 ProductLog,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions InverseFunctions
 ProgressIndicator,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects UserInterfaceStructuringAndLayout DialogBoxes
-ProgressReporting,Core Language & Structure,missing,2,,0,CodeCompilation TimeMeasurementAndOptimization SystematicTestingAndVerification
+ProgressReporting,Core Language & Structure,implemented,2,,0,CodeCompilation TimeMeasurementAndOptimization SystematicTestingAndVerification
 Projection,Core Language & Structure,implemented,1,,0,MatricesAndLinearAlgebra OperationsOnVectors MathematicalAndCountingOperationsOnLists
 Prolog,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance CombiningGraphics
 ProofObject,Higher Mathematical Computation,implemented,2,,0,LogicAndBooleanAlgebra TheoremProving
@@ -4892,7 +4892,7 @@ QueueingNetworkProcess,Higher Mathematical Computation,missing,2,,0,RandomProces
 QueueingProcess,Higher Mathematical Computation,implemented,2,,0,RandomProcesses DerivedRandomProcesses MarkovProcesses QueueingProcesses
 Quiet,Core Language & Structure,implemented,1,,0,PackageDevelopment TuningAndDebugging WolframSystemSessions ScopingConstructs
 QuietEcho,Core Language & Structure,implemented,2,,0,TuningAndDebugging
-Quit,System Operation & Setup,missing,3,,0,StandaloneWolframLanguageKernels
+Quit,System Operation & Setup,implemented,3,,0,StandaloneWolframLanguageKernels
 Quotient,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumericalFunctions IntegerFunctions
 QuotientRemainder,Symbolic & Numeric Computation,implemented,2,,0,IntegerFunctions
 RFixedPoints,Symbolic & Numeric Computation,implemented,2,,0,RecurrenceAndSumFunctions
@@ -4922,7 +4922,7 @@ RandomComplex,Core Language & Structure,implemented,2,,0,GPUComputing RandomNumb
 RandomDate,"Options, system variables & unclassified",implemented,3,,0,
 RandomEntity,Core Language & Structure,infeasible,,curated data,2,KnowledgeRepresentationAndAccess AstronomicalComputationAndData PhysicsAndChemistryDataAndComputation LifeSciencesAndMedicineDataAndComputation
 RandomFunction,Higher Mathematical Computation,implemented,2,,0,ProbabilityAndStatistics RandomProcesses ScientificModels ActuarialComputation
-RandomGeneratorState,Core Language & Structure,missing,2,,0,TuningAndDebugging RandomNumberGeneration
+RandomGeneratorState,Core Language & Structure,implemented,2,,0,TuningAndDebugging RandomNumberGeneration
 RandomGeoPosition,Geographic Data & Computation,infeasible,,curated data,0,LocationsPathsAndRouting Geodesy
 RandomGraph,Graphs & Networks,implemented,2,,1,GraphsAndNetworks GraphConstructionAndRepresentation SocialNetworks ScientificModels
 RandomImage,Core Language & Structure,implemented,2,,0,SystematicTestingAndVerification RandomNumberGeneration CreatingAndImportingImages
@@ -4936,7 +4936,7 @@ RandomPolyhedron,Visualization & Graphics,implemented,3,,0,Polyhedra
 RandomPrime,Higher Mathematical Computation,implemented,2,,0,MathematicalFunctions RandomNumberGeneration CryptographicNumberTheory PrimeNumbers
 RandomReal,Core Language & Structure,implemented,1,,9,Statistics MathematicalFunctions GPUComputing GPUProgramming
 RandomSample,Core Language & Structure,implemented,1,,3,DiscreteMathematics RearrangingAndRestructuringLists RandomNumberGeneration Permutations
-RandomSeeding,Core Language & Structure,missing,2,,0,TuningAndDebugging RandomNumberGeneration SupervisedMachineLearning NeuralNetworkConstruction
+RandomSeeding,Core Language & Structure,implemented,2,,0,TuningAndDebugging RandomNumberGeneration SupervisedMachineLearning NeuralNetworkConstruction
 RandomTime,"Options, system variables & unclassified",implemented,3,,0,
 RandomTree,"Options, system variables & unclassified",implemented,3,,0,
 RandomVariate,Symbolic & Numeric Computation,implemented,2,,0,Statistics MatricesAndLinearAlgebra ProbabilityAndStatistics ScientificModels
@@ -5241,9 +5241,9 @@ RuleDelayed,Core Language & Structure,implemented,1,,9,LanguageOverview RulesAnd
 RulePlot,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics BooleanComputation IteratedMapsAndFractals ComputationalSystemsAndDiscovery
 RulerUnits,"Options, system variables & unclassified",implemented,3,,0,
 RulesTree,"Options, system variables & unclassified",implemented,3,,0,
-Run,Core Language & Structure,missing,2,,0,ExternalOperations CallingExternalPrograms LowLevelSystemOptimization DirectControlOfExternalProcesses
-RunProcess,External Interfaces & Connections,missing,2,,1,ExternalOperations CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
-RunThrough,External Interfaces & Connections,missing,3,,0,CallingExternalPrograms DirectControlOfExternalProcesses
+Run,Core Language & Structure,implemented,2,,0,ExternalOperations CallingExternalPrograms LowLevelSystemOptimization DirectControlOfExternalProcesses
+RunProcess,External Interfaces & Connections,implemented,2,,1,ExternalOperations CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
+RunThrough,External Interfaces & Connections,implemented,3,,0,CallingExternalPrograms DirectControlOfExternalProcesses
 RuntimeAttributes,"Options, system variables & unclassified",missing,3,,0,
 RuntimeOptions,"Options, system variables & unclassified",missing,3,,0,
 RussellRaoDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimilarityMeasures
@@ -5284,7 +5284,7 @@ ScalingFunctions,Data Manipulation & Analysis,implemented,2,,0,FinancialVisualiz
 ScalingMatrix,Symbolic & Numeric Computation,implemented,2,,0,GeometricTransforms ConstructingMatrices
 ScalingTransform,Geometry,implemented,2,,0,GeometricTransforms
 Scan,Core Language & Structure,implemented,1,,0,ListManipulation FunctionalProgramming ApplyingFunctionsToLists LoopingConstructs
-ScheduledTask,Data Manipulation & Analysis,infeasible,,Wolfram Cloud / external services,0,AutomatedReports DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
+ScheduledTask,Data Manipulation & Analysis,implemented,2,,0,AutomatedReports DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
 SchrodingerPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 SchurDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixDecompositions
 ScientificForm,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers
@@ -5373,7 +5373,7 @@ ServiceObject,External Interfaces & Connections,infeasible,,Wolfram Cloud / exte
 ServiceObjects,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 ServiceRequest,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,AccessingExternalServicesAndAPIs
 ServiceSubmit,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,AccessingExternalServicesAndAPIs
-SessionSubmit,Knowledge Representation & Natural Language,missing,3,,0,DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
+SessionSubmit,Knowledge Representation & Natural Language,implemented,3,,0,DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
 SessionTime,Core Language & Structure,implemented,2,,0,DateAndTime TimeMeasurementAndOptimization WolframSystemSessionInformation
 Set,Core Language & Structure,implemented,1,,31,LanguageOverview VariablesAndFunctions RulesAndPatterns ProceduralProgramming
 SetAccuracy,Symbolic & Numeric Computation,implemented,2,,0,PrecisionAndAccuracyControl
@@ -5383,18 +5383,18 @@ SetCloudDirectory,System Operation & Setup,infeasible,,Wolfram Cloud / external 
 SetCookies,Geographic Data & Computation,missing,3,,0,CloudExecutionMetadata HTTPRequestsAndResponses CookieManagement
 SetDelayed,Core Language & Structure,implemented,1,,14,LanguageOverview VariablesAndFunctions RulesAndPatterns Syntax
 SetDirectory,System Operation & Setup,implemented,3,,0,ExternalOperations FileOperations SessionCustomization ManagingContentInTheCloud
-SetEnvironment,Core Language & Structure,missing,2,,0,LowLevelSystemOptimization
+SetEnvironment,Core Language & Structure,implemented,2,,0,LowLevelSystemOptimization
 SetFileDate,External Interfaces & Connections,implemented,3,,0,FileOperations
 SetFileFormatProperties,Data Manipulation & Analysis,implemented,2,,0,ImportingAndExporting
 SetOptions,Core Language & Structure,implemented,2,,1,PackageDevelopment WolframDataRepository LowLevelNotebookProgramming CreatingFormsAndApps
 SetPermissions,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,StructuredDataInTheCloud CloudPermissionsControl
 SetPrecision,Symbolic & Numeric Computation,implemented,2,,0,PrecisionAndAccuracyControl
 SetSelectedNotebook,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming
-SetSharedFunction,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
-SetSharedVariable,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
+SetSharedFunction,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
+SetSharedVariable,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
 SetStreamPosition,Core Language & Structure,implemented,1,,0,StringOperations Files LowLevelFileOperations
 SetSystemModel,Sound & Video,infeasible,,audio / video,0,SystemModelCreation
-SetSystemOptions,Core Language & Structure,missing,2,,0,MemoryMeasurementAndOptimization LowLevelSystemOptimization
+SetSystemOptions,Core Language & Structure,implemented,2,,0,MemoryMeasurementAndOptimization LowLevelSystemOptimization
 SetUsers,Higher Mathematical Computation,infeasible,,Wolfram Cloud / external services,0,CloudPermissionsControl
 Setter,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects
 SetterBar,User Interface Construction,infeasible,,front end / notebooks,0,InteractiveManipulation ControlObjects GeneralizedInput UserInterfaceStructuringAndLayout
@@ -5402,7 +5402,7 @@ Setting,User Interface Construction,infeasible,,front end / notebooks,0,ControlO
 Shallow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LayoutAndTables
 ShannonWavelet,Data Manipulation & Analysis,implemented,2,,0,Wavelets
 ShapiroWilkTest,Data Manipulation & Analysis,implemented,2,,0,HypothesisTests
-Share,Core Language & Structure,missing,2,,0,TuningAndDebugging MemoryMeasurementAndOptimization LowLevelSystemOptimization
+Share,Core Language & Structure,implemented,2,,0,TuningAndDebugging MemoryMeasurementAndOptimization LowLevelSystemOptimization
 SharingList,Higher Mathematical Computation,infeasible,,Wolfram Cloud / external services,0,CloudPermissionsControl
 Sharpen,Images,implemented,3,,0,BasicImageManipulation ImageFilteringAndNeighborhoodProcessing ImageRestoration ComputationalPhotography
 ShearingMatrix,Symbolic & Numeric Computation,implemented,2,,0,GeometricTransforms ConstructingMatrices
@@ -5670,7 +5670,7 @@ StarGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
 StartExternalSession,External Interfaces & Connections,missing,3,,0,DatabaseConnectivity CallingExternalPrograms ExternalLanguageInterfaces WorkingWithRelationalDatabases
 StartOfLine,Core Language & Structure,implemented,1,,1,StringPatterns
 StartOfString,Core Language & Structure,implemented,1,,1,StringPatterns
-StartProcess,External Interfaces & Connections,missing,3,,0,BackgroundAndScheduledTasks CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
+StartProcess,External Interfaces & Connections,implemented,3,,0,BackgroundAndScheduledTasks CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
 StartWebSession,Core Language & Structure,missing,2,,0,TuningAndDebugging WebOperations WebBrowserAutomation HTTPRequestsAndResponses
 StartingStepSize,"Options, system variables & unclassified",implemented,3,,0,
 StateFeedbackGains,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems SystemsModeling DelayControlSystems DescriptorControlSystems
@@ -5876,7 +5876,7 @@ SystemCredentialKey,Higher Mathematical Computation,infeasible,,ML models / LLM 
 SystemCredentialKeys,Higher Mathematical Computation,infeasible,,ML models / LLM services,0,Cryptography PersistentStorage
 SystemCredentialStoreObject,Higher Mathematical Computation,infeasible,,ML models / LLM services,0,Cryptography PersistentStorage
 SystemDialogInput,User Interface Construction,infeasible,,front end / notebooks,0,SoundAndSonification ControlObjects CustomInterfaceConstruction DialogBoxes
-SystemInformation,Core Language & Structure,missing,2,,0,TuningAndDebugging WolframSystemSessions WolframSystemSetup InternetAndWebRelatedData
+SystemInformation,Core Language & Structure,implemented,2,,0,TuningAndDebugging WolframSystemSessions WolframSystemSetup InternetAndWebRelatedData
 SystemModel,Scientific and Medical Data & Computation,infeasible,,curated data,0,LifeSciencesAndMedicineDataAndComputation ScientificModels ScientificDataAnalysis EngineeringData
 SystemModelAlways,Engineering Data & Computation,infeasible,,curated data,0,SystemModelAnalyticsDesign
 SystemModelCalibrate,Sound & Video,infeasible,,audio / video,0,SystemModelingOverview SystemModelCreation
@@ -5900,10 +5900,10 @@ SystemModelValidate,Engineering Data & Computation,infeasible,,curated data,0,Sy
 SystemModelValidationData,Engineering Data & Computation,infeasible,,curated data,0,SystemModelAnalyticsDesign
 SystemModeler,Sound & Video,infeasible,,"hardware devices, GPU, Wolfram System Modeler or the LibraryLink C ABI",0,SystemModelingConnectivity SystemModelingOverview SystemsModeling SystemModelSimulation
 SystemModels,Sound & Video,infeasible,,audio / video,0,SystemModelAnalyticsDesign SystemModelCreation
-SystemOpen,Core Language & Structure,missing,2,,1,CallingExternalPrograms WebBrowserAutomation
-SystemOptions,Core Language & Structure,missing,2,,0,TuningAndDebugging LowLevelSystemSpelunking TimeMeasurementAndOptimization MemoryMeasurementAndOptimization
+SystemOpen,Core Language & Structure,implemented,2,,1,CallingExternalPrograms WebBrowserAutomation
+SystemOptions,Core Language & Structure,implemented,2,,0,TuningAndDebugging LowLevelSystemSpelunking TimeMeasurementAndOptimization MemoryMeasurementAndOptimization
 SystemProcessData,External Interfaces & Connections,infeasible,,curated data,0,DirectControlOfExternalProcesses
-SystemProcesses,External Interfaces & Connections,missing,3,,0,DirectControlOfExternalProcesses
+SystemProcesses,External Interfaces & Connections,implemented,3,,0,DirectControlOfExternalProcesses
 SystemsConnectionsModel,Engineering Data & Computation,infeasible,,curated data,0,ModelConnections
 SystemsModelControllerData,"Options, system variables & unclassified",infeasible,,curated data,0,
 SystemsModelDelay,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems DelayControlSystems
@@ -5964,14 +5964,14 @@ TargetFunctions,"Options, system variables & unclassified",missing,3,,0,
 TargetStructure,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays MatrixDecompositions
 TargetSystem,Core Language & Structure,missing,2,,0,CodeCompilation
 TargetUnits,Geometry,infeasible,,depends on Quantity / curated unit data (already infeasible),0,3DPrinting Units
-TaskAbort,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
-TaskExecute,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
-TaskObject,Knowledge Representation & Natural Language,missing,3,,0,DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
-TaskRemove,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
-TaskResume,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
-TaskSuspend,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
-TaskWait,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
-Tasks,System Operation & Setup,missing,3,,0,BackgroundAndScheduledTasks
+TaskAbort,System Operation & Setup,implemented,3,,0,BackgroundAndScheduledTasks
+TaskExecute,System Operation & Setup,implemented,3,,0,BackgroundAndScheduledTasks
+TaskObject,Knowledge Representation & Natural Language,implemented,3,,0,DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
+TaskRemove,System Operation & Setup,implemented,3,,0,BackgroundAndScheduledTasks
+TaskResume,System Operation & Setup,implemented,3,,0,BackgroundAndScheduledTasks
+TaskSuspend,System Operation & Setup,implemented,3,,0,BackgroundAndScheduledTasks
+TaskWait,System Operation & Setup,implemented,3,,0,BackgroundAndScheduledTasks
+Tasks,System Operation & Setup,implemented,3,,0,BackgroundAndScheduledTasks
 TautologyQ,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation TheoremProving GraphProgramming
 TeXForm,Core Language & Structure,implemented,1,,0,ConvertingBetweenExpressionsAndStrings
 TelegraphProcess,Higher Mathematical Computation,implemented,2,,0,ParametricRandomProcesses MarkovProcesses
@@ -6375,7 +6375,7 @@ UnregisterExternalEvaluator,External Interfaces & Connections,missing,3,,0,Exter
 UnsameQ,Core Language & Structure,implemented,1,,0,TestingExpressions
 UnsavedVariables,"Options, system variables & unclassified",missing,3,,0,
 Unset,Core Language & Structure,implemented,1,,0,LanguageOverview VariablesAndFunctions Syntax Assignments
-UnsetShared,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
+UnsetShared,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
 Until,Core Language & Structure,implemented,1,,0,ProceduralProgramming LoopingConstructs
 UpArrow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
 UpArrowBar,"Options, system variables & unclassified",implemented,3,,0,
@@ -6558,8 +6558,8 @@ Volume,Geometry,implemented,2,,0,Calculus SolidGeometry GeometricPropertiesAndMe
 VonMisesDistribution,Symbolic & Numeric Computation,implemented,2,,0,BoundedDomainDistributions
 VonMisesStress,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
 VoronoiMesh,Geometry,implemented,2,,0,GeometricComputation MeshRegions SpatialPointCollections
-WaitAll,Core Language & Structure,missing,2,,0,ParallelComputing Concurrency
-WaitNext,Core Language & Structure,missing,2,,0,ParallelComputing Concurrency
+WaitAll,Core Language & Structure,implemented,2,,0,ParallelComputing Concurrency
+WaitNext,Core Language & Structure,implemented,2,,0,ParallelComputing Concurrency
 WakebyDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions
 WalleniusHypergeometricDistribution,Symbolic & Numeric Computation,implemented,2,,0,UrnModelDistributions DiscreteUnivariateDistributions BoundedDomainDistributions
 WaringYuleDistribution,Symbolic & Numeric Computation,implemented,2,,0,DiscreteUnivariateDistributions HeavyTailDistributions
@@ -6668,7 +6668,7 @@ WinsorizedVariance,Data Manipulation & Analysis,implemented,2,,0,DateAndTime Des
 WishartMatrixDistribution,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixDistributions RandomVariables
 With,Core Language & Structure,implemented,1,,3,LanguageOverview ProceduralProgramming DynamicInteractivityLanguage ScopingConstructs
 WithCleanup,Core Language & Structure,implemented,1,,0,PackageDevelopment ScopingConstructs RobustnessAndErrorHandling FlowControl
-WithLock,Core Language & Structure,missing,2,,0,Concurrency
+WithLock,Core Language & Structure,implemented,2,,0,Concurrency
 WolframAlpha,Core Language & Structure,infeasible,,curated data,0,KnowledgeRepresentationAndAccess WolframAlphaIntegration
 WolframLanguageData,Core Language & Structure,infeasible,,curated data,1,LanguageOverview KnowledgeRepresentationAndAccess
 Word,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
