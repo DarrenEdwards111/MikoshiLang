@@ -194,6 +194,10 @@ def load_modules(tests_dir: Path) -> List[Tuple[str, list]]:
     for p in sorted(tests_dir.glob("test_*.py")):
         if _needs_fixtures(p):
             NEEDS_FIXTURES.add(p.stem)
+            try:
+                _FIXTURE_SOURCES[p.stem] = p.read_text(encoding="utf-8")
+            except OSError:
+                pass
             continue
         try:
             mod = importlib.import_module(p.stem)
@@ -206,6 +210,7 @@ def load_modules(tests_dir: Path) -> List[Tuple[str, list]]:
 
 
 NEEDS_FIXTURES: set = set()
+_FIXTURE_SOURCES: Dict[str, str] = {}     # source of each left-out module, to tell "examples only there" from "none"
 _FIXTURE_ARG = re.compile(r"^def test_\w+\(case,\s*\w", re.M)
 _AUTOUSE_PER_TEST = re.compile(r"^@pytest\.fixture\(autouse=True\)", re.M)
 
@@ -423,6 +428,8 @@ def _run_selfcheck(r: Result, cases, harness):
         examples = [c for cs in _ALL_CASES.values() for c in cs
                     if len(c) > 1 and type(c[1]).__name__ != "Raises" and call.search(c[0])]
     if not examples:
+        if any(call.search(src) for src in _FIXTURE_SOURCES.values()):
+            return                      # its examples only run inside pytest fixtures: not exercised here
         r.add("self-check", False, "no real example to run the verification step on")
         return
     from .kernel import _state, SessionState

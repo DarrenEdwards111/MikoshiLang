@@ -1,6 +1,8 @@
 """Elementary functions: trigonometric, hyperbolic, exponential, logarithmic,
 rounding and complex-number parts.  Exact input gives exact output (SymPy);
 machine-number input gives machine-number output."""
+
+from __future__ import annotations
 from fractions import Fraction
 
 import sympy as sp
@@ -14,7 +16,7 @@ AREA = "elementary"
 
 def _unary(name, f, notes="verified against SymPy/mpmath", status="verified"):
     @fn(name, area=AREA, status=status, notes=notes, listable=True)
-    def impl(z):
+    def impl(z: Numeric) -> Numeric:
         v = f(sym(z, name))
         if name in _INT_VALUED and isinstance(v, sp.Integer):
             return R(v)          # Floor[2.7] = 2, Sign[-3.5] = -1 (integers, as in Wolfram)
@@ -39,12 +41,12 @@ for _name, _f in [
 @fn("ArcTan", area=AREA, status="fixed", listable=True,
     notes="ArcTan[x, y] was atan2(x, y); Wolfram's ArcTan[x, y] is the angle of the point (x, y), atan2(y, x)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _arctan1(z):
+def _arctan1(z: Numeric) -> Numeric:
     return numeric_out(sp.atan(sym(z, "ArcTan")), z, keep_zero=True)
 
 
 @fn("ArcTan", area=AREA, status="fixed")
-def _arctan2(x, y):
+def _arctan2(x: Numeric, y: Numeric) -> Numeric:
     sx, sy = sym(x, "ArcTan"), sym(y, "ArcTan")
     if sx == 0 and sy == 0:
         raise ValueError("ArcTan[0, 0] is indeterminate")
@@ -60,12 +62,12 @@ def _log(z):
 @fn("Log", area=AREA, status="fixed", listable=True,
     notes="Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _log1(z):
+def _log1(z: Numeric) -> Numeric:
     return numeric_out(_log(sym(z, "Log")), z, keep_zero=True)
 
 
 @fn("Log", area=AREA, status="fixed")
-def _log2arg(b, z):
+def _log2arg(b: Numeric, z: Numeric) -> Numeric:
     sb, sz = sym(b, "Log"), sym(z, "Log")
     if sb == 1:
         raise ValueError("Log[1, z] is undefined (base 1)")
@@ -77,7 +79,7 @@ def _log2arg(b, z):
 @fn("Log2", area=AREA, status="verified", listable=True, notes="log base 2; Log2[0] = -Infinity"
                                                                ". Check: exact (exact input gives exact results), "
                                                                "reference (differential cases in tests/library).")
-def _log2(z):
+def _log2(z: Numeric) -> Numeric:
     s = sym(z, "Log2")
     return numeric_out(-sp.oo if s == 0 else sp.log(s, 2), z)
 
@@ -85,7 +87,7 @@ def _log2(z):
 @fn("Log10", area=AREA, status="verified", listable=True, notes="log base 10; Log10[0] = -Infinity"
                                                                 ". Check: exact (exact input gives exact results), "
                                                                 "reference (differential cases in tests/library).")
-def _log10(z):
+def _log10(z: Numeric) -> Numeric:
     s = sym(z, "Log10")
     return numeric_out(-sp.oo if s == 0 else sp.log(s, 10), z)
 
@@ -93,7 +95,7 @@ def _log10(z):
 @fn("CubeRoot", area=AREA, status="fixed", listable=True,
     notes="returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _cuberoot(z):
+def _cuberoot(z: Real) -> Real:
     s = sym(z, "CubeRoot")
     if s.is_number and s.is_real is False:
         raise ValueError("CubeRoot is defined for real numbers only (use z^(1/3) for complex z)")
@@ -108,7 +110,7 @@ def _cuberoot(z):
           "Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. "
           "Legacy Root[a, n] meant a^(1/n) (now Surd/Power)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _root(f, k):
+def _root(f: Fn, k: PosInteger) -> Numeric:
     if not (isinstance(f, Expr) and f.head == "Function" and len(f.args) == 1):
         raise ValueError("Root[f, k]: f must be a pure function such as #^3 - 2 &")
     from ..math_ops import root_to_sympy, _ROOT_VAR as x
@@ -157,7 +159,7 @@ def _root(f, k):
 @fn("Surd", area=AREA, status="promoted", listable=True, notes="real n-th root (Wolfram Surd)"
                                                                ". Check: exact (exact input gives exact results), "
                                                                "reference (differential cases in tests/library).")
-def _surd(x, n):
+def _surd(x: Real, n: Integer) -> Real:
     s = sym(x, "Surd")
     from .core import int_arg
     k = int_arg(n, "Surd", "root index")
@@ -188,7 +190,7 @@ def _as_fraction(v):
     notes="Round[x] was not implemented and Round[x, a] returned floats (Round[7, 5] = 5.0); "
           "now Wolfram half-to-even rounding, exact for exact input"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _round1(x):
+def _round1(x: Numeric) -> Numeric:
     v = number(x, "Round", real=False)
     if v in (sp.oo, -sp.oo):
         return R(v)
@@ -211,7 +213,7 @@ def _round_real(v):
 
 
 @fn("Round", area=AREA, status="fixed")
-def _round2(x, a):
+def _round2(x: Numeric, a: Numeric) -> Numeric:
     v = number(x, "Round")
     step = number(a, "Round", "rounding step")
     if step == 0:
@@ -252,7 +254,7 @@ def _rounding(name, mode):
         notes=f"{name}[x] and {name}[x, a] (a {name}[x/a], exact when a is exact); complex numbers are rounded "
               "in their real and imaginary parts and give Gaussian integers (legacy gave floats: Floor[2.5 + 3.7 I] "
               "= 2. + 3. I, and had no step form)")
-    def one(x):
+    def one(x: Numeric) -> Numeric:
         if isinstance(x, (Symbol, Expr)) and not is_numeric_value(x):
             raise Unevaluated()
         v = number(x, name, real=False)
@@ -261,7 +263,7 @@ def _rounding(name, mode):
         return R(_cfloor(v, mode))
 
     @fn(name, area=AREA, status="fixed", listable=True)
-    def two(x, a):
+    def two(x: Numeric, a: Numeric) -> Numeric:
         v = number(x, name, real=False)
         step = number(a, name, "rounding step", real=False)
         if step == 0:
@@ -278,7 +280,7 @@ _rounding("Ceiling", "ceiling")
 @fn("Sign", area=AREA, status="fixed", listable=True,
     notes="Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _sign(z):
+def _sign(z: Numeric) -> Numeric:
     v = sym(z, "Sign")
     if v.is_number and v.is_real is False and v.is_finite:
         return numeric_out(sp.nsimplify(v / sp.Abs(v)) if not has_float(z) else v / sp.Abs(v), z)
@@ -293,7 +295,7 @@ def _sign(z):
           "complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset "
           "form and complex arguments were missing"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _mod(m, n, d=0):
+def _mod(m: Numeric, n: Numeric, d: Numeric = 0) -> Numeric:
     sm, sn, sd = sym(m, "Mod"), sym(n, "Mod"), sym(d, "Mod")
     if sn == 0:
         raise ValueError("Mod: modulus must be non-zero")
@@ -313,7 +315,7 @@ def _mod(m, n, d=0):
     notes="Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = "
           "Floor[(m - d)/n]; complex arguments use Round"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _quotient(m, n, d=0):
+def _quotient(m: Numeric, n: Numeric, d: Numeric = 0) -> Numeric:
     sm, sn, sd = sym(m, "Quotient"), sym(n, "Quotient"), sym(d, "Quotient")
     if sn == 0:
         raise ValueError("Quotient: divisor must be non-zero")
@@ -327,7 +329,7 @@ def _quotient(m, n, d=0):
 @fn("QuotientRemainder", area=AREA, status="added", listable=True,
     notes="{Quotient[m, n], Mod[m, n]}"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _quotrem(m, n):
+def _quotrem(m: Numeric, n: Numeric) -> ListOf[Numeric]:
     return Expr("List", _quotient(m, n), _mod(m, n))
 
 
