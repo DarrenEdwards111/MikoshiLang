@@ -892,7 +892,7 @@ def is_ds(x):
           "LinkedList, DoublyLinkedList, PriorityQueue, HashSet, OrderedHashSet, HashTable, OrderedHashTable, "
           "LeastRecentlyUsedCache, Value, Counter, SortedMultiset, DisjointSet, BitVector; operations ds[\"Op\", "
           "...] mutate in place; empty Pop/Peek raise")
-def _createds(typ, *args):
+def _createds(typ: String, *args: Expr) -> Expr:
     if not isinstance(typ, str):
         raise DSError(f"CreateDataStructure: the type {typ} must be a string")
     return _wrap(_create(typ, list(args)))
@@ -910,7 +910,7 @@ def _datastructure(typ, data, *rest):
 
 
 @fn("DataStructureQ", area=AREA, status="added", notes="DataStructureQ[x] / DataStructureQ[x, \"type\"]")
-def _datastructureq(x, typ=None):
+def _datastructureq(x: Expr, typ: Expr = None) -> Boolean:
     if not is_ds(x):
         return False
     return typ is None or (isinstance(typ, str) and x.args[0] == typ)

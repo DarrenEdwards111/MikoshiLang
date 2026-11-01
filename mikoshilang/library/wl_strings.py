@@ -239,7 +239,7 @@ _OPTS = {"IgnoreCase", "Overlaps"}
 @fn("StringMatchQ", area=AREA, status="added",
     notes="whole-string match against a string pattern; literal patterns use the metacharacters * (any "
           "characters) and @ (characters other than upper-case letters); IgnoreCase; threads over lists")
-def _smatchq(s, p, *opts):
+def _smatchq(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     _, o = split_options(opts, _OPTS, "StringMatchQ")
 
     def one(x):
@@ -266,23 +266,23 @@ def _search(fname, s, p, opts, anchor):
 
 @fn("StringContainsQ", area=AREA, status="fixed",
     notes="string patterns (legacy: literal substrings only); IgnoreCase; threads over lists")
-def _scontains(s, p, *opts):
+def _scontains(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringContainsQ", s, p, opts, None)
 
 
 @fn("StringFreeQ", area=AREA, status="added", notes="not StringContainsQ; string patterns; IgnoreCase")
-def _sfree(s, p, *opts):
+def _sfree(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     r = _search("StringFreeQ", s, p, opts, None)
     return L(*(not v for v in r.args)) if is_list(r) else (not r)
 
 
 @fn("StringStartsQ", area=AREA, status="fixed", notes="string patterns (legacy: literal prefix only); IgnoreCase")
-def _sstarts(s, p, *opts):
+def _sstarts(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringStartsQ", s, p, opts, "start")
 
 
 @fn("StringEndsQ", area=AREA, status="fixed", notes="string patterns (legacy: literal suffix only); IgnoreCase")
-def _sends(s, p, *opts):
+def _sends(s: Expr, p: Expr, *opts: Option) -> Boolean | ListOf[Boolean]:
     return _search("StringEndsQ", s, p, opts, "end")
 
 
@@ -322,7 +322,7 @@ def _scan(fname, s, p, n, opts, default_overlaps, emit):
 @fn("StringCases", area=AREA, status="added",
     notes="substrings matching a string pattern, or rule right-hand sides with named parts substituted; "
           "StringCases[s, p, n]; Overlaps -> False by default; IgnoreCase")
-def _scases(s, p, *rest):
+def _scases(s: Expr, p: Expr, *rest: Expr) -> Expr:
     n, opts = _count_arg(rest)
 
     def emit(st, ms):
@@ -341,7 +341,7 @@ def _count_arg(rest):
 @fn("StringPosition", area=AREA, status="added",
     notes="{{start, end}, ...} 1-based; Overlaps -> True by default (one match per start position), "
           "StringPosition[s, p, n]; IgnoreCase")
-def _spos(s, p, *rest):
+def _spos(s: Expr, p: Expr, *rest: Expr) -> Expr:
     n, opts = _count_arg(rest)
 
     def emit(st, ms):
@@ -352,7 +352,7 @@ def _spos(s, p, *rest):
 @fn("StringCount", area=AREA, status="fixed",
     notes="non-overlapping matches of a string pattern (legacy: literal substrings only); Overlaps -> True "
           "counts one match per start position; IgnoreCase; the empty literal raises")
-def _scount(s, p, *opts):
+def _scount(s: Expr, p: Expr, *opts: Option) -> Expr:
     if p == "":
         raise ValueError("StringCount: substring must be non-empty")
 
@@ -403,7 +403,7 @@ def _replace(fname, st, rules, lim, o):
     notes="StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts "
           "substitute into the right-hand side; RegularExpression rules accept \"$1\" group references; "
           "non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises")
-def _sreplace(s, r, *rest):
+def _sreplace(s: Expr, r: Expr, *rest: Expr) -> Expr:
     if isinstance(r, str) and rest and isinstance(rest[0], str):
         raise ValueError("StringReplace[s, old, new] is not Wolfram syntax; use StringReplace[s, old -> new]")
     n, opts = _count_arg(rest)
@@ -415,7 +415,7 @@ def _sreplace(s, r, *rest):
 @fn("StringDelete", area=AREA, status="fixed",
     notes="deletes every match of a string pattern (or list of patterns); IgnoreCase; the legacy slice form "
           "StringDelete[s, i, j] raises (use StringDrop[s, {i, j}])")
-def _sdelete(s, p, *rest):
+def _sdelete(s: Expr, p: Expr, *rest: Expr) -> Expr:
     if rest and not all(is_rule(x) for x in rest):
         raise ValueError("StringDelete[s, i, j] is not Wolfram syntax; use StringDrop[s, {i, j}]")
     _, o = split_options(rest, _OPTS, "StringDelete")
@@ -427,7 +427,7 @@ def _sdelete(s, p, *rest):
 @fn("StringTrim", area=AREA, status="fixed",
     notes="StringTrim[s] removes leading and trailing whitespace; StringTrim[s, p] removes a leading and a "
           "trailing match of the string pattern p")
-def _strim(s, p=None, *opts):
+def _strim(s: Expr, p: Expr = None, *opts: Option) -> Expr:
     if is_rule(p) and isinstance(p.args[0], Symbol) and p.args[0].name == "IgnoreCase":
         opts, p = (p,) + opts, None
     _, o = split_options(opts, {"IgnoreCase"}, "StringTrim")
@@ -451,7 +451,7 @@ def _strim(s, p=None, *opts):
     notes="splits at whitespace or at matches of a string pattern; empty pieces at the ends are dropped "
           "(kept with StringSplit[s, p, All]), interior ones kept; p -> r inserts r at each split; "
           "StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists")
-def _ssplit(s, p=None, *rest):
+def _ssplit(s: Expr, p: Expr = None, *rest: Expr) -> Expr:
     rest = list(rest)
     n = rest.pop(0) if rest and not is_rule(rest[0]) else None
     _, o = split_options(rest, _OPTS, "StringSplit")
@@ -499,7 +499,7 @@ def _tostr(x):
           "level above), StringRiffle[list, sep], "
           "StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings "
           "are converted with ToString")
-def _sriffle(lst, *seps):
+def _sriffle(lst: ListOf[Expr], *seps: Expr) -> Expr:
     if not is_list(lst):
         raise ValueError("StringRiffle: the first argument must be a list")
     depth = 1
@@ -527,7 +527,7 @@ def _sriffle(lst, *seps):
 
 @fn("StringPartition", area=AREA, status="added",
     notes="substrings of length n (incomplete final piece dropped), offset d, or UpTo[n] keeping the remainder")
-def _spartition(s, n, d=None):
+def _spartition(s: String, n: Expr, d: Expr = None) -> ListOf[Expr]:
     st = _s(s, "StringPartition")
     if isinstance(n, Expr) and n.head == "UpTo" and len(n.args) == 1:
         k = pos_int(n.args[0], "StringPartition", "length")
@@ -551,24 +551,24 @@ def _rotate(st, n):
 
 
 @fn("StringRotateLeft", area=AREA, status="added", notes="cyclic rotation by n characters (default 1)")
-def _srotl(s, n=1):
+def _srotl(s: Expr, n: Expr = 1) -> Expr:
     return _strmap(s, lambda x: _rotate(_s(x, "StringRotateLeft"), int_arg(n, "StringRotateLeft", "count")))
 
 
 @fn("StringRotateRight", area=AREA, status="added", notes="cyclic rotation by n characters (default 1)")
-def _srotr(s, n=1):
+def _srotr(s: Expr, n: Expr = 1) -> Expr:
     return _strmap(s, lambda x: _rotate(_s(x, "StringRotateRight"), -int_arg(n, "StringRotateRight", "count")))
 
 
 @fn("StringTakeDrop", area=AREA, status="added", notes="{StringTake[s, spec], StringDrop[s, spec]}")
-def _stakedrop(s, spec):
+def _stakedrop(s: Expr, spec: Expr) -> ListOf[Expr]:
     return L(ev(Expr("StringTake", s, spec)), ev(Expr("StringDrop", s, spec)))
 
 
 @fn("StringReplacePart", area=AREA, status="added",
     notes="StringReplacePart[s, new, {m, n}], a list of ranges with one new string, or a list of new strings "
           "matched to the ranges; negative positions count from the end")
-def _sreplacepart(s, new, spec):
+def _sreplacepart(s: String, new: Expr, spec: Expr) -> String:
     st = _s(s, "StringReplacePart")
     if is_list(spec) and spec.args and all(is_list(x) for x in spec.args):
         ranges = list(spec.args)
@@ -600,12 +600,12 @@ def _sreplacepart(s, new, spec):
 
 # ---------------------------------------------------------------- case and character predicates
 @fn("ToUpperCase", area=AREA, status="added", notes="upper-cases every letter; threads over lists")
-def _toupper(s):
+def _toupper(s: Expr) -> Expr:
     return _strmap(s, lambda x: _s(x, "ToUpperCase").upper())
 
 
 @fn("ToLowerCase", area=AREA, status="added", notes="lower-cases every letter; threads over lists")
-def _tolower(s):
+def _tolower(s: Expr) -> Expr:
     return _strmap(s, lambda x: _s(x, "ToLowerCase").lower())
 
 
@@ -613,7 +613,7 @@ def _tolower(s):
     notes="upper-cases the first character and leaves the rest; Capitalize[s, \"AllWords\"] does that for every "
           "word, \"LongWords\" for words longer than three characters, \"FirstWord\" = default (\"TitleCase\" with "
           "its small-word rules is not supported)")
-def _capitalize(s, mode=None):
+def _capitalize(s: Expr, mode: Expr = None) -> Expr:
     def one(x):
         st = _s(x, "Capitalize")
         if mode is None or mode == "FirstWord":
@@ -628,14 +628,14 @@ def _capitalize(s, mode=None):
 
 
 @fn("Decapitalize", area=AREA, status="added", notes="lower-cases the first character only")
-def _decapitalize(s):
+def _decapitalize(s: Expr) -> Expr:
     return _strmap(s, lambda x: _s(x, "Decapitalize")[:1].lower() + _s(x, "Decapitalize")[1:])
 
 
 def _all_chars(name, pred):
     @fn(name, area=AREA, status="added",
         notes="True when every character of the string satisfies the test (so True for \"\"); non-strings False")
-    def impl(s):
+    def impl(s: Expr) -> Boolean:
         if not isinstance(s, str):
             return False
         return all(pred(c) for c in s)
@@ -653,7 +653,7 @@ _all_chars("PrintableASCIIQ", lambda c: " " <= c <= "~")
 @fn("ToExpression", area=AREA, status="added",
     notes="parses and evaluates InputForm text; ToExpression[s, InputForm, h] wraps the unevaluated parse in h "
           "(e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated")
-def _toexpr(s, form=None, h=None):
+def _toexpr(s: Expr, form: Expr = None, h: Expr = None) -> Expr:
     if not isinstance(s, str):
         return s
     if form is not None and not is_sym(form, "InputForm") and not is_sym(form, "StandardForm"):
@@ -686,7 +686,7 @@ def _roman(n):
 @fn("IntegerString", area=AREA, status="added",
     notes="digits of |n| (the sign is dropped, as Wolfram) in base 2-36 with lower-case letters, padded with "
           "zeros or truncated to the last len digits; IntegerString[n, \"Roman\"]; threads over lists")
-def _intstring(n, b=10, length=None):
+def _intstring(n: Expr, b: Expr = 10, length: Expr = None) -> Expr:
     if is_list(n):
         return L(*(_intstring(x, b, length) for x in n.args))
     k = int_arg(n, "IntegerString", "integer")
@@ -712,7 +712,7 @@ def _intstring(n, b=10, length=None):
 @fn("RomanNumeral", area=AREA, status="added",
     notes="Roman numeral string of n for 1-4999 (sign dropped); RomanNumeral[0] gives \"N\"; threads over "
           "lists; the overbar forms for n >= 5000 are not supported")
-def _romannum(n):
+def _romannum(n: Expr) -> Expr:
     if is_list(n):
         return L(*(_romannum(x) for x in n.args))
     k = abs(int_arg(n, "RomanNumeral", "integer"))
@@ -720,7 +720,7 @@ def _romannum(n):
 
 
 @fn("FromRomanNumeral", area=AREA, status="added", notes="integer value of a Roman numeral string (\"N\" -> 0)")
-def _fromroman(s):
+def _fromroman(s: String) -> Expr:
     st = _s(s, "FromRomanNumeral").upper()
     if st == "N":
         return 0
@@ -737,7 +737,7 @@ def _fromroman(s):
 @fn("TextWords", area=AREA, status="added",
     notes="words of the text: runs of letters/digits, keeping internal apostrophes and hyphens (rule-based; "
           "Wolfram's tokenizer may differ on unusual punctuation)")
-def _textwords(s, n=None):
+def _textwords(s: String, n: Expr = None) -> ListOf[Expr]:
     words = re.findall(r"[^\W_]+(?:['\u2019\-][^\W_]+)*", _s(s, "TextWords"))
     if n is not None:
         words = words[:nonneg_int(n, "TextWords", "count")]
@@ -747,7 +747,7 @@ def _textwords(s, n=None):
 @fn("Alphabet", area=AREA, status="added",
     notes="Alphabet[] and Alphabet[\"English\"] give the 26 lower-case letters; other languages are not "
           "supported (curated data)")
-def _alphabet(lang="English"):
+def _alphabet(lang: Expr = "English") -> ListOf[Expr]:
     if lang not in ("English", Symbol("Automatic")) and not is_sym(lang, "Automatic"):
         raise NotImplementedError(f"Alphabet: only English is supported, not {lang!r}")
     return L(*"abcdefghijklmnopqrstuvwxyz")
@@ -756,7 +756,7 @@ def _alphabet(lang="English"):
 @fn("LetterNumber", area=AREA, status="added",
     notes="position of a letter in the English alphabet (either case), 0 for other characters; a string of "
           "several characters gives a list; threads over lists")
-def _letternumber(s):
+def _letternumber(s: Expr) -> Expr:
     def one(x):
         st = _s(x, "LetterNumber")
         vals = [ord(c.lower()) - 96 if c.isascii() and c.isalpha() else 0 for c in st]
@@ -768,7 +768,7 @@ def _letternumber(s):
     notes="the n-th lower-case English letter for 1 <= n <= 26 (negative n counts from z, 0 gives \" \"); other "
           "values raise; "
           "threads over lists")
-def _fromletternumber(n):
+def _fromletternumber(n: Expr) -> Expr:
     if is_list(n):
         return L(*(_fromletternumber(x) for x in n.args))
     k = int_arg(n, "FromLetterNumber", "position")
@@ -783,7 +783,7 @@ def _fromletternumber(n):
 
 @fn("RemoveDiacritics", area=AREA, status="added",
     notes="drops combining marks after Unicode NFKD decomposition (ligatures such as \u00e6 are kept)")
-def _removediacritics(s):
+def _removediacritics(s: Expr) -> Expr:
     def one(x):
         st = unicodedata.normalize("NFKD", _s(x, "RemoveDiacritics"))
         return unicodedata.normalize("NFC", "".join(c for c in st if not unicodedata.combining(c)))
@@ -792,7 +792,7 @@ def _removediacritics(s):
 
 @fn("CharacterRange", area=AREA, status="added",
     notes="characters from c1 to c2 by code point (strings or integer codes); empty when c2 < c1")
-def _charrange(a, b):
+def _charrange(a: Expr, b: Expr) -> ListOf[Expr]:
     def code(x):
         if isinstance(x, str):
             if len(x) != 1:
@@ -803,7 +803,7 @@ def _charrange(a, b):
 
 
 @fn("SymbolName", area=AREA, status="added", notes="name of a symbol as a string (no context prefix)")
-def _symbolname(x):
+def _symbolname(x: Expr) -> Expr:
     if isinstance(x, Symbol):
         return x.name.split("`")[-1]
     if isinstance(x, bool) or x is None:
@@ -812,7 +812,7 @@ def _symbolname(x):
 
 
 @fn("Symbol", area=AREA, status="added", notes="Symbol[\"name\"] gives the symbol (evaluated); invalid names raise")
-def _symbol(name):
+def _symbol(name: String) -> Expr:
     st = _s(name, "Symbol", "name")
     if not re.fullmatch(r"\$?[A-Za-z][A-Za-z0-9$]*|\$[A-Za-z0-9$]+", st):
         raise ValueError(f"Symbol: {st!r} is not a valid symbol name")
@@ -836,7 +836,7 @@ def _eq(a, b, ignore_case):
 
 @fn("EditDistance", area=AREA, status="added",
     notes="Levenshtein distance (insertions, deletions, substitutions) between strings or lists; IgnoreCase")
-def _editdistance(a, b, *opts):
+def _editdistance(a: Expr, b: Expr, *opts: Option) -> Expr:
     _, o = split_options(opts, {"IgnoreCase"}, "EditDistance")
     ic = _ignore_case(o)
     x, _ = _seq(a, "EditDistance")
@@ -853,7 +853,7 @@ def _editdistance(a, b, *opts):
 @fn("HammingDistance", area=AREA, status="added",
     notes="number of differing positions between equal-length strings or lists (unequal lengths raise); "
           "IgnoreCase")
-def _hamming(a, b, *opts):
+def _hamming(a: Expr, b: Expr, *opts: Option) -> Expr:
     _, o = split_options(opts, {"IgnoreCase"}, "HammingDistance")
     x, _ = _seq(a, "HammingDistance")
     y, _ = _seq(b, "HammingDistance")
@@ -869,7 +869,7 @@ def _wrap(items, is_str):
 @fn("LongestCommonSubsequence", area=AREA, status="added",
     notes="longest contiguous common run of two strings or lists (Wolfram's meaning; the non-contiguous one is "
           "LongestCommonSequence); ties go to the earliest position in the first argument")
-def _lcsubstr(a, b):
+def _lcsubstr(a: Expr, b: Expr) -> Expr:
     x, sx = _seq(a, "LongestCommonSubsequence")
     y, _ = _seq(b, "LongestCommonSubsequence")
     best, end = 0, 0
@@ -888,7 +888,7 @@ def _lcsubstr(a, b):
 @fn("LongestCommonSequence", area=AREA, status="added",
     notes="longest common (not necessarily contiguous) subsequence of two strings or lists by dynamic "
           "programming; among equal-length answers the one found by the standard back-trace is returned")
-def _lcseq(a, b):
+def _lcseq(a: Expr, b: Expr) -> Expr:
     x, sx = _seq(a, "LongestCommonSequence")
     y, _ = _seq(b, "LongestCommonSequence")
     n, m = len(x), len(y)
@@ -912,7 +912,7 @@ def _lcseq(a, b):
 @fn("PalindromeQ", area=AREA, status="added",
     notes="True for a string, list or non-negative integer (decimal digits) equal to its reverse; other "
           "expressions False")
-def _palindromeq(x):
+def _palindromeq(x: Expr) -> Boolean:
     if isinstance(x, str):
         return x == x[::-1]
     if is_list(x):
@@ -936,7 +936,7 @@ for _n in ("StringExpression", "Shortest", "Longest", "RegularExpression", "Digi
 @fn("StringExtract", area=AREA, status="added",
     notes="StringExtract[s, n] gives the n-th whitespace-separated piece (spans, lists and negative n allowed); "
           "StringExtract[s, sep -> n] splits at sep")
-def _stringextract(s, spec):
+def _stringextract(s: String, spec: Expr) -> Expr:
     st = _s(s, "StringExtract")
     if _is_rule(spec):
         pieces = ev(Expr("StringSplit", st, spec.args[0]))
@@ -949,7 +949,7 @@ def _stringextract(s, spec):
 @fn("StringReplaceList", area=AREA, status="added",
     notes="every string obtained by replacing a single match of the rules (one result per match position and "
           "rule, left to right); StringReplaceList[s, rules, n] keeps at most n")
-def _stringreplacelist(s, r, n=None):
+def _stringreplacelist(s: Expr, r: Expr, n: Expr = None) -> Expr:
     def one(x):
         st = _s(x, "StringReplaceList")
         alts = _rules_and_patterns(r)

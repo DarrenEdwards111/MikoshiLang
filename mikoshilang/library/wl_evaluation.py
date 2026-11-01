@@ -511,7 +511,7 @@ def names(spec=None, use_aliases=True, ignore_case=False):
           "RegularExpression), Names[{p1, ...}], Names[] ; options IgnoreCase, ResolveContextAliases, "
           "SpellingCorrection -> False. Names are short when their context is $Context or on $ContextPath. "
           "System` contains the symbols MikoshiLang implements")
-def _names(*args):
+def _names(*args: Expr) -> ListOf[Expr]:
     pos, o = _opts_from(args, {"IgnoreCase", "ResolveContextAliases", "SpellingCorrection"}, "Names")
     if o.get("SpellingCorrection", False) is True:
         raise NotImplementedError("Names: SpellingCorrection -> True is not supported")
@@ -525,7 +525,7 @@ def _names(*args):
 @fn("NameQ", area=AREA, status="added",
     notes="NameQ[\"string\"]: True if any symbol name matches (abbreviated string patterns); "
           "ResolveContextAliases option")
-def _nameq(*args):
+def _nameq(*args: Expr) -> Boolean:
     pos, o = _opts_from(args, {"ResolveContextAliases", "IgnoreCase"}, "NameQ")
     if len(pos) != 1:
         raise ValueError("NameQ: expected one string")
@@ -552,7 +552,7 @@ def _all_contexts():
 @fn("Contexts", area=AREA, status="added",
     notes="Contexts[] and Contexts[\"pattern\"]: the contexts of all existing symbols (and their parent contexts), "
           "$ContextPath and $Packages, sorted; ResolveContextAliases option")
-def _contexts(*args):
+def _contexts(*args: Expr) -> ListOf[Expr]:
     pos, o = _opts_from(args, {"ResolveContextAliases"}, "Contexts")
     cs = _all_contexts()
     use = o.get("ResolveContextAliases", True) is not False
@@ -613,7 +613,7 @@ def _resolve_context_arg(c, fname):
 @fn("Begin", area=AREA, status="added",
     notes="Begin[\"ctx`\"] sets $Context (a context starting with ` extends the current one) and returns it; "
           "End[] restores $Context and $ContextAliases. Affects how later inputs are parsed")
-def _begin(c):
+def _begin(c: String) -> Expr:
     c = _resolve_context_arg(c, "Begin")
     d = _ctxdata()
     o = st().own
@@ -632,7 +632,7 @@ def _restore_own(name, v):
 @fn("End", area=AREA, status="added",
     notes="End[] returns the current context and restores $Context and $ContextAliases to their values before "
           "the matching Begin; an unmatched End raises")
-def _end():
+def _end() -> Expr:
     d = _ctxdata()
     if not d["begin"]:
         raise ValueError("End::noctx: No previous context defined")
@@ -646,7 +646,7 @@ def _end():
 @fn("BeginPackage", area=AREA, status="added",
     notes="BeginPackage[\"ctx`\"] sets $Context to ctx` and $ContextPath to {ctx`, System`}, adds ctx` to "
           "$Packages; BeginPackage[\"ctx`\", {\"need1`\", ...}] calls Needs on each and puts them on the path")
-def _beginpackage(c, needs=None):
+def _beginpackage(c: String, needs: Expr = None) -> Expr:
     c = _resolve_context_arg(c, "BeginPackage")
     need_list = []
     if needs is not None:
@@ -671,7 +671,7 @@ def _beginpackage(c, needs=None):
 @fn("EndPackage", area=AREA, status="added",
     notes="EndPackage[] restores $Context and $ContextPath to their values before BeginPackage and prepends the "
           "package context to $ContextPath")
-def _endpackage():
+def _endpackage() -> Expr:
     d = _ctxdata()
     if not d["package"]:
         raise ValueError("EndPackage::noctx: No previous context defined")
@@ -845,14 +845,14 @@ def _needs(c, file=None):
     notes="Needs[\"ctx`\"] loads the package (Get[\"ctx`\"]) unless ctx` is in $Packages and puts ctx` on "
           "$ContextPath; Needs[\"ctx`\" -> \"alias`\"] adds a context alias instead; Needs[\"ctx`\" -> None] only "
           "loads; Needs[\"ctx`\", \"file\"] loads the given file")
-def _needs_fn(c, file=None):
+def _needs_fn(c: Expr, file: Expr = None) -> Expr:
     return _needs(c, file)
 
 
 @fn("DeclarePackage", area=AREA, status="added",
     notes="DeclarePackage[\"ctx`\", {\"name1\", ...}] creates ctx`name with attribute Stub and prepends ctx` to "
           "$ContextPath; the first use of such a symbol calls Needs[\"ctx`\"] and evaluates it again")
-def _declarepackage(c, nms):
+def _declarepackage(c: String, nms: Expr) -> Expr:
     c = _resolve_context_arg(c, "DeclarePackage")
     if isinstance(nms, str):
         nms = L(nms)
@@ -1546,7 +1546,7 @@ _BUILTIN_DEFAULTS = {"Plus": {(): 0}, "Times": {(): 1}, "Power": {(2,): 1}}
 @fn("Default", area=AREA, status="added",
     notes="Default[f], Default[f, i], Default[f, i, n]: the value an omitted x_. takes in f[...] (user values set "
           "by Default[f, ...] = v; Plus 0, Times 1, Power exponent 1); unevaluated when none is defined")
-def _default(f, *pos):
+def _default(f: Expr, *pos: Expr) -> Expr:
     if not isinstance(f, Symbol):
         raise ValueError("Default: the first argument must be a symbol")
     if len(pos) > 2 or not all(K.is_int(p) and int(p) >= 1 for p in pos):
@@ -1773,7 +1773,7 @@ UNSET_HOOKS["Options"] = lambda lhs: (st().ext.get("Options", {}).pop(
 @fn("SetOptions", area=AREA, status="added",
     notes="SetOptions[f, name -> value, ...] resets defaults that f already has (SetOptions::optnf for an unknown "
           "option), returning the new Options[f]; SetOptions[{f, g}, ...] sets several")
-def _setoptions(f, *rules):
+def _setoptions(f: Expr, *rules: Expr) -> ListOf[Expr]:
     if K.is_list(f):
         return L(*(_setoptions(g, *rules) for g in f.args))
     if not isinstance(f, Symbol):
@@ -1832,7 +1832,7 @@ def _fs(f):
     notes="OptionValue[name] inside f[..., OptionsPattern[]] := rhs gives the value of option name in the call "
           "(or f's default); OptionValue[f, name], OptionValue[f, opts, name], lists of names; "
           "OptionsPattern[{f, g}] searches several defaults")
-def _optionvalue(*a):
+def _optionvalue(*a: Expr) -> Expr:
     if len(a) == 2:
         return _option_value(_fs(a[0]), [], a[1])
     if len(a) == 3:
@@ -1900,7 +1900,7 @@ _added("OptionsPattern", "OptionsPattern[] matches a sequence of zero or more ru
 @fn("FilterRules", area=AREA, status="added",
     notes="FilterRules[rules, patt] keeps rules whose lhs matches patt; FilterRules[rules, {k1, ...}] keeps the "
           "named options; FilterRules[rules, Except[...]] removes them; FilterRules[rules, Options[f]] keeps f's")
-def _filterrules(rules, patt):
+def _filterrules(rules: Expr, patt: Expr) -> ListOf[Expr]:
     rs = _flat_opts([rules])
 
     def keep_pred(p):
@@ -2285,7 +2285,7 @@ def _exists(n):
 
 @fn("InformationData", area=AREA, status="added",
     notes="InformationData[assoc, False][\"prop\"] gives a property of an Information result")
-def _informationdata(*a):
+def _informationdata(*a: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -2409,7 +2409,7 @@ def _activate(t, pred, heads):
 @fn("Activate", area=AREA, status="added",
     notes="Activate[expr] replaces Inactive[f] by f everywhere in expr and evaluates; Activate[expr, patt] only "
           "for f matching patt; Heads -> False does not enter heads")
-def _activate_fn(e, *rest):
+def _activate_fn(e: Expr, *rest: Expr) -> Expr:
     rest = list(rest)
     patt = None
     if rest and not is_rule(rest[0]):
@@ -2473,7 +2473,7 @@ class GotoSignal(ValueError):
 @fn("Goto", area=AREA, status="added",
     notes="Goto[tag] continues evaluation after Label[tag] in the enclosing compound expression (the innermost "
           "one containing that label, searching outwards); a missing label raises Goto::nolabel")
-def _goto(tag):
+def _goto(tag: Expr) -> Expr:
     raise GotoSignal(tag)
 
 
@@ -2516,7 +2516,7 @@ K._HELD["CompoundExpression"] = _h_compound
 @fn("Update", area=AREA, status="added",
     notes="Update[s] / Update[] tell the system that values depending on s may have changed; MikoshiLang keeps "
           "no evaluation caches that could go stale, so this returns Null")
-def _update(*s):
+def _update(*s: Expr) -> Expr:
     if len(s) > 1 or (s and not isinstance(s[0], Symbol)):
         raise ValueError("Update expects Update[] or Update[symbol]")
     return NULL
@@ -2598,7 +2598,7 @@ for _nm, _d in (("OperatorApplied", (2, [2, 1], [])), ("CurryApplied", None)):
 @fn("OperatorApplied", area=AREA, status="added",
     notes="OperatorApplied[f][y][x] = f[x, y]; OperatorApplied[f, n][x1]...[xn] = f[x1, ..., xn]; "
           "OperatorApplied[f, {i1, ...}] and k -> {i1, ...} reorder; bracket structure is irrelevant")
-def _operatorapplied(f, spec=None):
+def _operatorapplied(f: Expr, spec: Expr = None) -> Expr:
     _curry_spec(spec, "OperatorApplied", (2, [2, 1], []))
     raise Unevaluated()
 
@@ -2606,7 +2606,7 @@ def _operatorapplied(f, spec=None):
 @fn("CurryApplied", area=AREA, status="added",
     notes="CurryApplied[f, n][x1]...[xn] = f[x1, ..., xn]; CurryApplied[n][f] = CurryApplied[f, n]; "
           "CurryApplied[f, {i1, ...}] and k -> {i1, ...} reorder")
-def _curryapplied(f, spec=None):
+def _curryapplied(f: Expr, spec: Expr = None) -> Expr:
     if spec is None:
         if not (K.is_int(f) or K.is_list(f) or (is_rule(f) and K.is_int(f.args[0]))):
             raise ValueError("CurryApplied[f] needs an arity: CurryApplied[f, n] or CurryApplied[n][f]")
@@ -2682,7 +2682,7 @@ def _pure_inverse(f, n, tot):
           "a unique inverse (InverseFunction[2 # + 3 &] = (#1 - 3)/2 &), InverseFunction[InverseFunction[f]] = f; "
           "InverseFunction[f, n, tot] for the n-th of tot arguments; otherwise stays symbolic "
           "(InverseFunction[f][x])")
-def _inversefunction(f, *nt):
+def _inversefunction(f: Expr, *nt: Expr) -> Expr:
     if len(nt) not in (0, 2):
         raise ValueError("InverseFunction expects InverseFunction[f] or InverseFunction[f, n, tot]")
     n, tot = (1, 1) if not nt else nt
@@ -2705,7 +2705,7 @@ def _inversefunction(f, *nt):
 @fn("Indexed", area=AREA, status="added",
     notes="Indexed[list, i] gives list[[i]], Indexed[list, {i, j, ...}] indexes recursively; for a symbolic "
           "expr, Indexed[x, i] stays as the component x_i (Indexed[x, {i}] is the same as Indexed[x, i])")
-def _indexed(e, i):
+def _indexed(e: Expr, i: Expr) -> Expr:
     idx = list(i.args) if K.is_list(i) else [i]
     if not idx:
         return e
@@ -2752,7 +2752,7 @@ def _hname(x, fname):
     notes="Distribute[f[a + b, c + d]] = f[a, c] + f[a, d] + f[b, c] + f[b, d]; Distribute[expr, g] over g; "
           "Distribute[expr, g, f] only when the head is f; Distribute[expr, g, f, gp, fp] uses gp and fp in the "
           "result")
-def _distribute_fn(e, *hs):
+def _distribute_fn(e: Expr, *hs: Expr) -> Expr:
     if len(hs) > 4:
         raise ValueError("Distribute: 1 to 5 arguments expected")
     names_ = [_hname(h, "Distribute") for h in hs]
@@ -2762,7 +2762,7 @@ def _distribute_fn(e, *hs):
 @fn("Prefix", area=AREA, status="added",
     notes="Prefix[f[x]] prints as f@x and Prefix[f[x], h] as h<>x (display wrapper; the expression inside is "
           "evaluated)")
-def _prefix(e, *rest):
+def _prefix(e: Expr, *rest: Expr) -> Expr:
     if len(rest) > 3:
         raise ValueError("Prefix: 1 to 4 arguments expected")
     raise Unevaluated()
@@ -2770,7 +2770,7 @@ def _prefix(e, *rest):
 
 @fn("Postfix", area=AREA, status="added",
     notes="Postfix[f[x]] prints as x//f and Postfix[f[x], h] as x<>h (display wrapper)")
-def _postfix(e, *rest):
+def _postfix(e: Expr, *rest: Expr) -> Expr:
     if len(rest) > 3:
         raise ValueError("Postfix: 1 to 4 arguments expected")
     raise Unevaluated()
@@ -2814,7 +2814,7 @@ _dt_entry = REGISTRY["Dt"]
 _orig_dt_impls = list(_dt_entry.impls)
 
 
-def _dt_constants(f, *args):
+def _dt_constants(f: Expr, *args: Expr) -> Expr:
     consts = sorted({n for n in st().attrs if "Constant" in st().attrs[n]})
     if consts:
         found = set()
@@ -3074,7 +3074,7 @@ def _traced_chain(e, form, opts):
     return chain, r
 
 
-def _trace_new(e, *rest):
+def _trace_new(e: Expr, *rest: Expr) -> Expr:
     form, opts = _trace_parse(rest, "Trace")
     chain, _ = _traced_chain(e, form, opts)
     return _linalg._trace_out(chain)
@@ -3116,7 +3116,7 @@ def _walk_forms(chain, d, out):
     notes="TracePrint[expr] prints the forms of the evaluation of expr indented by nesting level and returns "
           "the value; TracePrint[expr, form] only matching forms; Trace options accepted (forms are printed "
           "after evaluation completes)")
-def _traceprint(e, *rest):
+def _traceprint(e: Expr, *rest: Expr) -> Expr:
     form, opts = _trace_parse(rest, "TracePrint")
     if "TraceBackward" in opts:
         raise ValueError("TracePrint does not support the TraceBackward option")
@@ -3132,7 +3132,7 @@ def _traceprint(e, *rest):
     notes="TraceScan[f, expr] applies f to HoldForm of every form in the evaluation of expr and returns its "
           "value; TraceScan[f, expr, form] only matching forms; TraceScan[f, expr, form, fp] also applies fp to "
           "(HoldForm[form], HoldForm[result]) of each matching chain; f runs after the evaluation completes")
-def _tracescan(f, e, *rest):
+def _tracescan(f: Expr, e: Expr, *rest: Expr) -> Expr:
     f = ev(f)
     fp = None
     rest = list(rest)
@@ -3243,7 +3243,7 @@ def _hist_index(a, fname):
 @fn("Out", area=AREA, status="added",
     notes="Out[n] (%n) is the n-th output of the main loop (Session.evaluate_input / REPL / Jupyter), Out[] (%) "
           "the last, Out[-k] (%%...) the k-th previous; unevaluated when there is no such output")
-def _out(*a):
+def _out(*a: Expr) -> Expr:
     if len(a) > 1:
         raise ValueError("Out expects at most one argument")
     i = _hist_index(a, "Out")
@@ -3255,7 +3255,7 @@ def _out(*a):
 
 @fn("InString", area=AREA, status="added",
     notes="InString[n] is the text of input line n of the main loop; InString[] the last, InString[-k] earlier")
-def _instring(*a):
+def _instring(*a: Expr) -> Expr:
     if len(a) > 1:
         raise ValueError("InString expects at most one argument")
     i = _hist_index(a, "InString") if a else _line() - 1
@@ -3354,7 +3354,7 @@ def _ls_path(args, fname):
     notes="LocalSymbol[\"name\"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, "
           "or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol[\"name\"] = val or := val; unevaluated when never "
           "assigned; LocalSymbol[\"name\", \"dir\"] uses another base; =. deletes it")
-def _localsymbol(*a):
+def _localsymbol(*a: Expr) -> Expr:
     p = _ls_path(a, "LocalSymbol")
     if not os.path.exists(p):
         raise Unevaluated()
