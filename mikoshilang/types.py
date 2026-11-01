@@ -438,30 +438,16 @@ def _short(v) -> str:
 
 
 def check_args(head: str, sig: Signature, args) -> None:
-    """Report arguments that are concrete values of the wrong kind."""
+    """Report concrete arguments that are not of the declared type (sign constraints included: -1 is not a
+    PosInteger)."""
     if _mode.get() is None:
         return
     for i, a in enumerate(args):
         t = sig.param_type(i)
         if t is None or t == EXPR_T or t[0] == "Held":
             continue
-        if match(a, _kind(t)) is False:
+        if match(a, t) is False:
             _mismatch(head, i + 1, a, t)
-
-
-_SIGN_FREE = {"PosInteger": ("Integer",), "NonNegInteger": ("Integer",)}
-
-
-def _kind(t: tuple) -> tuple:
-    """The type with sign constraints dropped: a negative integer for PosInteger is a bad *value* (the function
-    raises ValueError, CONVENTIONS §2), not a wrong kind, so argument checks leave it to the function."""
-    if t[0] in _SIGN_FREE:
-        return _SIGN_FREE[t[0]]
-    if t[0] in CONTAINERS:
-        return (t[0], _kind(t[1]))
-    if t[0] == "Or":
-        return _union(*(_kind(u) for u in t[1]))
-    return t
 
 
 def check_result(head: str, sig: Signature, value) -> None:

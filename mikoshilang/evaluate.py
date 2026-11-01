@@ -64,6 +64,15 @@ def set_hold_first(head: str):
     _HOLD_FIRST.add(head)
 
 
+# Library heads whose result is final: it is returned without being evaluated again (TypeCheck's report holds
+# values that were already evaluated in report mode and must not be re-checked by an enclosing raising session).
+_FINAL_RESULT: Set[str] = set()
+
+
+def set_final_result(head: str):
+    _FINAL_RESULT.add(head)
+
+
 def clear_memo():
     _memo.clear()
 
@@ -481,6 +490,8 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
                 from .runtime import reject_quarantined
                 reject_quarantined(head)
             return new_expr
+        if head in _FINAL_RESULT:
+            return lib
         result = lib
 
     if isinstance(result, Expr) and result != new_expr:

@@ -53,9 +53,11 @@ a list, an association, a rule or `True`/`False` where the type excludes it.
 
 * **Symbolic arguments are never mismatches.** `x`, `n + 1` and `f[y]` may become anything, and the function
   may legitimately leave such a call unevaluated (CONVENTIONS §3).
-* **Sign constraints are values, not kinds.** For `PosInteger` and `NonNegInteger` arguments the checker only
-  tests that the value is an integer. The function itself raises `ValueError` for `0` or `-1`, as CONVENTIONS
-  §2 prescribes. `TypeMatchQ` does test the sign.
+* **Sign constraints are enforced.** `0` is not a `PosInteger` and `-1` is not a `NonNegInteger`, so a
+  checking session reports `PolygonalNumber[3, -1]` as a mismatch, as `TypeMatchQ` does. Without checking, the
+  function raises its own `ValueError` (CONVENTIONS §2).
+* **`TypeCheck` always reports.** Inside a `Session(check_types=True)`, `TypeCheck[expr]` still returns its
+  report instead of raising. Its result is final and is not evaluated again under the session's mode.
 * Held arguments (`Held`, or a user function with `HoldAll`/`HoldFirst`/`HoldRest`) are not checked. Their
   result is.
 * Kernel built-ins such as `Plus` and `Map` are not covered. Only library heads and declared user functions
