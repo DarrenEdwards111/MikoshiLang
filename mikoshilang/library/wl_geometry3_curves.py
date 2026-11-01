@@ -796,8 +796,8 @@ def _points_map(P, Q, f):
           "(symmetries) Wolfram's choice is undocumented, so the matrix can differ from Wolfram's while the "
           "image is the same. Regions that are not affinely equivalent raise ValueError, other region kinds "
           "NotImplementedError. WorkingPrecision is accepted (results are exact for exact input). Check: "
-          "self-check that the map takes reg1's vertices / centre data onto reg2's (built into the search); "
-          "tests apply the result and compare with reg2.")
+          "reference (tests apply the result and compare with reg2; the search itself only accepts a map that "
+          "takes reg1's vertices / centre data onto reg2's, ValueError otherwise).")
 def _find_region_transform(reg1: Expr | MatrixOf[Real], reg2: Expr | MatrixOf[Real], *opts: Option) -> Expr:
     f = "FindRegionTransform"
     options(opts, f, {"WorkingPrecision"})

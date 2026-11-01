@@ -294,8 +294,8 @@ fn("TransferFunctionModel", area=AREA, status="added",
          "cancelled. tfm[x] evaluates the transfer matrix at x; tfm[\"Poles\"] / tfm[\"Zeros\"] give the roots of "
          "den and (SISO) of the numerator (MikoshiLang accessors; Wolfram uses TransferFunctionPoles/Zeros), "
          "tfm[\"Dimensions\"] = {outputs, inputs}. Time delays and non-rational models raise NotImplementedError. "
-         "Check: reference (hand-computed C (sI - A)^-1 B + D, Wolfram's documented standard forms) and the "
-         "StateSpaceModel round-trip self-check in tests.")(_tfm)
+         "Check: reference (hand-computed C (sI - A)^-1 B + D, Wolfram's documented standard forms; StateSpaceModel "
+         "round trip) in tests.")(_tfm)
 
 
 def _poles(tf):

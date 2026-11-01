@@ -519,9 +519,9 @@ def _random_instance(scene: Expr, *rest: PosInteger | Option) -> Expr:
           "evaluated on 6 independent random instances (as in RandomInstance) and returned as a machine real "
           "when all agree to 1e-7 relative; otherwise the hypotheses do not determine it and ValueError is "
           "raised. Values are numerical (Wolfram returns exact values when it can solve symbolically). "
-          "Unsupported hypotheses or expressions raise NotImplementedError. Check: self-check (agreement "
-          "across instances is the test); tests use scenes with known answers (a right isosceles triangle, a "
-          "3-4-5 triangle, Thales' circle).")
+          "Unsupported hypotheses or expressions raise NotImplementedError. Check: reference (tests use scenes "
+          "with known answers: a right isosceles triangle, a 3-4-5 triangle, Thales' circle); agreement across "
+          "instances is required at run time (ValueError otherwise).")
 def _geometric_solve_values(scene: Expr, expr: Expr, *opts: Option) -> Real | ListOf[Real]:
     f = "GeometricSolveValues"
     np = _np()
