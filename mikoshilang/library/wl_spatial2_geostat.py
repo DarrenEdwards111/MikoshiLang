@@ -399,8 +399,8 @@ def parse_field(data, fname):
         if isinstance(v, Expr) and v.head == "Quantity":
             raise NotImplementedError(f"{fname}: Quantity values are not supported")
         z.append(fnum(v, fname, "a value"))
-    if len(z) < 3:
-        raise ValueError(f"{fname}: at least 3 data points are needed")
+    if len(z) < 2:
+        raise ValueError(f"{fname}: at least 2 data points are needed")
     if len(z) > 4000:
         raise ValueError(f"{fname}: at most 4000 data points are supported")
     return np.array(X, dtype=float), np.array(z, dtype=float)
