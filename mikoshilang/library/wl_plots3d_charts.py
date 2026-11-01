@@ -2484,3 +2484,619 @@ def _sectorchart3d(data: MatrixOf[Real], *opts: Option) -> Expr:
     g = finish_graphics(L(*content), gopts, [("BoxRatios", Symbol("Automatic")), ("PlotRange", range_expr(rg))],
                         dim=3)
     return _legend(g, o, styles, fname)
+
+
+# ───────────────────────────── financial charts ─────────────────────────────
+
+UP = Expr("RGBColor", 0.2, 0.6, 0.2)
+DOWN = Expr("RGBColor", 0.8, 0.2, 0.2)
+_FIN_DEFAULTS = {"TrendStyle": AUTO, "ChartBaseStyle": AUTO, "ChartElementFunction": AUTO, "ChartElements": AUTO,
+                 "DateFunction": AUTO, "EventLabels": NONE, "PerformanceGoal": AUTO, "PlotTheme": AUTO,
+                 "ScalingFunctions": NONE, "TargetUnits": AUTO, "PlotRange": AUTO, "Method": AUTO,
+                 "ChartStyle": AUTO, "PlotInteractivity": AUTO}
+
+
+def fin_options(fname, opts):
+    o, gopts = split_options(fname, opts, _FIN_DEFAULTS)
+    _unsupported(o, fname, ("TrendStyle", "ChartBaseStyle"))
+    return o, gopts
+
+
+def trend_styles(o, fname):
+    v = o["TrendStyle"]
+    base = [] if is_sym(o["ChartBaseStyle"], "Automatic", "None") else _directive_items(o["ChartBaseStyle"])
+    if is_sym(v, "Automatic"):
+        up, down = UP, DOWN
+    elif K.is_list(v) and len(v.args) == 2:
+        G.directive_like(v, fname, "TrendStyle")
+        up, down = v.args
+    elif isinstance(v, str):
+        raise NotImplementedError(f"{fname}: the named TrendStyle {v!r} is not supported; give {{up, down}}")
+    elif is_sym(v, "None"):
+        raise NotImplementedError(f"{fname}: TrendStyle -> None is not supported; give {{up, down}}")
+    else:
+        G.directive_like(v, fname, "TrendStyle")
+        up, down = v, Expr("GrayLevel", 1)
+    return (Expr("Directive", *base, *_directive_items(up)), Expr("Directive", *base, *_directive_items(down)))
+
+
+def dated_values(data, fname, k=1, what="date-price pairs {date, p}"):
+    """[(date expr or index, value(s))] of {{date, p}, ...} (k = 1) or {{date, {o, h, l, c(, v)}}, ...}; a flat list
+    of prices (k = 1) or of tuples is taken as an ordered sequence without dates."""
+    d, _, _ = P2._unwrap(data, fname)
+    if isinstance(d, str) or (K.is_list(d) and d.args and isinstance(d.args[0], str)):
+        raise NotImplementedError(f"{fname}: FinancialData entities (\"name\") need curated online data and are "
+                                  "not supported; give the data")
+    if isinstance(d, Expr) and d.head in ("TimeSeries", "EventSeries", "TemporalData", "Tabular"):
+        raise NotImplementedError(f"{fname}: {d.head} data is not supported")
+    if not K.is_list(d):
+        if isinstance(d, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of {what}, not {K_input(d)}")
+    out = []
+    for i, e in enumerate(d.args):
+        e, _, _ = P2._unwrap(e, fname)
+        if is_rule(e):
+            e = e.args[0]
+        if is_missing(e):
+            continue
+        if k == 1 and not K.is_list(e):
+            v = P2.scalar(e, fname)
+            if v is not None:
+                out.append((None, v))
+            continue
+        if not K.is_list(e):
+            raise ValueError(f"{fname}: {K_input(e)} is not one of {what}")
+        if k > 1 and len(e.args) >= 4 and not any(K.is_list(a) for a in e.args):
+            vals, date = e.args, None
+        elif len(e.args) == 2:
+            date, vals = e.args
+            if k > 1 and not K.is_list(vals):
+                raise ValueError(f"{fname}: {K_input(e)} is not one of {what}")
+            if k == 1 and K.is_list(vals):
+                raise ValueError(f"{fname}: {K_input(e)} is not one of {what}")
+            if date is not None:
+                P2.abs_time(date, fname)            # validates the date
+        else:
+            raise ValueError(f"{fname}: {K_input(e)} is not one of {what}")
+        if k == 1:
+            v = P2.scalar(vals, fname)
+            if v is not None:
+                out.append((date, v))
+        else:
+            vs = [P2.scalar(a, fname) for a in vals.args]
+            if len(vs) not in (4, 5) or (len(vs) < k):
+                raise ValueError(f"{fname}: price data must be {{open, high, low, close}} or with volume")
+            if any(v is None for v in vs):
+                continue
+            out.append((date, vs))
+    if not out:
+        raise ValueError(f"{fname}: the data has no prices")
+    return out
+
+
+def _date_ticks_seq(dates, n=6):
+    idx = [i for i, d in enumerate(dates) if d is not None]
+    if not idx:
+        return AUTO
+    step = max(1, len(dates) // n)
+    return L(*[L(i + 1, dates[i]) for i in range(0, len(dates), step) if dates[i] is not None])
+
+
+def threshold(spec, prices, fname, default):
+    """('abs', t) or ('pct', p) of a Kagi/Renko size specification."""
+    rng = max(prices) - min(prices)
+    if spec is None or is_sym(spec, "Automatic"):
+        return "abs", default * rng
+    v = num(spec)
+    if v is not None and not K.is_list(spec):
+        if not v > 0:
+            raise ValueError(f"{fname}: the size must be positive")
+        return "abs", v * rng
+    if K.is_list(spec) and len(spec.args) == 2 and isinstance(spec.args[0], str):
+        kind = spec.args[0]
+        p = float(pos_number(spec.args[1], fname, "the size"))
+        if kind == "Relative":
+            return "abs", p * rng
+        if kind == "Absolute":
+            return "abs", p
+        if kind == "Percent":
+            return "pct", p / 100
+        raise ValueError(f"{fname}: unknown size specification {kind!r} (\"Relative\", \"Absolute\", \"Percent\")")
+    raise ValueError(f"{fname}: {K_input(spec)} is not a valid size specification")
+
+
+def kagi_columns(prices, thr):
+    """Kagi columns [(start, end)]: a column continues while prices move in its direction and reverses when the
+    price moves against it by more than the threshold (absolute, or a fraction of the column extreme)."""
+    kind, t = thr
+
+    def T(e):
+        return t * abs(e) if kind == "pct" else t
+    p0 = prices[0]
+    s, e, d = p0, p0, 0
+    cols = []
+    for p in prices[1:]:
+        if d == 0:
+            if abs(p - p0) > T(p0):
+                d = 1 if p > p0 else -1
+                e = p
+        elif d == 1:
+            if p > e:
+                e = p
+            elif e - p > T(e):
+                cols.append((s, e))
+                s, e, d = e, p, -1
+        else:
+            if p < e:
+                e = p
+            elif p - e > T(e):
+                cols.append((s, e))
+                s, e, d = e, p, 1
+    cols.append((s, e))
+    return cols
+
+
+def kagi_segments(cols):
+    """[(x0, y0, x1, y1, thick)] line segments (verticals at x = k, horizontal connectors) with the yang/yin state:
+    thick after the price rises above the previous column high, thin after it falls below the previous low."""
+    segs = []
+    thick = cols[0][1] >= cols[0][0]
+    for k, (s, e) in enumerate(cols):
+        x = k + 1
+        if k >= 1:
+            segs.append((x - 1, s, x, s, thick))
+        prev = cols[k - 1] if k >= 1 else None
+        if prev is not None:
+            if e > s:
+                lvl = max(prev)                     # the previous high (start of the down column)
+                if not thick and e > lvl:
+                    segs.append((x, s, x, lvl, thick))
+                    thick = True
+                    segs.append((x, lvl, x, e, thick))
+                    continue
+            else:
+                lvl = min(prev)
+                if thick and e < lvl:
+                    segs.append((x, s, x, lvl, thick))
+                    thick = False
+                    segs.append((x, lvl, x, e, thick))
+                    continue
+        segs.append((x, s, x, e, thick))
+    return segs
+
+
+@fn("KagiChart", area=AREA, status="added",
+    notes="KagiChart[{{date1, p1}, ...}] (or a list of prices) and [data, rt]: vertical lines at x = 1, 2, ... (one "
+          "column per trend) joined by horizontal connectors; a column continues while the price moves in its "
+          "direction and a new column starts when the price reverses by more than the threshold rt (as "
+          "documented): {\"Relative\", p} (p times the price range, default p = 0.02), {\"Absolute\", p}, "
+          "{\"Percent\", p} (p% of the column extreme) or a number p (= {\"Relative\", p}). Lines are thick "
+          "(yang, first TrendStyle, default green) after the price rises above the previous column high and thin "
+          "(yin, second style, default red) after it falls below the previous low. Dates are an ordered sequence "
+          "(as documented) used as tick labels. FinancialData entity names, EventLabels and TimeSeries data raise "
+          "NotImplementedError. Check: reference (columns of a hand-worked example in tests).")
+def _kagichart(data: ListOf[Expr], *rest: Expr | Option) -> Expr:
+    fname = "KagiChart"
+    pos, opts = split_args((data,) + rest, fname, 1, 2)
+    o, gopts = fin_options(fname, opts)
+    dv = dated_values(pos[0], fname)
+    prices = [v for _, v in dv]
+    thr = threshold(pos[1] if len(pos) > 1 else None, prices, fname, 0.02)
+    cols = kagi_columns(prices, thr)
+    segs = kagi_segments(cols)
+    up, down = trend_styles(o, fname)
+    yang = [Expr("Line", pts([(a, b), (c, d)])) for a, b, c, d, t in segs if t]
+    yin = [Expr("Line", pts([(a, b), (c, d)])) for a, b, c, d, t in segs if not t]
+    content = []
+    if yang:
+        content.append(L(up, Expr("AbsoluteThickness", 3), *yang))
+    if yin:
+        content.append(L(down, Expr("AbsoluteThickness", 1), *yin))
+    r = _range_2d({"PlotRange": o["PlotRange"]}, fname, (0.5, len(cols) + 0.5), P2.data_range(prices))
+    return finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("PlotRange", range_expr(r))])
+
+
+def renko_bricks(prices, b):
+    """Renko bricks [(lo, hi, up)]: a brick is added when the price rises above the top of the last brick or falls
+    below its bottom by the brick height b (as documented), one brick per full height."""
+    lo = hi = prices[0]
+    bricks = []
+    for p in prices[1:]:
+        while p >= hi + b - 1e-12 * max(1.0, abs(hi)):
+            bricks.append((hi, hi + b, True))
+            lo, hi = hi, hi + b
+        while p <= lo - b + 1e-12 * max(1.0, abs(lo)):
+            bricks.append((lo - b, lo, False))
+            lo, hi = lo - b, lo
+    return bricks
+
+
+@fn("RenkoChart", area=AREA, status="added",
+    notes="RenkoChart[{{date1, p1}, ...}] (or a list of prices) and [data, s]: fixed-height bricks Rectangle[{k - "
+          "0.45, lo_k}, {k + 0.45, lo_k + b}], one per column k = 1, 2, ...: starting from the first price, a brick is "
+          "added when the price rises above the top of the last brick or drops below its bottom by the brick "
+          "height b (as documented; a reversal therefore needs a move of 2 b from the last brick's far edge). "
+          "Brick height: {\"Relative\", p} (p times the price range, default p = 0.1), {\"Absolute\", p} or a "
+          "number p (= {\"Relative\", p}). Up bricks use the first TrendStyle (default green), down bricks the "
+          "second (red). FinancialData names, EventLabels and TimeSeries raise NotImplementedError. Check: "
+          "reference (bricks of a hand-worked example in tests).")
+def _renkochart(data: ListOf[Expr], *rest: Expr | Option) -> Expr:
+    fname = "RenkoChart"
+    pos, opts = split_args((data,) + rest, fname, 1, 2)
+    o, gopts = fin_options(fname, opts)
+    prices = [v for _, v in dated_values(pos[0], fname)]
+    kind, b = threshold(pos[1] if len(pos) > 1 else None, prices, fname, 0.1)
+    if kind != "abs":
+        raise NotImplementedError(f"{fname}: percentage brick sizes are not supported")
+    if not b > 0:
+        raise ValueError(f"{fname}: the prices have no range; give {{\"Absolute\", b}}")
+    bricks = renko_bricks(prices, b)
+    up, down = trend_styles(o, fname)
+    ups = [Expr("Rectangle", pt(k + 1 - 0.45, a), pt(k + 1 + 0.45, c)) for k, (a, c, u) in enumerate(bricks) if u]
+    dns = [Expr("Rectangle", pt(k + 1 - 0.45, a), pt(k + 1 + 0.45, c)) for k, (a, c, u) in enumerate(bricks) if not u]
+    content = ([L(up, *ups)] if ups else []) + ([L(down, *dns)] if dns else [])
+    ys = [a for a, _, _ in bricks] + [c for _, c, _ in bricks] + prices[:1]
+    r = _range_2d({"PlotRange": o["PlotRange"]}, fname, (0.5, len(bricks) + 0.5), P2.data_range(ys))
+    return finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("PlotRange", range_expr(r))])
+
+
+def candles(dv, fname, up, down):
+    content_up, content_dn, wicks, ys = [], [], [], []
+    for i, (_d, (o_, h, l_, c) ) in enumerate([(d, v[:4]) for d, v in dv]):
+        if h < max(o_, c) or l_ > min(o_, c):
+            raise ValueError(f"{fname}: element {i + 1} has high < max(open, close) or low > min(open, close)")
+        x = i + 1.0
+        wicks.append(Expr("Line", pts([(x, l_), (x, h)])))
+        body = Expr("Rectangle", pt(x - 0.3, min(o_, c)), pt(x + 0.3, max(o_, c)))
+        (content_up if c >= o_ else content_dn).append(body)
+        ys += [l_, h]
+    content = [L(Expr("GrayLevel", 0.3), *wicks)]
+    if content_up:
+        content.append(L(up, Expr("EdgeForm", Expr("GrayLevel", 0.3)), *content_up))
+    if content_dn:
+        content.append(L(down, Expr("EdgeForm", Expr("GrayLevel", 0.3)), *content_dn))
+    return content, ys
+
+
+@fn("CandlestickChart", area=AREA, status="added",
+    notes="CandlestickChart[{{date1, {o1, h1, l1, c1}}, ...}] or [{{o1, h1, l1, c1}, ...}]: one candlestick per "
+          "element at x = 1, 2, ... (dates as an ordered sequence with date tick labels): wick Line[{{x, low}, "
+          "{x, high}}] and body Rectangle[{x - 0.3, Min[o, c]}, {x + 0.3, Max[o, c]}], rising candles (c >= o) in "
+          "the first TrendStyle (default green), falling ones in the second (red). A high below max(o, c) or low "
+          "above min(o, c) raises ValueError; FinancialData names and TimeSeries raise NotImplementedError. "
+          "Options: TrendStyle, ChartBaseStyle, PlotRange and Graphics options. Check: reference (wick and body "
+          "extents equal the OHLC values in tests).")
+def _candlestickchart(data: ListOf[Expr], *opts: Option) -> Expr:
+    fname = "CandlestickChart"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = fin_options(fname, opts_)
+    dv = dated_values(pos[0], fname, k=4, what="{date, {open, high, low, close}} elements")
+    up, down = trend_styles(o, fname)
+    content, ys = candles(dv, fname, up, down)
+    r = _range_2d({"PlotRange": o["PlotRange"]}, fname, (0.5, len(dv) + 0.5), P2.data_range(ys))
+    ticks = _date_ticks_seq([d for d, _ in dv])
+    return finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("Ticks", L(ticks, AUTO)),
+                                                ("PlotRange", range_expr(r))])
+
+
+@fn("TradingChart", area=AREA, status="added",
+    notes="TradingChart[{{date1, {o1, h1, l1, c1, v1}}, ...}] and [data, {\"Volume\"}]: GraphicsColumn[{candlestick "
+          "chart (as CandlestickChart), volume bar chart}] with volume bars Rectangle[{x - 0.3, 0}, {x + 0.3, v}] "
+          "(the volume panel is omitted when the data has no volumes). Other indicators (FinancialIndicator "
+          "objects, \"SMA\", ...), FinancialData names and interactive controls raise NotImplementedError. "
+          "Options: TrendStyle, ChartBaseStyle and GraphicsColumn options. Check: reference (candles and volume "
+          "bars equal the data in tests).")
+def _tradingchart(data: ListOf[Expr], *rest: Expr | Option) -> Expr:
+    fname = "TradingChart"
+    pos, opts = split_args((data,) + rest, fname, 1, 2)
+    o, gopts = fin_options(fname, opts)
+    inds = pos[1] if len(pos) > 1 else L()
+    ind_list = list(inds.args) if K.is_list(inds) else [inds]
+    for ind in ind_list:
+        if ind not in ("Volume", "V"):
+            raise NotImplementedError(f"{fname}: the indicator {K_input(ind)} is not supported (only \"Volume\")")
+    dv = dated_values(pos[0], fname, k=4, what="{date, {open, high, low, close, volume}} elements")
+    up, down = trend_styles(o, fname)
+    content, ys = candles(dv, fname, up, down)
+    ticks = _date_ticks_seq([d for d, _ in dv])
+    xr = (0.5, len(dv) + 0.5)
+    panels = [Expr("Graphics", L(*content), Expr("Rule", Symbol("AspectRatio"), Expr("Times", 1 / 2)),
+                   Expr("Rule", Symbol("Axes"), True), Expr("Rule", Symbol("Ticks"), L(ticks, AUTO)),
+                   Expr("Rule", Symbol("PlotRange"), range_expr([xr, P2.data_range(ys)])))]
+    vols = [v[4] for _, v in dv if len(v) == 5]
+    if vols and len(vols) == len(dv):
+        if any(v < 0 for v in vols):
+            raise ValueError(f"{fname}: volumes must be non-negative")
+        vb = [Expr("Rectangle", pt(i + 1 - 0.3, 0.0), pt(i + 1 + 0.3, v)) for i, v in enumerate(vols)]
+        panels.append(Expr("Graphics", L(L(Expr("GrayLevel", 0.5), *vb)), Expr("Rule", Symbol("AspectRatio"), 0.2),
+                           Expr("Rule", Symbol("Axes"), True),
+                           Expr("Rule", Symbol("PlotRange"), range_expr([xr, (0.0, max(vols) or 1.0)]))))
+    elif any(i in ("Volume", "V") for i in ind_list):
+        raise ValueError(f"{fname}: the Volume indicator needs {{open, high, low, close, volume}} data")
+    return Expr("GraphicsColumn", L(*panels), *gopts)
+
+
+# ───────────────────────────── word clouds ─────────────────────────────
+
+def _word_weights(data, fname):
+    d, _, _ = P2._unwrap(data, fname)
+    if isinstance(d, str):
+        raise NotImplementedError(f"{fname}: word clouds of a text string need Wolfram's stopword list and are not "
+                                  "supported; give a list of words or {word, weight} pairs")
+    if isinstance(d, Expr) and d.head == "Association":
+        return [(k, P2.scalar(v, fname)) for k, v in P2._assoc_items(d)]
+    if is_rule(d) and K.is_list(d.args[0]) and K.is_list(d.args[1]):
+        ws, ss = d.args[0].args, d.args[1].args
+        if len(ws) != len(ss):
+            raise ValueError(f"{fname}: the weight and word lists must have the same length")
+        return [(s, P2.scalar(w, fname)) for w, s in zip(ws, ss)]
+    if not K.is_list(d):
+        if isinstance(d, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of words, not {K_input(d)}")
+    items = list(d.args)
+    if items and all(is_rule(e) for e in items):
+        return [(e.args[1], P2.scalar(e.args[0], fname)) for e in items]
+    if items and all(K.is_list(e) and len(e.args) == 2 and num(e.args[1]) is not None for e in items):
+        return [(e.args[0], P2.scalar(e.args[1], fname)) for e in items]
+    counts, order = {}, []
+    for e in items:
+        if is_missing(e):
+            continue
+        k = K_input(e)
+        if k not in counts:
+            counts[k] = [e, 0]
+            order.append(k)
+        counts[k][1] += 1
+    return [(counts[k][0], float(counts[k][1])) for k in order]
+
+
+def wordcloud_layout(words, fmax=40.0):
+    """[(word, font size, x, y, w, h)]: sizes proportional to the weights (largest fmax), boxes 0.6 size per
+    character wide and size high, placed in decreasing weight along an Archimedean spiral at the first position
+    where the box overlaps no earlier box."""
+    wmax = max(w for _, w in words)
+    order = sorted(range(len(words)), key=lambda i: -words[i][1])
+    placed = []
+    for i in order:
+        s, w = words[i]
+        fs = fmax * w / wmax
+        text = s if isinstance(s, str) else K_input(s)
+        bw, bh = 0.6 * fs * max(1, len(text)), fs
+        t = 0.0
+        while True:
+            r = 0.8 * t
+            x, y = r * math.cos(t), r * math.sin(t) * 0.6
+            ok = all(abs(x - px) * 2 >= bw + pw - 1e-9 or abs(y - py) * 2 >= bh + ph - 1e-9
+                     for _, _, px, py, pw, ph in placed)
+            if ok:
+                placed.append((s, fs, x, y, bw, bh))
+                break
+            t += 0.05
+    return placed
+
+
+@fn("WordCloud", area=AREA, status="added",
+    notes="WordCloud[{s1, s2, ...}] (weights = multiplicities), [{w1 -> s1, ...}], [<|s1 -> w1, ...|>], [{w1, ...} -> "
+          "{s1, ...}] and [{{s1, w1}, ...}]: Graphics[{{colour, Text[Style[s, FontSize -> f], {x, y}]}, ...}] with "
+          "the font size f proportional to the weight (largest 40; \"linear dimensions proportional to the weight\", "
+          "as documented). Layout (Wolfram's is randomised): words in decreasing weight on an Archimedean spiral, "
+          "each at the first position where its box (0.6 f per character by f) overlaps no earlier box; the "
+          "layout is verified to be overlap-free. Weights must be positive. Text strings (stopword removal), "
+          "shape masks, rotations and WordOrientation/WordSpacings settings raise NotImplementedError. Check: "
+          "self-check (non-overlap of the boxes, raises ArithmeticError) and reference (sizes proportional to "
+          "weights in tests).")
+def _wordcloud(data: ListOf[Expr] | Assoc | Rule, *rest: Expr | Option) -> Expr:
+    fname = "WordCloud"
+    pos, opts = split_args((data,) + rest, fname, 1, 2)
+    if len(pos) > 1:
+        raise NotImplementedError(f"{fname}: shape masks are not supported")
+    o, gopts = split_options(fname, opts, {"WordOrientation": AUTO, "WordSpacings": AUTO, "ScalingFunctions": NONE,
+                                           "WordSelectionFunction": AUTO, "ColorFunction": AUTO,
+                                           "ColorFunctionScaling": True, "PerformanceGoal": AUTO,
+                                           "MaxItems": AUTO, "FontFamily": AUTO, "PlotTheme": AUTO, "Method": AUTO})
+    _unsupported(o, fname, ())
+    words = [(s, w) for s, w in _word_weights(pos[0], fname) if w is not None]
+    if not words:
+        raise ValueError(f"{fname}: there are no words with weights")
+    if any(not w > 0 for _, w in words):
+        raise ValueError(f"{fname}: weights must be positive")
+    lay = wordcloud_layout(words)
+    for a in range(len(lay)):
+        for b in range(a):
+            _, _, x1, y1, w1, h1 = lay[a]
+            _, _, x2, y2, w2, h2 = lay[b]
+            if abs(x1 - x2) * 2 < w1 + w2 - 1e-6 and abs(y1 - y2) * 2 < h1 + h2 - 1e-6:
+                raise ArithmeticError(f"{fname}: result failed verification (overlapping words)")
+    content = [L(default_color(k), Expr("Text", Expr("Style", s, Expr("Rule", Symbol("FontSize"), fl(f))), pt(x, y)))
+               for k, (s, f, x, y, _w, _h) in enumerate(lay)]
+    xs = [x - w / 2 for _, _, x, _, w, _ in lay] + [x + w / 2 for _, _, x, _, w, _ in lay]
+    ys = [y - h / 2 for _, _, _, y, _, h in lay] + [y + h / 2 for _, _, _, y, _, h in lay]
+    return finish_graphics(L(*content), gopts, [("PlotRange", range_expr([(min(xs), max(xs)), (min(ys), max(ys))])),
+                                                ("AspectRatio", Symbol("Automatic"))])
+
+
+# ───────────────────────────── image plots ─────────────────────────────
+
+def image_pixels(img, fname):
+    """(numpy array h x w x c of floats, colour space) of an Image."""
+    np = _np()
+    if not (isinstance(img, Expr) and img.head == "Image"):
+        if isinstance(img, (Symbol,)) or (isinstance(img, Expr) and not K.is_list(img)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: argument 1 must be an Image, not {K_input(img)}")
+    if img.head == "Image3D":
+        raise NotImplementedError(f"{fname}: Image3D is not supported")
+    data = ev(Expr("ImageData", img))
+    cs = ev(Expr("ImageColorSpace", img))
+    try:
+        A = np.array(K.to_python(data) if hasattr(K, "to_python") else _nested(data), dtype=float)
+    except (TypeError, ValueError):
+        raise ValueError(f"{fname}: could not read the image data")
+    if A.ndim == 2:
+        A = A[:, :, None]
+    return A, cs
+
+
+def _nested(x):
+    if K.is_list(x):
+        return [_nested(a) for a in x.args]
+    v = num(x)
+    return v if v is not None else float("nan")
+
+
+_IMG_DEFAULTS = {"PlotStyle": AUTO, "PlotRange": AUTO, "PlotLegends": NONE, "PlotTheme": AUTO, "Joined": AUTO,
+                 "InterpolationOrder": AUTO, "Method": AUTO, "MaxPlotPoints": AUTO, "AppearanceElements": AUTO}
+
+
+@fn("ImageHistogram", area=AREA, status="added",
+    notes="ImageHistogram[image], [image, bspec], [image, bspec, range]: per channel (gray, or red/green/blue for RGB "
+          "and \"RGBA\" without alpha), the pixel counts in n equal bins over the range, drawn as Rectangle bars "
+          "{colour, Opacity[0.5], Rectangle[{b_i, 0}, {b_(i+1), count_i}], ...} (zero bins omitted); the last bin "
+          "is closed so that the maximum level counts (as Wolfram's level histograms). bspec: Automatic (128 bins; "
+          "2 for \"Bit\" images, as documented), n, or \"Byte\" (256 levels after rounding to bytes); range: "
+          "Automatic ({0, 1}), {min, max}, {All, max}, {min, All} or All (the data range). Other colour spaces and "
+          "Image3D raise NotImplementedError. Check: exact (counts compared with BinCounts of ImageData in tests).")
+def _imagehistogram(img: Expr, *rest: Expr | Option) -> Expr:
+    fname = "ImageHistogram"
+    pos, opts = split_args((img,) + rest, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _IMG_DEFAULTS)
+    _unsupported(o, fname, ())
+    np = _np()
+    A, cs = image_pixels(pos[0], fname)
+    nch = A.shape[2]
+    if cs not in ("Grayscale", "RGB", "Automatic", Symbol("Automatic")) and not is_sym(cs, "Automatic"):
+        raise NotImplementedError(f"{fname}: the colour space {K_input(cs)} is not supported")
+    if nch == 4:
+        A, nch = A[:, :, :3], 3
+    if nch not in (1, 3):
+        raise NotImplementedError(f"{fname}: images with {nch} channels are not supported")
+    itype = ev(Expr("ImageType", pos[0]))
+    bspec = pos[1] if len(pos) > 1 else AUTO
+    rspec = pos[2] if len(pos) > 2 else AUTO
+    if is_sym(rspec, "Automatic"):
+        lo, hi = 0.0, 1.0
+    elif is_sym(rspec, "All"):
+        lo, hi = float(np.nanmin(A)), float(np.nanmax(A))
+    elif K.is_list(rspec) and len(rspec.args) == 2:
+        a, b = rspec.args
+        lo = float(np.nanmin(A)) if is_sym(a, "All") else float(real_number(a, fname, "the range minimum"))
+        hi = float(np.nanmax(A)) if is_sym(b, "All") else float(real_number(b, fname, "the range maximum"))
+    else:
+        raise ValueError(f"{fname}: {K_input(rspec)} is not a valid range")
+    if not hi > lo:
+        raise ValueError(f"{fname}: the range needs min < max")
+    vals = A
+    if bspec == "Byte":
+        vals = np.round(np.clip((A - lo) / (hi - lo), 0, 1) * 255) / 255 * (hi - lo) + lo
+        n = 256
+        edges = np.linspace(lo - 0.5 * (hi - lo) / 255, hi + 0.5 * (hi - lo) / 255, 257)
+    else:
+        if is_sym(bspec, "Automatic"):
+            n = 2 if itype == "Bit" else 128
+        elif is_sym(bspec, "All"):
+            raise NotImplementedError(f"{fname}: the bin specification All is not supported")
+        else:
+            n = pos_int(bspec, fname, "the number of bins")
+        edges = np.linspace(lo, hi, n + 1)
+    colors = [Expr("GrayLevel", 0.4)] if nch == 1 else [Expr("RGBColor", 1, 0, 0), Expr("RGBColor", 0, 0.7, 0),
+                                                         Expr("RGBColor", 0, 0, 1)]
+    content, cmax = [], 0
+    for c in range(nch):
+        v = vals[:, :, c].ravel()
+        v = v[np.isfinite(v)]
+        v = v[(v >= edges[0]) & (v <= edges[-1])]
+        idx = np.minimum(np.searchsorted(edges, v, side="right") - 1, n - 1)
+        counts = np.bincount(idx, minlength=n)
+        cmax = max(cmax, int(counts.max()) if counts.size else 0)
+        rs = [Expr("Rectangle", pt(edges[i], 0.0), pt(edges[i + 1], float(counts[i]))) for i in range(n) if counts[i]]
+        content.append(L(colors[c], Expr("Opacity", 0.5), Expr("EdgeForm"), *rs))
+    return finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Frame", True),
+                                                ("PlotRange", range_expr([(float(edges[0]), float(edges[-1])),
+                                                                          (0.0, float(cmax or 1))]))])
+
+
+KR, KG, KB = 0.2126, 0.7152, 0.0722         # Y of the sRGB/BT.709 primaries in XYZ
+
+
+@fn("ImageVectorscopePlot", area=AREA, status="added",
+    notes="ImageVectorscopePlot[image]: the chrominance {Cb, Cr} of every pixel as Point[{{Cb, Cr}, ...}, "
+          "VertexColors -> pixel colours], with Y = 0.2126 R + 0.7152 G + 0.0722 B (the Y components of the XYZ "
+          "representation of the sRGB primaries, as documented), Cb = (B - Y)/(2 (1 - 0.0722)) and Cr = (R - Y)/(2 "
+          "(1 - 0.2126)); grayscale images give the origin. More than MaxPlotPoints pixels (default 40000) are "
+          "subsampled on a regular stride. AspectRatio 1, PlotRange {{-0.5, 0.5}, {-0.5, 0.5}}. Other colour spaces "
+          "raise NotImplementedError. Check: reference (Cb, Cr of pure colours in tests: red {-0.1146, 0.5}).")
+def _imagevectorscopeplot(img: Expr, *opts: Option) -> Expr:
+    fname = "ImageVectorscopePlot"
+    pos, opts_ = split_args((img,) + opts, fname, 1, 1)
+    o, gopts = split_options(fname, opts_, _IMG_DEFAULTS)
+    _unsupported(o, fname, ("MaxPlotPoints",))
+    np = _np()
+    A, cs = image_pixels(pos[0], fname)
+    if A.shape[2] == 1:
+        A = np.repeat(A, 3, axis=2)
+    if A.shape[2] == 4:
+        A = A[:, :, :3]
+    if A.shape[2] != 3:
+        raise NotImplementedError(f"{fname}: images with {A.shape[2]} channels are not supported")
+    if isinstance(cs, str) and cs not in ("RGB", "Grayscale"):
+        raise NotImplementedError(f"{fname}: the colour space {cs!r} is not supported")
+    mp = o["MaxPlotPoints"]
+    m = 40000 if is_sym(mp, "Automatic") else pos_int(mp, fname, "MaxPlotPoints")
+    px = A.reshape(-1, 3)
+    if len(px) > m:
+        px = px[:: int(math.ceil(len(px) / m))]
+    R, Gc, B = px[:, 0], px[:, 1], px[:, 2]
+    Y = KR * R + KG * Gc + KB * B
+    Cb = (B - Y) / (2 * (1 - KB))
+    Cr = (R - Y) / (2 * (1 - KR))
+    pts_ = pts(list(zip(Cb.tolist(), Cr.tolist())))
+    cols = L(*[Expr("RGBColor", *[fl(min(max(c, 0.0), 1.0)) for c in p]) for p in px.tolist()])
+    content = [Expr("Point", pts_, Expr("Rule", Symbol("VertexColors"), cols))]
+    return finish_graphics(L(*content), gopts, [("AspectRatio", 1), ("Axes", True),
+                                                ("PlotRange", range_expr([(-0.5, 0.5), (-0.5, 0.5)]))])
+
+
+@fn("PairedBarChart", area=AREA, status="added",
+    notes="PairedBarChart[{y1, y2, ...}, {z1, z2, ...}]: back-to-back horizontal bars, item i at height i "
+          "(bottom to top), y_i to the left (Rectangle[{-y_i, i - 0.4}, {0, i + 0.4}]) and z_i to the right "
+          "(Rectangle[{0, i - 0.4}, {z_i, i + 0.4}]); negative values point the other way, zero bars are omitted. "
+          "The two lists may differ in length. Grouped data {{...}, ...} on a side raises NotImplementedError. "
+          "Options: ChartStyle (one style per side, or per bar with {{...}, {...}}), ChartBaseStyle, ChartLabels "
+          "(labels of the items), ChartLegends, PlotRange and Graphics options. Check: reference (bar extents "
+          "equal the data in tests).")
+def _pairedbarchart(d1: ListOf[Real], d2: ListOf[Real], *opts: Option) -> Expr:
+    fname = "PairedBarChart"
+    pos, opts_ = split_args((d1, d2) + opts, fname, 2, 2)
+    o, gopts = chart_options(fname, opts_, ("ChartLabels",))
+    sides = []
+    for d in pos:
+        du, _, _ = P2._unwrap(d, fname)
+        if K.is_list(du) and any(K.is_list(P2._unwrap(a, fname)[0]) for a in du.args):
+            raise NotImplementedError(f"{fname}: grouped data on a side is not supported")
+        sides.append(values_of(d, fname))
+    styles = chart_styles(o, 2, fname)
+    content, hmax = [], 0.0
+    for side, vs, st in ((-1, sides[0], styles[0]), (1, sides[1], styles[1])):
+        rs = []
+        for i, v in enumerate(vs):
+            v = float(v)
+            if v == 0:
+                continue
+            hmax = max(hmax, abs(v))
+            x0, x1 = sorted((0.0, side * v))
+            rs.append(Expr("Rectangle", pt(x0, i + 1 - 0.4), pt(x1, i + 1 + 0.4)))
+        if st is not None and rs:
+            content.append(L(st, *rs))
+    n = max(len(sides[0]), len(sides[1]), 1)
+    r = _range_2d(o, fname, (-(hmax or 1.0), hmax or 1.0), (0.5, n + 0.5))
+    lab = o["ChartLabels"]
+    ticks = AUTO
+    if K.is_list(lab):
+        ticks = L(*[L(k + 1, lab.args[k]) for k in range(min(n, len(lab.args)))])
+    elif not is_sym(lab, "None"):
+        raise NotImplementedError(f"{fname}: ChartLabels -> {K_input(lab)} is not supported; give a list of labels")
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("Ticks", L(AUTO, ticks)),
+                                             ("PlotRange", range_expr(r))])
+    return _legend(g, o, styles, fname)
