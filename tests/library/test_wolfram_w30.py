@@ -386,7 +386,8 @@ COMP = [
     ('FunctionDeclaration[w30f, 5]', Raises(TypeError)),
     ('FunctionDeclaration[w30f, Typed[{"Integer64"} -> "Integer64"]@Function[a, a], "Inline" -> "Sometimes"]', Raises(ValueError)),
     ('FunctionDeclaration[w30f, Typed[{"Integer64"} -> "Integer64"]@Function[a, a], "Inline" -> "Always"] // Head', 'FunctionDeclaration'),
-    ('FunctionDeclaration[w30f, Typed[{"Integer64"} -> "Integer64"]@KernelFunction[w30g]]', Raises(NotImplementedError)),
+    ('FunctionDeclaration[w30f, Typed[{"Integer64"} -> "Integer64"]@KernelFunction[w30g]]',   # X01: inert declaration
+     'FunctionDeclaration[w30f, Typed[KernelFunction[w30g], {"Integer64"} -> "Integer64"]]'),
     ('FunctionCompile[{FunctionDeclaration[w30poly, Typed[ForAllType[t, {TypeSpecifier["ListVector"][t]} -> t]]@Function[list, First[list]]]}, Function[Typed[list, TypeSpecifier["ListVector"]["MachineInteger"]], w30poly[list]]][{7, 3, 6, 4}]', '7'),
     ('FunctionCompile[{FunctionDeclaration[w30va, Typed[ForAllType[t, {"MachineInteger", SequenceType[t]} -> "MachineInteger"]]@Function[{e1, seq}, e1 + w30va[seq]]], FunctionDeclaration[w30va, Typed[{"MachineInteger"} -> "MachineInteger"]@Function[{e1}, e1]]}, Function[{Typed[x, "MachineInteger"], Typed[y, "MachineInteger"], Typed[z, "MachineInteger"]}, w30va[x, y, z]]][1, 2, 3]', '6'),
     ('FunctionCompile[{FunctionDeclaration[w30rk, Typed[ForAllType[r, {TypeSpecifier["PackedArray"]["MachineInteger", r]} -> TypeSpecifier["PackedArray"]["MachineInteger", TypeEvaluate[r + 1]]]]@Function[array, {array}]]}, Function[Typed[arg, TypeSpecifier["PackedArray"]["MachineInteger", 2]], w30rk[arg]]][{{1, 2, 3}, {4, 5, 6}}]', '{{{1, 2, 3}, {4, 5, 6}}}'),

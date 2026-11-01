@@ -513,7 +513,7 @@ STACK_TRACE = [
      form("{w1fac[2], 2*w1fac[2 - 1], {{2 - 1, 1}, w1fac[1], 1}, 2*1, 2}")),
     (FAC + "Trace[w1fac[1], TraceOff -> w1nomatch] === Trace[w1fac[1]]", True),
     ("Trace[1 + 2 3, TraceOff -> _Times]", form("{{2*3, 6}, 1 + 6, 7}")),
-    ("Trace[1 + 1, TraceOriginal -> True]", Raises(NotImplementedError)),
+    ("Trace[1 + 1, TraceOriginal -> True]", form("{1 + 1, {Plus}, {1}, {1}, 1 + 1, 2}")),   # X01: implemented
     ("Trace[1 + 1, TraceOriginal -> False]", form("{1 + 1, 2}")),
     ("Trace[1 + 1, Bogus -> 1]", Raises()),
     (FAC + "Trace[w1fac[1], w1fac]", form("{w1fac[1], {w1fac[0]}}")),

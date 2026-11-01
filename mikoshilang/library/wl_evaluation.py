@@ -426,7 +426,8 @@ def _install_parse_hook():
 def all_symbols():
     """Full names of every symbol that exists (System` names included)."""
     d = _ctxdata()
-    out = {"System`" + n for n in system_names()}
+    # internal heads registered with a context (Compile`...) are already full names
+    out = {n if "`" in n else "System`" + n for n in system_names()}
     out |= {"Global`" + n for n in (d["globals"] | _defined_bare()) if not is_system(n)}
     out |= {n for n in d["symbols"]}
     for k in list(st().own) + list(st().down) + list(st().attrs):

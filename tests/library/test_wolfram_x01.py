@@ -603,6 +603,24 @@ def x01_env():
         shutil.rmtree(p, ignore_errors=True)
 
 
+@pytest.fixture(autouse=True)
+def x01_tasks():
+    """Remove the URLSubmit/URLDownloadSubmit tasks a case created (Tasks[] is shared with other modules)."""
+    from mikoshilang.library import wl_system as W
+    before = set(W._ALL_TASKS)
+    yield
+    for uuid in list(W._ALL_TASKS):
+        if uuid not in before:
+            t = W._ALL_TASKS[uuid]
+            try:
+                th = getattr(t, "thread", None)
+                if th is not None:
+                    th.join(5)
+                t.remove()
+            except Exception:  # noqa: BLE001 - cleanup
+                pass
+
+
 def _sub(x, subs):
     if not isinstance(x, str):
         return x
