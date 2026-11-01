@@ -422,7 +422,9 @@ INTERP = [
     ("(y /. First[NDSolve[{y'[x] == -y[x], y[0] == 1}, y, {x, 0, 2}]])[1.]", Near(float(mp.exp(-1)), 1e-8)),
     ("NDSolve[{y'[x] == y[x], y[1] == 1}, y[x], {x, 0, 2}] /. x -> 0", Pred(lambda g: abs(g.args[0].args[0].args[1] - float(mp.exp(-1))) < 1e-8, "{{y[0] -> E^-1}}")),
     ("Head[NDSolve[{y'[x] == -y[x], y[0] == 1}, y, {x, 0, 2}][[1, 1, 2]]]", "InterpolatingFunction"),
-    ("NDSolve[{y''[x] == y[x], y[0] == 1, y[1] == 2}, y, {x, 0, 1}]", Raises()),
+    # two-point boundary-value problem (linear BVPs are solved since W26): y = Cosh[x] + (2 - Cosh[1]) Sinh[x]/Sinh[1]
+    ("(y /. First[NDSolve[{y''[x] == y[x], y[0] == 1, y[1] == 2}, y, {x, 0, 1}]])[0.5]",
+     Near(float(mp.cosh(0.5) + (2 - mp.cosh(1)) * mp.sinh(0.5) / mp.sinh(1)), 1e-9)),
     ("NDSolve[{y'[x] == y[x]}, y, {x, 0, 1}]", Raises()),
     ("{x[1.], y[1.]} /. First[NDSolve[{x'[t] == -y[t] - x[t]^2, y'[t] == 2 x[t] - y[t]^3, x[0] == y[0] == 1}, {x, y}, {t, 20}]]",
      Pred(lambda g: abs(g.args[0] + 0.17032312) < 1e-7 and abs(g.args[1] - 0.70724363) < 1e-7, "SciPy reference")),

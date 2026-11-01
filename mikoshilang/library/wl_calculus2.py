@@ -29,6 +29,7 @@ from .. import kernel_lists as KL
 from .core import (fn, record, R, L, rule, sym, is_list, Unevaluated, nonneg_int, int_arg, pos_int, has_float,
                    matrix_arg, mat_out)
 from .wl_symbolic import out, wl_fix, is_true, is_false, is_rule
+from .wl_common import reject_options
 
 AREA = "calculus extras (W06)"
 _sym_ = Symbol
@@ -3151,15 +3152,15 @@ def _diffroot_hook(head, args, ev):
         return K.UNHANDLED
     tf = float(sp.re(tv))
     f = sp.lambdify([xv] + Ys[:order], G, "mpmath")
-    mpmath.mp.dps = 20
-    try:
-        sol = mpmath.odefun(lambda xx, yy: list(yy[1:]) + [f(xx, *yy)], float(x0), [complex(sp.N(v)) for v in vals]
-                            if any(sp.N(v).has(sp.I) for v in vals) else [float(sp.N(v)) for v in vals])
-        r = sol(tf)[0]
-    except Exception as exc:
-        raise ValueError(f"DifferentialRoot: numerical integration failed ({exc})")
-    finally:
-        mpmath.mp.dps = 15
+    # workdps restores the caller's precision (this used to set mpmath.mp.dps = 15 globally afterwards)
+    with mpmath.workdps(20):
+        try:
+            sol = mpmath.odefun(lambda xx, yy: list(yy[1:]) + [f(xx, *yy)], float(x0),
+                                [complex(sp.N(v)) for v in vals] if any(sp.N(v).has(sp.I) for v in vals)
+                                else [float(sp.N(v)) for v in vals])
+            r = sol(tf)[0]
+        except Exception as exc:
+            raise ValueError(f"DifferentialRoot: numerical integration failed ({exc})")
     r = complex(r)
     return float(r.real) if abs(r.imag) < 1e-14 else R(r)
 
@@ -5364,6 +5365,7 @@ def _lineint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
 def _nlineint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "NLineIntegrate"
     rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal"}, fname)
+    reject_options(_o, _o, fname, 7)
     if rest:
         raise ValueError(f"{fname}: unexpected arguments {rest}")
     return _num_result(_num_total(_line_parts(f, spec, fname), fname), fname)
@@ -5390,6 +5392,7 @@ def _surfint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
 def _nsurfint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "NSurfaceIntegrate"
     rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal"}, fname)
+    reject_options(_o, _o, fname, 7)
     if rest:
         raise ValueError(f"{fname}: unexpected arguments {rest}")
     return _num_result(_num_total(_surface_parts(f, spec, fname), fname), fname)
@@ -5487,6 +5490,7 @@ def _contourint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
 def _ncontourint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "NContourIntegrate"
     rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal", "MaxRecursion"}, fname)
+    reject_options(_o, _o, fname, 7)
     if rest:
         raise ValueError(f"{fname}: unexpected arguments {rest}")
     z, reg = _contour_spec(spec, fname)
@@ -5664,6 +5668,7 @@ def _caputod(f: Expr, spec: Expr, *rest: Expr) -> Expr:
 
 def _nfrac_fn(f, spec, x0, rest, fname, caputo):
     rest, o = _opts(rest, {"Method", "WorkingPrecision", "AccuracyGoal", "PrecisionGoal"}, fname)
+    reject_options(o, ("WorkingPrecision", "AccuracyGoal", "PrecisionGoal"), fname, 7)
     if rest:
         raise ValueError(f"{fname}: unexpected arguments {rest}")
     meth = o.get("Method")

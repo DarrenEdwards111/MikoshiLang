@@ -10,6 +10,7 @@ import re
 import json
 from .expr import Expr, Symbol
 from .evaluate import evaluate
+from . import notation_ops as _NOTATION
 
 # ── Token types ──
 
@@ -57,6 +58,13 @@ _TOKEN_SPEC = [
     ("TWOWAYRULE", r'<->'),
     ("VECTOROP",  r'\\\[Vector(?:LessEqual|GreaterEqual|Less|Greater)\]'),
     ("NAMEDOP",   r'\\\[(?:DirectedEdge|UndirectedEdge|Distributed|TwoWayRule)\]'),
+    # Notation operators (W31/W32): \[Name] long names and Wolfram's characters; the value becomes the head name
+    # (\[GreaterSlantEqual] and \[LessSlantEqual] become GEQ/LEQ tokens, as in Wolfram).
+    ("NOTATION",  '|'.join(re.escape(k) for k in sorted(_NOTATION.input_map(), key=len, reverse=True))),
+    ("LANGLE",    r'\\\[LeftAngleBracket\]|\u2329'),
+    ("RANGLE",    r'\\\[RightAngleBracket\]|\u232a'),
+    ("LDBAR",     r'\\\[LeftDoubleBracketingBar\]|\uf605'),
+    ("RDBAR",     r'\\\[RightDoubleBracketingBar\]|\uf606'),
     ("RULE",      r'->'),
     ("REPLACEREPEATED", r'//\.'),
     ("APPLYTO",   r'//=(?!=)'),
@@ -122,9 +130,11 @@ _TOKEN_SPEC = [
     ("NEWLINE",   r'\n'),
 ]
 
+_NOTATION_INPUT = _NOTATION.input_map()
 _TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _TOKEN_SPEC), re.DOTALL)
 
 _STATEMENT_END = ("INTEGER", "FLOAT", "BIGNUM", "SCINUM", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "RASSOC",
+                  "RANGLE", "RDBAR",
                   "FUNCTION", "SLOT", "SLOTSEQ", "SLOTNAME", "INCREMENT", "DECREMENT", "BLANK", "BLANKS",
                   "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL", "OUT", "GET", "UNSET", "PUT", "PUTAPPEND")
 
@@ -216,10 +226,16 @@ def tokenize(text: str) -> ListType[Token]:
             continue
         if kind in ("WS", "COMMENT"):
             continue
-        if kind in ("LPAREN", "LSQUARE", "LBRACE", "LASSOC"):
+        if kind in ("LPAREN", "LSQUARE", "LBRACE", "LASSOC", "LANGLE", "LDBAR"):
             level += 1
-        elif kind in ("RPAREN", "RSQUARE", "RBRACE", "RASSOC"):
+        elif kind in ("RPAREN", "RSQUARE", "RBRACE", "RASSOC", "RANGLE", "RDBAR"):
             level -= 1
+        if kind == "NOTATION":
+            value = _NOTATION_INPUT[value]
+            if value in ("GreaterEqual", "LessEqual"):
+                kind = "GEQ" if value == "GreaterEqual" else "LEQ"
+            elif _NOTATION.OPS[value][2] == "prefix":
+                kind = "NOTATIONPREFIX"
         if kind == "INTEGER":
             value = int(value)
         elif kind == "FLOAT":
@@ -250,6 +266,7 @@ class Parser:
     def __init__(self, tokens: ListType[Token]):
         self.tokens = tokens
         self.pos = 0
+        self._band = []        # per-product flags: a CenterDot..Backslash operator was used (see parse_multiplication)
 
     def peek(self) -> Optional[Token]:
         if self.pos < len(self.tokens):
@@ -305,9 +322,8 @@ class Parser:
 
     def parse_assignment(self) -> Any:
         """Handle =, :=, ^=, ^:=, f /: lhs = rhs, =., +=, -=, *=, /=, //= (right-associative)."""
-        expr = self.parse_postfix_application()
-        ops = {"SET": "Set", "SETDELAYED": "SetDelayed", "ADDTO": "AddTo",
-               "SUBTRACTFROM": "SubtractFrom", "TIMESBY": "TimesBy", "DIVIDEBY": "DivideBy",
+        expr = self._notation(50, self._parse_vertical_separator)
+        ops = {"SET": "Set", "SETDELAYED": "SetDelayed",
                "UPSET": "UpSet", "UPSETDELAYED": "UpSetDelayed", "APPLYTO": "ApplyTo"}
         tok = self.peek()
         if tok is not None and tok.type == "UNSET":
@@ -333,16 +349,16 @@ class Parser:
 
     def parse_postfix_application(self) -> Any:
         """Handle expr // f  (== f[expr]), lowest precedence above assignment."""
-        expr = self.parse_function()
+        expr = self._notation(80, self.parse_function)
         while self.at("POSTFIXAPP"):
             self.advance()
-            f = self.parse_function()
+            f = self._notation(80, self.parse_function)
             expr = Expr(_as_head(f), expr)
         return expr
 
     def parse_function(self) -> Any:
         """Handle postfix & (pure functions) and direct application (body &)[args]."""
-        expr = self.parse_replace_all()
+        expr = self.parse_add_to()
         while self.at("FUNCTION"):
             self.advance()
             expr = Expr("Function", expr)
@@ -354,7 +370,7 @@ class Parser:
                     expr = Expr(expr, *args)
                     continue
                 op = self.advance().type
-                rhs = self.parse_replace_all()
+                rhs = self.parse_add_to()
                 if op == "MAP":
                     expr = Expr("Map", expr, rhs)
                 elif op == "MAPALL":
@@ -367,6 +383,18 @@ class Parser:
                     expr = Expr(expr, rhs)
         return expr
 
+    _ADD_TO = {"ADDTO": "AddTo", "SUBTRACTFROM": "SubtractFrom", "TIMESBY": "TimesBy", "DIVIDEBY": "DivideBy"}
+
+    def parse_add_to(self) -> Any:
+        """Handle x += y, x -= y, x *= y, x /= y (precedence 100, right-grouping: between & (90) and /. (110), so
+        ``x += 1 &`` is Function[AddTo[x, 1]] and ``x += y // f`` is f[AddTo[x, y]], as in Wolfram)."""
+        expr = self.parse_replace_all()
+        tok = self.peek()
+        if tok is not None and tok.type in self._ADD_TO:
+            self.advance()
+            return Expr(self._ADD_TO[tok.type], expr, self.parse_add_to())
+        return expr
+
     def parse_replace_all(self) -> Any:
         """Handle /. (ReplaceAll) and //. (ReplaceRepeated), left-associative."""
         expr = self.parse_rule()
@@ -377,17 +405,24 @@ class Parser:
         return expr
 
     def parse_rule(self) -> Any:
-        """Handle -> and :> (right-associative). Condition binds tighter, as in Wolfram."""
-        expr = self.parse_condition()
+        """Handle -> and :> (precedence 120, right-associative). TwoWayRule and Condition bind tighter."""
+        expr = self.parse_two_way_rule()
         if self.at("RULE", "RULEDELAYED"):
             op = self.advance().type
             rhs = self.parse_rule()
             expr = Expr("RuleDelayed" if op == "RULEDELAYED" else "Rule", expr, rhs)
-        elif self.at("TWOWAYRULE", "NAMEDOP"):        # a <-> b, \[DirectedEdge], \[UndirectedEdge], \[Distributed]
-            tok = self.advance()
-            head = "TwoWayRule" if tok.type == "TWOWAYRULE" else tok.value[2:-1]
-            rhs = self.parse_rule()
-            expr = Expr(head, expr, rhs)
+        return expr
+
+    def _at_named(self, *names) -> bool:
+        tok = self.peek()
+        return tok is not None and tok.type == "NAMEDOP" and tok.value[2:-1] in names
+
+    def parse_two_way_rule(self) -> Any:
+        """Handle a <-> b and a \\[TwoWayRule] b (precedence 125, right-associative: between -> and /;)."""
+        expr = self.parse_condition()
+        if self.at("TWOWAYRULE") or self._at_named("TwoWayRule"):
+            self.advance()
+            return Expr("TwoWayRule", expr, self.parse_two_way_rule())
         return expr
 
     def parse_condition(self) -> Any:
@@ -436,7 +471,7 @@ class Parser:
 
     def parse_repeated(self) -> Any:
         """Handle postfix p.. (Repeated) and p... (RepeatedNull), precedence 170."""
-        expr = self.parse_or()
+        expr = self._notation(190, self.parse_or)
         while self.at("REPEATED", "REPEATEDNULL"):
             expr = Expr("Repeated" if self.advance().type == "REPEATED" else "RepeatedNull", expr)
         return expr
@@ -460,13 +495,38 @@ class Parser:
             self.advance()
             operand = self.parse_not()
             return Expr("Not", operand)
-        return self.parse_comparison()
+        return self._parse_element_level()
+
+    def _parse_element_level(self) -> Any:
+        """Precedence 250: NotElement, Subset, ... (notation table) and x \\[Distributed] dist (binary)."""
+        expr = self._notation(250, self.parse_sameq)
+        if self._at_named("Distributed"):
+            self.advance()
+            expr = Expr("Distributed", expr, self.parse_sameq())
+            if self._at_named("Distributed") or self._at_notation(250):
+                raise ParseError("Distributed and operators of precedence 250 cannot be chained; use parentheses")
+        return expr
+
+    def parse_sameq(self) -> Any:
+        """Handle a === b === c (SameQ) and a =!= b =!= c (UnsameQ): precedence 260, below the arrows (270) and
+        ==, < (290), so ``a == b === c`` is SameQ[Equal[a, b], c] as in Wolfram.  Chains are flat; SameQ and
+        UnsameQ are not mixed without parentheses (ParseError)."""
+        expr = self._parse_arrows()
+        if not self.at("SAMEQ", "UNSAMEQ"):
+            return expr
+        kind = self.peek().type
+        args = [expr]
+        while self.at(kind):
+            self.advance()
+            args.append(self._parse_arrows())
+        if self.at("SAMEQ", "UNSAMEQ"):
+            raise ParseError("=== and =!= have the same precedence; use parentheses")
+        return Expr("SameQ" if kind == "SAMEQ" else "UnsameQ", *args)
 
     _COMP_OPS = {
         "EQUAL": "Equal", "UNEQUAL": "Unequal",
         "LESS": "Less", "GREATER": "Greater",
         "LEQ": "LessEqual", "GEQ": "GreaterEqual",
-        "SAMEQ": "SameQ", "UNSAMEQ": "UnsameQ",
     }
 
     _EXPR_START = ("INTEGER", "FLOAT", "STRING", "SYMBOL", "LPAREN", "LBRACE", "LASSOC", "MINUS", "PLUS",
@@ -477,25 +537,30 @@ class Parser:
         if self.at("SPAN"):
             start = 1
         else:
-            start = self.parse_stringjoin()
+            start = self.parse_addition()
             if not self.at("SPAN"):
                 return start
         self.advance()
-        end = self.parse_stringjoin() if self.at(*self._EXPR_START) else Symbol("All")
+        end = self.parse_addition() if self.at(*self._EXPR_START) else Symbol("All")
         if self.at("SPAN"):
             self.advance()
-            step = self.parse_stringjoin()
+            step = self.parse_addition()
             return Expr("Span", start, end, step)
         return Expr("Span", start, end)
 
     def parse_comparison(self) -> Any:
-        expr = self.parse_span()
+        expr = self._parse_edges()
+        if self._at_notation(290):                        # x \[Succeeds] y ... (W31): never mixed with comparisons
+            expr = self._notation(290, self._parse_edges, first=expr)
+            if self.peek() is not None and (self.peek().type in self._COMP_OPS or self.peek().type == "VECTOROP"):
+                raise ParseError(f"{expr.head} and comparison operators have the same precedence; use parentheses")
+            return expr
         comparisons = []
         while self.peek() is not None and (self.peek().type in self._COMP_OPS or self.peek().type == "VECTOROP"):
             tok = self.advance()
             if tok.type == "VECTOROP":                    # x \[VectorLess] y  ->  VectorLess[{x, y}]
                 op = tok.value[2:-1]
-                rhs = self.parse_span()
+                rhs = self._parse_edges()
                 last = comparisons[-1] if comparisons else None
                 if last is not None and last.head == op and last.args[0].args[-1] is expr:
                     comparisons[-1] = Expr(op, Expr("List", *last.args[0].args, rhs))
@@ -504,9 +569,11 @@ class Parser:
                 expr = rhs
                 continue
             op = self._COMP_OPS[tok.type]
-            rhs = self.parse_span()
+            rhs = self._parse_edges()
             comparisons.append(Expr(op, expr, rhs))
             expr = rhs
+        if comparisons and self._at_notation(290):
+            raise ParseError(f"comparison operators and {self.peek().value} have the same precedence; use parentheses")
         if not comparisons:
             return expr
         if len(comparisons) == 1:
@@ -514,22 +581,14 @@ class Parser:
         # a < b < c  ==  a < b && b < c
         return Expr("And", *comparisons)
 
-    def parse_stringjoin(self) -> Any:
-        expr = self.parse_addition()
-        if self.at("STRINGJOIN"):
-            parts = [expr]
-            while self.at("STRINGJOIN"):
-                self.advance()
-                parts.append(self.parse_addition())
-            return Expr("StringJoin", *parts)
-        return expr
-
     def parse_addition(self) -> Any:
-        expr = self.parse_multiplication()
-        while self.at("PLUS", "MINUS"):
+        expr = self._notation(330, self._parse_cup)
+        while self.at("PLUS", "MINUS") or self._at_op("MinusPlus") or self._at_op("PlusMinus"):
             tok = self.advance()
-            rhs = self.parse_multiplication()
-            if tok.type == "PLUS":
+            rhs = self._notation(330, self._parse_cup)
+            if tok.type == "NOTATION":                    # x \[MinusPlus] y, x \[PlusMinus] y group left, like x - y
+                expr = Expr(tok.value, expr, rhs)
+            elif tok.type == "PLUS":
                 expr = Expr("Plus", expr, rhs)
             elif isinstance(rhs, (int, float)) and not isinstance(rhs, bool):
                 expr = Expr("Plus", expr, -rhs)          # Wolfram FullForm: a - 1 is Plus[a, -1]
@@ -538,23 +597,35 @@ class Parser:
         return expr
 
     def parse_multiplication(self) -> Any:
-        expr = self.parse_unary()
+        self._band.append(False)
+        try:
+            return self._parse_multiplication()
+        finally:
+            self._band.pop()
+
+    def _parse_multiplication(self) -> Any:
+        expr = self._parse_band()
+        divided = False
         while True:
             # Explicit * or /
             if self.at("TIMES"):
                 self.advance()
-                rhs = self.parse_unary()
+                rhs = self._parse_band()
                 expr = Expr("Times", expr, rhs)
             elif self.at("DIVIDE"):
                 self.advance()
-                rhs = self.parse_unary()
+                divided = True
+                rhs = self._parse_band()
                 expr = Expr("Times", expr, Expr("Power", rhs, -1))
             # Implicit multiplication: juxtaposition
             elif self._can_implicit_multiply(expr):
-                rhs = self.parse_unary()
+                rhs = self._parse_band()
                 expr = Expr("Times", expr, rhs)
             else:
                 break
+            if divided and self._band[-1]:
+                raise ParseError("'/' and the operators CenterDot, CircleTimes, Vee, Diamond, Backslash bind "
+                                 "differently in Wolfram (Divide binds tighter); use parentheses")
         return expr
 
     def _can_implicit_multiply(self, left) -> bool:
@@ -563,7 +634,7 @@ class Parser:
         if tok is None:
             return False
         return tok.type in ("SYMBOL", "LPAREN", "LBRACE", "LASSOC", "INTEGER", "FLOAT", "SLOT", "SLOTSEQ",
-                            "SLOTNAME")
+                            "SLOTNAME", "LANGLE", "LDBAR", "NOTATIONPREFIX", "STRING")
 
     def parse_unary(self) -> Any:
         if self.at("MINUS"):
@@ -575,7 +646,26 @@ class Parser:
         if self.at("PLUS"):
             self.advance()
             return self.parse_unary()
+        if self._at_op("MinusPlus") or self._at_op("PlusMinus"):     # \[MinusPlus] x, \[PlusMinus] x: like unary minus
+            return Expr(self.advance().value, self.parse_unary())
         return self.parse_dot()
+
+    def _tight_operand(self, level) -> Any:
+        """Right operand of a binary operator above unary minus (^, /@, @@, @): a leading - or + (or ± / ∓)
+        applies to one operand of that same level only, so ``a^-b c`` is Times[Power[a, -b], c] and
+        ``b ^ -c . d`` is Dot[Power[b, -c], d]."""
+        if self.at("MINUS"):
+            self.advance()
+            operand = self._tight_operand(level)
+            if isinstance(operand, (int, float)) and not isinstance(operand, bool):
+                return -operand
+            return Expr("Times", -1, operand)
+        if self.at("PLUS"):
+            self.advance()
+            return self._tight_operand(level)
+        if self._at_op("MinusPlus") or self._at_op("PlusMinus"):
+            return Expr(self.advance().value, self._tight_operand(level))
+        return level()
 
     def parse_dot(self) -> Any:
         """Handle a . b . c (Dot, precedence 490: between Times and Power/Map), flat."""
@@ -590,20 +680,56 @@ class Parser:
 
     def parse_ncmult(self) -> Any:
         """Handle a ** b ** c (NonCommutativeMultiply, precedence 510: above Dot, below Power), flat."""
-        expr = self.parse_map()
+        expr = self._notation(520, self._parse_small_circle)
         if not self.at("NCMULT"):
             return expr
         args = [expr]
         while self.at("NCMULT"):
             self.advance()
-            args.append(self.parse_map())
+            args.append(self._notation(520, self._parse_small_circle))
         return Expr("NonCommutativeMultiply", *args)
 
+    def parse_power(self) -> Any:
+        """Handle a ^ b (Power, precedence 590, right-associative).  The base and exponent are StringJoin-level
+        operands (StringJoin 600, Factorial 610, Map 620, @ 640, ... bind tighter), so ``b ^ c . d`` is
+        Dot[Power[b, c], d] and ``a ^ b ^ c`` is Power[a, Power[b, c]]."""
+        base = self.parse_stringjoin()
+        if self.at("POWER"):
+            self.advance()
+            return Expr("Power", base, self._tight_operand(self.parse_power))
+        return base
+
+    def parse_stringjoin(self) -> Any:
+        """Handle a <> b <> c (StringJoin, precedence 600: above Power, below Factorial), flat."""
+        expr = self.parse_factorial()
+        if self.at("STRINGJOIN"):
+            parts = [expr]
+            while self.at("STRINGJOIN"):
+                self.advance()
+                parts.append(self.parse_factorial())
+            return Expr("StringJoin", *parts)
+        return expr
+
+    def parse_factorial(self) -> Any:
+        """Handle postfix n! (Factorial) and n!! (Factorial2), precedence 610: below Map (620) and @ (640), so
+        ``f @ x!`` is Factorial[f[x]] as in Wolfram.  ``!!`` written without a space is Factorial2."""
+        expr = self.parse_map()
+        while self.at("NOT") and self._factorial_position():
+            tok = self.advance()
+            nxt = self.peek()
+            if nxt is not None and nxt.type == "NOT" and nxt.pos == tok.pos + 1 and self._factorial_position():
+                self.advance()
+                expr = Expr("Factorial2", expr)
+            else:
+                expr = Expr("Factorial", expr)
+        return expr
+
     def parse_map(self) -> Any:
-        expr = self.parse_power()
+        """Handle f /@ x, f //@ x, f @@ x, f @@@ x (precedence 620, right-associative)."""
+        expr = self.parse_prefix_application()
         if self.at("MAP", "APPLY", "APPLYLEVEL1", "MAPALL"):
             op = self.advance().type
-            rhs = self.parse_unary() if self.at("MINUS", "PLUS") else self.parse_map()
+            rhs = self._tight_operand(self.parse_map)
             if op == "MAP":
                 expr = Expr("Map", expr, rhs)
             elif op == "MAPALL":
@@ -614,35 +740,37 @@ class Parser:
                 expr = Expr("Apply", expr, rhs, Expr("List", 1))
         return expr
 
-    def parse_power(self) -> Any:
-        base = self.parse_composition()
-        if self.at("POWER"):
-            self.advance()
-            # Right-associative
-            exp = self.parse_unary()
-            return Expr("Power", base, exp)
-        return base
-
-    def parse_composition(self) -> Any:
-        """Handle f @* g (Composition) and f /* g (RightComposition), flat."""
-        expr = self.parse_prefix_application()
-        while self.at("COMPOSITION", "RIGHTCOMPOSITION"):
-            head = "Composition" if self.advance().type == "COMPOSITION" else "RightComposition"
-            rhs = self.parse_prefix_application()
-            if isinstance(expr, Expr) and expr.head == head:
-                expr = Expr(head, *expr.args, rhs)
-            else:
-                expr = Expr(head, expr, rhs)
-        return expr
-
     def parse_prefix_application(self) -> Any:
-        """Handle f @ x  (== f[x]), right-associative."""
-        expr = self.parse_postfix()
+        """Handle f @ x  (== f[x]; precedence 640, right-associative)."""
+        expr = self.parse_right_composition()
         if self.at("AT"):
             self.advance()
-            arg = self.parse_prefix_application()
+            arg = self._tight_operand(self.parse_prefix_application)
             return Expr(_as_head(expr), arg)
         return expr
+
+    def parse_right_composition(self) -> Any:
+        """Handle f /* g /* h (RightComposition, precedence 650, flat); its operands are Composition-level (655),
+        so ``f /* g @* h`` is RightComposition[f, Composition[g, h]]."""
+        expr = self.parse_composition()
+        if not self.at("RIGHTCOMPOSITION"):
+            return expr
+        args = [expr]
+        while self.at("RIGHTCOMPOSITION"):
+            self.advance()
+            args.append(self.parse_composition())
+        return Expr("RightComposition", *args)
+
+    def parse_composition(self) -> Any:
+        """Handle f @* g @* h (Composition, precedence 655: above @ and /*), flat."""
+        expr = self.parse_postfix()
+        if not self.at("COMPOSITION"):
+            return expr
+        args = [expr]
+        while self.at("COMPOSITION"):
+            self.advance()
+            args.append(self.parse_postfix())
+        return Expr("Composition", *args)
 
     def parse_postfix(self) -> Any:
         """Handle calls f[...], Part x[[i]], derivatives f', x++, x--, and factorial n!"""
@@ -674,9 +802,6 @@ class Parser:
             elif tok.type in ("INCREMENT", "DECREMENT"):
                 self.advance()
                 expr = Expr("Increment" if tok.type == "INCREMENT" else "Decrement", expr)
-            elif tok.type == "NOT" and self._factorial_position():
-                self.advance()
-                expr = Expr("Factorial", expr)
             else:
                 break
         return expr
@@ -700,6 +825,105 @@ class Parser:
             test = self.parse_atom()
             return Expr("PatternTest", pattern, test)
         return pattern
+
+    # ── Notation operators (W31/W32): levels that only act when their operator tokens are present ──
+
+    def _at_notation(self, prec) -> bool:
+        tok = self.peek()
+        return tok is not None and tok.type == "NOTATION" and _NOTATION.OPS[tok.value][1] == prec
+
+    def _at_op(self, name) -> bool:
+        tok = self.peek()
+        return tok is not None and tok.type == "NOTATION" and tok.value == name
+
+    def _notation(self, prec, operand, first=None) -> Any:
+        """Operators of one precedence level: nary chains (x op y op z -> op[x, y, z]), left- or right-grouping
+        binary operators.  Different operators of one level are not mixed without parentheses (ParseError)."""
+        expr = operand() if first is None else first
+        if not self._at_notation(prec):
+            return expr
+        head = self.peek().value
+        kind = _NOTATION.OPS[head][2]
+        if kind == "nary":
+            args = [expr]
+            while self._at_op(head):
+                self.advance()
+                args.append(operand())
+            expr = Expr(head, *args)
+        elif kind == "left":
+            while self._at_notation(prec) and _NOTATION.OPS[self.peek().value][2] == "left":
+                h = self.advance().value
+                expr = Expr(h, expr, operand())
+        else:                                             # right
+            items, heads = [expr], []
+            while self._at_notation(prec) and _NOTATION.OPS[self.peek().value][2] == "right":
+                heads.append(self.advance().value)
+                items.append(operand())
+            expr = items[-1]
+            for h, x in zip(reversed(heads), reversed(items[:-1])):
+                expr = Expr(h, x, expr)
+        if self._at_notation(prec):
+            raise ParseError(f"{head} and {self.peek().value} have the same precedence; use parentheses")
+        if 410 <= prec <= 460 and self._band:
+            self._band[-1] = True
+        return expr
+
+    def _parse_vertical_separator(self) -> Any:
+        return self._notation(60, self.parse_postfix_application)
+
+    def _parse_arrows(self) -> Any:
+        return self._notation(270, lambda: self._notation(280, self.parse_comparison))
+
+    def _parse_edges(self) -> Any:
+        """Precedence 295: x \\[DirectedEdge] y and x \\[UndirectedEdge] y (right-grouping), between == (290) and
+        SquareUnion (300), so ``a \\[DirectedEdge] b -> c`` is Rule[DirectedEdge[a, b], c] as in Wolfram."""
+        expr = self._parse_square_union()
+        if self._at_named("DirectedEdge", "UndirectedEdge"):
+            head = self.advance().value[2:-1]
+            return Expr(head, expr, self._parse_edges())
+        return expr
+
+    def _parse_square_union(self) -> Any:
+        return self._notation(300, self._parse_square_intersection)
+
+    def _parse_square_intersection(self) -> Any:
+        start = self.pos
+        expr = self._notation(305, self.parse_span)
+        if isinstance(expr, Expr) and expr.head == "SquareIntersection":
+            depth = 0
+            for tok in self.tokens[start:self.pos]:
+                if tok.type in ("LPAREN", "LSQUARE", "LBRACE", "LASSOC", "LANGLE", "LDBAR"):
+                    depth += 1
+                elif tok.type in ("RPAREN", "RSQUARE", "RBRACE", "RASSOC", "RANGLE", "RDBAR"):
+                    depth -= 1
+                elif tok.type == "SPAN" and depth == 0:
+                    raise ParseError("SquareIntersection and Span (;;) have the same precedence; use parentheses")
+        return expr
+
+    def _parse_cup(self) -> Any:
+        """Levels 340 (Cup) .. 390 (Star), between CirclePlus and Times."""
+        f = self.parse_multiplication
+        for prec in (390, 370, 360, 350):
+            f = (lambda g, q: (lambda: self._notation(q, g)))(f, prec)
+        return self._notation(340, f)
+
+    def _parse_band(self) -> Any:
+        """Times operands: levels 410 (CenterDot) .. 460 (Backslash), between Times and Divide."""
+        f = self.parse_unary
+        for prec in (460, 450, 430, 420):
+            f = (lambda g, q: (lambda: self._notation(q, g)))(f, prec)
+        return self._notation(410, f)
+
+    def _parse_small_circle(self) -> Any:
+        return self._notation(530, self._parse_prefix_d)
+
+    def _parse_prefix_d(self) -> Any:
+        """Prefix notation operators: DifferentialD, CapitalDifferentialD (550), Del (550) and Square (540), all
+        right-grouping; no binary operator lies between 540 and 550, so they share this level."""
+        if self.at("NOTATIONPREFIX"):
+            head = self.advance().value
+            return Expr(head, self._parse_prefix_d())
+        return self._notation(580, self.parse_power)
 
     def parse_atom(self) -> Any:
         tok = self.peek()
@@ -788,6 +1012,18 @@ class Parser:
             args = self._parse_arglist("RASSOC")
             self.expect("RASSOC")
             return Expr("Association", *args)
+
+        if tok.type == "LANGLE":                     # \[LeftAngleBracket] x, ... \[RightAngleBracket] (W31)
+            self.advance()
+            args = self._parse_arglist("RANGLE")
+            self.expect("RANGLE")
+            return Expr("AngleBracket", *args)
+
+        if tok.type == "LDBAR":                      # \[LeftDoubleBracketingBar] x, ... \[RightDoubleBracketingBar]
+            self.advance()
+            args = self._parse_arglist("RDBAR")
+            self.expect("RDBAR")
+            return Expr("DoubleBracketingBar", *args)
 
         raise ParseError(f"Unexpected token: {tok}")
 
