@@ -244,7 +244,9 @@ def _ramp(x):
 
 
 _register("Ramp", 1, _ramp, "Ramp[x] = x for real x >= 0 and 0 for real x < 0; complex and symbolic x stay "
-          "unevaluated", numeric=False)
+          "unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", numeric=False)
 
 
 def _abs_cmp(v, c):
@@ -305,16 +307,24 @@ def _comb_value(v):
 
 _register("HeavisidePi", (1, 8), _product_fn("HeavisidePi", _pi_value),
           "HeavisidePi[x] = 1 for |x| < 1/2, 0 for |x| > 1/2, unevaluated at x = +-1/2 (reference); "
-          "HeavisidePi[x1, x2, ...] is the product", numeric=False)
+          "HeavisidePi[x1, x2, ...] is the product"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", numeric=False)
 _register("HeavisideLambda", (1, 8), _product_fn("HeavisideLambda", _lambda_value),
           "HeavisideLambda[x] = 1 - |x| for |x| < 1 and 0 otherwise (the convolution of two HeavisidePi); "
-          "multivariate form is the product", numeric=False)
+          "multivariate form is the product"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", numeric=False)
 _register("UnitTriangle", (1, 8), _product_fn("UnitTriangle", _lambda_value),
           "UnitTriangle[x] = Piecewise[{{x + 1, -1 <= x < 0}, {1 - x, 0 <= x <= 1}}] (0 otherwise); "
-          "UnitTriangle[x1, ...] is the product", numeric=False)
+          "UnitTriangle[x1, ...] is the product"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", numeric=False)
 _register("DiracComb", (1, 8), _product_fn("DiracComb", _comb_value),
           "DiracComb[x] = Sum[DiracDelta[x - n], {n, -Infinity, Infinity}]: 0 for real non-integer x, "
-          "unevaluated at integers and for symbolic x; multivariate form is the product", numeric=False)
+          "unevaluated at integers and for symbolic x; multivariate form is the product"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", numeric=False)
 
 
 def _discrete_indicator(x, x1, us):
@@ -329,7 +339,9 @@ def _discrete_indicator(x, x1, us):
 
 _register("DiscreteIndicator", 3, _discrete_indicator,
           "DiscreteIndicator[x, x1, {u1, ...}] = 1 if x === x1, 0 if x is another ui; unevaluated if x or x1 is "
-          "not one of the ui (reference)", listable=False, numeric=False)
+          "not one of the ui (reference)"
+          ". Check: exact (exact input gives exact results), reference (differential "
+          "cases in tests/library).", listable=False, numeric=False)
 
 
 def _wave(name, shape, default):
@@ -381,10 +393,16 @@ def _sawtooth(f, y1, y2):
 
 NOTES = {
     "SquareWave": "SquareWave[x] = 1 for FractionalPart-type phase in [0, 1/2), -1 in [1/2, 1) (SquareWave[0] = 1, "
-                  "SquareWave[1/2] = -1, reference PiecewiseExpand); SquareWave[{y1, y2}, x] gives y2 then y1",
+                  "SquareWave[1/2] = -1, reference PiecewiseExpand); SquareWave[{y1, y2}, x] gives y2 then y1"
+                  ". Check: exact (exact input gives exact results), reference (differential cases in "
+                  "tests/library).",
     "TriangleWave": "TriangleWave[x]: period 1, 0 at integers, 1 at 1/4, -1 at 3/4 (reference); "
-                    "TriangleWave[{min, max}, x] rescales",
-    "SawtoothWave": "SawtoothWave[x] = x - Floor[x] (SawtoothWave[0] = 0); SawtoothWave[{min, max}, x] rescales",
+                    "TriangleWave[{min, max}, x] rescales"
+                    ". Check: exact (exact input gives exact results), reference (differential cases in "
+                    "tests/library).",
+    "SawtoothWave": "SawtoothWave[x] = x - Floor[x] (SawtoothWave[0] = 0); SawtoothWave[{min, max}, x] rescales"
+                    ". Check: exact (exact input gives exact results), reference (differential cases in "
+                    "tests/library).",
 }
 _wave("SquareWave", _square, None)
 _wave("TriangleWave", _triangle, None)
@@ -528,7 +546,8 @@ def _alt_harmonic(*args):
 _register("AlternatingHarmonicNumber", (1, 3), _alt_harmonic,
           "AlternatingHarmonicNumber[n] = Sum[(-1)^(i+1)/i, {i, n}], [n, r] = Sum[(-1)^(i+1)/i^r], [n, r, s] = "
           "Sum[(-1)^(i+1) s^i/i^r]; exact for non-negative integer n, approximate arguments via the reference "
-          "analytic continuations (LerchPhi / Hurwitz Zeta / PolyLog)")
+          "analytic continuations (LerchPhi / Hurwitz Zeta / PolyLog)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _harmonic_rs(k, r, s):
@@ -577,7 +596,8 @@ _register("HyperHarmonicNumber", (2, 4), _hyper_harmonic,
           "HyperHarmonicNumber[p, n]: p-fold cumulative sums of harmonic numbers (level 0 = 1/n); [p, n, r] and "
           "[p, n, r, s] with order r and decoration s (level 1 = HarmonicNumber[n, r, s] = Sum[s^k/k^r]); exact "
           "for non-negative integers p, n; HyperHarmonicNumber[1, n] = HarmonicNumber[n]; other approximate "
-          "p, n via Gamma[n + p]/(n! Gamma[p]) (PolyGamma[n + p] - PolyGamma[p])")
+          "p, n via Gamma[n + p]/(n! Gamma[p]) (PolyGamma[n + p] - PolyGamma[p])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _nested_sum(n, rs, ss, zero, one, power):
@@ -637,7 +657,9 @@ def _multiple_harmonic(*args):
 _register("MultipleHarmonicNumber", (1, 3), _multiple_harmonic,
           "MultipleHarmonicNumber[n, {r1, ..., rk}, {s1, ..., sk}] = Sum over n >= n1 > ... > nk >= 1 of "
           "s1^n1 ... sk^nk/(n1^r1 ... nk^rk) (exact for exact weights); MultipleHarmonicNumber[n] = "
-          "HarmonicNumber[n]; n = Infinity gives MultipleZeta / MultiplePolyLog", listable=False, numeric=False)
+          "HarmonicNumber[n]; n = Infinity gives MultipleZeta / MultiplePolyLog"
+          ". Check: exact (exact input gives exact results), reference (differential "
+          "cases in tests/library).", listable=False, numeric=False)
 
 
 # ───────────────────────────── Bell and Nørlund polynomials, PascalBinomial ─────────────────────────────
@@ -705,7 +727,9 @@ def _belly(*args):
 _register("BellY", (1, 3), _belly,
           "BellY[n, k, {x1, ..., x(n-k+1)}] partial Bell polynomial (standard recurrence); BellY[m] generalized "
           "Bell polynomial of a matrix (n-th derivative of a composition, rows = derivatives of each function); "
-          "BellY[n, k, matrix] raises (not supported)", listable=False, numeric=False)
+          "BellY[n, k, matrix] raises (not supported)"
+          ". Check: exact (exact input gives exact results), reference (differential "
+          "cases in tests/library).", listable=False, numeric=False)
 
 
 def _series_log1(c, N):
@@ -756,7 +780,9 @@ def _norlundb(*args):
 _register("NorlundB", (2, 3), _norlundb,
           "NorlundB[n, a] Norlund polynomials and NorlundB[n, a, x] generalized Bernoulli polynomials from "
           "(t/(E^t - 1))^a E^(x t) = Sum[NorlundB[n, a, x] t^n/n!] (exact power-series arithmetic) for "
-          "non-negative integer n; NorlundB[n, 1] = BernoulliB[n]", numeric=False)
+          "non-negative integer n; NorlundB[n, 1] = BernoulliB[n]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", numeric=False)
 
 
 def _pascal_binomial(n, m):
@@ -778,7 +804,9 @@ def _pascal_binomial(n, m):
 _register("PascalBinomial", 2, _pascal_binomial,
           "PascalBinomial[n, m] agrees with Binomial except for negative integer n, where it is the iterated "
           "limit that preserves Pascal's identity: n(n-1)...(n-m+1)/m! for integer m >= 0, 0 for negative "
-          "integer m, ComplexInfinity for non-integer m (reference definition)", numeric=False)
+          "integer m, ComplexInfinity for non-integer m (reference definition)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", numeric=False)
 
 
 # ───────────────────────────── Ramanujan tau and its L-function ─────────────────────────────
@@ -853,7 +881,9 @@ def _tau(n):
 _register("RamanujanTau", 1, _tau,
           "RamanujanTau[n]: coefficients of Delta = q Prod[(1 - q^k)^24]; tau(p) from the divisor-sum identity "
           "n^4 sigma(n) - 24 Sum (35k^4 - 52k^3 n + 18k^2 n^2) sigma(k) sigma(n-k), multiplicativity and "
-          "tau(p^(e+1)) = tau(p) tau(p^e) - p^11 tau(p^(e-1)); 0 for n <= 0", numeric=False)
+          "tau(p^(e+1)) = tau(p) tau(p^e) - p^11 tau(p^(e-1)); 0 for n <= 0"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", numeric=False)
 
 
 def _tau_L(s):
@@ -929,7 +959,8 @@ def _zernike(n, m, r):
 _register("ZernikeR", 3, _zernike,
           "ZernikeR[n, m, r]: explicit radial Zernike polynomial Sum[(-1)^k (n-k)!/(k! ((n+m)/2-k)! "
           "((n-m)/2-k)!) r^(n-2k)] for integers 0 <= m <= n, 0 when n - m is odd; non-integer orders stay "
-          "unevaluated")
+          "unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 _PAULI = {
     0: [[1, 0], [0, 1]],
@@ -1620,7 +1651,8 @@ def _qpochhammer(*args):
 _register("QPochhammer", (1, 3), _qpochhammer,
           "QPochhammer[a, q, n] = Prod[1 - a q^k, {k, 0, n-1}] (exact for integer n, negative n by the inverse "
           "product), QPochhammer[a, q] the infinite product (|q| < 1), QPochhammer[q] = QPochhammer[q, q]; "
-          "mpmath qp for approximate arguments")
+          "mpmath qp for approximate arguments"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _qfactorial(n, q):
@@ -1641,7 +1673,8 @@ def _qfactorial(n, q):
 
 _register("QFactorial", 2, _qfactorial,
           "QFactorial[n, q] = QPochhammer[q, q, n]/(1 - q)^n = Prod[(1 - q^k)/(1 - q), {k, n}] (exact for "
-          "non-negative integer n; general n via QGamma[n + 1, q])")
+          "non-negative integer n; general n via QGamma[n + 1, q])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _qgamma(z, q):
@@ -1657,7 +1690,8 @@ def _qgamma(z, q):
 
 _register("QGamma", 2, _qgamma,
           "QGamma[z, q] = QPochhammer[q, q]/QPochhammer[q^z, q] (1 - q)^(1 - z) (mpmath qgamma); exact "
-          "QFactorial[z - 1, q] at positive integers z")
+          "QFactorial[z - 1, q] at positive integers z"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _qbinomial(n, k, q):
@@ -1684,7 +1718,8 @@ def _qbinomial(n, k, q):
 
 _register("QBinomial", 3, _qbinomial,
           "QBinomial[n, k, q] Gaussian binomial coefficient Prod[(1 - q^(n-k+i))/(1 - q^i), {i, k}] (exact for "
-          "integers, 0 outside 0 <= k <= n); general arguments via QGamma (QBinomial[4, 2, 1/2] = 35/16)")
+          "integers, 0 outside 0 <= k <= n); general arguments via QGamma (QBinomial[4, 2, 1/2] = 35/16)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _qpolygamma_core(n, z, q):
@@ -1738,7 +1773,8 @@ def _qpolygamma(*args):
 _register("QPolyGamma", (2, 3), _qpolygamma,
           "QPolyGamma[z, q] = D[Log[QGamma[z, q]], z] = -Log[1 - q] + Log[q] Sum[q^(m z)/(1 - q^m), {m, 1, "
           "Infinity}], QPolyGamma[n, z, q] its n-th derivative (Lambert-series form with the shift recurrence; "
-          "0 < |q| < 1)")
+          "0 < |q| < 1)"
+          ". Check: reference (differential cases in tests/library).")
 
 
 def _list_vals(x, name, what):
@@ -1765,7 +1801,8 @@ def _qhyper(a, b, q, z):
 
 _register("QHypergeometricPFQ", 4, _qhyper,
           "QHypergeometricPFQ[{a1, ..., ar}, {b1, ..., bs}, q, z] basic hypergeometric series Sum[(a1;q)_k ... "
-          "/((b1;q)_k ... (q;q)_k) ((-1)^k q^(k(k-1)/2))^(1+s-r) z^k] (mpmath qhyper); value 1 at z = 0",
+          "/((b1;q)_k ... (q;q)_k) ((-1)^k q^(k(k-1)/2))^(1+s-r) z^k] (mpmath qhyper); value 1 at z = 0"
+          ". Check: reference (differential cases in tests/library).",
           listable=False)
 
 
@@ -1802,7 +1839,8 @@ def _bihyper(a, b, z):
 
 _register("BilateralHypergeometricPFQ", 3, _bihyper,
           "BilateralHypergeometricPFQ[{a1, ...}, {b1, ...}, z] = Sum[Pochhammer[a1, n] ... /(Pochhammer[b1, n] "
-          "...) z^n, {n, -Infinity, Infinity}] (mpmath bihyper)", listable=False)
+          "...) z^n, {n, -Infinity, Infinity}] (mpmath bihyper)"
+          ". Check: reference (differential cases in tests/library).", listable=False)
 
 
 # ───────────────────────────── Appell functions ─────────────────────────────
@@ -1826,13 +1864,17 @@ def _appell(name, nparams, mpf, reduce_y0):
 
 APPELL_NOTES = {
     "AppellF1": "AppellF1[a, b1, b2, c, x, y] = Sum[(a)_(m+n) (b1)_m (b2)_n/((c)_(m+n) m! n!) x^m y^n] and its "
-                "continuation (mpmath appellf1); y = 0 gives Hypergeometric2F1[a, b1, c, x]",
+                "continuation (mpmath appellf1); y = 0 gives Hypergeometric2F1[a, b1, c, x]"
+                ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
     "AppellF2": "AppellF2[a, b1, b2, c1, c2, x, y] = Sum[(a)_(m+n) (b1)_m (b2)_n/((c1)_m (c2)_n m! n!) x^m y^n] "
-                "(mpmath appellf2); y = 0 gives Hypergeometric2F1[a, b1, c1, x]",
+                "(mpmath appellf2); y = 0 gives Hypergeometric2F1[a, b1, c1, x]"
+                ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
     "AppellF3": "AppellF3[a1, a2, b1, b2, c, x, y] = Sum[(a1)_m (a2)_n (b1)_m (b2)_n/((c)_(m+n) m! n!) x^m y^n] "
-                "(mpmath appellf3); y = 0 gives Hypergeometric2F1[a1, b1, c, x]",
+                "(mpmath appellf3); y = 0 gives Hypergeometric2F1[a1, b1, c, x]"
+                ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
     "AppellF4": "AppellF4[a, b, c1, c2, x, y] = Sum[(a)_(m+n) (b)_(m+n)/((c1)_m (c2)_n m! n!) x^m y^n] (mpmath "
-                "appellf4, |Sqrt[x]| + |Sqrt[y]| < 1); y = 0 gives Hypergeometric2F1[a, b, c1, x]",
+                "appellf4, |Sqrt[x]| + |Sqrt[y]| < 1); y = 0 gives Hypergeometric2F1[a, b, c1, x]"
+                ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
 }
 _appell("AppellF1", 4, mpmath.appellf1, lambda a: Expr("Hypergeometric2F1", a[0], a[1], a[3], a[4]))
 _appell("AppellF2", 5, mpmath.appellf2, lambda a: Expr("Hypergeometric2F1", a[0], a[1], a[3], a[5]))
@@ -1913,15 +1955,18 @@ def _sixj(a, b):
 
 _register("ThreeJSymbol", 3, _threej,
           "ThreeJSymbol[{j1, m1}, {j2, m2}, {j3, m3}] Wigner 3-j symbol (exact, sympy.physics.wigner); 0 unless "
-          "m1 + m2 + m3 = 0, |mi| <= ji and the triangle condition holds; symbolic parameters stay unevaluated",
+          "m1 + m2 + m3 = 0, |mi| <= ji and the triangle condition holds; symbolic parameters stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
           listable=False, numeric=False)
 _register("ClebschGordan", 3, _clebsch,
           "ClebschGordan[{j1, m1}, {j2, m2}, {j, m}] (Condon-Shortley/Edmonds phase, exact; related to "
-          "ThreeJSymbol by (-1)^(j1 - j2 + m) Sqrt[2 j + 1] ThreeJSymbol[{j1, m1}, {j2, m2}, {j, -m}])",
+          "ThreeJSymbol by (-1)^(j1 - j2 + m) Sqrt[2 j + 1] ThreeJSymbol[{j1, m1}, {j2, m2}, {j, -m}])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
           listable=False, numeric=False)
 _register("SixJSymbol", 2, _sixj,
           "SixJSymbol[{j1, j2, j3}, {j4, j5, j6}] Wigner 6-j symbol (exact, Racah formula via "
-          "sympy.physics.wigner); 0 unless the four triads satisfy the triangle conditions",
+          "sympy.physics.wigner); 0 unless the four triads satisfy the triangle conditions"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
           listable=False, numeric=False)
 
 
@@ -1967,7 +2012,8 @@ def _wignerd(spec, *angles):
 _register("WignerD", (2, 4), _wignerd,
           "WignerD[{j, m1, m2}, psi, theta, phi] = Exp[I m1 psi + I m2 phi] WignerD[{j, m1, m2}, 0, theta, 0] with "
           "Wolfram's phase convention (WignerD[{1/2, 1/2, -1/2}, t] = Sin[t/2]); WignerD[{j, m1, m2}, theta, phi] "
-          "and WignerD[{j, m1, m2}, theta] set the leading angles to 0; physical (half-)integer parameters only",
+          "and WignerD[{j, m1, m2}, theta] set the leading angles to 0; physical (half-)integer parameters only"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
           listable=False, numeric=False)
 
 
@@ -2173,12 +2219,15 @@ _register("GeneralizedPolyLog", (2, 3), _gpl_impl("GeneralizedPolyLog", _gpl_let
           "t1 < x}]: trailing zeros regularised by shuffle (G(0; x) = Log[x]), upper-endpoint collision -> "
           "ComplexInfinity, numerics by the nested Li series with Hoelder convolution; base point p (a single p or a "
           "constant list) by translation; letters on the integration path raise (detour continuation not "
-          "supported)", listable=False)
+          "supported)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", listable=False)
 _register("HarmonicPolyLog", (2, 3), _gpl_impl("HarmonicPolyLog", _hpl_letters,
                                               lambda w: (-1) ** sum(1 for a in w if a == 1)),
           "HarmonicPolyLog[{a1, ..., ak}, x] Remiddi-Vermaseren harmonic polylogarithm with kernels 1/t, 1/(1 - t), "
           "1/(1 + t) and the abbreviated +-m notation; computed as (-1)^(number of 1s) GeneralizedPolyLog of the "
-          "same letters", listable=False)
+          "same letters"
+          ". Check: reference (differential cases in tests/library).", listable=False)
 
 
 def _mzv_exact(s):
@@ -2243,7 +2292,9 @@ _register("MultipleZeta", (1, 10), _multiple_zeta,
           "MultipleZeta[{s1, ..., sk}] = Sum over n1 > n2 > ... > nk >= 1 of 1/(n1^s1 ... nk^sk): MultipleZeta[{s}] "
           "= Zeta[s], exact ({2,...,2}) = Pi^(2k)/(2k+1)! and Euler's formula for {n, 1} (MultipleZeta[{2, 1}] = "
           "Zeta[3]); divergent s1 = 1 -> ComplexInfinity; numerics for positive integer indices via the iterated "
-          "integral (Hoelder convolution); non-integer indices stay unevaluated / raise under N", listable=False)
+          "integral (Hoelder convolution); non-integer indices stay unevaluated / raise under N"
+          ". Check: exact (exact input gives exact results), reference (differential cases in "
+          "tests/library).", listable=False)
 
 
 def _mpl(z, s):
@@ -2296,7 +2347,8 @@ def _mpl(z, s):
 _register("MultiplePolyLog", 2, _mpl,
           "MultiplePolyLog[{z1, ..., zk}, {s1, ..., sk}] = Sum over n1 > ... > nk >= 1 of s1^n1 ... sk^nk/(n1^z1 ... "
           "nk^zk): nested series inside the poly-disc |s1 ... sj| < 1, ComplexInfinity outside it, the boundary "
-          "via GeneralizedPolyLog (positive integer indices); depth 1 = PolyLog, all s = 1 gives MultipleZeta",
+          "via GeneralizedPolyLog (positive integer indices); depth 1 = PolyLog, all s = 1 gives MultipleZeta"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
           listable=False)
 
 
@@ -2397,7 +2449,8 @@ _register("FoxH", 3, _foxh,
           "FoxH[{{{a1, alpha1}, ...}, {...}}, {{{b1, beta1}, ...}, {...}}, z] Mellin-Barnes integral of "
           "Prod Gamma(b_j + beta_j s) Prod Gamma(1 - a_i - alpha_i s)/(...) z^-s (reference convention); all "
           "alpha = beta = 1 gives MeijerG; positive rational alpha, beta evaluated exactly as a MeijerG by the Gauss "
-          "multiplication formula (mpmath meijerg with the z^(1/r) branch); other scale factors raise under N",
+          "multiplication formula (mpmath meijerg with the z^(1/r) branch); other scale factors raise under N"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).",
           listable=False)
 
 

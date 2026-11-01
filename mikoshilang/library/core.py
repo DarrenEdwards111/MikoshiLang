@@ -89,6 +89,24 @@ def fn(*names, area, status, notes="", listable=False, hold=False):
     return deco
 
 
+
+def add_check(sentence: str, *names: str) -> None:
+    """Append the ``Check:`` sentence (CONVENTIONS §4) to the notes of heads whose notes are built in code: heads
+    registered in a loop or by a factory. ``sentence`` names the methods, e.g. ``"reference (differential cases
+    in tests/library)."``. A head that already states a check, or is not registered, raises ValueError."""
+    for n in names:
+        if n not in STATUS:
+            raise ValueError(f"add_check: {n} is not registered")
+        area, status, notes = STATUS[n]
+        if "Check:" in (notes or ""):
+            raise ValueError(f"add_check: {n} already states a check")
+        v = (notes or "").rstrip()
+        new = (v + ("" if v.endswith((".", ";", ":")) else ".") + " " if v else "") + "Check: " + sentence
+        STATUS[n] = (area, status, new)
+        e = REGISTRY.get(n)
+        if e is not None:
+            e.notes = new
+
 ERRORS: Dict[str, str] = {}
 
 

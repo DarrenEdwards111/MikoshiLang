@@ -443,7 +443,8 @@ special("Zeta", (2, 2), lambda s, a: _wolfram_zeta_terms(s, a, lambda b, _z: mpm
         lambda s, a: _zeta2_exact(s, a), status="fixed", replace=True,
         notes="Zeta[s, a] = Sum[((k + a)^2)^(-s/2), {k, 0, Infinity}] (terms with k + a = 0 excluded); this "
               "differs from HurwitzZeta[s, a] = Sum[(k + a)^-s] only for Re(a) < 0 (legacy returned the Hurwitz value "
-              "there: Zeta[3, -1.5] = 0.118 instead of 16.71); exact values from SymPy (Zeta[2, 1/2] = Pi^2/2)")
+              "there: Zeta[3, -1.5] = 0.118 instead of 16.71); exact values from SymPy (Zeta[2, 1/2] = Pi^2/2)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _zeta2_exact(s, a):
@@ -986,7 +987,8 @@ special("LegendreP", 4, lambda n, m, a, x: mpmath.legenp(n, m, x, type=_legtype(
         symbolic=lambda n, m, a, x: _lp_exact(n, m, x, _legtype(a)), status="added",
         check=lambda n, m, a, x: _legtype(a),
         notes="LegendreP[n, m, a, z] of type a: types 1 and 2 are ((1+z)/(1-z))^(m/2) 2F1 forms (Condon-Shortley), "
-              "type 3 is ((z+1)/(z-1))^(m/2) with the cut (-Infinity, 1]")
+              "type 3 is ((z+1)/(z-1))^(m/2) with the cut (-Infinity, 1]"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _lq_sym(n, x):
@@ -1009,8 +1011,19 @@ special("LegendreQ", 2, lambda n, x: mpmath.legenq(n, 0, x, type=2), _lq_sym, sy
 special("LegendreQ", 3, lambda n, m, x: mpmath.legenq(n, m, x, type=2),
         lambda n, m, x: _lq_sym(n, x) if m.is_zero else None,
         symbolic=lambda n, m, x: _lq_sym(n, x) if m.is_zero else None, status="added",
-        notes="associated LegendreQ[n, m, x] (Wolfram type 1, Condon-Shortley; mpmath legenq type 2)")
+        notes="associated LegendreQ[n, m, x] (Wolfram type 1, Condon-Shortley; mpmath legenq type 2)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("LegendreQ", 4, lambda n, m, a, x: mpmath.legenq(n, m, x, type=_legtype(sp.Integer(int(a)))),
         lambda n, m, a, x: _lq_sym(n, x) if m.is_zero and _legtype(a) == 2 else None,
         check=lambda n, m, a, x: _legtype(a), status="added",
         notes="LegendreQ[n, m, a, z] of type a (1/2: inside the unit interval form, 3: cut plane outside [-1, 1])")
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "HypergeometricPFQ", "JacobiCD", "JacobiCN", "JacobiDC", "JacobiDN", "JacobiNC", "JacobiND", "JacobiSC",
+          "JacobiSD", "JacobiSN")
+_add_check("reference (differential cases in tests/library).",
+          "HypergeometricPFQRegularized", "JacobiCS", "JacobiDS", "JacobiNS")

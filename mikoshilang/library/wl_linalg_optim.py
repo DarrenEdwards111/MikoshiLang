@@ -205,12 +205,17 @@ def _sqeuclid(a, b):
 
 _dist("EuclideanDistance", lambda a, b: sp.sqrt(_sqeuclid(a, b)),
       "EuclideanDistance[u, v] = Sqrt[Total[Abs[u - v]^2]] for numeric or symbolic vectors (Abs[u - v] for scalars); "
-      "results keep the precision of the input")
-_dist("SquaredEuclideanDistance", _sqeuclid, "SquaredEuclideanDistance[u, v] = Total[Abs[u - v]^2]")
+      "results keep the precision of the input"
+      ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
+_dist("SquaredEuclideanDistance", _sqeuclid, "SquaredEuclideanDistance[u, v] = Total[Abs[u - v]^2]"
+                                             ". Check: exact (exact input gives exact results), reference "
+                                             "(differential cases in tests/library).")
 _dist("ManhattanDistance", lambda a, b: sp.Add(*[sp.Abs(x - y) for x, y in zip(a, b)]),
-      "ManhattanDistance[u, v] = Total[Abs[u - v]]")
+      "ManhattanDistance[u, v] = Total[Abs[u - v]]"
+      ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _dist("ChessboardDistance", lambda a, b: sp.Max(*[sp.Abs(x - y) for x, y in zip(a, b)]),
-      "ChessboardDistance[u, v] = Max[Abs[u - v]] (Chebyshev distance)")
+      "ChessboardDistance[u, v] = Max[Abs[u - v]] (Chebyshev distance)"
+      ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _braycurtis(a, b):
@@ -233,9 +238,12 @@ def _canberra(a, b):
     return tot
 
 
-_dist("BrayCurtisDistance", _braycurtis, "BrayCurtisDistance[u, v] = Total[Abs[u - v]]/Total[Abs[u + v]]")
+_dist("BrayCurtisDistance", _braycurtis, "BrayCurtisDistance[u, v] = Total[Abs[u - v]]/Total[Abs[u + v]]"
+                                         ". Check: exact (exact input gives exact results), reference (differential "
+                                         "cases in tests/library).")
 _dist("CanberraDistance", _canberra,
-      "CanberraDistance[u, v] = Total[Abs[u - v]/(Abs[u] + Abs[v])] (terms with u_i = v_i = 0 are 0)")
+      "CanberraDistance[u, v] = Total[Abs[u - v]/(Abs[u] + Abs[v])] (terms with u_i = v_i = 0 are 0)"
+      ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _norm2(a):
@@ -269,14 +277,19 @@ def _nsqeuclid(a, b):
     return sp.Rational(1, 2) * sp.Add(*[sp.Abs(x - y) ** 2 for x, y in zip(da, db)]) / den
 
 
-_dist("CosineDistance", _cosine, "CosineDistance[u, v] = 1 - u.Conjugate[v]/(Norm[u] Norm[v]); a zero vector raises",
+_dist("CosineDistance", _cosine, "CosineDistance[u, v] = 1 - u.Conjugate[v]/(Norm[u] Norm[v]); a zero vector raises"
+                                 ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                 "tests/library).",
       scalar=False)
 _dist("CorrelationDistance", _correlation,
-      "CorrelationDistance[u, v] = 1 - (u - Mean[u]).Conjugate[v - Mean[v]]/(Norm[u - Mean[u]] Norm[v - Mean[v]])",
+      "CorrelationDistance[u, v] = 1 - (u - Mean[u]).Conjugate[v - Mean[v]]/(Norm[u - Mean[u]] Norm[v - Mean[v]])"
+      ". Check: reference (differential cases in tests/library).",
       scalar=False)
 _dist("NormalizedSquaredEuclideanDistance", _nsqeuclid,
       "NormalizedSquaredEuclideanDistance[u, v] = Norm[(u - Mean[u]) - (v - Mean[v])]^2/(2 (Norm[u - Mean[u]]^2 + "
-      "Norm[v - Mean[v]]^2))", scalar=False)
+      "Norm[v - Mean[v]]^2))"
+      ". Check: exact (exact input gives exact results), reference (differential cases in "
+      "tests/library).", scalar=False)
 
 
 @fn("BinaryDistance", **ADDED,
@@ -757,7 +770,8 @@ def _sequency(row):
     notes="HadamardMatrix[n] (n a power of 2): the normalised (orthogonal, symmetric) Walsh-Hadamard matrix with "
           "entries +-1/Sqrt[n], rows in sequency order (Method -> \"Sequency\", default), Sylvester order "
           "(\"BitComplement\") or Paley/dyadic order (\"GrayCode\"); WorkingPrecision -> p gives numeric entries"
-          + _STRUCT_NOTE)
+          + _STRUCT_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hadamardmatrix(n: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, _TS | {"Method"}, "HadamardMatrix")
     if pos:
@@ -788,7 +802,8 @@ def _hadamardmatrix(n: Expr, *rest: Expr) -> Expr:
 
 @fn("JordanMatrix", **ADDED,
     notes="JordanMatrix[l, n] n x n Jordan block (l on the diagonal, 1 on the superdiagonal); JordanMatrix[l, n, "
-          "Right] puts the ones below the diagonal (the transpose); l must be a scalar" + _STRUCT_NOTE)
+          "Right] puts the ones below the diagonal (the transpose); l must be a scalar" + _STRUCT_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _jordanmatrix(lam: Expr, n: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts = split_options(rest, {"TargetStructure"}, "JordanMatrix")
     if is_list(lam):
@@ -850,7 +865,8 @@ def _perm_list(p, fname):
 @fn("PermutationMatrix", **ADDED,
     notes="PermutationMatrix[permv] has a 1 in column permv[[i]] of row i; also from Cycles[...] (size = largest "
           "moved point), i <-> j, or a permutation matrix (validated); PermutationMatrix[perm, n] pads to n x n; "
-          "Det is Signature[permv]" + _STRUCT_NOTE)
+          "Det is Signature[permv]" + _STRUCT_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _permutationmatrix(p: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, _TS, "PermutationMatrix")
     perm = _perm_list(p, "PermutationMatrix")
@@ -885,7 +901,8 @@ def _is_blockdiag_list(x):
 
 @fn("BlockDiagonalMatrix", **ADDED,
     notes="BlockDiagonalMatrix[{d1, d2, ...}] the block diagonal matrix with square blocks di ({} blocks are 0 x 0); "
-          "BlockDiagonalMatrix[mat] accepts a (block diagonal) square matrix" + _STRUCT_NOTE)
+          "BlockDiagonalMatrix[mat] accepts a (block diagonal) square matrix" + _STRUCT_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _blockdiagonalmatrix(x: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"TargetStructure"}, "BlockDiagonalMatrix")
     if pos:
@@ -949,7 +966,8 @@ def _block_triangular(x, fname, lower):
 
 @fn("BlockLowerTriangularMatrix", **ADDED,
    notes="BlockLowerTriangularMatrix[lmat] for a square matrix (any square matrix is block lower triangular with "
-         "a single block, as in Wolfram)" + _STRUCT_NOTE)
+         "a single block, as in Wolfram)" + _STRUCT_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _block_lower_triangular_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
     split_options(rest, {"TargetStructure"}, "BlockLowerTriangularMatrix")
     return _block_triangular(x, "BlockLowerTriangularMatrix", True)
@@ -957,7 +975,8 @@ def _block_lower_triangular_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
 
 @fn("BlockUpperTriangularMatrix", **ADDED,
    notes="BlockUpperTriangularMatrix[umat] for a square matrix (any square matrix is block upper triangular with "
-         "a single block, as in Wolfram)" + _STRUCT_NOTE)
+         "a single block, as in Wolfram)" + _STRUCT_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _block_upper_triangular_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
     split_options(rest, {"TargetStructure"}, "BlockUpperTriangularMatrix")
     return _block_triangular(x, "BlockUpperTriangularMatrix", False)
@@ -1001,7 +1020,8 @@ def _triangle_rows(x, fname, conj):
 
 @fn("SymmetricMatrix", **ADDED,
    notes="SymmetricMatrix[smat] validates a symmetric matrix; SymmetricMatrix[{{s11, s12, ...}, {s22, ...}, ...}] "
-         "or the lower-triangular rows {{s11}, {s21, s22}, ...} fill in the other triangle" + _STRUCT_NOTE)
+         "or the lower-triangular rows {{s11}, {s21, s22}, ...} fill in the other triangle" + _STRUCT_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _symmetric_matrix(x: ListOf[Expr], *rest: Option) -> Expr:
     split_options(rest, {"TargetStructure"}, "SymmetricMatrix")
     return _triangle_rows(x, "SymmetricMatrix", False)
@@ -1009,7 +1029,8 @@ def _symmetric_matrix(x: ListOf[Expr], *rest: Option) -> Expr:
 
 @fn("HermitianMatrix", **ADDED,
    notes="HermitianMatrix[hmat] validates a Hermitian matrix; HermitianMatrix[{{h11, h12, ...}, {h22, ...}, ...}] or "
-         "the lower rows {{h11}, {h21, h22}, ...} fill in the conjugate entries" + _STRUCT_NOTE)
+         "the lower rows {{h11}, {h21, h22}, ...} fill in the conjugate entries" + _STRUCT_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hermitian_matrix(x: ListOf[Expr], *rest: Option) -> Expr:
     split_options(rest, {"TargetStructure"}, "HermitianMatrix")
     return _triangle_rows(x, "HermitianMatrix", True)
@@ -1031,7 +1052,8 @@ def _orth_check(x, fname, conj):
 
 @fn("OrthogonalMatrix", **ADDED,
    notes="OrthogonalMatrix[omat] validates a (square, tall or wide) orthogonal matrix: Transpose[o].o (or "
-         "o.Transpose[o]) is the identity" + _STRUCT_NOTE)
+         "o.Transpose[o]) is the identity" + _STRUCT_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _orthogonal_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
     split_options(rest, {"TargetStructure"}, "OrthogonalMatrix")
     return _orth_check(x, "OrthogonalMatrix", False)
@@ -1039,7 +1061,8 @@ def _orthogonal_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
 
 @fn("UnitaryMatrix", **ADDED,
    notes="UnitaryMatrix[umat] validates a unitary matrix: ConjugateTranspose[u].u (or u.ConjugateTranspose[u]) is "
-         "the identity" + _STRUCT_NOTE)
+         "the identity" + _STRUCT_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _unitary_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
     split_options(rest, {"TargetStructure"}, "UnitaryMatrix")
     return _orth_check(x, "UnitaryMatrix", True)
@@ -1215,7 +1238,8 @@ def _float_out(a):
 @fn("LDLDecomposition", **ADDED,
     notes="{l, d} with m == l.d.ConjugateTranspose[l], l unit lower triangular and d diagonal, for a Hermitian (or "
           "real symmetric) matrix, exact, symbolic or machine; a zero pivot (no LDL factorisation without pivoting) "
-          "raises (use BunchKaufmanDecomposition)" + _DENSE_NOTE)
+          "raises (use BunchKaufmanDecomposition)" + _DENSE_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ldl(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "LDLDecomposition")
     if args:
@@ -1247,7 +1271,8 @@ _BK_ALPHA = (1 + math.sqrt(17)) / 8
     notes="{l, b, p} with p.m.Transpose[p] == l.b.ConjugateTranspose[l] (Hermitian m) or l.b.Transpose[l] "
           "(complex symmetric m): Bunch-Kaufman diagonal pivoting (alpha = (1 + Sqrt[17])/8), l unit lower "
           "triangular, b block diagonal with 1x1 and 2x2 blocks, p a permutation matrix; exact or machine numeric "
-          "matrices (symbolic matrices raise); pivot choices can differ from Wolfram's on ties" + _DENSE_NOTE)
+          "matrices (symbolic matrices raise); pivot choices can differ from Wolfram's on ties" + _DENSE_NOTE +
+          ". Check: reference (differential cases in tests/library).")
 def _bunchkaufman(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "BunchKaufmanDecomposition")
     if args:
@@ -1321,7 +1346,8 @@ def _bunchkaufman(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
 @fn("RankDecomposition", **ADDED,
     notes="{c, f} with m == c.f and c, f of full rank MatrixRank[m]: exact and symbolic matrices give c = the pivot "
           "columns of m and f = the non-zero rows of RowReduce[m] (as Wolfram); machine matrices give c with "
-          "orthonormal columns (SVD-based, the factorisation is not unique); the zero matrix raises" + _DENSE_NOTE)
+          "orthonormal columns (SVD-based, the factorisation is not unique); the zero matrix raises" + _DENSE_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rankdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "RankDecomposition", square=False, extra=("Tolerance",))
     if args:
@@ -1364,7 +1390,8 @@ def _int_scale(vec):
 @fn("EigenvalueDecomposition", **ADDED,
     notes="{s, d} with m == s.d.Inverse[s]: s has the eigenvectors (Eigenvectors[m]) as columns and d the "
           "eigenvalues on the diagonal, ordered as Eigensystem; rational eigenvectors are scaled to coprime "
-          "integers as Wolfram does; a non-diagonalizable matrix raises" + _DENSE_NOTE)
+          "integers as Wolfram does; a non-diagonalizable matrix raises" + _DENSE_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _eigenvaluedecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "EigenvalueDecomposition")
     if args:
@@ -1485,7 +1512,8 @@ def _smithdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
 
 @fn("SmithReduce", **ADDED,
     notes="the Smith normal form r of an integer or rational matrix (SmithDecomposition[m][[2]], unique)"
-          + _DENSE_NOTE)
+          + _DENSE_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _smithreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     return _mout(_smith(m, rest, "SmithReduce")[1])
 
@@ -1782,7 +1810,8 @@ def _frobeniusdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
 
 @fn("FrobeniusReduce", **ADDED,
     notes="the Frobenius (rational canonical) form of a square matrix (unique; FrobeniusDecomposition[m][[2]])"
-          + _DENSE_NOTE)
+          + _DENSE_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _frobeniusreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     return _ms(_frobenius(m, rest, "FrobeniusReduce")[1])
 
@@ -1791,7 +1820,8 @@ def _frobeniusreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     notes="the Jordan normal form j of a square matrix (exact via SymPy, blocks ordered by eigenvalue real part "
           "then imaginary part); machine matrices must be diagonalizable and give the diagonal matrix of "
           "Eigenvalues[m] (decreasing absolute value); Wolfram's block order can differ for exact matrices"
-          + _DENSE_NOTE)
+          + _DENSE_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _jordanreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     M, args, _ = _decomp(m, rest, "JordanReduce")
     if args:
@@ -1893,7 +1923,8 @@ def _cn_out(kind, X):
     notes="{t, c, n} with m == t.BlockDiagonalMatrix[{c, n}].Inverse[t], c invertible and n nilpotent; exact "
           "matrices use t = {pivot columns of m^k, integer null-space basis of m^k} (k the index of m), as "
           "Wolfram; invertible or nilpotent m give t = IdentityMatrix and {} for the empty part; machine matrices "
-          "use an SVD basis (t is not unique)" + _DENSE_NOTE)
+          "use an SVD basis (t is not unique)" + _DENSE_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _corenilpotent(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "CoreNilpotentDecomposition")
     if args:
@@ -1905,7 +1936,8 @@ def _corenilpotent(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
 @fn("DrazinInverse", **ADDED,
     notes="the Drazin inverse t.BlockDiagonalMatrix[{Inverse[c], 0}].Inverse[t] from the core-nilpotent "
           "decomposition (the inverse for invertible m, zero for nilpotent m); exact, symbolic (generic) or machine "
-          "square matrices" + _DENSE_NOTE)
+          "square matrices" + _DENSE_NOTE +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _drazininverse(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     M, args, _ = _decomp(m, rest, "DrazinInverse")
     if args:
@@ -1979,7 +2011,8 @@ def _schur_blocks(T, real):
           "RealBlockDiagonalForm -> True (default) keeps 2x2 real blocks for complex pairs of a real matrix; "
           "{m, a} gives the generalized decomposition {q, s, p, t} with m == q.s.ConjugateTranspose[p], a == "
           "q.t.ConjugateTranspose[p] ordered by the generalized eigenvalues; LAPACK reordering (trexc/tgexc) of "
-          "SciPy's Schur/QZ forms; numeric matrices only (exact input is evaluated numerically)" + _DENSE_NOTE)
+          "SciPy's Schur/QZ forms; numeric matrices only (exact input is evaluated numerically)" + _DENSE_NOTE +
+          ". Check: reference (differential cases in tests/library).")
 def _orderedschur(m: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "OrderedSchurDecomposition"
     args, opts = split_options(rest, {"TargetStructure", "RealBlockDiagonalForm"}, fname)
@@ -3633,16 +3666,20 @@ fn("LinearOptimization", **ADDED,
          "and [c, {a, b}, {aeq, beq}] (aeq.x + beq == 0) give the vector; domains {Integers, Reals, ...}; exact "
          "rational simplex (Bland's rule) so exact input gives exact results, branch and bound for integer "
          "variables (integer values exact, the others machine numbers as Wolfram); vertex choice among multiple "
-         "optima can differ from Wolfram's" + _FAMILY_NOTE)(_family("LinearOptimization", "lp"))
+         "optima can differ from Wolfram's" + _FAMILY_NOTE +
+         ". Check: exact (exact input gives exact results), reference "
+         "(differential cases in tests/library).")(_family("LinearOptimization", "lp"))
 fn("QuadraticOptimization", **ADDED,
    notes="minimise a convex quadratic objective subject to linear constraints: QuadraticOptimization[f, cons, "
          "vars] or [{q, c}, {a, b}, {aeq, beq}] (1/2 x.q.x + c.x); exact active-set enumeration (up to 12 "
          "inequalities, results as machine numbers like Wolfram), SciPy beyond that; a non-convex objective "
-         "raises" + _FAMILY_NOTE)(_family("QuadraticOptimization", "qp"))
+         "raises" + _FAMILY_NOTE +
+         ". Check: reference (differential cases in tests/library).")(_family("QuadraticOptimization", "qp"))
 fn("LinearFractionalOptimization", **ADDED,
    notes="minimise (a.x + b)/(c.x + d) subject to linear constraints (the denominator must be positive on the "
          "feasible set): exact Charnes-Cooper transformation to a linear program, branch and bound for integer "
-         "variables; matrix form [{a, b, c, d}, {a1, b1}, ...]" + _FAMILY_NOTE)(
+         "variables; matrix form [{a, b, c, d}, {a1, b1}, ...]" + _FAMILY_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(
     _family("LinearFractionalOptimization", "lfp"))
 for _nm, _what in [("ConvexOptimization", "convex objective and constraints"),
                    ("ConicOptimization", "linear objective with conic constraints (NormCone, SemidefiniteCone, "
@@ -4302,9 +4339,12 @@ _BO_NOTE = ("Gaussian-process Bayesian optimisation (RBF kernel with the length 
             "deterministic); results are stochastic like Wolfram's and the GP model differs, so configurations "
             "differ in detail; the \"PredictorFunction\" property raises")
 fn("BayesianMinimization", **ADDED, notes="BayesianMinimization[f, spec] gives a BayesianMinimizationObject: "
-   + _BO_NOTE)(_bayes("BayesianMinimization", "min"))
+   + _BO_NOTE +
+   ". Check: exact (exact input gives exact results), reference "
+   "(differential cases in tests/library).")(_bayes("BayesianMinimization", "min"))
 fn("BayesianMaximization", **ADDED, notes="BayesianMaximization[f, spec] gives a BayesianMaximizationObject: "
-   + _BO_NOTE)(_bayes("BayesianMaximization", "max"))
+   + _BO_NOTE +
+   ". Check: reference (differential cases in tests/library).")(_bayes("BayesianMaximization", "max"))
 
 
 @fn("BayesianMinimizationObject", **ADDED,
@@ -5141,3 +5181,14 @@ record("LossFunction", AREA, "added",
        "accept it")
 record("UnconstrainedParameters", AREA, "added",
        "option name (Wolfram: parameters left free in GeometricScene); GeometricScene does not accept it here")
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "DiceDissimilarity", "JaccardDissimilarity", "MatchingDissimilarity", "RogersTanimotoDissimilarity",
+          "RussellRaoDissimilarity", "SokalSneathDissimilarity", "YuleDissimilarity")
+_add_check("reference (differential cases in tests/library).",
+          "FindArgMax", "FindArgMin", "FindMaxValue", "FindMinValue", "NArgMax", "NArgMin", "NMaxValue", "NMinValue",
+          "VectorGreater", "VectorGreaterEqual", "VectorLess", "VectorLessEqual")

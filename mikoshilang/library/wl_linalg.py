@@ -186,10 +186,12 @@ def _eigenvectors_k(m: Expr, k: Expr) -> ListOf[Expr]:
 
 record("Eigenvalues", "linear algebra", "fixed",
        "eigenvalues with multiplicity in Wolfram order (decreasing absolute value; legacy returned SymPy's dict "
-       "order)." + EIG_K)
+       "order)." + EIG_K +
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 record("Eigenvectors", "linear algebra", "fixed",
        "ordered like Eigenvalues, exact vectors scaled so the last non-zero entry is 1, zero vectors pad defective "
-       "matrices (Wolfram); machine matrices give unit vectors; Eigenvectors[m, k] and UpTo[k] as for Eigenvalues")
+       "matrices (Wolfram); machine matrices give unit vectors; Eigenvectors[m, k] and UpTo[k] as for Eigenvalues"
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 @fn("Eigensystem", area=AREA, status="added",
@@ -928,16 +930,21 @@ def _eqtest(A, B, kind, opts, M):
 
 
 _matrix_pred("SquareMatrixQ", lambda M, k, o: _sq(M),
-             "True for a matrix with as many rows as columns, False for anything else")
+             "True for a matrix with as many rows as columns, False for anything else"
+             ". Check: reference (differential cases in tests/library).")
 _matrix_pred("HermitianMatrixQ", lambda M, k, o: _sq(M) and _eqtest(M, M.H, k, o, M),
              "m == ConjugateTranspose[m] (exact zero test; Tolerance -> t for approximate matrices, default "
-             "1e-12 at machine precision; SameTest -> f); False for non-matrices")
+             "1e-12 at machine precision; SameTest -> f); False for non-matrices"
+             ". Check: reference (differential cases in tests/library).")
 _matrix_pred("AntisymmetricMatrixQ", lambda M, k, o: _sq(M) and _eqtest(M, -M.T, k, o, M),
-             "m == -Transpose[m] (exact; Tolerance / SameTest as for HermitianMatrixQ)")
+             "m == -Transpose[m] (exact; Tolerance / SameTest as for HermitianMatrixQ)"
+             ". Check: reference (differential cases in tests/library).")
 _matrix_pred("AntihermitianMatrixQ", lambda M, k, o: _sq(M) and _eqtest(M, -M.H, k, o, M),
-             "m == -ConjugateTranspose[m] (exact; Tolerance / SameTest as for HermitianMatrixQ)")
+             "m == -ConjugateTranspose[m] (exact; Tolerance / SameTest as for HermitianMatrixQ)"
+             ". Check: reference (differential cases in tests/library).")
 _matrix_pred("NormalMatrixQ", lambda M, k, o: _sq(M) and _eqtest(M * M.H, M.H * M, k, o, M),
-             "m.ConjugateTranspose[m] == ConjugateTranspose[m].m")
+             "m.ConjugateTranspose[m] == ConjugateTranspose[m].m"
+             ". Check: reference (differential cases in tests/library).")
 
 
 def _orthotest(M, kind, opts, conj):
@@ -954,9 +961,11 @@ def _orthotest(M, kind, opts, conj):
 _matrix_pred("OrthogonalMatrixQ", lambda M, k, o: _orthotest(M, k, o, False),
              "p x q matrix: Transpose[m].m == IdentityMatrix[q] when p >= q, m.Transpose[m] == IdentityMatrix[p] "
              "when p <= q (no conjugation, as in Wolfram); options Normalized -> False (only orthogonal columns/"
-             "rows), Tolerance -> t (infinity norm of the defect), SameTest -> f")
+             "rows), Tolerance -> t (infinity norm of the defect), SameTest -> f"
+             ". Check: reference (differential cases in tests/library).")
 _matrix_pred("UnitaryMatrixQ", lambda M, k, o: _orthotest(M, k, o, True),
-             "as OrthogonalMatrixQ with ConjugateTranspose; options Normalized, Tolerance, SameTest")
+             "as OrthogonalMatrixQ with ConjugateTranspose; options Normalized, Tolerance, SameTest"
+             ". Check: reference (differential cases in tests/library).")
 
 
 def _hermitian_part(M):
@@ -1019,13 +1028,17 @@ DEFN = ("; the quadratic form is Re[Conjugate[x].m.x], so only the Hermitian par
         "Hermitian part with a tolerance of n*$MachineEpsilon*max|eigenvalue|; False for symbolic matrices unless "
         "every sign can be proved, and for non-matrices")
 _matrix_pred("PositiveDefiniteMatrixQ", lambda M, k, o: _definiteness(M, k)[0],
-             "Re[Conjugate[x].m.x] > 0 for all non-zero x" + DEFN)
+             "Re[Conjugate[x].m.x] > 0 for all non-zero x" + DEFN +
+             ". Check: reference (differential cases in tests/library).")
 _matrix_pred("PositiveSemidefiniteMatrixQ", lambda M, k, o: _definiteness(M, k)[1],
-             "Re[Conjugate[x].m.x] >= 0 for all x" + DEFN)
+             "Re[Conjugate[x].m.x] >= 0 for all x" + DEFN +
+             ". Check: reference (differential cases in tests/library).")
 _matrix_pred("NegativeDefiniteMatrixQ", lambda M, k, o: _definiteness(M, k)[2],
-             "Re[Conjugate[x].m.x] < 0 for all non-zero x" + DEFN)
+             "Re[Conjugate[x].m.x] < 0 for all non-zero x" + DEFN +
+             ". Check: reference (differential cases in tests/library).")
 _matrix_pred("NegativeSemidefiniteMatrixQ", lambda M, k, o: _definiteness(M, k)[3],
-             "Re[Conjugate[x].m.x] <= 0 for all x" + DEFN)
+             "Re[Conjugate[x].m.x] <= 0 for all x" + DEFN +
+             ". Check: reference (differential cases in tests/library).")
 
 
 def _indefinite(M, kind):
@@ -1040,7 +1053,8 @@ def _indefinite(M, kind):
 
 
 _matrix_pred("IndefiniteMatrixQ", lambda M, k, o: _indefinite(M, k),
-             "the quadratic form takes both signs (neither positive nor negative semidefinite)" + DEFN)
+             "the quadratic form takes both signs (neither positive nor negative semidefinite)" + DEFN +
+             ". Check: reference (differential cases in tests/library).")
 
 
 def _diagonalizable(M, kind):
@@ -1060,7 +1074,8 @@ def _diagonalizable(M, kind):
 
 _matrix_pred("DiagonalizableMatrixQ", lambda M, k, o: _diagonalizable(M, k),
              "m == s.d.Inverse[s] for a diagonal d (over the complex numbers): exact via SymPy; machine matrices "
-             "test that the eigenvector matrix is well-conditioned (condition number < 10^8)")
+             "test that the eigenvector matrix is well-conditioned (condition number < 10^8)"
+             ". Check: reference (differential cases in tests/library).")
 
 
 # ─────────────────────────── tensors ───────────────────────────

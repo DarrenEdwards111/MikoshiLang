@@ -29,50 +29,94 @@ def _special(name, f, nargs, status, notes, listable=True):
 
 EXACT = "now exact/symbolic via SymPy (legacy converted every argument to a float, so symbolic input failed and exact input gave floats)"
 
-_special("Gamma", sp.gamma, 1, "verified", "Euler gamma (SymPy)")
+_special("Gamma", sp.gamma, 1, "verified", "Euler gamma (SymPy)"
+                                           ". Check: exact (exact input gives exact results), reference "
+                                           "(differential cases in tests/library).")
 _special("Gamma", sp.uppergamma, 2, "verified", "Gamma[a, z] is the upper incomplete gamma function")
 _special("Beta", lambda a, b: sp.expand_func(sp.beta(a, b)) if a.is_number and b.is_number else sp.beta(a, b),
          2, "fixed", "Euler beta, exact closed forms for numeric arguments (Beta[1/2, 1/2] = Pi; legacy left it "
-         "unevaluated)")
-_special("LogGamma", sp.loggamma, 1, "fixed", EXACT)
-_special("DiGamma", sp.digamma, 1, "verified", "MikoshiLang alias of PolyGamma[z]")
-_special("TriGamma", lambda z: sp.polygamma(1, z), 1, "fixed", "TriGamma[z] = PolyGamma[1, z]; " + EXACT)
-_special("PolyGamma", lambda z: sp.polygamma(0, z), 1, "verified", "PolyGamma[z] = digamma")
+         "unevaluated)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
+_special("LogGamma", sp.loggamma, 1, "fixed", EXACT +
+                                              ". Check: reference (differential cases in tests/library).")
+_special("DiGamma", sp.digamma, 1, "verified", "MikoshiLang alias of PolyGamma[z]"
+                                               ". Check: exact (exact input gives exact results), reference "
+                                               "(differential cases in tests/library).")
+_special("TriGamma", lambda z: sp.polygamma(1, z), 1, "fixed", "TriGamma[z] = PolyGamma[1, z]; " + EXACT +
+                                                               ". Check: reference (differential cases in "
+                                                               "tests/library).")
+_special("PolyGamma", lambda z: sp.polygamma(0, z), 1, "verified", "PolyGamma[z] = digamma"
+                                                                   ". Check: exact (exact input gives exact "
+                                                                   "results), reference (differential cases in "
+                                                                   "tests/library).")
 _special("PolyGamma", sp.polygamma, 2, "verified", "PolyGamma[n, z]")
 _special("Zeta", sp.zeta, 1, "verified", "Riemann zeta")
 _special("Zeta", sp.zeta, 2, "verified", "Zeta[s, a] is the Hurwitz zeta function")
-_special("HurwitzZeta", sp.zeta, 2, "fixed", "HurwitzZeta[s, a]; " + EXACT)
-_special("DirichletEta", sp.dirichlet_eta, 1, "fixed", EXACT)
-_special("Erf", sp.erf, 1, "verified", "error function")
-_special("Erfc", sp.erfc, 1, "verified", "complementary error function")
-_special("Erfi", sp.erfi, 1, "fixed", EXACT)
-_special("ExpIntegralEi", sp.Ei, 1, "fixed", EXACT)
+_special("HurwitzZeta", sp.zeta, 2, "fixed", "HurwitzZeta[s, a]; " + EXACT +
+                                             ". Check: exact (exact input gives exact results), reference "
+                                             "(differential cases in tests/library).")
+_special("DirichletEta", sp.dirichlet_eta, 1, "fixed", EXACT +
+                                                       ". Check: exact (exact input gives exact results), reference "
+                                                       "(differential cases in tests/library).")
+_special("Erf", sp.erf, 1, "verified", "error function"
+                                       ". Check: exact (exact input gives exact results), reference (differential "
+                                       "cases in tests/library).")
+_special("Erfc", sp.erfc, 1, "verified", "complementary error function"
+                                         ". Check: reference (differential cases in tests/library).")
+_special("Erfi", sp.erfi, 1, "fixed", EXACT +
+                                      ". Check: reference (differential cases in tests/library).")
+_special("ExpIntegralEi", sp.Ei, 1, "fixed", EXACT +
+                                             ". Check: reference (differential cases in tests/library).")
 _special("ExpIntegralE", sp.expint, 2, "promoted", "ExpIntegralE[n, z] (generalised exponential integral)")
-_special("LogIntegral", sp.li, 1, "fixed", "LogIntegral[x] = li(x); " + EXACT)
-_special("SinIntegral", sp.Si, 1, "fixed", EXACT)
-_special("CosIntegral", sp.Ci, 1, "fixed", EXACT)
+_special("LogIntegral", sp.li, 1, "fixed", "LogIntegral[x] = li(x); " + EXACT +
+                                           ". Check: reference (differential cases in tests/library).")
+_special("SinIntegral", sp.Si, 1, "fixed", EXACT +
+                                           ". Check: reference (differential cases in tests/library).")
+_special("CosIntegral", sp.Ci, 1, "fixed", EXACT +
+                                           ". Check: reference (differential cases in tests/library).")
 for _n, _f in [("BesselJ", sp.besselj), ("BesselY", sp.bessely), ("BesselI", sp.besseli), ("BesselK", sp.besselk)]:
     _special(_n, _f, 2, "verified", "Bessel function (same convention as Wolfram/mpmath)")
-_special("HankelH1", sp.hankel1, 2, "fixed", "H1 = J + I Y; " + EXACT)
-_special("HankelH2", sp.hankel2, 2, "fixed", "H2 = J - I Y; " + EXACT)
+_special("HankelH1", sp.hankel1, 2, "fixed", "H1 = J + I Y; " + EXACT +
+                                             ". Check: reference (differential cases in tests/library).")
+_special("HankelH2", sp.hankel2, 2, "fixed", "H2 = J - I Y; " + EXACT +
+                                             ". Check: reference (differential cases in tests/library).")
 _special("SphericalBesselJ", sp.jn, 2, "promoted", "spherical Bessel j_n(z)")
-_special("AiryAi", sp.airyai, 1, "verified", "Airy Ai")
-_special("AiryBi", sp.airybi, 1, "verified", "Airy Bi")
-_special("ChebyshevT", sp.chebyshevt, 2, "fixed", EXACT)
-_special("ChebyshevU", sp.chebyshevu, 2, "fixed", EXACT)
-_special("HermiteH", sp.hermite, 2, "fixed", "physicists' Hermite polynomials; " + EXACT)
-_special("LaguerreL", sp.laguerre, 2, "fixed", EXACT)
+_special("AiryAi", sp.airyai, 1, "verified", "Airy Ai"
+                                             ". Check: reference (differential cases in tests/library).")
+_special("AiryBi", sp.airybi, 1, "verified", "Airy Bi"
+                                             ". Check: reference (differential cases in tests/library).")
+_special("ChebyshevT", sp.chebyshevt, 2, "fixed", EXACT +
+                                                  ". Check: exact (exact input gives exact results), reference "
+                                                  "(differential cases in tests/library).")
+_special("ChebyshevU", sp.chebyshevu, 2, "fixed", EXACT +
+                                                  ". Check: exact (exact input gives exact results), reference "
+                                                  "(differential cases in tests/library).")
+_special("HermiteH", sp.hermite, 2, "fixed", "physicists' Hermite polynomials; " + EXACT +
+                                             ". Check: exact (exact input gives exact results), reference "
+                                             "(differential cases in tests/library).")
+_special("LaguerreL", sp.laguerre, 2, "fixed", EXACT +
+                                               ". Check: exact (exact input gives exact results), reference "
+                                               "(differential cases in tests/library).")
 _special("LaguerreL", sp.assoc_laguerre, 3, "fixed", "LaguerreL[n, a, x] (generalised Laguerre)")
 _special("LegendreP", sp.legendre, 2, "fixed", EXACT)
 _special("LegendreP", sp.assoc_legendre, 3, "fixed", "LegendreP[n, m, x] with the Condon-Shortley phase (Wolfram type 1)")
-_special("GegenbauerC", sp.gegenbauer, 3, "fixed", EXACT)
-_special("JacobiP", sp.jacobi, 4, "fixed", EXACT)
-_special("EllipticK", sp.elliptic_k, 1, "fixed", "parameter m convention (Wolfram); " + EXACT)
-_special("EllipticE", sp.elliptic_e, 1, "fixed", "complete, parameter m; " + EXACT)
+_special("GegenbauerC", sp.gegenbauer, 3, "fixed", EXACT +
+                                                   ". Check: reference (differential cases in tests/library).")
+_special("JacobiP", sp.jacobi, 4, "fixed", EXACT +
+                                           ". Check: reference (differential cases in tests/library).")
+_special("EllipticK", sp.elliptic_k, 1, "fixed", "parameter m convention (Wolfram); " + EXACT +
+                                                 ". Check: reference (differential cases in tests/library).")
+_special("EllipticE", sp.elliptic_e, 1, "fixed", "complete, parameter m; " + EXACT +
+                                                 ". Check: exact (exact input gives exact results), reference "
+                                                 "(differential cases in tests/library).")
 _special("EllipticE", sp.elliptic_e, 2, "fixed", "EllipticE[phi, m] incomplete")
-_special("EllipticEIncomplete", sp.elliptic_e, 2, "fixed", "alias of EllipticE[phi, m]; " + EXACT)
-_special("EllipticF", sp.elliptic_f, 2, "fixed", "EllipticF[phi, m]; " + EXACT)
-_special("EllipticPi", sp.elliptic_pi, 2, "fixed", "EllipticPi[n, m] complete; " + EXACT)
+_special("EllipticEIncomplete", sp.elliptic_e, 2, "fixed", "alias of EllipticE[phi, m]; " + EXACT +
+                                                           ". Check: reference (differential cases in "
+                                                           "tests/library).")
+_special("EllipticF", sp.elliptic_f, 2, "fixed", "EllipticF[phi, m]; " + EXACT +
+                                                 ". Check: reference (differential cases in tests/library).")
+_special("EllipticPi", sp.elliptic_pi, 2, "fixed", "EllipticPi[n, m] complete; " + EXACT +
+                                                   ". Check: reference (differential cases in tests/library).")
 _special("EllipticPi", sp.elliptic_pi, 3, "fixed", "EllipticPi[n, phi, m] incomplete")
 @fn("KroneckerDelta", area=AREA, status="promoted",
     notes="variadic: 1 if all arguments are equal, 0 if any differ, KroneckerDelta[n] = 1 iff n == 0; symbolic "
@@ -141,10 +185,13 @@ def _hyper(p, q):
     return f
 
 
-_special("Hypergeometric0F1", _hyper(0, 1), 2, "fixed", "0F1(; b; z); " + EXACT)
-_special("Hypergeometric1F1", _hyper(1, 1), 3, "fixed", "Kummer 1F1(a; b; z); " + EXACT)
+_special("Hypergeometric0F1", _hyper(0, 1), 2, "fixed", "0F1(; b; z); " + EXACT +
+                                                        ". Check: reference (differential cases in tests/library).")
+_special("Hypergeometric1F1", _hyper(1, 1), 3, "fixed", "Kummer 1F1(a; b; z); " + EXACT +
+                                                        ". Check: reference (differential cases in tests/library).")
 _special("Hypergeometric2F1", _hyper(2, 1), 4, "fixed",
-         "Gauss 2F1(a, b; c; z); the 2-argument legacy form returned an Error expression and now raises an arity error; " + EXACT)
+         "Gauss 2F1(a, b; c; z); the 2-argument legacy form returned an Error expression and now raises an arity error; " + EXACT +
+         ". Check: reference (differential cases in tests/library).")
 
 
 @fn("LegendreQ", area=AREA, status="fixed", listable=True,
@@ -195,3 +242,10 @@ def _struveh(n, z):
     if not (has_float(n) or has_float(z)):
         raise Unevaluated()        # no closed form in SymPy: stay exact/unevaluated like Wolfram
     return R(complex(mpmath.struveh(complex(sn), complex(sz))))
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("reference (differential cases in tests/library).",
+          "BesselI", "BesselJ", "BesselK", "BesselY")
