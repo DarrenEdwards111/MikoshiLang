@@ -66,9 +66,74 @@ CANONICAL = [
     ("Block[{fzr}, fzr[x_] := Times[x, Times[2, fzg[\"s\"]]]; fzr[3] === 6 fzg[\"s\"]]", True),
 ]
 
-CASES = LISTS + CANONICAL
+NI = Raises(NotImplementedError)
+OPTIONS = [
+    # FindRoot honours MaxIterations (mpmath maxsteps); too few iterations is an error, never an unconverged value
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> 1]",
+     Raises(ValueError, "FindRoot: the search did not converge within MaxIterations -> 1 iterations")),
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> 3]", Raises(ValueError, "MaxIterations -> 3")),
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> 10]", "{x -> 0.7390851332151607}"),
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> 100]", "{x -> 0.7390851332151607}"),
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> Infinity]", "{x -> 0.7390851332151607}"),
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> Automatic]", "{x -> 0.7390851332151607}"),
+    ("FindRoot[Cos[x] - x, {x, 0, 1}, MaxIterations -> 1]", Raises(ValueError, "MaxIterations -> 1")),
+    ("FindRoot[{x^2 + y^2 == 4, x == y}, {{x, 1}, {y, 2}}, MaxIterations -> 1]",
+     Raises(ValueError, "MaxIterations -> 1")),
+    ("FindRoot[{x^2 + y^2 == 4, x == y}, {{x, 1}, {y, 2}}, MaxIterations -> 20]",
+     "{x -> 1.4142135623730951, y -> 1.4142135623730951}"),
+    ("FindRoot[x^2 + 1, {x, 1}, MaxIterations -> 5]", Raises(ValueError, "FindRoot: no root was found")),
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> 0]", Raises(ValueError, "FindRoot: MaxIterations must be")),
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> 2.5]", Raises(ValueError, "FindRoot: MaxIterations must be")),
+    ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> 30, WorkingPrecision -> 30] // Last // Last // Precision",
+     "30."),
+    # options that used to be accepted and silently ignored now raise unless they have their default value
+    ("FindRoot[Cos[x] - x, {x, 1}, Method -> \"Newton\"]", Raises(NotImplementedError, "FindRoot: the option Method")),
+    ("FindRoot[Cos[x] - x, {x, 1}, AccuracyGoal -> 3]", Raises(NotImplementedError, "FindRoot: the option Accuracy")),
+    ("FindRoot[Cos[x] - x, {x, 1}, EvaluationMonitor :> Print[x]]", NI),
+    ("FindRoot[Cos[x] - x, {x, 1}, Method -> Automatic, Compiled -> False]", "{x -> 0.7390851332151607}"),
+    ("NIntegrate[x^2, {x, 0, 1}, MaxRecursion -> 3]", Raises(NotImplementedError, "NIntegrate: the option MaxRec")),
+    ("NIntegrate[x^2, {x, 0, 1}, PrecisionGoal -> 12]", Raises(NotImplementedError, "PrecisionGoal -> 12")),
+    ("NIntegrate[x^2, {x, 0, 1}, PrecisionGoal -> 6]", 1 / 3),
+    ("NIntegrate[x^2, {x, 0, 1}, Method -> \"GaussKronrod\"]", 1 / 3),
+    ("NSum[1/n^2, {n, 1, Infinity}, Method -> \"EulerMaclaurin\"]", NI),
+    ("NSum[1/n^2, {n, 1, Infinity}, AccuracyGoal -> 5]", 1.6449340668482264),
+    ("NProduct[1 + 1/n^2, {n, 1, Infinity}, MaxIterations -> 5]", NI),
+    ("NSolve[x^2 == 2, x, Method -> \"Homotopy\"]", NI),
+    ("NSolve[x^2 == 2, x, WorkingPrecision -> 20] // Length", "2"),
+    ("NRoots[x^2 - 2 == 0, x, Method -> \"JenkinsTraub\"]", NI),
+    ("NMinimize[x^2 - x, x, Integers]", Raises(NotImplementedError, "NMinimize: the domain Integers")),
+    ("NMinimize[x^2 - x, x, Reals]", "{-0.25, {x -> 0.5}}"),
+    ("NMaximize[x - x^2, x, Method -> \"NelderMead\"]", Raises(NotImplementedError, "NMaximize: the option Method")),
+    ("NMinimize[x^2 - x, x, WorkingPrecision -> MachinePrecision]", "{-0.25, {x -> 0.5}}"),
+    ("FindMinimum[x^2 - x, {x, 1}, MaxIterations -> 1]", Raises(ValueError, "FindMinimum")),
+    ("LinearOptimization[x, {x >= 1}, x, Tolerance -> 0.1]", Raises(NotImplementedError, "Tolerance -> 0.1")),
+    ("LinearOptimization[x, {x >= 1}, x, Method -> \"Simplex\"]", NI),
+    ("LinearOptimization[x, {x >= 1}, x, Method -> Automatic]", "{x -> 1}"),
+    ("NArgMin[x^2 - x, x, MaxIterations -> 3]", NI),
+    ("ParametricConvexOptimization[(x - p)^2, {}, {x}, {p}, MaxIterations -> 3]", NI),
+    ("FindShortestTour[{{0, 0}, {1, 0}, {1, 1}}, Method -> \"Greedy\"]", NI),
+    ("FindShortestTour[{{0, 0}, {1, 0}, {1, 1}}, Method -> Automatic] // First", "2 + Sqrt[2]"),
+    ("DistanceMatrix[{1, 2}, WorkingPrecision -> 30]", NI),
+    ("FindIntegerNullVector[{1, Sqrt[2], 1 + Sqrt[2]}, ZeroTest -> (# == 0 &)]", NI),
+    ("Interpolation[{1, 2, 3, 4}, PeriodicInterpolation -> True]", NI),
+    ("Interpolation[{1, 2, 3, 4}, PeriodicInterpolation -> False][2]", 2.0),
+    ("ListInterpolation[{1, 2, 3, 4}, Method -> \"Spline\"]", NI),
+    ("NDSolve[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, Method -> \"ExplicitRungeKutta\"]", NI),
+    ("NDSolve[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, PrecisionGoal -> 12]", NI),
+]
+
+CASES = LISTS + CANONICAL + OPTIONS
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
 def test_fixups(case):
     check(case)
+
+
+def test_differentialroot_keeps_global_mpmath_precision():
+    # DifferentialRoot[...][x] used to reset mpmath.mp.dps to 15 globally (clobbering a caller's precision)
+    import mpmath
+    from _harness import ev
+    with mpmath.workdps(40):
+        ev("DifferentialRoot[Function[{y, x}, {y'[x] == y[x], y[0] == 1}]][1.]")
+        assert mpmath.mp.dps == 40

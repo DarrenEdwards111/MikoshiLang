@@ -1974,7 +1974,7 @@ def _listarg(x, name):
 # arithmetic ---------------------------------------------------------------
 
 
-def _opaque_arith(expr):
+def _opaque_arith(expr: Expr) -> Expr | None:
     """Plus / Times / Power whose operands SymPy cannot represent (strings, rules, Hold[...], compound heads such
     as f[x][y], graphics, ...): those operands become placeholder symbols, the rest is combined by SymPy, and the
     operands are put back.  So the result is still in canonical form -- nested Plus/Times flattened (Flat), terms

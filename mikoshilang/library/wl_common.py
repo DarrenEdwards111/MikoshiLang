@@ -31,6 +31,29 @@ def is_sym(x, name):
     return isinstance(x, Symbol) and x.name == name
 
 
+def reject_options(opts: dict, names, fname: str, goal_digits: int | None = None) -> None:
+    """Options in ``names`` that are accepted for compatibility but not implemented: a value other than the
+    default (Automatic; for WorkingPrecision MachinePrecision or at most 16 digits; for AccuracyGoal and
+    PrecisionGoal a number up to ``goal_digits``, the accuracy the implementation guarantees) raises
+    NotImplementedError instead of being silently ignored."""
+    for name in names:
+        if name not in opts:
+            continue
+        v = opts[name]
+        if isinstance(v, Symbol) and v.name == "Automatic":
+            continue
+        if name == "WorkingPrecision":
+            if isinstance(v, Symbol) and v.name == "MachinePrecision":
+                continue
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= 16:
+                continue
+            raise NotImplementedError(f"{fname}: WorkingPrecision -> {v} is not supported (machine precision only)")
+        if name in ("AccuracyGoal", "PrecisionGoal") and goal_digits is not None and \
+                isinstance(v, (int, float)) and not isinstance(v, bool) and v <= goal_digits:
+            continue
+        raise NotImplementedError(f"{fname}: the option {name} -> {v} is not supported")
+
+
 def split_options(args, names, fname):
     """Split trailing Name -> value options (Name in names) from positional arguments."""
     args = list(args)

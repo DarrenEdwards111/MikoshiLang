@@ -200,7 +200,7 @@ def _order_to_sympy(arg):
     return sp.Order(arg, (s, point[0]))
 
 
-def _list_as_function(x):
+def _list_as_function(x: object) -> object:
     """A List argument of a function head (a Python list after conversion) as the undefined SymPy function
     List(...): SymPy functions cannot hold Python lists (f([a]) fails inside SymPy), and from_sympy turns the
     undefined function List back into {...}, so f[{a}] round-trips unchanged."""
@@ -209,7 +209,7 @@ def _list_as_function(x):
     return x
 
 
-def _is_list_function(f) -> bool:
+def _is_list_function(f: object) -> bool:
     return isinstance(f, AppliedUndef) and type(f).__name__ == "List"
 
 

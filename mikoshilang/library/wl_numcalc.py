@@ -10,7 +10,7 @@ import sympy as sp
 
 from ..expr import Expr, Symbol
 from .core import fn, R, L, rule, sym, variable, list_arg, is_list, Unevaluated
-from .wl_common import split_options, ev
+from .wl_common import split_options, ev, reject_options
 from .wl_special import to_mp, from_mp
 
 AREA = "numerics (batch 2)"
@@ -20,7 +20,15 @@ _OPTS = {"WorkingPrecision", "PrecisionGoal", "AccuracyGoal", "Method", "MaxIter
          "Jacobian", "Gradient", "VerifyConvergence", "NSumTerms", "Weights", "MaxPoints"}
 
 
-def _opts(args, fname):
+# Options that only affect speed, never the value of the result: accepted and ignored.
+_HINTS = {"Compiled"}
+
+
+def _opts(args: tuple, fname: str, handled: tuple = ("WorkingPrecision",), goals: bool = False) -> tuple:
+    """Split the options of a numerical function.  An option other than ``handled`` (or a pure performance hint)
+    with a value other than Automatic raises NotImplementedError instead of being silently ignored; with
+    ``goals``, AccuracyGoal / PrecisionGoal up to the digits the error check guarantees (half the working
+    precision) are accepted."""
     pos, opts = split_options(args, _OPTS, fname)
     wp = opts.get("WorkingPrecision")
     if wp is None or (isinstance(wp, Symbol) and wp.name == "MachinePrecision"):
@@ -35,7 +43,22 @@ def _opts(args, fname):
         else:
             dps = int(round(d))
             prec = mpmath.libmp.dps_to_prec(dps)
+    unsupported = [n for n in opts if n not in handled and n not in _HINTS]
+    reject_options(opts, unsupported, fname, min(dps, 15) // 2 if goals else None)
     return pos, opts, prec, dps
+
+
+def _max_iterations(opts: dict, fname: str) -> int | None:
+    """MaxIterations -> n (a positive integer, Infinity or Automatic) as an iteration limit, or None for the
+    solver's default."""
+    m = opts.get("MaxIterations")
+    if m is None or (isinstance(m, Symbol) and m.name == "Automatic"):
+        return None
+    if isinstance(m, Symbol) and m.name == "Infinity":
+        return 10 ** 5
+    if isinstance(m, int) and not isinstance(m, bool) and m > 0:
+        return m
+    raise ValueError(f"{fname}: MaxIterations must be a positive integer or Infinity, not {m}")
 
 
 def _method(opts):
@@ -123,7 +146,7 @@ def _quad_method(opts):
           "singularities, complex-valued integrands and complex contours; WorkingPrecision -> p for arbitrary "
           "precision (mpmath tanh-sinh / Gauss-Legendre: Method -> \"DoubleExponential\" | \"GaussKronrod\")")
 def _nintegrate(f: Expr, *rest: Expr) -> Expr:
-    pos, opts, prec, dps = _opts(rest, "NIntegrate")
+    pos, opts, prec, dps = _opts(rest, "NIntegrate", ("WorkingPrecision", "Method"), goals=True)
     if not pos:
         raise ValueError("NIntegrate: an integration range {x, a, b} is required")
     its = [_iterator(it, "NIntegrate") for it in pos]
@@ -162,7 +185,7 @@ def _nintegrate(f: Expr, *rest: Expr) -> Expr:
 # ───────────────────────────── NSum / NProduct ─────────────────────────────
 
 def _nsum_like(f, rest, fname, op):
-    pos, opts, prec, dps = _opts(rest, fname)
+    pos, opts, prec, dps = _opts(rest, fname, goals=True)
     if not pos:
         raise ValueError(f"{fname}: an iterator {{n, nmin, nmax}} is required")
     its = []
@@ -354,7 +377,8 @@ def _nroots(eq: Expr, x: Expr, *rest: Expr) -> Expr:
           "and systems FindRoot[{eqs}, {{x, x0}, {y, y0}}] -> {x -> root, ...}; complex starting values search "
           "in the complex plane; WorkingPrecision -> p; raises when no root is found")
 def _findroot(eqs: Expr, *rest: Expr) -> ListOf[Expr]:
-    pos, opts, prec, dps = _opts(rest, "FindRoot")
+    pos, opts, prec, dps = _opts(rest, "FindRoot", ("WorkingPrecision", "MaxIterations"))
+    steps = _max_iterations(opts, "FindRoot")
     exprs = _equations(eqs, "FindRoot")
     if not pos:
         raise ValueError("FindRoot: starting values {x, x0} are required")
@@ -375,23 +399,32 @@ def _findroot(eqs: Expr, *rest: Expr) -> ListOf[Expr]:
     with mpmath.workdps(dps + 10):
         F = [_Fn(R(e), xs, "FindRoot") for e in exprs]
         x0 = [to_mp(v[0]) for v in starts]
-        try:
+        def search(kw):
             if len(xs) == 1:
                 if len(starts[0]) == 2:
-                    r = mpmath.findroot(F[0], (to_mp(starts[0][0]), to_mp(starts[0][1])), solver="secant")
+                    r = mpmath.findroot(F[0], (to_mp(starts[0][0]), to_mp(starts[0][1])), solver="secant", **kw)
                 elif len(starts[0]) == 3:
                     lo, hi = to_mp(starts[0][1]), to_mp(starts[0][2])
-                    r = mpmath.findroot(F[0], x0[0])
+                    r = mpmath.findroot(F[0], x0[0], **kw)
                     if not (lo <= mpmath.re(r) <= hi):
                         raise ValueError
                 else:
-                    r = mpmath.findroot(F[0], x0[0])
-                rs = [r]
-            else:
-                r = mpmath.findroot([lambda *a, f=f: f(*a) for f in F], x0)
-                rs = [r[i] for i in range(len(xs))]
+                    r = mpmath.findroot(F[0], x0[0], **kw)
+                return [r]
+            r = mpmath.findroot([lambda *a, f=f: f(*a) for f in F], x0, **kw)
+            return [r[i] for i in range(len(xs))]
+        try:
+            rs = search({} if steps is None else {"maxsteps": steps})
         except (ValueError, ZeroDivisionError):
-            raise ValueError("FindRoot: no root was found from the given starting point")
+            if steps is not None:
+                try:
+                    search({})
+                except (ValueError, ZeroDivisionError):
+                    pass
+                else:
+                    raise ValueError(f"FindRoot: the search did not converge within MaxIterations -> {steps} "
+                                     f"iterations") from None
+            raise ValueError("FindRoot: no root was found from the given starting point") from None
         res = max(abs(f(*rs)) for f in F)
         if not mpmath.isfinite(res) or res > mpmath.mpf(10) ** (-dps // 2):
             raise ValueError("FindRoot: the search did not converge to a root")
@@ -559,12 +592,24 @@ def _nminimize(f, vs, fname, sense):
           "searches; constraints: <, <=, >, >=, ==, Inequality, And); like Wolfram's it is a heuristic global "
           "method; integer domains raise")
 def _nmin(f: Expr, vs: Expr, *rest: Expr) -> Expr:
+    _nmin_rest(rest, "NMinimize")
     return _nminimize(f, vs, "NMinimize", "min")
+
+
+def _nmin_rest(rest: tuple, fname: str) -> None:
+    """NMinimize / NMaximize: a domain other than Reals and options other than their defaults raise (they used
+    to be ignored, so NMinimize[f, x, Integers] silently gave a non-integer minimum)."""
+    pos, opts = split_options(rest, _OPTS | {"RandomSeed", "PerformanceGoal"}, fname)
+    for d in pos:
+        if not (isinstance(d, Symbol) and d.name == "Reals"):
+            raise NotImplementedError(f"{fname}: the domain {d} is not supported (only Reals)")
+    reject_options(opts, [k for k in opts if k not in _HINTS | {"PerformanceGoal", "RandomSeed"}], fname)
 
 
 @fn("NMaximize", area=AREA, status="added",
     notes="NMaximize[f, vars] / [{f, cons}, vars] -> {fmax, {x -> x*, ...}} (NMinimize of -f)")
 def _nmax(f: Expr, vs: Expr, *rest: Expr) -> Expr:
+    _nmin_rest(rest, "NMaximize")
     return _nminimize(f, vs, "NMaximize", "max")
 
 
