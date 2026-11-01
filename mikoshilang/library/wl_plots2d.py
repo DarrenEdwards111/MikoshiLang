@@ -25,6 +25,12 @@ adaptive bisection (default 6) where the curve is not straight to within 1/1000 
 survives 40 further bisections is a discontinuity (``Exclusions -> Automatic``) and splits the curve; non-real or
 undefined values split it too. Expressions are compiled with SymPy/NumPy and cross-checked against the kernel's
 own ``N`` at sample points; heads that cannot be compiled are evaluated point by point by the kernel.
+
+3-D plots: ``Graphics3D[{{style, GraphicsComplex[points, {EdgeForm[], Polygon[...]}]}, ...}, Axes -> True,
+BoxRatios -> ..., PlotRange -> {{xmin, xmax}, {ymin, ymax}, {zmin, zmax}}]``; implicit surfaces (ContourPlot3D,
+ListContourPlot3D, RegionPlot3D) come from marching tetrahedra on a grid, volumes (DensityPlot3D,
+ListDensityPlot3D) are ``Raster3D`` cells. Symbols that cannot be done correctly are listed in ``SKIPPED`` at the
+end of the module with the reason.
 """
 from __future__ import annotations
 
