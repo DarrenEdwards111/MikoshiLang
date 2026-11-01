@@ -1847,8 +1847,8 @@ def inverse_distance(v, dfun):
           "with radius its value, as documented (a disk of radius r holds the pixels at distance < r, so "
           "InverseDistanceTransform[DistanceTransform[b]] == b). DistanceFunction -> EuclideanDistance (default), "
           "ManhattanDistance or ChessboardDistance. Multichannel images use the mean intensity; arrays raise "
-          "TypeError. Check: self-check-free round trip InverseDistanceTransform[DistanceTransform[b]] == b in "
-          "tests (reference).")
+          "TypeError. Check: reference (the round trip InverseDistanceTransform[DistanceTransform[b]] == b in "
+          "tests).")
 def _inversedistance(x: Expr, *opts: Option) -> Expr:
     fname = "InverseDistanceTransform"
     _, o = opts_split(opts, {"DistanceFunction"}, fname)
