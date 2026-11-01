@@ -337,7 +337,8 @@ def _modify(s, f, fname):
 
 
 @fn("AssociateTo", **ADDED,
-    notes="AssociateTo[a, k -> v] (or a list of rules) updates the association stored in symbol a and returns it")
+    notes="AssociateTo[a, k -> v] (or a list of rules) updates the association stored in symbol a and returns it"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _associateto(s: Expr, rules: Expr) -> Expr:
     def upd(v):
         if not is_assoc(v):
@@ -346,7 +347,9 @@ def _associateto(s: Expr, rules: Expr) -> Expr:
     return _modify(s, upd, "AssociateTo")
 
 
-@fn("KeyDropFrom", **ADDED, notes="KeyDropFrom[a, key or keys] removes entries from the association stored in a")
+@fn("KeyDropFrom", **ADDED, notes="KeyDropFrom[a, key or keys] removes entries from the association stored in a"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _keydropfrom(s: Expr, ks: Expr) -> Expr:
     def upd(v):
         if not is_assoc(v):

@@ -651,7 +651,8 @@ def _data(data, nvars, fname):
 
 @fn("Fit", area=AREA, status="added",
     notes="Fit[data, {f1, f2, ...}, vars] linear least-squares fit -> c1 f1 + c2 f2 + ... (data {y1, y2, ...} "
-          "at x = 1, 2, ... or {{x, y}, ...} or {{x1, x2, y}, ...}); machine-precision coefficients")
+          "at x = 1, 2, ... or {{x, y}, ...} or {{x1, x2, y}, ...}); machine-precision coefficients"
+          ". Check: reference (differential cases in tests/library).")
 def _fit(data: ListOf[Expr], funs: Expr, vs: Expr) -> Expr:
     import numpy as np
     xs = [variable(v, "Fit") for v in (vs.args if is_list(vs) else [vs])]
@@ -670,7 +671,8 @@ def _fit(data: ListOf[Expr], funs: Expr, vs: Expr) -> Expr:
 
 @fn("FindFit", area=AREA, status="added",
     notes="FindFit[data, expr, pars, vars] nonlinear least squares -> {a -> a*, ...}; pars may be {{a, a0}, ...} "
-          "with starting values (default 1); constraints FindFit[data, {expr, cons}, ...] are not supported")
+          "with starting values (default 1); constraints FindFit[data, {expr, cons}, ...] are not supported"
+          ". Check: reference (differential cases in tests/library).")
 def _findfit(data: Expr, model: Expr, pars: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     import numpy as np
     _need_scipy("FindFit")

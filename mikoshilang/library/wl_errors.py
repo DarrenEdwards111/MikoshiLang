@@ -711,7 +711,8 @@ _ECHO_DEPTH: ContextVar[int] = ContextVar("w02_echo_depth", default=0)
 
 @fn("Print", area=AREA, status="added",
     notes="Print[e1, e2, ...] writes the ei concatenated (OutputForm: strings without quotes) and a newline to "
-          "$Output (stdout) and returns Null")
+          "$Output (stdout) and returns Null"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _print(*args: Expr) -> Expr:
     print_line("".join(output_text(a) for a in args))
     return NULL
@@ -719,7 +720,8 @@ def _print(*args: Expr) -> Expr:
 
 @fn("PrintTemporary", area=AREA, status="added",
     notes="text interface: PrintTemporary[e1, ...] prints like Print (there are no notebook cells to delete "
-          "afterwards) and returns Null")
+          "afterwards) and returns Null"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _print_temporary(*args: Expr) -> Expr:
     print_line("".join(output_text(a) for a in args))
     return NULL
@@ -760,7 +762,8 @@ def _echo_function_hook(head, args, ev_):
 
 
 @fn("EchoLabel", area=AREA, status="added",
-    notes="operator form: EchoLabel[label][expr] prints >> label  expr and returns expr; EchoLabel[][expr] is Echo[expr]")
+    notes="operator form: EchoLabel[label][expr] prints >> label  expr and returns expr; EchoLabel[][expr] is Echo[expr]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _echo_label(*label: Expr) -> Expr:
     raise Unevaluated()
 
@@ -837,7 +840,8 @@ KL.COMPOUND_HEAD_HOOKS["EchoFunction"] = _echo_function_hook
 @fn("Assert", area=AREA, status="added",
     notes="Assert[test] / Assert[test, tag] (HoldAll): disabled by default (returns Null without evaluating test); "
           "after On[Assert] a test that is not True issues Assert::asrtf (Assert::asrtfl for a {line, file} tag) or "
-          "evaluates $AssertFunction[HoldComplete[Assert[...]]] when that is set; returns Null")
+          "evaluates $AssertFunction[HoldComplete[Assert[...]]] when that is set; returns Null"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _assert(test: Expr, *tag: Expr) -> Expr:
     if len(tag) > 1:
         raise ValueError("Assert called with more than 2 arguments; 1 or 2 arguments are expected")
@@ -1637,7 +1641,8 @@ _hold_first("RegisterExceptionType")
 
 @fn("ExceptionTypes", area=AREA, status="added",
     notes="ExceptionTypes[] / ExceptionTypes[All] lists the registered exception types in registration order; "
-          "ExceptionTypes[tag | {tags}] lists the registered types that are the given types or their descendants")
+          "ExceptionTypes[tag | {tags}] lists the registered types that are the given types or their descendants"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _exception_types(*spec: Expr) -> ListOf[Expr]:
     if len(spec) > 1:
         raise ValueError("ExceptionTypes called with more than 1 argument")
@@ -1650,7 +1655,8 @@ def _exception_types(*spec: Expr) -> ListOf[Expr]:
 
 @fn("ExceptionTypeRegisteredQ", area=AREA, status="added",
     notes="ExceptionTypeRegisteredQ[sym] is True if sym is a registered exception type; with a second argument, "
-          "True if it is registered and one of the given types is among its ancestors")
+          "True if it is registered and one of the given types is among its ancestors"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _exception_type_registered_q(sym: Expr, *spec: Expr) -> Boolean:
     if len(spec) > 1:
         raise ValueError("ExceptionTypeRegisteredQ called with more than 2 arguments")
@@ -1732,7 +1738,8 @@ def _interrupt() -> Expr:
 
 @fn("AbortProtect", area=AREA, status="added",
     notes="AbortProtect[expr] (HoldAll) evaluates expr completely, saving any Abort[] or TimeConstrained / "
-          "MemoryConstrained abort until it finishes (a CheckAbort inside still catches them)")
+          "MemoryConstrained abort until it finishes (a CheckAbort inside still catches them)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _abort_protect(expr: Expr) -> Expr:
     with _AbortCtx("P"):
         return ev(expr)
@@ -1781,7 +1788,8 @@ def _propagate_aborts(*args: Expr) -> Expr:
 @fn("WithCleanup", area=AREA, status="added",
     notes="WithCleanup[expr, cleanup] / WithCleanup[init, expr, cleanup] (HoldAll) returns expr's value and always "
           "evaluates cleanup, also after an abort, Throw, Confirm or error in expr; aborts during init and cleanup "
-          "are postponed until cleanup is done (an abort in init skips expr)")
+          "are postponed until cleanup is done (an abort in init skips expr)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _with_cleanup(*args: Expr) -> Expr:
     if len(args) == 2:
         init, body, cleanup = None, args[0], args[1]
@@ -2006,7 +2014,8 @@ def _memory_constrained(expr: Expr, b: Expr, *fail: Expr) -> Expr:
 
 @fn("TimeRemaining", area=AREA, status="added",
     notes="TimeRemaining[] gives the seconds (real time) left before the earliest enclosing TimeConstrained aborts, "
-          "or Infinity outside TimeConstrained")
+          "or Infinity outside TimeConstrained"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _time_remaining() -> Expr:
     deadlines = [c.deadline for c in _ACTIVE if c.kind == "time" and not c.fired]
     if not deadlines:
@@ -2108,7 +2117,8 @@ def _echo_timing(expr: Expr, *rest: Expr) -> Expr:
 
 
 @fn("Pause", area=AREA, status="added",
-    notes="Pause[n] waits at least n seconds (n a non-negative real number or a Quantity of time) and returns Null")
+    notes="Pause[n] waits at least n seconds (n a non-negative real number or a Quantity of time) and returns Null"
+          ". Check: reference (differential cases in tests/library).")
 def _pause(n: Expr) -> Expr:
     secs = _seconds(n, "Pause")
     if secs is None or secs == float("inf"):
@@ -2146,14 +2156,16 @@ _PROCESS_START = _process_start()
 
 @fn("SessionTime", area=AREA, status="added",
     notes="SessionTime[] gives the real seconds since the MikoshiLang (Python) process started (procfs on Linux; "
-          "elsewhere since the library was loaded)")
+          "elsewhere since the library was loaded)"
+          ". Check: reference (differential cases in tests/library).")
 def _session_time() -> Expr:
     return time.time() - _PROCESS_START
 
 
 @fn("TimeUsed", area=AREA, status="added",
     notes="TimeUsed[] gives the CPU seconds used so far by the MikoshiLang (Python) process (time.process_time); "
-          "Pause is not counted")
+          "Pause is not counted"
+          ". Check: reference (differential cases in tests/library).")
 def _time_used() -> Expr:
     return time.process_time()
 
@@ -2197,7 +2209,8 @@ def _rss_now():
 
 @fn("MemoryInUse", area=AREA, status="added",
     notes="MemoryInUse[] gives the resident memory (bytes) of the MikoshiLang process (/proc/self/statm on Linux, "
-          "psutil elsewhere); MemoryInUse[$FrontEnd] raises because there is no front end")
+          "psutil elsewhere); MemoryInUse[$FrontEnd] raises because there is no front end"
+          ". Check: reference (differential cases in tests/library).")
 def _memory_in_use(*fe: Expr) -> Expr:
     if fe:
         raise NotImplementedError("MemoryInUse[$FrontEnd]: MikoshiLang has no front end process")
@@ -2234,7 +2247,8 @@ def _max_memory_used(*args: Expr) -> Expr:
 
 @fn("MemoryAvailable", area=AREA, status="added",
     notes="MemoryAvailable[] gives the bytes the operating system reports as available (MemAvailable in "
-          "/proc/meminfo on Linux, psutil elsewhere)")
+          "/proc/meminfo on Linux, psutil elsewhere)"
+          ". Check: reference (differential cases in tests/library).")
 def _memory_available() -> Expr:
     try:
         with open("/proc/meminfo") as f:
@@ -2282,7 +2296,8 @@ def _clear_system_cache(*kind: Expr) -> Expr:
 
 @fn("TerminatedEvaluation", area=AREA, status="added",
     notes="TerminatedEvaluation[\"reason\"] is the inert representation of an evaluation stopped by a session limit "
-          "(\"IterationLimit\", \"RecursionLimit\", ...); a non-string reason raises")
+          "(\"IterationLimit\", \"RecursionLimit\", ...); a non-string reason raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _terminated_evaluation(reason: Expr) -> Expr:
     if _has_pattern(reason):
         raise Unevaluated()
@@ -2645,7 +2660,8 @@ def _verification_test(*args: Expr) -> Expr:
 @fn("IntermediateTest", area=AREA, status="added",
     notes="IntermediateTest[input, expected, messages, opts] (HoldAllComplete) evaluates a test (without printing "
           "messages) and returns the evaluated input; inside VerificationTest / TestEvaluate a failing intermediate "
-          "test makes the enclosing test fail (IntermediateTestFailure / IntermediateTestMessagesFailure)")
+          "test makes the enclosing test fail (IntermediateTestFailure / IntermediateTestMessagesFailure)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _intermediate_test(*args: Expr) -> Expr:
     obj, value = evaluate_test(_test_args(args, "IntermediateTest"))
     parent = _ITESTS.get()

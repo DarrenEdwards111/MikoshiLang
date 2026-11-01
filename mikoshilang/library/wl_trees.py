@@ -458,7 +458,8 @@ KL.operator_form("TreeMap", 1, "last")
 
 @fn("TreeScan", area=AREA, status="added",
     notes="TreeScan[f, tree, levelspec -> elem] evaluates f on the data (or elements) of each subtree in "
-          "traversal order; returns Null")
+          "traversal order; returns Null"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treescan(*args: Expr) -> Expr:
     pos, opts = _with_opts(args, "TreeScan", 1, 3)
     if len(pos) == 1:
@@ -771,7 +772,9 @@ def _roottree(t: Expr, n: Expr = None) -> Expr:
     return go(t, 0)
 
 
-@fn("UnlabeledTree", area=AREA, status="added", notes="a tree of the same shape with Null as every node's data")
+@fn("UnlabeledTree", area=AREA, status="added", notes="a tree of the same shape with Null as every node's data"
+                                                      ". Check: exact (exact input gives exact results), reference "
+                                                      "(differential cases in tests/library).")
 def _unlabeledtree(t: Expr, *opts: Option) -> Expr:
     t = _need_tree(t, "UnlabeledTree")
 
@@ -927,7 +930,8 @@ def _treeexpression(*args: Expr) -> Expr:
 
 
 @fn("TreeForm", area=AREA, status="added",
-    notes="TreeForm[expr] / TreeForm[expr, n] is an inert display wrapper (no tree drawing in the terminal)")
+    notes="TreeForm[expr] / TreeForm[expr, n] is an inert display wrapper (no tree drawing in the terminal)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treeform(*args: Expr) -> Expr:
     raise Unevaluated()
 
@@ -941,7 +945,8 @@ def _wg():
 
 @fn("TreeGraph", area=AREA, status="added",
     notes="TreeGraph[{edges or rules}] / TreeGraph[{vertices}, {edges}] gives the Graph after checking it is a "
-          "tree (DirectedEdges -> False makes rules undirected); the predecessor-list form and Tree objects raise")
+          "tree (DirectedEdges -> False makes rules undirected); the predecessor-list form and Tree objects raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treegraph(*args: Expr) -> Expr:
     G = _wg()
     pos, opts = split_options(args, {"DirectedEdges"} | G._GRAPH_OPTS, "TreeGraph")
@@ -1034,7 +1039,8 @@ def _graphtree(*args: Expr) -> Expr:
 
 @fn("NestGraph", area=AREA, status="added",
     notes="NestGraph[f, expr | {exprs} | graph, n] breadth-first graph with directed edges x -> y for y in f[x], "
-          "n levels (default 1; Infinity allowed when finite); DirectedEdges -> False gives undirected edges")
+          "n levels (default 1; Infinity allowed when finite); DirectedEdges -> False gives undirected edges"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nestgraph(*args: Expr) -> Expr:
     G = _wg()
     pos, opts = split_options(args, {"DirectedEdges"} | G._GRAPH_OPTS, "NestGraph")

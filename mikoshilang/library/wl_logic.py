@@ -430,7 +430,8 @@ def _boolfun(spec: Expr, n: Expr = None) -> Expr:
 
 @fn("BooleanCountingFunction", area=AREA, status="added",
     notes="BooleanCountingFunction[kmax, n] (at most kmax True), [{k}, n] (exactly k), [{k1, k2, ...}, n], "
-          "[{{kmin, kmax}}, n] pure functions; with a variable list gives an equivalent minimal DNF")
+          "[{{kmin, kmax}}, n] pure functions; with a variable list gives an equivalent minimal DNF"
+          ". Check: reference (differential cases in tests/library).")
 def _bcf(spec: Expr, n: Expr) -> Expr:
     if is_list(n):
         vars_ = list(n.args)

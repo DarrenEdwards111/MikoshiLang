@@ -891,7 +891,8 @@ def is_ds(x):
     notes="CreateDataStructure[\"type\", args] for Stack, Queue, Deque, RingBuffer, DynamicArray, FixedArray, "
           "LinkedList, DoublyLinkedList, PriorityQueue, HashSet, OrderedHashSet, HashTable, OrderedHashTable, "
           "LeastRecentlyUsedCache, Value, Counter, SortedMultiset, DisjointSet, BitVector; operations ds[\"Op\", "
-          "...] mutate in place; empty Pop/Peek raise")
+          "...] mutate in place; empty Pop/Peek raise"
+          ". Check: reference (differential cases in tests/library).")
 def _createds(typ: String, *args: Expr) -> Expr:
     if not isinstance(typ, str):
         raise DSError(f"CreateDataStructure: the type {typ} must be a string")

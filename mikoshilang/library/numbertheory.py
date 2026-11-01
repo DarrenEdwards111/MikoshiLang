@@ -927,7 +927,8 @@ def _divisorsum(n: Integer, form: Fn, cond: Fn = None):
 
 @fn("RandomPrime", area=B2, status="added",
     notes="RandomPrime[n] is a uniformly random prime in [2, n]; RandomPrime[{a, b}]; RandomPrime[range, k] a "
-          "list of k primes (independent draws); raises when the range contains no prime")
+          "list of k primes (independent draws); raises when the range contains no prime"
+          ". Check: reference (differential cases in tests/library).")
 def _randomprime(rng, count=None):
     import random
     if is_list(rng):

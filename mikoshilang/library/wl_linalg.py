@@ -620,7 +620,8 @@ def _cauchy(x: Expr, y: Expr = None) -> Expr:
 
 @fn("FourierMatrix", area=AREA, status="added",
     notes="FourierMatrix[n]: entries Exp[2 Pi I (r - 1)(s - 1)/n]/Sqrt[n] (Wolfram's default FourierParameters "
-          "{0, 1}); exact")
+          "{0, 1}); exact"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fouriermatrix(n: PosInteger) -> MatrixOf[Expr]:
     k = pos_int(n, "FourierMatrix", "size")
     return mat_out(sp.Matrix(k, k, lambda r, s: sp.exp(2 * sp.pi * sp.I * ((r * s) % k) / k) / sp.sqrt(k)))
@@ -809,7 +810,8 @@ def _box_matrix(r: Expr, w: Expr = None) -> ListOf[Expr]:
 
 @fn("CrossMatrix", area=AREA, status="added",
    notes="1s on the central row and column (central lines in higher dimensions) extending r positions: "
-         "CrossMatrix[r] is (2r+1) x (2r+1), CrossMatrix[r, w], CrossMatrix[{r1, ...}]; integer radii only")
+         "CrossMatrix[r] is (2r+1) x (2r+1), CrossMatrix[r, w], CrossMatrix[{r1, ...}]; integer radii only"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cross_matrix(r: Expr, w: Expr = None) -> ListOf[Expr]:
     return _shape(r, w, "CrossMatrix", _cross)
 
@@ -823,7 +825,9 @@ def _diamond(r: Expr, w: Expr = None) -> Expr:
 
 fn("DiamondMatrix", area=AREA, status="added",
    notes="1s where the Manhattan distance from the centre is at most r: DiamondMatrix[r] is (2r+1) x (2r+1), "
-         "DiamondMatrix[r, w]; integer radii only, equal radii per dimension")(_diamond)
+         "DiamondMatrix[r, w]; integer radii only, equal radii per dimension"
+         ". Check: exact (exact input gives exact results), reference (differential cases in "
+         "tests/library).")(_diamond)
 
 
 def _perm_sign(p):

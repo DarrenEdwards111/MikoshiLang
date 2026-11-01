@@ -1050,7 +1050,8 @@ special("RiemannR", 1, mpmath.riemannr,
         notes="RiemannR[x] = Sum[MoebiusMu[n]/n LogIntegral[x^(1/n)]] (Gram series; mpmath riemannr)"
               ". Check: reference (differential cases in tests/library).")
 special("RiemannSiegelTheta", 1, mpmath.siegeltheta, lambda t: sp.Integer(0) if t == 0 else None,
-        notes="RiemannSiegelTheta[t] = Im[LogGamma[1/4 + I t/2]] - t Log[Pi]/2 (mpmath siegeltheta); value 0 at 0")
+        notes="RiemannSiegelTheta[t] = Im[LogGamma[1/4 + I t/2]] - t Log[Pi]/2 (mpmath siegeltheta); value 0 at 0"
+              ". Check: reference (differential cases in tests/library).")
 special("RiemannSiegelZ", 1, mpmath.siegelz,
         notes="RiemannSiegelZ[t] = Exp[I RiemannSiegelTheta[t]] Zeta[1/2 + I t] (mpmath siegelz)"
               ". Check: reference (differential cases in tests/library).")
@@ -1105,7 +1106,8 @@ def _zetazero_check(*vals):
 special("ZetaZero", (1, 2), _zetazero, None, check=_zetazero_check,
         notes="ZetaZero[k] represents the k-th zero 1/2 + I t of Zeta on the critical line (negative k: conjugate "
               "zeros), ZetaZero[k, t] the k-th zero above height t; stays symbolic for exact k, N gives any "
-              "precision (mpmath zetazero / nzeros)")
+              "precision (mpmath zetazero / nzeros)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _log_barnes_g(z):

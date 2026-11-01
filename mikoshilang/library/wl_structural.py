@@ -64,7 +64,9 @@ def _wedge(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
-@fn("SuchThat", **ADDED, notes="x \\[SuchThat] y: an operator with no built-in meaning (stays unevaluated)")
+@fn("SuchThat", **ADDED, notes="x \\[SuchThat] y: an operator with no built-in meaning (stays unevaluated)"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _suchthat(*args: Expr) -> Expr:
     raise Unevaluated()
 
@@ -1428,7 +1430,8 @@ def _nearest(data: Expr, *rest: Expr) -> Expr:
 
 
 @fn("NearestFunction", **ADDED,
-    notes="NearestFunction[data] (made by Nearest[data]) applied as nf[x], nf[{x1, ...}], nf[x, n], nf[x, {n, r}]")
+    notes="NearestFunction[data] (made by Nearest[data]) applied as nf[x], nf[{x1, ...}], nf[x, n], nf[x, {n, r}]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nearestfunction(*args: Expr) -> Expr:
     if not args:
         raise ValueError("NearestFunction: data is required")
@@ -2313,7 +2316,8 @@ def _inc_current(fname):
           "instance DataStructure[\"IncrementalFunction\", ...] (no FunctionCompile step is needed). ds[\"Next\"] runs "
           "to the next IncrementalYield (giving its value) or IncrementalReceive (giving Null); ds[\"Send\", x] "
           "resumes, making the pending IncrementalReceive return x; once the code ends the call gives "
-          "Failure[\"IncrementalFunctionTerminated\", ...]. Errors inside the function are raised to the caller")
+          "Failure[\"IncrementalFunctionTerminated\", ...]. Errors inside the function are raised to the caller"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _incfunction(f: Expr) -> Expr:
     raise Unevaluated()
 

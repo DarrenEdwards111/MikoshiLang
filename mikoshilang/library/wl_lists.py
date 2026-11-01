@@ -156,7 +156,9 @@ K.BUILTIN_ATTRIBUTES["Reap"] = {"HoldFirst", "Protected"}
 
 
 @fn("Sow", **ADDED, notes="Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap "
-                          "(outside Reap, Sow just returns e)")
+                          "(outside Reap, Sow just returns e)"
+                          ". Check: exact (exact input gives exact results), reference (differential cases in "
+                          "tests/library).")
 def _sow(e: Expr, tag: Expr = None) -> Expr:
     stack = _REAP.get()
     if stack:
@@ -1426,7 +1428,9 @@ def _mapapply(f: Expr, x: Expr) -> Expr:
 
 
 @fn("Scan", **ADDED, notes="evaluates f on each element (or each part at the given levels) for its side effects; "
-                           "returns Null (Return[v] inside f returns v)")
+                           "returns Null (Return[v] inside f returns v)"
+                           ". Check: exact (exact input gives exact results), reference (differential cases in "
+                           "tests/library).")
 def _scan(f: Fn, x: Expr, levels: Expr = None) -> Expr:
     spec = KL.level_spec(levels, (1, 1))
     if KL.atomq(x) and not is_assoc(x) and spec[0] > 0:
@@ -1606,12 +1610,16 @@ def _booleanq(x: Expr) -> Boolean:
     return isinstance(x, bool)
 
 
-@fn("AppendTo", **ADDED, notes="AppendTo[s, e] sets s = Append[s, e] and returns the new value (s must have a value)")
+@fn("AppendTo", **ADDED, notes="AppendTo[s, e] sets s = Append[s, e] and returns the new value (s must have a value)"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _appendto(s: Expr, e: Expr) -> Expr:
     return _modify_symbol(s, lambda v: ev(Expr("Append", v, e)), "AppendTo")
 
 
-@fn("PrependTo", **ADDED, notes="PrependTo[s, e] sets s = Prepend[s, e] and returns the new value")
+@fn("PrependTo", **ADDED, notes="PrependTo[s, e] sets s = Prepend[s, e] and returns the new value"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _prependto(s: Expr, e: Expr) -> Expr:
     return _modify_symbol(s, lambda v: ev(Expr("Prepend", v, e)), "PrependTo")
 

@@ -282,7 +282,8 @@ def _struvel_exact(n, z):
 
 mpfun("StruveL", 2, mpmath.struvel, _struvel_exact,
       real=lambda n, z: _allreal(n, z) and z >= 0,
-      notes="modified Struve function L_n(z); mpmath struvel; half-integer orders 1/2, -1/2 in closed form")
+      notes="modified Struve function L_n(z); mpmath struvel; half-integer orders 1/2, -1/2 in closed form"
+            ". Check: reference (differential cases in tests/library).")
 
 
 def _lommel_exact(mu, nu, z):
@@ -341,15 +342,19 @@ def _scorer_prime0(z, hi=False):
 
 
 mpfun("ScorerGi", 1, mpmath.scorergi, lambda z: 1 / (3 ** sp.Rational(7, 6) * _G23) if z == 0 else None,
-      real=_allreal, notes="Scorer function Gi(z) (Gi'' - z Gi = -1/Pi); mpmath scorergi; Gi(0) = 1/(3^(7/6) Gamma(2/3))")
+      real=_allreal, notes="Scorer function Gi(z) (Gi'' - z Gi = -1/Pi); mpmath scorergi; Gi(0) = 1/(3^(7/6) Gamma(2/3))"
+                           ". Check: reference (differential cases in tests/library).")
 mpfun("ScorerHi", 1, mpmath.scorerhi, lambda z: 2 / (3 ** sp.Rational(7, 6) * _G23) if z == 0 else None,
-      real=_allreal, notes="Scorer function Hi(z) (Hi'' - z Hi = 1/Pi); mpmath scorerhi; Hi(0) = 2/(3^(7/6) Gamma(2/3))")
+      real=_allreal, notes="Scorer function Hi(z) (Hi'' - z Hi = 1/Pi); mpmath scorerhi; Hi(0) = 2/(3^(7/6) Gamma(2/3))"
+                           ". Check: reference (differential cases in tests/library).")
 mpfun("ScorerGiPrime", 1, lambda z: _scorer_prime(z), lambda z: 1 / (3 ** sp.Rational(5, 6) * _G13) if z == 0 else None,
       real=_allreal, notes="Gi'(z) = Bi'(z) Integral[Ai, {z, Infinity}] + Ai'(z) Integral[Bi, {0, z}]; "
-                           "Gi'(0) = 1/(3^(5/6) Gamma(1/3))")
+                           "Gi'(0) = 1/(3^(5/6) Gamma(1/3))"
+                           ". Check: reference (differential cases in tests/library).")
 mpfun("ScorerHiPrime", 1, lambda z: _scorer_prime(z, True),
       lambda z: 2 / (3 ** sp.Rational(5, 6) * _G13) if z == 0 else None,
-      real=_allreal, notes="Hi'(z) = Bi'(z) - Gi'(z) (Gi + Hi = Bi); Hi'(0) = 2/(3^(5/6) Gamma(1/3))")
+      real=_allreal, notes="Hi'(z) = Bi'(z) - Gi'(z) (Gi + Hi = Bi); Hi'(0) = 2/(3^(5/6) Gamma(1/3))"
+                           ". Check: reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── Whittaker, parabolic cylinder, Coulomb ─────────────────────────────
@@ -386,13 +391,17 @@ def _coulomb_real(l, eta, r):
 
 
 mpfun("CoulombF", 3, mpmath.coulombf, lambda l, eta, r: sp.Integer(0) if r == 0 and l.is_real and l > -1 else None,
-      real=_coulomb_real, notes="regular Coulomb wave function F_l(eta, r); mpmath coulombf")
+      real=_coulomb_real, notes="regular Coulomb wave function F_l(eta, r); mpmath coulombf"
+                                ". Check: reference (differential cases in tests/library).")
 mpfun("CoulombG", 3, mpmath.coulombg, real=_coulomb_real,
-      notes="irregular Coulomb wave function G_l(eta, r); mpmath coulombg")
+      notes="irregular Coulomb wave function G_l(eta, r); mpmath coulombg"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("CoulombH1", 3, lambda l, eta, r: mpmath.coulombg(l, eta, r) + 1j * mpmath.coulombf(l, eta, r),
-      notes="outgoing Coulomb wave function H+ = G + i F (~ exp(i (r - eta Log[2 r] ...)) for large r)")
+      notes="outgoing Coulomb wave function H+ = G + i F (~ exp(i (r - eta Log[2 r] ...)) for large r)"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("CoulombH2", 3, lambda l, eta, r: mpmath.coulombg(l, eta, r) - 1j * mpmath.coulombf(l, eta, r),
-      notes="incoming Coulomb wave function H- = G - i F")
+      notes="incoming Coulomb wave function H- = G - i F"
+            ". Check: reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── arithmetic-geometric mean, Carlson integrals ─────────────────────────────
@@ -451,7 +460,8 @@ _carlson("CarlsonRC", 2, mpmath.elliprc,
                "principal value for y < 0); mpmath elliprc"
                ". Check: reference (differential cases in tests/library).", pv=True)
 _carlson("CarlsonRF", 3, mpmath.elliprf, _rf_exact,
-         notes="Carlson R_F(x, y, z) = 1/2 Integrate[((t+x)(t+y)(t+z))^(-1/2), {t, 0, Infinity}]; mpmath elliprf")
+         notes="Carlson R_F(x, y, z) = 1/2 Integrate[((t+x)(t+y)(t+z))^(-1/2), {t, 0, Infinity}]; mpmath elliprf"
+               ". Check: reference (differential cases in tests/library).")
 _carlson("CarlsonRD", 3, mpmath.elliprd,
          lambda x, y, z: (x ** sp.Rational(-3, 2) if x != 0 else None) if x == y == z else None,
          notes="Carlson R_D(x, y, z) = R_J(x, y, z, z); mpmath elliprd"
@@ -463,7 +473,8 @@ _carlson("CarlsonRJ", 4, mpmath.elliprj,
                ". Check: reference (differential cases in tests/library).", pv=True)
 _carlson("CarlsonRG", 3, mpmath.elliprg,
          lambda x, y, z: (sp.sqrt(x) if x == y == z else None),
-         notes="Carlson R_G(x, y, z); mpmath elliprg")
+         notes="Carlson R_G(x, y, z); mpmath elliprg"
+               ". Check: reference (differential cases in tests/library).")
 _carlson("CarlsonRK", 2, lambda x, y: 2 / mpmath.pi * mpmath.elliprf(0, x, y),
          lambda x, y: (1 / sp.sqrt(x) if x != 0 else None) if x == y else None,
          notes="CarlsonRK[x, y] = 1/Pi Integrate[t^(-1/2) (t+x)^(-1/2) (t+y)^(-1/2), {t, 0, Infinity}] "
@@ -703,7 +714,8 @@ def _am_exact(u, m):
 mpfun("JacobiAmplitude", 2, _am, _am_exact, symbolic=_am_exact,
       notes="Jacobi amplitude am(u | m) (the continuous inverse of EllipticF[phi, m] in phi): reduced by "
             "am(u + 2K) = am(u) + Pi, ArcTan[cn, sn] on the principal interval; am(u|1) = Gudermannian; "
-            "real arguments only (complex arguments raise)")
+            "real arguments only (complex arguments raise)"
+            ". Check: reference (differential cases in tests/library).")
 
 
 def _zeta_theta(u, m):
@@ -742,12 +754,14 @@ mpfun("JacobiZN", 2, _zn, lambda u, m: sp.Integer(0) if (u == 0 or m == 0) else 
       symbolic=lambda u, m: sp.Integer(0) if (u == 0 or m == 0) else (sp.tanh(u) if m == 1 else None),
       real=lambda u, m: _allreal(u, m) and m <= 1,
       notes="Jacobi zeta function Z(u | m) = Integrate[dn^2 - E(m)/K(m), {0, u}] via theta_4'/theta_4; "
-            "real m > 1 raises")
+            "real m > 1 raises"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("JacobiEpsilon", 2, _eps_fn,
       lambda u, m: sp.Integer(0) if u == 0 else (u if m == 0 else (sp.tanh(u) if m == 1 else None)),
       symbolic=lambda u, m: sp.Integer(0) if u == 0 else (u if m == 0 else (sp.tanh(u) if m == 1 else None)),
       real=lambda u, m: _allreal(u, m) and m <= 1,
-      notes="Jacobi epsilon function Integrate[dn(t|m)^2, {t, 0, u}] = Z(u|m) + u E(m)/K(m); real m > 1 raises")
+      notes="Jacobi epsilon function Integrate[dn(t|m)^2, {t, 0, u}] = Z(u|m) + u E(m)/K(m); real m > 1 raises"
+            ". Check: reference (differential cases in tests/library).")
 
 
 def _jzeta(phi, m):
@@ -760,7 +774,8 @@ mpfun("JacobiZeta", 2, _jzeta, lambda p, m: sp.Integer(0) if (p == 0 or m == 0) 
       symbolic=lambda p, m: sp.Integer(0) if (p == 0 or m == 0) else None,
       real=lambda p, m: _allreal(p, m) and m < 1,
       notes="Jacobi zeta Z(phi | m) = EllipticE[phi, m] - EllipticE[m] EllipticF[phi, m]/EllipticK[m] "
-            "(amplitude argument, as in Wolfram); mpmath ellipe/ellipf")
+            "(amplitude argument, as in Wolfram); mpmath ellipe/ellipf"
+            ". Check: reference (differential cases in tests/library).")
 
 
 # inverse Jacobi functions missing from the earlier batch (DC, DS, ND), as EllipticF[phi, m] on principal ranges
