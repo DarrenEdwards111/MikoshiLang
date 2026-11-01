@@ -935,7 +935,7 @@ def _random_model(model, fname):
           "channels in XYZ/LAB/LCH/LUV raise NotImplementedError (visual-range limits undocumented). Reproducible "
           "after SeedRandom (the stream differs from Wolfram's). Symbolic models or counts stay unevaluated; a "
           "non-model (string, number) raises TypeError, wrong channel counts or negative counts ValueError. "
-          "Check: self-check of channel ranges and ColorQ on results in tests.")
+          "Check: reference (channel ranges and ColorQ on results are tested).")
 def _randomcolor(*args: Expr) -> Expr | ListOf[Expr]:
     pos, o = _opts(list(args), {"ColorSpace"}, "RandomColor")
     cs = o.get("ColorSpace")
