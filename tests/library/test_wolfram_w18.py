@@ -72,6 +72,14 @@ WATC = "Map[With[{w18r = # Pi/2}, N[2 Pi (w18r - IntegerPart[w18r])]] &, " + WAT
 UNI7 = "{0.1, 0.5, 0.7, 0.2, 0.9, 0.33, 0.41}"
 MV = "{{1., 2.}, {2., 1.5}, {3., 4.}, {4., 3.}}"
 
+# fitting data
+LMD = "{{0, 1}, {1, 0}, {3, 2}, {5, 4}}"            # WL doc LinearModelFit basic example
+LMDF = "{{0., 1.}, {1., 0.}, {3., 2.}, {5., 4.}}"
+POIS = "{{1, 2}, {2, 3}, {3, 6}, {4, 7}, {5, 12}}"
+BIN = "{{1, 0}, {2, 0}, {3, 1}, {4, 0}, {5, 1}, {6, 1}}"
+GAM = "{{1, 2.1}, {2, 1.3}, {3, 0.9}, {4, 0.7}, {5, 0.6}}"
+EXPD = "{{0, 1.}, {1, 2.7}, {2, 7.4}, {3, 20.1}, {4, 54.6}}"
+
 CASES = [
     # ── BiweightLocation (WL doc examples) ──
     (f"BiweightLocation[{BASIC}]", approx(6.10018)),
@@ -760,6 +768,146 @@ CASES = [
     ("Censoring[3, 2]", Raises(ValueError)),
     ("Censoring[{1, 2}, {0}]", Raises(ValueError)),
     ('Censoring["a", 0]', Raises(TypeError)),
+    # ── DesignMatrix (WL doc form; rows {1, f1, ...}) ──
+    ("DesignMatrix[{{1, 2}, {2, 3}, {4, 7}}, {w18x, w18x^2}, w18x]", "{{1, 1, 1}, {1, 2, 4}, {1, 4, 16}}"),
+    ("DesignMatrix[{{1, 2}, {2, 3}, {4, 7}}, {w18x}, w18x, IncludeConstantBasis -> False]", "{{1}, {2}, {4}}"),
+    ("DesignMatrix[{{1, 2, 0}, {3, 4, 1}}, {w18x, w18y, w18x w18y}, {w18x, w18y}]", "{{1, 1, 2, 2}, {1, 3, 4, 12}}"),
+    ("DesignMatrix[{5, 7, 9}, w18x, w18x]", "{{1, 1}, {1, 2}, {1, 3}}"),
+    ("DesignMatrix[{{1.5, 2}, {2, 3}}, Log[w18x], w18x]", approx_list([1, 0.4054651081081644, 1, 0.6931471805599453])),
+    ("DesignMatrix[w18d, w18x, w18x]", "DesignMatrix[w18d, w18x, w18x]"),
+    ("DesignMatrix[{{1, 2}, {2, 3}}, w18y, w18x]", Raises(ValueError)),
+    ("DesignMatrix[{{1, 2}, {2, 3}}, w18x, 3]", Raises(TypeError)),
+    ("DesignMatrix[{{1, 2}, {2, 3}}, w18x, w18x, NominalVariables -> w18x]", Raises(NotImplementedError)),
+    # Check: DesignMatrix . BestFitParameters == PredictedResponse
+    (f"DesignMatrix[{LMD}, w18x, w18x] . LinearModelFit[{LMD}, w18x, w18x][\"BestFitParameters\"] == "
+     f"LinearModelFit[{LMD}, w18x, w18x][\"PredictedResponse\"]", "True"),
+    # ── LinearModelFit (WL doc: 0.186441 + 0.694915 x; statsmodels OLS on the same data) ──
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"BestFit\"]", "11/59 + 41 w18x/59"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][2]", "93/59"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"FitResiduals\"]", "{48/59, -52/59, -16/59, 20/59}"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"RSquared\"]", "1681/2065"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"EstimatedVariance\"]", "48/59"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"ParameterErrors\"]", "{4 Sqrt[105]/59, 8 Sqrt[3]/59}"),
+    # statsmodels OLS: bse [0.69470853, 0.23485435], pvalues [0.81355932, 0.09775636], rsquared_adj 0.72106538
+    (f"LinearModelFit[{LMDF}, w18x, w18x][\"ParameterErrors\"]", approx_list([0.69470853, 0.23485435])),
+    (f"LinearModelFit[{LMDF}, w18x, w18x][\"ParameterPValues\"]", approx_list([0.81355932, 0.09775636])),
+    (f"LinearModelFit[{LMDF}, w18x, w18x][\"AdjustedRSquared\"]", approx(0.7210653753026635)),
+    (f"LinearModelFit[{LMDF}, w18x, w18x][\"ParameterConfidenceIntervals\"]",
+     approx_list([-2.80264886, 3.17553022, -0.31558144, 1.70541195])),
+    # statsmodels llf -3.8767869; WL counts the variance as a parameter: AIC = -2 llf + 2 (p + 1)
+    (f"LinearModelFit[{LMDF}, w18x, w18x][\"LogLikelihood\"]", approx(-3.8767869057031428)),
+    (f"LinearModelFit[{LMDF}, w18x, w18x][\"AIC\"]", approx(2 * 3.8767869057031428 + 6)),
+    (f"LinearModelFit[{LMDF}, w18x, w18x][\"BIC\"]", approx(2 * 3.8767869057031428 + 3 * 1.3862943611198906)),
+    # statsmodels WLS(weights = {1, 2, 1, 3}): params [-0.14851485, 0.8019802], bse [0.69926509, 0.19949942]
+    (f"LinearModelFit[{LMD}, w18x, w18x, Weights -> {{1, 2, 1, 3}}][\"BestFitParameters\"]", "{-15/101, 81/101}"),
+    (f"N[LinearModelFit[{LMD}, w18x, w18x, Weights -> {{1, 2, 1, 3}}][\"ParameterErrors\"]]",
+     approx_list([0.69926509, 0.19949942])),
+    (f"LinearModelFit[{LMD}, w18x, w18x, Weights -> {{1, 2, 1, 3}}][\"RSquared\"]", "6561/7373"),   # = 0.88986844
+    ("LinearModelFit[{1, 3, 2, 5}, {w18x, w18x^2}, w18x][\"BestFit\"]", "5/4 - 3 w18x/20 + w18x^2/4"),
+    ("LinearModelFit[{{1, 2, 3}, {2, 1, 5}, {3, 3, 4}, {4, 1, 1}}, {w18x, w18y}, {w18x, w18y}][\"BestFit\"]",
+     "13/3 - 2 w18x/3 + w18y/3"),
+    ("LinearModelFit[{{{1, 0}, {1, 1}, {1, 3}, {1, 5}}, {1, 0, 2, 4}}][\"BestFitParameters\"]", "{11/59, 41/59}"),
+    ("LinearModelFit[{{{1, 0}, {1, 1}, {1, 3}, {1, 5}}, {1, 0, 2, 4}}][1, 2]", "93/59"),
+    (f"LinearModelFit[{LMD}, w18x, w18x, IncludeConstantBasis -> False][\"BestFit\"]", "26 w18x/35"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"Function\"][2]", "93/59"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"Data\"]", LMD),
+    (f"LinearModelFit[{LMD}, w18x, w18x][{{\"RSquared\", \"EstimatedVariance\"}}]", "{1681/2065, 48/59}"),
+    ("LinearModelFit[w18d, w18x, w18x]", "LinearModelFit[w18d, w18x, w18x]"),
+    ("LinearModelFit[{{1, 2}, {1, 2}}, w18x, w18x]", Raises(ValueError)),
+    ("LinearModelFit[{{1, 2}, {2, 3}}, w18x, w18x, w18Foo -> 1]", Raises(ValueError)),
+    ('LinearModelFit["a", w18x, w18x]', Raises(TypeError)),
+    ("LinearModelFit[{{1, 2}, {2, 3}, {3, 5}}, w18x, w18x, NominalVariables -> w18x]", Raises(NotImplementedError)),
+    # ── FittedModel ──
+    (f"Head[LinearModelFit[{LMD}, w18x, w18x]]", "FittedModel"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"CovarianceMatrix\"]", "{{1680/3481, -432/3481}, {-432/3481, 192/3481}}"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"AdjustedRSquared\"]", "1489/2065"),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"ParameterTable\"]", Raises(NotImplementedError)),
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"w18Foo\"]", Raises(ValueError)),
+    ("FittedModel[3]", Raises(TypeError)),
+    ('FittedModel[<|"a" -> 1|>]["BestFit"]', Raises(ValueError)),
+    # Check: the exact covariance matrix equals EstimatedVariance Inverse[X'X]
+    (f"LinearModelFit[{LMD}, w18x, w18x][\"CovarianceMatrix\"] == 48/59 Inverse[Transpose[DesignMatrix[{LMD}, "
+     f"w18x, w18x]] . DesignMatrix[{LMD}, w18x, w18x]]", "True"),
+    # ── NonlinearModelFit (scipy.optimize.curve_fit: [1.00159214, 0.999618], errors [0.00205462, 0.00053049]) ──
+    (f"Values[NonlinearModelFit[{EXPD}, w18a Exp[w18b w18x], {{w18a, w18b}}, w18x][\"BestFitParameters\"]]",
+     approx_list([1.00159214, 0.999618])),
+    (f"NonlinearModelFit[{EXPD}, w18a Exp[w18b w18x], {{w18a, w18b}}, w18x][\"ParameterErrors\"]",
+     approx_list([0.00205462, 0.00053049], 1e-4)),
+    (f"NonlinearModelFit[{EXPD}, w18a Exp[w18b w18x], {{{{w18a, 2}}, {{w18b, 1/2}}}}, w18x][1]",
+     approx(1.00159214 * 2.71724365)),
+    ("Values[NonlinearModelFit[{{0, 1.}, {1, 2.7}, {2, 7.4}}, w18a Exp[w18b w18x] + w18c, "
+     "{{w18a, 1}, {w18b, 1}, {w18c, 0}}, w18x][\"BestFitParameters\"]]", approx_list([0.96333333, 1.01693426, 0.03666667])),
+    # Check: a model linear in its parameters reproduces LinearModelFit
+    (f"Values[NonlinearModelFit[{LMDF}, w18a + w18b w18x, {{w18a, w18b}}, w18x][\"BestFitParameters\"]]",
+     approx_list([11 / 59, 41 / 59])),
+    ("NonlinearModelFit[w18d, w18a Exp[w18b w18x], {w18a, w18b}, w18x]",
+     "NonlinearModelFit[w18d, w18a Exp[w18b w18x], {w18a, w18b}, w18x]"),
+    (f"NonlinearModelFit[{EXPD}, {{w18a Exp[w18b w18x], w18a > 0}}, {{w18a, w18b}}, w18x]", Raises(NotImplementedError)),
+    ("NonlinearModelFit[{{0, 1.}, {1, 2.7}}, w18a Exp[w18b w18x] + w18c, {w18a, w18b, w18c}, w18x]", Raises(ValueError)),
+    ("NonlinearModelFit[{{0, 1.}, {1, 2.7}, {2, 3}}, w18a Exp[w18b w18x] + w18q, {w18a, w18b}, w18x]", Raises(ValueError)),
+    ("NonlinearModelFit[{{0, 1.}, {1, 2.7}, {2, 3}}, w18a w18x, {3}, w18x]", Raises(TypeError)),
+    ("NonlinearModelFit[{{0, 1.}, {1, 2.7}, {2, 3}}, Exp[w18a w18x], {{w18a, 800}}, w18x]", Raises(ArithmeticError)),
+    # ── GeneralizedLinearModelFit (statsmodels GLM) ──
+    # Poisson: params [0.31876907, 0.43131527], bse [0.57919854, 0.14465024], deviance 0.27985317, aic 21.68704284
+    (f'GeneralizedLinearModelFit[{POIS}, w18x, w18x, ExponentialFamily -> "Poisson"]["BestFitParameters"]',
+     approx_list([0.31876907, 0.43131527])),
+    (f'GeneralizedLinearModelFit[{POIS}, w18x, w18x, ExponentialFamily -> "Poisson"]["ParameterErrors"]',
+     approx_list([0.57919854, 0.14465024])),
+    (f'GeneralizedLinearModelFit[{POIS}, w18x, w18x, ExponentialFamily -> "Poisson"][{{"Deviance", "AIC", '
+     f'"LogLikelihood", "NullDeviance"}}]', approx_list([0.27985317, 21.68704284, -8.84352142, 10.24030961])),
+    # Gamma (inverse link): params [0.16725108, 0.30783288], bse [0.01581905, 0.007417], scale 0.00055574197
+    (f'GeneralizedLinearModelFit[{GAM}, w18x, w18x, ExponentialFamily -> "Gamma"]["BestFitParameters"]',
+     approx_list([0.16725108, 0.30783288])),
+    (f'GeneralizedLinearModelFit[{GAM}, w18x, w18x, ExponentialFamily -> "Gamma"]["ParameterErrors"]',
+     approx_list([0.01581905, 0.007417])),
+    (f'GeneralizedLinearModelFit[{GAM}, w18x, w18x, ExponentialFamily -> "Gamma"]["EstimatedDispersion"]',
+     approx(0.0005557419684972075, 1e-6)),
+    # InverseGaussian: params [-0.36441801, 0.56568429], bse [0.09673732, 0.06046635], scale 0.0090342499
+    (f'GeneralizedLinearModelFit[{GAM}, w18x, w18x, ExponentialFamily -> "InverseGaussian"]["ParameterErrors"]',
+     approx_list([0.09673732, 0.06046635])),
+    (f'GeneralizedLinearModelFit[{GAM}, w18x, w18x, ExponentialFamily -> "InverseGaussian"]["EstimatedDispersion"]',
+     approx(0.009034249897115848, 1e-6)),
+    # Gaussian: params [2.2, -0.36], bse [0.26532998, 0.08], scale 0.064, llf 1.05455188
+    (f'GeneralizedLinearModelFit[{GAM}, w18x, w18x][{{"EstimatedDispersion", "LogLikelihood"}}]',
+     approx_list([0.064, 1.0545518824477762])),
+    (f'GeneralizedLinearModelFit[{GAM}, w18x, w18x]["ParameterErrors"]', approx_list([0.26532998, 0.08])),
+    # Binomial with cloglog link: params [-3.64211867, 0.88611191], bse [2.63145255, 0.62244104]
+    (f'GeneralizedLinearModelFit[{BIN}, w18x, w18x, ExponentialFamily -> "Binomial", '
+     f'LinkFunction -> "ComplementaryLogLogLink"]["BestFitParameters"]', approx_list([-3.64211867, 0.88611191], 1e-4)),
+    # Check: the Gaussian identity-link GLM equals LinearModelFit
+    (f'GeneralizedLinearModelFit[{GAM}, w18x, w18x]["BestFitParameters"] - '
+     f'LinearModelFit[{GAM}, w18x, w18x]["BestFitParameters"]', approx_list([0, 0])),
+    ("GeneralizedLinearModelFit[w18d, w18x, w18x]", "GeneralizedLinearModelFit[w18d, w18x, w18x]"),
+    ('GeneralizedLinearModelFit[{{1, 2}, {2, 3}}, w18x, w18x, ExponentialFamily -> "w18Foo"]', Raises(ValueError)),
+    ('GeneralizedLinearModelFit[{{1, 2}, {2, 3}, {3, 4}}, w18x, w18x, LinkFunction -> (Log[#] &)]',
+     Raises(NotImplementedError)),
+    ('GeneralizedLinearModelFit[{{1, -2}, {2, 3}, {3, 4}}, w18x, w18x, ExponentialFamily -> "Poisson"]', Raises(ValueError)),
+    ('GeneralizedLinearModelFit[{{1, 2}, {2, 3}, {3, 4}}, w18x, 5]', Raises(TypeError)),
+    ('GeneralizedLinearModelFit[{{1, 1}, {2, 2}, {3, 3}}, w18x, w18x, ExponentialFamily -> "Gamma", '
+     'LinkFunction -> "IdentityLink", Weights -> {1, 1, -1}]', Raises(ValueError)),
+    # ── LogitModelFit (statsmodels GLM Binomial, tol 1e-14: params [-4.24909655, 1.21402759],
+    #    bse [3.38785022, 0.91258556], deviance 4.95597367, llf -2.47798684, aic 8.95597367) ──
+    (f'LogitModelFit[{BIN}, w18x, w18x]["BestFitParameters"]', approx_list([-4.24909655, 1.21402759])),
+    (f'LogitModelFit[{BIN}, w18x, w18x]["ParameterErrors"]', approx_list([3.38785022, 0.91258556])),
+    (f'LogitModelFit[{BIN}, w18x, w18x][{{"Deviance", "LogLikelihood", "AIC"}}]',
+     approx_list([4.95597367, -2.47798684, 8.95597367])),
+    (f'LogitModelFit[{BIN}, w18x, w18x]["ParameterPValues"]', approx_list([0.2097631, 0.18341368], 1e-4)),
+    (f'LogitModelFit[{BIN}, w18x, w18x][3.5]', approx(0.5, 1e-6)),   # Check: symmetric data -> 1/2 at the centre
+    ("LogitModelFit[w18d, w18x, w18x]", "LogitModelFit[w18d, w18x, w18x]"),
+    ("LogitModelFit[{{1, 2}, {2, 0}, {3, 1}}, w18x, w18x]", Raises(ValueError)),
+    ("LogitModelFit[{{1, 0}, {2, 1}, {3, 1}}, w18x, w18x, w18Foo -> 2]", Raises(ValueError)),
+    ('LogitModelFit["x", w18x, w18x]', Raises(TypeError)),
+    ("LogitModelFit[{{1, 0}, {2, 1}, {3, 1}}, w18x, w18x, LinearOffsetFunction -> w18x]", Raises(NotImplementedError)),
+    # ── ProbitModelFit (statsmodels GLM Binomial(probit), tol 1e-14: [-2.65923414, 0.75978118],
+    #    bse [1.87154306, 0.50042696]) ──
+    (f'ProbitModelFit[{BIN}, w18x, w18x]["BestFitParameters"]', approx_list([-2.65923414, 0.75978118])),
+    (f'ProbitModelFit[{BIN}, w18x, w18x]["ParameterErrors"]', approx_list([1.87154306, 0.50042696])),
+    (f'ProbitModelFit[{BIN}, w18x, w18x][3.5]', approx(0.5, 1e-6)),   # Check: symmetric data -> 1/2 at the centre
+    (f'ProbitModelFit[{BIN}, w18x, w18x][4] - CDF[NormalDistribution[], -2.65923414 + 4 0.75978118]', approx(0.0, 1e-6)),
+    ("ProbitModelFit[w18d, w18x, w18x]", "ProbitModelFit[w18d, w18x, w18x]"),
+    ("ProbitModelFit[{{1, 2}, {2, 0}, {3, 1}}, w18x, w18x]", Raises(ValueError)),
+    ('ProbitModelFit["x", w18x, w18x]', Raises(TypeError)),
+    ("ProbitModelFit[{{1, 0}, {2, 1}, {3, 1}}, w18x, w18x, NominalVariables -> w18x]", Raises(NotImplementedError)),
 ]
 
 
