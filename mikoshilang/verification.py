@@ -6,8 +6,8 @@ into checks that run:
 
 * ``reference``: the head's differential cases in ``tests/library`` (values written independently of the code);
 * ``exact``: every case with exact input gives a result without machine or bignum floats;
-* ``self-check``: the implementation contains its verification step (it raises ``ArithmeticError``) and its
-  cases pass through it;
+* ``self-check``: the implementation contains its verification step (it raises ``ArithmeticError``), and one real
+  (non-error) example of the head runs through it;
 * ``numeric cross-check``: for numeric heads, the exact result evaluated to 30 digits agrees with the head
   evaluated on 30-digit input;
 * ``delegated``: the named library routine exists.
@@ -194,6 +194,10 @@ def load_modules(tests_dir: Path) -> List[Tuple[str, list]]:
     for p in sorted(tests_dir.glob("test_*.py")):
         if _needs_fixtures(p):
             NEEDS_FIXTURES.add(p.stem)
+            try:
+                _FIXTURE_SOURCES[p.stem] = p.read_text(encoding="utf-8")
+            except OSError:
+                pass
             continue
         try:
             mod = importlib.import_module(p.stem)
@@ -206,6 +210,7 @@ def load_modules(tests_dir: Path) -> List[Tuple[str, list]]:
 
 
 NEEDS_FIXTURES: set = set()
+_FIXTURE_SOURCES: Dict[str, str] = {}     # source of each left-out module, to tell "examples only there" from "none"
 _FIXTURE_ARG = re.compile(r"^def test_\w+\(case,\s*\w", re.M)
 _AUTOUSE_PER_TEST = re.compile(r"^@pytest\.fixture\(autouse=True\)", re.M)
 
@@ -366,13 +371,42 @@ def _cell_ok(cell):
         return False
 
 
+_ALL_CASES: Dict[str, list] = {}          # every head's cases, for examples that nest the head (set by run)
+
+
 def _run_selfcheck(r: Result, cases, harness):
+    """The implementation has a verification step, and one real (non-error) example runs through it."""
     # the implementation itself, or a helper, factory-wrapped function or class it uses, raising ArithmeticError
     if not (any("ArithmeticError" in s or "verif" in s.lower() for s in _impl_sources(r.name, depth=0))
             or any("raise ArithmeticError" in s for s in _impl_sources(r.name))):
         r.add("self-check", False, "no verification step (ArithmeticError) found in the implementation")
         return
-    r.add("self-check", True)
+    examples = [c for c in cases if len(c) > 1 and type(c[1]).__name__ != "Raises"]
+    if not examples:                    # the head may only appear inside another call (VertexList[f[g]])
+        call = re.compile(r"(?<![A-Za-z0-9`$])" + re.escape(r.name) + r"\[")
+        examples = [c for cs in _ALL_CASES.values() for c in cs
+                    if len(c) > 1 and type(c[1]).__name__ != "Raises" and call.search(c[0])]
+    if not examples:
+        if any(call.search(src) for src in _FIXTURE_SOURCES.values()):
+            return                      # its examples only run inside pytest fixtures: not exercised here
+        r.add("self-check", False, "no real example to run the verification step on")
+        return
+    from .kernel import _state, SessionState
+    first = None
+    for c in examples:
+        tok = _state.set(SessionState())
+        try:
+            harness.check(c)
+        except BaseException as exc:          # noqa: BLE001 - pytest failures derive from BaseException
+            if isinstance(exc, KeyboardInterrupt):
+                raise
+            first = first or f"{c[0][:80]}: {type(exc).__name__}: {str(exc)[:120]}"
+            continue
+        finally:
+            _state.reset(tok)
+        r.add("self-check", True)
+        return
+    r.add("self-check", False, f"no example ran cleanly ({first})")
 
 
 def _run_numeric(r: Result, cases, harness):
@@ -500,6 +534,8 @@ def run(tests_dir, mode: str = "stated", names: Optional[List[str]] = None) -> D
     import mikoshilang  # noqa: F401  (registers the library)
     from .library.core import STATUS
     cases = load_cases(tests_dir)
+    _ALL_CASES.clear()
+    _ALL_CASES.update(cases)
     harness = _harness(tests_dir)
     selected = {}
     for name, (area, status, notes) in sorted(STATUS.items()):

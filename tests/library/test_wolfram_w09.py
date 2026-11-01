@@ -577,7 +577,7 @@ ALGEBRAIC = [
     ("NumberFieldSignature[2^(1/3)]", "{1, 1}"),
     ("NumberFieldSignature[I]", "{0, 1}"),
     ("NumberFieldSignature[Root[#^4 - 2 &, 1]]", "{2, 1}"),
-    ("NumberFieldNormRepresentatives[Sqrt[2], 7]", Raises()),
+    ("AlgebraicNumberNorm /@ NumberFieldNormRepresentatives[Sqrt[2], 7]", "{7, 7}"),   # X01: implemented (quadratic)
     ("RootOfUnityQ[(-1)^(2/7)]", "True"),
     ("RootOfUnityQ[(1 + I)/Sqrt[2]]", "True"),
     ("RootOfUnityQ[-1]", "True"),

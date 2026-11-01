@@ -1,5 +1,7 @@
 """Special functions.  All conventions follow the Wolfram Language (which agree
 with SymPy/mpmath for the functions below unless stated)."""
+
+from __future__ import annotations
 import sympy as sp
 
 from .core import (fn, error, S, R, numeric_out, sym, int_arg, nonneg_int, Unevaluated, has_float)
@@ -10,19 +12,19 @@ AREA = "special functions"
 def _special(name, f, nargs, status, notes, listable=True):
     if nargs == 1:
         @fn(name, area=AREA, status=status, notes=notes, listable=listable)
-        def impl(a):
+        def impl(a: Numeric) -> Numeric:
             return numeric_out(f(sym(a, name)), a)
     elif nargs == 2:
         @fn(name, area=AREA, status=status, notes=notes, listable=listable)
-        def impl(a, b):
+        def impl(a: Numeric, b: Numeric) -> Numeric:
             return numeric_out(f(sym(a, name), sym(b, name)), a, b)
     elif nargs == 3:
         @fn(name, area=AREA, status=status, notes=notes, listable=listable)
-        def impl(a, b, c):
+        def impl(a: Numeric, b: Numeric, c: Numeric) -> Numeric:
             return numeric_out(f(sym(a, name), sym(b, name), sym(c, name)), a, b, c)
     else:
         @fn(name, area=AREA, status=status, notes=notes, listable=listable)
-        def impl(a, b, c, d):
+        def impl(a: Numeric, b: Numeric, c: Numeric, d: Numeric) -> Numeric:
             return numeric_out(f(*(sym(v, name) for v in (a, b, c, d))), a, b, c, d)
     return impl
 
@@ -77,7 +79,7 @@ _special("EllipticPi", sp.elliptic_pi, 3, "fixed", "EllipticPi[n, phi, m] incomp
 @fn("KroneckerDelta", area=AREA, status="promoted",
     notes="variadic: 1 if all arguments are equal, 0 if any differ, KroneckerDelta[n] = 1 iff n == 0; symbolic "
           "arguments stay unevaluated")
-def _kdelta(*args):
+def _kdelta(*args: Numeric) -> Integer:
     if not args:
         return 1
     vals = [sym(a, "KroneckerDelta") for a in args]
@@ -95,7 +97,7 @@ def _kdelta(*args):
 @fn("DiscreteDelta", area=AREA, status="promoted",
     notes="Wolfram DiscreteDelta[n1, n2, ...]: 1 if every argument is 0, 0 if any argument is a non-zero number; "
           "symbolic arguments stay unevaluated (previously always inert)")
-def _ddelta(*args):
+def _ddelta(*args: Numeric) -> Integer:
     vals = [sym(a, "DiscreteDelta") for a in args]
     if any(v.is_number and v != 0 for v in vals):
         return 0
@@ -107,7 +109,7 @@ def _ddelta(*args):
 @fn("UnitStep", area=AREA, status="promoted",
     notes="Wolfram UnitStep[x1, ...]: 1 if every argument is >= 0 (UnitStep[0] = 1), 0 if any is < 0; real "
           "arguments only; symbolic arguments stay unevaluated (previously always inert)")
-def _ustep(*args):
+def _ustep(*args: Real) -> Integer:
     vals = [sym(a, "UnitStep") for a in args]
     for v in vals:
         if v.is_number and v.is_real is False:
@@ -121,7 +123,7 @@ def _ustep(*args):
 
 @fn("SphericalHarmonicY", area=AREA, status="fixed",
     notes="Y_l^m(theta, phi) with the Condon-Shortley phase (Wolfram); legacy forced floats and returned Python complex")
-def _ynm(l, m, theta, phi):
+def _ynm(l: Numeric, m: Numeric, theta: Numeric, phi: Numeric) -> Numeric:
     ll = nonneg_int(l, "SphericalHarmonicY", "degree l")
     mm = int_arg(m, "SphericalHarmonicY", "order m")
     if abs(mm) > ll:
@@ -164,13 +166,13 @@ def _legendreq(n, x):
 @fn("LambertW", area=AREA, status="fixed",
     notes="LambertW[z] and LambertW[z, k] (branch k; note Wolfram's ProductLog[k, z] argument order); "
           "legacy returned Python complex numbers for every input")
-def _lambertw(z, k=0):
+def _lambertw(z: Numeric, k: Integer = 0) -> Numeric:
     kk = int_arg(k, "LambertW", "branch")
     return numeric_out(sp.LambertW(sym(z, "LambertW"), kk), z)
 
 
 @fn("ProductLog", area=AREA, status="promoted", notes="Wolfram ProductLog[z] and ProductLog[k, z]")
-def _productlog(*a):
+def _productlog(*a: Numeric) -> Numeric:
     if len(a) == 1:
         return numeric_out(sp.LambertW(sym(a[0], "ProductLog")), a[0])
     if len(a) == 2:
@@ -180,7 +182,7 @@ def _productlog(*a):
 
 
 @fn("StruveH", area=AREA, status="promoted", notes="Struve H_n(z), numeric via mpmath")
-def _struveh(n, z):
+def _struveh(n: Numeric, z: Numeric) -> Numeric:
     import mpmath
     sn, sz = sym(n, "StruveH"), sym(z, "StruveH")
     if not (sn.is_number and sz.is_number):

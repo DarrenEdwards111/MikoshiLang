@@ -39,6 +39,8 @@ from contextvars import ContextVar as _ContextVar
 # were evaluated, and ("splice", chain) for re-evaluations of a rewritten expression.
 _TRACE = _ContextVar("mikoshilang_trace", default=None)
 _TRACE_ARG = _ContextVar("mikoshilang_trace_arg", default=False)
+# TraceOriginal (X01): False, True (record heads and unchanged chains) or "Automatic" (start forms only).
+_TRACE_ORIG = _ContextVar("mikoshilang_trace_original", default=False)
 
 # Evaluation stack for Stack[] (frames [expr, live]; live is False once a later expression on the same evaluation
 # chain replaced it), StackInhibit and StackComplete; the evaluation-chain length for $IterationLimit.
@@ -62,6 +64,15 @@ def set_hold_all(head: str):
 
 def set_hold_first(head: str):
     _HOLD_FIRST.add(head)
+
+
+# Library heads whose result is final: it is returned without being evaluated again (TypeCheck's report holds
+# values that were already evaluated in report mode and must not be re-checked by an enclosing raising session).
+_FINAL_RESULT: Set[str] = set()
+
+
+def set_final_result(head: str):
+    _FINAL_RESULT.add(head)
 
 
 def clear_memo():
@@ -101,11 +112,12 @@ def _traced(expr, depth):
     finally:
         stack.pop()
         _TRACE_ARG.reset(tok)
-    chain = _trace_chain(expr, frame, r, start=bool(stack) and not is_arg and len(stack) > 1)
+    orig = _TRACE_ORIG.get()
+    chain = _trace_chain(expr, frame, r, start=(bool(stack) and not is_arg and len(stack) > 1) or bool(orig))
     if stack:
         if not is_arg:
             stack[-1].append(("splice", chain))
-        elif len(chain) > 1 or any(isinstance(c, list) for c in chain):
+        elif len(chain) > 1 or any(isinstance(c, list) for c in chain) or orig is True:
             stack[-1].append(("nested", chain))
     return r
 
@@ -141,19 +153,22 @@ def _same(a, b):
         return False
 
 
-def trace_evaluation(expr):
-    """Evaluate expr while recording the Wolfram-style evaluation chain; returns (chain, value)."""
+def trace_evaluation(expr, original=False):
+    """Evaluate expr while recording the Wolfram-style evaluation chain; returns (chain, value).
+    original: the TraceOriginal setting (False, True or "Automatic")."""
     stack = [[]]
     tok = _TRACE.set(stack)
     atok = _TRACE_ARG.set(False)
+    otok = _TRACE_ORIG.set(original)
     try:
         r = evaluate(expr, 1)
     finally:
         _TRACE.reset(tok)
         _TRACE_ARG.reset(atok)
+        _TRACE_ORIG.reset(otok)
     top = stack[0]
     chain = top[0][1] if top else [expr, r]
-    if len(chain) == 1:       # nothing happened: Wolfram returns {}
+    if len(chain) == 1 and original is not True:       # nothing happened: Wolfram returns {}
         chain = []
     return chain, r
 
@@ -271,6 +286,9 @@ def _evaluate_body(expr, depth: int) -> Any:
         if isinstance(target, Expr):
             return ev(Expr(target, *expr.args))
         raise ValueError("Assigned head is not callable")
+
+    if isinstance(head, str) and _TRACE_ORIG.get() is True and _TRACE.get():
+        _TRACE.get()[-1].append(("nested", [Symbol(head)]))     # TraceOriginal -> True: the head's chain {f}
 
     # 3. Special forms that see unevaluated arguments
     handled = kernel.held(expr, ev)
@@ -425,8 +443,14 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
     op = OPERATOR_FORMS.get(head) if isinstance(head, str) else None
     if op is not None and len(new_args) == op[0]:
         return new_expr
+    ksig = None
+    if _typestate.ACTIVE and isinstance(head, str):
+        from . import types as _types
+        ksig = _types.check_kernel_call(head, new_args)
     r = kernel.apply_builtin(new_expr, ev)
     if r is not kernel.UNHANDLED:
+        if ksig is not None:
+            _types.check_result(head, ksig, r)
         return r
 
     if not isinstance(head, str):
@@ -481,6 +505,8 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
                 from .runtime import reject_quarantined
                 reject_quarantined(head)
             return new_expr
+        if head in _FINAL_RESULT:
+            return lib
         result = lib
 
     if isinstance(result, Expr) and result != new_expr:
