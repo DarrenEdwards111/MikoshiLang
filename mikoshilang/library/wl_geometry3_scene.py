@@ -81,7 +81,7 @@ class Scene:
         for j, q in enumerate(self.quants):
             self.var[q] = ("q", base + j)
         self.n = base + len(self.quants)
-        self.eqs, self.ineqs = [], []
+        self.eqs, self.ineqs, self.lines, self.lens = [], [], [], []
         for h in self.hyps:
             self._hyp(h)
 
@@ -204,6 +204,10 @@ class Scene:
                 self.eqs.append(lambda X, dl=dl, dr=dr: np.array([self._d2p(X, *dl) - self._d2p(X, *dr)]))
                 return
             if dl is not None:
+                try:
+                    self.lens.append(abs(float(self.val(np.zeros(self.n), r))))
+                except Exception:
+                    pass
                 self.eqs.append(lambda X, dl=dl, r=r: np.array([self._d2p(X, *dl) - self.val(X, r) ** 2]))
                 self.ineqs.append(lambda X, r=r: self.val(X, r) + 1e-12)
                 return
@@ -221,6 +225,7 @@ class Scene:
                     self.eqs.append(lambda X, ps=ps: np.array(
                         [self._cross(X, ps[0], ps[-1], p) for p in ps[1:-1]]))
                     self.ineqs.append(lambda X, ps=ps: self._order(X, ps))
+                    self.lines.append([self.var[p.name][1] for p in ps if isinstance(p, Symbol) and p.name in self.var])
                 elif len(ps) == 2:
                     self.ineqs.append(lambda X, ps=ps: self._sep(X, ps[0], ps[1]))
             return
@@ -334,6 +339,28 @@ class Scene:
             return np.zeros(0)
         return np.concatenate([np.atleast_1d(np.asarray(e(X), dtype=float)) for e in self.eqs])
 
+    def start(self, rng):
+        """Random start with the points of each Line[{p1, ..., pk}] hypothesis placed in order on the segment
+        p1 pk, so the solver starts in the basin of the intended configuration."""
+        np = _np()
+        L = max(self.lens) if self.lens else 1.0
+        x0 = np.concatenate([rng.uniform(-L, L, 2 * len(self.points)), rng.uniform(0.5, 2, len(self.quants))])
+        for idx in self.lines:
+            if len(idx) < 3:
+                continue
+            a, b = x0[idx[0]:idx[0] + 2].copy(), x0[idx[-1]:idx[-1] + 2].copy()
+            ts = np.sort(rng.uniform(0.1, 0.9, len(idx) - 2))
+            for i, t in zip(idx[1:-1], ts):
+                x0[i:i + 2] = a + t * (b - a)
+        return x0
+
+    def residual_aug(self, X):
+        """Equations plus hinge penalties pushing the order / nondegeneracy inequalities to a small positive
+        margin (used when the plain solve lands on a solution with the points in the wrong order)."""
+        np = _np()
+        m = 1e-3 * self.scale(X) ** 2
+        return np.concatenate([self.residual(X), np.array([max(0.0, m - g(X)) for g in self.ineqs])])
+
     def general_position(self, X):
         """Distinct points (Wolfram: points are assumed to be in general position)."""
         np = _np()
@@ -411,11 +438,14 @@ def instances(S, k, f, seed=None, tries=60):
     np = _np()
     rng = G._np_rng() if seed is None else np.random.default_rng(seed)
     out_ = []
-    for _ in range(tries * k):
+    for _ in range(min(tries * k, 30 + 8 * k)):
         if len(out_) >= k:
             break
-        x0 = np.concatenate([rng.uniform(-1, 1, 2 * len(S.points)), rng.uniform(0.5, 2, len(S.quants))])
+        x0 = S.start(rng) if _ % 2 == 0 else np.concatenate(
+            [rng.uniform(-1, 1, 2 * len(S.points)), rng.uniform(0.5, 2, len(S.quants))])
         x, res = lm_solve(S.residual, x0)
+        if S.ineqs and any(g(x) <= 0 for g in S.ineqs):
+            x, _ = lm_solve(S.residual_aug, x)
         # polish
         x, res = lm_solve(S.residual, x, 50)
         s = S.scale(x)
@@ -446,6 +476,8 @@ def _seed(opts, f):
 
 
 def instance_expr(S, X):
+    X = X.copy()
+    X[abs(X) < 1e-12 * S.scale(X)] = 0.0  # round-off below the solver tolerance
     pts_ = [Expr("Rule", Symbol(p), L(fnum(X[2 * i]), fnum(X[2 * i + 1]))) for i, p in enumerate(S.points)]
     qs = [Expr("Rule", Symbol(q), fnum(X[S.var[q][1]])) for q in S.quants]
     return Expr("GeometricScene", L(L(*pts_), L(*qs)), L(*S.hyps), L(*S.concl), *S.opts)
@@ -520,7 +552,9 @@ def _candidates(S):
     for (a, b), (d, e) in itertools.combinations(list(itertools.combinations(P, 2)), 2):
         l1, l2 = (a, b), (d, e)
         lines = L(Expr("Line", L(a, b)), Expr("Line", L(d, e)))
-        c.append((Expr("GeometricAssertion", lines, "Parallel"), lambda X, l1=l1, l2=l2: S._crossl(X, l1, l2), 2))
+        if not {a.name, b.name} & {d.name, e.name}:  # lines through a common point: that is collinearity
+            c.append((Expr("GeometricAssertion", lines, "Parallel"),
+                      lambda X, l1=l1, l2=l2: S._crossl(X, l1, l2), 2))
         c.append((Expr("GeometricAssertion", lines, "Perpendicular"),
                   lambda X, l1=l1, l2=l2: S._dotl(X, l1, l2), 2))
         c.append((Expr("Equal", Expr("EuclideanDistance", a, b), Expr("EuclideanDistance", d, e)),
@@ -550,7 +584,7 @@ def _norm_expr(e):
     notes="FindGeometricConjectures[scene], [scene, patt] and [scene, patt, n] for plane GeometricScene "
           "objects: the scene with added conclusions that hold on 4 independent random instances (as in "
           "RandomInstance) and are not among the hypotheses. Candidate catalogue: collinear triples, parallel and "
-          "perpendicular point-pair lines, equal distances, midpoints, right angles PlanarAngle[{a, b, c}] == "
+          "perpendicular point-pair lines (parallel only for lines without a common point), equal distances, midpoints, right angles PlanarAngle[{a, b, c}] == "
           "90 Degree and concyclic quadruples (GeometricAssertion[{...}, \"Concyclic\"]); a candidate holds when "
           "its residual is below 1e-7 relative to the scene size on every instance and is not degenerate "
           "(distinct points). Conclusions implied by others are not removed, so the list can be longer than "
