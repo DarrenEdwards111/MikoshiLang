@@ -707,7 +707,7 @@ TEXT_FORMS = ("OutputForm", "StandardForm", "TraditionalForm", "TeXForm", "CForm
 TOSTRING_OPTIONS = ("FormatType", "PageWidth", "TotalWidth", "CharacterEncoding", "NumberMarks")
 
 _NAMED_CHARS = {
-    "\u00d7": "Times", "\u03c0": "Pi", "\u221e": "Infinity", "\u2192": "Rule", "\u29f4": "RuleDelayed",
+    "\u00d7": "Times", "\u03c0": "Pi", "\u221e": "Infinity", "\u2192": "RightArrow", "\u29f4": "RuleDelayed",
     "\u2264": "LessEqual", "\u2265": "GreaterEqual", "\u2260": "NotEqual", "\u00ab": "LeftSkeleton",
     "\u00bb": "RightSkeleton", "\u2026": "Ellipsis", "\u00b0": "Degree", "\u2208": "Element", "\u2227": "And",
     "\u2228": "Or", "\u00ac": "Not", "\u2061": "InvisibleApplication", "\u2062": "InvisibleTimes",

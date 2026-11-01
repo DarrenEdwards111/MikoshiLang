@@ -230,13 +230,16 @@ _WRAPPERS = {"Style", "Annotation", "Tooltip", "Mouseover", "Hyperlink", "Button
              "Callout", "Highlighted", "Labeled", "StatusArea", "PopupWindow", "Dynamic", "Placed"}
 
 
-def check_content(x, dim, fname, depth=0):
-    """Walk graphics content: lists, primitives, directives, wrappers, transforms and style rules."""
+def check_content(x, dim, fname, depth=0, indexed=False):
+    """Walk graphics content: lists, primitives, directives, wrappers, transforms and style rules.
+
+    ``indexed`` is True inside GraphicsComplex, where primitives hold point indices rather than coordinates, so
+    their coordinate validators are skipped (the dimension check still applies)."""
     if depth > 200:
         raise ValueError(f"{fname}: graphics content is nested too deeply")
     if K.is_list(x):
         for i in x.args:
-            check_content(i, dim, fname, depth + 1)
+            check_content(i, dim, fname, depth + 1, indexed)
         return
     if x is None or isinstance(x, Symbol):
         return
@@ -256,21 +259,21 @@ def check_content(x, dim, fname, depth=0):
         if dim not in spec["dims"]:
             kind = "two" if 2 in spec["dims"] else "three"
             raise ValueError(f"{fname}: {h} is a {kind}-dimensional primitive and cannot be used in {fname}")
-        if spec["validate"] is not None:
+        if spec["validate"] is not None and not indexed:
             spec["validate"](x, dim)
         return
     if h in ("GraphicsGroup",) and x.args:
-        check_content(x.args[0], dim, fname, depth + 1)
+        check_content(x.args[0], dim, fname, depth + 1, indexed)
     elif h == "GraphicsComplex" and x.args:
         pts = x.args[0]
         if K.is_list(pts) and pts.args and K.is_list(pts.args[0]) and len(pts.args[0].args) != dim:
             raise ValueError(f"{fname}: GraphicsComplex points must be {dim}-dimensional in {fname}")
         if len(x.args) > 1:
-            check_content(x.args[1], dim, fname, depth + 1)
+            check_content(x.args[1], dim, fname, depth + 1, True)
     elif h in ("Translate", "Rotate", "Scale", "GeometricTransformation") and x.args:
-        check_content(x.args[0], dim, fname, depth + 1)
+        check_content(x.args[0], dim, fname, depth + 1, indexed)
     elif h in _WRAPPERS and x.args:
-        check_content(x.args[0], dim, fname, depth + 1)
+        check_content(x.args[0], dim, fname, depth + 1, indexed)
 
 
 # ───────────────────────────── Graphics, Graphics3D ─────────────────────────────
