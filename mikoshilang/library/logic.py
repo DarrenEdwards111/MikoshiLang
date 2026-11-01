@@ -81,7 +81,8 @@ def _vars(v):
 
 
 @fn("TruthTable", area=AREA, status="verified",
-    notes="rows {v1, ..., vn, value} over all assignments, variables in alphabetical order (MikoshiLang)")
+    notes="rows {v1, ..., vn, value} over all assignments, variables in alphabetical order (MikoshiLang)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tt(e):
     v = _bexpr(e, "TruthTable")
     xs = _vars(v)
@@ -92,7 +93,9 @@ def _tt(e):
     return L(*(L(*vals, bool(v.subs(dict(zip(xs, vals))))) for vals in itertools.product([False, True], repeat=len(xs))))
 
 
-@fn("AllSAT", area=AREA, status="verified", notes="all satisfying assignments as rule lists (MikoshiLang)")
+@fn("AllSAT", area=AREA, status="verified", notes="all satisfying assignments as rule lists (MikoshiLang)"
+                                                  ". Check: exact (exact input gives exact results), reference "
+                                                  "(differential cases in tests/library).")
 def _allsat(e):
     v = _bexpr(e, "AllSAT")
     xs = _vars(v)
@@ -107,7 +110,8 @@ def _allsat(e):
 
 @fn("SATSolve", area=AREA, status="fixed",
     notes="one satisfying assignment {x -> True, ...} (all variables, alphabetical) or False; legacy omitted "
-          "variables SymPy did not need and could return {True -> True} for tautologies")
+          "variables SymPy did not need and could return {True -> True} for tautologies"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sat(e):
     v = _bexpr(e, "SATSolve")
     xs = _vars(v)
@@ -118,17 +122,23 @@ def _sat(e):
     return L(*(rule(Symbol(x.name), model.get(x, False)) for x in xs))
 
 
-@fn("CNF", area=AREA, status="verified", notes="conjunctive normal form (SymPy to_cnf; Wolfram BooleanConvert[e, \"CNF\"])")
+@fn("CNF", area=AREA, status="verified", notes="conjunctive normal form (SymPy to_cnf; Wolfram BooleanConvert[e, \"CNF\"])"
+                                               ". Check: exact (exact input gives exact results), reference "
+                                               "(differential cases in tests/library).")
 def _cnf(e):
     return _from_bool(sp.to_cnf(_bexpr(e, "CNF")))
 
 
-@fn("DNF", area=AREA, status="verified", notes="disjunctive normal form (SymPy to_dnf)")
+@fn("DNF", area=AREA, status="verified", notes="disjunctive normal form (SymPy to_dnf)"
+                                               ". Check: exact (exact input gives exact results), reference "
+                                               "(differential cases in tests/library).")
 def _dnf(e):
     return _from_bool(sp.to_dnf(_bexpr(e, "DNF")))
 
 
-@fn("BooleanMinimize", area=AREA, status="verified", notes="minimal DNF (SymPy simplify_logic, Quine-McCluskey)")
+@fn("BooleanMinimize", area=AREA, status="verified", notes="minimal DNF (SymPy simplify_logic, Quine-McCluskey)"
+                                                           ". Check: exact (exact input gives exact results), "
+                                                           "reference (differential cases in tests/library).")
 def _bmin(e):
     v = _bexpr(e, "BooleanMinimize")
     if not sp.satisfiable(v):

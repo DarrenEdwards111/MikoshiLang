@@ -132,7 +132,8 @@ def _order(opts, fname):
     notes="Interpolation[{f1, f2, ...}] (x = 1, 2, ...) and Interpolation[{{x1, f1}, ...}] -> InterpolatingFunction: "
           "piecewise polynomials of InterpolationOrder (default 3) through the nearest order+1 points "
           "(Wolfram's default method; exact through the data); Interpolation[data, x] evaluates at x; "
-          "one-dimensional data only (derivative data and grids raise)")
+          "one-dimensional data only (derivative data and grids raise)"
+          ". Check: reference (differential cases in tests/library).")
 def _interpolation(data: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"InterpolationOrder", "Method", "PeriodicInterpolation"}, "Interpolation")
     if opts.get("Method") is not None:
@@ -146,7 +147,8 @@ def _interpolation(data: Expr, *rest: Expr) -> Expr:
 
 @fn("ListInterpolation", area=AREA, status="added",
     notes="ListInterpolation[{f1, ..., fn}] on x = 1..n and ListInterpolation[list, {{xmin, xmax}}] on an "
-          "equally spaced grid -> InterpolatingFunction (same piecewise polynomials as Interpolation); 1-D only")
+          "equally spaced grid -> InterpolatingFunction (same piecewise polynomials as Interpolation); 1-D only"
+          ". Check: reference (differential cases in tests/library).")
 def _listinterp(data: ListOf[Expr], *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"InterpolationOrder", "Method", "PeriodicInterpolation"}, "ListInterpolation")
     vals = list_arg(data, "ListInterpolation", "data", min_len=2)
@@ -371,7 +373,8 @@ def _ndopts(rest, fname):
           "of any order that can be solved for the highest derivatives -> {{y -> InterpolatingFunction[...]}} "
           "(or {{y[x] -> InterpolatingFunction[...][x]}}); SciPy DOP853 (Radau fallback for stiff problems), "
           "rtol 1e-10; the initial point may be inside the range; machine precision only; boundary-value "
-          "problems, DAEs, PDEs and delay equations raise")
+          "problems, DAEs, PDEs and delay equations raise"
+          ". Check: reference (differential cases in tests/library).")
 def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Expr]:
     _ndopts(rest, "NDSolve")
     us, out, xv = _ndsolve(eqs, unknowns, rng, {}, "NDSolve")
@@ -387,7 +390,8 @@ def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Exp
 
 @fn("NDSolveValue", area=AREA, status="added",
     notes="NDSolveValue[{odes, ics}, y, {x, xmin, xmax}] -> InterpolatingFunction (y[x] -> ifun[x], {y, z} -> "
-          "list); same solver and limits as NDSolve")
+          "list); same solver and limits as NDSolve"
+          ". Check: reference (differential cases in tests/library).")
 def _ndsolvevalue(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> Expr:
     _ndopts(rest, "NDSolveValue")
     us, out, xv = _ndsolve(eqs, unknowns, rng, {}, "NDSolveValue")

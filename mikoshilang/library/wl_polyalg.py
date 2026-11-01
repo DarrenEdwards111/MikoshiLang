@@ -114,7 +114,8 @@ def _pw_parts(pw, fname="Piecewise"):
     notes="Piecewise[{{v1, c1}, ...}, def] (HoldAll, as Wolfram): conditions are evaluated in order, False cases are "
           "dropped, the first True case gives its value (later cases are dropped), Piecewise[{}, d] -> d, the "
           "default is 0; values are evaluated only when they can be returned. Symbolic cases stay; Integrate, D, "
-          "Limit and PiecewiseExpand work with it through SymPy's Piecewise")
+          "Limit and PiecewiseExpand work with it through SymPy's Piecewise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _piecewise(*args: Expr) -> Expr:
     if len(args) not in (1, 2):
         raise ValueError("Piecewise called with the wrong number of arguments; expected 1 or 2")
@@ -151,7 +152,8 @@ def _piecewise(*args: Expr) -> Expr:
     notes="DirectedInfinity[z]: an infinite quantity in the direction of z. DirectedInfinity[] and "
           "DirectedInfinity[0 | Indeterminate] -> ComplexInfinity; a positive real -> Infinity, a negative real -> "
           "-Infinity; other numeric directions are normalised to z/Abs[z] (DirectedInfinity[1 + I] -> "
-          "DirectedInfinity[(1 + I)/Sqrt[2]]); symbolic directions stay")
+          "DirectedInfinity[(1 + I)/Sqrt[2]]); symbolic directions stay"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dirinf(*a: Expr) -> Expr:
     if len(a) > 1:
         raise ValueError("DirectedInfinity called with 2 or more arguments; expected 0 or 1")
@@ -377,11 +379,15 @@ fn("AddSides", area=AREA, status="added",
    notes="AddSides[rel, x] adds x to every side of an equation, inequation, inequality or chain (also inside "
          "And, ConditionalExpression and Piecewise); AddSides[rel1, rel2] adds corresponding sides (equation + "
          "relation keeps the relation; two inequalities must point the same way, else the second is reversed); "
-         "True/False stay")(_sides_add("AddSides", False))
+         "True/False stay"
+         ". Check: exact (exact input gives exact results), reference (differential "
+         "cases in tests/library).")(_sides_add("AddSides", False))
 fn("SubtractSides", area=AREA, status="added",
    notes="SubtractSides[rel, x] subtracts x from every side; SubtractSides[rel] subtracts the right-hand side "
          "(a == b -> a - b == 0); SubtractSides[rel1, rel2] subtracts corresponding sides (an inequality is "
-         "reversed when subtracted)")(_sides_add("SubtractSides", True))
+         "reversed when subtracted)"
+         ". Check: exact (exact input gives exact results), reference "
+         "(differential cases in tests/library).")(_sides_add("SubtractSides", True))
 
 
 def _sign(x, A):
@@ -524,17 +530,22 @@ fn("MultiplySides", area=AREA, status="added",
          "swapped relations); with unknown sign GenerateConditions -> All (default) gives Piecewise[{{rel x, x > "
          "0}, {reversed, x < 0}}, rel], True/Automatic give ConditionalExpression[..., x > 0], False the "
          "unconditional form and None stays unevaluated; for equations the condition is x != 0 (Automatic drops "
-         "it); Assumptions and $Assumptions decide the sign")(_sides_mul("MultiplySides", False))
+         "it); Assumptions and $Assumptions decide the sign"
+         ". Check: exact (exact input gives exact results), reference "
+         "(differential cases in tests/library).")(_sides_mul("MultiplySides", False))
 fn("DivideSides", area=AREA, status="added",
    notes="DivideSides[rel, x] / DivideSides[rel] (divides by the right-hand side) / DivideSides[rel1, c == d]: "
          "as MultiplySides with division (x != 0 and sign conditions, GenerateConditions and Assumptions "
-         "options)")(_sides_mul("DivideSides", True))
+         "options)"
+         ". Check: exact (exact input gives exact results), reference "
+         "(differential cases in tests/library).")(_sides_mul("DivideSides", True))
 
 
 @fn("ApplySides", area=AREA, status="added",
     notes="ApplySides[f, rel]: applies f to every side of an equation, inequation, inequality or chain (also "
           "inside And, ConditionalExpression and Piecewise), purely structurally as Wolfram (no check that an "
-          "inequality stays valid); True/False stay")
+          "inequality stays valid); True/False stay"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _applysides(f: Fn, r: Expr) -> Expr:
     return _map_rel(r, lambda q: ev(Expr(q.head, *(K.call(f, s) for s in q.args))), "ApplySides")
 
@@ -612,10 +623,12 @@ fn("PolynomialExpressionQ", area=AREA, status="added",
    notes="PolynomialExpressionQ[e, x | {x, ...}] / [e, vars, test]: True if e is built from the variables and "
          "coefficients free of them with Plus, Times and non-negative integer Power (purely structural, as "
          "Wolfram: x Sin[x]^2 + x Cos[x]^2 is not, x - 1/x is not; variables may be any expressions such as "
-         "x[1] or Sin[x]); test is applied to the coefficients")(_structq("PolynomialExpressionQ", False))
+         "x[1] or Sin[x]); test is applied to the coefficients"
+         ". Check: reference (differential cases in tests/library).")(_structq("PolynomialExpressionQ", False))
 fn("RationalExpressionQ", area=AREA, status="added",
    notes="RationalExpressionQ[e, x | {x, ...}] / [e, vars, test]: True if e is built from the variables and "
          "coefficients free of them with Plus, Times and integer Power (structural, as Wolfram: Sqrt[x] is not)"
+         ". Check: reference (differential cases in tests/library)."
          )(_structq("RationalExpressionQ", True))
 
 
@@ -720,7 +733,9 @@ def _pick_var(e, x, fname):
           "the powers of the square-free factors of the denominator (ApartSquareFree[(x^2 - 2)/(x^4 - 2 x^2 + 1)] "
           "-> -1/(-1 + x^2)^2 + 1/(-1 + x^2)), exact over the rationals and rational functions of other symbols; "
           "threads over lists, equations and inequalities; the result is checked to equal the input; the Modulus "
-          "and Trig options raise")
+          "and Trig options raise"
+          ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
+          "in tests/library).")
 def _apartsqf(e: Expr, *rest: Expr) -> Expr:
     rest, opts = _opts(rest, {"Modulus", "Trig"}, "ApartSquareFree")
     if opts.get("Modulus", 0) not in (0,) or (opts.get("Trig") is not None and not is_false(opts.get("Trig"))):
@@ -772,7 +787,9 @@ def _pfe_full(f, x):
           "\"PolynomialCoefficients\", \"FractionalCoefficients\" ({{pole, multiplicity, {c_m, ..., c_1}}, ...} with "
           "c_k the coefficient of 1/(x - pole)^k), \"Poles\", \"PoleMultiplicities\"|>, the complete decomposition "
           "over the algebraic numbers (poles in radicals); PartialFractionElements[f, x, prop] gives one property; "
-          "poles are sorted as Wolfram (real ascending, then complex); the decomposition is checked to equal f")
+          "poles are sorted as Wolfram (real ascending, then complex); the decomposition is checked to equal f"
+          ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
+          "in tests/library).")
 def _pfe(e: Expr, x: Var, *prop: Expr) -> Expr:
     xs = _var1(x, "PartialFractionElements")
     f = _S(e, "PartialFractionElements")
@@ -807,7 +824,9 @@ def _pfe(e: Expr, x: Var, *prop: Expr) -> Expr:
 @fn("PolynomialExtendedGCD", area=AREA, status="added",
     notes="PolynomialExtendedGCD[p, q, x] -> {g, {r, s}} with r p + s q == g, g the monic GCD and deg r < deg q - "
           "deg g, deg s < deg p - deg g (unique cofactors; coefficients may be rational functions of other "
-          "symbols, as Wolfram); Modulus -> prime works over GF(p) with representatives 0..p-1; checked")
+          "symbols, as Wolfram); Modulus -> prime works over GF(p) with representatives 0..p-1; checked"
+          ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
+          "in tests/library).")
 def _pegcd(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = _opts(rest, {"Modulus"}, "PolynomialExtendedGCD")
     if rest:
@@ -844,7 +863,8 @@ _ORDERS = {"Lexicographic": "lex", "DegreeLexicographic": "grlex", "DegreeRevers
     notes="PolynomialReduction[p, {p1, ...}, {x1, ...}]: the remainder of p on division by the pi (fully reduced "
           "with respect to their leading terms; unique when the pi are a Gröbner basis), coefficients in the field "
           "of rational functions of the other symbols; MonomialOrder -> Lexicographic | DegreeLexicographic | "
-          "DegreeReverseLexicographic, Modulus -> prime; the identity p == Σ ai pi + r is checked")
+          "DegreeReverseLexicographic, Modulus -> prime; the identity p == Σ ai pi + r is checked"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _preduction(p: Expr, ps: Expr, vs: Expr, *rest: Expr) -> Expr:
     rest, opts = _opts(rest, {"MonomialOrder", "Modulus", "CoefficientDomain"}, "PolynomialReduction")
     if rest:
@@ -939,7 +959,8 @@ def _order_pq(P, Q, fname):
     notes="Subresultants[p, q, x]: the principal subresultant coefficients {psc_0, ..., psc_n} (n = deg q <= deg "
           "p): psc_j is the leading coefficient of the j-th subresultant (determinant of the Sylvester submatrix), "
           "psc_0 = Resultant and psc_n = lc(q)^(deg p - deg q); the first k vanish exactly when p and q have k "
-          "common roots; deg p < deg q and Modulus raise")
+          "common roots; deg p < deg q and Modulus raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _subresultants(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("Subresultants: options (Modulus) are not supported")
@@ -982,7 +1003,8 @@ def _subresprs(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
 
 @fn("FromCoefficientRules", area=AREA, status="added",
     notes="FromCoefficientRules[{{e1, e2, ...} -> c, ...}, {x1, x2, ...}] -> Σ c x1^e1 x2^e2 ... (inverse of "
-          "CoefficientRules); a single variable may be given without a list")
+          "CoefficientRules); a single variable may be given without a list"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fromcr(rules: Expr, vs: Expr) -> Expr:
     V = list(vs.args) if is_list(vs) else [vs]
     rs = list(rules.args) if is_list(rules) else [rules]
@@ -1004,7 +1026,8 @@ def _fromcr(rules: Expr, vs: Expr) -> Expr:
           "the coefficient of x_i1 ... x_ik at i1 <= ... <= ik and 0 elsewhere (Wolfram's default), or spread "
           "equally over all orderings with \"Symmetric\" -> True; equations are taken as lhs - rhs; a single "
           "polynomial gives a scalar c0. MikoshiLang has no sparse storage, so the arrays are dense (Wolfram returns "
-          "SparseArray objects; Normal gives these arrays)")
+          "SparseArray objects; Normal gives these arrays)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _coefarrays(polys: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     sym_ = False
     rest = list(rest)
@@ -1096,7 +1119,8 @@ def _pade_core(c, m, n, t):
           "deg Q <= n, Q(x0) = 1 whose series agrees with f to the highest possible order (extended Euclidean "
           "algorithm, so degenerate cases such as PadeApproximant[Cos[x], {x, 0, 1}] -> 1 are handled); a pole or "
           "zero (x - x0)^k of f is factored out as Wolfram does (Exp[x]/x); x0 may be symbolic or Infinity "
-          "(series in 1/x); fractional powers (Puiseux series) raise; the result's series is checked")
+          "(series in 1/x); fractional powers (Puiseux series) raise; the result's series is checked"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _pade(f: Expr, spec: Expr) -> Expr:
     if not (is_list(spec) and len(spec.args) == 3):
         raise ValueError("PadeApproximant: expected {x, x0, {m, n}} or {x, x0, n}")
@@ -1255,7 +1279,8 @@ def _q_poly(e, fname):
           "Complexes, also rectangles {lower-left, upper-right} with Gaussian-rational corners for the non-real "
           "roots), and for each interval the positions of the polynomials having that root. Each real interval "
           "contains exactly one root in its interior, or is {r, r} for a rational root; isolation is certified "
-          "from exact root separation; the interval endpoints differ from Wolfram's (they are not unique)")
+          "from exact root separation; the interval endpoints differ from Wolfram's (they are not unique)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rootintervals(ps: Expr, *dom: Expr) -> ListOf[Expr]:
     if len(dom) > 1:
         raise ValueError("RootIntervals called with too many arguments")
@@ -1297,7 +1322,8 @@ def _rootintervals(ps: Expr, *dom: Expr) -> ListOf[Expr]:
     notes="IsolatingInterval[a] / IsolatingInterval[a, dx]: for an exact algebraic number a, an interval {lo, hi} "
           "with rational endpoints (Gaussian-rational corners {lower-left, upper-right} for a non-real a) "
           "containing a and no other root of its minimal polynomial, of width below dx when given; a rational "
-          "number gives {a, a}; endpoints are certified but differ from Wolfram's choice")
+          "number gives {a, a}; endpoints are certified but differ from Wolfram's choice"
+          ". Check: reference (differential cases in tests/library).")
 def _isolinterval(a: Expr, *dx: Expr) -> ListOf[Expr]:
     if len(dx) > 1:
         raise ValueError("IsolatingInterval called with too many arguments")
@@ -1340,7 +1366,8 @@ def _isolinterval(a: Expr, *dx: Expr) -> ListOf[Expr]:
 @fn("NSolveValues", area=AREA, status="added",
     notes="NSolveValues[eqns, vars] / NSolveValues[eqns, vars, dom]: the values of the NSolve solutions ({v1, "
           "...} for one variable, {{x1, y1, ...}, ...} for several), with NSolve's options (WorkingPrecision) and "
-          "MaxRoots -> n (at most n solutions, Wolfram order)")
+          "MaxRoots -> n (at most n solutions, Wolfram order)"
+          ". Check: reference (differential cases in tests/library).")
 def _nsolvevalues(eqs: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = _opts(rest, {"MaxRoots", "WorkingPrecision"}, "NSolveValues")
     if len(rest) > 1:
@@ -1381,7 +1408,9 @@ record("MaxRoots", AREA, "added",
     notes="SolveAlways[eqns, vars]: values of the parameters for which the equations (and inequations) hold for "
           "all values of vars: every coefficient of the numerators as polynomials in vars must vanish (an "
           "inequation p != 0 needs p to be a nonzero constant); the parameter system is solved exactly and each "
-          "solution is substituted back. Non-polynomial dependence on vars and Or raise")
+          "solution is substituted back. Non-polynomial dependence on vars and Or raise"
+          ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
+          "in tests/library).")
 def _solvealways(eqs: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("SolveAlways: options are not supported")
@@ -1475,7 +1504,9 @@ def _pyth_variants(g):
           "(and hyperbolic analogues) in Sin and Cos, factoring as polynomials in the trigonometric functions and "
           "simplifying each factor with the Pythagorean identities (TrigFactorList[Cosh[x]^2 - Cosh[x]^4] -> "
           "{{-1, 1}, {Sinh[x], 2}, {Cosh[x], 2}}); the product is checked to equal expr; the chosen factors can "
-          "differ from Wolfram's sum-to-product forms")
+          "differ from Wolfram's sum-to-product forms"
+          ". Check: self-check (the result is verified before it is returned), reference (differential cases in "
+          "tests/library).")
 def _trigfactorlist(e: Expr) -> ListOf[Expr]:
     v = _S(e, "TrigFactorList")
     w = sp.together(_trig_gens_rewrite(v))
@@ -1538,7 +1569,8 @@ def _trigfactorlist(e: Expr) -> ListOf[Expr]:
 @fn("MatrixPolynomialValue", area=AREA, status="added",
     notes="MatrixPolynomialValue[poly, m, x] -> poly with x replaced by the square matrix m (constant term times "
           "the identity, powers as MatrixPower); MatrixPolynomialValue[{c0, c1, ...}, m] -> Σ ck m^k (Horner "
-          "scheme, exact or numeric)")
+          "scheme, exact or numeric)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _matpolyval(p: Expr, m: Expr, *x: Expr) -> Expr:
     from .core import matrix_arg
     if len(x) > 1:
@@ -1783,7 +1815,8 @@ def _hermitedecomp(m: MatrixOf[Integer]) -> ListOf[Expr]:
 
 @fn("HermiteReduce", area=AREA, status="added",
     notes="HermiteReduce[m]: the Hermite normal form r of an integer matrix (the second element of "
-          "HermiteDecomposition)")
+          "HermiteDecomposition)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hermitereduce(m: MatrixOf[Integer]) -> Expr:
     A = _int_matrix(m, "HermiteReduce")
     U, H = _hnf(A, _IntRing)
@@ -1827,7 +1860,8 @@ def _polyhermitedecomp(*args: Expr) -> ListOf[Expr]:
 
 @fn("PolynomialHermiteReduce", area=AREA, status="added",
     notes="PolynomialHermiteReduce[m] / [m, x]: the Hermite form h of a univariate polynomial matrix (second "
-          "element of PolynomialHermiteDecomposition; pivots monic)")
+          "element of PolynomialHermiteDecomposition; pivots monic)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _polyhermitereduce(*args: Expr) -> Expr:
     U, H, R_ = _phd(*args)
     return _pm_out(H, R_)
@@ -1860,7 +1894,8 @@ def _polysmithdecomp(*args: Expr) -> ListOf[Expr]:
 
 
 @fn("PolynomialSmithReduce", area=AREA, status="added",
-    notes="PolynomialSmithReduce[m] / [m, x]: the Smith form s (monic invariant factors on the diagonal)")
+    notes="PolynomialSmithReduce[m] / [m, x]: the Smith form s (monic invariant factors on the diagonal)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _polysmithreduce(*args: Expr) -> Expr:
     U, S, V, R_ = _psd(*args, fname="PolynomialSmithReduce")
     return _pm_out(S, R_)
@@ -1941,12 +1976,15 @@ fn("BooleanMinterms", area=AREA, status="added",
          "digits give the inputs, first variable most significant; 0/1 or True/False vectors also accepted) as a "
          "minimal DNF (BooleanMinterms[{1, 3, 5}, {a, b, c}] -> (!a && c) || (!b && c)); BooleanMinterms[spec, n] "
          "and BooleanMinterms[{vectors}] give BooleanFunction[k, n]; a third argument \"DNF\"/\"CNF\"/\"ANF\"/... "
-         "converts with BooleanConvert")(_terms_fn("BooleanMinterms", False))
+         "converts with BooleanConvert"
+         ". Check: exact (exact input gives exact results), reference "
+         "(differential cases in tests/library).")(_terms_fn("BooleanMinterms", False))
 fn("BooleanMaxterms", area=AREA, status="added",
    notes="BooleanMaxterms[{i1, ...}, {a, b, ...}]: the conjunction of the maxterms ik (maxterm i has the variable "
          "where the bit of i is 1 and its negation where it is 0, Wolfram's convention, so it is False exactly at "
          "the input 2^n - 1 - i) as a minimal CNF (BooleanMaxterms[{1, 3, 5}, {a, b, c}] -> (!a || c) && (!b || "
-         "c)); BooleanMaxterms[spec, n] -> BooleanFunction[k, n]; optional form argument")(
+         "c)); BooleanMaxterms[spec, n] -> BooleanFunction[k, n]; optional form argument"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(
     _terms_fn("BooleanMaxterms", True))
 
 
@@ -2009,7 +2047,8 @@ def _flatten_items(x):
           "c2}}) uses k1 x k2 windows in an n1 x n2 array (arguments flattened row by row or given as an array). "
           "Applied to arguments it gives the equivalent DNF Or of window conjunctions (Wolfram keeps the operator "
           "unevaluated; BooleanConvert of it gives the same DNF); BooleanConsecutiveFunction[spec, {vars}] / "
-          "[spec, {vars}, form] give the formula directly")
+          "[spec, {vars}, form] give the formula directly"
+          ". Check: reference (differential cases in tests/library).")
 def _bcfn(spec: Expr, n: Expr, *form: Expr) -> Expr:
     if len(form) > 1:
         raise ValueError("BooleanConsecutiveFunction called with too many arguments")
@@ -2068,7 +2107,8 @@ def _truth(f, vals, vars_):
     notes="UnateQ[f]: True if the Boolean function f is positive unate (monotone non-decreasing) in all its "
           "variables; UnateQ[f, {x, !y, ...}] checks positive unateness in x and negative unateness in y (only the "
           "listed variables); pure functions and BooleanFunction take a list of True (positive), False (negative) "
-          "or _ (ignore) per argument; decided from the complete truth table")
+          "or _ (ignore) per argument; decided from the complete truth table"
+          ". Check: reference (differential cases in tests/library).")
 def _unateq(f: Expr, *spec: Expr) -> Boolean:
     if len(spec) > 1:
         raise ValueError("UnateQ called with too many arguments")
@@ -2550,7 +2590,8 @@ def _strict_opt(opts, fname):
     notes="FunctionSign[f, x] / [{f, cond}, x]: 1 if f >= 0, -1 if f <= 0, 0 if f == 0 on the (real) domain, "
           "Indeterminate if f takes both signs or is not real somewhere; StrictInequalities -> True asks for f > 0 "
           "/ f < 0. Univariate elementary functions over Reals; proofs by solveset (Abs split at its zeros) and "
-          "verified sample points; anything undecidable raises")
+          "verified sample points; anything undecidable raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fsign(*args: Expr) -> Expr:
     f, cond, vs, dom, opts = _prop_args(args, "FunctionSign", extra_opts=("StrictInequalities",))
     if dom != "Reals":
@@ -2615,7 +2656,8 @@ def _monotonicity(f, cond, vs, opts, fname):
     notes="FunctionMonotonicity[f, x] / [{f, cond}, x]: 1 non-decreasing, -1 non-increasing, 0 constant, "
           "Indeterminate otherwise (or if f is not real on the domain); StrictInequalities -> True for strict "
           "monotonicity. Univariate elementary functions continuous on an interval domain (derivative sign, with "
-          "Abs split at its zeros); undecidable cases raise")
+          "Abs split at its zeros); undecidable cases raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fmono(*args: Expr) -> Expr:
     f, cond, vs, dom, opts = _prop_args(args, "FunctionMonotonicity", extra_opts=("StrictInequalities",))
     if dom != "Reals":
@@ -2627,7 +2669,8 @@ def _fmono(*args: Expr) -> Expr:
     notes="FunctionConvexity[f, x] / [{f, cond}, x]: 1 convex, -1 concave, 0 both (affine), Indeterminate "
           "otherwise; StrictInequalities -> True for strict convexity. Univariate: sign of f'' on the smooth "
           "pieces plus the jump of f' at Abs kinks; multivariate: polynomials of degree <= 2 (constant Hessian, "
-          "eigenvalue signs) and f = g(linear form). Undecidable cases raise")
+          "eigenvalue signs) and f = g(linear form). Undecidable cases raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fconv(*args: Expr) -> Expr:
     fname = "FunctionConvexity"
     f, cond, vs, dom, opts = _prop_args(args, fname, extra_opts=("StrictInequalities",))
@@ -2856,16 +2899,19 @@ fn("FunctionContinuous", area=AREA, status="added",
    notes="FunctionContinuous[f, x] / [{f, cond}, x] / [f, x, Complexes]: True if f is real-valued (over Reals) and "
          "continuous on the whole domain, decided from the structural discontinuity condition of whitelisted "
          "elementary heads (as FunctionDiscontinuities) intersected with the domain; False only when a bad point "
-         "provably exists; multivariate: polynomials / entire compositions. Undecidable cases raise")(
+         "provably exists; multivariate: polynomials / entire compositions. Undecidable cases raise"
+         ". Check: reference (differential cases in tests/library).")(
     _prop_bool("disc", "FunctionContinuous", "Reals"))
 fn("FunctionAnalytic", area=AREA, status="added",
    notes="FunctionAnalytic[f, x] / [{f, cond}, x] / [f, x, Complexes]: True if f is analytic on the domain (no "
-         "point of FunctionSingularities in it); same decision procedure as FunctionContinuous")(
+         "point of FunctionSingularities in it); same decision procedure as FunctionContinuous"
+         ". Check: reference (differential cases in tests/library).")(
     _prop_bool("sing", "FunctionAnalytic", "Reals"))
 fn("FunctionMeromorphic", area=AREA, status="added",
    notes="FunctionMeromorphic[f, x] / [{f, cond}, x]: True if f is meromorphic on the (complex) domain: poles from "
          "rational parts, Tan/Sec/Cot/Csc, Gamma are allowed; branch cuts of Log and fractional powers are not; "
-         "Exp/Sin/... of arguments with poles (essential singularities) and unsupported heads raise")(
+         "Exp/Sin/... of arguments with poles (essential singularities) and unsupported heads raise"
+         ". Check: reference (differential cases in tests/library).")(
     _prop_bool("mero", "FunctionMeromorphic", "Complexes"))
 
 
@@ -2887,7 +2933,8 @@ _orig_mero = None
           "not continuous (over Reals also where it is not real-valued), built structurally from whitelisted "
           "heads as Wolfram does: Tan[x] -> Cos[x] == 0, Sqrt[x] -> x <= 0, Floor[g] -> Sin[Pi g] == 0, Gamma[x] "
           "-> Sin[Pi x] == 0 && x <= 0, Log[x] over Complexes -> x == 0 || (Im[x] == 0 && Re[x] <= 0); False if "
-          "there are none; unsupported heads raise")
+          "there are none; unsupported heads raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fdisc(*args: Expr) -> Expr:
     f, cond, vs, dom, _ = _prop_args(args, "FunctionDiscontinuities")
     c = _bad(ev(f), vs, "disc", dom, "FunctionDiscontinuities")
@@ -2897,7 +2944,8 @@ def _fdisc(*args: Expr) -> Expr:
 @fn("FunctionSingularities", area=AREA, status="added",
     notes="FunctionSingularities[f, x] / [{f, cond}, x] / [f, x, Complexes]: a condition describing where f is not "
           "analytic (as FunctionDiscontinuities, plus zeros of Abs arguments, boundary points of Sqrt/ArcSin "
-          "domains: Abs[Tan[2 Sin[x]]] -> Cos[2 Sin[x]] == 0 || Tan[2 Sin[x]] == 0)")
+          "domains: Abs[Tan[2 Sin[x]]] -> Cos[2 Sin[x]] == 0 || Tan[2 Sin[x]] == 0)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fsing(*args: Expr) -> Expr:
     f, cond, vs, dom, _ = _prop_args(args, "FunctionSingularities")
     c = _bad(ev(f), vs, "sing", dom, "FunctionSingularities")
@@ -3090,14 +3138,17 @@ fn("FunctionInjective", area=AREA, status="added",
    notes="FunctionInjective[f, x] / [{f, xcond}, x] / [{f, xcond, ycond}, x, y] / [f, x, Complexes]: over Reals "
          "f is continuous on its natural domain (which must be an interval), so it is injective iff strictly "
          "monotone (derivative sign proofs); over Complexes polynomials (degree 1), Exp/Sin/Cos/Tan of linear "
-         "arguments (False) and Log (True). Parameters, vector maps and other cases raise")(_map_prop("inj"))
+         "arguments (False) and Log (True). Parameters, vector maps and other cases raise"
+         ". Check: reference (differential cases in tests/library).")(_map_prop("inj"))
 fn("FunctionSurjective", area=AREA, status="added",
    notes="FunctionSurjective[f, x] / [{f, xcond}, x] / [{f, xcond, ycond}, x, y] / [f, x, Complexes]: over Reals "
          "the range on the natural domain (SymPy function_range) must contain the codomain (all reals, or the "
          "ycond set); over Complexes polynomials of degree >= 1 and Sin/Cos are onto, Exp/Log/Tan are not. "
-         "Parameters and vector maps raise")(_map_prop("sur"))
+         "Parameters and vector maps raise"
+         ". Check: reference (differential cases in tests/library).")(_map_prop("sur"))
 fn("FunctionBijective", area=AREA, status="added",
-   notes="FunctionBijective: FunctionInjective && FunctionSurjective with the same arguments")(_map_prop("bij"))
+   notes="FunctionBijective: FunctionInjective && FunctionSurjective with the same arguments"
+         ". Check: reference (differential cases in tests/library).")(_map_prop("bij"))
 
 
 def _pole_sources(e, vs, fname):
@@ -3137,7 +3188,8 @@ def _pole_sources(e, vs, fname):
           "functions built from polynomials, entire functions and Tan/Sec/Cot/Csc of polynomial arguments: "
           "explicit poles from denominators (multiplicity from the Laurent leading term, removable points dropped) "
           "and, without a condition, periodic families {ConditionalExpression[..., C[1] in Integers], k} for "
-          "c Tan[g]^k-type terms; functions with branch points stay unevaluated (as in Wolfram); others raise")
+          "c Tan[g]^k-type terms; functions with branch points stay unevaluated (as in Wolfram); others raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fpoles(*args: Expr) -> ListOf[Expr]:
     fname = "FunctionPoles"
     f, cond, vs, dom, _ = _prop_args(args, fname, "Complexes")
@@ -3348,7 +3400,8 @@ def _pw_int_parts(h, g, D, xvar, fname):
           "Ramp, Clip, KroneckerDelta (and Abs, Sign over Reals) become one Piecewise (SymPy piecewise_fold plus "
           "condition simplification; cases are equivalent to Wolfram's, conditions may be written differently); "
           "Floor/Ceiling/Round of a univariate expression are expanded when the condition bounds its range (at "
-          "most $MaxPiecewiseCases cases); inequalities with piecewise sides are expanded to conditions")
+          "most $MaxPiecewiseCases cases); inequalities with piecewise sides are expanded to conditions"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _pwexpand(e: Expr, *rest: Expr) -> Expr:
     fname = "PiecewiseExpand"
     rest, opts = _opts(rest, ("Assumptions", "Method"), fname)
@@ -3467,7 +3520,8 @@ def _in_dom(v, dom):
           "search (equations solved for the last variable); Booleans uses SatisfiabilityInstances. Without "
           "domain, variables are real when the condition has inequalities (as Wolfram). {} is returned only when "
           "the system is proved to have no solution (0-dimensional Solve or an empty solveset); otherwise a search "
-          "that finds nothing raises")
+          "that finds nothing raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _findinstance(expr: Expr, vars_: Expr, *rest: Expr) -> Expr:
     fname = "FindInstance"
     rest, opts = _opts(rest, ("WorkingPrecision", "RandomSeeding"), fname)
@@ -4042,7 +4096,8 @@ def _cad_args(args, fname):
           "polynomial (in)equalities with rational coefficients in one variable, or two variables with degree <= 2 "
           "in the second (exact CAD: leading coefficients, discriminants, resultants, exact cell samples); "
           "\"Function\" gives a CylindricalDecompositionFunction; quantifiers, 3+ variables, parameters and other "
-          "forms (\"Boundary\", ...) raise")
+          "forms (\"Boundary\", ...) raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cylindrical(*args: Expr) -> Expr:
     fname = "CylindricalDecomposition"
     e, X, rest = _cad_args(args, fname)
@@ -4065,7 +4120,8 @@ def _cylindrical(*args: Expr) -> Expr:
 @fn("GenericCylindricalDecomposition", area=AREA, status="added",
     notes="GenericCylindricalDecomposition[ineqs, {x, y}]: {full-dimensional part, boundary condition}: the "
           "open cells of the CAD (same scope as CylindricalDecomposition) and an Or of polynomial == 0 conditions "
-          "containing every lower-dimensional solution cell (False if there is none)")
+          "containing every lower-dimensional solution cell (False if there is none)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gcad(*args: Expr) -> ListOf[Expr]:
     fname = "GenericCylindricalDecomposition"
     e, X, rest = _cad_args(args, fname)
@@ -4140,7 +4196,8 @@ _KL.COMPOUND_HEAD_HOOKS["CylindricalDecompositionFunction"] = _cdf_hook
 @fn("CylindricalDecompositionFunction", area=AREA, status="added",
     notes="CylindricalDecompositionFunction[cond, {x, y}] (returned by CylindricalDecomposition[..., "
           "\"Function\"]): applied to numbers it tests membership (cdf[x0, y0] -> True/False); Normal gives the "
-          "cylindrical condition")
+          "cylindrical condition"
+          ". Check: reference (differential cases in tests/library).")
 def _cdf(*args: Expr) -> Expr:
     raise Unevaluated()
 
@@ -4148,7 +4205,8 @@ def _cdf(*args: Expr) -> Expr:
 @fn("SemialgebraicComponentInstances", area=AREA, status="added",
     notes="SemialgebraicComponentInstances[ineqs, {x, y}] / [ineqs, x]: sample points {{x -> a, y -> b}, ...}, "
           "at least one in each connected component of the solution set (one per true CAD cell, so possibly more "
-          "than one per component); same scope as CylindricalDecomposition")
+          "than one per component); same scope as CylindricalDecomposition"
+          ". Check: reference (differential cases in tests/library).")
 def _sci(*args: Expr) -> ListOf[Expr]:
     fname = "SemialgebraicComponentInstances"
     e, X, rest = _cad_args(args, fname)
@@ -4674,7 +4732,8 @@ def _nc_expand_impl(e, ctx, alg, fname):
     notes="NonCommutativeExpand[expr] / [expr, alg]: expands ** (or the algebra's multiplication/addition) "
           "products over sums, moving scalars (numbers, ScalarVariables) to coefficients and CommutativeVariables "
           "to the front of each word, and reduces modulo the algebra relations (Groebner basis). Repeated factors "
-          "are written out (a ** a) where Wolfram displays a power")
+          "are written out (a ** a) where Wolfram displays a power"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ncexpand(*args: Expr) -> Expr:
     fname = "NonCommutativeExpand"
     args, alg, ctx, _ = _nc_setup(args, fname)
@@ -4687,7 +4746,8 @@ def _ncexpand(*args: Expr) -> Expr:
 
 @fn("NonCommutativeVariables", area=AREA, status="added",
     notes="NonCommutativeVariables[expr] / [expr, alg]: sorted list of the noncommutative generators in expr "
-          "(scalars, ScalarVariables, CommutativeVariables and the unity excluded); lists are searched elementwise")
+          "(scalars, ScalarVariables, CommutativeVariables and the unity excluded); lists are searched elementwise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ncvars(*args: Expr) -> Expr:
     fname = "NonCommutativeVariables"
     args, alg, ctx, _ = _nc_setup(args, fname)
@@ -4705,7 +4765,8 @@ def _ncvars(*args: Expr) -> Expr:
 
 @fn("NonCommutativePolynomialQ", area=AREA, status="added",
     notes="NonCommutativePolynomialQ[expr, vars] / [expr, vars, alg]: True if expr is a noncommutative polynomial "
-          "in vars with scalar (or commutative-variable) coefficients")
+          "in vars with scalar (or commutative-variable) coefficients"
+          ". Check: reference (differential cases in tests/library).")
 def _ncpq(*args: Expr) -> Boolean:
     fname = "NonCommutativePolynomialQ"
     args, alg, ctx, blocks = _nc_setup(args, fname)
@@ -4808,7 +4869,8 @@ def _ncpr(*args: Expr) -> ListOf[Expr]:
 
 @fn("NonCommutativePolynomialReduction", area=AREA, status="added",
     notes="NonCommutativePolynomialReduction[p, {q1, ...}, vars] / [..., alg]: the remainder of "
-          "NonCommutativePolynomialReduce")
+          "NonCommutativePolynomialReduce"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ncprn(*args: Expr) -> Expr:
     ctx, alg, qs, r, hist = _nc_reduce_main(args, "NonCommutativePolynomialReduction")
     return ctx.out(r)
@@ -4818,7 +4880,8 @@ def _ncprn(*args: Expr) -> Expr:
     notes="NonCommutativeCollect[poly, x] / [poly, {x, Left}] / [poly, {x, Right}] / [..., alg]: groups the "
           "expanded terms by the pattern of x-factors (default: x-runs with one varying gap between them; Left: "
           "leading x power; Right: trailing x power) and factors the varying part, e.g. x**(3y + 4z)**x**x; "
-          "terms whose patterns differ in more than one gap are left separate")
+          "terms whose patterns differ in more than one gap are left separate"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nccollect(*args: Expr) -> Expr:
     fname = "NonCommutativeCollect"
     args, alg, ctx, blocks = _nc_setup(args, fname)
@@ -5031,7 +5094,8 @@ def _ldl_psd(G):
           "monomials (ordered by degree, later variables first, so x^2 + x y + y^2 -> {x/2 + y, Sqrt[3] x/2} as "
           "Wolfram); free Gram entries (at most 3) are searched over simple rationals. Wolfram picks a different "
           "decomposition when the Gram matrix is not unique. Raises when no decomposition is found (p may not be a "
-          "sum of squares)")
+          "sum of squares)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _psos(p: Expr, vars_: Expr) -> Expr:
     fname = "PolynomialSumOfSquaresList"
     vs = _vars(vars_, fname)
@@ -5233,7 +5297,8 @@ def _subst_struct(e, vl, vals):
           "congruence closure over the ground axioms plus the instances of the quantified axioms on the subterms "
           "of the problem (iterated twice); a found proof is sound and is returned as ProofObject[<|\"Logic\" -> "
           "\"EquationalLogic\", \"Theorem\" -> thm, \"Axioms\" -> axioms, ...|>]. Predicate-logic statements "
-          "(Implies, predicates) raise; a failed search raises (it does not prove the statement false)")
+          "(Implies, predicates) raise; a failed search raises (it does not prove the statement false)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fep(thm: Expr, axioms: Expr, *rest: Expr) -> Expr:
     fname = "FindEquationalProof"
     if rest:
@@ -5293,7 +5358,8 @@ _KL.COMPOUND_HEAD_HOOKS["ProofObject"] = _proof_hook
 @fn("ProofObject", area=AREA, status="added",
     notes="ProofObject[<|...|>] returned by FindEquationalProof; proof[\"Theorem\"], [\"Theorems\"], "
           "[\"Axioms\"], [\"Logic\"], [\"Method\"], [\"Properties\"] (ProofGraph/ProofDataset/ProofNotebook are "
-          "not supported and raise)")
+          "not supported and raise)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _proofobj(*args: Expr) -> Expr:
     raise Unevaluated()
 

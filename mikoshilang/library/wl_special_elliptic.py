@@ -256,13 +256,15 @@ def _anger_exact(nu, z):
 
 mpfun("AngerJ", 2, mpmath.angerj,
       lambda nu, z: (sp.Integer(1) if nu == 0 else sp.sin(sp.pi * nu) / (sp.pi * nu)) if z == 0 else None,
-      real=_allreal, notes="AngerJ[nu, z] = 1/Pi Integrate[Cos[nu t - z Sin[t]], {t, 0, Pi}]; mpmath angerj")
+      real=_allreal, notes="AngerJ[nu, z] = 1/Pi Integrate[Cos[nu t - z Sin[t]], {t, 0, Pi}]; mpmath angerj"
+                           ". Check: reference (differential cases in tests/library).")
 mpfun("AngerJ", 3, lambda nu, mu, z: _anger3(nu, mu, z),
       notes="associated Anger function AngerJ[nu, mu, z] = 1/Pi Integrate[(2 Sin[t])^mu Cos[nu t - z Sin[t]], "
             "{t, 0, Pi}] by quadrature (Re mu > -1)", real=_allreal)
 mpfun("WeberE", 2, mpmath.webere,
       lambda nu, z: (sp.Integer(0) if nu == 0 else (1 - sp.cos(sp.pi * nu)) / (sp.pi * nu)) if z == 0 else None,
-      real=_allreal, notes="WeberE[nu, z] = 1/Pi Integrate[Sin[nu t - z Sin[t]], {t, 0, Pi}]; mpmath webere")
+      real=_allreal, notes="WeberE[nu, z] = 1/Pi Integrate[Sin[nu t - z Sin[t]], {t, 0, Pi}]; mpmath webere"
+                           ". Check: reference (differential cases in tests/library).")
 mpfun("WeberE", 3, lambda nu, mu, z: _anger3(nu, mu, z, weber=True),
       notes="associated Weber function WeberE[nu, mu, z] = 1/Pi Integrate[(2 Sin[t])^mu Sin[nu t - z Sin[t]], "
             "{t, 0, Pi}] by quadrature (Re mu > -1)", real=_allreal)
@@ -357,9 +359,11 @@ def _whitm_exact(k, m, z):
 
 
 mpfun("WhittakerM", 3, mpmath.whitm, _whitm_exact, real=lambda k, m, z: _allreal(k, m, z) and z > 0,
-      notes="WhittakerM[k, m, z] = E^(-z/2) z^(m+1/2) Hypergeometric1F1[1/2 + m - k, 1 + 2 m, z]; mpmath whitm")
+      notes="WhittakerM[k, m, z] = E^(-z/2) z^(m+1/2) Hypergeometric1F1[1/2 + m - k, 1 + 2 m, z]; mpmath whitm"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("WhittakerW", 3, mpmath.whitw, real=lambda k, m, z: _allreal(k, m, z) and z > 0,
-      notes="WhittakerW[k, m, z] (decays like E^(-z/2) z^k); mpmath whitw")
+      notes="WhittakerW[k, m, z] (decays like E^(-z/2) z^k); mpmath whitw"
+            ". Check: reference (differential cases in tests/library).")
 
 
 def _pcfd_exact(nu, z):
@@ -373,7 +377,8 @@ def _pcfd_exact(nu, z):
 
 mpfun("ParabolicCylinderD", 2, mpmath.pcfd, _pcfd_exact, symbolic=lambda nu, z: _pcfd_exact(nu, z) if nu == 0 else None,
       real=_allreal, notes="parabolic cylinder function D_nu(z); mpmath pcfd; D_0(z) = E^(-z^2/4), "
-                           "D_nu(0) = 2^(nu/2) Sqrt[Pi]/Gamma[(1-nu)/2]")
+                           "D_nu(0) = 2^(nu/2) Sqrt[Pi]/Gamma[(1-nu)/2]"
+                           ". Check: reference (differential cases in tests/library).")
 
 
 def _coulomb_real(l, eta, r):
@@ -422,7 +427,8 @@ def _agm_exact2(a, b):
 mpfun("ArithmeticGeometricMean", 2, _agm, _agm_exact2,
       real=lambda a, b: _allreal(a, b) and ((a >= 0 and b >= 0) or (a <= 0 and b <= 0)),
       notes="ArithmeticGeometricMean[a, b] = Pi (a + b)/(4 EllipticK[((a - b)/(a + b))^2]) (Wolfram's branch; the "
-            "arithmetic-geometric iteration for positive a, b)")
+            "arithmetic-geometric iteration for positive a, b)"
+            ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _carlson(name, nargs, f, exact=None, notes="", pv=False):
@@ -442,16 +448,19 @@ def _rf_exact(x, y, z):
 _carlson("CarlsonRC", 2, mpmath.elliprc,
          lambda x, y: (1 / sp.sqrt(x) if x != 0 else None) if x == y else None,
          notes="Carlson R_C(x, y) = 1/2 Integrate[(t + x)^(-1/2) (t + y)^(-1), {t, 0, Infinity}] (Cauchy "
-               "principal value for y < 0); mpmath elliprc", pv=True)
+               "principal value for y < 0); mpmath elliprc"
+               ". Check: reference (differential cases in tests/library).", pv=True)
 _carlson("CarlsonRF", 3, mpmath.elliprf, _rf_exact,
          notes="Carlson R_F(x, y, z) = 1/2 Integrate[((t+x)(t+y)(t+z))^(-1/2), {t, 0, Infinity}]; mpmath elliprf")
 _carlson("CarlsonRD", 3, mpmath.elliprd,
          lambda x, y, z: (x ** sp.Rational(-3, 2) if x != 0 else None) if x == y == z else None,
-         notes="Carlson R_D(x, y, z) = R_J(x, y, z, z); mpmath elliprd")
+         notes="Carlson R_D(x, y, z) = R_J(x, y, z, z); mpmath elliprd"
+               ". Check: reference (differential cases in tests/library).")
 _carlson("CarlsonRJ", 4, mpmath.elliprj,
          lambda x, y, z, p: (x ** sp.Rational(-3, 2) if x != 0 else None) if x == y == z == p else None,
          notes="Carlson R_J(x, y, z, p) = 3/2 Integrate[(t+p)^-1 ((t+x)(t+y)(t+z))^(-1/2), {t, 0, Infinity}] "
-               "(principal value for p < 0); mpmath elliprj", pv=True)
+               "(principal value for p < 0); mpmath elliprj"
+               ". Check: reference (differential cases in tests/library).", pv=True)
 _carlson("CarlsonRG", 3, mpmath.elliprg,
          lambda x, y, z: (sp.sqrt(x) if x == y == z else None),
          notes="Carlson R_G(x, y, z); mpmath elliprg")
@@ -524,13 +533,15 @@ def _theta_real(a, u, q):
 
 mpfun("EllipticTheta", 3, lambda a, u, q: _theta(a, u, q), _theta_exact, real=_theta_real,
       notes="Jacobi theta function theta_a(u, q) (a = 1..4) in the nome convention of the Wolfram reference "
-            "(theta_1 = 2 q^(1/4) Sum[(-1)^n q^(n(n+1)) Sin[(2n+1) u]] ...); mpmath jtheta; Abs[q] < 1")
+            "(theta_1 = 2 q^(1/4) Sum[(-1)^n q^(n(n+1)) Sin[(2n+1) u]] ...); mpmath jtheta; Abs[q] < 1"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("EllipticTheta", 2, lambda a, q: _theta(a, 0, q), lambda a, q: _theta_exact(a, sp.Integer(0), q),
       real=lambda a, q: _theta_real(a, sp.Integer(0), q),
       notes="theta constant EllipticTheta[a, q] = EllipticTheta[a, 0, q]")
 mpfun("EllipticThetaPrime", 3, lambda a, u, q: _theta(a, u, q, 1, "EllipticThetaPrime"),
       lambda a, u, q: _theta_exact(a, u, q, 1), real=_theta_real,
-      notes="derivative of EllipticTheta[a, u, q] with respect to u; mpmath jtheta(..., 1)")
+      notes="derivative of EllipticTheta[a, u, q] with respect to u; mpmath jtheta(..., 1)"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("EllipticThetaPrime", 2, lambda a, q: _theta(a, 0, q, 1, "EllipticThetaPrime"),
       lambda a, q: _theta_exact(a, sp.Integer(0), q, 1), real=lambda a, q: _theta_real(a, sp.Integer(0), q),
       notes="EllipticThetaPrime[a, q] = EllipticThetaPrime[a, 0, q]")
@@ -558,10 +569,12 @@ def _inv_nome(q):
 
 
 mpfun("EllipticNomeQ", 1, _nome, _nome_exact, real=lambda m: _allreal(m) and m <= 1,
-      notes="nome q(m) = Exp[-Pi EllipticK[1 - m]/EllipticK[m]]; mpmath qfrom")
+      notes="nome q(m) = Exp[-Pi EllipticK[1 - m]/EllipticK[m]]; mpmath qfrom"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("InverseEllipticNomeQ", 1, _inv_nome,
       lambda q: sp.Integer(0) if q == 0 else (sp.Rational(1, 2) if sp.simplify(q - sp.exp(-sp.pi)) == 0 else None),
-      real=lambda q: _allreal(q), notes="parameter m with EllipticNomeQ[m] == q (Abs[q] < 1); mpmath mfrom")
+      real=lambda q: _allreal(q), notes="parameter m with EllipticNomeQ[m] == q (Abs[q] < 1); mpmath mfrom"
+                                        ". Check: reference (differential cases in tests/library).")
 
 
 def _upper(tau, name):
@@ -603,14 +616,17 @@ mpfun("DedekindEta", 1, _eta,
       lambda t: sp.gamma(sp.Rational(1, 4)) / (2 * sp.pi ** sp.Rational(3, 4)) if t == sp.I else None,
       real=lambda t: _allreal(sp.re(t)) and sp.re(t) == 0,
       notes="Dedekind eta(tau) = q^(1/24) Product[1 - q^n] with q = E^(2 Pi I tau), Im tau > 0; mpmath eta; "
-            "eta(I) = Gamma[1/4]/(2 Pi^(3/4))")
+            "eta(I) = Gamma[1/4]/(2 Pi^(3/4))"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("KleinInvariantJ", 1, _klein,
       lambda t: sp.Integer(1) if t == sp.I else (sp.Integer(0) if (_eq(t, _RHO) or _eq(t, _RHO - 1)) else None),
       real=lambda t: sp.re(t) == 0 or abs(sp.re(t)) == sp.Rational(1, 2),
-      notes="Klein invariant J(tau) = g2^3/(g2^3 - 27 g3^2) (J(I) = 1, J(E^(2 Pi I/3)) = 0); mpmath kleinj")
+      notes="Klein invariant J(tau) = g2^3/(g2^3 - 27 g3^2) (J(I) = 1, J(E^(2 Pi I/3)) = 0); mpmath kleinj"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("ModularLambda", 1, _lambda, lambda t: sp.Rational(1, 2) if t == sp.I else None,
       real=lambda t: sp.re(t) == 0,
-      notes="modular lambda(tau) = EllipticTheta[2, 0, q]^4/EllipticTheta[3, 0, q]^4, q = E^(I Pi tau)")
+      notes="modular lambda(tau) = EllipticTheta[2, 0, q]^4/EllipticTheta[3, 0, q]^4, q = E^(I Pi tau)"
+            ". Check: reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── Neville theta functions ─────────────────────────────
@@ -981,7 +997,8 @@ def _hp_table(i):
 
 _wfun("WeierstrassHalfPeriods", lambda g2, g3: list(_half_periods(g2, g3)), lambda k: _hp_table(0)(k),
       notes="half-periods {w1, w3} for invariants {g2, g3}: the lattice basis with w3/w1 reduced to the "
-            "fundamental domain (as in Wolfram); periods from EllipticK of the roots, checked against the invariants")
+            "fundamental domain (as in Wolfram); periods from EllipticK of the roots, checked against the invariants"
+            ". Check: reference (differential cases in tests/library).")
 _wfun("WeierstrassHalfPeriodW1", lambda g2, g3: _half_periods(g2, g3)[0], _hp_table(1),
       notes="half-period w1 (first of WeierstrassHalfPeriods)")
 _wfun("WeierstrassHalfPeriodW3", lambda g2, g3: _half_periods(g2, g3)[1], _hp_table(3),
@@ -997,7 +1014,8 @@ def _e_i(i):
 
 
 _wfun("WeierstrassE1", _e_i(1), lambda k: _EXACT_E1.get(k), real_when_disc_pos=True,
-      notes="e1 = WeierstrassP[w1, {g2, g3}] (theta-constant formula DLMF 23.6.2 on the Wolfram half-periods)")
+      notes="e1 = WeierstrassP[w1, {g2, g3}] (theta-constant formula DLMF 23.6.2 on the Wolfram half-periods)"
+            ". Check: reference (differential cases in tests/library).")
 _wfun("WeierstrassE2", _e_i(2), real_when_disc_pos=True, notes="e2 = WeierstrassP[w2, {g2, g3}], w2 = -w1 - w3")
 _wfun("WeierstrassE3", _e_i(3), real_when_disc_pos=True, notes="e3 = WeierstrassP[w3, {g2, g3}]")
 
@@ -1115,10 +1133,12 @@ mpfun("EllipticExp", 2, lambda u, ab: _ellexp(u, ab), _ellexp_exact,
       listable=False, real=_allreal,
       notes="EllipticExp[u, {a, b}] = {x, y} on y^2 = x^3 + a x^2 + b x with u == EllipticLog[{x, y}, {a, b}]: "
             "x = WeierstrassP[u, {g2, g3}] - a/3, y = WeierstrassPPrime[u, {g2, g3}]/2, g2 = 4(a^2/3 - b), "
-            "g3 = 4ab/3 - 8a^3/27")
+            "g3 = 4ab/3 - 8a^3/27"
+            ". Check: reference (differential cases in tests/library).")
 mpfun("EllipticExpPrime", 2, lambda u, ab: _ellexp(u, ab, True), lambda u, ab: _ellexp_exact(u, ab, True),
       symbolic=lambda u, ab: _ellexp_exact(u, ab, True) if isinstance(ab, list) and ab == [0, 0] else None,
-      listable=False, real=_allreal, notes="derivative of EllipticExp[u, {a, b}] with respect to u: {2 y, 3 x^2 + 2 a x + b}")
+      listable=False, real=_allreal, notes="derivative of EllipticExp[u, {a, b}] with respect to u: {2 y, 3 x^2 + 2 a x + b}"
+                                           ". Check: reference (differential cases in tests/library).")
 
 
 def _rf_branch(p, q, roots, name):
@@ -1152,7 +1172,8 @@ def _elllog(xy, ab):
 mpfun("EllipticLog", 2, _elllog, listable=False,
       exact=lambda xy, ab: None,
       notes="EllipticLog[{x, y}, {a, b}] = Integrate[1/(2 Y(t)), {t, Infinity, x}] with Y^2 = t^3 + a t^2 + b t and "
-            "Y(x) = y, evaluated as -sign R_F(x - e1, x - e2, x - e3) (Carlson; e_i the roots of the cubic)")
+            "Y(x) = y, evaluated as -sign R_F(x - e1, x - e2, x - e3) (Carlson; e_i the roots of the cubic)"
+            ". Check: reference (differential cases in tests/library).")
 
 
 def _inv_wp(pq, g, single):
@@ -1185,7 +1206,8 @@ mpfun("InverseWeierstrassP", 2, lambda pq, g: _inv_wp(pq, g, not isinstance(pq, 
       exact=lambda pq, g: Symbol("ComplexInfinity") if (not isinstance(pq, list) and pq == sp.zoo) else None,
       notes="InverseWeierstrassP[p, {g2, g3}] / [{p, q}, {g2, g3}]: a u with WeierstrassP[u] == p (and "
             "WeierstrassPPrime[u] == q; q defaults to Sqrt[4 p^3 - g2 p - g3]) from Carlson R_F, reduced to the "
-            "period parallelogram centred at 0; it can differ from Wolfram's representative by a period")
+            "period parallelogram centred at 0; it can differ from Wolfram's representative by a period"
+            ". Check: reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── modified Lommel functions ─────────────────────────────
@@ -1233,7 +1255,8 @@ mpfun("LommelT1", 3, _lommel_t, _lommel_t_exact, real=lambda m, n, z: _allreal(m
 mpfun("LommelT2", 3, _lommel_T2, real=lambda m, n, z: _allreal(m, n, z) and z > 0,
       notes="modified Lommel function of the second kind: -t_{mu,nu}(z) + 2^(mu-1) Gamma[(mu+nu+1)/2] "
             "Gamma[(mu-nu+1)/2] (BesselI[nu, z] + 2/Pi Cos[(mu-nu) Pi/2] Sin[(mu+nu) Pi/2] BesselK[nu, z]) "
-            "(the solution with algebraic growth; reduces to the documented (BesselI - StruveL) forms)")
+            "(the solution with algebraic growth; reduces to the documented (BesselI - StruveL) forms)"
+            ". Check: reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── linear ODE solver (Taylor series continuation) ─────────────────────────────
@@ -1819,7 +1842,8 @@ mpfun("MathieuCharacteristicExponent", 2, lambda a, q: _verified(lambda: _mathie
       lambda a, q: sp.sqrt(a) if q == 0 else None, symbolic=lambda a, q: sp.sqrt(a) if q == 0 else None,
       notes="characteristic exponent r with Cos[Pi r] = y_e(Pi) (even solution, y_e(0) = 1), r in [n, n+1] in the "
             "n-th stability band and r = n + I mu in the n-th instability gap (Wolfram's branch); real a, q "
-            "(complex raise)")
+            "(complex raise)"
+            ". Check: reference (differential cases in tests/library).")
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -2126,7 +2150,8 @@ mpfun("SpheroidalEigenvalue", 3, _sph_eig,
       lambda n, m, g: n * (n + 1) if (not isinstance(g, list) and g == 0 and not isinstance(n, list) and n.is_integer
                                       and not isinstance(m, list) and m.is_integer and n >= abs(m)) else None,
       notes="spheroidal eigenvalue lambda_n^m(gamma) of (1-z^2) y'' - 2 z y' + (lambda + gamma^2 (1-z^2) - "
-            "m^2/(1-z^2)) y = 0 (Legendre-basis matrix); integer n >= |m|, real or imaginary gamma (others raise)")
+            "m^2/(1-z^2)) y = 0 (Legendre-basis matrix); integer n >= |m|, real or imaginary gamma (others raise)"
+            ". Check: reference (differential cases in tests/library).")
 
 
 def _sph_ps(deriv):
@@ -2268,7 +2293,8 @@ mpfun("SpheroidalJoiningFactor", 3, _sph_joining,
       real=lambda n, m, g: _allreal(n, m, g),
       notes="joining factor SpheroidalS1[n, m, c, z] / SpheroidalPS[n, m, c, z] (documented for m = 0), for m != 0 "
             "with the Ferrers phase (-I)^|m| of SpheroidalPS on z > 1 removed (real for real c); integer n >= |m|, "
-            "real or imaginary c")
+            "real or imaginary c"
+            ". Check: reference (differential cases in tests/library).")
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -2489,7 +2515,8 @@ def _siegel_dispatch(*args):
 mpfun("SiegelTheta", (2, 3), _siegel_dispatch, listable=False,
       notes="Siegel (Riemann) theta function Sum_n Exp[Pi I n.Omega.n + 2 Pi I n.s] over Z^p, with characteristics "
             "{nu1, nu2}; Omega symmetric with positive definite imaginary part (otherwise raises); numerical "
-            "lattice sum (exact input stays unevaluated, N gives digits)")
+            "lattice sum (exact input stays unevaluated, N gives digits)"
+            ". Check: reference (differential cases in tests/library).")
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -2730,6 +2757,7 @@ def _ci_conditions(conds, cand, X, Cs, to_sympy):
     notes="complete integral of a first-order PDE (n independent constants C[k]): Clairaut equations and equations "
           "without u that separate additively (F(Du) = 0, Hamilton-Jacobi type, f(x, p) = g(y, q)); every result is "
           "substituted back and its constants checked independent; conditions u[...] == v fix the constants; other "
-          "PDEs stay unevaluated. Constants may be numbered differently from Wolfram")
+          "PDEs stay unevaluated. Constants may be numbered differently from Wolfram"
+          ". Check: reference (differential cases in tests/library).")
 def _complete_integral_3(pde: Expr, u: Expr, xs: Expr) -> Expr:
     return _complete_integral(pde, u, xs)

@@ -53,7 +53,8 @@ def _real_num(v):
 @fn("DiracDelta", area=AREA, status="added",
     notes="Wolfram DiracDelta[x1, ...]: 0 when any argument is a nonzero real number, unevaluated otherwise "
           "(DiracDelta[0] stays); complex numeric arguments raise; integrates and transforms through SymPy "
-          "(Integrate[f[x] DiracDelta[x - a], {x, -Infinity, Infinity}] -> f[a]); D[HeavisideTheta[x], x] -> DiracDelta[x]")
+          "(Integrate[f[x] DiracDelta[x - a], {x, -Infinity, Infinity}] -> f[a]); D[HeavisideTheta[x], x] -> DiracDelta[x]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _diracdelta(*args: Expr) -> Integer:
     vals = [sym(a, "DiracDelta") for a in args]
     for v in vals:
@@ -66,7 +67,8 @@ def _diracdelta(*args: Expr) -> Integer:
 
 @fn("HeavisideTheta", area=AREA, status="added",
     notes="Wolfram HeavisideTheta[x1, ...]: 1 when every argument is positive, 0 when any is negative, "
-          "unevaluated at 0 (unlike UnitStep[0] = 1 and SymPy's Heaviside(0) = 1/2); D gives DiracDelta")
+          "unevaluated at 0 (unlike UnitStep[0] = 1 and SymPy's Heaviside(0) = 1/2); D gives DiracDelta"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _heaviside(*args: Expr) -> Integer:
     vals = [sym(a, "HeavisideTheta") for a in args]
     for v in vals:
@@ -84,7 +86,8 @@ def _heaviside(*args: Expr) -> Integer:
           "conditions combine with And (ConditionalExpression[ConditionalExpression[x, a], b] = "
           "ConditionalExpression[x, a && b]), otherwise unevaluated (returned by Integrate, Sum, Solve and the "
           "Fourier coefficient functions for parameter conditions; arithmetic on ConditionalExpression objects is "
-          "not propagated).  Single implementation shared by batches 4 and 6.")
+          "not propagated).  Single implementation shared by batches 4 and 6."
+          " Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _condexpr(e: Expr, c: Expr) -> Expr:
     if is_true(c):
         return e
@@ -352,7 +355,8 @@ KL.apply_compound_head = apply_compound_head
     notes="Derivative[n1, n2, ...][f] for pure functions and built-in mathematical functions gives a pure "
           "function (Derivative[1][Sin] -> Cos[#1] &, Derivative[2][#^3 &] -> 6 #1 &); Derivative[n...][f][x...] "
           "evaluates for known f (Sin'[x] -> Cos[x], previously unevaluated) and stays symbolic for undefined f "
-          "(f'[x], Derivative[1, 0][f][x, y]); Derivative[0][f] -> f")
+          "(f'[x], Derivative[1, 0][f][x, y]); Derivative[0][f] -> f"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _derivative_head(*orders: Expr) -> Expr:
     for o in orders:
         if not K.is_int(o) or int(o) < 0:
@@ -794,13 +798,15 @@ def _extreme_limit(a, fname, which):
 @fn("MaxLimit", area=AREA, status="added",
     notes="upper limit (limsup) MaxLimit[f, x -> a] with Direction and Assumptions: the larger one-sided limit, "
           "or A + |B| for f = A + B Sin[g] / A + B Cos[g] with g -> +-Infinity (MaxLimit[Sin[1/x], x -> 0] -> 1); "
-          "other oscillating functions raise")
+          "other oscillating functions raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _maxlimit(*a: Expr) -> Expr:
     return _extreme_limit(list(a), "MaxLimit", "upper")
 
 
 @fn("MinLimit", area=AREA, status="added",
-    notes="lower limit (liminf) MinLimit[f, x -> a]; see MaxLimit (MinLimit[Sign[x], x -> 0] -> -1)")
+    notes="lower limit (liminf) MinLimit[f, x -> a]; see MaxLimit (MinLimit[Sign[x], x -> 0] -> -1)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _minlimit(*a: Expr) -> Expr:
     return _extreme_limit(list(a), "MinLimit", "lower")
 
@@ -1147,7 +1153,8 @@ def _fps_coefficient(g, t, nsym, fname):
     notes="SeriesCoefficient[f, {x, x0, n}] (negative n for Laurent series, x0 may be Infinity: coefficient of "
           "(1/x)^n), several variables {x, x0, nx}, {y, y0, ny}, and SeriesCoefficient[series, n]; a symbolic n "
           "gives Piecewise[{{general term, n >= 0}}, 0] when SymPy finds a formal power series (checked against "
-          "10 Taylor coefficients); a coefficient beyond a given series' order is Indeterminate")
+          "10 Taylor coefficients); a coefficient beyond a given series' order is Indeterminate"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _seriescoefficient(f: Expr, *specs: Expr) -> Expr:
     if not specs:
         raise ValueError("SeriesCoefficient needs a specification")
@@ -1348,7 +1355,8 @@ def _product(f: Expr, *args: Expr) -> Expr:
 @fn("SumConvergence", area=AREA, status="added",
     notes="SumConvergence[f, n]: True/False for the convergence of Sum[f, {n, k, Infinity}] (SymPy's ratio, root, "
           "integral, comparison, alternating-series tests); the p-series family 1/n^p and n^p r^n with a "
-          "parameter gives the Wolfram condition (Re[p] > 1, Abs[r] < 1); undecided cases stay unevaluated")
+          "parameter gives the Wolfram condition (Re[p] > 1, Abs[r] < 1); undecided cases stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sumconvergence(f: Expr, n: Var, *opts: Option) -> Expr:
     v = sym(f, "SumConvergence")
     nv = variable(n, "SumConvergence")
@@ -1476,7 +1484,8 @@ def _rsolve(eq: Expr, fexpr: Expr, n: Expr) -> Expr:
 
 @fn("RSolveValue", area=AREA, status="added",
     notes="RSolveValue[eqns, a[n], n] gives the solution value, RSolveValue[eqns, a, n] a pure function, "
-          "RSolveValue[eqns, expr, n] the value of expr (e.g. a[10]); checked like RSolve")
+          "RSolveValue[eqns, expr, n] the value of expr (e.g. a[10]); checked like RSolve"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rsolvevalue(eq: Expr, target: Expr, n: Var) -> Expr:
     nv = variable(n, "RSolveValue")
     if isinstance(target, Symbol):
@@ -1575,7 +1584,8 @@ def _b_dsolve(a, ev, expr):
 
 @fn("DSolveValue", area=AREA, status="added",
     notes="DSolveValue[eqns, y[x], x] gives the solution value, DSolveValue[eqns, y, x] a pure function, "
-          "DSolveValue[eqns, expr, x] the value of expr; several solutions give a list; checked like DSolve")
+          "DSolveValue[eqns, expr, x] the value of expr; several solutions give a list; checked like DSolve"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dsolvevalue(eqs: Expr, target: Expr, x: Expr) -> Expr:
     from ..evaluate import evaluate
     ev = lambda e: evaluate(e, 1)   # noqa: E731
@@ -1608,7 +1618,8 @@ def _applied(e):
 @fn("ImplicitD", area=AREA, status="added",
     notes="ImplicitD[f == g, y, x] = dy/dx for y defined implicitly (ImplicitD[x^2 + y^2 == 1, y, x] -> -x/y), "
           "ImplicitD[eqn, y, {x, n}] higher derivatives (expressed in x and y), ImplicitD[{eqns}, {y1, y2}, x] "
-          "for systems")
+          "for systems"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _implicitd(eqn: Expr, ys: Expr, xspec: Expr) -> Expr:
     if is_list(xspec):
         if len(xspec.args) != 2:
@@ -1913,7 +1924,8 @@ def _symbolic_coeff(make_integrand, tv, lo, hi, scale, n, fname, n0_scale=None, 
     notes="FourierCoefficient[f, t, n] = 1/(2π) ∫_{-π}^{π} f e^(-int) dt (Wolfram default FourierParameters "
           "{1, 1}; other parameters raise); integer or symbolic n (symbolic n is integer: a separate n == 0 "
           "value appears as Piecewise[{{c0, n == 0}}, g[n]]); the general term is checked against direct "
-          "integrals at n = ±1, ±2, 3, 5")
+          "integrals at n = ±1, ±2, 3, 5"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fcoeff(e: Expr, t: Var, n: Expr, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierCoefficient")
     tv = variable(t, "FourierCoefficient")
@@ -1947,14 +1959,16 @@ def _trig_coeff(kind, e, t, n, rest, fname):
 
 @fn("FourierCosCoefficient", area=AREA, status="added",
     notes="FourierCosCoefficient[f, t, n] = 2/π ∫_0^π f cos(nt) dt, with 1/π ∫_0^π f dt for n = 0 (Wolfram); "
-          "symbolic n checked against direct integrals")
+          "symbolic n checked against direct integrals"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fcc(e: Expr, t: Expr, n: Expr, *rest: Expr) -> Expr:
     return _trig_coeff("cos", e, t, n, rest, "FourierCosCoefficient")
 
 
 @fn("FourierSinCoefficient", area=AREA, status="added",
     notes="FourierSinCoefficient[f, t, n] = 2/π ∫_0^π f sin(nt) dt (Wolfram); symbolic n checked against direct "
-          "integrals")
+          "integrals"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fsc(e: Expr, t: Expr, n: Expr, *rest: Expr) -> Expr:
     return _trig_coeff("sin", e, t, n, rest, "FourierSinCoefficient")
 
@@ -1965,7 +1979,8 @@ def _fs_order(k, fname):
 
 @fn("FourierSeries", area=AREA, status="added",
     notes="FourierSeries[f, t, k] = Σ_{n=-k}^{k} FourierCoefficient[f, t, n] E^(I n t) (Wolfram default "
-          "parameters; others raise)")
+          "parameters; others raise)"
+          ". Check: reference (differential cases in tests/library).")
 def _fseries(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierSeries")
     kk = _fs_order(k, "FourierSeries")
@@ -1980,7 +1995,8 @@ def _fseries(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
 
 @fn("FourierTrigSeries", area=AREA, status="added",
     notes="FourierTrigSeries[f, t, k] = a0 + Σ_{n=1}^{k} (a_n Cos[n t] + b_n Sin[n t]) with a0 = 1/(2π)∫f, "
-          "a_n = 1/π ∫_{-π}^{π} f cos(nt), b_n = 1/π ∫_{-π}^{π} f sin(nt) (Wolfram default parameters)")
+          "a_n = 1/π ∫_{-π}^{π} f cos(nt), b_n = 1/π ∫_{-π}^{π} f sin(nt) (Wolfram default parameters)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ftrig(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierTrigSeries")
     kk = _fs_order(k, "FourierTrigSeries")
@@ -1996,7 +2012,8 @@ def _ftrig(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
 
 @fn("FourierCosSeries", area=AREA, status="added",
     notes="FourierCosSeries[f, t, k] = Σ_{n=0}^{k} FourierCosCoefficient[f, t, n] Cos[n t] (even extension of f "
-          "on [0, π])")
+          "on [0, π])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fcosser(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierCosSeries")
     kk = _fs_order(k, "FourierCosSeries")
@@ -2011,7 +2028,8 @@ def _fcosser(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
 
 @fn("FourierSinSeries", area=AREA, status="added",
     notes="FourierSinSeries[f, t, k] = Σ_{n=1}^{k} FourierSinCoefficient[f, t, n] Sin[n t] (odd extension of f "
-          "on [0, π])")
+          "on [0, π])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fsinser(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierSinSeries")
     kk = _fs_order(k, "FourierSinSeries")
@@ -2026,7 +2044,8 @@ def _fsinser(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
 
 @fn("MellinTransform", area=_TR.AREA, status="added",
     notes="MellinTransform[f, x, s] = ∫_0^∞ x^(s-1) f dx (Wolfram); convergence strip dropped (generic value), "
-          "checked numerically at two real s inside the strip; unevaluated if SymPy has no closed form")
+          "checked numerically at two real s inside the strip; unevaluated if SymPy has no closed form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mellin(e: Expr, x: Var, s: Var, *rest: Expr) -> Expr:
     import mpmath as mp
     _, opts = split_opts(rest, {"Assumptions", "GenerateConditions"}, "MellinTransform")
@@ -2059,7 +2078,8 @@ def _mellin(e: Expr, x: Var, s: Var, *rest: Expr) -> Expr:
 
 @fn("InverseMellinTransform", area=_TR.AREA, status="added",
     notes="InverseMellinTransform[F, s, x] via SymPy (fundamental strip inferred); result checked by transforming "
-          "back with MellinTransform; unevaluated otherwise")
+          "back with MellinTransform; unevaluated otherwise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _imellin(e: Expr, s: Var, x: Var, *rest: Expr) -> Expr:
     F = sym(e, "InverseMellinTransform")
     sv, xv = variable(s, "InverseMellinTransform"), variable(x, "InverseMellinTransform")
@@ -2245,7 +2265,8 @@ def _arclength4(f: Expr, *spec: Expr) -> Expr:
 @fn("ArcCurvature", area=_CA.AREA, status="added",
     notes="ArcCurvature[{x1[t], ..., xn[t]}, t] = Sqrt[|r'|^2 |r''|^2 - (r'.r'')^2]/|r'|^3 (t real; gives "
           "|x'y'' - y'x''|/(x'^2 + y'^2)^(3/2) in 2D, |r' x r''|/|r'|^3 in 3D); ArcCurvature[f, x] for the graph "
-          "y = f(x): Abs[f'']/(1 + f'^2)^(3/2)")
+          "y = f(x): Abs[f'']/(1 + f'^2)^(3/2)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arccurv(f: Expr, t: Expr, *rest: Expr) -> Expr:
     if rest:
         raise NotImplementedError("ArcCurvature: coordinate charts are not supported")

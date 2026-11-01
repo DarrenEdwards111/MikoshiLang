@@ -281,7 +281,8 @@ _dist("NormalizedSquaredEuclideanDistance", _nsqeuclid,
 
 @fn("BinaryDistance", **ADDED,
     notes="BinaryDistance[u, v] = Boole[!(u == v)]: 0 for equal expressions (1 == 1. counts as equal), 1 for "
-          "different ones; Boole[u != v] when equality cannot be decided")
+          "different ones; Boole[u != v] when equality cannot be decided"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _binarydistance(u: Expr, v: Expr) -> Expr:
     r = ev(Expr("Equal", u, v))
     if r is True:
@@ -379,7 +380,8 @@ def _elements(x, fname):
     notes="DistanceMatrix[{u1, ...}] and DistanceMatrix[{u1, ...}, {v1, ...}] matrix of distances (Euclidean for "
           "numeric data, EditDistance for strings, JaccardDissimilarity for Boolean vectors) or DistanceFunction -> f; "
           "associations use their values; PerformanceGoal is accepted (results are always computed exactly or at "
-          "input precision)")
+          "input precision)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _distancematrix(us: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts = split_options(rest, _DM_OPTS, "DistanceMatrix")
     if len(pos) > 1:
@@ -508,7 +510,8 @@ def _dtw(s1, s2, rest, fname):
           "warping path; EuclideanDistance for numbers and vectors, BinaryDistance/MatchingDissimilarity for "
           "Booleans, or DistanceFunction -> f); WarpingDistance[s1, s2, win] with win = r | {\"SlantedBand\", r} | "
           "{\"Band\", r} | Automatic; the result is a machine real; the Parallelogram window and Method settings "
-          "raise")
+          "raise"
+          ". Check: reference (differential cases in tests/library).")
 def _warpingdistance(s1: Expr, s2: Expr, *rest: Expr) -> Expr:
     d, _ = _dtw(s1, s2, rest, "WarpingDistance")
     return float(d)
@@ -516,7 +519,8 @@ def _warpingdistance(s1: Expr, s2: Expr, *rest: Expr) -> Expr:
 
 @fn("WarpingCorrespondence", **ADDED,
     notes="WarpingCorrespondence[s1, s2] = {n, m}: the index lists of the optimal dynamic time warping path (same "
-          "windows and DistanceFunction as WarpingDistance; ties prefer the diagonal step)")
+          "windows and DistanceFunction as WarpingDistance; ties prefer the diagonal step)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _warpingcorrespondence(s1: Expr, s2: Expr, *rest: Expr) -> ListOf[Expr]:
     _, path = _dtw(s1, s2, rest, "WarpingCorrespondence")
     return L(L(*(p[0] + 1 for p in path)), L(*(p[1] + 1 for p in path)))
@@ -526,7 +530,8 @@ def _warpingcorrespondence(s1: Expr, s2: Expr, *rest: Expr) -> ListOf[Expr]:
     notes="FeatureDistance[e1, e2, extractor] distance between extractor[e1] and extractor[e2] (EuclideanDistance "
           "for numeric features, or DistanceFunction -> f); extractor is any function (e.g. a pure Function or "
           "Identity); FeatureDistance[extractor][e1, e2] operator form; FeatureExtractorFunction objects (machine-"
-          "learned extractors from FeatureExtraction) are not available and raise")
+          "learned extractors from FeatureExtraction) are not available and raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _featuredistance(*args: Expr) -> Expr:
     pos, opts = split_options(args, {"DistanceFunction"}, "FeatureDistance")
     if len(pos) == 1:
@@ -707,7 +712,8 @@ def _companion_coeffs(args, fname):
     notes="CompanionMatrix[{c0, ..., c(n-1)}] (implicit monic x^n term) and CompanionMatrix[poly, x] (normalised by "
           "the leading coefficient): ones on the subdiagonal and -c_i down the last column; CompanionMatrix[..., dir] "
           "with dir = Right (default), Bottom (transpose), Top (-c(n-1), ..., -c0 along the first row) or Left "
-          "(its transpose); TargetStructure -> \"Dense\" | \"Sparse\" accepted (dense result)")
+          "(its transpose); TargetStructure -> \"Dense\" | \"Sparse\" accepted (dense result)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _companionmatrix(*args: Expr) -> Expr:
     pos, opts = split_options(args, {"TargetStructure"}, "CompanionMatrix")
     if not pos:
@@ -1068,7 +1074,8 @@ def _objarray(x, fname):
 @fn("ArrayDot", **ADDED,
     notes="ArrayDot[a, b, k] contracts the last k indices of a with the first k of b; ArrayDot[a, b, {{s1, t1}, "
           "...}] contracts index si of a with index ti of b (remaining indices of a, then of b); exact, symbolic and "
-          "numeric arrays")
+          "numeric arrays"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arraydot(a: ListOf[Expr], b: ListOf[Expr], spec: Expr) -> Expr:
     np = _np()
     A, B = _objarray(a, "ArrayDot"), _objarray(b, "ArrayDot")
@@ -1588,7 +1595,8 @@ def _popov_check(rows, piv, ncols):
           "up to row scaling; here pivots are made monic (Wolfram may normalise rows differently, e.g. to integer "
           "coefficients).  Exact rational, complex-rational and symbolic coefficients (then x must be given) work "
           "exactly; Modulus -> prime works over GF(p); approximate coefficients are converted to exact rationals, "
-          "decomposed exactly and returned as machine numbers.")
+          "decomposed exactly and returned as machine numbers."
+          " Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _popovdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     fname = "PopovDecomposition"
     args, opts = split_options(rest, {"Modulus"}, fname)
@@ -2091,7 +2099,8 @@ def _reshape_like(flat, x):
           "eigenvectors of the covariance matrix of the (flattened) arrays ai in order of decreasing eigenvalue "
           "(sign: largest component positive) and {b1, ...} == m.{a1, ...}; Standardized -> True first shifts each "
           "ai to zero mean; KarhunenLoeveDecomposition[{b1, ...}, m] inverts the transform (missing b's are 0); "
-          "machine-precision results")
+          "machine-precision results"
+          ". Check: reference (differential cases in tests/library).")
 def _kld(arrays: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "KarhunenLoeveDecomposition"
     args, opts = split_options(rest, {"Standardized"}, fname)
@@ -2237,7 +2246,8 @@ def _kind_float(e):
           "numeric matrices by skew-symmetric (Parlett-Reid style) elimination with pivoting, symbolic matrices by "
           "expansion along the first row; Method -> Automatic, \"ParlettReid\", \"Householder\", \"Hessenberg\" "
           "and \"Pauli\" give the same value, \"Det\" gives Sqrt[Det[m]] (sign not conformed, as Wolfram); a "
-          "non-antisymmetric matrix raises")
+          "non-antisymmetric matrix raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _pfaffiandet(m: Expr, *rest: Expr) -> Expr:
     fname = "PfaffianDet"
     args, opts = split_options(rest, {"Method"}, fname)
@@ -2306,7 +2316,8 @@ KL.COMPOUND_HEAD_HOOKS["LinearSolveFunction"] = _lsf_call
 
 @fn("TransformationMatrix", **ADDED,
     notes="TransformationMatrix[TransformationFunction[m]] gives the homogeneous matrix m; anything else stays "
-          "unevaluated")
+          "unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _transformationmatrix(t: Expr) -> Expr:
     tf = isinstance(t, Expr) and t.head == "TransformationFunction"
     if tf and len(t.args) == 1 and is_list(t.args[0]):
@@ -3871,7 +3882,8 @@ def _knap_item(it, fname):
           "association of items gives an association); exact integer programming (branch and bound on the exact "
           "simplex), ties broken by the smaller total cost; the constraints can be maxcost, {maxcost}, {maxpayoff, maxcost}, "
           "{maxpayoff, maxcost, maxcount} or an association of \"MaxTotalPayoff\", \"MaxTotalCost\", "
-          "\"MaxTotalCount\"; Quantity payoffs/costs raise")
+          "\"MaxTotalCount\"; Quantity payoffs/costs raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _knapsack(items: Expr, capacity: Expr, *rest: Expr) -> Expr:
     fname = "KnapsackSolve"
     if rest:
@@ -3955,7 +3967,8 @@ def _tour_dist(opts, pts, fname):
           "(EuclideanDistance, exact lengths for exact points) or strings (EditDistance), or use DistanceFunction "
           "-> f; exact (Held-Karp dynamic programming) for up to 12 points, a 2-opt/Or-opt local search beyond "
           "that (not guaranteed optimal, like Wolfram's heuristics); the direction of an optimal tour and the choice "
-          "among equally short tours can differ from Wolfram's; graphs and GeoPositions raise")
+          "among equally short tours can differ from Wolfram's; graphs and GeoPositions raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _findshortesttour(pts: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "FindShortestTour"
     args, opts = split_options(rest, {"DistanceFunction", "Method"}, fname)
@@ -4370,7 +4383,8 @@ def _py_to_ml(x):
           "n} gives MatrixGame[payoff array, options..., \"Validity\" -> {True}]; options GameActionLabels and "
           "GamePlayerLabels; properties \"PayoffArray\", \"ComponentPayoffArray\", \"GameActionLabels\", "
           "\"GamePlayerLabels\", \"Dataset\" (Dataset of payoff vectors by action labels) and \"Plot\" "
-          "(MatrixGamePlot); \"TreeGame\" and SparseArray/rule specifications raise")
+          "(MatrixGamePlot); \"TreeGame\" and SparseArray/rule specifications raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _matrixgame(p: Expr, *rest: Expr) -> Expr:
     fname = "MatrixGame"
     if any(isinstance(r, Expr) and is_rule(r) and r.args[0] == "Validity" for r in rest):
@@ -4507,7 +4521,8 @@ def _expected(arr, dims, n, prof, power=1):
     notes="MatrixGamePayoff[game, {s1, ..., sn}] gives the expected payoff of each player for mixed strategies si "
           "(probability vectors; also {1 -> s1, ...} rules or <|label -> s|>, and lists of profiles); "
           "MatrixGamePayoff[game, profile, \"Expectation\" | \"Variance\"]; exact for exact strategies; joint "
-          "group strategies and the distribution/simulation properties raise")
+          "group strategies and the distribution/simulation properties raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _matrixgamepayoff(game: Expr, strat: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "MatrixGamePayoff"
     arr, dims, n, opts = _game_parts(game, fname)
@@ -4550,7 +4565,8 @@ def _nash_check(arr, dims, n, prof, tol=0):
 @fn("VerifyMatrixGameStrategy", **ADDED,
     notes="True when the strategy profile {s1, ..., sn} is a Nash equilibrium of the matrix game (no player gains "
           "by deviating to any pure action; machine-number strategies use a 10^-9 tolerance); a list of profiles "
-          "gives a list; symbolic strategies raise")
+          "gives a list; symbolic strategies raise"
+          ". Check: reference (differential cases in tests/library).")
 def _verifymatrixgame(game: Expr, strat: Expr, *rest: Expr) -> Expr:
     fname = "VerifyMatrixGameStrategy"
     if rest:
@@ -4573,7 +4589,8 @@ def _frac_of(v):
           "each sorted; two-player games use exact support enumeration (all equilibria of a non-degenerate game; "
           "for degenerate games the extreme equilibria with equal-size supports), n-player games give the pure "
           "equilibria only with \"Pure\" (mixed n-player equilibria raise); FindMatrixGameStrategies[game, "
-          "\"Pure\" | \"Mixed\"] restricts the kind; the Method option is not supported")
+          "\"Pure\" | \"Mixed\"] restricts the kind; the Method option is not supported"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _findmatrixgame(game: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "FindMatrixGameStrategies"
     args, opts = split_options(rest, {"Method"}, fname)
@@ -4754,7 +4771,8 @@ def _ksp(v):
           "are listed (this reproduces Wolfram's results, including its handling of ties), each as <|player -> <|node -> probabilities|>|> with "
           "nodes as child-index paths ({} the root), players in order of appearance (chance players get <||>), "
           "sorted; payoff vectors are matched to the non-chance players in order of appearance; as in Wolfram, "
-          "information sets are ignored (each node solved separately)")
+          "information sets are ignored (each node solved separately)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _findtreegame(game: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "FindTreeGameStrategies"
     if rest:
@@ -4825,7 +4843,8 @@ def _findtreegame(game: Expr, *rest: Expr) -> ListOf[Expr]:
     notes="True when the strategy profile <|player -> <|node -> probabilities|>|> is a subgame-perfect equilibrium "
           "of a perfect-information TreeGame (at every action node no action gives the moving player a higher "
           "expected payoff than the strategy, given the strategy below it; a 10^-9 tolerance for machine numbers); "
-          "every non-chance action node must be specified; information sets are ignored; symbolic strategies raise")
+          "every non-chance action node must be specified; information sets are ignored; symbolic strategies raise"
+          ". Check: reference (differential cases in tests/library).")
 def _verifytreegame(game: Expr, strat: Expr, *rest: Expr) -> Expr:
     fname = "VerifyTreeGameStrategy"
     if rest:
@@ -4987,7 +5006,8 @@ def _tm_format(kind, hist, extra, region_override=None):
           "{{s, x, dx}, ...} and finite cyclic tapes {s, {a1, ...}}; TuringMachine[rule, init, t] gives the t + 1 "
           "steps {{s, x, dx}, tape} (infinite tapes padded to the region visited), TuringMachine[rule, init] and "
           "TuringMachine[rule][init] one step; multidimensional machines, offset ranges and repetitive "
-          "backgrounds raise")
+          "backgrounds raise"
+          ". Check: reference (differential cases in tests/library).")
 def _turingmachine(rule: Expr, *rest: Expr) -> Expr:
     fname = "TuringMachine"
     if not rest:

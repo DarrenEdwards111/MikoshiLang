@@ -110,13 +110,16 @@ def _arc_exact(sfun):
 
 special("ArcCoth", 1, mpmath.acoth, _arc_exact(sp.acoth),
         notes="ArcCoth[z] = ArcTanh[1/z] (branch cut [-1, 1]); mpmath acoth; exact special values (ArcCoth[0] = "
-              "I Pi/2, ArcCoth[Infinity] = 0, ArcCoth[1] = Infinity, ArcCoth[I] = -I Pi/4)")
+              "I Pi/2, ArcCoth[Infinity] = 0, ArcCoth[1] = Infinity, ArcCoth[I] = -I Pi/4)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("ArcCsch", 1, mpmath.acsch, _arc_exact(sp.acsch),
         notes="ArcCsch[z] = ArcSinh[1/z]; mpmath acsch; exact special values (ArcCsch[I] = -I Pi/2, ArcCsch[0] = "
-              "ComplexInfinity)")
+              "ComplexInfinity)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("ArcSech", 1, mpmath.asech, _arc_exact(sp.asech),
         notes="ArcSech[z] = ArcCosh[1/z]; mpmath asech; exact special values (ArcSech[1] = 0, ArcSech[0] = "
-              "Infinity, ArcSech[2] = I Pi/3)")
+              "Infinity, ArcSech[2] = I Pi/3)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── Gudermannian, sigmoid, sinc ─────────────────────────────
@@ -137,7 +140,8 @@ def _gd_exact(z):
 
 special("Gudermannian", 1, _gd, _gd_exact,
         notes="Gudermannian[z] = 2 ArcTan[Tanh[z/2]] (reference definition; cuts from I Pi (2n + 1/2) to "
-              "I Pi (2n + 3/2)); Gudermannian[0] = 0, Gudermannian[+-Infinity] = +-Pi/2")
+              "I Pi (2n + 3/2)); Gudermannian[0] = 0, Gudermannian[+-Infinity] = +-Pi/2"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _igd(z):
@@ -156,7 +160,8 @@ def _igd_exact(z):
 
 special("InverseGudermannian", 1, _igd, _igd_exact,
         notes="InverseGudermannian[z] = Log[Tan[z/2 + Pi/4]] (reference definition); "
-              "InverseGudermannian[0] = 0, InverseGudermannian[+-Pi/2] = +-Infinity")
+              "InverseGudermannian[0] = 0, InverseGudermannian[+-Pi/2] = +-Infinity"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _sigmoid_exact(z):
@@ -171,7 +176,8 @@ def _sigmoid_exact(z):
 
 special("LogisticSigmoid", 1, lambda z: 1 / (1 + mpmath.exp(-z)), _sigmoid_exact,
         notes="LogisticSigmoid[z] = 1/(1 + E^-z); LogisticSigmoid[0] = 1/2, LogisticSigmoid[Infinity] = 1, "
-              "LogisticSigmoid[-Infinity] = 0")
+              "LogisticSigmoid[-Infinity] = 0"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _sinc_exact(z):
@@ -185,7 +191,8 @@ def _sinc_exact(z):
 
 special("Sinc", 1, lambda z: mpmath.mpf(1) if z == 0 else mpmath.sin(z) / z, _sinc_exact,
         notes="Sinc[z] = Sin[z]/z, Sinc[0] = 1; exact where Sin has an exact value (Sinc[Pi] = 0, "
-              "Sinc[Pi/2] = 2/Pi)")
+              "Sinc[Pi/2] = 2/Pi)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── generalized functions and waveforms ─────────────────────────────
@@ -884,7 +891,8 @@ def _tau_theta(t):
 
 special("RamanujanTauTheta", 1, _tau_theta, lambda t: sp.Integer(0) if t == 0 else None,
         notes="RamanujanTauTheta[t] = -I/2 (LogGamma[6 + I t] - LogGamma[6 - I t]) - t Log[2 Pi] (continuous "
-              "branch; RamanujanTauTheta[9.22] = 1.40372 as in the reference); RamanujanTauTheta[0] = 0")
+              "branch; RamanujanTauTheta[9.22] = 1.40372 as in the reference); RamanujanTauTheta[0] = 0"
+              ". Check: reference (differential cases in tests/library).")
 
 
 def _tau_Z(t):
@@ -963,7 +971,8 @@ def _pauli(k: Expr, *opts: Option) -> Expr:
 
 fn("PauliMatrix", area=AREA, status=STATUS, listable=False,
    notes="PauliMatrix[k]: k = 1, 2, 3 Pauli spin matrices, PauliMatrix[0] = IdentityMatrix[2]; threads over "
-         "lists; WorkingPrecision; TargetStructure -> \"Dense\" (other structures raise)")(_pauli)
+         "lists; WorkingPrecision; TargetStructure -> \"Dense\" (other structures raise)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(_pauli)
 
 
 def _inert(name, notes, nargs=(0, 12)):
@@ -1009,7 +1018,8 @@ def _dbeta(s):
 special("DirichletBeta", 1, _dbeta, _dbeta_exact,
         notes="DirichletBeta[s] = Sum[(-1)^n/(2n + 1)^s, {n, 0, Infinity}] (analytically continued; mpmath dirichlet "
               "with the character mod 4); exact: beta(0) = 1/2, beta(1) = Pi/4, beta(2) = Catalan, odd s via Euler "
-              "numbers, beta(-n) = EulerE[n]/2")
+              "numbers, beta(-n) = EulerE[n]/2"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _dlambda_exact(s):
@@ -1022,7 +1032,8 @@ def _dlambda_exact(s):
 
 special("DirichletLambda", 1, lambda s: (1 - mpmath.power(2, -s)) * mpmath.zeta(s), _dlambda_exact,
         notes="DirichletLambda[s] = (1 - 2^-s) Zeta[s] = Sum[1/(2n + 1)^s, {n, 0, Infinity}]; exact where Zeta "
-              "is (even positive and non-positive integers), DirichletLambda[1] = ComplexInfinity")
+              "is (even positive and non-positive integers), DirichletLambda[1] = ComplexInfinity"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _primezeta(s):
@@ -1033,13 +1044,16 @@ def _primezeta(s):
 
 special("PrimeZetaP", 1, _primezeta, lambda s: sp.oo if s == 1 else None,
         notes="PrimeZetaP[s] = Sum[1/Prime[k]^s] for Re(s) > 0 (mpmath primezeta; natural boundary Re(s) = 0 "
-              "raises); PrimeZetaP[1] = Infinity")
+              "raises); PrimeZetaP[1] = Infinity"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("RiemannR", 1, mpmath.riemannr,
-        notes="RiemannR[x] = Sum[MoebiusMu[n]/n LogIntegral[x^(1/n)]] (Gram series; mpmath riemannr)")
+        notes="RiemannR[x] = Sum[MoebiusMu[n]/n LogIntegral[x^(1/n)]] (Gram series; mpmath riemannr)"
+              ". Check: reference (differential cases in tests/library).")
 special("RiemannSiegelTheta", 1, mpmath.siegeltheta, lambda t: sp.Integer(0) if t == 0 else None,
         notes="RiemannSiegelTheta[t] = Im[LogGamma[1/4 + I t/2]] - t Log[Pi]/2 (mpmath siegeltheta); value 0 at 0")
 special("RiemannSiegelZ", 1, mpmath.siegelz,
-        notes="RiemannSiegelZ[t] = Exp[I RiemannSiegelTheta[t]] Zeta[1/2 + I t] (mpmath siegelz)")
+        notes="RiemannSiegelZ[t] = Exp[I RiemannSiegelTheta[t]] Zeta[1/2 + I t] (mpmath siegelz)"
+              ". Check: reference (differential cases in tests/library).")
 
 
 def _xi(s):
@@ -1065,7 +1079,8 @@ def _xi_exact(s):
 
 special("RiemannXi", 1, _xi, _xi_exact,
         notes="RiemannXi[s] = s (s - 1) Pi^(-s/2) Gamma[s/2] Zeta[s]/2 with xi(s) = xi(1 - s); exact 1/2 at 0, 1 "
-              "and closed forms at even integers (RiemannXi[2] = Pi/6)")
+              "and closed forms at even integers (RiemannXi[2] = Pi/6)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _zetazero(k, t=None):
@@ -1137,7 +1152,8 @@ def _lbg_exact(z):
 special("LogBarnesG", 1, _log_barnes_g, _lbg_exact,
         notes="LogBarnesG[z]: holomorphic logarithm of BarnesG with a branch cut along the negative real axis "
               "(recurrence with LogGamma plus the asymptotic expansion; log of Prod[k!, {k, n-2}] at positive "
-              "integers); singular at non-positive integers")
+              "integers); singular at non-positive integers"
+              ". Check: reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── Dawson, Fresnel auxiliaries, Owen T, Marcum Q, Mittag-Leffler ─────────────────
@@ -1147,7 +1163,8 @@ def _dawson(z):
 
 
 special("DawsonF", 1, _dawson, lambda z: sp.Integer(0) if z in (0, sp.oo, -sp.oo) else None,
-        notes="DawsonF[z] = E^-z^2 Integrate[E^t^2, {t, 0, z}] = Sqrt[Pi]/2 E^-z^2 Erfi[z]; 0 at 0 and +-Infinity")
+        notes="DawsonF[z] = E^-z^2 Integrate[E^t^2, {t, 0, z}] = Sqrt[Pi]/2 E^-z^2 Erfi[z]; 0 at 0 and +-Infinity"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _fresnel_aux(which):
@@ -1167,11 +1184,13 @@ def _fresnel_aux(which):
 special("FresnelF", 1, _fresnel_aux("F"),
         lambda z: sp.Rational(1, 2) if z == 0 else (sp.Integer(0) if z == sp.oo else None),
         notes="FresnelF[z] = (1/2 - FresnelS[z]) Cos[Pi z^2/2] - (1/2 - FresnelC[z]) Sin[Pi z^2/2] (extra working "
-              "precision against cancellation); FresnelF[0] = 1/2, FresnelF[Infinity] = 0")
+              "precision against cancellation); FresnelF[0] = 1/2, FresnelF[Infinity] = 0"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("FresnelG", 1, _fresnel_aux("G"),
         lambda z: sp.Rational(1, 2) if z == 0 else (sp.Integer(0) if z == sp.oo else None),
         notes="FresnelG[z] = (1/2 - FresnelC[z]) Cos[Pi z^2/2] + (1/2 - FresnelS[z]) Sin[Pi z^2/2]; FresnelG[0] = "
-              "1/2, FresnelG[Infinity] = 0")
+              "1/2, FresnelG[Infinity] = 0"
+              ". Check: reference (differential cases in tests/library).")
 
 
 def _owen(h, a):
@@ -1191,7 +1210,8 @@ def _owen_exact(h, a):
 
 special("OwenT", 2, _owen, _owen_exact,
         notes="OwenT[h, a] = 1/(2 Pi) Integrate[E^(-h^2 (1 + x^2)/2)/(1 + x^2), {x, 0, a}] (mpmath quadrature, "
-              "real arguments); OwenT[0, a] = ArcTan[a]/(2 Pi), OwenT[h, 0] = 0")
+              "real arguments); OwenT[0, a] = ArcTan[a]/(2 Pi), OwenT[h, 0] = 0"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _marcum(m, a, b, b1=None):
@@ -1235,7 +1255,8 @@ special("MarcumQ", (3, 4), _marcum, _marcum_exact,
         notes="MarcumQ[m, a, b] = Integrate[x (x/a)^(m-1) BesselI[m-1, a x] E^(-(a^2 + x^2)/2), {x, b, Infinity}] "
               "via the Poisson-weighted series Sum[E^(-a^2/2) (a^2/2)^j/j! GammaRegularized[m + j, b^2/2]] (real "
               "arguments, m > 0); MarcumQ[m, a, b0, b1] = MarcumQ[m, a, b0] - MarcumQ[m, a, b1]; exact "
-              "MarcumQ[m, a, 0] = 1 and MarcumQ[m, 0, b] = GammaRegularized[m, b^2/2]")
+              "MarcumQ[m, a, 0] = 1 and MarcumQ[m, 0, b] = GammaRegularized[m, b^2/2]"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _mittag(*v):
@@ -1296,7 +1317,8 @@ def _mittag_exact(*v):
 special("MittagLefflerE", (2, 3), _mittag, _mittag_exact, symbolic=_mittag_sym,
         notes="MittagLefflerE[a, b, z] = Sum[z^k/Gamma[a k + b], {k, 0, Infinity}] (power series with extra "
               "working precision against cancellation, real a > 0); MittagLefflerE[a, z] = MittagLefflerE[a, 1, z]; "
-              "closed forms for (1, 1), (2, 1), (1, 2), (1/2, 1) and z = 0")
+              "closed forms for (1, 1), (2, 1), (1, 2), (1/2, 1) and z = 0"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── inverse regularized gamma and beta ─────────────────────────────
@@ -1371,7 +1393,8 @@ def _inv_gamma_exact(a, *rest):
 special("InverseGammaRegularized", (2, 3), _inv_gamma_reg, _inv_gamma_exact,
         notes="InverseGammaRegularized[a, s] solves GammaRegularized[a, z] == s for z (upper regularized gamma; "
               "bracketing root finder at the input precision); InverseGammaRegularized[a, z0, s] inverts "
-              "GammaRegularized[a, z0, z]; exact: s = 1 -> 0, s = 0 -> Infinity, a = 1 -> -Log[s]")
+              "GammaRegularized[a, z0, z]; exact: s = 1 -> 0, s = 0 -> Infinity, a = 1 -> -Log[s]"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _inv_beta_reg(*v):
@@ -1413,7 +1436,8 @@ def _inv_beta_exact(*v):
 special("InverseBetaRegularized", (3, 4), _inv_beta_reg, _inv_beta_exact,
         notes="InverseBetaRegularized[s, a, b] solves BetaRegularized[z, a, b] == s for z in [0, 1] (bracketing "
               "root finder); InverseBetaRegularized[z0, s, a, b] inverts BetaRegularized[z0, z, a, b]; exact "
-              "s = 0, 1 and b = 1 (s^(1/a)), a = 1 (1 - (1 - s)^(1/b))")
+              "s = 0, 1 and b = 1 (s^(1/a)), a = 1 (1 - (1 - s)^(1/b))"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── Minkowski question mark and Cantor staircase ─────────────────────────────
@@ -1486,7 +1510,8 @@ def _qmark_num(x):
 special("MinkowskiQuestionMark", 1, _qmark_num, _qmark_exact,
         notes="MinkowskiQuestionMark[x] = a0 + 2 Sum[(-1)^(k+1) 2^-(a1 + ... + ak)] for x = [a0; a1, a2, ...]: "
               "exact for rationals and quadratic irrationals (periodic continued fractions, e.g. ?(Sqrt[2]) = 7/5); "
-              "approximate x uses its exact binary value")
+              "approximate x uses its exact binary value"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _cantor_rational(p, q, maxdigits=None):
@@ -1545,7 +1570,8 @@ def _cantor_num(x):
 
 special("CantorStaircase", 1, _cantor_num, _cantor_exact,
         notes="CantorStaircase[x]: the Cantor function (0 for x <= 0, 1 for x >= 1); exact for rationals via the "
-              "ternary expansion (periodic expansions summed exactly), approximate x via its exact binary value")
+              "ternary expansion (periodic expansions summed exactly), approximate x via its exact binary value"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── q-analogues ─────────────────────────────

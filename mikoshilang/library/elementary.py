@@ -37,7 +37,8 @@ for _name, _f in [
 
 
 @fn("ArcTan", area=AREA, status="fixed", listable=True,
-    notes="ArcTan[x, y] was atan2(x, y); Wolfram's ArcTan[x, y] is the angle of the point (x, y), atan2(y, x)")
+    notes="ArcTan[x, y] was atan2(x, y); Wolfram's ArcTan[x, y] is the angle of the point (x, y), atan2(y, x)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arctan1(z):
     return numeric_out(sp.atan(sym(z, "ArcTan")), z, keep_zero=True)
 
@@ -57,7 +58,8 @@ def _log(z):
 
 
 @fn("Log", area=AREA, status="fixed", listable=True,
-    notes="Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b")
+    notes="Log[0] returned ComplexInfinity; Wolfram gives -Infinity. Log[b, z] is log base b"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _log1(z):
     return numeric_out(_log(sym(z, "Log")), z, keep_zero=True)
 
@@ -72,20 +74,25 @@ def _log2arg(b, z):
     return numeric_out(sp.log(sz, sb), b, z)
 
 
-@fn("Log2", area=AREA, status="verified", listable=True, notes="log base 2; Log2[0] = -Infinity")
+@fn("Log2", area=AREA, status="verified", listable=True, notes="log base 2; Log2[0] = -Infinity"
+                                                               ". Check: exact (exact input gives exact results), "
+                                                               "reference (differential cases in tests/library).")
 def _log2(z):
     s = sym(z, "Log2")
     return numeric_out(-sp.oo if s == 0 else sp.log(s, 2), z)
 
 
-@fn("Log10", area=AREA, status="verified", listable=True, notes="log base 10; Log10[0] = -Infinity")
+@fn("Log10", area=AREA, status="verified", listable=True, notes="log base 10; Log10[0] = -Infinity"
+                                                                ". Check: exact (exact input gives exact results), "
+                                                                "reference (differential cases in tests/library).")
 def _log10(z):
     s = sym(z, "Log10")
     return numeric_out(-sp.oo if s == 0 else sp.log(s, 10), z)
 
 
 @fn("CubeRoot", area=AREA, status="fixed", listable=True,
-    notes="returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2)")
+    notes="returned the principal complex root ((-8)^(1/3) = 1 + I Sqrt[3]); Wolfram CubeRoot is the real root (-2)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cuberoot(z):
     s = sym(z, "CubeRoot")
     if s.is_number and s.is_real is False:
@@ -99,7 +106,8 @@ def _cuberoot(z):
           "part first); SymPy's CRootOf index differs and is remapped. The polynomial is reduced to the irreducible factor that has "
           "the root; roots of linear, quadratic and binomial (x^n - a) factors become radicals, other roots stay "
           "Root[minpoly &, j] and evaluate numerically with N. Approximate coefficients give a numeric root. "
-          "Legacy Root[a, n] meant a^(1/n) (now Surd/Power)")
+          "Legacy Root[a, n] meant a^(1/n) (now Surd/Power)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _root(f, k):
     if not (isinstance(f, Expr) and f.head == "Function" and len(f.args) == 1):
         raise ValueError("Root[f, k]: f must be a pure function such as #^3 - 2 &")
@@ -146,7 +154,9 @@ def _root(f, k):
     raise ArithmeticError("Root: could not isolate the requested root")
 
 
-@fn("Surd", area=AREA, status="promoted", listable=True, notes="real n-th root (Wolfram Surd)")
+@fn("Surd", area=AREA, status="promoted", listable=True, notes="real n-th root (Wolfram Surd)"
+                                                               ". Check: exact (exact input gives exact results), "
+                                                               "reference (differential cases in tests/library).")
 def _surd(x, n):
     s = sym(x, "Surd")
     from .core import int_arg
@@ -176,7 +186,8 @@ def _as_fraction(v):
 
 @fn("Round", area=AREA, status="fixed", listable=True,
     notes="Round[x] was not implemented and Round[x, a] returned floats (Round[7, 5] = 5.0); "
-          "now Wolfram half-to-even rounding, exact for exact input")
+          "now Wolfram half-to-even rounding, exact for exact input"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _round1(x):
     v = number(x, "Round", real=False)
     if v in (sp.oo, -sp.oo):
@@ -265,7 +276,8 @@ _rounding("Ceiling", "ceiling")
 
 
 @fn("Sign", area=AREA, status="fixed", listable=True,
-    notes="Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals")
+    notes="Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sign(z):
     v = sym(z, "Sign")
     if v.is_number and v.is_real is False and v.is_finite:
@@ -279,7 +291,8 @@ def _sign(z):
 @fn("Mod", area=AREA, status="fixed", listable=True,
     notes="Mod[m, n] = m - n Floor[m/n] (sign of n); Mod[m, n, d] uses the offset d (result in [d, d + n)); "
           "complex m or n use Round (Gaussian remainder, Mod[5 + 3 I, 2] = 1 - I); Mod[m, 0] raises. The offset "
-          "form and complex arguments were missing")
+          "form and complex arguments were missing"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mod(m, n, d=0):
     sm, sn, sd = sym(m, "Mod"), sym(n, "Mod"), sym(d, "Mod")
     if sn == 0:
@@ -298,7 +311,8 @@ def _mod(m, n, d=0):
 
 @fn("Quotient", area=AREA, status="fixed", listable=True,
     notes="Quotient[m, n] = Floor[m/n] as an integer (legacy gave Quotient[7.5, 2] = 3.); Quotient[m, n, d] = "
-          "Floor[(m - d)/n]; complex arguments use Round")
+          "Floor[(m - d)/n]; complex arguments use Round"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _quotient(m, n, d=0):
     sm, sn, sd = sym(m, "Quotient"), sym(n, "Quotient"), sym(d, "Quotient")
     if sn == 0:
@@ -311,7 +325,8 @@ def _quotient(m, n, d=0):
 
 
 @fn("QuotientRemainder", area=AREA, status="added", listable=True,
-    notes="{Quotient[m, n], Mod[m, n]}")
+    notes="{Quotient[m, n], Mod[m, n]}"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _quotrem(m, n):
     return Expr("List", _quotient(m, n), _mod(m, n))
 

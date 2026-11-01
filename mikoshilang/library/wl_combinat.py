@@ -179,7 +179,8 @@ def _out(p, kind, n=None):
 
 @fn("Cycles", area=AREA, status="added",
     notes="canonical form: 1-cycles dropped, each cycle starts with its smallest point, cycles sorted by first "
-          "point; repeated or non-positive points raise")
+          "point; repeated or non-positive points raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cycles(spec: Expr) -> Expr:
     c = _cycles_raw(Expr("Cycles", spec), "Cycles")
     if c is None:
@@ -188,7 +189,8 @@ def _cycles(spec: Expr) -> Expr:
 
 
 @fn("PermutationCyclesQ", area=AREA, status="added", notes="True for a valid Cycles object (disjoint positive "
-    "integer cycles), else False")
+    "integer cycles), else False"
+    ". Check: reference (differential cases in tests/library).")
 def _pcq(x: Expr) -> Boolean:
     if not _is_cycles(x):
         return False
@@ -198,13 +200,15 @@ def _pcq(x: Expr) -> Boolean:
         return False
 
 
-@fn("PermutationListQ", area=AREA, status="added", notes="True for a rearrangement of Range[n] (n >= 0)")
+@fn("PermutationListQ", area=AREA, status="added", notes="True for a rearrangement of Range[n] (n >= 0)"
+                                                         ". Check: reference (differential cases in tests/library).")
 def _plq(x: Expr) -> Boolean:
     return _perm_list_q(x)
 
 
 @fn("PermutationCycles", area=AREA, status="added",
-    notes="disjoint-cycle form of a permutation list (i -> p_i) or canonical form of a Cycles object")
+    notes="disjoint-cycle form of a permutation list (i -> p_i) or canonical form of a Cycles object"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _pcycles(p: Expr) -> Expr:
     perm, _ = perm_of(p, "PermutationCycles")
     return _cycles_expr(perm.cycles())
@@ -212,7 +216,8 @@ def _pcycles(p: Expr) -> Expr:
 
 @fn("PermutationList", area=AREA, status="added",
     notes="PermutationList[perm] (length PermutationMax) and PermutationList[perm, n] padded to length n; n smaller "
-          "than the largest moved point raises")
+          "than the largest moved point raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _plist(p: Expr, n: Expr = None) -> ListOf[Expr]:
     perm, kind = perm_of(p, "PermutationList")
     if n is None:
@@ -226,7 +231,8 @@ def _plist(p: Expr, n: Expr = None) -> ListOf[Expr]:
 
 @fn("PermutationProduct", area=AREA, status="added",
     notes="left-to-right product (apply the first permutation first); PermutationProduct[] = Cycles[{}], "
-          "PermutationProduct[x] = x; all permutation lists give a list, otherwise Cycles")
+          "PermutationProduct[x] = x; all permutation lists give a list, otherwise Cycles"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _pprod(*ps: Expr) -> Expr:
     if not ps:
         return Expr("Cycles", L())
@@ -243,32 +249,41 @@ def _pprod(*ps: Expr) -> Expr:
 
 
 @fn("InversePermutation", area=AREA, status="added", notes="inverse of a Cycles object or permutation list "
-    "(same representation as the input)")
+    "(same representation as the input)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _pinv(p: Expr) -> Expr:
     perm, kind = perm_of(p, "InversePermutation")
     return _out(perm.inverse(), kind, len(p.args) if kind == "list" else None)
 
 
-@fn("PermutationPower", area=AREA, status="added", notes="n-th power (n any integer, negative = inverse powers)")
+@fn("PermutationPower", area=AREA, status="added", notes="n-th power (n any integer, negative = inverse powers)"
+                                                         ". Check: exact (exact input gives exact results), "
+                                                         "reference (differential cases in tests/library).")
 def _ppow(p: Expr, n: Integer) -> Expr:
     perm, kind = perm_of(p, "PermutationPower")
     k = int_arg(n, "PermutationPower", "exponent")
     return _out(perm.power(k), kind, len(p.args) if kind == "list" else None)
 
 
-@fn("PermutationOrder", area=AREA, status="added", notes="LCM of the cycle lengths; identity -> 1")
+@fn("PermutationOrder", area=AREA, status="added", notes="LCM of the cycle lengths; identity -> 1"
+                                                         ". Check: exact (exact input gives exact results), "
+                                                         "reference (differential cases in tests/library).")
 def _porder(p: Expr) -> Expr:
     perm, _ = perm_of(p, "PermutationOrder")
     return perm.order()
 
 
-@fn("PermutationSupport", area=AREA, status="added", notes="sorted list of the points moved")
+@fn("PermutationSupport", area=AREA, status="added", notes="sorted list of the points moved"
+                                                           ". Check: exact (exact input gives exact results), "
+                                                           "reference (differential cases in tests/library).")
 def _psupport(p: Expr) -> ListOf[Expr]:
     perm, _ = perm_of(p, "PermutationSupport")
     return L(*sorted(perm.m))
 
 
-@fn("PermutationLength", area=AREA, status="added", notes="number of points moved")
+@fn("PermutationLength", area=AREA, status="added", notes="number of points moved"
+                                                          ". Check: exact (exact input gives exact results), "
+                                                          "reference (differential cases in tests/library).")
 def _plength(p: Expr) -> Integer:
     if _is_group(p):
         return len(_group_support(p))
@@ -277,7 +292,8 @@ def _plength(p: Expr) -> Integer:
 
 
 @fn("PermutationMax", area=AREA, status="added", notes="largest moved point; identity -> -Infinity (Max of the "
-    "empty support)")
+    "empty support)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _pmax(p: Expr) -> Expr:
     if _is_group(p):
         s = _group_support(p)
@@ -286,7 +302,9 @@ def _pmax(p: Expr) -> Expr:
     return s[-1] if s else Expr("Times", -1, Symbol("Infinity"))
 
 
-@fn("PermutationMin", area=AREA, status="added", notes="smallest moved point; identity -> Infinity")
+@fn("PermutationMin", area=AREA, status="added", notes="smallest moved point; identity -> Infinity"
+                                                       ". Check: exact (exact input gives exact results), reference "
+                                                       "(differential cases in tests/library).")
 def _pmin(p: Expr) -> Expr:
     if _is_group(p):
         s = _group_support(p)
@@ -309,7 +327,8 @@ def _replace_points(e, perm):
 
 @fn("PermutationReplace", area=AREA, status="added",
     notes="replaces each positive integer in expr (at any depth in lists) by its image; Cycles objects in expr are "
-          "relabelled (conjugated); a group gives the list of images under GroupElements")
+          "relabelled (conjugated); a group gives the list of images under GroupElements"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _preplace(e: Expr, p: Expr) -> Expr:
     if _is_group(p):
         return L(*(_replace_points(e, g) for g in _group_elements(p, "PermutationReplace")))
@@ -331,7 +350,8 @@ def _permute(e, perm, fname):
 
 @fn("Permute", area=AREA, status="added",
     notes="Permute[expr, perm] moves part i to position perm(i) (Permute[{a, b, c}, {2, 3, 1}] = {c, a, b}); a "
-          "group gives the list over GroupElements")
+          "group gives the list over GroupElements"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _permute_fn(e: Expr, p: Expr) -> Expr:
     if _is_group(p):
         return L(*(_permute(e, g, "Permute") for g in _group_elements(p, "Permute")))
@@ -343,7 +363,8 @@ def _permute_fn(e: Expr, p: Expr) -> Expr:
 
 @fn("FindPermutation", area=AREA, status="added",
     notes="FindPermutation[e1, e2]: Cycles p with Permute[e1, p] == e2; FindPermutation[e] relative to Sort[e]; "
-          "repeated elements (ambiguous) raise")
+          "repeated elements (ambiguous) raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _findperm(e1: Expr, e2: Expr = None) -> Expr:
     from .. import kernel as K
     if e2 is None:
@@ -371,7 +392,8 @@ def _findperm(e1: Expr, e2: Expr = None) -> Expr:
 
 
 @fn("Signature", area=AREA, status="added",
-    notes="sign (+1/-1) of the permutation that sorts the list into canonical order; 0 if any element is repeated")
+    notes="sign (+1/-1) of the permutation that sorts the list into canonical order; 0 if any element is repeated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _signature(x: ListOf[Expr]) -> Expr:
     from .. import kernel as K
     if not is_list(x):
@@ -580,7 +602,8 @@ def _position(elems, p):
     return keys.get(p.key())
 
 
-@fn("GroupElementQ", area=AREA, status="added", notes="membership test for a permutation in a group")
+@fn("GroupElementQ", area=AREA, status="added", notes="membership test for a permutation in a group"
+                                                      ". Check: reference (differential cases in tests/library).")
 def _gelemq(g: Expr, p: Expr) -> Boolean:
     if not _is_group(g):
         raise Unevaluated()
@@ -596,7 +619,8 @@ def _gelemq(g: Expr, p: Expr) -> Boolean:
 
 
 @fn("GroupElementPosition", area=AREA, status="added",
-    notes="position of a permutation (or list of them) in GroupElements[group]; non-members raise")
+    notes="position of a permutation (or list of them) in GroupElements[group]; non-members raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gelempos(g: Expr, p: Expr) -> Expr:
     if not _is_group(g):
         raise Unevaluated()
@@ -614,7 +638,8 @@ def _gelempos(g: Expr, p: Expr) -> Expr:
 
 
 @fn("GroupMultiplicationTable", area=AREA, status="added",
-    notes="m[[i, j]] = position of PermutationProduct[g_i, g_j] in GroupElements (array indexing)")
+    notes="m[[i, j]] = position of PermutationProduct[g_i, g_j] in GroupElements (array indexing)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gmult(g: Expr) -> ListOf[Expr]:
     if not _is_group(g):
         raise Unevaluated()
@@ -627,7 +652,8 @@ def _gmult(g: Expr) -> ListOf[Expr]:
 
 @fn("GroupOrbits", area=AREA, status="added",
     notes="GroupOrbits[group] orbits of the support points; GroupOrbits[group, {p1, ...}] orbits of the given "
-          "points; each orbit sorted, orbits ordered by smallest point")
+          "points; each orbit sorted, orbits ordered by smallest point"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gorbits(g: Expr, pts: Expr = None) -> ListOf[Expr]:
     if not _is_group(g):
         raise Unevaluated()
@@ -701,7 +727,8 @@ def _frob_check(a, fname):
 
 @fn("FrobeniusNumber", area=AREA, status="added",
     notes="largest integer not a non-negative integer combination of the a_i; -1 if some a_i = 1; Infinity when "
-          "GCD > 1 (round-robin shortest paths over residues of the smallest a_i)")
+          "GCD > 1 (round-robin shortest paths over residues of the smallest a_i)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _frobnum(a: Expr) -> Expr:
     ns = sorted(set(_frob_check(a, "FrobeniusNumber")))
     g = 0
@@ -733,7 +760,8 @@ def _frobnum(a: Expr) -> Expr:
 
 @fn("FrobeniusSolve", area=AREA, status="added",
     notes="all non-negative integer solutions of a.x == b, sorted lexicographically; the 3-argument form (first m "
-          "solutions) raises because Wolfram's selection order is not reproduced")
+          "solutions) raises because Wolfram's selection order is not reproduced"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _frobsolve(a: Expr, b: Integer) -> ListOf[Expr]:
     ns = _frob_check(a, "FrobeniusSolve")
     t = int_value(b, "FrobeniusSolve", "target")
@@ -764,7 +792,8 @@ def _exact_int_or_uneval(n, fname):
 
 @fn("Hyperfactorial", area=AREA, status="added", listable=True,
     notes="Product[k^k, {k, n}] for integers n >= 0 (Hyperfactorial[0] = 1); approximate real arguments via mpmath "
-          "hyperfac; exact non-integers stay unevaluated")
+          "hyperfac; exact non-integers stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hyperfac(n: Expr) -> Expr:
     if _intq(n):
         k = int(n)
@@ -788,7 +817,8 @@ def _hyperfac(n: Expr) -> Expr:
 
 @fn("PolygonalNumber", area=AREA, status="added", listable=True,
     notes="PolygonalNumber[n] = n (n + 1)/2 (triangular); PolygonalNumber[r, n] = n ((r - 2) n - (r - 4))/2; "
-          "exact numeric arguments of any kind; symbolic arguments stay unevaluated")
+          "exact numeric arguments of any kind; symbolic arguments stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _polygonal(r: Expr, n: Expr = None) -> Expr:
     if n is None:
         r, n = 3, r
@@ -800,7 +830,8 @@ def _polygonal(r: Expr, n: Expr = None) -> Expr:
 
 
 @fn("AlternatingFactorial", area=AREA, status="added", listable=True,
-    notes="Sum[(-1)^(n - k) k!, {k, n}] for integers n >= 0 (OEIS A005165); other arguments stay unevaluated")
+    notes="Sum[(-1)^(n - k) k!, {k, n}] for integers n >= 0 (OEIS A005165); other arguments stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _altfact(n: Expr) -> Expr:
     k = _exact_int_or_uneval(n, "AlternatingFactorial")
     if k < 0:
@@ -813,7 +844,8 @@ def _altfact(n: Expr) -> Expr:
 
 
 @fn("Fibonorial", area=AREA, status="added", listable=True,
-    notes="Product[Fibonacci[k], {k, n}] for integers n >= 0 (OEIS A003266); other arguments stay unevaluated")
+    notes="Product[Fibonacci[k], {k, n}] for integers n >= 0 (OEIS A003266); other arguments stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fibonorial(n: Expr) -> Expr:
     k = _exact_int_or_uneval(n, "Fibonorial")
     if k < 0:

@@ -54,7 +54,8 @@ def _tol(t, fname):
 
 @fn("Bisection", area=AREA, status="fixed",
     notes="Bisection[f, x, a, b, tol=1e-6] root of f in [a, b]; raises unless f(a), f(b) bracket a root "
-          "(legacy returned an Error[...] expression)")
+          "(legacy returned an Error[...] expression)"
+          ". Check: reference (differential cases in tests/library).")
 def _bisect(f, x, a, b, tol=1e-6):
     _, _, g = _f1(f, x, "Bisection")
     a, b, tol = _fl(a, "Bisection", "a"), _fl(b, "Bisection", "b"), _tol(tol, "Bisection")
@@ -79,7 +80,8 @@ def _bisect(f, x, a, b, tol=1e-6):
 
 @fn("NewtonRaphson", area=AREA, status="fixed",
     notes="NewtonRaphson[f, x, x0, tol=1e-10, maxIter=100] with the exact derivative; raises on zero "
-          "derivative or non-convergence (legacy returned Error[...] expressions)")
+          "derivative or non-convergence (legacy returned Error[...] expressions)"
+          ". Check: reference (differential cases in tests/library).")
 def _newton(f, x, x0, tol=1e-10, maxit=100):
     e, v, g = _f1(f, x, "NewtonRaphson")
     _, _, dg = _f1(R(sp.diff(e, v)), x, "NewtonRaphson")
@@ -97,7 +99,8 @@ def _newton(f, x, x0, tol=1e-10, maxit=100):
 
 
 @fn("SecantMethod", area=AREA, status="fixed",
-    notes="SecantMethod[f, x, x0, x1, tol=1e-10, maxIter=100]; raises on failure (legacy returned Error[...])")
+    notes="SecantMethod[f, x, x0, x1, tol=1e-10, maxIter=100]; raises on failure (legacy returned Error[...])"
+          ". Check: reference (differential cases in tests/library).")
 def _secant(f, x, x0, x1, tol=1e-10, maxit=100):
     _, _, g = _f1(f, x, "SecantMethod")
     a, b = _fl(x0, "SecantMethod", "x0"), _fl(x1, "SecantMethod", "x1")
@@ -144,7 +147,9 @@ def _rk4(g, x, y, h):
 _ode("RungeKutta4", _rk4)
 
 
-@fn("TrapezoidalRule", area=AREA, status="verified", notes="composite trapezoid rule with n panels (default 100)")
+@fn("TrapezoidalRule", area=AREA, status="verified", notes="composite trapezoid rule with n panels (default 100)"
+                                                           ". Check: reference (differential cases in "
+                                                           "tests/library).")
 def _trap(f, x, a, b, n=100):
     _, _, g = _f1(f, x, "TrapezoidalRule")
     a, b, n = _fl(a, "TrapezoidalRule", "a"), _fl(b, "TrapezoidalRule", "b"), pos_int(n, "TrapezoidalRule", "n")
@@ -153,7 +158,8 @@ def _trap(f, x, a, b, n=100):
 
 
 @fn("SimpsonsRule", area=AREA, status="fixed",
-    notes="composite Simpson rule; n (default 100) must be even (legacy silently used n+1)")
+    notes="composite Simpson rule; n (default 100) must be even (legacy silently used n+1)"
+          ". Check: reference (differential cases in tests/library).")
 def _simpson(f, x, a, b, n=100):
     _, _, g = _f1(f, x, "SimpsonsRule")
     a, b, n = _fl(a, "SimpsonsRule", "a"), _fl(b, "SimpsonsRule", "b"), pos_int(n, "SimpsonsRule", "n")
@@ -165,7 +171,8 @@ def _simpson(f, x, a, b, n=100):
 
 
 @fn("GaussQuadrature", area=AREA, status="fixed",
-    notes="n-point Gauss-Legendre rule (default n = 5); legacy ignored n and used adaptive quadrature")
+    notes="n-point Gauss-Legendre rule (default n = 5); legacy ignored n and used adaptive quadrature"
+          ". Check: reference (differential cases in tests/library).")
 def _gauss(f, x, a, b, n=5):
     _, _, g = _f1(f, x, "GaussQuadrature")
     a, b, n = _fl(a, "GaussQuadrature", "a"), _fl(b, "GaussQuadrature", "b"), pos_int(n, "GaussQuadrature", "n")
@@ -179,7 +186,8 @@ def _gauss(f, x, a, b, n=5):
 
 @fn("MonteCarloIntegration", area=AREA, status="verified",
     notes="plain Monte Carlo estimate with n uniform samples (default 10000); random, reproducible after "
-          "SeedRandom[s]; standard error ~ (b-a)·σ/√n")
+          "SeedRandom[s]; standard error ~ (b-a)·σ/√n"
+          ". Check: reference (differential cases in tests/library).")
 def _mc(f, x, a, b, n=10000):
     from .statistics import _RNG
     _, _, g = _f1(f, x, "MonteCarloIntegration")

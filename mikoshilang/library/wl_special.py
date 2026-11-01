@@ -196,7 +196,8 @@ def _gamma_reg_exact(a, z):
 special("GammaRegularized", 2, lambda a, z: mpmath.gammainc(a, z, regularized=True), _gamma_reg_exact,
         symbolic=lambda a, z: sp.Integer(1) if z == 0 else sp.Integer(0) if z == sp.oo else None,
         notes="GammaRegularized[a, z] = Gamma[a, z]/Gamma[a] (regularized upper incomplete gamma Q); exact for "
-              "positive integer a; mpmath gammainc(regularized=True)")
+              "positive integer a; mpmath gammainc(regularized=True)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("GammaRegularized", 3, lambda a, z0, z1: mpmath.gammainc(a, z0, z1, regularized=True),
         lambda a, z0, z1: None if _gamma_reg_exact(a, z0) is None or _gamma_reg_exact(a, z1) is None
         else sp.simplify(_gamma_reg_exact(a, z0) - _gamma_reg_exact(a, z1)),
@@ -229,7 +230,8 @@ def _betareg_exact(z, a, b):
 
 
 special("BetaRegularized", 3, lambda z, a, b: mpmath.betainc(a, b, 0, z, regularized=True), _betareg_exact,
-        notes="BetaRegularized[z, a, b] = Beta[z, a, b]/Beta[a, b]; exact for positive integer a, b")
+        notes="BetaRegularized[z, a, b] = Beta[z, a, b]/Beta[a, b]; exact for positive integer a, b"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("BetaRegularized", 4, lambda z0, z1, a, b: mpmath.betainc(a, b, z0, z1, regularized=True),
         lambda z0, z1, a, b: None if _poly_beta(z0, z1, a, b) is None
         else sp.expand(_poly_beta(z0, z1, a, b) / sp.beta(a, b).rewrite(sp.gamma)),
@@ -282,25 +284,31 @@ def _inverfc_mp(x):
 
 special("InverseErf", 1, _inverf_mp, _inverf_exact,
         notes="inverse of Erf on [-1, 1]: InverseErf[0] = 0, InverseErf[1] = Infinity; complex and |x| > 1 "
-              "arguments raise (not supported)")
+              "arguments raise (not supported)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("InverseErfc", 1, _inverfc_mp,
         lambda x: sp.Integer(0) if x == 1 else sp.oo if x == 0 else -sp.oo if x == 2 else None,
         notes="inverse of Erfc on [0, 2] (Newton refinement keeps full relative precision for tiny arguments); "
-              "complex arguments raise (not supported)")
+              "complex arguments raise (not supported)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── exponential and trigonometric integrals ─────────────────────────────
 
 special("SinhIntegral", 1, mpmath.shi, _exact_via(sp.Shi),
-        notes="Shi(z) = Integral[Sinh[t]/t, {t, 0, z}]; mpmath shi")
+        notes="Shi(z) = Integral[Sinh[t]/t, {t, 0, z}]; mpmath shi"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("CoshIntegral", 1, mpmath.chi,
         lambda z: -sp.oo if z == 0 else _exact_via(sp.Chi)(z),
         notes="Chi(z) = EulerGamma + Log[z] + Integral[(Cosh[t] - 1)/t, {t, 0, z}], branch cut along the "
-              "negative real axis (CoshIntegral[-1.] = 0.837867 + 3.14159 I); CoshIntegral[0] = -Infinity")
+              "negative real axis (CoshIntegral[-1.] = 0.837867 + 3.14159 I); CoshIntegral[0] = -Infinity"
+              ". Check: reference (differential cases in tests/library).")
 special("FresnelS", 1, mpmath.fresnels, _exact_via(sp.fresnels),
-        notes="FresnelS[z] = Integral[Sin[Pi t^2/2], {t, 0, z}]; FresnelS[Infinity] = 1/2")
+        notes="FresnelS[z] = Integral[Sin[Pi t^2/2], {t, 0, z}]; FresnelS[Infinity] = 1/2"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("FresnelC", 1, mpmath.fresnelc, _exact_via(sp.fresnelc),
-        notes="FresnelC[z] = Integral[Cos[Pi t^2/2], {t, 0, z}]; FresnelC[Infinity] = 1/2")
+        notes="FresnelC[z] = Integral[Cos[Pi t^2/2], {t, 0, z}]; FresnelC[Infinity] = 1/2"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 # ───────────────────────────── Bessel-type functions ─────────────────────────────
@@ -338,7 +346,8 @@ def _sph_exact(kind):
 special("SphericalBesselJ", 2, _sph("j"), lambda n, z: (sp.Integer(1) if n == 0 else sp.Integer(0)) if z == 0 and n.is_Integer and n >= 0 else _sph_exact("j")(n, z),
         symbolic=_sph_exact("j"), status="fixed", replace=True,
         notes="j_n(z) = Sqrt[Pi/(2 z)] BesselJ[n + 1/2, z], elementary for integer n >= 0 (SphericalBesselJ[1, x] = "
-              "Sin[x]/x^2 - Cos[x]/x; legacy left it unevaluated); any order and precision via mpmath")
+              "Sin[x]/x^2 - Cos[x]/x; legacy left it unevaluated); any order and precision via mpmath"
+              ". Check: reference (differential cases in tests/library).")
 special("SphericalBesselY", 2, _sph("y"), _sph_exact("y"), symbolic=_sph_exact("y"),
         notes="y_n(z) = Sqrt[Pi/(2 z)] BesselY[n + 1/2, z]; SphericalBesselY[n, 0] = ComplexInfinity")
 special("SphericalHankelH1", 2, _sph("h1"), _sph_exact("h1"), symbolic=_sph_exact("h1"),
@@ -408,7 +417,8 @@ special("PolyLog", 2, mpmath.polylog, _polylog_exact, symbolic=_polylog_sym,
         notes="PolyLog[n, z] = Sum[z^k/k^n, {k, 1, Infinity}] continued analytically, branch cut [1, Infinity) "
               "(PolyLog[2, 2.] = 2.4674 - 2.17759 I); PolyLog[1, z] = -Log[1 - z], PolyLog[n, z] for integer n <= 0 "
               "is rational, PolyLog[s, 1] = Zeta[s], PolyLog[2, 1/2] = Pi^2/12 - Log[2]^2/2. The Nielsen form "
-              "PolyLog[n, p, z] is not supported")
+              "PolyLog[n, p, z] is not supported"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _wolfram_zeta_terms(s, a, f_tail, z=1):
@@ -461,7 +471,8 @@ def _zeta_shift(s, a):
 
 special("HurwitzZeta", 2, mpmath.zeta, lambda s, a: _zeta2_exact(s, a) if not (a.is_real and a <= 0) else None,
         status="fixed", replace=True,
-        notes="HurwitzZeta[s, a] = Sum[(k + a)^-s, {k, 0, Infinity}] (principal powers, also for Re(a) < 0)")
+        notes="HurwitzZeta[s, a] = Sum[(k + a)^-s, {k, 0, Infinity}] (principal powers, also for Re(a) < 0)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _lerch_tail(z, s):
@@ -472,7 +483,8 @@ special("LerchPhi", 3, lambda z, s, a: _wolfram_zeta_terms(s, a, _lerch_tail(z, 
         lambda z, s, a: sp.zeta(s, a) if z == 1 and a.is_positive and not isinstance(sp.zeta(s, a), sp.zeta)
         else (sp.Integer(1) / a ** s if z == 0 and a.is_positive else None),
         notes="LerchPhi[z, s, a] = Sum[z^k/((k + a)^2)^(s/2), {k, 0, Infinity}] (Wolfram's definition; terms with "
-              "k + a = 0 excluded); mpmath lerchphi for Re(a) > 0")
+              "k + a = 0 excluded); mpmath lerchphi for Re(a) > 0"
+              ". Check: reference (differential cases in tests/library).")
 special("HurwitzLerchPhi", 3, mpmath.lerchphi,
         lambda z, s, a: sp.Integer(1) / a ** s if z == 0 else None,
         notes="HurwitzLerchPhi[z, s, a] = Sum[z^k/(k + a)^s, {k, 0, Infinity}] (principal powers)")
@@ -480,7 +492,9 @@ special("HurwitzLerchPhi", 3, mpmath.lerchphi,
 
 special("StieltjesGamma", 1, mpmath.stieltjes, lambda n: sp.EulerGamma if n == 0 else None,
         notes="Stieltjes constants gamma_n (Laurent coefficients of Zeta at s = 1); StieltjesGamma[0] = "
-              "EulerGamma", check=lambda n: None)
+              "EulerGamma"
+              ". Check: exact (exact input gives exact results), reference (differential "
+              "cases in tests/library).", check=lambda n: None)
 special("StieltjesGamma", 2, mpmath.stieltjes, lambda n, a: -sp.polygamma(0, a) if n == 0 else None,
         notes="generalized Stieltjes constants gamma_n(a) of Zeta[s, a]; StieltjesGamma[0, a] = -PolyGamma[a]")
 
@@ -496,7 +510,8 @@ def _hyperu_exact(a, b, z):
 special("HypergeometricU", 3, mpmath.hyperu, _hyperu_exact,
         symbolic=lambda a, b, z: sp.Integer(1) if a == 0 else None,
         notes="Tricomi confluent hypergeometric function U(a, b, z) (branch cut along the negative real axis); "
-              "HypergeometricU[0, b, z] = 1")
+              "HypergeometricU[0, b, z] = 1"
+              ". Check: reference (differential cases in tests/library).")
 
 
 def _params(x, name):
@@ -788,13 +803,15 @@ def _wp_args(name):
 @fn("WeierstrassP", area=AREA, status="added",
     notes="WeierstrassP[u, {g2, g3}] via the Jacobi form e3 + (e1 - e3)/sn^2(Sqrt[e1 - e3] u | m), "
           "m = (e2 - e3)/(e1 - e3), with e_i the roots of 4 t^3 - g2 t - g3 (valid for any ordering of the roots); "
-          "approximate arguments only; degenerate invariants raise")
+          "approximate arguments only; degenerate invariants raise"
+          ". Check: reference (differential cases in tests/library).")
 def _weierstrassp(u: Expr, g: Expr) -> Expr:
     return _weier(u, g, False, "WeierstrassP")
 
 
 @fn("WeierstrassPPrime", area=AREA, status="added",
-    notes="derivative of WeierstrassP[u, {g2, g3}] with respect to u")
+    notes="derivative of WeierstrassP[u, {g2, g3}] with respect to u"
+          ". Check: reference (differential cases in tests/library).")
 def _weierstrassprime(u: Expr, g: Expr) -> Expr:
     return _weier(u, g, True, "WeierstrassPPrime")
 
@@ -838,7 +855,8 @@ def _barnes_exact(z):
 
 special("BarnesG", 1, mpmath.barnesg, _barnes_exact,
         notes="Barnes G-function, G(z + 1) = Gamma(z) G(z); BarnesG[n] = Prod[k!, {k, 0, n - 2}] for positive "
-              "integers, 0 at non-positive integers; mpmath barnesg")
+              "integers, 0 at non-positive integers; mpmath barnesg"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _poch_exact(a, n):
@@ -859,7 +877,8 @@ special("Pochhammer", 2, _poch_mp, _poch_exact,
         symbolic=lambda a, n: sp.Integer(1) if n == 0 else (sp.expand(sp.rf(a, n)) if n.is_Integer and n < 0 and False
                                                           else None),
         notes="rising factorial (a)_n = Gamma[a + n]/Gamma[a]; exact for integer n (including negative n: "
-              "Pochhammer[a, -n] = 1/((a - 1)...(a - n))); stays unevaluated for symbolic a (Wolfram)")
+              "Pochhammer[a, -n] = 1/((a - 1)...(a - n))); stays unevaluated for symbolic a (Wolfram)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _fpower_exact(x, n, h=sp.Integer(1)):
@@ -880,7 +899,8 @@ def _fpower_exact(x, n, h=sp.Integer(1)):
 
 special("FactorialPower", 2, lambda x, n: mpmath.gamma(x + 1) / mpmath.gamma(x - n + 1), _fpower_exact,
         notes="falling factorial x (x - 1) ... (x - n + 1) = Gamma[x + 1]/Gamma[x - n + 1]; FactorialPower[x, n, h] "
-              "= x (x - h) ... (x - (n - 1) h); stays unevaluated for symbolic x")
+              "= x (x - h) ... (x - (n - 1) h); stays unevaluated for symbolic x"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("FactorialPower", 3, lambda x, n, h: h ** n * mpmath.gamma(x / h + 1) / mpmath.gamma(x / h - n + 1),
         _fpower_exact, notes="FactorialPower[x, n, h]")
 
@@ -900,7 +920,8 @@ def _expint_exact(n, z):
 special("ExpIntegralE", 2, mpmath.expint, _expint_exact, symbolic=lambda n, z: sp.expint(n, z),
         status="fixed", replace=True,
         notes="ExpIntegralE[n, 0] = 1/(n - 1) for n > 1 and ComplexInfinity for n <= 1 (legacy left the integer "
-              "cases unevaluated); numeric values at any precision via mpmath")
+              "cases unevaluated); numeric values at any precision via mpmath"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _ci_exact(z):
@@ -911,7 +932,8 @@ def _ci_exact(z):
 
 special("CosIntegral", 1, mpmath.ci, _ci_exact, symbolic=sp.Ci, status="fixed", replace=True,
         notes="CosIntegral[0] = -Infinity (legacy gave ComplexInfinity); branch cut along the negative real axis "
-              "(CosIntegral[-1.] = Ci(1) + I Pi)")
+              "(CosIntegral[-1.] = Ci(1) + I Pi)"
+              ". Check: reference (differential cases in tests/library).")
 
 
 def _lag_exact(n, x, a=None):
@@ -927,7 +949,8 @@ def _lag_exact(n, x, a=None):
 special("LaguerreL", 2, lambda n, x: mpmath.laguerre(n, 0, x), lambda n, x: _lag_exact(n, x),
         symbolic=lambda n, x: _lag_exact(n, x) if n.is_Integer else None, status="fixed", replace=True,
         notes="LaguerreL[n, x]: polynomial for integer n, the confluent form 1F1(-n; 1; x) for non-integer n "
-              "(legacy raised 'n should be an integer')")
+              "(legacy raised 'n should be an integer')"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("LaguerreL", 3, lambda n, a, x: mpmath.laguerre(n, a, x), lambda n, a, x: _lag_exact(n, x, a),
         symbolic=lambda n, a, x: _lag_exact(n, x, a) if n.is_Integer and n >= 0 else None, status="fixed",
         replace=True,
@@ -952,7 +975,8 @@ special("LegendreP", 2, lambda n, x: mpmath.legenp(n, 0, x, type=2),
         lambda n, x: sp.expand(sp.legendre(n, x)) if n.is_Integer and n >= 0 else None,
         symbolic=lambda n, x: sp.expand(sp.legendre(n, x)) if n.is_Integer and n >= 0 else None,
         status="fixed", replace=True,
-        notes="LegendreP[n, x]: polynomial for integer n >= 0, the Legendre function for other n (mpmath)")
+        notes="LegendreP[n, x]: polynomial for integer n >= 0, the Legendre function for other n (mpmath)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("LegendreP", 3, lambda n, m, x: mpmath.legenp(n, m, x, type=2), _lp_exact,
         symbolic=_lp_exact, status="fixed", replace=True,
         notes="LegendreP[n, m, x] with the Condon-Shortley phase (Wolfram type 1/2); non-integer degree/order "
@@ -980,7 +1004,8 @@ def _lq_sym(n, x):
 special("LegendreQ", 2, lambda n, x: mpmath.legenq(n, 0, x, type=2), _lq_sym, symbolic=_lq_sym,
         status="fixed", replace=True,
         notes="LegendreQ[n, x] (Wolfram type 1): Q0 = (Log[1 + x] - Log[1 - x])/2 and the three-term recurrence, so "
-              "|x| > 1 now continues analytically (LegendreQ[0, 2.] = 0.549306 - 1.5708 I) instead of raising")
+              "|x| > 1 now continues analytically (LegendreQ[0, 2.] = 0.549306 - 1.5708 I) instead of raising"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 special("LegendreQ", 3, lambda n, m, x: mpmath.legenq(n, m, x, type=2),
         lambda n, m, x: _lq_sym(n, x) if m.is_zero else None,
         symbolic=lambda n, m, x: _lq_sym(n, x) if m.is_zero else None, status="added",
