@@ -368,3 +368,13 @@ def _min(*args):
         if v == best:
             return item          # Wolfram returns the extremal element itself: Min[1/2, 0.4] = 1/2
     return R(best)
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "Abs", "ArcCos", "ArcCot", "ArcCsc", "ArcSec", "Ceiling", "Conjugate", "Cos", "Cot", "Csc", "Exp", "Floor",
+          "ImaginaryPart", "RealPart", "Sec", "Sin", "Sqrt", "Tan")
+_add_check("reference (differential cases in tests/library).",
+          "ArcCosh", "ArcSin", "ArcSinh", "ArcTanh", "Cosh", "Coth", "Csch", "Sech", "Sinh", "Tanh")

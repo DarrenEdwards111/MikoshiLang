@@ -253,7 +253,8 @@ def _monolist(e: Expr, v: Expr = None, order: Expr = None) -> ListOf[Expr]:
          "Exponent[p, x]: highest power of x (Exponent[0, x] = -Infinity), also for sums of non-integer powers; "
          "batch 4: Exponent[p, x, h] applies h to the list of distinct exponents (in increasing order, 0 for a "
          "constant term): Exponent[x^3 + x, x, Min] -> 1, Exponent[1 + x^2, x, List] -> {0, 2}; threads over "
-         "lists")
+         "lists"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _exponent(e: Expr, x: Expr, h: Expr = None) -> Expr:
     if is_list(e):
         return L(*(_exponent(y, x, h) for y in e.args))
@@ -955,7 +956,8 @@ def _element1(v, dom):
     notes="Element[x, dom] for dom in Reals, Integers, Rationals, Algebraics, Complexes, Primes, Booleans: True or "
           "False when decidable for explicit numbers (Element[Sqrt[2], Rationals] -> False, Element[Pi, "
           "Algebraics] -> False), unevaluated for symbols (used in assumptions); Element[{x1, ...}, dom] tests "
-          "every element (False if any is False)")
+          "every element (False if any is False)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _element(x, dom):
     if not isinstance(dom, Symbol) or dom.name not in set(_DOMAINS) | {"Booleans"}:
         raise Unevaluated()
@@ -1844,14 +1846,16 @@ def _opt_result(obj, vs, kind, fname):
          "critical points, closed endpoints and limits at open ends and ±Infinity -> {min, {x -> x0}}; an "
          "infimum that is not attained gives the boundary point ({0, {x -> 0}} for {x, x > 0}; {-Infinity, {x -> "
          "-Infinity}} when unbounded), as Wolfram (which also warns); constraints in several "
-         "variables raise")
+         "variables raise"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _minimize(obj: Expr, vs: Expr, *rest: Expr) -> Expr:
     return _opt_result(obj, vs, "min", "Minimize")
 
 
 @replace("Maximize", AREA,
          "Maximize[f, x] (unconstrained, as before) and batch 4: Maximize[{f, cons}, x] for one variable, as "
-         "Minimize")
+         "Minimize"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _maximize(obj: Expr, vs: Expr, *rest: Expr) -> Expr:
     return _opt_result(obj, vs, "max", "Maximize")
 

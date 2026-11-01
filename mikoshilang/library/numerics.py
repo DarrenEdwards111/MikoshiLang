@@ -194,3 +194,10 @@ def _mc(f, x, a, b, n=10000):
     a, b = _fl(a, "MonteCarloIntegration", "a"), _fl(b, "MonteCarloIntegration", "b")
     n = pos_int(n, "MonteCarloIntegration", "n")
     return (b - a) * sum(g(_RNG.uniform(a, b)) for _ in range(n)) / n
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("reference (differential cases in tests/library).",
+          "EulerMethod", "RungeKutta4")

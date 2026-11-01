@@ -65,7 +65,9 @@ def _primepi(x):
     return R(sp.primepi(int(sp.floor(v))) if v >= 2 else 0)
 
 
-@fn("Prime", area=AREA, status="fixed", listable=True, notes="Prime[n] for positive integers only; " + NO_TRUNC)
+@fn("Prime", area=AREA, status="fixed", listable=True, notes="Prime[n] for positive integers only; " + NO_TRUNC +
+                                                             ". Check: exact (exact input gives exact results), "
+                                                             "reference (differential cases in tests/library).")
 def _prime(n):
     return R(sp.prime(pos_int(n, "Prime", "index")))
 
@@ -89,7 +91,8 @@ def _factor(n, fname):
 
 @fn("FactorInteger", area=AREA, status="fixed", listable=True,
     notes="FactorInteger[1] returned {} (Wolfram {{1,1}}), 0 and rationals failed; now {{-1,1},...} for negatives, "
-          "negative exponents for rationals")
+          "negative exponents for rationals"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _factorint(n):
     return _factor(n, "FactorInteger")
 
@@ -109,12 +112,17 @@ def _nonzero(n, fname):
     return abs(k)
 
 
-@fn("Divisors", area=AREA, status="fixed", listable=True, notes="Divisors[-n] = Divisors[n]; 0 raises; " + NO_TRUNC)
+@fn("Divisors", area=AREA, status="fixed", listable=True, notes="Divisors[-n] = Divisors[n]; 0 raises; " + NO_TRUNC +
+                                                                ". Check: exact (exact input gives exact results), "
+                                                                "reference (differential cases in tests/library).")
 def _divisors(n):
     return R(sp.divisors(_nonzero(n, "Divisors")))
 
 
-@fn("DivisorCount", area=AREA, status="fixed", listable=True, notes="number of divisors; " + NO_TRUNC)
+@fn("DivisorCount", area=AREA, status="fixed", listable=True, notes="number of divisors; " + NO_TRUNC +
+                                                                    ". Check: exact (exact input gives exact "
+                                                                    "results), reference (differential cases in "
+                                                                    "tests/library).")
 def _divisorcount(n):
     return R(sp.divisor_count(_nonzero(n, "DivisorCount")))
 
@@ -293,7 +301,8 @@ def _lucas(n):
 
 
 fn("Lucas", area=AREA, status="fixed", listable=True,
-   notes="MikoshiLang alias of LucasL; negative and real n added; " + NO_TRUNC)(_lucas)
+   notes="MikoshiLang alias of LucasL; negative and real n added; " + NO_TRUNC +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(_lucas)
 fn("LucasL", area=AREA, status="promoted", listable=True, notes="Lucas numbers L_n")(_lucas)
 
 
@@ -305,8 +314,13 @@ def _bernoulli(n, x=None):
 
 
 B1 = "Bernoulli[1] returned +1/2 (SymPy >= 1.12 convention); Wolfram BernoulliB[1] = -1/2"
-fn("Bernoulli", area=AREA, status="fixed", listable=True, notes=B1)(_bernoulli)
-fn("BernoulliNumber", area=AREA, status="fixed", listable=True, notes=B1)(_bernoulli)
+fn("Bernoulli", area=AREA, status="fixed", listable=True, notes=B1 +
+                                                                ". Check: exact (exact input gives exact results), "
+                                                                "reference (differential cases in tests/library).")(_bernoulli)
+fn("BernoulliNumber", area=AREA, status="fixed", listable=True, notes=B1 +
+                                                                      ". Check: exact (exact input gives exact "
+                                                                      "results), reference (differential cases in "
+                                                                      "tests/library).")(_bernoulli)
 fn("BernoulliB", area=AREA, status="promoted", listable=True, notes="BernoulliB[n] and BernoulliB[n, x]"
                                                                     ". Check: exact (exact input gives exact "
                                                                     "results), reference (differential cases in "
@@ -338,7 +352,8 @@ def _catalan_call(*args):
 
 
 @fn("CatalanNumber", area=AREA, status="fixed", listable=True,
-    notes="exact for any exact argument, symbolic n stays unevaluated; " + NO_TRUNC)
+    notes="exact for any exact argument, symbolic n stays unevaluated; " + NO_TRUNC +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _catalan(n):
     if not is_numeric_value(n):
         raise Unevaluated()
@@ -352,8 +367,12 @@ def _bell(n, x=None):
     return R(sp.bell(k))
 
 
-fn("Bell", area=AREA, status="fixed", listable=True, notes="alias of BellB; " + NO_TRUNC)(_bell)
-fn("BellNumber", area=AREA, status="fixed", listable=True, notes="alias of BellB; " + NO_TRUNC)(_bell)
+fn("Bell", area=AREA, status="fixed", listable=True, notes="alias of BellB; " + NO_TRUNC +
+                                                           ". Check: exact (exact input gives exact results), "
+                                                           "reference (differential cases in tests/library).")(_bell)
+fn("BellNumber", area=AREA, status="fixed", listable=True, notes="alias of BellB; " + NO_TRUNC +
+                                                                 ". Check: exact (exact input gives exact results), "
+                                                                 "reference (differential cases in tests/library).")(_bell)
 fn("BellB", area=AREA, status="promoted", listable=True, notes="BellB[n] and Bell polynomials BellB[n, x]"
                                                                ". Check: exact (exact input gives exact results), "
                                                                "reference (differential cases in tests/library).")(_bell)
@@ -373,7 +392,9 @@ def _s1(n, k):
     return _stirling(n, k, 1)
 
 
-@fn("StirlingS2", area=AREA, status="fixed", listable=True, notes="Stirling numbers of the second kind; " + NO_TRUNC)
+@fn("StirlingS2", area=AREA, status="fixed", listable=True, notes="Stirling numbers of the second kind; " + NO_TRUNC +
+                                                                  ". Check: exact (exact input gives exact results), "
+                                                                  "reference (differential cases in tests/library).")
 def _s2(n, k):
     return _stirling(n, k, 2)
 
@@ -389,7 +410,8 @@ def _stirling_any(n, k, kind=2):
 
 
 @fn("DigitSum", area=AREA, status="fixed", listable=True,
-    notes="DigitSum[n] and DigitSum[n, b] (sum of base-b digits of |n|); " + NO_TRUNC)
+    notes="DigitSum[n] and DigitSum[n, b] (sum of base-b digits of |n|); " + NO_TRUNC +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _digitsum(n, b=10):
     k, base = abs(int_arg(n, "DigitSum")), int_arg(b, "DigitSum", "base")
     if base < 2:
@@ -435,7 +457,8 @@ def _digitcount(n, b=10, d=None):
 
 @fn("IntegerDigits", area=AREA, status="fixed", listable=True,
     notes="legacy silently used base 10 for a non-integer base; now IntegerDigits[n], [n, b], [n, b, len] "
-          "(digits of |n|, padded/truncated on the left)")
+          "(digits of |n|, padded/truncated on the left)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _intdigits(n, b=10, length=None):
     k = int_arg(n, "IntegerDigits")
     base = _base(b, "IntegerDigits")
@@ -456,7 +479,8 @@ def _letter_value(ch, fname):
 
 @fn("FromDigits", area=AREA, status="fixed",
     notes="now accepts digit strings (letters a-z = 10-35), symbolic digits and digits >= base as Wolfram; "
-          "legacy silently used base 10 for invalid bases")
+          "legacy silently used base 10 for invalid bases"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fromdigits(ds, b=10):
     if isinstance(b, (Symbol, Expr)) and not isinstance(b, str):
         base = sym(b, "FromDigits")
@@ -519,7 +543,8 @@ def _baseconvert(n, b1, b2):
 
 
 @fn("CarmichaelLambda", area=AREA, status="fixed", listable=True,
-    notes="CarmichaelLambda[-n] = CarmichaelLambda[n]; 0 raises; " + NO_TRUNC)
+    notes="CarmichaelLambda[-n] = CarmichaelLambda[n]; 0 raises; " + NO_TRUNC +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _carmichael(n):
     m = _nonzero(n, "CarmichaelLambda")
     lam = 1
@@ -533,7 +558,8 @@ def _carmichael(n):
 
 
 @fn("Radical", area=AREA, status="fixed", listable=True,
-    notes="product of the distinct primes dividing n; Radical[0] raises; " + NO_TRUNC)
+    notes="product of the distinct primes dividing n; Radical[0] raises; " + NO_TRUNC +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _radical(n):
     m = _nonzero(n, "Radical")
     return R(math.prod(sp.factorint(m).keys()) if m > 1 else 1)
@@ -553,7 +579,8 @@ def _jordan(n, k=1):
 
 
 @fn("LegendreSymbol", area=AREA, status="fixed", listable=True,
-    notes="p must be an odd prime (clear error otherwise); " + NO_TRUNC)
+    notes="p must be an odd prime (clear error otherwise); " + NO_TRUNC +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _legendre(a, p):
     aa, pp = int_arg(a, "LegendreSymbol"), int_arg(p, "LegendreSymbol")
     if pp < 3 or not sp.isprime(pp):
@@ -562,7 +589,8 @@ def _legendre(a, p):
 
 
 @fn("JacobiSymbol", area=AREA, status="fixed", listable=True,
-    notes="m must be a positive odd integer (clear error otherwise); " + NO_TRUNC)
+    notes="m must be a positive odd integer (clear error otherwise); " + NO_TRUNC +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _jacobi(n, m):
     nn, mm = int_arg(n, "JacobiSymbol"), int_arg(m, "JacobiSymbol")
     if mm <= 0 or mm % 2 == 0:
@@ -634,7 +662,8 @@ def _primrootq(a, n):
 
 
 @fn("MultiplicativeOrder", area=AREA, status="fixed", listable=True,
-    notes="raises a clear error when gcd(k, n) != 1; " + NO_TRUNC)
+    notes="raises a clear error when gcd(k, n) != 1; " + NO_TRUNC +
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _order(k, n):
     kk, m = int_arg(k, "MultiplicativeOrder"), pos_int(n, "MultiplicativeOrder", "modulus")
     if math.gcd(kk, m) != 1:

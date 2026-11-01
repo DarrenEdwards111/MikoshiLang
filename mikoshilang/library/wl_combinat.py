@@ -534,7 +534,8 @@ def _sympy_group(gens, deg):
 
 @fn("GroupOrder", area=AREA, status="added",
     notes="order of SymmetricGroup (n!), AlternatingGroup (n!/2, 1 for n <= 2), CyclicGroup (n), DihedralGroup (2n), "
-          "AbelianGroup (product) or a PermutationGroup (Schreier-Sims via SymPy)")
+          "AbelianGroup (product) or a PermutationGroup (Schreier-Sims via SymPy)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gorder(g):
     if not _is_group(g):
         raise Unevaluated()
@@ -559,7 +560,8 @@ def _gorder(g):
 
 @fn("GroupElements", area=AREA, status="added",
     notes="all elements as Cycles objects sorted by image lists (Wolfram's standard order for a sorted base; the "
-          "identity is first); GroupElements[g, {r1, ...}] picks positions (negative from the end)")
+          "identity is first); GroupElements[g, {r1, ...}] picks positions (negative from the end)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gelements(g, positions=None):
     if not _is_group(g):
         raise Unevaluated()
@@ -578,7 +580,8 @@ def _gelements(g, positions=None):
 @fn("GroupGenerators", area=AREA, status="added",
     notes="generators of a PermutationGroup (as given, identities removed), SymmetricGroup[n] "
           "({Cycles[{{1, 2}}], Cycles[{{1, ..., n}}]}) and CyclicGroup[n]; other named groups raise because "
-          "Wolfram's chosen generating sets are not reproduced")
+          "Wolfram's chosen generating sets are not reproduced"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ggens(g):
     if not _is_group(g):
         raise Unevaluated()

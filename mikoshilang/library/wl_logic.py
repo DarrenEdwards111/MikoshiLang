@@ -959,11 +959,27 @@ def _install(name, impl, min_args, notes):
 
 
 _install("Xor", _xor_partial, 2, "variadic exclusive or; True/False arguments are simplified away "
-         "(Xor[True, c] = !c, Xor[False, c] = c; batch 6)")
-_install("Xnor", _xnor_partial, 2, "Not[Xor[...]] with the same partial evaluation as Xor (batch 6)")
-_install("Nand", _nand_partial, 2, "variadic Not[And[...]]; Nand[False, x] = True, Nand[True, x] = !x (batch 6)")
-_install("Nor", _nor_partial, 2, "variadic Not[Or[...]]; Nor[True, x] = False, Nor[False, x] = !x (batch 6)")
+         "(Xor[True, c] = !c, Xor[False, c] = c; batch 6)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
+_install("Xnor", _xnor_partial, 2, "Not[Xor[...]] with the same partial evaluation as Xor (batch 6)"
+                                   ". Check: exact (exact input gives exact results), reference (differential cases "
+                                   "in tests/library).")
+_install("Nand", _nand_partial, 2, "variadic Not[And[...]]; Nand[False, x] = True, Nand[True, x] = !x (batch 6)"
+                                   ". Check: exact (exact input gives exact results), reference (differential cases "
+                                   "in tests/library).")
+_install("Nor", _nor_partial, 2, "variadic Not[Or[...]]; Nor[True, x] = False, Nor[False, x] = !x (batch 6)"
+                                 ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                 "tests/library).")
 _install("Implies", _implies_partial, 2, "Implies[p, q]; Implies[True, q] = q, Implies[False, q] = True, "
-         "Implies[p, True] = True, Implies[p, False] = !p (batch 6)")
+         "Implies[p, True] = True, Implies[p, False] = !p (batch 6)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _install("Equivalent", _equiv_partial, 2, "variadic; True when all arguments are equal booleans; "
-         "Equivalent[True, a, b] = a && b, Equivalent[False, a] = !a, mixed True/False = False (batch 6)")
+         "Equivalent[True, a, b] = a && b, Equivalent[False, a] = !a, mixed True/False = False (batch 6)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "ForAll")

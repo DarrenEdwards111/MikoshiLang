@@ -35,7 +35,8 @@ def _implies(p, q):
 
 _conn("Equivalent", lambda b: all(x == b[0] for x in b), "variadic; True when all arguments are equal booleans")
 _conn("Iff", lambda b: all(x == b[0] for x in b),
-      "alias of Equivalent; legacy used Python bool() so Iff[x, y] was True for any symbols")
+      "alias of Equivalent; legacy used Python bool() so Iff[x, y] was True for any symbols"
+      ". Check: reference (differential cases in tests/library).")
 _conn("Xor", lambda b: sum(b) % 2 == 1, "variadic exclusive or (odd number of True)")
 _conn("Xnor", lambda b: sum(b) % 2 == 0,
       "Not[Xor[...]]; legacy used Python bool() so Xnor[x, y] was True for any symbols")
