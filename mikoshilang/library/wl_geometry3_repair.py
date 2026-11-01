@@ -507,13 +507,17 @@ def repair(S, kinds, f):
                 nv = len(P) - 1
                 for i in g:
                     faces[i] = tuple(nv if w == v else w for w in faces[i])
-    if "FlippedFaces" in kinds and S.P.shape[1] == 3:
+    if "FlippedFaces" in kinds and "HoleEdges" in kinds and S.P.shape[1] == 3:  # consistent loops for filling
         S4 = Surf.__new__(Surf)
         S4.P, S4.faces = np.array(P), faces
         fl_ = orientation_classes(S4)
         faces = [fc[::-1] if i in fl_ else fc for i, fc in enumerate(faces)]
     if "HoleEdges" in kinds and faces:
+        directed = {e for fc in faces for e in _edges_of(fc)}
         for lp in _boundary_loops(faces):
+            lp = list(lp)
+            if (lp[0], lp[1]) in directed:  # fill against the neighbouring faces' orientation
+                lp = lp[::-1]
             if len(lp) == 3:
                 faces.append((lp[0], lp[1], lp[2]))
                 continue
@@ -521,6 +525,11 @@ def repair(S, kinds, f):
             c = len(P) - 1
             for k in range(len(lp)):
                 faces.append((lp[k], lp[(k + 1) % len(lp)], c))
+    if "FlippedFaces" in kinds and S.P.shape[1] == 3:  # after hole filling, so closed parts end outward
+        S4 = Surf.__new__(Surf)
+        S4.P, S4.faces = np.array(P), faces
+        fl_ = orientation_classes(S4)
+        faces = [fc[::-1] if i in fl_ else fc for i, fc in enumerate(faces)]
     if "IsolatedVertices" in kinds:
         points = []
     cells = [("Polygon" if len(fc) > 3 else "Triangle", fc) for fc in faces] + \
