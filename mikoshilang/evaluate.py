@@ -97,6 +97,9 @@ def evaluate(expr, depth: int = 0) -> Any:
         except (BreakSignal, ContinueSignal):
             raise ValueError("Break[] or Continue[] used outside a loop") from None
         except ThrowSignal as t:
+            from .library.wl_errors import ConfirmThrow, uncaught_confirm
+            if isinstance(t, ConfirmThrow):
+                return uncaught_confirm(t)
             raise ValueError(f"Uncaught Throw[{t.value!r}]") from None
     return _evaluate(expr, depth)
 

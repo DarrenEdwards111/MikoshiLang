@@ -1,22 +1,54 @@
+<p align="center"><img src="mikoshilang-logo-v2.jpg" alt="MikoshiLang" width="320"></p>
+
 # MikoshiLang
 
-A small Wolfram-style symbolic language backed by SymPy, built by Mikoshi Ltd.
-**Alpha software, not a Mathematica replacement or a proof verifier.**
+**Wolfram-style symbolic computing for Python, and it tells you how it checked each answer.**
 
-## Correctness repair (3.8.0 development)
+[![PyPI](https://img.shields.io/pypi/v/mikoshilang)](https://pypi.org/project/mikoshilang/)
+[![Tests](https://github.com/DarrenEdwards111/MikoshiLang/actions/workflows/tests.yml/badge.svg)](https://github.com/DarrenEdwards111/MikoshiLang/actions/workflows/tests.yml)
+[![Verification](https://github.com/DarrenEdwards111/MikoshiLang/actions/workflows/verification.yml/badge.svg)](https://github.com/DarrenEdwards111/MikoshiLang/actions/workflows/verification.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](pyproject.toml)
 
-The previous “6,324 working functions” claim was not supported by the implementation.
-Generated modules `extended4` through `extended37` are now **quarantined**: they are
-retained as historical source but are not registered by the evaluator. This disables
-placeholder constants, identity stubs, numbered filler and unreviewed formulas.
-Calling a quarantined operation raises `NotImplementedError`, unless an independently
-implemented core overload exists (for example SHA256 and graph operations).
-The retained `extended`, `extended2`, and `extended3` wrappers are not all formally
-verified; consult tests and check results for consequential uses.
-Historical manuals and completion reports describe the old version and are not a
-current capability specification. This README supersedes their function-count claims.
+MikoshiLang is an open-source symbolic language that runs inside Python. You write Wolfram-style code
+(`f[x_] := x^2`, `Solve`, `DSolve`, `Integrate`, `Series`, pattern rules, `Module`/`Block` scoping) and get
+Python values back. It is built on SymPy and NumPy and follows one rule: **a correct result, a clear error,
+or left unevaluated, never silently wrong.** It implements **4,402 of the 6,716** documented Wolfram Language
+symbols with reviewed, value-tested semantics (92.9% of the 4,739 that are feasible without Wolfram's curated
+data, notebooks or cloud); the [coverage roadmap](docs/wolfram_coverage_roadmap.md) lists exactly which.
 
-## Install and run
+```sh
+pip install mikoshilang            # core (SymPy + NumPy)
+pip install "mikoshilang[all]"     # + Jupyter kernel, plotting, SciPy, NetworkX, scikit-learn
+mikoshilang                        # REPL
+```
+
+```python
+from mikoshilang import Session
+s = Session()
+s.eval("Solve[{x + y == 3, x - y == 1}, {x, y}]")   # {{x -> 2, y -> 1}}
+s.evaluate("Verify[FactorInteger[2^64 + 1]]")      # Certified[{{274177, 1}, {67280421310721, 1}}, <|...|>]
+```
+
+**Three pillars**
+
+- **Verification:** `Verify[expr]` re-checks a result with a method independent of the one that produced it and
+  labels it `Certified` (an exact certificate was checked), `Checked` (symbolic or numerical evidence),
+  `Unchecked` (no checker applies) or `Failed[value, info]`. Every reviewed function carries an executable
+  `Check:` note that CI runs on every push. [More](#verification)
+- **Python interop:** results come back as Python data (`Fraction`, lists, dicts, NumPy arrays), typed Python
+  functions become language heads with one decorator, and calling Python from MikoshiLang is off unless you
+  allow-list modules. [More](#python-interop)
+- **Types (opt-in):** signatures are read from Python annotations; `Session(check_types=True)` reports type
+  errors, and symbolic arguments are never type errors. [More](#types-opt-in)
+
+Also included: a REPL, a Jupyter kernel, packed NumPy arrays, and safe defaults (network and Python access are off
+unless enabled). Runnable scripts are in [`examples/`](examples/).
+
+**What it isn't:** a Mathematica replacement or a proof assistant. It's alpha software; check results you rely on
+(that is what `Verify` is for).
+
+## Install from source
 
 ```sh
 python -m pip install .
@@ -24,6 +56,9 @@ python -m pip install .
 python -m pip install '.[all]'
 mikoshilang
 ```
+
+SciPy-backed heads such as `NDSolve` need the `signal` or `all` extra; on a minimal install they raise a
+clear "requires SciPy" error.
 
 ```python
 from mikoshilang import Session
@@ -147,7 +182,8 @@ What is implemented, and checked by value-level tests (see `tests/`):
   solution); `DSolve` for ODEs and ODE systems in `y[x]`, with initial conditions,
   returning `{{y[x] -> ...}}` (constants `C[1]`, `C[2]`) or `y -> Function[{x}, ...]`;
   `Series[f, {x, x0, n}]` up to and including order n plus an `O[x]^(n+1)` term
-  (`Normal` drops it); two-sided `Limit` (`Indeterminate` when one-sided limits differ).
+  (`Normal` drops it), including multivariate `Series`; `Limit`, two-sided by default
+  (`Indeterminate` when one-sided limits differ) or one-sided with `Direction -> "FromAbove"`/`"FromBelow"`.
 - **Display** — the default form is re-parseable InputForm (`x^3/3`, `Sqrt[Pi]`,
   `1/(2*x)`, `E^x`); `InputForm[...]`, `FullForm[...]` (`Rational[1, 3]`), `ToString`.
 - Exact integer/rational arithmetic and canonical algebra use SymPy. Decimal literals
@@ -159,12 +195,14 @@ What is implemented, and checked by value-level tests (see `tests/`):
 - Recursion is limited to depth 1024 (`RecursionError`), `Range`/`Table` to
   100,000 entries. This is not a resource sandbox.
 
-**Not supported (raises an error rather than guessing):** optional patterns (`x_.`,
-`x_:v`), the `|` and `..` pattern operators, `Span` (`;;`), the `.` operator (use
-`Dot[...]`), `%`, associations, UpValues/TagSet, `#0`, `Function` with an
-attributes argument, `Sort` of general symbolic expressions without an ordering
-function, `Map`/`Apply` at levels other than `{1}`, multivariate `Series`, `Solve`
-with inequalities or a domain, `Limit` directions, PDEs. Term order in sums follows
+Also implemented: optional and default patterns (`x_.`, `x_:v`), the `|` and `..` pattern operators,
+`Span` (`;;`), the `.` operator, associations (`<|"a" -> 1|>`, `Keys`, `Lookup`, ...), UpValues/TagSet
+(`h /: q[h] = 7`), `Map`/`Apply` at other levels, and `Solve` over a domain (`Solve[x^2 == -1, x, Reals]`).
+
+**Not supported (raises an error rather than guessing):** `#0` (recursive pure functions), `Function` with an
+attributes argument, `Sort` of general symbolic expressions without an ordering function, `Solve` with
+inequalities or logical combinations (use `Reduce`), and PDEs in `DSolve`. `%`/`Out[n]` history is not
+kept by a `Session` (they stay symbolic). Term order in sums follows
 SymPy's canonical order, which is close to but not always identical to Wolfram's
 (e.g. `a^2 + b^2 + 2*a*b`). `Solve[expr, x]` with a bare expression is treated as
 `expr == 0` (SymPy convention). The Python helper `series(expr, x, x0, n)` now also
@@ -204,6 +242,10 @@ python -m build                 # sdist and wheel
 python -m pytest -m live_service tests/test_knowledge.py tests/test_knowledge_full.py
 ```
 
+The offline suite collects 27,742 tests (`python -m pytest --collect-only -q` with every extra installed; 50
+`live_service` tests are deselected by default). Most of them are value-level checks of Wolfram semantics in
+`tests/library/`.
+
 GitHub Actions runs offline tests and package builds on Python 3.9, 3.12 and 3.13,
 plus a minimal-install job without extras. `tests/test_differential_sympy.py`
 compares 120+ expressions with independent SymPy computations (including Solve rule
@@ -214,6 +256,19 @@ isolation, lazy branching, quarantine and offline imports. Legacy shape-only tes
 are not evidence that every historical library entry works. `test_all_functions.py`
 now compares expected answers and labels samples without expectations unverified.
 `count_functions.py` reports active registry names, not a verified-function count.
+
+## History: the 3.8 correctness repair
+
+Releases up to 3.7.1 advertised "6,324 working functions". An audit showed that claim was not supported by the
+implementation: many entries were generated stubs, and some gave silently wrong answers. In 3.8 the generated
+modules `extended4` through `extended37` are **quarantined**: they are retained as historical source but are not
+registered by the evaluator, and calling a quarantined operation raises `NotImplementedError` unless an
+independently implemented core overload exists. The library was then rebuilt head by head against Wolfram's
+documented semantics, with value-level tests; the audit and the list of wrong answers found and fixed are in
+[docs/library_audit.md](docs/library_audit.md) and [docs/CORRECTNESS_REPAIR.md](docs/CORRECTNESS_REPAIR.md).
+The retained `extended`, `extended2` and `extended3` wrappers are not all formally verified. Historical
+documents in [docs/history/](docs/history/) and the pre-3.8 sections of the manual describe the old version and
+are not a capability specification. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Licence
 

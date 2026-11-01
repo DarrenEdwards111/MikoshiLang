@@ -99,6 +99,8 @@ def _inert(name, nargs, notes):
             raise ValueError(f"{name} expects {' or '.join(map(str, nargs))} parameter(s)")
         if name == "NormalDistribution" and not args:
             return Expr("NormalDistribution", 0, 1)
+        if name == "UniformDistribution" and not args:
+            return Expr("UniformDistribution", L(0, 1))     # Wolfram: UniformDistribution[] = [{0, 1}]
         _dist(Expr(name, *args), name)          # validates numeric parameters
         raise Unevaluated()
     return impl
@@ -113,7 +115,8 @@ _inert("TDistribution", (1,), "inert Student t distribution (MikoshiLang name; S
 _inert("StudentTDistribution", (1,), "inert Student t distribution [nu]")
 _inert("FDistribution", (2,), "inert F-ratio distribution [n, m] (Wolfram FRatioDistribution)")
 _inert("UniformDistribution", (0, 1, 2),
-       "inert distribution UniformDistribution[{min, max}] (Wolfram); the legacy form [min, max] is accepted")
+       "inert distribution UniformDistribution[{min, max}] (Wolfram; UniformDistribution[] = [{0, 1}]); the legacy "
+       "form [min, max] is accepted")
 
 
 def _pw(expr, cond, x):

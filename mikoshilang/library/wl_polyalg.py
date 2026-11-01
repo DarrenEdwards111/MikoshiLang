@@ -4554,6 +4554,8 @@ def _nc_normal(ctx, alg, p, fname):
           "that otherwise stays symbolic; NonCommutativeExpand and the NonCommutative* functions expand and reduce "
           "it")
 def _ncm(*args: Expr) -> Expr:
+    if len(args) == 1:
+        return args[0]                      # OneIdentity: NonCommutativeMultiply[a] = a (Wolfram)
     if any(_is_head(a, "NonCommutativeMultiply") for a in args):
         flat = []
         for a in args:

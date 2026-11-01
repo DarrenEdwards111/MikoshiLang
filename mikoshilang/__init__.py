@@ -3,7 +3,7 @@
 Built by Mikoshi Ltd.
 """
 
-__version__ = "3.8.0.dev1"
+__version__ = "3.8.0"
 
 from .expr import Expr, Symbol, symbols
 from .pattern import Blank, BlankSequence, BlankNullSequence, Pattern

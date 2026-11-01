@@ -58,7 +58,7 @@
 
 \title{\Huge\textbf{MikoshiLang}\\\Large Reference Manual \& User Guide}
 \author{Mikoshi Ltd}
-\date{Version 3.7.0 --- \today}
+\date{Version 3.8.0 --- \today}
 
 \begin{document}
 
@@ -68,16 +68,27 @@
 \vspace{2cm}
 
 \begin{abstract}
-MikoshiLang is a symbolic computation language for Python, inspired by Wolfram Language. It provides \textbf{6,324 functions} across \textbf{40+ domains} including calculus, linear algebra, number theory, statistics, chemistry, visualization, machine learning, physics, cryptography, biology, engineering (mechanical, electrical, civil, aerospace, chemical), hydrology, mining, manufacturing, renewable energy, and more. Unlike traditional computational tools, MikoshiLang combines natural language processing with deterministic code execution — AI proposes, the engine proves. No hallucinated math.
+MikoshiLang is an open-source, Wolfram-style symbolic computation language for Python, built on SymPy and NumPy. It implements \textbf{4,402 of the 6,716} documented Wolfram Language symbols with reviewed, value-tested semantics (92.9\% of the 4,739 judged feasible without curated data, notebooks or cloud services; see \texttt{docs/wolfram\_coverage\_roadmap.md}). Its rule is: a correct result, a clear error, or left unevaluated, never silently wrong. Version 3.8 adds three pillars: \texttt{Verify[]}, which re-checks results with an independent method and labels them Certified, Checked, Unchecked or Failed; two-way Python interop; and opt-in types read from Python annotations. MikoshiLang is alpha software, not a Mathematica replacement or a proof assistant.
 \end{abstract}
 
 \vfill
 
 \begin{center}
-\textbf{Try it online:} \url{https://mikoshi.co.uk/mikoshilang/console}\\
 \textbf{GitHub:} \url{https://github.com/DarrenEdwards111/MikoshiLang}\\
 \textbf{PyPI:} \texttt{pip install mikoshilang}
 \end{center}
+
+\newpage
+
+\section*{Status of this manual (3.8)}
+
+Releases up to 3.7.1 advertised ``6,324 functions''. An audit found that figure was not supported: many entries were generated stubs and some gave wrong answers. Those modules are quarantined in 3.8 and are not registered by the evaluator. \textbf{Where any later section of this manual conflicts with the README, the README and the files in \texttt{docs/} take precedence.} In particular, the natural-language mode, the hosted web console and REST API, and the domain packs described below as ``chemistry'', ``physics'', ``biology'', ``machine learning'' and engineering functions belong to the pre-3.8 releases; the hosted services are offline and many of those functions are quarantined. Current, authoritative references:
+\begin{itemize}
+    \item README: \url{https://github.com/DarrenEdwards111/MikoshiLang#readme}
+    \item Coverage roadmap: \texttt{docs/wolfram\_coverage\_roadmap.md}
+    \item Verification: \texttt{docs/verification.md}; types: \texttt{docs/types.md}; Python interop: \texttt{docs/python\_interop.md}
+    \item Runnable examples: \texttt{examples/}
+\end{itemize}
 
 \newpage
 
@@ -92,8 +103,10 @@ MikoshiLang is a symbolic computation language designed for Python, providing Wo
 \subsection{Key Features}
 
 \begin{itemize}
-    \item \textbf{6,324 functions} across 40+ domains: calculus, algebra, number theory, statistics, chemistry, physics, biology, ML, cryptography, engineering, hydrology, mining, manufacturing, renewable energy, and more
-    \item \textbf{Natural language mode} — type plain English, get verified results
+    \item \textbf{4,402 documented Wolfram symbols} implemented with reviewed, value-tested semantics (see the coverage roadmap)
+    \item \textbf{Verification} — \texttt{Verify[expr]} returns Certified, Checked, Unchecked or Failed, using a method independent of the one that produced the result
+    \item \textbf{Python interop} — results as Python data, typed Python functions as language heads, Python access off unless allow-listed
+    \item \textbf{Opt-in types} — signatures from Python annotations; \texttt{Session(check\_types=True)}
     \item \textbf{Pattern matching \& rules} — symbolic manipulation with custom transformations
     \item \textbf{Jupyter kernel} — interactive notebooks with rich output
     \item \textbf{Visualization} — 2D/3D plotting with matplotlib \& plotly
@@ -103,7 +116,6 @@ MikoshiLang is a symbolic computation language designed for Python, providing Wo
     \item \textbf{Biology} — genetics, DNA analysis, population dynamics
     \item \textbf{Cryptography} — hashing, modular arithmetic, number theory
     \item \textbf{Unit conversion} — 50+ physical units with dimensional analysis
-    \item \textbf{No hallucinations} — AI translates natural language to code, engine verifies
 \end{itemize}
 
 \subsection{Installation}
@@ -674,11 +686,7 @@ MikoshiLang includes an AI-powered natural language interface. Type plain Englis
 
 \subsection{Web Console}
 
-Try the interactive web console at:
-
-\url{https://mikoshi.co.uk/mikoshilang/console}
-
-Features auto-detection — if your input looks like natural language, it routes to the NL endpoint automatically.
+The hosted web console described in earlier editions is no longer online. Use the \texttt{mikoshilang} REPL, the Jupyter kernel, or the Python API instead.
 
 \section{API Usage}
 
@@ -703,24 +711,7 @@ print(result)  # => x^2 + 2*x + 1
 
 \subsection{REST API}
 
-MikoshiLang is deployed at \texttt{mikoshi.co.uk} with a REST API:
-
-\begin{lstlisting}[language=bash]
-# Evaluate expression
-curl -X POST https://mikoshi.co.uk/api/mikoshilang/eval \
-  -H "Content-Type: application/json" \
-  -d '{"input": "D[x^3, x]", "mode": "parse"}'
-
-# Natural language
-curl -X POST https://mikoshi.co.uk/api/mikoshilang/nl \
-  -H "Content-Type: application/json" \
-  -d '{"input": "What is the integral of x squared?"}'
-
-# Chemistry
-curl -X POST https://mikoshi.co.uk/api/mikoshilang/chemistry \
-  -H "Content-Type: application/json" \
-  -d '{"action": "balance", "input": "H2 + O2 -> H2O"}'
-\end{lstlisting}
+The hosted REST API described in earlier editions is no longer online and is not part of the Python package. To serve MikoshiLang over HTTP, wrap \texttt{Session.eval} in your own web service, and run untrusted input in an external process sandbox with time and memory limits.
 
 \subsection{Jupyter Kernel}
 
@@ -742,10 +733,10 @@ jupyter notebook
 \subsubsection{Platform Support}
 
 \begin{itemize}
-    \item \textbf{Linux:} ✓ Fully supported
-    \item \textbf{macOS:} ✓ Fully supported (Intel \& Apple Silicon)
-    \item \textbf{Windows (Anaconda):} ✓ Fully supported (fixed in v3.6.9)
-    \item \textbf{Windows (WSL):} ✓ Fully supported
+    \item \textbf{Linux:} Fully supported
+    \item \textbf{macOS:} Fully supported (Intel \& Apple Silicon)
+    \item \textbf{Windows (Anaconda):} Fully supported (fixed in v3.6.9)
+    \item \textbf{Windows (WSL):} Fully supported
 \end{itemize}
 
 \textbf{Anaconda Compatibility:} As of v3.6.9, the MikoshiLang kernel is fully compatible with Anaconda on all platforms. The kernel applies \texttt{nest\_asyncio.apply()} before launch to fix Windows ProactorEventLoop conflicts.
@@ -787,14 +778,15 @@ which jupyter
 
 \section{Function Reference}
 
-MikoshiLang provides \textbf{6,324 functions} across \textbf{40+ domains}. Below is a categorized listing.
+MikoshiLang implements \textbf{4,402 of the 6,716} documented Wolfram Language symbols (see \texttt{docs/wolfram\_coverage\_roadmap.md} for the authoritative, generated list). The categorized listing below dates from earlier releases; entries from quarantined modules are not available in 3.8.
 
 \subsection{Version History}
 
 \begin{itemize}
-    \item \textbf{v3.3.0} (Current) — Full knowledge layer: 5 domain packs (Crossref, OpenAlex, GeoNames, World Bank, PubChem), SPARQL graph queries, persistent cache, 50 canonical properties
+    \item \textbf{v3.8.0} (Current) — Correctness repair (generated modules quarantined); 4,402 documented Wolfram symbols with reviewed semantics; \texttt{Verify[]} and executable \texttt{Check:} notes; Python interop; opt-in types. See \texttt{CHANGELOG.md}
+    \item \textbf{v3.3.0} — Full knowledge layer: 5 domain packs (Crossref, OpenAlex, GeoNames, World Bank, PubChem), SPARQL graph queries, persistent cache, 50 canonical properties
     \item \textbf{v3.2.0} — MVP knowledge layer: EntitySearch, EntityValue, WikipediaSummary, Wikidata/Wikipedia integration
-    \item \textbf{v3.1.1} — 6,324 computational functions
+    \item \textbf{v3.1.1} — claimed 6,324 computational functions (claim retracted in 3.8)
     \item \textbf{v3.1.0} — Added 600 functions: hydrology, mining, manufacturing, renewable energy
     \item \textbf{v3.0.4} — Fixed all placeholders, 100\% working functions
     \item \textbf{v3.0.0} — Added 600 functions: info theory, acoustics, GIS, chemical engineering
@@ -1120,7 +1112,6 @@ Verify parentheses/brackets are balanced.
 \subsection{Getting Help}
 
 \begin{itemize}
-    \item Web console: \url{https://mikoshi.co.uk/mikoshilang/console}
     \item GitHub Issues: \url{https://github.com/DarrenEdwards111/MikoshiLang/issues}
     \item Documentation: \url{https://github.com/DarrenEdwards111/MikoshiLang/blob/main/README.md}
 \end{itemize}
@@ -1132,7 +1123,7 @@ MikoshiLang is open-source (Apache 2.0). Contributions welcome:
 \begin{enumerate}
     \item Fork the repository
     \item Create a feature branch
-    \item Add functions to \texttt{mikoshilang/extended*.py}
+    \item Add or fix functions in \texttt{mikoshilang/library/}, following \texttt{docs/CONVENTIONS.md}, with an executable \texttt{Check:} note
     \item Write tests in \texttt{tests/}
     \item Submit a pull request
 \end{enumerate}
@@ -1168,7 +1159,7 @@ Inspired by Wolfram Language and designed for the Python ecosystem.
 \begin{center}
 \Large\textbf{Built by Mikoshi Ltd}\\
 \normalsize
-\url{https://mikoshi.co.uk}
+\url{https://github.com/DarrenEdwards111/MikoshiLang}
 \end{center}
 
 \end{document}
