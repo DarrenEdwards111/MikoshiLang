@@ -18,7 +18,7 @@ import sympy as sp
 from ..expr import Expr, Symbol
 from .. import kernel as K
 from .. import kernel_lists as KL
-from .core import fn, record, Unevaluated, REGISTRY
+from .core import fn, record, Unevaluated, REGISTRY, S
 from .wl_common import (L, ev, apply, true, is_sym, is_list, is_int, is_assoc, is_rule, same, items_of,
                         canonical, tester, split_options, int_value, real_number)
 from . import wl_lists as WL
@@ -1956,9 +1956,24 @@ def _symdep(comp: Expr, sym: Expr) -> ListOf[Expr]:
     return L(*(L(*j) for j in sorted(info.orbit(idx))))
 
 
+def _same_array(a, b) -> bool:
+    """Elementwise equality of two nested lists (entries compared after expanding their difference)."""
+    if is_list(a) and is_list(b):
+        return len(a.args) == len(b.args) and all(_same_array(p, q) for p, q in zip(a.args, b.args))
+    if is_list(a) or is_list(b):
+        return False
+    if a == b:
+        return True
+    try:
+        return sp.expand(S(a) - S(b)) == 0
+    except Exception:
+        return False
+
+
 @fn("SymmetrizedReplacePart", **ADDED,
     notes="SymmetrizedReplacePart[sa, {pos -> val, ...}] replaces independent values (dependent positions are mapped "
-          "to their independent component); SymmetrizedReplacePart[array, rules, sym] symmetrizes first")
+          "to their independent component); SymmetrizedReplacePart[array, rules, sym] needs an array that already has the "
+          "symmetry sym (non-symmetric input raises instead of being averaged)")
 def _symreplace(x: Expr, rules: Expr, sym: Expr = None) -> Expr:
     parts = _sa_parts(x, "SymmetrizedReplacePart")
     if parts is None:
@@ -1968,6 +1983,9 @@ def _symreplace(x: Expr, rules: Expr, sym: Expr = None) -> Expr:
         dims = _full_dims(x)
         vals = {tuple(int(i) for i in r.args[0].args): r.args[1] for r in base.args[:-1]}
         s = sym
+        if not _same_array(_sa_normal(dims, vals, s), x):
+            raise ValueError("SymmetrizedReplacePart: the array does not have the given symmetry (it is not "
+                             "symmetrized implicitly; use SymmetrizedArray[array, dims, sym] to symmetrize first)")
     else:
         dims, vals, s = parts
     info = _SymInfo(dims, s, "SymmetrizedReplacePart")
