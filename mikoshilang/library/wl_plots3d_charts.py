@@ -1477,3 +1477,502 @@ def _pairwisesmoothdensityhistogram(data: MatrixOf[Real], *opts: Option) -> Expr
                     Expr("Rule", Symbol("Frame"), True), Expr("Rule", Symbol("AspectRatio"), 1),
                     Expr("Rule", Symbol("PlotRange"), range_expr([(a, b), (0.0, max(ys))])))
     return pairwise_grid(fname, pos[0], opts_, panel, diag)
+
+
+# ───────────────────────────── gauges ─────────────────────────────
+
+def _gauge_any(x):
+    return True
+
+
+_GAUGE_OPTION_SPECS = [
+    ("GaugeFaceElementFunction", "Automatic, a named element function or a function",
+     [PO.AUTO, PO._string(), PO._func],
+     "option of gauges: how the face is drawn; gauges here support Automatic (other settings raise "
+     "NotImplementedError)."),
+    ("GaugeFaceStyle", "Automatic, None or a graphics directive", [PO.AUTO_NONE, PO.STYLE],
+     "option of gauges: style (colour) of the gauge face."),
+    ("GaugeFrameElementFunction", "Automatic, a named element function or a function",
+     [PO.AUTO, PO._string(), PO._func],
+     "option of gauges: how the frame is drawn; gauges here support Automatic (others raise NotImplementedError)."),
+    ("GaugeFrameSize", "Automatic, None, Tiny, Small, Medium, Large or a size s > 0",
+     [PO._sym("Automatic", "None", *PO.SIZES), PO.POS],
+     "option of gauges: width of the frame as a fraction of the gauge size (Tiny 0.02, Small 0.04, Medium 0.06, "
+     "Large 0.1, Automatic 0.04)."),
+    ("GaugeFrameStyle", "Automatic, None or a graphics directive", [PO.AUTO_NONE, PO.STYLE],
+     "option of gauges: style (colour) of the frame."),
+    ("GaugeLabels", "None, Automatic, \"Value\", a label or a list of labels",
+     [PO._sym("None", "Automatic", "All", "Full"), PO._string(), PO._list(_gauge_any), PO.LABEL],
+     "option of gauges: labels; None (default), Automatic or \"Value\" (the value shown as text), or a label "
+     "expression; Placed labels raise NotImplementedError."),
+    ("GaugeMarkers", "Automatic, None, a marker name, a graphic or a list of markers",
+     [PO.AUTO_NONE, PO._string(), PO._list(_gauge_any), PO._head("Graphics", "Graphics3D", "Image")],
+     "option of gauges: shape of the value markers (needles, bars); gauges here support Automatic (others raise "
+     "NotImplementedError)."),
+    ("GaugeStyle", "Automatic, a graphics directive or a list of directives", [PO.AUTO, PO.STYLE],
+     "option of gauges: style of the value markers (one directive per value, cycled)."),
+]
+for _n, _m, _preds, _note in _GAUGE_OPTION_SPECS:
+    PO.OPTION_VALIDATORS[_n] = PO.make_validator(_n, _m, *_preds)
+    inert_option(_n, _note + " Invalid settings raise ValueError. Inert as an expression (Name and Name -> value "
+                 "evaluate to themselves). Check: reference (Wolfram documentation settings) in tests.", area=AREA)
+
+
+_GAUGE_DEFAULTS = {"GaugeFaceElementFunction": AUTO, "GaugeFaceStyle": AUTO, "GaugeFrameElementFunction": AUTO,
+                   "GaugeFrameSize": AUTO, "GaugeFrameStyle": AUTO, "GaugeLabels": NONE, "GaugeMarkers": AUTO,
+                   "GaugeStyle": AUTO, "ScaleDivisions": AUTO, "ScaleOrigin": AUTO, "ScalePadding": AUTO,
+                   "ScaleRanges": NONE, "ScaleRangeStyle": AUTO, "TargetUnits": AUTO, "PlotTheme": AUTO,
+                   "PerformanceGoal": AUTO, "TicksStyle": AUTO, "TimeZone": AUTO, "ReferenceMarkers": AUTO,
+                   "ReferenceMarkerStyle": AUTO, "Method": AUTO}
+
+FACE = Expr("GrayLevel", 0.97)
+FRAME = Expr("GrayLevel", 0.6)
+
+
+def gauge_options(fname, opts, extra=()):
+    o, gopts = split_options(fname, opts, _GAUGE_DEFAULTS)
+    allowed = {"GaugeFaceStyle", "GaugeFrameSize", "GaugeFrameStyle", "GaugeLabels", "GaugeStyle",
+               "ScaleDivisions", "ScaleRanges", "ScaleRangeStyle"} | set(extra)
+    for n in ("GaugeFaceElementFunction", "GaugeFrameElementFunction", "GaugeMarkers"):
+        if not is_sym(o[n], "Automatic"):
+            raise NotImplementedError(f"{fname}: {n} -> {K_input(o[n])} is not supported")
+    _unsupported(o, fname, allowed | {"GaugeFaceElementFunction", "GaugeFrameElementFunction", "GaugeMarkers"})
+    return o, gopts
+
+
+def gauge_value(x, lo, hi, fname):
+    """The plotted value: clipped to [lo, hi]; missing values show the minimum (as documented)."""
+    if is_missing(x):
+        return lo
+    if isinstance(x, (bool, str)):
+        raise TypeError(f"{fname}: the value {K_input(x)} is not a real number")
+    if isinstance(x, Expr) and x.head in ("Quantity", "Dynamic"):
+        raise NotImplementedError(f"{fname}: {x.head} values are not supported")
+    v = num(x)
+    if v is None:
+        if isinstance(x, complex) or (isinstance(x, Expr) and x.head == "Complex"):
+            return lo
+        raise Unevaluated()
+    return min(max(v, lo), hi)
+
+
+def gauge_values(x, lo, hi, fname):
+    if K.is_list(x):
+        if not x.args:
+            raise ValueError(f"{fname}: the list of values is empty")
+        return [gauge_value(a, lo, hi, fname) for a in x.args]
+    return [gauge_value(x, lo, hi, fname)]
+
+
+def gauge_range(spec, fname, pos=2):
+    if spec is None:
+        return 0.0, 1.0
+    if not K.is_list(spec) or len(spec.args) != 2:
+        if isinstance(spec, (Symbol,)) or (isinstance(spec, Expr) and not K.is_list(spec)):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: argument {pos} must be a range {{min, max}}, not {K_input(spec)}")
+    if any(isinstance(a, Expr) and a.head == "Quantity" for a in spec.args):
+        raise NotImplementedError(f"{fname}: Quantity ranges are not supported")
+    lo = float(real_number(spec.args[0], fname, "the minimum"))
+    hi = float(real_number(spec.args[1], fname, "the maximum"))
+    if not hi > lo:
+        raise ValueError(f"{fname}: the range must have min < max, not {K_input(spec)}")
+    return lo, hi
+
+
+def scale_ticks(lo, hi, spec, fname):
+    """(major tick values, minor tick values) of a gauge scale."""
+    if is_sym(spec, "None"):
+        return [], []
+    if is_sym(spec, "Automatic"):
+        w = float(_nice_width(lo, hi, 5))
+        k0 = math.ceil(lo / w - 1e-9)
+        k1 = math.floor(hi / w + 1e-9)
+        major = [k * w for k in range(k0, k1 + 1)]
+        minor = []
+        for a in major[:-1]:
+            minor += [a + w * j / 5 for j in range(1, 5)]
+        return major, minor
+    if K.is_int(spec):
+        n = pos_int(spec, fname, "ScaleDivisions")
+        return [lo + (hi - lo) * k / n for k in range(n + 1)], []
+    if K.is_list(spec) and len(spec.args) == 2:
+        n = pos_int(spec.args[0], fname, "ScaleDivisions")
+        m = pos_int(spec.args[1], fname, "ScaleDivisions")
+        major = [lo + (hi - lo) * k / n for k in range(n + 1)]
+        minor = [a + (major[1] - major[0]) * j / m for a in major[:-1] for j in range(1, m)]
+        return major, minor
+    raise ValueError(f"{fname}: ScaleDivisions -> {K_input(spec)} is not valid")
+
+
+def _label_num(v):
+    r = round(v, 10)
+    return int(r) if r == int(r) else r
+
+
+def _style_of(o, name, default):
+    v = o[name]
+    if is_sym(v, "Automatic"):
+        return default
+    if is_sym(v, "None"):
+        return None
+    G.directive_like(v, "gauge", name)
+    return v
+
+
+def gauge_styles(o, n):
+    spec = o["GaugeStyle"]
+    user = list(spec.args) if K.is_list(spec) else ([spec] if not is_sym(spec, "Automatic") else [])
+    out = []
+    for i in range(n):
+        u = user[i % len(user)] if user else None
+        out.append(Expr("Directive", default_color(i), *([] if u is None else _directive_items(u))))
+    return out
+
+
+def frame_size(o, fname):
+    v = o["GaugeFrameSize"]
+    if is_sym(v, "None"):
+        return 0.0
+    if is_sym(v, "Automatic"):
+        return 0.04
+    sizes = {"Tiny": 0.02, "Small": 0.04, "Medium": 0.06, "Large": 0.1}
+    if isinstance(v, Symbol) and v.name in sizes:
+        return sizes[v.name]
+    return float(pos_number(v, fname, "GaugeFrameSize"))
+
+
+def gauge_label(o, values, fname):
+    v = o["GaugeLabels"]
+    if is_sym(v, "None"):
+        return None
+    if is_sym(v, "Automatic") or v == "Value":
+        return ", ".join(str(_label_num(x)) for x in values)
+    if isinstance(v, Expr) and v.head == "Placed":
+        raise NotImplementedError(f"{fname}: Placed gauge labels are not supported")
+    return v
+
+
+def scale_ranges(o, fname, lo, hi):
+    """[(a, b, style)] of ScaleRanges (clipped to the scale)."""
+    spec = o["ScaleRanges"]
+    if is_sym(spec, "None"):
+        return []
+    if is_sym(spec, "All"):
+        items = [L(lo, hi)]
+    elif K.is_list(spec) and len(spec.args) == 2 and all(num(a) is not None for a in spec.args):
+        items = [spec]
+    elif K.is_list(spec):
+        items = list(spec.args)
+    else:
+        raise ValueError(f"{fname}: ScaleRanges -> {K_input(spec)} is not valid")
+    st = o["ScaleRangeStyle"]
+    sts = list(st.args) if K.is_list(st) else ([st] if not is_sym(st, "Automatic") else
+                                               [Expr("RGBColor", 0.6, 0.8, 0.6), Expr("RGBColor", 1.0, 0.85, 0.4),
+                                                Expr("RGBColor", 0.95, 0.5, 0.45)])
+    out = []
+    for k, it in enumerate(items):
+        if not (K.is_list(it) and len(it.args) == 2):
+            raise NotImplementedError(f"{fname}: the scale range {K_input(it)} is not supported; give {{vmin, vmax}}")
+        a = min(max(float(real_number(it.args[0], fname, "a scale range limit")), lo), hi)
+        b = min(max(float(real_number(it.args[1], fname, "a scale range limit")), lo), hi)
+        if not b > a:
+            raise ValueError(f"{fname}: a scale range needs vmin < vmax")
+        out.append((a, b, sts[k % len(sts)]))
+    return out
+
+
+ANG0, ANG1 = 5 * math.pi / 4, -math.pi / 4
+
+
+def angle_of(v, lo, hi, a0=ANG0, a1=ANG1):
+    return a0 + (a1 - a0) * (v - lo) / (hi - lo)
+
+
+def _gauge_args(args, fname, lo_n=1, hi_n=2):
+    pos, opts = split_args(args, fname, lo_n, hi_n)
+    return pos, opts
+
+
+def _scale_origin(o, fname):
+    v = o["ScaleOrigin"]
+    if is_sym(v, "Automatic"):
+        return ANG0, ANG1
+    if K.is_list(v) and len(v.args) == 2 and all(num(a) is not None for a in v.args):
+        a0, a1 = (float(num(a)) for a in v.args)
+        if a0 == a1:
+            raise ValueError(f"{fname}: ScaleOrigin angles must differ")
+        return a0, a1
+    raise NotImplementedError(f"{fname}: ScaleOrigin -> {K_input(v)} is not supported; give {{theta_min, theta_max}}")
+
+
+def _cs(t):
+    return (math.cos(t), math.sin(t))
+
+
+@fn("AngularGauge", area=AREA, status="added",
+    notes="AngularGauge[v], [v, {min, max}] and [{v1, v2, ...}, ...]: a dial Graphics with the face Disk[{0, 0}, 1], "
+          "frame Annulus, scale arc Circle[{0, 0}, 0.9, ...], tick Lines and Text labels, and one needle Line[{{0, 0}, "
+          "0.8 {Cos[a], Sin[a]}}] per value as the last group, where a = a0 + (a1 - a0) (v - min)/(max - min) with "
+          "a0 = 5 Pi/4 and a1 = -Pi/4 (clockwise 270 degree scale; ScaleOrigin -> {a0, a1} changes it). Default "
+          "range {0, 1} (as documented); values are clipped to the range and missing values show min (as "
+          "documented). Options: GaugeStyle, GaugeFaceStyle, GaugeFrameStyle, GaugeFrameSize, GaugeLabels, "
+          "ScaleDivisions (Automatic nice ticks, n or {n, m}), ScaleOrigin, ScaleRanges, ScaleRangeStyle and "
+          "Graphics options; element functions, markers, Dynamic and Quantity values raise NotImplementedError. "
+          "Symbolic values stay unevaluated. Check: reference (needle angles from the linear scale in tests).")
+def _angulargauge(v: Real | ListOf[Real], *rest: ListOf[Real] | Option) -> Expr:
+    fname = "AngularGauge"
+    pos, opts = _gauge_args((v,) + rest, fname)
+    o, gopts = gauge_options(fname, opts, ("ScaleOrigin",))
+    lo, hi = gauge_range(pos[1] if len(pos) > 1 else None, fname)
+    vals = gauge_values(pos[0], lo, hi, fname)
+    a0, a1 = _scale_origin(o, fname)
+    content = []
+    fs = frame_size(o, fname)
+    face = _style_of(o, "GaugeFaceStyle", FACE)
+    if face is not None:
+        content.append(L(face, Expr("Disk", pt(0, 0), 1.0)))
+    frame = _style_of(o, "GaugeFrameStyle", FRAME)
+    if frame is not None and fs > 0:
+        content.append(L(frame, Expr("Annulus", pt(0, 0), L(1.0, fl(1 + fs)))))
+    for a, b, st in scale_ranges(o, fname, lo, hi):
+        t0, t1 = sorted((angle_of(a, lo, hi, a0, a1), angle_of(b, lo, hi, a0, a1)))
+        content.append(L(st, Expr("Annulus", pt(0, 0), L(0.8, 0.9), L(fl(t0), fl(t1)))))
+    t0, t1 = sorted((a0, a1))
+    major, minor = scale_ticks(lo, hi, o["ScaleDivisions"], fname)
+    sc = [Expr("Circle", pt(0, 0), 0.9, L(fl(t0), fl(t1)))]
+    for m in major:
+        c, s = _cs(angle_of(m, lo, hi, a0, a1))
+        sc.append(Expr("Line", pts([(0.9 * c, 0.9 * s), (0.8 * c, 0.8 * s)])))
+        sc.append(Expr("Text", _label_num(m), pt(0.68 * c, 0.68 * s)))
+    for m in minor:
+        c, s = _cs(angle_of(m, lo, hi, a0, a1))
+        sc.append(Expr("Line", pts([(0.9 * c, 0.9 * s), (0.85 * c, 0.85 * s)])))
+    content.append(L(Expr("GrayLevel", 0.3), *sc))
+    lab = gauge_label(o, vals, fname)
+    if lab is not None:
+        content.append(Expr("Text", lab, pt(0, -0.45)))
+    needles = []
+    for x, st in zip(vals, gauge_styles(o, len(vals))):
+        c, s = _cs(angle_of(x, lo, hi, a0, a1))
+        needles.append(L(st, Expr("AbsoluteThickness", 3), Expr("Line", pts([(0, 0), (0.8 * c, 0.8 * s)]))))
+    content.append(L(*needles, L(Expr("GrayLevel", 0.3), Expr("Disk", pt(0, 0), 0.06))))
+    r = 1 + fs + 0.02
+    return finish_graphics(L(*content), gopts, [("PlotRange", range_expr([(-r, r), (-r, r)])),
+                                                ("AspectRatio", 1)])
+
+
+def _linear_gauge(fname, args, horizontal, thermometer=False):
+    pos, opts = _gauge_args(args, fname)
+    o, gopts = gauge_options(fname, opts)
+    lo, hi = gauge_range(pos[1] if len(pos) > 1 else None, fname)
+    vals = gauge_values(pos[0], lo, hi, fname)
+    s = hi - lo
+
+    def P(u, y):                     # u across the track (in units of s), y along the scale (data value)
+        return pt(y, u * s) if horizontal else pt(u * s, y)
+
+    def R(u0, y0, u1, y1):
+        if horizontal:
+            return Expr("Rectangle", pt(y0, u0 * s), pt(y1, u1 * s))
+        return Expr("Rectangle", pt(u0 * s, y0), pt(u1 * s, y1))
+    content = []
+    hw = 0.035 if thermometer else 0.05
+    face = _style_of(o, "GaugeFaceStyle", FACE)
+    frame = _style_of(o, "GaugeFrameStyle", FRAME)
+    fs = frame_size(o, fname) * 0.5
+    if frame is not None and fs > 0:
+        content.append(L(frame, R(-hw - fs, lo - fs * s, hw + fs, hi + fs * s)))
+    if face is not None:
+        content.append(L(face, R(-hw, lo, hw, hi)))
+    for a, b, st in scale_ranges(o, fname, lo, hi):
+        content.append(L(st, R(hw, a, hw + 0.04, b)))
+    major, minor = scale_ticks(lo, hi, o["ScaleDivisions"], fname)
+    sc = []
+    for m in major:
+        sc.append(Expr("Line", L(P(hw + 0.04, m), P(hw + 0.08, m))))
+        sc.append(Expr("Text", _label_num(m), P(hw + 0.16, m)))
+    for m in minor:
+        sc.append(Expr("Line", L(P(hw + 0.04, m), P(hw + 0.06, m))))
+    content.append(L(Expr("GrayLevel", 0.3), *sc))
+    lab = gauge_label(o, vals, fname)
+    if lab is not None:
+        content.append(Expr("Text", lab, P(0, lo - 0.25 * s)))
+    styles = gauge_styles(o, len(vals))
+    marks = []
+    if thermometer:
+        st0 = styles[0]
+        marks.append(L(st0, Expr("Disk", P(0, lo - 0.07 * s), fl(0.08 * s)),
+                       R(-hw * 0.6, lo - 0.05 * s, hw * 0.6, vals[0])))
+        for x, st in zip(vals[1:], styles[1:]):
+            marks.append(L(st, Expr("Line", L(P(-hw, x), P(hw, x)))))
+    else:
+        order = sorted(range(len(vals)), key=lambda i: -vals[i])
+        for i in order:
+            marks.append(L(styles[i], R(-hw * 0.7, lo, hw * 0.7, vals[i])))
+    content.append(L(*marks))
+    across = (-hw - 0.06, hw + 0.25)
+    along = (lo - (0.2 if thermometer else 0.05) * s, hi + 0.05 * s)
+    rr = [along, (across[0] * s, across[1] * s)] if horizontal else [(across[0] * s, across[1] * s), along]
+    return finish_graphics(L(*content), gopts, [("PlotRange", range_expr(rr)), ("AspectRatio", Symbol("Automatic"))])
+
+
+_LINEAR_NOTE = ("Default range {0, 1} (as documented); values are clipped to the range and missing values show min. "
+                "Options: GaugeStyle, GaugeFaceStyle, GaugeFrameStyle, GaugeFrameSize, GaugeLabels, ScaleDivisions "
+                "(Automatic nice ticks, n or {n, m}), ScaleRanges, ScaleRangeStyle and Graphics options; element "
+                "functions, markers, Dynamic and Quantity values raise NotImplementedError. Symbolic values stay "
+                "unevaluated. Check: reference (bar ends equal the clipped values in tests).")
+
+
+@fn("VerticalGauge", area=AREA, status="added",
+    notes="VerticalGauge[v], [v, {min, max}] and [{v1, ...}, ...]: Graphics in data coordinates with the scale along "
+          "y from min to max: track Rectangle[{-0.05 s, min}, {0.05 s, max}] (s = max - min), ticks and labels to the "
+          "right, and one bar Rectangle[{-0.035 s, min}, {0.035 s, v}] per value as the last group (largest first). "
+          + _LINEAR_NOTE)
+def _verticalgauge(v: Real | ListOf[Real], *rest: ListOf[Real] | Option) -> Expr:
+    return _linear_gauge("VerticalGauge", (v,) + rest, horizontal=False)
+
+
+@fn("HorizontalGauge", area=AREA, status="added",
+    notes="HorizontalGauge[v], [v, {min, max}] and [{v1, ...}, ...]: as VerticalGauge with the scale along x: bars "
+          "Rectangle[{min, -0.035 s}, {v, 0.035 s}] as the last group. " + _LINEAR_NOTE)
+def _horizontalgauge(v: Real | ListOf[Real], *rest: ListOf[Real] | Option) -> Expr:
+    return _linear_gauge("HorizontalGauge", (v,) + rest, horizontal=True)
+
+
+@fn("ThermometerGauge", area=AREA, status="added",
+    notes="ThermometerGauge[v], [v, {min, max}] and [{v1, ...}, ...]: a vertical thermometer in data coordinates: "
+          "tube Rectangle from min to max, bulb Disk below min, and the mercury Rectangle[{-0.021 s, min - 0.05 s}, "
+          "{0.021 s, v1}] (s = max - min) as the last group; further values are marker Lines. " + _LINEAR_NOTE)
+def _thermometergauge(v: Real | ListOf[Real], *rest: ListOf[Real] | Option) -> Expr:
+    return _linear_gauge("ThermometerGauge", (v,) + rest, horizontal=False, thermometer=True)
+
+
+@fn("BulletGauge", area=AREA, status="added",
+    notes="BulletGauge[v, ref, {min, max}], [v, ref, {min, m1, ..., max}], lists of values and of references: a "
+          "horizontal bullet chart in data coordinates (s = max - min): qualitative bands Rectangle[{m_k, -0.15 s}, "
+          "{m_(k+1), 0.15 s}] in decreasing gray levels, one value bar Rectangle[{min, -0.05 s}, {v, 0.05 s}] per "
+          "value and one reference Line[{{r, -0.1 s}, {r, 0.1 s}}] per reference (values and references clipped to "
+          "the range, as documented). The division points must increase. Options: GaugeStyle, GaugeLabels, "
+          "ScaleDivisions and Graphics options; others raise NotImplementedError. Check: reference (bar ends, "
+          "reference positions and band limits in tests).")
+def _bulletgauge(v: Real | ListOf[Real], ref: Real | ListOf[Real], rng: ListOf[Real], *opts: Option) -> Expr:
+    fname = "BulletGauge"
+    pos, opts_ = split_args((v, ref, rng) + opts, fname, 3, 3)
+    o, gopts = gauge_options(fname, opts_)
+    spec = pos[2]
+    if not K.is_list(spec) or len(spec.args) < 2:
+        if isinstance(spec, (Symbol, Expr)) and not K.is_list(spec):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: argument 3 must be {{min, max}} or {{min, m1, ..., max}}")
+    marks = [float(real_number(a, fname, "a range point")) for a in spec.args]
+    if any(b <= a for a, b in zip(marks, marks[1:])):
+        raise ValueError(f"{fname}: the range points must increase")
+    lo, hi = marks[0], marks[-1]
+    s = hi - lo
+    vals = gauge_values(pos[0], lo, hi, fname)
+    refs = gauge_values(pos[1], lo, hi, fname)
+    content = []
+    nb = len(marks) - 1
+    for k in range(nb):
+        g = 0.6 + 0.3 * (k / max(1, nb - 1) if nb > 1 else 0.5)
+        content.append(L(Expr("GrayLevel", fl(g)), Expr("Rectangle", pt(marks[k], -0.15 * s),
+                                                          pt(marks[k + 1], 0.15 * s))))
+    major, minor = scale_ticks(lo, hi, o["ScaleDivisions"], fname)
+    sc = []
+    for m in major:
+        sc.append(Expr("Line", pts([(m, -0.15 * s), (m, -0.19 * s)])))
+        sc.append(Expr("Text", _label_num(m), pt(m, -0.26 * s)))
+    content.append(L(Expr("GrayLevel", 0.3), *sc))
+    lab = gauge_label(o, vals, fname)
+    if lab is not None:
+        content.append(Expr("Text", lab, pt(lo - 0.12 * s, 0)))
+    styles = gauge_styles(o, len(vals))
+    bars_ = [L(st, Expr("Rectangle", pt(lo, -0.05 * s), pt(x, 0.05 * s))) for x, st in
+             sorted(zip(vals, styles), key=lambda t: -t[0])]
+    reflines = [L(Expr("GrayLevel", 0), Expr("AbsoluteThickness", 3), Expr("Line", pts([(r, -0.1 * s), (r, 0.1 * s)])))
+                for r in refs]
+    content.append(L(*bars_, *reflines))
+    return finish_graphics(L(*content), gopts, [("PlotRange", range_expr([(lo - 0.2 * s, hi + 0.02 * s),
+                                                                          (-0.3 * s, 0.17 * s)])),
+                                                ("AspectRatio", Symbol("Automatic"))])
+
+
+def clock_hms(t, fname):
+    """(h, m, s) of a ClockGauge time specification."""
+    import datetime as dt
+    if t is None:
+        now = dt.datetime.now()
+        return now.hour, now.minute, now.second + now.microsecond / 1e6
+    if is_missing(t):
+        return 0, 0, 0.0
+    if K.is_list(t) and len(t.args) == 3:
+        h, m, s = (float(real_number(a, fname, "a time component")) for a in t.args)
+        return h, m, s
+    if K.is_list(t) and len(t.args) == 6:
+        _y, _mo, _d, h, m, s = (float(real_number(a, fname, "a date component")) for a in t.args)
+        return h, m, s
+    if isinstance(t, Expr) and t.head in ("DateObject", "TimeObject") or isinstance(t, str) or \
+            (num(t) is not None and not isinstance(t, bool)):
+        if isinstance(t, Expr) and t.head == "DateObject" and len(t.args) > 2:
+            raise NotImplementedError(f"{fname}: DateObject time zones are not supported; give {{h, m, s}}")
+        r = ev(Expr("DateList", t))
+        if not K.is_list(r) or len(r.args) != 6:
+            raise ValueError(f"{fname}: {K_input(t)} is not a valid time")
+        return float(num(r.args[3])), float(num(r.args[4])), float(num(r.args[5]))
+    if isinstance(t, (Symbol, Expr)) and not K.is_list(t):
+        raise Unevaluated()
+    raise TypeError(f"{fname}: {K_input(t)} is not a time specification")
+
+
+def clock_angles(h, m, s):
+    """Angles (radians, counterclockwise from the x axis) of the hour, minute and second hands."""
+    th = math.pi / 2 - 2 * math.pi * ((h % 12) + m / 60 + s / 3600) / 12
+    tm = math.pi / 2 - 2 * math.pi * (m + s / 60) / 60
+    ts = math.pi / 2 - 2 * math.pi * s / 60
+    return th, tm, ts
+
+
+@fn("ClockGauge", area=AREA, status="added",
+    notes="ClockGauge[], ClockGauge[{h, m, s}], [{y, m, d, h, m, s}], [AbsoluteTime], [DateObject or TimeObject] and "
+          "[\"string\"] (via DateList): an analog clock Graphics with face Disk[{0, 0}, 1], 12 hour marks with labels "
+          "and, as the last group, the hour, minute and second hands Line[{{0, 0}, r {Cos[a], Sin[a]}}] (r = 0.5, "
+          "0.75, 0.85) at a = Pi/2 - 2 Pi (h mod 12 + m/60 + s/3600)/12, Pi/2 - 2 Pi (m + s/60)/60 and Pi/2 - 2 Pi "
+          "s/60. ClockGauge[] uses the local time of the session; missing values show 0:00:00 (as documented). "
+          "DateObject time zones and the TimeZone option raise NotImplementedError. Options: GaugeStyle (hands), "
+          "GaugeFaceStyle, GaugeFrameStyle, GaugeFrameSize, GaugeLabels and Graphics options. Check: reference "
+          "(hand angles for known times in tests).")
+def _clockgauge(*args: ListOf[Real] | Expr | Option) -> Expr:
+    fname = "ClockGauge"
+    pos, opts = split_args(args, fname, 0, 1)
+    o, gopts = gauge_options(fname, opts)
+    h, m, s = clock_hms(pos[0] if pos else None, fname)
+    content = []
+    fs = frame_size(o, fname)
+    face = _style_of(o, "GaugeFaceStyle", FACE)
+    if face is not None:
+        content.append(L(face, Expr("Disk", pt(0, 0), 1.0)))
+    frame = _style_of(o, "GaugeFrameStyle", FRAME)
+    if frame is not None and fs > 0:
+        content.append(L(frame, Expr("Annulus", pt(0, 0), L(1.0, fl(1 + fs)))))
+    marks = []
+    for k in range(12):
+        a = math.pi / 2 - 2 * math.pi * k / 12
+        c, sn = _cs(a)
+        marks.append(Expr("Line", pts([(0.9 * c, 0.9 * sn), (0.97 * c, 0.97 * sn)])))
+        marks.append(Expr("Text", 12 if k == 0 else k, pt(0.78 * c, 0.78 * sn)))
+    content.append(L(Expr("GrayLevel", 0.3), *marks))
+    lab = gauge_label(o, [], fname)
+    if lab is not None and lab != "":
+        content.append(Expr("Text", lab, pt(0, -0.45)))
+    th, tm, ts = clock_angles(h, m, s)
+    sty = gauge_styles(o, 3)
+    hands = [L(Expr("GrayLevel", 0.2), Expr("AbsoluteThickness", 4), Expr("Line", pts([(0, 0), (0.5 * math.cos(th),
+                                                                                     0.5 * math.sin(th))]))),
+             L(Expr("GrayLevel", 0.2), Expr("AbsoluteThickness", 3), Expr("Line", pts([(0, 0), (0.75 * math.cos(tm),
+                                                                                     0.75 * math.sin(tm))]))),
+             L(sty[0] if not is_sym(o["GaugeStyle"], "Automatic") else Expr("RGBColor", 0.8, 0.1, 0.1),
+               Expr("AbsoluteThickness", 1), Expr("Line", pts([(0, 0), (0.85 * math.cos(ts), 0.85 * math.sin(ts))])))]
+    content.append(L(*hands))
+    r = 1 + fs + 0.02
+    return finish_graphics(L(*content), gopts, [("PlotRange", range_expr([(-r, r), (-r, r)])), ("AspectRatio", 1)])
