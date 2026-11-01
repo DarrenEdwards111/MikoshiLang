@@ -268,8 +268,8 @@ def _ptr_hook(head, args, ev_):
         return addr
     if p == "Type" and head.head == "RawPointer":
         return head.args[1]
-    raise ValueError(f"{head.head}: unknown property {_show(p)} (\"Address\""
-                     f"{', \"Type\"' if head.head == 'RawPointer' else ''})")
+    known = '"Address", "Type"' if head.head == "RawPointer" else '"Address"'
+    raise ValueError(f"{head.head}: unknown property {_show(p)} ({known})")
 
 
 KL.COMPOUND_HEAD_HOOKS["RawPointer"] = _ptr_hook
