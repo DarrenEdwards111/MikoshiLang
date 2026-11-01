@@ -1991,11 +1991,15 @@ def _output(x, fname):
 
 @fn("Close", area=AREA, status="added",
     notes="Close[stream] closes an InputStream or OutputStream (file, string or method stream) and gives its name "
-          "(the symbol String for StringToStream streams); Close[\"name\"] closes the only open stream of that "
+          "(the symbol String for StringToStream streams); Close[SocketObject[...]] closes a TCP socket and gives "
+          "\"host:port\" (through wl_external); Close[\"name\"] closes the only open stream of that "
           "name; closing a closed or unknown stream, or a name with several open streams, raises ValueError; the "
           "standard streams stdout/stderr cannot be closed (ValueError). Check: exact; Streams[] before and after "
           "in tests.")
 def _close(x: Expr) -> String | Expr:
+    if _is_socket(x):
+        from .wl_external import close_socket
+        return close_socket(x)
     s = _stream_obj(x, "Close")
     if s is None:
         name = _name(x, "Close", "stream or file name")
@@ -2011,6 +2015,26 @@ def _close(x: Expr) -> String | Expr:
     name = s.name
     s.close()
     return name
+
+
+@fn("DeleteObject", area=AREA, status="added",
+    notes="DeleteObject[obj] removes an external object: a SocketListener is stopped and a SocketObject is closed "
+          "(through wl_external); returns Null. Deleting an object that is no longer active raises ValueError; "
+          "other object types raise NotImplementedError; a symbol stays unevaluated. Check: exact; the listener "
+          "and socket are inactive afterwards in tests.")
+def _deleteobject(x: Expr) -> Expr:
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if _is_socket(x):
+        from .wl_external import close_socket
+        close_socket(x)
+        return NULL
+    if isinstance(x, Expr) and x.head == "SocketListener":
+        from .wl_external import delete_listener
+        delete_listener(x)
+        return NULL
+    raise NotImplementedError(f"DeleteObject: deleting {_form(x)} is not supported (SocketListener and "
+                              f"SocketObject are)")
 
 
 @fn("Streams", area=AREA, status="added",
@@ -2735,6 +2759,27 @@ def _encode_text(text, s, fname):
         raise ValueError(f"{fname}: the text cannot be encoded as {enc} ({e.reason})")
 
 
+def _is_socket(x):
+    return isinstance(x, Expr) and x.head == "SocketObject"
+
+
+def _split_sockets(ch, fname):
+    """(file/stream channels, SocketObjects) of a channel or list of channels; sockets go to wl_external."""
+    items = list(ch.args) if is_list(ch) else [ch]
+    if not items:
+        raise ValueError(f"{fname}: no output channel given")
+    socks = [c for c in items if _is_socket(c)]
+    rest = [c for c in items if not _is_socket(c)]
+    return ([_output(c, fname) for c in rest], socks)
+
+
+def _write_sockets(socks, data):
+    if socks:
+        from .wl_external import write_socket
+        for c in socks:
+            write_socket(c, data)
+
+
 def _channels(ch, fname):
     items = list(ch.args) if is_list(ch) else [ch]
     if not items:
@@ -2776,11 +2821,14 @@ def _string_arg(x):
 @fn("WriteString", area=AREA, status="added",
     notes="WriteString[channel, e1, e2, ...] writes strings as they are (other expressions in OutputForm, as "
           "ToString) with no newline and returns Null; a file name not already open is opened with OpenWrite "
-          "(erasing it) and left open; lists of channels accepted. Check: exact; ReadString round trips and "
+          "(erasing it) and left open; lists of channels accepted; a SocketObject channel is sent the UTF-8 bytes "
+          "(a server socket: every connected client). Check: exact; ReadString round trips and "
           "FileByteCount in tests.")
 def _writestring(ch: Expr, *exprs: Expr) -> Expr:
     text = "".join(_string_arg(e) for e in exprs)
-    _put(_channels(ch, "WriteString"), text, "WriteString")
+    streams, socks = _split_sockets(ch, "WriteString")
+    _put(streams, text, "WriteString")
+    _write_sockets(socks, text.encode("utf-8"))
     return NULL
 
 
@@ -3144,7 +3192,8 @@ def _flatten(x):
           "(repeated cyclically); types as BinaryRead (exact numbers are rounded correctly to the IEEE format, "
           "Real128 included; Infinity, -Infinity and Indeterminate give IEEE infinities and NaN); ByteOrdering -> "
           "1 | -1; channel is an OutputStream, file name (opened with OpenWrite if not open, and left open) or "
-          "File[...] or a list of them; returns the channel; a value that does not fit the type raises ValueError "
+          "File[...] or a SocketObject (the bytes are sent; a server socket sends to every connected client) or a list "
+          "of them; returns the channel; a value that does not fit the type raises ValueError "
           "(the wrong kind: TypeError) and nothing is written. Check: reference (IEEE 754 encodings, "
           "IntegerDigits[n, 256]) and BinaryRead round trips in tests.")
 def _binarywrite(ch: Expr, data: Expr, *rest: String | ListOf[String] | Option) -> Expr:
@@ -3169,7 +3218,9 @@ def _binarywrite(ch: Expr, data: Expr, *rest: String | ListOf[String] | Option) 
         out = b"".join(_bin_encode(c, "Character8", bo, "BinaryWrite") for c in data)
     else:
         out = b"".join(_bin_encode(v, "Byte", bo, "BinaryWrite") for v in _flatten(data))
-    for s in _channels(ch, "BinaryWrite"):
+    streams, socks = _split_sockets(ch, "BinaryWrite")
+    _write_sockets(socks, out)
+    for s in streams:
         s.raw.write(out)
         if hasattr(s.raw, "flush"):
             s.raw.flush()

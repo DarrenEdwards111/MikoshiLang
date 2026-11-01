@@ -294,6 +294,20 @@ NET = [
     ('MatchQ[SocketListen[Automatic, Identity], _SocketListener]', 'True'),
     ('w30l = SocketListen[Automatic, Identity]; SocketListener @@ w30l === w30l', 'True'),
     ('SocketListener[5]', Raises(TypeError)),
+    # W27 stream functions on sockets (wired at integration to wl_external.close_socket/write_socket/delete_listener)
+    ('w30s = SocketConnect[{"127.0.0.1", {E}}]; WriteString[w30s, "ws"]; ByteArrayToString[SocketReadMessage[w30s]]', '"WS"'),
+    ('w30s = SocketConnect[{"127.0.0.1", {E}}]; BinaryWrite[w30s, {97, 98}] === w30s', 'True'),
+    ('w30s = SocketConnect[{"127.0.0.1", {E}}]; BinaryWrite[w30s, {97, 98}]; Normal[SocketReadMessage[w30s]]', '{65, 66}'),
+    ('w30s = SocketConnect[{"127.0.0.1", {E}}]; Close[w30s] == "127.0.0.1:{E}"', 'True'),
+    ('w30s = SocketConnect[{"127.0.0.1", {E}}]; Close[w30s]; SocketObject[w30s[[1]]]', Raises(ValueError)),
+    ('w30s = SocketConnect[{"127.0.0.1", {E}}]; Close[w30s]; Close[w30s]', Raises(ValueError)),
+    ('w30s = SocketConnect[{"127.0.0.1", {E}}]; Close[w30s]; WriteString[w30s, "x"]', Raises(ValueError)),
+    ('w30l = SocketListen[Automatic, Identity]; DeleteObject[w30l] === Null', 'True'),
+    ('w30l = SocketListen[Automatic, Identity]; DeleteObject[w30l]; SocketListener @@ w30l', Raises(ValueError)),
+    ('w30l = SocketListen[Automatic, Identity]; DeleteObject[w30l]; DeleteObject[w30l]', Raises(ValueError)),
+    ('w30s = SocketConnect[{"127.0.0.1", {E}}]; DeleteObject[w30s]; SocketObject[w30s[[1]]]', Raises(ValueError)),
+    ('DeleteObject[5]', Raises(NotImplementedError)),
+    ('DeleteObject[w30notanobject]', 'DeleteObject[w30notanobject]'),
 ]
 COMP = [
     # ------------------------------------------------------------ Compile (Wolfram reference examples; N of the uncompiled expression)
