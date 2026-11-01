@@ -349,17 +349,22 @@ special("SphericalBesselJ", 2, _sph("j"), lambda n, z: (sp.Integer(1) if n == 0 
               "Sin[x]/x^2 - Cos[x]/x; legacy left it unevaluated); any order and precision via mpmath"
               ". Check: reference (differential cases in tests/library).")
 special("SphericalBesselY", 2, _sph("y"), _sph_exact("y"), symbolic=_sph_exact("y"),
-        notes="y_n(z) = Sqrt[Pi/(2 z)] BesselY[n + 1/2, z]; SphericalBesselY[n, 0] = ComplexInfinity")
+        notes="y_n(z) = Sqrt[Pi/(2 z)] BesselY[n + 1/2, z]; SphericalBesselY[n, 0] = ComplexInfinity"
+              ". Check: reference (differential cases in tests/library).")
 special("SphericalHankelH1", 2, _sph("h1"), _sph_exact("h1"), symbolic=_sph_exact("h1"),
-        notes="h1_n(z) = SphericalBesselJ[n, z] + I SphericalBesselY[n, z]")
+        notes="h1_n(z) = SphericalBesselJ[n, z] + I SphericalBesselY[n, z]"
+              ". Check: reference (differential cases in tests/library).")
 special("SphericalHankelH2", 2, _sph("h2"), _sph_exact("h2"), symbolic=_sph_exact("h2"),
-        notes="h2_n(z) = SphericalBesselJ[n, z] - I SphericalBesselY[n, z]")
+        notes="h2_n(z) = SphericalBesselJ[n, z] - I SphericalBesselY[n, z]"
+              ". Check: reference (differential cases in tests/library).")
 special("AiryAiPrime", 1, lambda z: mpmath.airyai(z, derivative=1),
         lambda z: -1 / (sp.root(3, 3) * sp.gamma(sp.Rational(1, 3))) if z == 0 else None,
-        notes="derivative of AiryAi; AiryAiPrime[0] = -1/(3^(1/3) Gamma[1/3])")
+        notes="derivative of AiryAi; AiryAiPrime[0] = -1/(3^(1/3) Gamma[1/3])"
+              ". Check: reference (differential cases in tests/library).")
 special("AiryBiPrime", 1, lambda z: mpmath.airybi(z, derivative=1),
         lambda z: sp.root(3, 6) / sp.gamma(sp.Rational(1, 3)) if z == 0 else None,
-        notes="derivative of AiryBi; AiryBiPrime[0] = 3^(1/6)/Gamma[1/3]")
+        notes="derivative of AiryBi; AiryBiPrime[0] = 3^(1/6)/Gamma[1/3]"
+              ". Check: reference (differential cases in tests/library).")
 
 
 def _gamma3_exact(a, z0, z1):
@@ -487,7 +492,8 @@ special("LerchPhi", 3, lambda z, s, a: _wolfram_zeta_terms(s, a, _lerch_tail(z, 
               ". Check: reference (differential cases in tests/library).")
 special("HurwitzLerchPhi", 3, mpmath.lerchphi,
         lambda z, s, a: sp.Integer(1) / a ** s if z == 0 else None,
-        notes="HurwitzLerchPhi[z, s, a] = Sum[z^k/(k + a)^s, {k, 0, Infinity}] (principal powers)")
+        notes="HurwitzLerchPhi[z, s, a] = Sum[z^k/(k + a)^s, {k, 0, Infinity}] (principal powers)"
+              ". Check: reference (differential cases in tests/library).")
 
 
 special("StieltjesGamma", 1, mpmath.stieltjes, lambda n: sp.EulerGamma if n == 0 else None,
@@ -647,7 +653,8 @@ _reg_named("Hypergeometric2F1Regularized", 2, 1)
 @fn("MeijerG", area=AREA, status="added",
     notes="MeijerG[{{a1, ..., an}, {an+1, ..., ap}}, {{b1, ..., bm}, {bm+1, ..., bq}}, z] (and the form with a "
           "final argument r) evaluated with mpmath meijerg for approximate arguments; exact arguments stay "
-          "unevaluated (FunctionExpand is not implemented)")
+          "unevaluated (FunctionExpand is not implemented)"
+          ". Check: reference (differential cases in tests/library).")
 def _meijerg(a: Expr, b: Expr, z: Expr, r: Expr = None) -> Expr:
     def two(x):
         if not (is_list(x) and len(x.args) == 2 and all(is_list(y) for y in x.args)):

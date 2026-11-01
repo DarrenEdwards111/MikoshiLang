@@ -353,7 +353,8 @@ def _sym_array_dense(e):
 
 @fn("SymbolicZerosArray", area=AREA, status="added",
     notes="SymbolicZerosArray[{d1, ...}]: a symbolic all-zero array (inert); Normal gives the dense array for "
-          "integer dimensions; ArrayExpand/ArraySimplify use A.0 = 0, A + 0 = A")
+          "integer dimensions; ArrayExpand/ArraySimplify use A.0 = 0, A + 0 = A"
+          ". Check: reference (differential cases in tests/library).")
 def _szeros(dims: ListOf[Expr]) -> Expr:
     _dims_ok(dims, "SymbolicZerosArray")
     raise Unevaluated()
@@ -361,7 +362,8 @@ def _szeros(dims: ListOf[Expr]) -> Expr:
 
 @fn("SymbolicOnesArray", area=AREA, status="added",
     notes="SymbolicOnesArray[{d1, ...}]: a symbolic all-ones array (inert); Normal gives the dense array for integer "
-          "dimensions")
+          "dimensions"
+          ". Check: reference (differential cases in tests/library).")
 def _sones(dims: ListOf[Expr]) -> Expr:
     _dims_ok(dims, "SymbolicOnesArray")
     raise Unevaluated()
@@ -370,7 +372,8 @@ def _sones(dims: ListOf[Expr]) -> Expr:
 @fn("SymbolicIdentityArray", area=AREA, status="added",
     notes="SymbolicIdentityArray[{n1, ..., nk}]: the identity array of dimensions {n1, ..., nk, n1, ..., nk} "
           "(entries KroneckerDelta[i1, j1] ... KroneckerDelta[ik, jk]); SymbolicIdentityArray[{n}] is the n x n "
-          "identity matrix; Normal gives the dense array; A.SymbolicIdentityArray[{n}] simplifies to A")
+          "identity matrix; Normal gives the dense array; A.SymbolicIdentityArray[{n}] simplifies to A"
+          ". Check: reference (differential cases in tests/library).")
 def _sident(dims: ListOf[Expr]) -> Expr:
     _dims_ok(dims, "SymbolicIdentityArray")
     raise Unevaluated()
@@ -379,7 +382,8 @@ def _sident(dims: ListOf[Expr]) -> Expr:
 @fn("SymbolicDeltaProductArray", area=AREA, status="added",
     notes="SymbolicDeltaProductArray[dims, {{s1, t1}, ...}]: the array whose entries are the product of "
           "KroneckerDelta[i_s, i_t] over the given slot pairs (pairs disjoint, slots in range); Normal gives the "
-          "dense array")
+          "dense array"
+          ". Check: reference (differential cases in tests/library).")
 def _sdelta(dims: ListOf[Expr], pairs: ListOf[Expr]) -> Expr:
     d = _dims_ok(dims, "SymbolicDeltaProductArray")
     ps = _delta_pairs(pairs, len(d), "SymbolicDeltaProductArray")

@@ -1209,7 +1209,8 @@ def _check_origin(sd, fname, what):
 @fn("InverseSeries", area=AREA, status="added",
     notes="InverseSeries[s] / InverseSeries[s, y] for a power series s = a1 x + a2 x^2 + ... + O[x]^n about 0 "
           "with a1 != 0: the series of the inverse function to the same order (InverseSeries[Series[Sin[x], "
-          "{x, 0, 5}]] -> x + x^3/6 + 3 x^5/40 + O[x]^6); the result is checked by composing back")
+          "{x, 0, 5}]] -> x + x^3/6 + 3 x^5/40 + O[x]^6); the result is checked by composing back"
+          ". Check: reference (differential cases in tests/library).")
 def _inverseseries(s: Expr, y: Expr = None) -> Expr:
     sd = parse_series(s, "InverseSeries")
     _check_origin(sd, "InverseSeries", "the input")
@@ -1239,7 +1240,8 @@ def _inverseseries(s: Expr, y: Expr = None) -> Expr:
 @fn("ComposeSeries", area=AREA, status="added",
     notes="ComposeSeries[s1, s2, ...] = s1(s2(...)) for power series about 0 where the inner series vanish at 0; "
           "the order is the one the truncations allow (ComposeSeries[Series[Exp[x], {x, 0, 5}], Series[Sin[x], "
-          "{x, 0, 5}]] -> 1 + x + x^2/2 - x^4/8 - x^5/15 + O[x]^6)")
+          "{x, 0, 5}]] -> 1 + x + x^2/2 - x^4/8 - x^5/15 + O[x]^6)"
+          ". Check: reference (differential cases in tests/library).")
 def _composeseries(s1: Expr, s2: Expr, *more: Expr) -> Expr:
     if more:
         return _composeseries(s1, _composeseries(s2, *more))

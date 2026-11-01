@@ -843,7 +843,8 @@ def _nfclass(a):
 
 
 @fn("NumberFieldRootsOfUnity", **ADDED, notes="the roots of unity in Q(a): {-1, 1} followed by the others as "
-    "AlgebraicNumber objects in canonical (coefficient-list) order; threads over lists")
+    "AlgebraicNumber objects in canonical (coefficient-list) order; threads over lists"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_field_listable
 def _nfroots(a):
     _check_field_arg(a, "NumberFieldRootsOfUnity")

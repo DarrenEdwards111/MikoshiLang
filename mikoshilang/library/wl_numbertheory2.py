@@ -223,7 +223,8 @@ def _overflow(*a: Expr) -> Expr:
 
 
 @fn("Underflow", **ADDED, notes="Underflow[] represents a number too small to represent; x + Underflow[] = x for "
-    "numbers x != 0 (as a machine real), c Underflow[] = Sign[c] Underflow[], 1/Underflow[] = Overflow[]")
+    "numbers x != 0 (as a machine real), c Underflow[] = Sign[c] Underflow[], 1/Underflow[] = Overflow[]"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _underflow(*a: Expr) -> Expr:
     if a:
         raise ValueError("Underflow takes no arguments")
@@ -1238,7 +1239,8 @@ def _fkm(k, n):
 @fn("DeBruijnSequence", **ADDED, notes="DeBruijnSequence[list, n]: the lexicographically first de Bruijn "
     "sequence (FKM algorithm) in the order of the elements of list (duplicates removed, first occurrence kept); "
     "DeBruijnSequence[k, n] uses Range[0, k - 1]; a string gives a string. The positions-based form "
-    "DeBruijnSequence[list, n, positions] is not supported")
+    "DeBruijnSequence[list, n, positions] is not supported"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _debruijn(lst: Expr, n: Expr) -> Expr:
     if not _intq(n) or int(n) < 0:
         raise ValueError("DeBruijnSequence: n must be a non-negative integer")
@@ -1728,7 +1730,8 @@ def _dirichlet_numeric(k, j, s, prec):
 @fn("DirichletL", **ADDED, listable=True, notes="DirichletL[k, j, s]: the Dirichlet L-function of "
     "DirichletCharacter[k, j, n]; DirichletL[1, 1, s] = Zeta[s]; the principal character gives Zeta[s] "
     "Product[1 - p^-s, {p | k}]; non-positive integers s give -B[1 - s, chi]/(1 - s) (generalized Bernoulli "
-    "numbers); inexact s is evaluated with mpmath; other exact arguments stay unevaluated (N evaluates them)")
+    "numbers); inexact s is evaluated with mpmath; other exact arguments stay unevaluated (N evaluates them)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dirichletl(k: Expr, j: Expr, s: Expr) -> Expr:
     k, j = _kj(k, j, "DirichletL")
     tab = _char_table(k, j)

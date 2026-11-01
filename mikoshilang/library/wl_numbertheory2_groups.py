@@ -582,3 +582,41 @@ def _cycleindex(g: Expr, xs: Expr, d: Expr = None) -> Expr:
     if not C._is_cycles(g):
         deg = max(deg, len(g.args)) if d is None else deg
     return R(_cycle_monomial(perm, deg, vs))
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "BabyMonsterGroupB", "ConwayGroupCo1", "ConwayGroupCo2", "ConwayGroupCo3", "FischerGroupFi22",
+          "FischerGroupFi23", "FischerGroupFi24Prime", "HaradaNortonGroupHN", "HeldGroupHe", "HigmanSimsGroupHS",
+          "JankoGroupJ1", "JankoGroupJ2", "JankoGroupJ3", "JankoGroupJ4", "LyonsGroupLy", "MathieuGroupM11",
+          "MathieuGroupM12", "MathieuGroupM22", "MathieuGroupM23", "MathieuGroupM24", "McLaughlinGroupMcL",
+          "MonsterGroupM", "ONanGroupON", "RudvalisGroupRu", "SuzukiGroupSuz", "ThompsonGroupTh", "TitsGroupT")
+
+# Heads whose notes are built in code in other modules; their Check: sentences are added here, after those
+# modules are imported (each names only methods that pass in scripts/verify_library.py).
+# notes set in wl_special.py
+_add_check("reference (differential cases in tests/library).",
+          "Hypergeometric0F1Regularized", "Hypergeometric1F1Regularized", "Hypergeometric2F1Regularized",
+          "InverseJacobiCD", "InverseJacobiCN", "InverseJacobiCS", "InverseJacobiDN", "InverseJacobiNC",
+          "InverseJacobiNS", "InverseJacobiSC", "InverseJacobiSD", "InverseJacobiSN")
+
+# notes set in wl_special_elliptic.py
+_add_check("reference (differential cases in tests/library).",
+          "BesselJZero", "BesselYZero", "KelvinBei", "KelvinBer")
+
+# notes set in applied.py
+_add_check("reference (differential cases in tests/library).",
+          "AtomicMassUnit", "AvogadroNumber", "BohrMagneton", "BoltzmannConstant", "CoulombConstant", "EarthMass",
+          "EarthRadius", "ElectronMass", "ElementaryCharge", "FaradayConstant", "FineStructureConstant",
+          "GasConstant", "GravitationalConstant", "HubbleConstant", "LightYear", "MolarVolumeIdealGas",
+          "NeutronMass", "Parsec", "PlanckConstant", "ProtonMass", "ReducedPlanckConstant", "RydbergConstant",
+          "SolarMass", "SpeedOfLight", "StandardAtmosphere", "StandardGravity", "StefanBoltzmannConstant",
+          "VacuumPermeability", "VacuumPermittivity", "WienDisplacement")
+
+# notes set in wl_logic.py
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "Conjunction", "Disjunction")
+_add_check("reference (differential cases in tests/library).",
+          "Exists")

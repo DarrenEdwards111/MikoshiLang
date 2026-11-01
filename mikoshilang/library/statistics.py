@@ -105,15 +105,22 @@ def _inert(name, nargs, notes):
 
 
 _inert("NormalDistribution", (0, 2), "inert distribution object NormalDistribution[mu, sigma] (NormalDistribution[] = [0, 1])")
-_inert("ExponentialDistribution", (1,), "inert distribution object (rate lambda)")
-_inert("PoissonDistribution", (1,), "inert distribution object (mean mu)")
-_inert("BinomialDistribution", (2,), "inert distribution object [n, p]")
-_inert("ChiSquaredDistribution", (1,), "inert distribution object (nu degrees of freedom)")
-_inert("TDistribution", (1,), "inert Student t distribution (MikoshiLang name; StudentTDistribution is the Wolfram name)")
+_inert("ExponentialDistribution", (1,), "inert distribution object (rate lambda)"
+                                        ". Check: reference (differential cases in tests/library).")
+_inert("PoissonDistribution", (1,), "inert distribution object (mean mu)"
+                                    ". Check: reference (differential cases in tests/library).")
+_inert("BinomialDistribution", (2,), "inert distribution object [n, p]"
+                                     ". Check: reference (differential cases in tests/library).")
+_inert("ChiSquaredDistribution", (1,), "inert distribution object (nu degrees of freedom)"
+                                       ". Check: reference (differential cases in tests/library).")
+_inert("TDistribution", (1,), "inert Student t distribution (MikoshiLang name; StudentTDistribution is the Wolfram name)"
+                              ". Check: reference (differential cases in tests/library).")
 _inert("StudentTDistribution", (1,), "inert Student t distribution [nu]")
-_inert("FDistribution", (2,), "inert F-ratio distribution [n, m] (Wolfram FRatioDistribution)")
+_inert("FDistribution", (2,), "inert F-ratio distribution [n, m] (Wolfram FRatioDistribution)"
+                              ". Check: reference (differential cases in tests/library).")
 _inert("UniformDistribution", (0, 1, 2),
-       "inert distribution UniformDistribution[{min, max}] (Wolfram); the legacy form [min, max] is accepted")
+       "inert distribution UniformDistribution[{min, max}] (Wolfram); the legacy form [min, max] is accepted"
+       ". Check: reference (differential cases in tests/library).")
 
 
 def _pw(expr, cond, x):

@@ -928,10 +928,12 @@ def _utm(x: MatrixOf[Expr], *rest: Expr) -> Expr:
 
 fn("LowerTriangularMatrix", **ADDED,
    notes="LowerTriangularMatrix[m] validates a square lower triangular matrix (entries above the diagonal must be "
-         "zero, else a clear error)" + _STRUCT_NOTE)(_ltm)
+         "zero, else a clear error)" + _STRUCT_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(_ltm)
 fn("UpperTriangularMatrix", **ADDED,
    notes="UpperTriangularMatrix[m] validates a square upper triangular matrix (entries below the diagonal must be "
-         "zero, else a clear error)" + _STRUCT_NOTE)(_utm)
+         "zero, else a clear error)" + _STRUCT_NOTE +
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(_utm)
 
 
 def _block_triangular(x, fname, lower):
@@ -2300,7 +2302,8 @@ _REGISTRY["LinearSolve"].impls.append((_linearsolve_one, 1, 1))
 
 @fn("LinearSolveFunction", **ADDED,
     notes="LinearSolve[m] gives LinearSolveFunction[{r, c}, m] (the stored data is the matrix itself, not "
-          "Wolfram's factorisation data); f[b] solves m.x == b for a vector or matrix b like LinearSolve[m, b]")
+          "Wolfram's factorisation data); f[b] solves m.x == b for a vector or matrix b like LinearSolve[m, b]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _linearsolvefunction(*args: Expr) -> Expr:
     raise Unevaluated()
 

@@ -128,7 +128,8 @@ def ba_bytes(x, fname="ByteArray"):
 
 @fn("ByteArray", area=AREA, status="added",
     notes="ByteArray[{b1, ...}] (bytes 0..255) and ByteArray[\"base64\"]; the evaluated form is "
-          "ByteArray[\"base64\"] (Wolfram's InputForm); Normal and Length work on it")
+          "ByteArray[\"base64\"] (Wolfram's InputForm); Normal and Length work on it"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _bytearray(x: Expr) -> Expr:
     if isinstance(x, str):
         if x == "":
@@ -203,7 +204,8 @@ def _codec(enc, fname):
 
 @fn("StringToByteArray", area=AREA, status="added",
     notes="bytes of a string in UTF-8 (default) or a named $CharacterEncodings encoding; a character the "
-          "encoding cannot represent raises")
+          "encoding cannot represent raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _str2ba(s: String, enc: Expr = None) -> Expr:
     s = _str(s, "StringToByteArray")
     c = _codec(enc, "StringToByteArray")
@@ -313,7 +315,8 @@ def _baseencode(b: Expr, enc: Expr = "Base64") -> Expr:
 
 @fn("BaseDecode", area=AREA, status="added",
     notes="inverse of BaseEncode, giving a ByteArray; characters outside the alphabet are dropped; Base64 input "
-          "must be padded to a multiple of 4 (otherwise an error)")
+          "must be padded to a multiple of 4 (otherwise an error)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _basedecode(s: String, enc: Expr = "Base64") -> Expr:
     s = _str(s, "BaseDecode")
     try:

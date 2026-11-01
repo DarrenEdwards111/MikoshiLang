@@ -1380,7 +1380,8 @@ def _roots(eq: Expr, x: Expr, *rest: Expr) -> Expr:
 
 @fn("ToRules", area=AREA, status="added",
     notes="ToRules[eqns]: x == a && y == b -> {x -> a, y -> b}; a disjunction gives one rule list per case as a "
-          "Sequence (so {ToRules[...]} is a Solve-style list); False gives nothing")
+          "Sequence (so {ToRules[...]} is a Solve-style list); False gives nothing"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _torules(e: Expr) -> Expr:
     if e is False:
         return Expr("Sequence")

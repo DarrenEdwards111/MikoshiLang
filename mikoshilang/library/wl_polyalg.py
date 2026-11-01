@@ -1805,7 +1805,8 @@ def _check_um(U, A0, H, mult):
 @fn("HermiteDecomposition", area=AREA, status="added",
     notes="HermiteDecomposition[m] -> {u, r} for an integer matrix: u unimodular (Det = ±1), u.m == r, r the Hermite "
           "normal form (row echelon, positive pivots, entries above a pivot reduced into [0, pivot)), unique; u is "
-          "unique when m is square and nonsingular (otherwise one valid u); non-integer entries raise")
+          "unique when m is square and nonsingular (otherwise one valid u); non-integer entries raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hermitedecomp(m: MatrixOf[Integer]) -> ListOf[Expr]:
     A = _int_matrix(m, "HermiteDecomposition")
     U, H = _hnf(A, _IntRing)
@@ -1852,7 +1853,8 @@ def _phd(*args):
           "determinant) and h upper triangular (row echelon) with every entry above a pivot of lower degree than "
           "the pivot, over the rational numbers (or rational functions of other symbols). The Hermite form is "
           "canonical only up to constant multiples of the rows; MikoshiLang makes the pivots monic (Wolfram's row "
-          "scaling differs). Modulus and approximate coefficients raise")
+          "scaling differs). Modulus and approximate coefficients raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _polyhermitedecomp(*args: Expr) -> ListOf[Expr]:
     U, H, R_ = _phd(*args)
     return L(_pm_out(U, R_), _pm_out(H, R_))
@@ -1887,7 +1889,8 @@ def _psd(*args, fname):
     notes="PolynomialSmithDecomposition[m] / [m, x] -> {u, s, v}: u.m.v == s with u, v unimodular and s diagonal "
           "with each diagonal entry dividing the next (the invariant factors), over the rationals or rational "
           "functions of other symbols; invariant factors are unique up to constants and are made monic here "
-          "(Wolfram leaves constant multiples). Checked")
+          "(Wolfram leaves constant multiples). Checked"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _polysmithdecomp(*args: Expr) -> ListOf[Expr]:
     U, S, V, R_ = _psd(*args, fname="PolynomialSmithDecomposition")
     return L(_pm_out(U, R_), _pm_out(S, R_), _pm_out(V, R_))
@@ -4610,7 +4613,8 @@ def _nc_normal(ctx, alg, p, fname):
 @fn("NonCommutativeMultiply", area=AREA, status="added",
     notes="a ** b ** c (parsed with precedence between Dot and Power): associative (Flat) noncommutative product "
           "that otherwise stays symbolic; NonCommutativeExpand and the NonCommutative* functions expand and reduce "
-          "it")
+          "it"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ncm(*args: Expr) -> Expr:
     if any(_is_head(a, "NonCommutativeMultiply") for a in args):
         flat = []

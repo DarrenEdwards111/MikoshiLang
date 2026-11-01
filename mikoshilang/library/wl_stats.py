@@ -2265,7 +2265,8 @@ def _rreal(spec=None, n=None, *opts):
 
 
 @fn("RandomChoice", area=AREA, status="added",
-    notes="RandomChoice[list], [list, n] (with replacement), [{w...} -> list, n] weighted; reproducible with SeedRandom")
+    notes="RandomChoice[list], [list, n] (with replacement), [{w...} -> list, n] weighted; reproducible with SeedRandom"
+          ". Check: reference (differential cases in tests/library).")
 def _rchoice(x, n=None):
     rng = _rng()
     if isinstance(x, Expr) and x.head == "Rule":
