@@ -68,6 +68,9 @@ jobs:
           cp -r tests test_all_functions.py "$RUNNER_TEMP/"
           cd "$RUNNER_TEMP"
           # test_roadmap reads docs/ and scripts/ from the checkout; it is covered by the offline job.
-          "$RUNNER_TEMP/venv/bin/python" -m pytest -q -p no:cacheprovider tests --ignore=tests/test_roadmap.py
+          # pyproject.toml (and its addopts) is not read here, so deselect the network-only tests explicitly
+          # (live PubChem/Crossref/... calls fail when the service hiccups).
+          "$RUNNER_TEMP/venv/bin/python" -m pytest -q -p no:cacheprovider tests --ignore=tests/test_roadmap.py \
+            -m "not live_service" -o 'markers=live_service: depends on external knowledge APIs and mutable remote data'
         env:
           MPLBACKEND: Agg
