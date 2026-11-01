@@ -6,8 +6,8 @@ into checks that run:
 
 * ``reference``: the head's differential cases in ``tests/library`` (values written independently of the code);
 * ``exact``: every case with exact input gives a result without machine or bignum floats;
-* ``self-check``: the implementation contains its verification step (it raises ``ArithmeticError``) and its
-  cases pass through it;
+* ``self-check``: the implementation contains its verification step (it raises ``ArithmeticError``), and one real
+  (non-error) example of the head runs through it;
 * ``numeric cross-check``: for numeric heads, the exact result evaluated to 30 digits agrees with the head
   evaluated on 30-digit input;
 * ``delegated``: the named library routine exists.
@@ -300,11 +300,31 @@ def _impl_sources(name):
 
 
 def _run_selfcheck(r: Result, cases, harness):
+    """The implementation has a verification step, and one real (non-error) example runs through it."""
     srcs = _impl_sources(r.name)
     if not any("ArithmeticError" in s or "verif" in s.lower() for s in srcs):
         r.add("self-check", False, "no verification step (ArithmeticError) found in the implementation")
         return
-    r.add("self-check", True)
+    examples = [c for c in cases if len(c) > 1 and type(c[1]).__name__ != "Raises"]
+    if not examples:
+        r.add("self-check", False, "no real example to run the verification step on")
+        return
+    from .kernel import _state, SessionState
+    first = None
+    for c in examples:
+        tok = _state.set(SessionState())
+        try:
+            harness.check(c)
+        except BaseException as exc:          # noqa: BLE001 - pytest failures derive from BaseException
+            if isinstance(exc, KeyboardInterrupt):
+                raise
+            first = first or f"{c[0][:80]}: {type(exc).__name__}: {str(exc)[:120]}"
+            continue
+        finally:
+            _state.reset(tok)
+        r.add("self-check", True)
+        return
+    r.add("self-check", False, f"no example ran cleanly ({first})")
 
 
 def _run_numeric(r: Result, cases, harness):

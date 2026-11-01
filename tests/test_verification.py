@@ -109,7 +109,7 @@ def test_harness_runs_stated_checks_for_named_heads():
     assert res["VerifyDerivedKey"].checks["reference"][0] >= 3
     assert res["Gamma"].checks["mpmath"][0] >= 4                     # mpmath table
     assert res["FactorInteger"].checks["identity"] == (1, 0)          # identity table
-    assert res["Verify"].checks["self-check"] == (1, 0)              # ArithmeticError path present
+    assert res["Verify"].checks["self-check"] == (1, 0)              # verification step present and an example ran
     assert all(r.status == "pass" for r in res.values()), {k: r.failures for k, r in res.items()}
 
 
@@ -120,6 +120,16 @@ def test_harness_reports_failures():
     r = H.Result("Y", ["self-check"], "self-check")
     H._run_selfcheck(r, [], None)                                    # no implementation: no verification step
     assert r.status == "fail"
+    harness = H._harness(TESTS)
+    r = H.Result("Verify", ["self-check"], "self-check")
+    H._run_selfcheck(r, [("Verify[GCD[4, 6]]", harness.Raises())], harness)
+    assert r.status == "fail" and "no real example" in r.failures[0]       # error cases do not count
+    r = H.Result("Verify", ["self-check"], "self-check")
+    H._run_selfcheck(r, [("Verify[GCD[4, 6]]", "Certified[3, <||>]")], harness)
+    assert r.status == "fail" and "no example ran cleanly" in r.failures[0]  # a wrong example fails
+    r = H.Result("Verify", ["self-check"], "self-check")
+    H._run_selfcheck(r, [("Verify[GCD[4, 6]][[1]]", "2")], harness)
+    assert r.status == "pass"
     assert H.Result("Z", [], "").status == "no check stated"
 
 

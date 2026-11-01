@@ -52,7 +52,7 @@ Verify[Sort[{3, 1, 2}]]              (* Unchecked[{1, 2, 3}, "no checker for Sor
 |---|---|
 | `reference` | the head's differential cases in `tests/library` (each module's cases run in order, because some set up state for later ones) |
 | `exact` | every case with exact input gives a result without floats |
-| `self-check` | the implementation contains its verification step (`ArithmeticError`) |
+| `self-check` | the implementation contains its verification step (`ArithmeticError`), and one real (non-error) example of the head runs cleanly through it |
 | `numeric cross-check` | the exact result evaluated to 30 digits matches the head evaluated on 30-digit input |
 | `delegated` | the named routine (`delegated (hashlib.scrypt)`) is importable |
 
@@ -79,7 +79,6 @@ Each function gets one status: `pass`, `fail`, `not exercised` (it states a chec
 Caveats:
 
 * `exact` is vacuous for a head whose cases are all inexact or expect errors.
-* `self-check` only confirms the verification code exists. Its execution is covered by the head's cases.
 * Most heads predate the `Check:` convention, so they are reported as `no check stated` (with their reference
   cases, in `--all` mode) until their notes gain the sentence.
 
