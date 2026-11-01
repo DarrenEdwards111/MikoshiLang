@@ -113,7 +113,7 @@ def test_harness_runs_stated_checks_for_named_heads():
     assert all(r.status == "pass" for r in res.values()), {k: r.failures for k, r in res.items()}
 
 
-def test_harness_reports_failures():
+def test_harness_reports_failures(monkeypatch):
     r = H.Result("X", ["delegated"], "delegated (no.such.module_fn)")
     H._run_delegated(r, [], None)
     assert r.status == "fail" and "not importable" in r.failures[0]
@@ -122,6 +122,7 @@ def test_harness_reports_failures():
     assert r.status == "fail"
     harness = H._harness(TESTS)
     r = H.Result("Verify", ["self-check"], "self-check")
+    monkeypatch.setattr(H, "_ALL_CASES", {})                         # no nesting examples to fall back on
     H._run_selfcheck(r, [("Verify[GCD[4, 6]]", harness.Raises())], harness)
     assert r.status == "fail" and "no real example" in r.failures[0]       # error cases do not count
     r = H.Result("Verify", ["self-check"], "self-check")
@@ -158,3 +159,8 @@ def test_delegated_prose_is_not_a_module_path():
     r = H.Result("Y", ["delegated"], "delegated (no.such.module_fn)")
     H._run_delegated(r, [], None)
     assert r.status == "fail"
+
+
+def test_selfcheck_uses_an_example_that_nests_the_head():
+    res = H.run(TESTS, "stated", ["KirchhoffGraph"])
+    assert res["KirchhoffGraph"].status == "pass", res["KirchhoffGraph"].failures

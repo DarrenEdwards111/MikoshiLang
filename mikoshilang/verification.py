@@ -347,6 +347,9 @@ def _cell_ok(cell):
         return False
 
 
+_ALL_CASES: Dict[str, list] = {}          # every head's cases, for examples that nest the head (set by run)
+
+
 def _run_selfcheck(r: Result, cases, harness):
     """The implementation has a verification step, and one real (non-error) example runs through it."""
     # the implementation itself, or a helper, factory-wrapped function or class it uses, raising ArithmeticError
@@ -355,6 +358,10 @@ def _run_selfcheck(r: Result, cases, harness):
         r.add("self-check", False, "no verification step (ArithmeticError) found in the implementation")
         return
     examples = [c for c in cases if len(c) > 1 and type(c[1]).__name__ != "Raises"]
+    if not examples:                    # the head may only appear inside another call (VertexList[f[g]])
+        call = re.compile(r"(?<![A-Za-z0-9`$])" + re.escape(r.name) + r"\[")
+        examples = [c for cs in _ALL_CASES.values() for c in cs
+                    if len(c) > 1 and type(c[1]).__name__ != "Raises" and call.search(c[0])]
     if not examples:
         r.add("self-check", False, "no real example to run the verification step on")
         return
@@ -501,6 +508,8 @@ def run(tests_dir, mode: str = "stated", names: Optional[List[str]] = None) -> D
     import mikoshilang  # noqa: F401  (registers the library)
     from .library.core import STATUS
     cases = load_cases(tests_dir)
+    _ALL_CASES.clear()
+    _ALL_CASES.update(cases)
     harness = _harness(tests_dir)
     selected = {}
     for name, (area, status, notes) in sorted(STATUS.items()):
