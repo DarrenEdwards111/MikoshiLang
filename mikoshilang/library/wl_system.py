@@ -1923,7 +1923,7 @@ def _system_open(target: String | Expr) -> Expr:
         t = t.args[0]
     t = _string(t, "SystemOpen", "the target")
     if is_url or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", t) or t.startswith("mailto:"):
-        if not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:(//)?\S+$", t):
+        if not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:(//[^/\s]\S*|[^/\s]\S*)$", t):
             raise ValueError(f"SystemOpen: {t!r} is not a valid URL")
     else:
         t = os.path.abspath(os.path.expanduser(t))
@@ -3631,6 +3631,8 @@ def _wait_all(expr: Expr) -> Expr:
           "finished first; an already finished one is taken first). Check: exact (all results are collected by "
           "repeated WaitNext) in tests.")
 def _wait_next(eos: ListOf[Expr]) -> ListOf[Expr]:
+    if isinstance(eos, Symbol):
+        raise Unevaluated()
     if not is_list(eos):
         eos = L(eos)
     ids = [_eo_id(x) for x in eos.args]
