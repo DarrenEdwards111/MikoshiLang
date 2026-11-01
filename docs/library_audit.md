@@ -119,7 +119,7 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 
 Remaining unreviewed quarantined names: **5192** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **25233**.
+Differential test cases in tests/library: **25235**.
 
 
 ## By area
@@ -460,12 +460,12 @@ Cases = number of differential test cases in which the head occurs.
 | `Curl` | fixed | 9 | 3D curl and the 2D scalar curl; batch 4: Curl[F, vars, chart] for Polar (scalar), Cylindrical and Spherical (orthonormal components, Wolfram) |
 | `DefiniteIntegral` | fixed | 4 | definite integral DefiniteIntegral[f, {x, a, b}] (MikoshiLang); legacy silently computed an indefinite integral for a bare variable, now that raises |
 | `DirectionalDerivative` | fixed | 3 | grad f . u/\|u\| with an exact unit vector; legacy converted the direction to floats and did not normalise it (so it returned grad f . u) |
-| `Div` | fixed | 8 | Div[{f1, ..., fn}, {x1, ..., xn}] (Cartesian); batch 4: Div[F, vars, chart] for Polar, Cylindrical, Spherical (orthonormal components, Wolfram) |
+| `Div` | fixed | 9 | Div[{f1, ..., fn}, {x1, ..., xn}] (Cartesian); batch 4: Div[F, vars, chart] for Polar, Cylindrical, Spherical (orthonormal components, Wolfram) |
 | `Divergence` | fixed | 3 | sum of dF_i/dx_i (MikoshiLang; Wolfram Div); mismatched lengths now raise (legacy zip-truncated) |
 | `ExactODEQ` | verified | 3 | True when M dx + N dy = 0 is exact (dM/dy == dN/dx) |
 | `FindMinimum` | fixed | 4 | Wolfram FindMinimum[f, {x, x0}] / [f, {{x, x0}, {y, y0}}] -> {fmin, {x -> xmin, ...}} (local, numeric, BFGS via SciPy); the legacy form [f, {x, y}, {x0, y0}] is accepted and returns the same format; non-convergence raises |
 | `GeneratingFunction` | fixed | 3 | GeneratingFunction[{a0, a1, ...}, x] = a0 + a1 x + ... (MikoshiLang finite form); exact (legacy converted coefficients to floats); Wolfram's GeneratingFunction[expr, n, x] is not supported |
-| `Grad` | fixed | 9 | Grad[f, {x1, ..., xn}] (Cartesian; a vector field gives the Jacobian); batch 4: Grad[f, vars, chart] for "Cartesian", "Polar" {r, θ}, "Cylindrical" {r, θ, z}, "Spherical" {r, θ, φ} (θ polar angle) in the orthonormal basis (Wolfram) |
+| `Grad` | fixed | 10 | Grad[f, {x1, ..., xn}] (Cartesian; a vector field gives the Jacobian); batch 4: Grad[f, vars, chart] for "Cartesian", "Polar" {r, θ}, "Cylindrical" {r, θ, z}, "Spherical" {r, θ, φ} (θ polar angle) in the orthonormal basis (Wolfram) |
 | `Gradient` | verified | 3 | list of partial derivatives (MikoshiLang; Wolfram Grad) |
 | `HessianMatrix` | verified | 3 | matrix of second partial derivatives |
 | `InflectionPoints` | fixed | 3 | real points where f'' changes sign; legacy returned every root of f'' (so x^4 reported 0, which is not an inflection point) and complex roots |
@@ -1014,7 +1014,7 @@ Cases = number of differential test cases in which the head occurs.
 | `In` | added | 5 | In[n] re-evaluates input line n of the main loop; In[] the last line, In[-k] earlier lines; unevaluated when there is no such line |
 | `InString` | added | 3 | InString[n] is the text of input line n of the main loop; InString[] the last, InString[-k] earlier |
 | `Inactivate` | added | 11 | Inactivate[expr] replaces every head f (except List, Rule, Blank and other structural heads) by Inactive[f] before evaluation; Inactivate[expr, patt] only heads matching patt (a symbol, Alternatives, Except[...]); Heads -> False leaves compound heads alone |
-| `Inactive` | added | 30 | Inactive[f][args] is an inert form of f[args] (the arguments are evaluated, f is not applied); Inactive[atom] gives atom for atoms other than symbols |
+| `Inactive` | added | 31 | Inactive[f][args] is an inert form of f[args] (the arguments are evaluated, f is not applied); Inactive[atom] gives atom for atoms other than symbols |
 | `IncludedContexts` | added | 3 | FullDefinition option: only symbols in these contexts are followed |
 | `Indexed` | added | 8 | Indexed[list, i] gives list[[i]], Indexed[list, {i, j, ...}] indexes recursively; for a symbolic expr, Indexed[x, i] stays as the component x_i (Indexed[x, {i}] is the same as Indexed[x, i]) |
 | `Information` | added | 19 | Information[symbol] (also ?f, ??f) gives InformationData[<\|ObjectType, Usage, Documentation, OwnValues, UpValues, DownValues, SubValues, DefaultValues, NValues, FormatValues, Options, Attributes, FullName\|>]; Information[s, "prop"] gives one property; Information["patt*"] a list; LongForm -> False keeps only the summary. Usage messages (f::usage) are not available |
@@ -1026,7 +1026,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LocalSymbol` | added | 6 | LocalSymbol["name"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol["name"] = val or := val; unevaluated when never assigned; LocalSymbol["name", "dir"] uses another base; =. deletes it |
 | `Locked` | added | 5 | attribute: the attributes of the symbol can no longer be changed (Protect/Unprotect, SetAttributes, ClearAttributes, Attributes[f] = ... raise) |
 | `Manual` | added | 6 | inert option value: selected manually |
-| `Method` | added | 172 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
+| `Method` | added | 173 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
 | `NHoldAll` | added | 3 | attribute: N does not affect any argument of f |
 | `NHoldFirst` | added | 3 | attribute: N does not affect the first argument of f |
 | `NHoldRest` | added | 3 | attribute: N affects only the first argument of f |
@@ -2541,7 +2541,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Apply` | fixed | 9 | kernel builtin extended in batch 1: level specifications (f @@@ expr); an association gives f[values] |
 | `AtomQ` | fixed | 6 | kernel builtin extended in batch 1: associations and rationals are atoms |
 | `Cancel` | kernel | 3 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `Cases` | fixed | 14 | kernel builtin extended in batch 1: level specifications and a maximum count |
+| `Cases` | fixed | 15 | kernel builtin extended in batch 1: level specifications and a maximum count |
 | `Count` | fixed | 14 | kernel builtin extended in batch 1: level specifications |
 | `DeleteCases` | fixed | 3 | kernel builtin extended in batch 1: level specifications and a maximum count |
 | `Diff` | kernel | 2 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -2549,7 +2549,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Drop` | fixed | 7 | kernel builtin extended in batch 1: UpTo[n], {m, n, s} and one specification per level |
 | `Equal` | fixed | 9 | kernel builtin extended in batch 1: more than two arguments chain |
 | `EvenQ` | kernel | 40 | evaluated by the kernel builtin; legacy library rule was unreachable |
-| `First` | fixed | 89 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
+| `First` | fixed | 90 | kernel builtin extended in batch 1: First[expr, default]; associations give their first value |
 | `Flatten` | fixed | 24 | kernel builtin extended in batch 1: Flatten[expr, n], Flatten[expr, n, h] and dimension groups {{2}, {1}} |
 | `FreeQ` | fixed | 19 | kernel builtin extended in batch 1: level specifications, Heads -> False |
 | `IntegerQ` | kernel | 25 | evaluated by the kernel builtin; legacy library rule was unreachable |
@@ -2797,7 +2797,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Diagonal` | added | 11 | Diagonal[m] = {m[[1,1]], m[[2,2]], ...} (rectangular matrices too); Diagonal[m, k] is the k-th superdiagonal (k < 0: subdiagonal); entries are returned unevaluated-as-given |
 | `DiagonalizableMatrixQ` | added | 5 | m == s.d.Inverse[s] for a diagonal d (over the complex numbers): exact via SymPy; machine matrices test that the eigenvector matrix is well-conditioned (condition number < 10^8) |
 | `DiamondMatrix` | added | 4 | 1s where the Manhattan distance from the centre is at most r: DiamondMatrix[r] is (2r+1) x (2r+1), DiamondMatrix[r, w]; integer radii only, equal radii per dimension |
-| `Dot` | fixed | 22 | kernel builtin replaced in batch 3: any number of arguments and tensors of any rank (contracts the last index of each factor with the first of the next); symbolic factors leave Dot unevaluated (legacy raised); Dot[x] = x; incompatible shapes raise; infix a.b parses as Dot |
+| `Dot` | fixed | 23 | kernel builtin replaced in batch 3: any number of arguments and tensors of any rank (contracts the last index of each factor with the first of the next); symbolic factors leave Dot unevaluated (legacy raised); Dot[x] = x; incompatible shapes raise; infix a.b parses as Dot |
 | `DotProduct` | fixed | 5 | MikoshiLang alias of Dot for two vectors (now the batch-3 Dot) |
 | `Eigensystem` | added | 6 | {Eigenvalues[m], Eigenvectors[m]} with matching order (decreasing absolute value); Eigensystem[m, k] and UpTo[k]; generalized {m, a} raises |
 | `FourierMatrix` | added | 4 | FourierMatrix[n]: entries Exp[2 Pi I (r - 1)(s - 1)/n]/Sqrt[n] (Wolfram's default FourierParameters {0, 1}); exact |
@@ -3509,15 +3509,15 @@ Cases = number of differential test cases in which the head occurs.
 | `ListInterpolation` | added | 6 | ListInterpolation[{f1, ..., fn}] on x = 1..n and ListInterpolation[list, {{xmin, xmax}}] on an equally spaced grid -> InterpolatingFunction (same piecewise polynomials as Interpolation); 1-D only |
 | `MachineNumberQ` | added | 7 | True for machine-precision real and complex numbers only |
 | `MachinePrecision` | added | 10 | symbol for machine precision; N[MachinePrecision] = 15.9546 (53 Log10[2]) |
-| `NDSolve` | added | 11 | NDSolve[{odes, ics}, y, {x, xmin, xmax}] (also y[x], and systems {y, z}) for initial-value problems of any order that can be solved for the highest derivatives -> {{y -> InterpolatingFunction[...]}} (or {{y[x] -> InterpolatingFunction[...][x]}}); SciPy DOP853 (Radau fallback for stiff problems), rtol 1e-10, MaxStepFraction 1/10; the initial point may be inside the range; machine precision only; WhenEvent actions and the AccuracyGoal / PrecisionGoal / MaxStepSize / MaxStepFraction / StartingStepSize / MaxSteps / StepMonitor / EvaluationMonitor options (W26). Linear boundary-value problems (1-D, or 2-D on rectangles) with DirichletCondition, NeumannValue, PeriodicBoundaryCondition or end-point equations are solved by Chebyshev collocation (W26, wl_pde); nonlinear BVPs, DAEs, time-dependent PDEs and delay equations raise. Check: self-check (BVP grid refinement raises ArithmeticError when unconverged) and reference values in tests. |
-| `NDSolveValue` | added | 55 | NDSolveValue[{odes, ics}, y, {x, xmin, xmax}] -> InterpolatingFunction (y[x] -> ifun[x], {y, z} -> list); same solvers and limits as NDSolve. Check: self-check (BVP grid refinement raises ArithmeticError when unconverged) and reference values in tests. |
+| `NDSolve` | added | 10 | NDSolve[{odes, ics}, y, {x, xmin, xmax}] (also y[x], and systems {y, z}) for initial-value problems of any order that can be solved for the highest derivatives -> {{y -> InterpolatingFunction[...]}} (or {{y[x] -> InterpolatingFunction[...][x]}}); SciPy DOP853 (Radau fallback for stiff problems), rtol 1e-10, MaxStepFraction 1/10; the initial point may be inside the range; machine precision only; WhenEvent actions and the AccuracyGoal / PrecisionGoal / MaxStepSize / MaxStepFraction / StartingStepSize / MaxSteps / StepMonitor / EvaluationMonitor options (W26). Linear boundary-value problems (1-D, or 2-D on rectangles) with DirichletCondition, NeumannValue, PeriodicBoundaryCondition or end-point equations are solved by Chebyshev collocation (W26, wl_pde); nonlinear BVPs, DAEs, time-dependent PDEs and delay equations raise. Check: self-check (BVP grid refinement raises ArithmeticError when unconverged) and reference values in tests. |
+| `NDSolveValue` | added | 57 | NDSolveValue[{odes, ics}, y, {x, xmin, xmax}] -> InterpolatingFunction (y[x] -> ifun[x], {y, z} -> list); same solvers and limits as NDSolve. Check: self-check (BVP grid refinement raises ArithmeticError when unconverged) and reference values in tests. |
 | `NIntegrate` | added | 21 | numerical integration NIntegrate[f, {x, a, b}, {y, c, d}, ...] (later limits may depend on earlier variables, Wolfram order), infinite ranges, intermediate points {x, a, x1, ..., b} for interior singularities, complex-valued integrands and complex contours; WorkingPrecision -> p for arbitrary precision (mpmath tanh-sinh / Gauss-Legendre: Method -> "DoubleExponential" \| "GaussKronrod") |
 | `NMaximize` | added | 4 | NMaximize[f, vars] / [{f, cons}, vars] -> {fmax, {x -> x*, ...}} (NMinimize of -f) |
 | `NMinimize` | added | 8 | NMinimize[f, vars] / NMinimize[{f, cons}, vars] -> {fmin, {x -> x*, ...}}: global numeric search (differential evolution when every variable is bounded, plus 40 seeded multi-start SLSQP/BFGS local searches; constraints: <, <=, >, >=, ==, Inequality, And); like Wolfram's it is a heuristic global method; integer domains raise |
 | `NProduct` | added | 5 | NProduct[f, {n, nmin, nmax}] (also infinite products, mpmath nprod); WorkingPrecision -> p |
 | `NRoots` | added | 5 | NRoots[poly == 0, x] gives x == r1 \|\| x == r2 \|\| ... with roots repeated by multiplicity (machine precision, or the precision of approximate coefficients); non-polynomials raise |
 | `NSolve` | added | 11 | NSolve[eqns, vars] numerical solutions of polynomial (and rational) equations and systems as {{x -> x1}, ...} with every complex root repeated by multiplicity; NSolve[eqns, vars, Reals] keeps real solutions; WorkingPrecision -> p; transcendental equations raise (use FindRoot) |
-| `NSum` | added | 12 | NSum[f, {n, nmin, nmax}] and {n, nmin, nmax, dn}, multiple iterators, nmax = Infinity (mpmath nsum: Richardson/Shanks/Euler-Maclaurin acceleration, alternating series); WorkingPrecision -> p; finite short ranges are summed directly; divergent sums raise |
+| `NSum` | added | 13 | NSum[f, {n, nmin, nmax}] and {n, nmin, nmax, dn}, multiple iterators, nmax = Infinity (mpmath nsum: Richardson/Shanks/Euler-Maclaurin acceleration, alternating series); WorkingPrecision -> p; finite short ranges are summed directly; divergent sums raise |
 | `Numerator` | added | 5 | numerator of a rational number or of a product with negative exponents (Numerator[x^2 y^-3] = x^2); sums are not combined over a common denominator (Numerator[a/b + c/d] is the whole sum) |
 | `Precision` | added | 19 | Precision[x]: Infinity for exact numbers and symbolic expressions without approximate numbers, MachinePrecision for machine numbers, the decimal precision of a bignum; the minimum over an expression (a machine number makes the whole expression MachinePrecision). An arbitrary-precision zero has Precision 0. |
 | `Rationalize` | added | 16 | Rationalize[x] gives the first continued-fraction convergent p/q with \|p/q - x\| < 10^-4/q^2, or x unchanged when there is none (Rationalize[N[Pi]] = 3.14159); Rationalize[x, dx] gives the first convergent within dx, refined to the smallest semiconvergent within dx (Rationalize[Pi, 1/1000] = 201/64); Rationalize[x, 0] gives the simplest rational within the precision of x; applies to every approximate number of an expression |
@@ -3609,7 +3609,7 @@ Cases = number of differential test cases in which the head occurs.
 | `StartingStepSize` | added | 3 | StartingStepSize -> h (option): NDSolve's first step size (SciPy first_step); larger than the range raises ValueError. Check: numeric cross-check in tests. |
 | `StepMonitor` | added | 8 | StepMonitor :> expr (option): evaluated after every accepted step of NDSolve (x, y[x], y'[x] replaced by the step values; the monitor runs once the integration finishes); FindRoot / NIntegrate / NSolve raise NotImplementedError for it rather than ignore it. Check: reference in tests. |
 | `Tolerance` | added | 8 | Tolerance -> t (option): honoured by SingularValueList (singular values below t times the largest are dropped) and the other linear-algebra heads that document it. Check: reference in tests. |
-| `VerifyConvergence` | added | 3 | VerifyConvergence -> True \| False (option): accepted by NSum, which raises ValueError for a divergent sum such as Sum[1/n]. Check: reference in tests. |
+| `VerifyConvergence` | added | 4 | VerifyConvergence -> True \| False (option): accepted by NSum, which raises ValueError for a divergent sum such as Sum[1/n]. Check: reference in tests. |
 | `VonMisesStress` | added | 5 | VonMisesStress[vars, pars, stress] -> Sqrt[((sxx - syy)^2 + (syy - szz)^2 + (szz - sxx)^2 + 6 (txy^2 + txz^2 + tyz^2))/2] for a symmetric 3 x 3 (or 2 x 2, padded with zeros) stress matrix or SymmetrizedArray; numeric stresses give a number, symbolic ones a formula; non-symmetric or wrongly shaped input raises ValueError. Check: reference (uniaxial stress s -> \|s\|, pure shear t -> Sqrt[3] \|t\|) in tests. |
 | `WavePDEComponent` | added | 3 | WavePDEComponent[{u[t, x...], t, {x...}}, pars] -> D[u, {t, 2}] + Inactive[Div][-c^2 . Inactive[Grad][u, X], X] with "WaveCoefficient" c (scalar, or an n x n matrix whose square c.c is used; default 1) and "RegionSymmetry"; stationary vars raise ValueError. Check: reference (Wolfram documentation forms) in tests. |
 | `WhenEvent` | added | 10 | WhenEvent[event, action] (HoldAll, inert) inside NDSolve / NDSolveValue initial-value problems: events a == b (either crossing) or a > b / a < b (becoming True) located by SciPy root finding; actions "StopIntegration" (the solution domain ends there), "RemoveEvent", resets y[t] -> value / y'[t] -> value, lists of actions and any expression evaluated for side effects (Sow, counters) with the current state substituted; discrete variables, event options and integration in both directions from an interior initial point raise NotImplementedError. Check: reference (bouncing ball impact time Sqrt[2 h/g] and restitution) in tests. |
