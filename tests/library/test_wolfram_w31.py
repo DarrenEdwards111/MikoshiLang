@@ -343,6 +343,14 @@ SPECIAL = [
     # unchanged existing syntax
     ("Hold[w31a + w31b * w31c / w31d]", "Hold[Plus[w31a, Times[Times[w31b, w31c], Power[w31d, -1]]]]"),
     ("Hold[w31a < w31b == w31c]", "Hold[And[Less[w31a, w31b], Equal[w31b, w31c]]]"),
+    ("Hold[w31a/w31b/w31c]", "Hold[Times[Times[w31a, Power[w31b, -1]], Power[w31c, -1]]]"),
+    ("Hold[2 w31a w31b^2]", "Hold[Times[Times[2, w31a], Power[w31b, 2]]]"),
+    ("Hold[w31a ** w31b ^ w31c]", "Hold[NonCommutativeMultiply[w31a, Power[w31b, w31c]]]"),
+    ("Hold[!w31a && w31b || w31c]", "Hold[Or[And[Not[w31a], w31b], w31c]]"),
+    ("Hold[w31a | w31b -> w31c /; w31d]", "Hold[Rule[Alternatives[w31a, w31b], Condition[w31c, w31d]]]"),
+    ("Hold[w31x = w31a // w31f]", "Hold[Set[w31x, w31f[w31a]]]"),
+    ("Hold[w31a ;; w31b]", "Hold[Span[w31a, w31b]]"),
+    ("Hold[w31f /@ w31a + w31b]", "Hold[Plus[Map[w31f, w31a], w31b]]"),
 ]
 
 # Different operators of one precedence level are not mixed without parentheses (ParseError), so nothing is read
