@@ -434,8 +434,14 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
     op = OPERATOR_FORMS.get(head) if isinstance(head, str) else None
     if op is not None and len(new_args) == op[0]:
         return new_expr
+    ksig = None
+    if _typestate.ACTIVE and isinstance(head, str):
+        from . import types as _types
+        ksig = _types.check_kernel_call(head, new_args)
     r = kernel.apply_builtin(new_expr, ev)
     if r is not kernel.UNHANDLED:
+        if ksig is not None:
+            _types.check_result(head, ksig, r)
         return r
 
     if not isinstance(head, str):
