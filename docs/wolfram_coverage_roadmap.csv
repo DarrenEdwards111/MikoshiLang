@@ -363,7 +363,7 @@ And,Core Language & Structure,implemented,1,,10,LanguageOverview ProceduralProgr
 AndersonDarlingTest,Data Manipulation & Analysis,implemented,2,,0,HypothesisTests RandomVariables
 AngerJ,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 AngleBisector,Geometry,implemented,2,,0,PlaneGeometry SyntheticGeometry AnglesAndPolarCoordinates
-AngleBracket,Core Language & Structure,missing,2,,0,WolframLanguageSyntaxCharacters SymbolicNotationalForms
+AngleBracket,Core Language & Structure,implemented,2,,0,WolframLanguageSyntaxCharacters SymbolicNotationalForms
 AnglePath,Higher Mathematical Computation,implemented,1,,5,IteratedMapsAndFractals ComputationalSystemsAndDiscovery AnglesAndPolarCoordinates
 AnglePath3D,Higher Mathematical Computation,implemented,2,,1,IteratedMapsAndFractals ComputationalSystemsAndDiscovery AnglesAndPolarCoordinates
 AngleVector,Core Language & Structure,implemented,2,,0,OperationsOnVectors AnglesAndPolarCoordinates TrigonometricFunctions
@@ -392,7 +392,7 @@ AnomalyDetector,Data Manipulation & Analysis,infeasible,,ML models / LLM service
 AnomalyDetectorFunction,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,UnsupervisedMachineLearning
 Anonymous,"Options, system variables & unclassified",missing,3,,0,
 Antialiasing,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling
-Anticommutator,"Options, system variables & unclassified",missing,3,,0,
+Anticommutator,"Options, system variables & unclassified",implemented,3,,0,
 Antihermitian,Higher Mathematical Computation,implemented,2,,0,SymbolicTensors
 AntihermitianMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
 Antisymmetric,Higher Mathematical Computation,implemented,2,,0,SymbolicTensors
@@ -633,7 +633,7 @@ BSplineSurface,Data Manipulation & Analysis,implemented,2,,0,GraphicsObjects Spl
 BabyMonsterGroupB,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 Back,Visualization & Graphics,implemented,3,,0,3DGraphicsOptions
 Background,Notebook Documents & Presentation,implemented,1,,3,AutomatedReports GraphicsOptionsAndStyling RasterImageFormats NotebookFormattingAndStyling
-Backslash,"Options, system variables & unclassified",missing,3,,0,
+Backslash,"Options, system variables & unclassified",implemented,3,,0,
 Backward,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
 Ball,Geometry,implemented,2,,0,GeometricComputation PlaneGeometry SolidGeometry GeometricSpecialRegions
 Band,Symbolic & Numeric Computation,implemented,2,,0,Tensors ConstructingMatrices
@@ -667,7 +667,7 @@ BayesianMaximization,Symbolic & Numeric Computation,implemented,2,,0,Optimizatio
 BayesianMaximizationObject,Symbolic & Numeric Computation,implemented,2,,0,Optimization
 BayesianMinimization,Data Manipulation & Analysis,implemented,2,,0,Optimization SupervisedMachineLearning
 BayesianMinimizationObject,Symbolic & Numeric Computation,implemented,2,,0,Optimization
-Because,"Options, system variables & unclassified",missing,3,,0,
+Because,"Options, system variables & unclassified",implemented,3,,0,
 BeckmannDistribution,Symbolic & Numeric Computation,implemented,2,,0,DistributionsInCommunicationSystems
 Beep,Core Language & Structure,infeasible,,audio / video,1,SoundAndSonification BasicInputAndOutputInPrograms Messages
 Before,"Options, system variables & unclassified",implemented,3,,0,
@@ -839,8 +839,8 @@ BoxStyle,Visualization & Graphics,implemented,3,,0,3DGraphicsOptions
 BoxWhiskerChart,Data Manipulation & Analysis,implemented,1,,1,Statistics DataVisualization ChartingAndInformationVisualization TimeSeries
 Boxed,Visualization & Graphics,implemented,2,,1,GraphicsOptionsAndStyling 3DGraphicsOptions
 Boxes,"Options, system variables & unclassified",implemented,3,,0,
-Bra,"Options, system variables & unclassified",missing,3,,0,
-BraKet,"Options, system variables & unclassified",missing,3,,0,
+Bra,"Options, system variables & unclassified",implemented,3,,0,
+BraKet,"Options, system variables & unclassified",implemented,3,,0,
 BracketingBar,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
 BrayCurtisDistance,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimilarityMeasures
 BreadthFirstScan,Graphs & Networks,implemented,2,,0,GraphsAndNetworks ComputationOnGraphs GraphProgramming
@@ -914,9 +914,9 @@ CanonicalizeRegion,Geometry,implemented,2,,0,GeometricComputation
 CantorMesh,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals MeshRegions
 CantorStaircase,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IteratedMapsAndFractals
 Canvas,Visualization & Graphics,infeasible,,front end / notebooks,1,GraphicsInteractivityAndDrawing NotebookFormattingAndStyling AnnotatingAndCombiningGraphics CombiningGraphics
-Cap,"Options, system variables & unclassified",missing,3,,0,
+Cap,"Options, system variables & unclassified",implemented,3,,0,
 CapForm,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
-CapitalDifferentialD,"Options, system variables & unclassified",missing,3,,0,
+CapitalDifferentialD,"Options, system variables & unclassified",implemented,3,,0,
 Capitalize,Core Language & Structure,implemented,1,,0,WorkingWithTemplates StringOperations TextConstruction
 CapsuleShape,Geometry,implemented,2,,0,GeometricSpecialRegions
 CaptureRunning,"Options, system variables & unclassified",missing,3,,0,
@@ -997,7 +997,7 @@ CensoredDistribution,Symbolic & Numeric Computation,implemented,2,,0,RandomVaria
 Censoring,"Options, system variables & unclassified",implemented,3,,0,
 Center,"Options, system variables & unclassified",implemented,3,,0,
 CenterArray,Core Language & Structure,implemented,1,,0,ConstructingLists ConstructingMatrices StructureMatricesAndConvolutionKernels
-CenterDot,"Options, system variables & unclassified",missing,3,,0,
+CenterDot,"Options, system variables & unclassified",implemented,3,,0,
 CenteredInterval,Data Manipulation & Analysis,implemented,2,,0,NumbersWithUncertainty IntervalArithmetic
 CentralFeature,Symbolic & Numeric Computation,implemented,2,,0,LocationsPathsAndRouting DescriptiveStatistics SpatialStatistics DistanceAndSimilarityMeasures
 CentralMoment,Data Manipulation & Analysis,implemented,2,,0,DateAndTime DescriptiveStatistics SymbolicArrays StatisticalMomentsAndGeneratingFunctions
@@ -1064,12 +1064,12 @@ ChromaticPolynomial,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasure
 ChromaticityPlot,Images,missing,2,,1,DataVisualization ColorProcessing ComputationalPhotography
 ChromaticityPlot3D,Data Manipulation & Analysis,missing,2,,1,DataVisualization ColorProcessing
 Circle,Visualization & Graphics,implemented,1,,12,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
-CircleDot,"Options, system variables & unclassified",missing,3,,0,
-CircleMinus,"Options, system variables & unclassified",missing,3,,0,
-CirclePlus,Notebook Documents & Presentation,missing,3,,0,MathematicalTypesetting WolframLanguageSyntaxCharacters DefiningCustomNotation SymbolicNotationalForms
+CircleDot,"Options, system variables & unclassified",implemented,3,,0,
+CircleMinus,"Options, system variables & unclassified",implemented,3,,0,
+CirclePlus,Notebook Documents & Presentation,implemented,3,,0,MathematicalTypesetting WolframLanguageSyntaxCharacters DefiningCustomNotation SymbolicNotationalForms
 CirclePoints,Core Language & Structure,implemented,2,,0,OperationsOnVectors GraphicsObjects AnglesAndPolarCoordinates TrigonometricFunctions
 CircleThrough,Geometry,implemented,2,,0,PlaneGeometry GeometricSpecialRegions SyntheticGeometry
-CircleTimes,"Options, system variables & unclassified",missing,3,,0,
+CircleTimes,"Options, system variables & unclassified",implemented,3,,0,
 CirculantGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
 CircularArcThrough,"Options, system variables & unclassified",implemented,3,,0,
 CircularOrthogonalMatrixDistribution,Symbolic & Numeric Computation,implemented,2,,0,MatrixDistributions
@@ -1147,7 +1147,7 @@ CoefficientRules,Higher Mathematical Computation,implemented,2,,0,PolynomialAlge
 CoifletWavelet,Data Manipulation & Analysis,implemented,2,,0,Wavelets
 Collect,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation PolynomialAlgebra AlgebraicTransformations
 CollinearPoints,Geometry,implemented,2,,0,PlaneGeometry SolidGeometry GeometricPropertiesAndMeasures
-Colon,"Options, system variables & unclassified",missing,3,,0,
+Colon,"Options, system variables & unclassified",implemented,3,,0,
 ColorBalance,Images,implemented,3,,0,ImageRestoration ColorProcessing ComputationalPhotography
 ColorCombine,Images,implemented,3,,0,ColorProcessing ImageRepresentation
 ColorConvert,Images,implemented,3,,0,ImageProcessing ColorProcessing Colors ComputationalPhotography
@@ -1204,7 +1204,7 @@ CommunityBoundaryStyle,"Options, system variables & unclassified",missing,3,,0,
 CommunityGraphPlot,Graphs & Networks,missing,2,,1,GraphsAndNetworks GraphVisualization SocialNetworks ClusterAnalysis
 CommunityLabels,Data Manipulation & Analysis,missing,2,,0,Labels
 CommunityRegionStyle,"Options, system variables & unclassified",missing,3,,0,
-Commutator,"Options, system variables & unclassified",missing,3,,0,
+Commutator,"Options, system variables & unclassified",implemented,3,,0,
 CompanionMatrix,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 CompanyData,"Options, system variables & unclassified",infeasible,,curated data,0,
 CompatibleUnitQ,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,Units
@@ -1379,7 +1379,7 @@ CoordinateTransformData,Symbolic & Numeric Computation,infeasible,,curated data,
 CoordinatesToolOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 CoplanarPoints,Geometry,implemented,2,,0,SolidGeometry GeometricPropertiesAndMeasures
 CoprimeQ,Symbolic & Numeric Computation,implemented,2,,0,TestingExpressions IntegerFunctions NumberTheoreticFunctions PrimeNumbers
-Coproduct,"Options, system variables & unclassified",missing,3,,0,
+Coproduct,"Options, system variables & unclassified",implemented,3,,0,
 CopulaDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions RandomVariables DerivedDistributions
 CopyDatabin,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,UsingTheWolframDataDrop
 CopyDirectory,External Interfaces & Connections,implemented,3,,0,FileOperations DirectoriesAndDirectoryOperations
@@ -1472,8 +1472,8 @@ Cuboid,Visualization & Graphics,implemented,3,,0,SymbolicGraphicsLanguage SolidG
 Cumulant,Data Manipulation & Analysis,implemented,2,,0,DateAndTime DescriptiveStatistics SymbolicArrays RandomVariables
 CumulantGeneratingFunction,Data Manipulation & Analysis,implemented,2,,0,SummationTransforms StatisticalMomentsAndGeneratingFunctions StatisticalDistributionFunctions
 CumulativeFeatureImpactPlot,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,UnsupervisedMachineLearning DateAndTimeVisualization
-Cup,"Options, system variables & unclassified",missing,3,,0,
-CupCap,"Options, system variables & unclassified",missing,3,,0,
+Cup,"Options, system variables & unclassified",implemented,3,,0,
+CupCap,"Options, system variables & unclassified",implemented,3,,0,
 Curl,Symbolic & Numeric Computation,implemented,2,,0,Calculus OperationsOnVectors DifferentialEquations PDEModelingAndAnalysis
 CurrencyConvert,Financial Data & Computation,infeasible,,curated data,1,SocioeconomicAndDemographicData Units FinancialAndEconomicData Finance
 CurrentCompiledFunctionData,Core Language & Structure,infeasible,,curated data,0,CodeCompilation
@@ -1699,7 +1699,7 @@ DialogNotebook,User Interface Construction,infeasible,,front end / notebooks,0,D
 DialogProlog,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 DialogReturn,User Interface Construction,infeasible,,front end / notebooks,0,CustomInterfaceConstruction FlowControl DialogBoxes
 DialogSymbols,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-Diamond,"Options, system variables & unclassified",missing,3,,0,
+Diamond,"Options, system variables & unclassified",implemented,3,,0,
 DiamondMatrix,Images,implemented,3,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters ConstructingMatrices StructureMatricesAndConvolutionKernels
 DiceDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimilarityMeasures
 DictionaryLookup,Strings & Text,infeasible,,curated data,0,StringManipulation Cryptography ProcessingTextualData TextAnalysis
@@ -1719,7 +1719,7 @@ DifferenceQuotient,Symbolic & Numeric Computation,implemented,2,,0,Calculus Disc
 DifferenceRoot,Symbolic & Numeric Computation,implemented,2,,0,DiscreteCalculus SpecialFunctions RecurrenceAndSumFunctions IntegerSequences
 DifferenceRootReduce,Higher Mathematical Computation,implemented,2,,0,DiscreteCalculus TheoremProving AlgebraicTransformations
 Differences,Core Language & Structure,implemented,1,,0,ListManipulation DataTransformsAndSmoothing DiscreteCalculus SignalProcessing
-DifferentialD,"Options, system variables & unclassified",missing,3,,0,
+DifferentialD,"Options, system variables & unclassified",implemented,3,,0,
 DifferentialRoot,Symbolic & Numeric Computation,implemented,2,,0,Calculus SpecialFunctions DifferentialEquations DifferentialOperators
 DifferentialRootReduce,Symbolic & Numeric Computation,implemented,2,,0,TheoremProving AlgebraicTransformations DifferentialOperators
 DifferentiatorFilter,Data Manipulation & Analysis,implemented,2,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters SignalFilteringAndFilterDesign
@@ -1843,34 +1843,34 @@ DominatorTreeGraph,Graphs & Networks,implemented,2,,0,GraphModifications
 DominatorVertexList,Graphs & Networks,implemented,2,,0,GraphModifications
 Dot,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra Tensors GPUComputing OperationsOnVectors
 DotDashed,Visualization & Graphics,implemented,3,,0,GraphicsObjects GraphicsDirectives
-DotEqual,"Options, system variables & unclassified",missing,3,,0,
+DotEqual,"Options, system variables & unclassified",implemented,3,,0,
 DotLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 Dotted,Visualization & Graphics,implemented,3,,0,GraphicsObjects GraphicsDirectives
 DoubleBracketingBar,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
-DoubleDownArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleLeftArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleLeftRightArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleLeftTee,"Options, system variables & unclassified",missing,3,,0,
-DoubleLongLeftArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleLongLeftRightArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleLongRightArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleRightArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleRightTee,"Options, system variables & unclassified",missing,3,,0,
-DoubleUpArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleUpDownArrow,"Options, system variables & unclassified",missing,3,,0,
-DoubleVerticalBar,"Options, system variables & unclassified",missing,3,,0,
-DownArrow,"Options, system variables & unclassified",missing,3,,0,
-DownArrowBar,"Options, system variables & unclassified",missing,3,,0,
-DownArrowUpArrow,"Options, system variables & unclassified",missing,3,,0,
-DownLeftRightVector,"Options, system variables & unclassified",missing,3,,0,
-DownLeftTeeVector,"Options, system variables & unclassified",missing,3,,0,
-DownLeftVector,"Options, system variables & unclassified",missing,3,,0,
-DownLeftVectorBar,"Options, system variables & unclassified",missing,3,,0,
-DownRightTeeVector,"Options, system variables & unclassified",missing,3,,0,
-DownRightVector,"Options, system variables & unclassified",missing,3,,0,
-DownRightVectorBar,"Options, system variables & unclassified",missing,3,,0,
-DownTee,"Options, system variables & unclassified",missing,3,,0,
-DownTeeArrow,"Options, system variables & unclassified",missing,3,,0,
+DoubleDownArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleLeftRightArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleLeftTee,"Options, system variables & unclassified",implemented,3,,0,
+DoubleLongLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleLongLeftRightArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleLongRightArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleRightArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleRightTee,"Options, system variables & unclassified",implemented,3,,0,
+DoubleUpArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleUpDownArrow,"Options, system variables & unclassified",implemented,3,,0,
+DoubleVerticalBar,"Options, system variables & unclassified",implemented,3,,0,
+DownArrow,"Options, system variables & unclassified",implemented,3,,0,
+DownArrowBar,"Options, system variables & unclassified",implemented,3,,0,
+DownArrowUpArrow,"Options, system variables & unclassified",implemented,3,,0,
+DownLeftRightVector,"Options, system variables & unclassified",implemented,3,,0,
+DownLeftTeeVector,"Options, system variables & unclassified",implemented,3,,0,
+DownLeftVector,"Options, system variables & unclassified",implemented,3,,0,
+DownLeftVectorBar,"Options, system variables & unclassified",implemented,3,,0,
+DownRightTeeVector,"Options, system variables & unclassified",implemented,3,,0,
+DownRightVector,"Options, system variables & unclassified",implemented,3,,0,
+DownRightVectorBar,"Options, system variables & unclassified",implemented,3,,0,
+DownTee,"Options, system variables & unclassified",implemented,3,,0,
+DownTeeArrow,"Options, system variables & unclassified",implemented,3,,0,
 DownValues,Core Language & Structure,implemented,1,,0,Assignments SymbolHandling
 DownValuesFunction,Core Language & Structure,missing,2,,0,CodeCompilation
 Downsample,Sound & Video,infeasible,,audio / video,0,SoundAndSonification LayoutAndTables CreatingAndImportingSignals
@@ -2020,9 +2020,9 @@ Environment,Core Language & Structure,missing,2,,0,LLMFunctions StandaloneWolfra
 Epilog,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling GraphicsAnnotationAndAppearance CombiningGraphics
 EpilogFunction,"Options, system variables & unclassified",implemented,3,,0,
 Equal,Core Language & Structure,implemented,1,,9,LanguageOverview ProceduralProgramming Syntax FormulaManipulation
-EqualTilde,"Options, system variables & unclassified",missing,3,,0,
+EqualTilde,"Options, system variables & unclassified",implemented,3,,0,
 EqualTo,Core Language & Structure,implemented,1,,0,TestingExpressions
-Equilibrium,"Options, system variables & unclassified",missing,3,,0,
+Equilibrium,"Options, system variables & unclassified",implemented,3,,0,
 EquirippleFilterKernel,Sound & Video,infeasible,,audio / video,0,SignalFilteringAndFilterDesign
 Equivalent,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation LogicAndBooleanAlgebra
 EquivalentStrain,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
@@ -2759,14 +2759,14 @@ Gray,Visualization & Graphics,implemented,1,,2,Colors
 GrayLevel,Visualization & Graphics,implemented,1,,3,ColorProcessing Colors GraphicsDirectives
 Greater,Symbolic & Numeric Computation,implemented,1,,7,TestingExpressions NumericalFunctions Inequalities AssumptionsAndDomains
 GreaterEqual,Symbolic & Numeric Computation,implemented,1,,3,TestingExpressions NumericalFunctions Inequalities
-GreaterEqualLess,"Options, system variables & unclassified",missing,3,,0,
+GreaterEqualLess,"Options, system variables & unclassified",implemented,3,,0,
 GreaterEqualThan,Core Language & Structure,implemented,1,,0,TestingExpressions
-GreaterFullEqual,"Options, system variables & unclassified",missing,3,,0,
-GreaterGreater,"Options, system variables & unclassified",missing,3,,0,
-GreaterLess,"Options, system variables & unclassified",missing,3,,0,
-GreaterSlantEqual,"Options, system variables & unclassified",missing,3,,0,
+GreaterFullEqual,"Options, system variables & unclassified",implemented,3,,0,
+GreaterGreater,"Options, system variables & unclassified",implemented,3,,0,
+GreaterLess,"Options, system variables & unclassified",implemented,3,,0,
+GreaterSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
 GreaterThan,Core Language & Structure,implemented,1,,2,KnowledgeRepresentationAndAccess TestingExpressions
-GreaterTilde,"Options, system variables & unclassified",missing,3,,0,
+GreaterTilde,"Options, system variables & unclassified",implemented,3,,0,
 Green,Visualization & Graphics,implemented,1,,7,ColorProcessing Colors GraphicsDirectives
 GreenFunction,Symbolic & Numeric Computation,implemented,2,,0,DifferentialEquations DifferentialOperators
 Grid,User Interface Construction,implemented,1,,8,ListManipulation ComputationWithStructuredDatasets HandlingArraysOfData DataVisualization
@@ -2922,8 +2922,8 @@ HotellingTSquareDistribution,Data Manipulation & Analysis,implemented,2,,0,Norma
 HoytDistribution,Symbolic & Numeric Computation,implemented,2,,0,DistributionsInCommunicationSystems
 Hue,Visualization & Graphics,implemented,1,,9,Colors GraphicsDirectives
 HumanGrowthData,Scientific and Medical Data & Computation,infeasible,,curated data,0,LifeSciencesAndMedicineDataAndComputation
-HumpDownHump,"Options, system variables & unclassified",missing,3,,0,
-HumpEqual,"Options, system variables & unclassified",missing,3,,0,
+HumpDownHump,"Options, system variables & unclassified",implemented,3,,0,
+HumpEqual,"Options, system variables & unclassified",implemented,3,,0,
 HurwitzLerchPhi,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
 HurwitzZeta,Symbolic & Numeric Computation,implemented,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
 HyperHarmonicNumber,Symbolic & Numeric Computation,implemented,2,,0,RecurrenceAndSumFunctions
@@ -3339,7 +3339,7 @@ KernelFunction,Core Language & Structure,missing,2,,0,CodeCompilation
 KernelMixtureDistribution,Core Language & Structure,implemented,2,,0,TabularModeling RandomVariables NonparametricStatisticalDistributions
 KernelModelFit,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
 KernelObject,Core Language & Structure,missing,2,,0,ManagingRemoteAndParallelKernels
-Ket,"Options, system variables & unclassified",missing,3,,0,
+Ket,"Options, system variables & unclassified",implemented,3,,0,
 Key,Core Language & Structure,implemented,1,,4,Associations FunctionCompositionAndOperatorForms TabularObjects
 KeyCollisionFunction,"Options, system variables & unclassified",implemented,3,,0,
 KeyComplement,Core Language & Structure,implemented,1,,0,Associations
@@ -3459,27 +3459,27 @@ LearningRateMultipliers,Machine Learning & LLMs,infeasible,,ML models / LLM serv
 LeastSquares,Symbolic & Numeric Computation,implemented,2,,0,Statistics MatricesAndLinearAlgebra Optimization GPUComputing
 LeastSquaresFilterKernel,Sound & Video,infeasible,,audio / video,0,SignalProcessing SignalFilteringAndFilterDesign
 Left,Visualization & Graphics,implemented,2,,1,3DGraphicsOptions
-LeftArrow,"Options, system variables & unclassified",missing,3,,0,
-LeftArrowBar,"Options, system variables & unclassified",missing,3,,0,
-LeftArrowRightArrow,"Options, system variables & unclassified",missing,3,,0,
-LeftDownTeeVector,"Options, system variables & unclassified",missing,3,,0,
-LeftDownVector,"Options, system variables & unclassified",missing,3,,0,
-LeftDownVectorBar,"Options, system variables & unclassified",missing,3,,0,
+LeftArrow,"Options, system variables & unclassified",implemented,3,,0,
+LeftArrowBar,"Options, system variables & unclassified",implemented,3,,0,
+LeftArrowRightArrow,"Options, system variables & unclassified",implemented,3,,0,
+LeftDownTeeVector,"Options, system variables & unclassified",implemented,3,,0,
+LeftDownVector,"Options, system variables & unclassified",implemented,3,,0,
+LeftDownVectorBar,"Options, system variables & unclassified",implemented,3,,0,
 LeftJoinAcross,Data Manipulation & Analysis,implemented,2,,0,TabularTransformation
 LeftRightArrow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathematicalTypesetting
-LeftRightVector,"Options, system variables & unclassified",missing,3,,0,
-LeftTee,"Options, system variables & unclassified",missing,3,,0,
-LeftTeeArrow,"Options, system variables & unclassified",missing,3,,0,
-LeftTeeVector,"Options, system variables & unclassified",missing,3,,0,
-LeftTriangle,"Options, system variables & unclassified",missing,3,,0,
-LeftTriangleBar,"Options, system variables & unclassified",missing,3,,0,
-LeftTriangleEqual,"Options, system variables & unclassified",missing,3,,0,
-LeftUpDownVector,"Options, system variables & unclassified",missing,3,,0,
-LeftUpTeeVector,"Options, system variables & unclassified",missing,3,,0,
-LeftUpVector,"Options, system variables & unclassified",missing,3,,0,
-LeftUpVectorBar,"Options, system variables & unclassified",missing,3,,0,
-LeftVector,"Options, system variables & unclassified",missing,3,,0,
-LeftVectorBar,"Options, system variables & unclassified",missing,3,,0,
+LeftRightVector,"Options, system variables & unclassified",implemented,3,,0,
+LeftTee,"Options, system variables & unclassified",implemented,3,,0,
+LeftTeeArrow,"Options, system variables & unclassified",implemented,3,,0,
+LeftTeeVector,"Options, system variables & unclassified",implemented,3,,0,
+LeftTriangle,"Options, system variables & unclassified",implemented,3,,0,
+LeftTriangleBar,"Options, system variables & unclassified",implemented,3,,0,
+LeftTriangleEqual,"Options, system variables & unclassified",implemented,3,,0,
+LeftUpDownVector,"Options, system variables & unclassified",implemented,3,,0,
+LeftUpTeeVector,"Options, system variables & unclassified",implemented,3,,0,
+LeftUpVector,"Options, system variables & unclassified",implemented,3,,0,
+LeftUpVectorBar,"Options, system variables & unclassified",implemented,3,,0,
+LeftVector,"Options, system variables & unclassified",implemented,3,,0,
+LeftVectorBar,"Options, system variables & unclassified",implemented,3,,0,
 LegendAppearance,Visualization & Graphics,implemented,3,,0,ChartingAndInformationVisualization ChartLabelingLegendingAndAnnotation
 LegendFunction,Data Manipulation & Analysis,implemented,2,,0,Legends
 LegendLabel,Data Manipulation & Analysis,implemented,2,,0,Legends
@@ -3495,14 +3495,14 @@ LengthWhile,Core Language & Structure,implemented,1,,0,FunctionalProgramming Ele
 LerchPhi,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions NumberTheoreticFunctions RecurrenceAndSumFunctions AnalyticNumberTheory
 Less,Symbolic & Numeric Computation,implemented,1,,4,ProceduralProgramming TestingExpressions NumericalFunctions Inequalities
 LessEqual,Symbolic & Numeric Computation,implemented,1,,6,TestingExpressions NumericalFunctions Inequalities
-LessEqualGreater,"Options, system variables & unclassified",missing,3,,0,
+LessEqualGreater,"Options, system variables & unclassified",implemented,3,,0,
 LessEqualThan,Core Language & Structure,implemented,1,,0,TestingExpressions
-LessFullEqual,"Options, system variables & unclassified",missing,3,,0,
-LessGreater,"Options, system variables & unclassified",missing,3,,0,
-LessLess,"Options, system variables & unclassified",missing,3,,0,
-LessSlantEqual,"Options, system variables & unclassified",missing,3,,0,
+LessFullEqual,"Options, system variables & unclassified",implemented,3,,0,
+LessGreater,"Options, system variables & unclassified",implemented,3,,0,
+LessLess,"Options, system variables & unclassified",implemented,3,,0,
+LessSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
 LessThan,Core Language & Structure,implemented,1,,0,KnowledgeRepresentationAndAccess TestingExpressions
-LessTilde,"Options, system variables & unclassified",missing,3,,0,
+LessTilde,"Options, system variables & unclassified",implemented,3,,0,
 LetterCharacter,Core Language & Structure,implemented,1,,2,StringPatterns ProgrammableLinguisticInterface CharacterOperations
 LetterCounts,Strings & Text,implemented,1,,2,ProcessingTextualData TextAnalysis CharacterOperations TextNormalization
 LetterNumber,Core Language & Structure,implemented,1,,5,Cryptography ConvertingBetweenExpressionsAndStrings TextConstruction CharacterOperations
@@ -3680,9 +3680,9 @@ LommelS1,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 LommelS2,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 LommelT1,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 LommelT2,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
-LongLeftArrow,"Options, system variables & unclassified",missing,3,,0,
-LongLeftRightArrow,"Options, system variables & unclassified",missing,3,,0,
-LongRightArrow,"Options, system variables & unclassified",missing,3,,0,
+LongLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
+LongLeftRightArrow,"Options, system variables & unclassified",implemented,3,,0,
+LongRightArrow,"Options, system variables & unclassified",implemented,3,,0,
 LongShortTermMemoryLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NaturalLanguageProcessing SpeechComputation NeuralNetworkLayers
 Longest,Core Language & Structure,implemented,1,,2,RulesAndPatterns StringManipulation Patterns StringPatterns
 LongestCommonSequence,Strings & Text,implemented,2,,0,SequenceAlignmentAndComparison BiomolecularSequences
@@ -3696,8 +3696,8 @@ LoopFreeGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements
 Looping,Sound & Video,infeasible,,audio / video,0,VideoProcessing
 LossFunction,"Options, system variables & unclassified",implemented,3,,0,
 LowerCaseQ,Core Language & Structure,implemented,1,,0,CharacterOperations
-LowerLeftArrow,"Options, system variables & unclassified",missing,3,,0,
-LowerRightArrow,"Options, system variables & unclassified",missing,3,,0,
+LowerLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
+LowerRightArrow,"Options, system variables & unclassified",implemented,3,,0,
 LowerTriangularMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays MatrixDecompositions
 LowerTriangularMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
 LowerTriangularize,Symbolic & Numeric Computation,implemented,2,,0,MatrixOperations PartsOfMatrices LinearSystems
@@ -3936,7 +3936,7 @@ MinkowskiQuestionMark,Higher Mathematical Computation,implemented,2,,0,IteratedM
 MinorPlanetData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Minors,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixOperations LinearSystems
 Minus,Core Language & Structure,implemented,2,,0,Syntax
-MinusPlus,"Options, system variables & unclassified",missing,3,,0,
+MinusPlus,"Options, system variables & unclassified",implemented,3,,0,
 Missing,Core Language & Structure,implemented,1,,4,Associations ComputationWithStructuredDatasets ImportingAndExporting DataTransformsAndSmoothing
 MissingBehavior,Core Language & Structure,missing,2,,0,ComputationWithStructuredDatasets
 MissingDataMethod,"Options, system variables & unclassified",implemented,3,,0,
@@ -4116,8 +4116,8 @@ NestList,Core Language & Structure,implemented,1,,17,LanguageOverview ListManipu
 NestTree,"Options, system variables & unclassified",implemented,3,,0,
 NestWhile,Core Language & Structure,implemented,1,,0,FunctionalProgramming IteratedMapsAndFractals FunctionalIteration LoopingConstructs
 NestWhileList,Core Language & Structure,implemented,1,,0,FunctionalProgramming IteratedMapsAndFractals ComputationalSystemsAndDiscovery ConstructingLists
-NestedGreaterGreater,"Options, system variables & unclassified",missing,3,,0,
-NestedLessLess,"Options, system variables & unclassified",missing,3,,0,
+NestedGreaterGreater,"Options, system variables & unclassified",implemented,3,,0,
+NestedLessLess,"Options, system variables & unclassified",implemented,3,,0,
 NetAppend,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworks NeuralNetworkConstruction NeuralNetworkOperations
 NetArray,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkConstruction
 NetArrayLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
@@ -4222,58 +4222,58 @@ Normalized,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
 NormalizedSquaredEuclideanDistance,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimilarityMeasures
 NormalsFunction,"Options, system variables & unclassified",implemented,3,,0,
 Not,Core Language & Structure,implemented,1,,6,Syntax BooleanComputation LogicAndBooleanAlgebra TheoremProving
-NotCongruent,"Options, system variables & unclassified",missing,3,,0,
-NotCupCap,"Options, system variables & unclassified",missing,3,,0,
-NotDoubleVerticalBar,"Options, system variables & unclassified",missing,3,,0,
-NotElement,Symbolic & Numeric Computation,missing,2,,0,TheoremProving AssumptionsAndDomains
-NotEqualTilde,"Options, system variables & unclassified",missing,3,,0,
-NotExists,"Options, system variables & unclassified",missing,3,,0,
-NotGreater,"Options, system variables & unclassified",missing,3,,0,
-NotGreaterEqual,"Options, system variables & unclassified",missing,3,,0,
-NotGreaterFullEqual,"Options, system variables & unclassified",missing,3,,0,
-NotGreaterGreater,"Options, system variables & unclassified",missing,3,,0,
-NotGreaterLess,"Options, system variables & unclassified",missing,3,,0,
-NotGreaterSlantEqual,"Options, system variables & unclassified",missing,3,,0,
-NotGreaterTilde,"Options, system variables & unclassified",missing,3,,0,
-NotHumpDownHump,"Options, system variables & unclassified",missing,3,,0,
-NotHumpEqual,"Options, system variables & unclassified",missing,3,,0,
-NotLeftTriangle,"Options, system variables & unclassified",missing,3,,0,
-NotLeftTriangleBar,"Options, system variables & unclassified",missing,3,,0,
-NotLeftTriangleEqual,"Options, system variables & unclassified",missing,3,,0,
-NotLess,"Options, system variables & unclassified",missing,3,,0,
-NotLessEqual,"Options, system variables & unclassified",missing,3,,0,
-NotLessFullEqual,"Options, system variables & unclassified",missing,3,,0,
-NotLessGreater,"Options, system variables & unclassified",missing,3,,0,
-NotLessLess,"Options, system variables & unclassified",missing,3,,0,
-NotLessSlantEqual,"Options, system variables & unclassified",missing,3,,0,
-NotLessTilde,"Options, system variables & unclassified",missing,3,,0,
-NotNestedGreaterGreater,"Options, system variables & unclassified",missing,3,,0,
-NotNestedLessLess,"Options, system variables & unclassified",missing,3,,0,
-NotPrecedes,"Options, system variables & unclassified",missing,3,,0,
-NotPrecedesEqual,"Options, system variables & unclassified",missing,3,,0,
-NotPrecedesSlantEqual,"Options, system variables & unclassified",missing,3,,0,
-NotPrecedesTilde,"Options, system variables & unclassified",missing,3,,0,
-NotReverseElement,"Options, system variables & unclassified",missing,3,,0,
-NotRightTriangle,"Options, system variables & unclassified",missing,3,,0,
-NotRightTriangleBar,"Options, system variables & unclassified",missing,3,,0,
-NotRightTriangleEqual,"Options, system variables & unclassified",missing,3,,0,
-NotSquareSubset,"Options, system variables & unclassified",missing,3,,0,
-NotSquareSubsetEqual,"Options, system variables & unclassified",missing,3,,0,
-NotSquareSuperset,"Options, system variables & unclassified",missing,3,,0,
-NotSquareSupersetEqual,"Options, system variables & unclassified",missing,3,,0,
-NotSubset,"Options, system variables & unclassified",missing,3,,0,
-NotSubsetEqual,"Options, system variables & unclassified",missing,3,,0,
-NotSucceeds,"Options, system variables & unclassified",missing,3,,0,
-NotSucceedsEqual,"Options, system variables & unclassified",missing,3,,0,
-NotSucceedsSlantEqual,"Options, system variables & unclassified",missing,3,,0,
-NotSucceedsTilde,"Options, system variables & unclassified",missing,3,,0,
-NotSuperset,"Options, system variables & unclassified",missing,3,,0,
-NotSupersetEqual,"Options, system variables & unclassified",missing,3,,0,
-NotTilde,"Options, system variables & unclassified",missing,3,,0,
-NotTildeEqual,"Options, system variables & unclassified",missing,3,,0,
-NotTildeFullEqual,"Options, system variables & unclassified",missing,3,,0,
-NotTildeTilde,"Options, system variables & unclassified",missing,3,,0,
-NotVerticalBar,"Options, system variables & unclassified",missing,3,,0,
+NotCongruent,"Options, system variables & unclassified",implemented,3,,0,
+NotCupCap,"Options, system variables & unclassified",implemented,3,,0,
+NotDoubleVerticalBar,"Options, system variables & unclassified",implemented,3,,0,
+NotElement,Symbolic & Numeric Computation,implemented,2,,0,TheoremProving AssumptionsAndDomains
+NotEqualTilde,"Options, system variables & unclassified",implemented,3,,0,
+NotExists,"Options, system variables & unclassified",implemented,3,,0,
+NotGreater,"Options, system variables & unclassified",implemented,3,,0,
+NotGreaterEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotGreaterFullEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotGreaterGreater,"Options, system variables & unclassified",implemented,3,,0,
+NotGreaterLess,"Options, system variables & unclassified",implemented,3,,0,
+NotGreaterSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotGreaterTilde,"Options, system variables & unclassified",implemented,3,,0,
+NotHumpDownHump,"Options, system variables & unclassified",implemented,3,,0,
+NotHumpEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotLeftTriangle,"Options, system variables & unclassified",implemented,3,,0,
+NotLeftTriangleBar,"Options, system variables & unclassified",implemented,3,,0,
+NotLeftTriangleEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotLess,"Options, system variables & unclassified",implemented,3,,0,
+NotLessEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotLessFullEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotLessGreater,"Options, system variables & unclassified",implemented,3,,0,
+NotLessLess,"Options, system variables & unclassified",implemented,3,,0,
+NotLessSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotLessTilde,"Options, system variables & unclassified",implemented,3,,0,
+NotNestedGreaterGreater,"Options, system variables & unclassified",implemented,3,,0,
+NotNestedLessLess,"Options, system variables & unclassified",implemented,3,,0,
+NotPrecedes,"Options, system variables & unclassified",implemented,3,,0,
+NotPrecedesEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotPrecedesSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotPrecedesTilde,"Options, system variables & unclassified",implemented,3,,0,
+NotReverseElement,"Options, system variables & unclassified",implemented,3,,0,
+NotRightTriangle,"Options, system variables & unclassified",implemented,3,,0,
+NotRightTriangleBar,"Options, system variables & unclassified",implemented,3,,0,
+NotRightTriangleEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotSquareSubset,"Options, system variables & unclassified",implemented,3,,0,
+NotSquareSubsetEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotSquareSuperset,"Options, system variables & unclassified",implemented,3,,0,
+NotSquareSupersetEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotSubset,"Options, system variables & unclassified",implemented,3,,0,
+NotSubsetEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotSucceeds,"Options, system variables & unclassified",implemented,3,,0,
+NotSucceedsEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotSucceedsSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotSucceedsTilde,"Options, system variables & unclassified",implemented,3,,0,
+NotSuperset,"Options, system variables & unclassified",implemented,3,,0,
+NotSupersetEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotTilde,"Options, system variables & unclassified",implemented,3,,0,
+NotTildeEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotTildeFullEqual,"Options, system variables & unclassified",implemented,3,,0,
+NotTildeTilde,"Options, system variables & unclassified",implemented,3,,0,
+NotVerticalBar,"Options, system variables & unclassified",implemented,3,,0,
 Notebook,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming LowLevelNotebookStructure
 NotebookApply,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming Palettes
 NotebookAutoSave,Core Language & Structure,infeasible,,front end / notebooks,0,ManagingComputationsInNotebooks WolframSystemSessionHistory EvaluationOptionsInNotebooks
@@ -4770,9 +4770,9 @@ PreDecrement,Core Language & Structure,implemented,1,,0,Assignments
 PreIncrement,Core Language & Structure,implemented,1,,0,Assignments
 PrecedenceForm,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
 Precedes,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
-PrecedesEqual,"Options, system variables & unclassified",missing,3,,0,
-PrecedesSlantEqual,"Options, system variables & unclassified",missing,3,,0,
-PrecedesTilde,"Options, system variables & unclassified",missing,3,,0,
+PrecedesEqual,"Options, system variables & unclassified",implemented,3,,0,
+PrecedesSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
+PrecedesTilde,"Options, system variables & unclassified",implemented,3,,0,
 Precision,Symbolic & Numeric Computation,implemented,2,,0,NumericalEvaluationAndPrecision RepresentationOfNumbers PrecisionAndAccuracyControl AtomicElementsOfExpressions
 PrecisionGoal,Symbolic & Numeric Computation,missing,2,,0,NumericalEvaluationAndPrecision PrecisionAndAccuracyControl DifferentialEquations
 Predict,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,MachineLearning TabularProcessing LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis
@@ -4838,8 +4838,8 @@ Projection,Core Language & Structure,implemented,1,,0,MatricesAndLinearAlgebra O
 Prolog,Visualization & Graphics,implemented,3,,0,GraphicsAnnotationAndAppearance CombiningGraphics
 ProofObject,Higher Mathematical Computation,implemented,2,,0,LogicAndBooleanAlgebra TheoremProving
 PropagateAborts,Core Language & Structure,implemented,1,,0,RobustnessAndErrorHandling FlowControl PackageBulletproofing
-Proportion,"Options, system variables & unclassified",missing,3,,0,
-Proportional,"Options, system variables & unclassified",missing,3,,0,
+Proportion,"Options, system variables & unclassified",implemented,3,,0,
+Proportional,"Options, system variables & unclassified",implemented,3,,0,
 Protect,Core Language & Structure,implemented,1,,0,PackageDevelopment Attributes PackageBulletproofing
 Protected,Core Language & Structure,implemented,1,,0,VariablesAndFunctions Attributes
 ProteinData,"Options, system variables & unclassified",infeasible,,curated data,0,
@@ -5160,12 +5160,12 @@ ReturnTextPacket,Core Language & Structure,infeasible,,WSTP / MathLink protocol 
 Reverse,Core Language & Structure,implemented,1,,16,ListManipulation RearrangingAndRestructuringLists StructuralOperationsOnExpressions PartsOfMatrices
 ReverseApplied,Core Language & Structure,implemented,1,,0,FunctionalProgramming FunctionCompositionAndOperatorForms
 ReverseBiorthogonalSplineWavelet,Data Manipulation & Analysis,implemented,2,,0,Wavelets
-ReverseElement,"Options, system variables & unclassified",missing,3,,0,
-ReverseEquilibrium,"Options, system variables & unclassified",missing,3,,0,
+ReverseElement,"Options, system variables & unclassified",implemented,3,,0,
+ReverseEquilibrium,"Options, system variables & unclassified",implemented,3,,0,
 ReverseGraph,Graphs & Networks,implemented,2,,0,GraphModifications
 ReverseSort,Core Language & Structure,implemented,1,,0,RearrangingAndRestructuringLists
 ReverseSortBy,Core Language & Structure,implemented,1,,0,RearrangingAndRestructuringLists TabularTransformation
-ReverseUpEquilibrium,"Options, system variables & unclassified",missing,3,,0,
+ReverseUpEquilibrium,"Options, system variables & unclassified",implemented,3,,0,
 RevolutionAxis,"Options, system variables & unclassified",implemented,3,,0,
 RevolutionPlot3D,Visualization & Graphics,implemented,3,,0,FunctionVisualization 3DPrinting
 RiccatiSolve,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving ControlSystems
@@ -5178,25 +5178,25 @@ RiemannXi,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylo
 Riffle,Core Language & Structure,implemented,1,,2,ListManipulation RearrangingAndRestructuringLists AnnotatingAndCombiningGraphics TextualElementsInNotebooks
 Right,Visualization & Graphics,implemented,2,,1,3DGraphicsOptions
 RightArrow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,ArrowsAndArrowLikeForms
-RightArrowBar,"Options, system variables & unclassified",missing,3,,0,
-RightArrowLeftArrow,"Options, system variables & unclassified",missing,3,,0,
+RightArrowBar,"Options, system variables & unclassified",implemented,3,,0,
+RightArrowLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
 RightComposition,Core Language & Structure,implemented,1,,6,Syntax FunctionCompositionAndOperatorForms
 RightCosetRepresentative,Higher Mathematical Computation,implemented,2,,0,GroupTheory
-RightDownTeeVector,"Options, system variables & unclassified",missing,3,,0,
-RightDownVector,"Options, system variables & unclassified",missing,3,,0,
-RightDownVectorBar,"Options, system variables & unclassified",missing,3,,0,
-RightTee,"Options, system variables & unclassified",missing,3,,0,
-RightTeeArrow,"Options, system variables & unclassified",missing,3,,0,
-RightTeeVector,"Options, system variables & unclassified",missing,3,,0,
-RightTriangle,"Options, system variables & unclassified",missing,3,,0,
-RightTriangleBar,"Options, system variables & unclassified",missing,3,,0,
-RightTriangleEqual,"Options, system variables & unclassified",missing,3,,0,
-RightUpDownVector,"Options, system variables & unclassified",missing,3,,0,
-RightUpTeeVector,"Options, system variables & unclassified",missing,3,,0,
-RightUpVector,"Options, system variables & unclassified",missing,3,,0,
-RightUpVectorBar,"Options, system variables & unclassified",missing,3,,0,
-RightVector,"Options, system variables & unclassified",missing,3,,0,
-RightVectorBar,"Options, system variables & unclassified",missing,3,,0,
+RightDownTeeVector,"Options, system variables & unclassified",implemented,3,,0,
+RightDownVector,"Options, system variables & unclassified",implemented,3,,0,
+RightDownVectorBar,"Options, system variables & unclassified",implemented,3,,0,
+RightTee,"Options, system variables & unclassified",implemented,3,,0,
+RightTeeArrow,"Options, system variables & unclassified",implemented,3,,0,
+RightTeeVector,"Options, system variables & unclassified",implemented,3,,0,
+RightTriangle,"Options, system variables & unclassified",implemented,3,,0,
+RightTriangleBar,"Options, system variables & unclassified",implemented,3,,0,
+RightTriangleEqual,"Options, system variables & unclassified",implemented,3,,0,
+RightUpDownVector,"Options, system variables & unclassified",implemented,3,,0,
+RightUpTeeVector,"Options, system variables & unclassified",implemented,3,,0,
+RightUpVector,"Options, system variables & unclassified",implemented,3,,0,
+RightUpVectorBar,"Options, system variables & unclassified",implemented,3,,0,
+RightVector,"Options, system variables & unclassified",implemented,3,,0,
+RightVectorBar,"Options, system variables & unclassified",implemented,3,,0,
 RipleyK,Symbolic & Numeric Computation,implemented,2,,0,ProbabilityAndStatistics DescriptiveStatistics SpatialStatistics SpatialPointProcesses
 RipleyRassonRegion,Symbolic & Numeric Computation,missing,2,,0,SpatialPointCollections
 RiskAchievementImportance,Engineering Data & Computation,infeasible,,curated data,0,Reliability
@@ -5412,12 +5412,12 @@ ShenCastanMatrix,Images,implemented,3,,0,StructureMatricesAndConvolutionKernels
 ShiftRegisterSequence,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation ComputationalSystemsAndDiscovery RandomNumberGeneration IntegerSequences
 ShiftedGompertzDistribution,Symbolic & Numeric Computation,implemented,2,,0,DistributionsUsedInReliabilityAnalysis ExponentialRelatedDistributions
 Short,Core Language & Structure,implemented,2,,0,TuningAndDebugging LayoutAndTables MemoryMeasurementAndOptimization
-ShortDownArrow,"Options, system variables & unclassified",missing,3,,0,
-ShortLeftArrow,"Options, system variables & unclassified",missing,3,,0,
-ShortRightArrow,"Options, system variables & unclassified",missing,3,,0,
+ShortDownArrow,"Options, system variables & unclassified",implemented,3,,0,
+ShortLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
+ShortRightArrow,"Options, system variables & unclassified",implemented,3,,0,
 ShortTimeFourier,Machine Learning & LLMs,missing,3,,0,SpeechComputation AudioProcessing SignalProcessing VideoAnalysis
 ShortTimeFourierData,Symbolic & Numeric Computation,infeasible,,curated data,0,FourierAnalysis
-ShortUpArrow,"Options, system variables & unclassified",missing,3,,0,
+ShortUpArrow,"Options, system variables & unclassified",implemented,3,,0,
 Shortest,Core Language & Structure,implemented,1,,3,RulesAndPatterns StringManipulation Patterns StringPatterns
 ShortestCurveDistance,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
 ShortestPathFunction,Graphs & Networks,implemented,2,,0,GraphPathsCyclesAndFlows
@@ -5487,7 +5487,7 @@ SliderBoxOptions,"Options, system variables & unclassified",infeasible,,front en
 Slot,Core Language & Structure,implemented,1,,74,Associations FunctionalProgramming Syntax
 SlotSequence,Core Language & Structure,implemented,1,,1,FunctionalProgramming
 Small,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling NotebookFormattingAndStyling MathematicalTypesetting GraphicsShapeAndSize
-SmallCircle,"Options, system variables & unclassified",missing,3,,0,
+SmallCircle,"Options, system variables & unclassified",implemented,3,,0,
 Smaller,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,NotebookFormattingAndStyling TextStyling FontOptions
 SmithDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 SmithDelayCompensator,Engineering Data & Computation,infeasible,,curated data,0,DelayControlSystems
@@ -5622,14 +5622,14 @@ SqrtBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,Lo
 SqrtBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 Square,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
 SquareFreeQ,Higher Mathematical Computation,implemented,2,,0,NumberTheoreticFunctions PolynomialFactoring NumberRecognition PrimeNumbers
-SquareIntersection,"Options, system variables & unclassified",missing,3,,0,
+SquareIntersection,"Options, system variables & unclassified",implemented,3,,0,
 SquareMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
 SquareRepeatingElement,Strings & Text,implemented,2,,0,InterpretingStrings
-SquareSubset,"Options, system variables & unclassified",missing,3,,0,
-SquareSubsetEqual,"Options, system variables & unclassified",missing,3,,0,
-SquareSuperset,"Options, system variables & unclassified",missing,3,,0,
-SquareSupersetEqual,"Options, system variables & unclassified",missing,3,,0,
-SquareUnion,"Options, system variables & unclassified",missing,3,,0,
+SquareSubset,"Options, system variables & unclassified",implemented,3,,0,
+SquareSubsetEqual,"Options, system variables & unclassified",implemented,3,,0,
+SquareSuperset,"Options, system variables & unclassified",implemented,3,,0,
+SquareSupersetEqual,"Options, system variables & unclassified",implemented,3,,0,
+SquareUnion,"Options, system variables & unclassified",implemented,3,,0,
 SquareWave,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IntegralTransforms NumericalFunctions FourierAnalysis
 SquaredEuclideanDistance,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimilarityMeasures
 SquaresR,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumberTheory NumberTheoreticFunctions DiophantineEquations
@@ -5663,7 +5663,7 @@ StandardYellow,Visualization & Graphics,implemented,3,,0,Colors
 Standardize,Data Manipulation & Analysis,implemented,2,,0,DataTransformsAndSmoothing
 Standardized,"Options, system variables & unclassified",implemented,3,,0,
 StandbyDistribution,Engineering Data & Computation,implemented,3,,0,Reliability SystemsModeling DistributionsUsedInReliabilityAnalysis DerivedDistributions
-Star,"Options, system variables & unclassified",missing,3,,0,
+Star,"Options, system variables & unclassified",implemented,3,,0,
 StarClusterData,"Options, system variables & unclassified",infeasible,,curated data,0,
 StarData,"Options, system variables & unclassified",infeasible,,curated data,0,
 StarGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
@@ -5781,10 +5781,10 @@ Subscript,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,
 SubscriptBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 SubscriptBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 Subsequences,Core Language & Structure,implemented,1,,0,SequenceAlignmentAndComparison ConstructingLists RearrangingAndRestructuringLists BiomolecularSequences
-Subset,"Options, system variables & unclassified",missing,3,,0,
+Subset,"Options, system variables & unclassified",implemented,3,,0,
 SubsetCases,Core Language & Structure,implemented,1,,0,ElementsOfLists OperationsOnSets
 SubsetCount,Core Language & Structure,implemented,1,,0,ElementsOfLists OperationsOnSets
-SubsetEqual,"Options, system variables & unclassified",missing,3,,0,
+SubsetEqual,"Options, system variables & unclassified",implemented,3,,0,
 SubsetMap,Core Language & Structure,implemented,1,,0,FunctionalProgramming ApplyingFunctionsToLists
 SubsetPosition,Core Language & Structure,implemented,1,,0,ElementsOfLists OperationsOnSets
 SubsetQ,Core Language & Structure,implemented,1,,0,TestingExpressions OperationsOnSets
@@ -5800,10 +5800,10 @@ SubtitleTrackSelection,Sound & Video,infeasible,,audio / video,0,VideoProcessing
 Subtract,Symbolic & Numeric Computation,implemented,1,,11,GPUComputing ArithmeticFunctions
 SubtractFrom,Core Language & Structure,implemented,1,,0,Assignments
 SubtractSides,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation ManipulatingEquations
-Succeeds,"Options, system variables & unclassified",missing,3,,0,
-SucceedsEqual,"Options, system variables & unclassified",missing,3,,0,
-SucceedsSlantEqual,"Options, system variables & unclassified",missing,3,,0,
-SucceedsTilde,"Options, system variables & unclassified",missing,3,,0,
+Succeeds,"Options, system variables & unclassified",implemented,3,,0,
+SucceedsEqual,"Options, system variables & unclassified",implemented,3,,0,
+SucceedsSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
+SucceedsTilde,"Options, system variables & unclassified",implemented,3,,0,
 Success,Core Language & Structure,implemented,2,,0,PackageDevelopment AutomaticMailProcessing
 SuchThat,"Options, system variables & unclassified",implemented,3,,0,
 Sum,Higher Mathematical Computation,implemented,2,,0,Calculus DiscreteMathematics DiscreteCalculus ScopingConstructs
@@ -5821,8 +5821,8 @@ SupernovaData,"Options, system variables & unclassified",infeasible,,curated dat
 Superscript,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
 SuperscriptBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 SuperscriptBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-Superset,"Options, system variables & unclassified",missing,3,,0,
-SupersetEqual,"Options, system variables & unclassified",missing,3,,0,
+Superset,"Options, system variables & unclassified",implemented,3,,0,
+SupersetEqual,"Options, system variables & unclassified",implemented,3,,0,
 Surd,Symbolic & Numeric Computation,implemented,2,,0,ElementaryFunctions
 SurdForm,"Options, system variables & unclassified",implemented,3,,0,
 SurfaceArea,Visualization & Graphics,implemented,3,,0,GeometricPropertiesAndMeasures Polyhedra
@@ -6033,7 +6033,7 @@ TextureCoordinateFunction,Visualization & Graphics,implemented,3,,0,PlottingOpti
 TextureCoordinateScaling,Visualization & Graphics,implemented,3,,0,PlottingOptions
 TextureMapping,"Options, system variables & unclassified",implemented,3,,0,
 ThemeColor,Visualization & Graphics,infeasible,,front end / notebooks,0,Accessibility Colors
-Therefore,"Options, system variables & unclassified",missing,3,,0,
+Therefore,"Options, system variables & unclassified",implemented,3,,0,
 ThermodynamicData,Scientific and Medical Data & Computation,infeasible,,curated data,0,PhysicsAndChemistryDataAndComputation EngineeringData
 ThermometerGauge,Data Manipulation & Analysis,implemented,2,,0,Gauges
 Thick,Visualization & Graphics,implemented,3,,0,GraphicsObjects GraphicsDirectives
@@ -6062,10 +6062,10 @@ TickPositions,Visualization & Graphics,implemented,3,,0,GraphicsObjects
 Ticks,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling Labels GraphicsAnnotationAndAppearance
 TicksStyle,Visualization & Graphics,implemented,3,,0,Labels GraphicsAnnotationAndAppearance 3DGraphicsOptions
 TideData,Geographic Data & Computation,infeasible,,curated data,0,WeatherData EarthSciencesDataAndComputation
-Tilde,"Options, system variables & unclassified",missing,3,,0,
-TildeEqual,"Options, system variables & unclassified",missing,3,,0,
-TildeFullEqual,"Options, system variables & unclassified",missing,3,,0,
-TildeTilde,"Options, system variables & unclassified",missing,3,,0,
+Tilde,"Options, system variables & unclassified",implemented,3,,0,
+TildeEqual,"Options, system variables & unclassified",implemented,3,,0,
+TildeFullEqual,"Options, system variables & unclassified",implemented,3,,0,
+TildeTilde,"Options, system variables & unclassified",implemented,3,,0,
 TimeConstrained,Core Language & Structure,implemented,1,,1,ProceduralProgramming TuningAndDebugging DateAndTime NetworkProgramming
 TimeConstraint,Core Language & Structure,implemented,2,,0,RemoteBatchJobs WolframAlphaIntegration GlobalComputationSettingsAndParameters SystematicTestingAndVerification
 TimeDirection,"Options, system variables & unclassified",missing,3,,0,
@@ -6347,7 +6347,7 @@ UnilateralConvolve,Data Manipulation & Analysis,implemented,2,,0,IntegralTransfo
 UnilateralDiscreteConvolve,Higher Mathematical Computation,implemented,2,,0,SummationTransforms
 Uninstall,External Interfaces & Connections,infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,InstallableWSTPPrograms
 Union,Core Language & Structure,implemented,1,,5,ComputationWithStructuredDatasets HandlingArraysOfData DiscreteMathematics NumericalData
-UnionPlus,"Options, system variables & unclassified",missing,3,,0,
+UnionPlus,"Options, system variables & unclassified",implemented,3,,0,
 UnionedEntityClass,Core Language & Structure,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),0,KnowledgeRepresentationAndAccess WorkingWithRelationalDatabases
 Unique,Core Language & Structure,implemented,2,,0,TuningAndDebugging NamespaceManagement SymbolHandling
 UniqueElements,Symbolic & Numeric Computation,implemented,2,,0,OperationsOnSets
@@ -6378,14 +6378,14 @@ Unset,Core Language & Structure,implemented,1,,0,LanguageOverview VariablesAndFu
 UnsetShared,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
 Until,Core Language & Structure,implemented,1,,0,ProceduralProgramming LoopingConstructs
 UpArrow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
-UpArrowBar,"Options, system variables & unclassified",missing,3,,0,
-UpArrowDownArrow,"Options, system variables & unclassified",missing,3,,0,
-UpDownArrow,"Options, system variables & unclassified",missing,3,,0,
-UpEquilibrium,"Options, system variables & unclassified",missing,3,,0,
+UpArrowBar,"Options, system variables & unclassified",implemented,3,,0,
+UpArrowDownArrow,"Options, system variables & unclassified",implemented,3,,0,
+UpDownArrow,"Options, system variables & unclassified",implemented,3,,0,
+UpEquilibrium,"Options, system variables & unclassified",implemented,3,,0,
 UpSet,Core Language & Structure,implemented,1,,0,LanguageOverview PackageDevelopment Assignments
 UpSetDelayed,Core Language & Structure,implemented,1,,0,Assignments
-UpTee,"Options, system variables & unclassified",missing,3,,0,
-UpTeeArrow,"Options, system variables & unclassified",missing,3,,0,
+UpTee,"Options, system variables & unclassified",implemented,3,,0,
+UpTeeArrow,"Options, system variables & unclassified",implemented,3,,0,
 UpTo,Core Language & Structure,implemented,1,,1,ElementsOfLists GraphicsShapeAndSize
 UpValues,Core Language & Structure,implemented,1,,0,Assignments SymbolHandling
 Update,Core Language & Structure,implemented,1,,0,EvaluationControl LowLevelSystemOptimization
@@ -6394,8 +6394,8 @@ UpdatePacletSites,"Options, system variables & unclassified",infeasible,,Wolfram
 UpdateSearchIndex,Strings & Text,implemented,2,,0,TextSearch
 UpdateSemanticSearchIndex,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,LLMFunctions
 UpperCaseQ,Core Language & Structure,implemented,1,,0,CharacterOperations
-UpperLeftArrow,"Options, system variables & unclassified",missing,3,,0,
-UpperRightArrow,"Options, system variables & unclassified",missing,3,,0,
+UpperLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
+UpperRightArrow,"Options, system variables & unclassified",implemented,3,,0,
 UpperTriangularMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays MatrixDecompositions
 UpperTriangularMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixPredicates
 UpperTriangularize,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixOperations PartsOfMatrices LinearSystems
@@ -6447,7 +6447,7 @@ VectorSizes,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
 VectorStyle,Data Manipulation & Analysis,implemented,2,,0,VectorVisualization
 VectorSymbol,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays
 Vectors,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays SymbolicTensors
-Vee,"Options, system variables & unclassified",missing,3,,0,
+Vee,"Options, system variables & unclassified",implemented,3,,0,
 Verbatim,Core Language & Structure,implemented,1,,0,Patterns
 VerificationTest,Core Language & Structure,implemented,2,,1,SystematicTestingAndVerification
 VerifyConvergence,"Options, system variables & unclassified",missing,3,,0,
@@ -6500,11 +6500,11 @@ VertexTextureCoordinates,"Options, system variables & unclassified",implemented,
 VertexTransitiveGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements
 VertexWeight,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation GraphAnnotations Annotations Properties
 VertexWeightedGraphQ,Graphs & Networks,implemented,2,,0,GraphAnnotations GraphProperties
-VerticalBar,"Options, system variables & unclassified",missing,3,,0,
+VerticalBar,"Options, system variables & unclassified",implemented,3,,0,
 VerticalGauge,Data Manipulation & Analysis,implemented,2,,1,DataVisualization ChartingAndInformationVisualization DynamicVisualization Gauges
-VerticalSeparator,"Options, system variables & unclassified",missing,3,,0,
+VerticalSeparator,"Options, system variables & unclassified",implemented,3,,0,
 VerticalSlider,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects
-VerticalTilde,"Options, system variables & unclassified",missing,3,,0,
+VerticalTilde,"Options, system variables & unclassified",implemented,3,,0,
 Video,Sound & Video,infeasible,,audio / video,2,VideoProcessing
 VideoCapture,Sound & Video,infeasible,,audio / video,3,VideoProcessing VideoCreation
 VideoCombine,Sound & Video,infeasible,,audio / video,0,VideoEditing
