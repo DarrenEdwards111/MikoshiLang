@@ -1976,3 +1976,511 @@ def _clockgauge(*args: ListOf[Real] | Expr | Option) -> Expr:
     content.append(L(*hands))
     r = 1 + fs + 0.02
     return finish_graphics(L(*content), gopts, [("PlotRange", range_expr([(-r, r), (-r, r)])), ("AspectRatio", 1)])
+
+
+# ───────────────────────────── statistical charts ─────────────────────────────
+
+_CHART_DEFAULTS = {"ChartStyle": AUTO, "ChartBaseStyle": AUTO, "ChartLabels": NONE, "ChartLegends": NONE,
+                   "ChartElementFunction": AUTO, "ChartElements": AUTO, "ChartLayout": AUTO, "BarSpacing": AUTO,
+                   "BarOrigin": Symbol("Bottom"), "BubbleSizes": AUTO, "BubbleScale": AUTO, "SectorOrigin": AUTO,
+                   "SectorSpacing": AUTO, "PlotRange": AUTO, "LabelingFunction": AUTO, "PlotTheme": AUTO,
+                   "PerformanceGoal": AUTO, "ColorFunction": AUTO, "ColorFunctionScaling": True, "Method": AUTO,
+                   "PlotInteractivity": AUTO, "ScalingFunctions": NONE}
+
+
+def chart_options(fname, opts, allowed, dim=2):
+    o, gopts = split_options(fname, opts, _CHART_DEFAULTS, dim=dim)
+    _unsupported(o, fname, set(allowed) | {"ChartStyle", "ChartBaseStyle", "ChartLegends"})
+    return o, gopts
+
+
+def chart_datasets(data, fname, allow_groups=False):
+    """[values] for one dataset {y1, ...} or a list of datasets {{...}, {...}}."""
+    du, _, _ = P2._unwrap(data, fname)
+    if K.is_list(du) and du.args and all(K.is_list(P2._unwrap(a, fname)[0]) for a in du.args):
+        if any(K.is_list(P2._unwrap(a, fname)[0]) and any(K.is_list(b) for b in P2._unwrap(a, fname)[0].args)
+               for a in du.args) and not allow_groups:
+            raise NotImplementedError(f"{fname}: grouped datasets {{{{data1, data2, ...}}, ...}} are not supported")
+        return [values_of(a, fname) for a in du.args]
+    return [values_of(data, fname)]
+
+
+def _ticks_labels(o, n, fname):
+    lab = o["ChartLabels"]
+    if is_sym(lab, "None"):
+        return AUTO
+    if K.is_list(lab):
+        items = list(lab.args)
+        return L(L(*[L(k + 1, items[k]) for k in range(min(n, len(items)))]), AUTO)
+    raise NotImplementedError(f"{fname}: ChartLabels -> {K_input(lab)} is not supported; give a list of labels")
+
+
+def quartiles(vals, fname):
+    r = ev(Expr("Quartiles", L(*[_out(v) for v in vals])))
+    if not K.is_list(r) or len(r.args) != 3:
+        raise ArithmeticError(f"{fname}: could not compute the quartiles")
+    return [float(num(q)) for q in r.args]
+
+
+@fn("BoxWhiskerChart", area=AREA, status="added",
+    notes="BoxWhiskerChart[data] and [{data1, data2, ...}], [data, bwspec]: one box-and-whisker element per dataset "
+          "at x = 1, 2, ...: box Rectangle[{i - 0.3, Q1}, {i + 0.3, Q3}], median Line at Q2 and whisker Lines to the "
+          "minimum and maximum, with the quartiles of the Quartiles function (Wolfram's definition, as "
+          "documented). bwspec \"Outliers\": whiskers end at the most extreme data within 1.5 IQR of the box and "
+          "the points beyond are drawn as Point; \"Mean\": a dashed Line at the mean; other element specifications "
+          "(notches, fences styling) and grouped datasets raise NotImplementedError. Options: ChartStyle, "
+          "ChartBaseStyle, ChartLabels (tick labels), ChartLegends, PlotRange and Graphics options. Check: "
+          "reference (box limits equal Quartiles, whiskers equal Min/Max in tests).")
+def _boxwhiskerchart(data: ListOf[Real] | ListOf[ListOf[Real]], *rest: Expr | Option) -> Expr:
+    fname = "BoxWhiskerChart"
+    pos, opts = split_args((data,) + rest, fname, 1, 2)
+    o, gopts = chart_options(fname, opts, ("ChartLabels",))
+    sets = chart_datasets(pos[0], fname)
+    spec = pos[1] if len(pos) > 1 else AUTO
+    specs = [spec] if not K.is_list(spec) else list(spec.args)
+    outliers = mean = False
+    for s in specs:
+        if is_sym(s, "Automatic") or s == "Median":
+            continue
+        if s == "Outliers":
+            outliers = True
+        elif s == "Mean":
+            mean = True
+        else:
+            raise NotImplementedError(f"{fname}: the box-whisker specification {K_input(s)} is not supported")
+    styles = chart_styles(o, len(sets), fname)
+    content, ys = [], []
+    for i, (vs, st) in enumerate(zip(sets, styles)):
+        if not vs:
+            continue
+        x = i + 1.0
+        q1, q2, q3 = quartiles(vs, fname)
+        fv = sorted(float(v) for v in vs)
+        lo, hi = fv[0], fv[-1]
+        out_pts = []
+        if outliers:
+            iqr = q3 - q1
+            inside = [v for v in fv if q1 - 1.5 * iqr <= v <= q3 + 1.5 * iqr]
+            lo, hi = (min(min(inside), q1), max(max(inside), q3)) if inside else (q1, q3)
+            out_pts = [v for v in fv if v < q1 - 1.5 * iqr or v > q3 + 1.5 * iqr]
+        ys += fv
+        prims = [Expr("Line", pts([(x, q3), (x, hi)])), Expr("Line", pts([(x, q1), (x, lo)])),
+                 Expr("Rectangle", pt(x - 0.3, q1), pt(x + 0.3, q3)),
+                 L(Expr("GrayLevel", 1), Expr("Line", pts([(x - 0.3, q2), (x + 0.3, q2)])))]
+        if mean:
+            mu = sum(fv) / len(fv)
+            prims.append(L(Expr("GrayLevel", 1), Expr("Dashing", L(0.02)), Expr("Line", pts([(x - 0.3, mu),
+                                                                                             (x + 0.3, mu)]))))
+        if out_pts:
+            prims.append(Expr("Point", pts([(x, v) for v in out_pts])))
+        if st is not None:
+            content.append(L(st, *prims))
+    yr = P2.data_range(ys)
+    r = _range_2d(o, fname, (0.5, len(sets) + 0.5), yr)
+    tl = _ticks_labels(o, len(sets), fname)
+    bottom = tl.args[0] if K.is_list(tl) else NONE
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Frame", True),
+                                             ("FrameTicks", L(L(AUTO, NONE), L(bottom, NONE))),
+                                             ("PlotRange", range_expr(r))])
+    return _legend(g, o, styles, fname)
+
+
+@fn("DistributionChart", area=AREA, status="added",
+    notes="DistributionChart[{data1, data2, ...}] and [data, \"SmoothDensity\"]: a violin per dataset at x = 1, 2, "
+          "...: the Polygon {i +- 0.4 f(y)/fmax, y} for y over [min, max] of the dataset, where f is the Gaussian "
+          "kernel density estimate with Silverman's bandwidth (as SmoothHistogram), plus a median Line. Other "
+          "element specifications (\"Density\" histograms, \"Quantile\", glass styles) and grouped datasets raise "
+          "NotImplementedError. Options: ChartStyle, ChartBaseStyle, ChartLabels, ChartLegends, PlotRange and "
+          "Graphics options. Check: reference (violin half-widths proportional to the kernel density in tests).")
+def _distributionchart(data: ListOf[ListOf[Real]], *rest: Expr | Option) -> Expr:
+    fname = "DistributionChart"
+    pos, opts = split_args((data,) + rest, fname, 1, 2)
+    o, gopts = chart_options(fname, opts, ("ChartLabels",))
+    sets = chart_datasets(pos[0], fname)
+    spec = pos[1] if len(pos) > 1 else AUTO
+    if not (is_sym(spec, "Automatic") or spec == "SmoothDensity"):
+        raise NotImplementedError(f"{fname}: the element specification {K_input(spec)} is not supported "
+                                  "(\"SmoothDensity\")")
+    np = _np()
+    styles = chart_styles(o, len(sets), fname)
+    content, ys = [], []
+    for i, (vs, st) in enumerate(zip(sets, styles)):
+        if len(vs) < 2:
+            raise ValueError(f"{fname}: each dataset needs at least two values")
+        x = i + 1.0
+        h = bandwidth(vs, None, fname)
+        f = kde_fun(vs, h, "PDF", fname)
+        lo, hi = min(float(v) for v in vs), max(float(v) for v in vs)
+        yy = np.linspace(lo, hi, 61)
+        dens = f(yy)
+        w = 0.4 * dens / dens.max()
+        poly = [(x + float(a), float(y)) for a, y in zip(w, yy)] + \
+               [(x - float(a), float(y)) for a, y in zip(w[::-1], yy[::-1])]
+        med = float(num(ev(Expr("Median", L(*[_out(v) for v in vs])))))
+        ys += [lo, hi]
+        if st is not None:
+            content.append(L(st, Expr("Polygon", pts(poly)),
+                             L(Expr("GrayLevel", 1), Expr("Line", pts([(x - 0.1, med), (x + 0.1, med)])))))
+    r = _range_2d(o, fname, (0.5, len(sets) + 0.5), P2.data_range(ys))
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Frame", True), ("PlotRange", range_expr(r))])
+    return _legend(g, o, styles, fname)
+
+
+def tuples_of(d, fname, k, what):
+    """[(v1, ..., vk)] of a list of k-tuples (missing tuples dropped)."""
+    d, _, _ = P2._unwrap(d, fname)
+    if not K.is_list(d):
+        if isinstance(d, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of {what}, not {K_input(d)}")
+    out = []
+    for p in d.args:
+        if is_missing(p):
+            continue
+        p, _, _ = P2._unwrap(p, fname)
+        if not K.is_list(p) or len(p.args) != k:
+            if isinstance(p, (Symbol,)) or (isinstance(p, Expr) and not K.is_list(p)):
+                raise Unevaluated()
+            raise ValueError(f"{fname}: the data must be a list of {what}; {K_input(p)} is not")
+        vs = [P2.scalar(c, fname) for c in p.args]
+        if any(v is None for v in vs):
+            continue
+        out.append(tuple(vs))
+    if not out:
+        raise ValueError(f"{fname}: the data has no numeric {what}")
+    return out
+
+
+def tuple_datasets(data, fname, k, what):
+    du, _, _ = P2._unwrap(data, fname)
+    if K.is_list(du) and du.args and all(K.is_list(a) and a.args and all(K.is_list(b) for b in a.args)
+                                         for a in du.args):
+        return [tuples_of(a, fname, k, what) for a in du.args]
+    return [tuples_of(data, fname, k, what)]
+
+
+@fn("BubbleChart", area=AREA, status="added",
+    notes="BubbleChart[{{x1, y1, z1}, ...}] and lists of datasets: Graphics[{{style, Disk[{x, y}, r], ...}, ...}] "
+          "with one group per dataset. Bubble diameters are fractions of the larger coordinate span: BubbleSizes "
+          "{smin, smax} (default {0.05, 0.2}) for the smallest and largest z of all datasets, with the area "
+          "(BubbleScale \"Area\", default, as documented) or the diameter (\"Diameter\") interpolated linearly in z. "
+          "Options: BubbleSizes, BubbleScale, ChartStyle, ChartBaseStyle, ChartLegends, PlotRange and Graphics "
+          "options. Check: reference (bubble areas affine in z in tests).")
+def _bubblechart(data: MatrixOf[Real] | ListOf[MatrixOf[Real]], *opts: Option) -> Expr:
+    fname = "BubbleChart"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = chart_options(fname, opts_, ("BubbleSizes", "BubbleScale"))
+    sets = tuple_datasets(pos[0], fname, 3, "triples {x, y, z}")
+    smin, smax = _bubble_sizes(o["BubbleSizes"], fname, (0.05, 0.2))
+    scale = _bubble_scale(o["BubbleScale"], fname, "Area")
+    allz = [p[2] for s in sets for p in s]
+    xr = P2.data_range([p[0] for s in sets for p in s])
+    yr = P2.data_range([p[1] for s in sets for p in s])
+    span = max(xr[1] - xr[0], yr[1] - yr[0]) or 1.0
+    ds = bubble_diameters(allz, smin, smax, scale)
+    styles = chart_styles(o, len(sets), fname)
+    content, k, rmax = [], 0, 0.0
+    for s, st in zip(sets, styles):
+        disks = []
+        for p in s:
+            r = ds[k] * span / 2
+            k += 1
+            rmax = max(rmax, r)
+            disks.append(Expr("Disk", pt(p[0], p[1]), fl(r)))
+        if st is not None:
+            content.append(L(st, *disks))
+    r = _range_2d(o, fname, (xr[0] - rmax, xr[1] + rmax), (yr[0] - rmax, yr[1] + rmax))
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr(r))])
+    return _legend(g, o, styles, fname)
+
+
+@fn("BubbleChart3D", area=AREA, status="added",
+    notes="BubbleChart3D[{{x1, y1, z1, u1}, ...}] and lists of datasets: Graphics3D[{{style, Sphere[{x, y, z}, r], "
+          "...}, ...}] with diameters as fractions of the largest coordinate span: BubbleSizes {smin, smax} (default "
+          "{0.05, 0.2}) for the smallest and largest u, the volume (BubbleScale \"Volume\", default), area or "
+          "diameter interpolated linearly in u. Options: BubbleSizes, BubbleScale, ChartStyle, ChartBaseStyle, "
+          "ChartLegends, PlotRange and Graphics3D options. Check: reference (sphere volumes affine in u in tests).")
+def _bubblechart3d(data: MatrixOf[Real] | ListOf[MatrixOf[Real]], *opts: Option) -> Expr:
+    fname = "BubbleChart3D"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = chart_options(fname, opts_, ("BubbleSizes", "BubbleScale"), dim=3)
+    sets = tuple_datasets(pos[0], fname, 4, "quadruples {x, y, z, u}")
+    smin, smax = _bubble_sizes(o["BubbleSizes"], fname, (0.05, 0.2))
+    sc = o["BubbleScale"]
+    scale = "Volume" if is_sym(sc, "Automatic") or sc == "Volume" else _bubble_scale(sc, fname, "Area")
+    us = [p[3] for s in sets for p in s]
+    if scale == "Volume":
+        ulo, uhi = min(us), max(us)
+        ds = [((smin ** 3 + ((u - ulo) / (uhi - ulo) if uhi > ulo else 1.0) * (smax ** 3 - smin ** 3)) ** (1 / 3))
+              for u in us]
+    else:
+        ds = bubble_diameters(us, smin, smax, scale)
+    rngs = [P2.data_range([p[c] for s in sets for p in s]) for c in range(3)]
+    span = max(b - a for a, b in rngs) or 1.0
+    styles = chart_styles(o, len(sets), fname)
+    content, k = [], 0
+    for s, st in zip(sets, styles):
+        sph = []
+        for p in s:
+            sph.append(Expr("Sphere", pt(*p[:3]), fl(ds[k] * span / 2)))
+            k += 1
+        if st is not None:
+            content.append(L(st, *sph))
+    rm = max(ds) * span / 2
+    r = P2.resolve_plot_range(o["PlotRange"], fname, [(a - rm, b + rm) for a, b in rngs], dims=3)
+    g = finish_graphics(L(*content), gopts, [("Axes", True), ("BoxRatios", L(1, 1, 1)), ("PlotRange", range_expr(r))],
+                        dim=3)
+    return _legend(g, o, styles, fname)
+
+
+def _bar_data(data, fname):
+    """[[y_gj]] groups of bar heights (a flat list is one group per value: groups of size 1)."""
+    du, _, _ = P2._unwrap(data, fname)
+    if K.is_list(du) and du.args and all(K.is_list(a) for a in du.args):
+        groups = [values_of(a, fname) for a in du.args]
+    else:
+        groups = [[v] for v in values_of(data, fname)]
+    return groups
+
+
+@fn("BarChart3D", area=AREA, status="added",
+    notes="BarChart3D[{y1, y2, ...}] and [{{y11, y12, ...}, ...}] (groups): Graphics3D with one Cuboid[{p - 0.4, "
+          "-0.4, min(0, y)}, {p + 0.4, 0.4, max(0, y)}] per value at positions p = 1, 2, ... along x (groups are "
+          "separated by one empty slot) and colours by position within a group (one colour per value for a flat "
+          "list). Missing values leave gaps. Options: ChartStyle, ChartBaseStyle, ChartLegends, PlotRange and "
+          "Graphics3D options; ChartLayout and other settings raise NotImplementedError. Check: reference (cuboid "
+          "heights equal the data in tests).")
+def _barchart3d(data: ListOf[Real] | MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "BarChart3D"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = chart_options(fname, opts_, (), dim=3)
+    groups = _bar_data(pos[0], fname)
+    flat = all(len(g) == 1 for g in groups)
+    m = max(len(g) for g in groups)
+    styles = chart_styles(o, len(groups) if flat else m, fname)
+    content, p, zs = [], 0, [0.0]
+    for gi, g in enumerate(groups):
+        for j, y in enumerate(g):
+            p += 1
+            y = float(y)
+            zs.append(y)
+            st = styles[gi] if flat else styles[j]
+            if st is not None:
+                content.append(L(st, Expr("Cuboid", pt(p - 0.4, -0.4, min(0.0, y)), pt(p + 0.4, 0.4, max(0.0, y)))))
+        if not flat:
+            p += 1
+    r = P2.resolve_plot_range(o["PlotRange"], fname, [(0.5, p + 0.5), (-0.5, 0.5), P2.data_range(zs)], dims=3)
+    g = finish_graphics(L(*content), gopts, [("Axes", True), ("BoxRatios", L(1, 0.3, 0.5)),
+                                             ("PlotRange", range_expr(r))], dim=3)
+    return _legend(g, o, styles, fname)
+
+
+def _bar_spacing(o, fname):
+    v = o["BarSpacing"]
+    if is_sym(v, "Automatic", "None"):
+        return 0.0
+    x = num(v)
+    if x is None or x < 0:
+        raise NotImplementedError(f"{fname}: BarSpacing -> {K_input(v)} is not supported; give a number >= 0")
+    return x
+
+
+@fn("RectangleChart", area=AREA, status="added",
+    notes="RectangleChart[{{x1, y1}, {x2, y2}, ...}] and lists of datasets: rectangles of width x_i and height y_i "
+          "placed side by side from x = 0 (Rectangle[{X_i, 0}, {X_i + x_i, y_i}], X_i the running sum of widths "
+          "plus BarSpacing s between rectangles, default 0); widths must be non-negative. Options: BarSpacing (a "
+          "number), ChartStyle, ChartBaseStyle, ChartLabels, ChartLegends, PlotRange and Graphics options. Check: "
+          "reference (rectangle widths and heights equal the data in tests).")
+def _rectanglechart(data: MatrixOf[Real] | ListOf[MatrixOf[Real]], *opts: Option) -> Expr:
+    fname = "RectangleChart"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = chart_options(fname, opts_, ("BarSpacing", "ChartLabels"))
+    sets = tuple_datasets(pos[0], fname, 2, "pairs {width, height}")
+    gap = _bar_spacing(o, fname)
+    n = max(len(s) for s in sets)
+    styles = chart_styles(o, n, fname)
+    content, X, ys = [], 0.0, [0.0]
+    for s in sets:
+        for i, (w, h) in enumerate(s):
+            if w < 0:
+                raise ValueError(f"{fname}: widths must be non-negative, not {w}")
+            if styles[i] is not None:
+                content.append(L(styles[i], Expr("Rectangle", pt(X, min(0.0, h)), pt(X + w, max(0.0, h)))))
+            ys.append(h)
+            X += w + gap
+        X += gap
+    r = _range_2d(o, fname, (0.0, max(X - 2 * gap, 1e-9) if X else 1.0), P2.data_range(ys))
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("PlotRange", range_expr(r))])
+    return _legend(g, o, styles, fname)
+
+
+@fn("RectangleChart3D", area=AREA, status="added",
+    notes="RectangleChart3D[{{x1, y1, z1}, ...}] and lists of datasets: cuboids of width x_i, depth y_i and height "
+          "z_i side by side along x from 0 (Cuboid[{X_i, 0, 0}, {X_i + x_i, y_i, z_i}], X_i the running sum of "
+          "widths plus BarSpacing). Widths and depths must be non-negative. Options as RectangleChart. Check: "
+          "reference (cuboid sizes equal the data in tests).")
+def _rectanglechart3d(data: MatrixOf[Real] | ListOf[MatrixOf[Real]], *opts: Option) -> Expr:
+    fname = "RectangleChart3D"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = chart_options(fname, opts_, ("BarSpacing", "ChartLabels"), dim=3)
+    sets = tuple_datasets(pos[0], fname, 3, "triples {width, depth, height}")
+    gap = _bar_spacing(o, fname)
+    n = max(len(s) for s in sets)
+    styles = chart_styles(o, n, fname)
+    content, X, ys, zs = [], 0.0, [0.0], [0.0]
+    for s in sets:
+        for i, (w, d, h) in enumerate(s):
+            if w < 0 or d < 0:
+                raise ValueError(f"{fname}: widths and depths must be non-negative")
+            if styles[i] is not None:
+                content.append(L(styles[i], Expr("Cuboid", pt(X, 0.0, min(0.0, h)), pt(X + w, d, max(0.0, h)))))
+            ys.append(d)
+            zs.append(h)
+            X += w + gap
+        X += gap
+    r = P2.resolve_plot_range(o["PlotRange"], fname, [(0.0, X or 1.0), P2.data_range(ys), P2.data_range(zs)], dims=3)
+    g = finish_graphics(L(*content), gopts, [("Axes", True), ("BoxRatios", Symbol("Automatic")),
+                                             ("PlotRange", range_expr(r))], dim=3)
+    return _legend(g, o, styles, fname)
+
+
+def sector_origin(o, fname):
+    """(start angle, direction +1 counterclockwise / -1 clockwise)."""
+    v = o["SectorOrigin"]
+    if is_sym(v, "Automatic"):
+        return 0.0, 1
+    names = {"Right": 0.0, "Top": math.pi / 2, "Left": math.pi, "Bottom": -math.pi / 2}
+    if isinstance(v, Symbol) and v.name in names:
+        return names[v.name], 1
+    x = num(v)
+    if x is not None:
+        return x, 1
+    if K.is_list(v) and len(v.args) == 2:
+        a, d = v.args
+        a0 = names[a.name] if isinstance(a, Symbol) and a.name in names else (0.0 if is_sym(a, "Automatic") else num(a))
+        if a0 is None:
+            raise ValueError(f"{fname}: SectorOrigin -> {K_input(v)} is not valid")
+        if d == "Clockwise" or d == -1:
+            return a0, -1
+        if d == "Counterclockwise" or d == 1:
+            return a0, 1
+    raise NotImplementedError(f"{fname}: SectorOrigin -> {K_input(v)} is not supported")
+
+
+def sector_angles(weights, a0, sense, fname):
+    tot = sum(weights)
+    if any(w < 0 for w in weights):
+        raise ValueError(f"{fname}: sector sizes must be non-negative")
+    if not tot > 0:
+        raise ValueError(f"{fname}: the sector sizes must have a positive total")
+    out, a = [], a0
+    for w in weights:
+        b = a + sense * 2 * math.pi * w / tot
+        out.append((min(a, b), max(a, b)))
+        a = b
+    return out
+
+
+@fn("SectorChart", area=AREA, status="added",
+    notes="SectorChart[{{a1, r1}, {a2, r2}, ...}] and lists of datasets (concentric rings are not supported: "
+          "NotImplementedError): sector i spans the angle 2 Pi a_i/Total[a] with radius r_i, drawn as Disk[{0, 0}, "
+          "r_i, {t_i, t_(i+1)}]; sectors start at angle 0 and go counterclockwise (SectorOrigin -> t0, a named side "
+          "or {t0, \"Clockwise\"} changes this). Negative sizes or radii raise ValueError. Options: SectorOrigin, "
+          "ChartStyle, ChartBaseStyle, ChartLegends, PlotRange and Graphics options. Check: reference (sector angles "
+          "proportional to a_i and radii r_i in tests).")
+def _sectorchart(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "SectorChart"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = chart_options(fname, opts_, ("SectorOrigin",))
+    sets = tuple_datasets(pos[0], fname, 2, "pairs {angle size, radius}")
+    if len(sets) > 1:
+        raise NotImplementedError(f"{fname}: several datasets (concentric sector rings) are not supported")
+    s = sets[0]
+    a0, sense = sector_origin(o, fname)
+    angs = sector_angles([p[0] for p in s], a0, sense, fname)
+    styles = chart_styles(o, len(s), fname)
+    content, rmax = [], 0.0
+    for (a, r), (t0, t1), st in zip(s, angs, styles):
+        if r < 0:
+            raise ValueError(f"{fname}: radii must be non-negative")
+        rmax = max(rmax, r)
+        if st is not None and t1 > t0:
+            content.append(L(st, Expr("Disk", pt(0, 0), fl(r), L(fl(t0), fl(t1)))))
+    rr = rmax or 1.0
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", 1), ("PlotRange", range_expr(
+        _range_2d(o, fname, (-rr, rr), (-rr, rr))))])
+    return _legend(g, o, styles, fname)
+
+
+def wedge_polygons(t0, t1, r, h, rin=0.0):
+    """Polygons of a 3-D pie wedge between angles t0 < t1, radius r, from z = 0 to z = h."""
+    n = max(2, int(math.ceil((t1 - t0) / (math.pi / 36))) + 1)
+    ts = [t0 + (t1 - t0) * k / (n - 1) for k in range(n)]
+    arc = [(r * math.cos(t), r * math.sin(t)) for t in ts]
+    inner = [(rin * math.cos(t), rin * math.sin(t)) for t in reversed(ts)] if rin > 0 else [(0.0, 0.0)]
+    top = [(x, y, h) for x, y in arc + inner]
+    bot = [(x, y, 0.0) for x, y in arc + inner]
+    polys = [top, bot[::-1]]
+    for (x0, y0), (x1, y1) in zip(arc, arc[1:]):
+        polys.append([(x0, y0, 0.0), (x1, y1, 0.0), (x1, y1, h), (x0, y0, h)])
+    for x, y in (arc[0], arc[-1]):
+        cx, cy = inner[-1] if (x, y) == arc[0] else inner[0]
+        polys.append([(cx, cy, 0.0), (x, y, 0.0), (x, y, h), (cx, cy, h)])
+    return Expr("Polygon", L(*[pts(p) for p in polys]))
+
+
+@fn("PieChart3D", area=AREA, status="added",
+    notes="PieChart3D[{y1, y2, ...}]: Graphics3D with one wedge per value: the solid between angles t_i and t_(i+1) "
+          "(sector angle 2 Pi y_i/Total[y], from angle 0 counterclockwise; SectorOrigin as SectorChart), radius 1 "
+          "and height 0.2, given as Polygon faces (top, bottom, outer side approximated by facets of at most 5 "
+          "degrees, and the two radial sides). Negative values raise ValueError; missing values are dropped; "
+          "several datasets (rings) raise NotImplementedError. Options: SectorOrigin, ChartStyle, ChartBaseStyle, "
+          "ChartLegends, PlotRange and Graphics3D options. Check: reference (wedge angles and radius in tests).")
+def _piechart3d(data: ListOf[Real], *opts: Option) -> Expr:
+    fname = "PieChart3D"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = chart_options(fname, opts_, ("SectorOrigin",), dim=3)
+    du, _, _ = P2._unwrap(pos[0], fname)
+    if K.is_list(du) and du.args and all(K.is_list(a) for a in du.args):
+        raise NotImplementedError(f"{fname}: several datasets (rings) are not supported")
+    vs = [float(v) for v in values_of(pos[0], fname)]
+    a0, sense = sector_origin(o, fname)
+    angs = sector_angles(vs, a0, sense, fname)
+    styles = chart_styles(o, len(vs), fname)
+    content = [L(st, wedge_polygons(t0, t1, 1.0, 0.2)) for (t0, t1), st in zip(angs, styles)
+               if st is not None and t1 > t0]
+    r = P2.resolve_plot_range(o["PlotRange"], fname, [(-1.0, 1.0), (-1.0, 1.0), (0.0, 0.2)], dims=3)
+    g = finish_graphics(L(*content), gopts, [("Boxed", False), ("BoxRatios", Symbol("Automatic")),
+                                             ("PlotRange", range_expr(r))], dim=3)
+    return _legend(g, o, styles, fname)
+
+
+@fn("SectorChart3D", area=AREA, status="added",
+    notes="SectorChart3D[{{a1, r1, h1}, ...}]: 3-D sectors with angle 2 Pi a_i/Total[a], radius r_i and height h_i "
+          "(Polygon faces as PieChart3D), from angle 0 counterclockwise (SectorOrigin as SectorChart). Negative "
+          "sizes, radii or heights raise ValueError; several datasets raise NotImplementedError. Options: "
+          "SectorOrigin, ChartStyle, ChartBaseStyle, ChartLegends, PlotRange and Graphics3D options. Check: "
+          "reference (wedge angles, radii and heights in tests).")
+def _sectorchart3d(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "SectorChart3D"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+    o, gopts = chart_options(fname, opts_, ("SectorOrigin",), dim=3)
+    sets = tuple_datasets(pos[0], fname, 3, "triples {angle size, radius, height}")
+    if len(sets) > 1:
+        raise NotImplementedError(f"{fname}: several datasets are not supported")
+    s = sets[0]
+    a0, sense = sector_origin(o, fname)
+    angs = sector_angles([p[0] for p in s], a0, sense, fname)
+    styles = chart_styles(o, len(s), fname)
+    content, rmax, hmax = [], 0.0, 0.0
+    for (a, r, h), (t0, t1), st in zip(s, angs, styles):
+        if r < 0 or h < 0:
+            raise ValueError(f"{fname}: radii and heights must be non-negative")
+        rmax, hmax = max(rmax, r), max(hmax, h)
+        if st is not None and t1 > t0:
+            content.append(L(st, wedge_polygons(t0, t1, r, h)))
+    rr = rmax or 1.0
+    rg = P2.resolve_plot_range(o["PlotRange"], fname, [(-rr, rr), (-rr, rr), (0.0, hmax or 1.0)], dims=3)
+    g = finish_graphics(L(*content), gopts, [("BoxRatios", Symbol("Automatic")), ("PlotRange", range_expr(rg))],
+                        dim=3)
+    return _legend(g, o, styles, fname)
