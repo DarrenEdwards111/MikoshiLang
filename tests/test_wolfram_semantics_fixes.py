@@ -104,7 +104,7 @@ def test_ncm_flattening_unchanged(s):
 # ---- SymmetrizedReplacePart ----------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("src", [
-    "SymmetrizedReplacePart[{{a, b}, {c, d}}, {{2, 1} -> x}, Symmetric[{1, 2}]]",
+    "SymmetrizedReplacePart[{{a, b}, {c, d}}, {{1, 1} -> x}, Symmetric[{1, 2}]]",
     "SymmetrizedReplacePart[{{1, 2}, {3, 4}}, {{2, 1} -> x}, Antisymmetric[{1, 2}]]",
     "SymmetrizedReplacePart[{{1, 2}, {3, 1}}, {{1, 1} -> 0}, Symmetric[{1, 2}]]",
 ])
@@ -126,3 +126,10 @@ def test_symreplace_antisymmetric_array(s):
 def test_symreplace_symmetrized_array_unchanged(s):
     assert s.evaluate("Normal[SymmetrizedReplacePart[SymmetrizedArray[{{a, b}, {b, c}}], {{2, 1} -> x}]] == "
                       "{{a, x}, {x, c}}") is True
+
+
+def test_symreplace_doc_example_overwrites_whole_orbit(s):
+    # Wolfram docs (Generalizations): the rule replaces both independent and dependent components, so the
+    # non-symmetric pair b, c is overwritten rather than averaged.
+    assert s.evaluate("SymmetrizedReplacePart[{{a, b}, {c, d}}, {{2, 1} -> x}, Symmetric[{1, 2}]] == "
+                      "{{a, x}, {x, d}}") is True
