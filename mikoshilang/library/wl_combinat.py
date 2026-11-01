@@ -687,7 +687,11 @@ def _pgroup(gens: Expr) -> Expr:
     if is_list(gens):
         for p in gens.args:
             perm_of(p, "PermutationGroup")
-    raise Unevaluated()
+        raise Unevaluated()
+    if isinstance(gens, Symbol) or (isinstance(gens, Expr) and not isinstance(gens, str) and gens.head != "Cycles"):
+        raise Unevaluated()                 # symbolic generator list
+    raise ValueError(f"PermutationGroup: the generators {gens!r} must be a list of Cycles objects or permutation "
+                     "lists")
 
 
 # ─────────────────────────────── counting functions ───────────────────────────────

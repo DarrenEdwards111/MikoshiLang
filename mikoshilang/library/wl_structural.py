@@ -18,7 +18,7 @@ import sympy as sp
 from ..expr import Expr, Symbol
 from .. import kernel as K
 from .. import kernel_lists as KL
-from .core import fn, record, Unevaluated, REGISTRY
+from .core import fn, record, Unevaluated, REGISTRY, S
 from .wl_common import (L, ev, apply, true, is_sym, is_list, is_int, is_assoc, is_rule, same, items_of,
                         canonical, tester, split_options, int_value, real_number)
 from . import wl_lists as WL
@@ -1956,9 +1956,47 @@ def _symdep(comp: Expr, sym: Expr) -> ListOf[Expr]:
     return L(*(L(*j) for j in sorted(info.orbit(idx))))
 
 
+def _same_array(a, b) -> bool:
+    """Elementwise equality of two nested lists (entries compared after expanding their difference)."""
+    if is_list(a) and is_list(b):
+        return len(a.args) == len(b.args) and all(_same_array(p, q) for p, q in zip(a.args, b.args))
+    if is_list(a) or is_list(b):
+        return False
+    if a == b:
+        return True
+    try:
+        return sp.expand(S(a) - S(b)) == 0
+    except Exception:
+        return False
+
+
+def _require_symmetric(x: Expr, symmetrized: Expr, info: "_SymInfo", rules: list) -> None:
+    """Raise unless x already has the symmetry everywhere except on the orbits the explicit rules overwrite (those
+    components are replaced, both independent and dependent, so no value of x is averaged away)."""
+    covered = set()
+    for r in rules:
+        if is_list(r.args[0]) and all(is_int(v) for v in r.args[0].args) and len(r.args[0].args) == info.r:
+            idx = tuple(int(v) for v in r.args[0].args)
+            if all(1 <= i <= d for i, d in zip(idx, info.dims)):
+                covered.add(info.rep(idx)[0])
+    for idx in itertools.product(*(range(1, d + 1) for d in info.dims)):
+        if info.rep(idx)[0] in covered:
+            continue
+        a, b = x, symmetrized
+        for i in idx:
+            a, b = a.args[i - 1], b.args[i - 1]
+        if not _same_array(a, b):
+            raise ValueError(f"SymmetrizedReplacePart: the array does not have the given symmetry (component "
+                             f"{list(idx)} is {a!r}, its symmetrization is {b!r}); non-symmetric components are "
+                             f"not averaged, so replace their whole orbit or symmetrize the array first")
+
+
 @fn("SymmetrizedReplacePart", **ADDED,
     notes="SymmetrizedReplacePart[sa, {pos -> val, ...}] replaces independent values (dependent positions are mapped "
-          "to their independent component); SymmetrizedReplacePart[array, rules, sym] symmetrizes first")
+          "to their independent component); SymmetrizedReplacePart[array, rules, sym] replaces both independent and "
+          "dependent components (Wolfram docs); components of array that lack the symmetry sym and are not "
+          "overwritten by an explicit rule raise instead of being silently averaged. Check: reference; tests compare "
+          "hand-derived symmetric/antisymmetric results and the raised non-symmetric cases.")
 def _symreplace(x: Expr, rules: Expr, sym: Expr = None) -> Expr:
     parts = _sa_parts(x, "SymmetrizedReplacePart")
     if parts is None:
@@ -1971,8 +2009,10 @@ def _symreplace(x: Expr, rules: Expr, sym: Expr = None) -> Expr:
     else:
         dims, vals, s = parts
     info = _SymInfo(dims, s, "SymmetrizedReplacePart")
-    new = _sa_make(dims, _assign_rules(info, _rules_from(rules, "SymmetrizedReplacePart"), "SymmetrizedReplacePart",
-                                       vals), s)
+    rl = _rules_from(rules, "SymmetrizedReplacePart")
+    if parts is None:
+        _require_symmetric(x, _sa_normal(dims, vals, s), info, rl)
+    new = _sa_make(dims, _assign_rules(info, rl, "SymmetrizedReplacePart", vals), s)
     return new if parts is not None else _sa_normal(dims, _sa_parts(new, "")[1], s)
 
 
