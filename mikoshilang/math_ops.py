@@ -200,6 +200,22 @@ def _order_to_sympy(arg):
     return sp.Order(arg, (s, point[0]))
 
 
+def _list_as_function(x):
+    """A List argument of a function head (a Python list after conversion) as the undefined SymPy function
+    List(...): SymPy functions cannot hold Python lists (f([a]) fails inside SymPy), and from_sympy turns the
+    undefined function List back into {...}, so f[{a}] round-trips unchanged."""
+    if isinstance(x, list):
+        return sp.Function("List")(*(_list_as_function(a) for a in x))
+    return x
+
+
+def _is_list_function(f) -> bool:
+    return isinstance(f, AppliedUndef) and type(f).__name__ == "List"
+
+
+_LIST_DIFF_MSG = "differentiating through a list argument of a function (as in f[{x}]) is not supported"
+
+
 def to_sympy(expr) -> Any:
     """Convert a MikoshiLang expression to a SymPy expression."""
     if isinstance(expr, str):
@@ -254,9 +270,9 @@ def to_sympy(expr) -> Any:
             return _FUNCS[head](*args)
         candidate = getattr(sp, head.lower(), None)
         if isinstance(candidate, type) and issubclass(candidate, sp.Function):
-            return candidate(*args)
+            return candidate(*(_list_as_function(a) for a in args))
         # Unknown heads are undefined functions: f[x] -> f(x)
-        return sp.Function(head)(*args)
+        return sp.Function(head)(*(_list_as_function(a) for a in args))
     if isinstance(expr, (sp.Basic, sp.MatrixBase)):
         return sp.sympify(expr)
     raise TypeError(f"Unsupported symbolic value type: {type(expr).__name__}")
@@ -383,6 +399,8 @@ def from_sympy(sexpr) -> Any:
     if isinstance(sexpr, sp.Subs) and isinstance(sexpr.expr, sp.Derivative):
         d = sexpr.expr
         fexpr = d.expr
+        if _is_list_function(fexpr):
+            raise NotImplementedError(_LIST_DIFF_MSG)
         if isinstance(fexpr, sp.core.function.AppliedUndef) and tuple(fexpr.args) == tuple(sexpr.variables):
             counts = dict(d.variable_count)
             orders = [int(counts.get(v, 0)) for v in fexpr.args]
@@ -433,6 +451,8 @@ def from_sympy(sexpr) -> Any:
         return Expr("Power", from_sympy(sexpr.base), from_sympy(sexpr.exp))
     if isinstance(sexpr, sp.Derivative):
         f = sexpr.expr
+        if _is_list_function(f):
+            raise NotImplementedError(_LIST_DIFF_MSG)
         if isinstance(f, AppliedUndef) and all(isinstance(a, sp.Symbol) for a in f.args):
             counts = dict(sexpr.variable_count)
             orders = [int(counts.get(a, 0)) for a in f.args]

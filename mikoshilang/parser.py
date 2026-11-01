@@ -634,7 +634,7 @@ class Parser:
         if tok is None:
             return False
         return tok.type in ("SYMBOL", "LPAREN", "LBRACE", "LASSOC", "INTEGER", "FLOAT", "SLOT", "SLOTSEQ",
-                            "SLOTNAME", "LANGLE", "LDBAR", "NOTATIONPREFIX")
+                            "SLOTNAME", "LANGLE", "LDBAR", "NOTATIONPREFIX", "STRING")
 
     def parse_unary(self) -> Any:
         if self.at("MINUS"):
