@@ -5267,7 +5267,5 @@ SKIPPED = {
     "BioSequencePlot": "needs BioSequence objects (not implemented) and an undocumented sequence-track layout",
     "SingularValuePlot": "needs a control-systems frequency response (TransferFunctionModel evaluates inertly; "
                          "no state-space/transfer-function numerics to take singular values of)",
-    "ListSurfacePlot3D": "Wolfram's surface reconstruction from unordered 3-D points is undocumented; any "
-                         "reconstruction would give a different surface",
     "ImageWaveformPlot": "needs the Image type from batch W21 (not merged into this branch)",
 }
