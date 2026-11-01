@@ -361,6 +361,8 @@ def _model_apply(head, args, ev_):
         return UNH
     if spec.head == "NearestModel":
         return _nearest_apply(spec, args[0], ev_)
+    if spec.head == "PeriodicModel" and _sym(spec.hyper, "Automatic"):     # documented: one frequency
+        spec = spec.copy(hyper=1)
     if not _single(spec):
         return UNH
     x = args[0]
@@ -1258,7 +1260,7 @@ def _model_fit(data: Expr, model: Expr | String | ListOf[Expr], prop: String | L
           "NotImplementedError; unknown properties ValueError. Check: values recomputed from the residuals in "
           "tests (RSS, TSS, RMSE identities).")
 def _model_fit_report(a: Expr) -> Expr:
-    if not _is_assoc(a):
+    if not _is_assoc(a) and not isinstance(a, Symbol):
         raise TypeError("ModelFitReport: expected ModelFitReport[<|...|>] (use ModelFit[..., \"Report\"])")
     raise Unevaluated()
 
@@ -1500,6 +1502,8 @@ def _local_call(a, args):
     nv = int(FIT._get(a, "InputSize"))
     if len(args) == 1 and is_list(args[0]) and nv > 1:
         args = list(args[0].args)
+    elif len(args) == 1 and is_list(args[0]) and nv == 1:        # a list of points: map
+        return L(*(_local_call(a, [v]) for v in args[0].args))
     if len(args) != nv:
         raise ValueError(f"FittedModel: expected {nv} argument(s)")
     if not all(_is_num(v) for v in args):

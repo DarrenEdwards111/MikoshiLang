@@ -999,7 +999,7 @@ def _tsm_value(a, t):
           "parameter covariances / standard errors and \"PredictionLimits\" raise NotImplementedError. Check: "
           "residual ACF and Ljung-Box values compared with statsmodels acf / acorr_ljungbox (tests).")
 def _tsm(a: Expr) -> Expr:
-    if not (isinstance(a, Expr) and a.head == "Association"):
+    if not (isinstance(a, Expr) and a.head == "Association") and not isinstance(a, Symbol):
         raise TypeError("TimeSeriesModel: expected TimeSeriesModel[<|...|>] (use TimeSeriesModelFit)")
     raise Unevaluated()
 
