@@ -1127,7 +1127,7 @@ def _dateobjectq(x: Expr) -> Boolean:
     notes="DateList[] (now in $TimeZone), DateList[date] for DateObject, date list (out-of-range values reduced, "
           "fractional d/h/m/s allowed), absolute time (seconds since 1900 in $TimeZone), date string or "
           "{\"string\", {e1, sep, e2, ...}}; always {y, m, d, h, m, s} with real seconds; DateList[TimeZone -> z]")
-def _datelist(*args: Expr) -> Expr:
+def _datelist(*args: Expr) -> ListOf[Expr]:
     args, o = _opts(args, {"TimeZone"}, "DateList")
     if len(args) > 1:
         raise ValueError("DateList: expected at most one date specification")
@@ -1154,7 +1154,7 @@ def _datelist(*args: Expr) -> Expr:
           "DateObject (converted from its zone), date list (exact for exact input: AbsoluteTime[{2000, 1, 1}] = "
           "3155673600), date string or absolute time; TimeZone -> z gives the value in zone z; leap seconds are not "
           "counted")
-def _absolutetime(*args: Expr) -> Expr:
+def _absolutetime(*args: Expr) -> Real:
     args, o = _opts(args, {"TimeZone"}, "AbsoluteTime")
     if len(args) > 1:
         raise ValueError("AbsoluteTime: expected at most one date specification")
@@ -1194,7 +1194,7 @@ def _wrap_datestring():
                 return f_(*a)
         raise ValueError("DateString: wrong number of arguments")
 
-    def ds(*args: Expr) -> Expr:
+    def ds(*args: Expr) -> String:
         args, o = _opts(args, {"TimeZone"}, "DateString")
         if len(args) > 2:
             raise ValueError("DateString: expected DateString[], DateString[date], DateString[fmt] or "
@@ -1672,7 +1672,7 @@ def _later(a, b):
     notes="MinDate[{d1, d2, ...}] gives the earliest date in the form given (DateObject, date list, absolute time, "
           "string, DateInterval); MinDate[interval] the start of a DateInterval, MinDate[interval, gran] at "
           "granularity gran")
-def _mindate(x: Expr, g: Expr = None) -> Expr:
+def _mindate(x: ListOf[Expr], g: Expr = None) -> Expr:
     di = parse_interval(x)
     if di is not None:
         return _min_of_interval(di, g)
@@ -1688,7 +1688,7 @@ def _mindate(x: Expr, g: Expr = None) -> Expr:
 @fn("MaxDate", **ADDED,
     notes="MaxDate[{d1, d2, ...}] gives the latest date (latest end of its period) in the form given; "
           "MaxDate[interval] the end date of a DateInterval, MaxDate[interval, gran] at granularity gran")
-def _maxdate(x: Expr, g: Expr = None) -> Expr:
+def _maxdate(x: ListOf[Expr], g: Expr = None) -> Expr:
     di = parse_interval(x)
     if di is not None:
         return _max_of_interval(di, g)
@@ -1705,7 +1705,7 @@ def _maxdate(x: Expr, g: Expr = None) -> Expr:
     notes="DateBounds[{d1, d2, ...}] = {earliest, latest} in the form given; DateBounds[interval] the first and last "
           "dates of a DateInterval; DateBounds[gdate] the first and final instants of a granular DateObject (the "
           "final instant is the start of the next period); DateBounds[obj, gran] at granularity gran")
-def _datebounds(x: Expr, g: Expr = None) -> ListOf[Expr]:
+def _datebounds(x: ListOf[Expr], g: Expr = None) -> ListOf[Expr]:
     di = parse_interval(x)
     if di is not None:
         return L(_min_of_interval(di, g), _max_of_interval(di, g))
@@ -2173,7 +2173,7 @@ def _jd_date(x, fname):
           "date list or string in $TimeZone, absolute time) and the variants \"Full\", \"Reduced\" (JD - 2400000), "
           "\"Modified\" (JD - 2400000.5), \"Truncated\" (JD - 2440000.5), \"Dublin\" (JD - 2415020); exact for exact "
           "input; TimeSystem option (UT/UTC, TAI, TT, TDB, ...)")
-def _juliandate(*args: Expr) -> Expr:
+def _juliandate(*args: Expr) -> Real:
     args, o = _opts(args, {"TimeSystem"}, "JulianDate")
     variant = "Full"
     if args and isinstance(args[0], str) and args[0] in _JD_VARIANTS:
@@ -2338,7 +2338,7 @@ def _jd_ut(d):
           "GoldstineLunationNumber (+37105), HebrewLunationNumber (+71234), IslamicLunationNumber (+17038), "
           "ThaiLunationNumber (+16843); Moon from Meeus ch. 47 (60 terms), Sun from Meeus ch. 25, TT - UT from the "
           "Espenak-Meeus fits: about 1e-5 lunation (~30 s) accuracy")
-def _lunationnumber(*args: Expr) -> Expr:
+def _lunationnumber(*args: Expr) -> Real:
     scheme = None
     if len(args) == 2:
         scheme, args = args[0], args[1:]
