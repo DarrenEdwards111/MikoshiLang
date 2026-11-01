@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mikoshilang"
-version = "3.8.0.dev1"
-description = "Symbolic computation language for Python — pattern matching, algebraic simplification, and computational intelligence"
+version = "3.8.0"
+description = "Wolfram-style symbolic computing for Python, with opt-in types, Python interop and independent verification of results"
 authors = [{name = "Mikoshi Ltd", email = "mikoshiuk@gmail.com"}]
 license = {text = "Apache-2.0"}
 requires-python = ">=3.9"
@@ -31,10 +31,11 @@ test = ["pytest>=7", "hypothesis>=6"]
 all = ["ipykernel>=6.0", "matplotlib>=3.4", "scipy>=1.7", "plotly>=5.0", "networkx>=2.6", "scikit-learn>=1.0"]
 
 [project.urls]
-Homepage = "https://mikoshi.co.uk/mikoshilang"
+Homepage = "https://github.com/DarrenEdwards111/MikoshiLang"
 Repository = "https://github.com/DarrenEdwards111/MikoshiLang"
-"Try It Online" = "https://mikoshi.co.uk/mikoshilang"
-Documentation = "https://github.com/DarrenEdwards111/MikoshiLang#readme"
+Documentation = "https://github.com/DarrenEdwards111/MikoshiLang/tree/main/docs"
+Changelog = "https://github.com/DarrenEdwards111/MikoshiLang/blob/main/CHANGELOG.md"
+Issues = "https://github.com/DarrenEdwards111/MikoshiLang/issues"
 
 [project.scripts]
 mikoshilang = "mikoshilang.repl:main"
