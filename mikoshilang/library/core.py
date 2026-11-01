@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, List, Optional
 import sympy as sp
 
 from ..expr import Expr, Symbol
+from .. import _typestate
 
 UNHANDLED = object()
 
@@ -46,6 +47,12 @@ class Entry:
     impls: List[tuple] = field(default_factory=list)   # (fn, min_args, max_args or None)
     listable: bool = False
     hold: bool = False                                    # receives unevaluated args
+
+    @property
+    def signature(self) -> list:
+        """One ``types.Signature`` per implementation, read from its annotations (CONVENTIONS §2)."""
+        from ..types import entry_signature
+        return entry_signature(self)
 
 
 REGISTRY: Dict[str, Entry] = {}
@@ -114,11 +121,26 @@ def dispatch(head, args):
     n = len(args)
     for f, lo, hi in e.impls:
         if n >= lo and (hi is None or n <= hi):
+            if _typestate.ACTIVE:
+                return _checked_call(head, e, f, args)
             try:
                 return f(*args)
             except Unevaluated:
                 return UNHANDLED
     raise ValueError(f"{head} called with {n} argument(s); expected {_arity_text(e)}")
+
+
+def _checked_call(head, e, f, args):
+    """``f(*args)`` with the opt-in type checker (Session(check_types=...), TypeCheck) on."""
+    from .. import types
+    sig = types.check_library_call(head, f, args, e.hold)
+    try:
+        out = f(*args)
+    except Unevaluated:
+        return UNHANDLED
+    if sig is not None:
+        types.check_result(head, sig, out)
+    return out
 
 
 # ─────────────────────────── conversion helpers ───────────────────────────

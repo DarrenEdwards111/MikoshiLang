@@ -8,6 +8,9 @@ from .symbol_values import SYMBOL_VALUES
 from .interop import PYFUNCS_KEY, INTEROP_HEADS
 _CONTEXT_ALIASES = {"Developer`" + n: n for n in ("ToPackedArray", "FromPackedArray", "PackedArrayQ")}
 from .packed import PackedArray, FAST as PACKED_FAST, UNHANDLED as PACKED_UNHANDLED, apply as packed_apply
+from . import _typestate
+
+_HOLD_ATTRS = frozenset({"HoldAll", "HoldFirst", "HoldRest", "HoldAllComplete"})
 
 # The reviewed function library (mikoshilang.library) replaces the legacy
 # extended/extended2/extended3/visualization rule tables, which are no longer
@@ -401,14 +404,21 @@ def _evaluate_rest(expr, head, new_args, attrs, depth, ev, complete, chain):
             if r is not kernel.UNHANDLED:
                 return r
 
-    # 7. User definitions (DownValues, most specific first)
+    # 7. User definitions (DownValues, most specific first); declared types are checked when checking is on
+    declared = None
+    if _typestate.ACTIVE and isinstance(head, str):
+        from . import types
+        declared = types.declared(head) if attrs & _HOLD_ATTRS else types.select_declared(head, new_expr.args)
     defined = kernel.apply_downvalues(new_expr, ev)
     if defined is not kernel.UNHANDLED:
         _supersede(chain)
         try:
-            return ev(defined)
+            out = ev(defined)
         except kernel.ReturnSignal as r:
-            return r.value
+            out = r.value
+        if declared:
+            types.check_declared_result(head, declared, out)
+        return out
 
     # 8. Kernel built-ins (an operator form such as Select[crit] stays unevaluated until applied)
     from .kernel_lists import OPERATOR_FORMS

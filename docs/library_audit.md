@@ -111,15 +111,15 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 | verified | 119 | legacy behaviour confirmed correct against SymPy / mpmath / SciPy / NetworkX / Wolfram references |
 | fixed | 513 | legacy behaviour was wrong, crashed or was non-Wolfram; reimplemented and tested |
 | promoted | 28 | was quarantined; now properly implemented and tested |
-| added | 3932 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
+| added | 3935 | new Wolfram built-in added in Wolfram batch 1, differentially tested against Wolfram documentation examples |
 | kernel | 25 | implemented by the evaluator kernel before the library is consulted; Wolfram results confirmed |
 | error | 16 | raises NotImplementedError with the Wolfram-correct replacement (legacy meaning conflicted with Wolfram) |
 | quarantined | 0 | raises NotImplementedError (legacy implementation wrong and not worth fixing) |
-| **total reviewed** | **4633** | 620 pre-audit inventory heads, all with a status, plus 4013 promoted/aliased heads |
+| **total reviewed** | **4636** | 620 pre-audit inventory heads, all with a status, plus 4016 promoted/aliased heads |
 
 Remaining unreviewed quarantined names: **5192** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **25235**.
+Differential test cases in tests/library: **25281**.
 
 
 ## By area
@@ -213,6 +213,7 @@ Differential test cases in tests/library: **25235**.
 | time series (W25) | 0 | 0 | 0 | 18 | 0 | 0 | 0 |
 | transforms | 4 | 15 | 0 | 6 | 0 | 0 | 0 |
 | trees (W03) | 0 | 0 | 0 | 54 | 0 | 0 | 0 |
+| types (T1) | 0 | 0 | 0 | 3 | 0 | 0 | 0 |
 
 ## Every function
 
@@ -482,7 +483,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PhasePlane` | fixed | 3 | equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped tuple-form solutions |
 | `Residue` | verified | 3 | Residue[f, {x, a}] (Wolfram) and Residue[f, x, a] |
 | `SeparableODE` | fixed | 3 | general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable equations raise; legacy returned a SymPy equation |
-| `Table` | kernel | 89 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
+| `Table` | kernel | 90 | Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed |
 | `TaylorPolynomial` | verified | 3 | TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang) |
 | `TaylorSeries` | fixed | 3 | TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); default n = 5 |
 | `Wronskian` | verified | 3 | Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram) |
@@ -687,7 +688,7 @@ Cases = number of differential test cases in which the head occurs.
 | `PermutationReplace` | added | 5 | replaces each positive integer in expr (at any depth in lists) by its image; Cycles objects in expr are relabelled (conjugated); a group gives the list of images under GroupElements |
 | `PermutationSupport` | added | 3 | sorted list of the points moved |
 | `Permute` | added | 7 | Permute[expr, perm] moves part i to position perm(i) (Permute[{a, b, c}, {2, 3, 1}] = {c, a, b}); a group gives the list over GroupElements |
-| `PolygonalNumber` | added | 5 | PolygonalNumber[n] = n (n + 1)/2 (triangular); PolygonalNumber[r, n] = n ((r - 2) n - (r - 4))/2; exact numeric arguments of any kind; symbolic arguments stay unevaluated |
+| `PolygonalNumber` | added | 6 | PolygonalNumber[n] = n (n + 1)/2 (triangular); PolygonalNumber[r, n] = n ((r - 2) n - (r - 4))/2; exact numeric arguments of any kind; symbolic arguments stay unevaluated |
 | `RandomPermutation` | added | 5 | RandomPermutation[n] (uniform on Range[n], a Cycles object), [n, k] k of them, [group], [group, k]; reproducible after SeedRandom (the stream differs from Wolfram's generator) |
 | `Signature` | added | 8 | sign (+1/-1) of the permutation that sorts the list into canonical order; 0 if any element is repeated |
 | `SymmetricGroup` | added | 36 | SymmetricGroup[n] inert group object (permutation representation on 1..n) for GroupOrder, GroupElements, GroupMultiplicationTable, GroupOrbits, Permute, ... |
@@ -864,7 +865,7 @@ Cases = number of differential test cases in which the head occurs.
 | `BitClear` | added | 3 |  |
 | `BitFlip` | added | 3 |  |
 | `BitGet` | added | 3 |  |
-| `BitLength` | added | 5 | for negative n, the length of BitNot[n] (two's complement without the sign) |
+| `BitLength` | added | 10 | for negative n, the length of BitNot[n] (two's complement without the sign) |
 | `BitNot` | added | 3 |  |
 | `BitOr` | added | 4 |  |
 | `BitSet` | added | 3 |  |
@@ -951,7 +952,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Sign` | fixed | 12 | Sign[z] = z/Abs[z] for complex z (legacy left Sign[3 + 4 I] unevaluated); integer -1, 0, 1 for reals |
 | `Sin` | verified | 197 | verified against SymPy/mpmath |
 | `Sinh` | verified | 4 | verified against SymPy/mpmath |
-| `Sqrt` | verified | 186 | verified against SymPy/mpmath |
+| `Sqrt` | verified | 187 | verified against SymPy/mpmath |
 | `Surd` | promoted | 4 | real n-th root (Wolfram Surd) |
 | `Tan` | verified | 16 | verified against SymPy/mpmath |
 | `Tanh` | verified | 3 | verified against SymPy/mpmath |
@@ -1026,7 +1027,7 @@ Cases = number of differential test cases in which the head occurs.
 | `LocalSymbol` | added | 6 | LocalSymbol["name"] gives the value stored persistently (a file under ~/.mikoshilang/LocalSymbols, or $MIKOSHILANG_LOCALSYMBOL_BASE) by LocalSymbol["name"] = val or := val; unevaluated when never assigned; LocalSymbol["name", "dir"] uses another base; =. deletes it |
 | `Locked` | added | 5 | attribute: the attributes of the symbol can no longer be changed (Protect/Unprotect, SetAttributes, ClearAttributes, Attributes[f] = ... raise) |
 | `Manual` | added | 6 | inert option value: selected manually |
-| `Method` | added | 173 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
+| `Method` | added | 174 | option name Method -> "name" / {"name", opts} / Automatic for algorithm choices |
 | `NHoldAll` | added | 3 | attribute: N does not affect any argument of f |
 | `NHoldFirst` | added | 3 | attribute: N does not affect the first argument of f |
 | `NHoldRest` | added | 3 | attribute: N affects only the first argument of f |
@@ -1251,7 +1252,7 @@ Cases = number of differential test cases in which the head occurs.
 | `FileType` | added | 7 | FileType["name"] gives File, Directory, Special (devices, pipes, sockets) or None when nothing of that name exists (symbolic links are followed); File[...] accepted. Check: exact (os.stat); tests in a temporary directory. |
 | `FindFile` | added | 13 | FindFile["name"] searches the directories of $Path (or the Path option) in order and gives the absolute name of the first file found; a directory resolves to its Kernel/init.wl, Kernel/init.m, init.wl or init.m; "ctx`" looks for ctx.wl, ctx.m or a ctx directory (MX files are not supported); absolute names are checked directly; the documented result $Failed when nothing is found. File[...] accepted. Check: exact; tests create files in a temporary directory and search with Path. |
 | `InputStream` | added | 3 | InputStream[name, n] is the inert object for an open input stream (OpenRead gives InputStream["full name", n], StringToStream InputStream[String, n]); Read, ReadList, ... act on it. Check: reference (Wolfram documentation) in tests. |
-| `Number` | added | 18 | Number is the Read/ReadList type for an integer or approximate real number (C/Fortran exponent forms allowed; an integer when there is no decimal point). Check: reference (Wolfram documentation) in tests. |
+| `Number` | added | 19 | Number is the Read/ReadList type for an integer or approximate real number (C/Fortran exponent forms allowed; an integer when there is no decimal point). Check: reference (Wolfram documentation) in tests. |
 | `OpenAppend` | added | 8 | OpenAppend["file"] opens a file for writing at its end (creating it if needed) and gives OutputStream["full name", n]; options as OpenWrite (a stream method's constructor gets isAppend = True). Check: exact; tests append to a file and read it back. |
 | `OpenRead` | added | 37 | OpenRead["file"] opens a file for reading and gives InputStream["full name", n] (n unique across all streams); relative names are looked up in Directory[] and then in $Path (or the Path option); options BinaryFormat, CharacterEncoding (UTF8 default, ASCII, ISOLatin1), Method ("File", a method of DefineInputStreamMethod, {method, opts}), and the stream defaults RecordSeparators, WordSeparators, NullRecords, NullWords, TokenWords used by Read; a missing file or a directory raises ValueError (Wolfram: message and $Failed); pipes "!cmd" raise NotImplementedError. Check: exact; Streams[] membership and Read round trips in tests. |
 | `OpenWrite` | added | 17 | OpenWrite["file"] opens a file for writing, deleting its contents, and gives OutputStream["full name", n]; OpenWrite[] opens a new file in $TemporaryDirectory; options BinaryFormat, CharacterEncoding (UTF8 default; ASCII writes non-ASCII characters as \:hhhh escapes), FormatType (InputForm default, OutputForm), Method ("File" or a DefineOutputStreamMethod method). Lines are never wrapped: PageWidth, TotalWidth and NumberMarks other than their no-op values raise NotImplementedError; a missing directory raises ValueError; pipes raise NotImplementedError. Check: exact; Write/Read round trips in tests. |
@@ -2611,7 +2612,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Nothing` | added | 6 | removed from lists |
 | `Optional` | added | 3 | x_:d and x_. (Plus/Times/Power defaults) |
 | `Repeated` | added | 3 | p.. and Repeated[p, n \| {m, n}] in sequences |
-| `RepeatedNull` | added | 3 | p... in sequences |
+| `RepeatedNull` | added | 5 | p... in sequences |
 | `RightComposition` | added | 3 | f /* g; RightComposition[f, g][x] = g[f[x]] |
 | `SameAs` | added | 3 | operator x === y |
 | `Span` | added | 3 | i ;; j ;; k in Part, Take and Drop |
@@ -4919,7 +4920,7 @@ Cases = number of differential test cases in which the head occurs.
 | `StringReplace` | fixed | 24 | StringReplace[s, p -> r], [s, {rules}], [s, rules, n] with string patterns; named pattern parts substitute into the right-hand side; RegularExpression rules accept "$1" group references; non-string replacements give a StringExpression; the legacy form StringReplace[s, old, new] raises |
 | `StringReplaceList` | added | 3 | every string obtained by replacing a single match of the rules (one result per match position and rule, left to right); StringReplaceList[s, rules, n] keeps at most n |
 | `StringReplacePart` | added | 3 | StringReplacePart[s, new, {m, n}], a list of ranges with one new string, or a list of new strings matched to the ranges; negative positions count from the end |
-| `StringRiffle` | added | 8 | StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per level above), StringRiffle[list, sep], StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings are converted with ToString |
+| `StringRiffle` | added | 9 | StringRiffle[list] joins with spaces (nested lists: spaces at the lowest level, one more newline per level above), StringRiffle[list, sep], StringRiffle[list, {left, sep, right}], StringRiffle[list, sep1, sep2, ...] per level; non-strings are converted with ToString |
 | `StringRotateLeft` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringRotateRight` | added | 3 | cyclic rotation by n characters (default 1) |
 | `StringSplit` | added | 15 | splits at whitespace or at matches of a string pattern; empty pieces at the ends are dropped (kept with StringSplit[s, p, All]), interior ones kept; p -> r inserts r at each split; StringSplit[s, p, n] gives at most n pieces; IgnoreCase; threads over lists |
@@ -5286,6 +5287,14 @@ Cases = number of differential test cases in which the head occurs.
 | `TreeSize` | added | 24 | number of subtrees (nodes) |
 | `TreeTraversalOrder` | added | 6 | option of TreeMap, TreeScan, TreeLevel, TreeCases, TreePosition, TreeSelect: Automatic/"DepthFirst"/"PostOrder"/"BottomUp" (children before parents, default), "PreOrder"/"TopDown", "BreadthFirst"/"LevelOrder" (top-down); other orders raise |
 | `UnlabeledTree` | added | 3 | a tree of the same shape with Null as every node's data |
+
+### types (T1)
+
+| Function | Status | Cases | Notes |
+|---|---|---|---|
+| `TypeCheck` | added | 8 | TypeCheck[expr] evaluates expr with type checking in report mode and gives <\|"Result" -> value, "Mismatches" -> {<\|"Function" -> f, "Position" -> i, "Value" -> v, "Expected" -> type\|>, ...}\|>. A mismatch is a concrete argument (or result) of the wrong kind; symbolic arguments never are. Position is the argument number, "Result" or "Count" (wrong number of arguments for a declared function). MikoshiLang extension. Check: exact; seeded mismatches in tests. |
+| `TypeMatchQ` | added | 27 | TypeMatchQ[value, type] is True when value is known to have the type (Integer, Real, ListOf[t], t1 \| t2, ...) and False otherwise, including for symbolic values whose type is not known yet (x is not an Integer). An unknown type raises ValueError. MikoshiLang extension. Check: exact; reference values for every type in tests. |
+| `TypeSignature` | added | 15 | TypeSignature[f] gives the signatures of f as {{t1, t2, ...} -> result, ...}: user declarations in this session first, otherwise the library signature read from the Python annotations of each implementation (RepeatedNull[t] stands for any number of further arguments); {} if none is known. TypeSignature[f, {t1, ...} -> r] declares a signature for a user function (repeat it for overloads) and returns it; RepeatedNull[t] is allowed last. The declaration is checked only when checking is on (Session(check_types=...) or TypeCheck). A non-symbol f raises TypeError; an unknown type raises ValueError. MikoshiLang extension. Check: exact; the signatures of library heads are compared with their annotations in tests. |
 
 ## Quarantine decision for the remaining names
 
