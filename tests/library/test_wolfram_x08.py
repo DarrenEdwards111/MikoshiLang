@@ -320,7 +320,6 @@ VARIO = [
     ("VariogramModel[\"Exponential\", {2, 3}][\"Range\"]", near(3 * math.log(20), 1e-9)),
     ("VariogramModel[\"Gaussian\", {1, 2}][\"Range\"]", near(2 * math.sqrt(math.log(20)), 1e-9)),
     ("VariogramModel[\"SineHoleEffect\", {1, 2}][\"Range\"]", near(2.0, 1e-9)),
-    ("VariogramModel[\"GaussianLaguerre\", {1, 2, 1, 1}][\"Range\"]", near(2 * math.sqrt(1.5), 1e-9)),
     ("VariogramModel[\"Dagum\", {1, 2, 1, 2}][\"Range\"]", near(2 * (0.95 ** -2 - 1) ** -0.5, 1e-9)),
     ("VariogramModel[\"Power\", {2, 1.5}][4]", near(2 ** 1.5, 1e-12)),
     ("VariogramModel[\"Power\", {2, 1.5}][\"Sill\"]", "Infinity"),
@@ -394,6 +393,7 @@ VARIO = [
 GRID = ("x08pts = Flatten[Table[{i, j}, {i, 0, 9}, {j, 0, 9}], 1]; x08z = x08pts -> (Sin[#[[1]]/2.] + "
         "Cos[#[[2]]/3.] & /@ x08pts); ")
 VARIO_SCIPY = [
+    ("VariogramModel[\"GaussianLaguerre\", {1, 2, 1, 1}][\"Range\"]", near(2 * math.sqrt(1.5), 1e-9)),
     (GRID + "Head[EstimatedVariogramModel[x08z]]", "VariogramModel"),
     (GRID + "EstimatedVariogramModel[x08z, \"Exponential\"][\"Name\"]", "\"Exponential\""),
     (GRID + "EstimatedVariogramModel[x08z, {\"Spherical\", {a, 20}}][\"Parameters\"][[2]]", "20.0"),
@@ -437,6 +437,8 @@ def test_without_scipy_raises():
         ev("EstimatedVariogramModel[Table[{i}, {i, 0, 40}] -> Table[Sin[i/3.], {i, 0, 40}]]")
     with pytest.raises(NotImplementedError, match="SciPy"):
         ev("PointDensity[{{0.1, 0.1}, {0.9, 0.2}, {0.5, 0.8}, {0.4, 0.4}}]")
+    with pytest.raises(NotImplementedError, match="SciPy"):
+        ev("VariogramModel[\"Matern\", {1, 1, 1/2}][\"Range\"]")
 
 
 def test_density_integrates_to_count():
