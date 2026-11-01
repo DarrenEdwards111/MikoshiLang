@@ -423,6 +423,7 @@ def _gradient_fitted_mesh(points: MatrixOf[Real] | Expr, *opts: Option) -> Expr:
     pos, o, keep = options(opts, f, {"PerformanceGoal", "VertexNormals"}, MESH_PRESENTATION)
     if pos:
         raise ValueError(f"{f}: expected GradientFittedMesh[points, opts]")
+    require_points(points, f, (3,), lo=4)  # argument errors before the SciPy requirement
     require_scipy(f)
     P, N = _points_normals(points, o, f)
     Q, cells = poisson_mesh(P, N, _grid_res(o.get("PerformanceGoal"), f), f)
@@ -566,8 +567,8 @@ def _reconstruction_mesh(points: MatrixOf[Real] | Expr, *opts: Option) -> Expr:
     if pos:
         raise ValueError(f"{f}: expected ReconstructionMesh[points, opts]")
     meth, sub = _method(o.get("Method"), f, ("AlphaShape", "Crust", "Poisson"), {"Alpha"})
-    require_scipy(f)
     P, _ = require_points(points, f, (2, 3), lo=2)
+    require_scipy(f)
     P, _ = dedupe_points(P)
     if meth == "Poisson":
         if P.shape[1] != 3:
@@ -615,7 +616,6 @@ def _list_surface_plot3d(data: MatrixOf[Real], *opts: Option) -> Expr:
     from . import wl_plots2d as P2
     pos, o_ = P2._list_args((data,) + opts, f)
     o, gopts = P2._opts3d(f, o_, ("PlotStyle", "MaxPlotPoints"))
-    require_scipy(f)
     mpp = o["MaxPlotPoints"]
     if is_auto(mpp):
         res = 30
@@ -624,6 +624,7 @@ def _list_surface_plot3d(data: MatrixOf[Real], *opts: Option) -> Expr:
     else:
         res = int_arg(mpp, f, "MaxPlotPoints", 8, 128)
     P, _ = require_points(pos[0], f, (3,), lo=4)
+    require_scipy(f)
     P, _ = dedupe_points(P)
     N = plane_fit_normals(P)
     Q, cells = poisson_mesh(P, N, res, f)
