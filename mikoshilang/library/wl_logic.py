@@ -326,7 +326,8 @@ def _minimal(sv, form, syms=None):
 # ─────────────────────────────── simple connectives ───────────────────────────────
 
 @fn("Boole", area=AREA, status="added", listable=True, notes="Boole[True] = 1, Boole[False] = 0; other arguments "
-    "stay unevaluated")
+    "stay unevaluated"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _boole(x: Boolean) -> Integer:
     if x is True:
         return 1
@@ -338,7 +339,8 @@ def _boole(x: Boolean) -> Integer:
 @fn("Majority", area=AREA, status="added",
     notes="True when more than half of the (odd number of) arguments are True, False when more than half are False; "
           "symbolic arguments stay unevaluated unless the count is already decided; an even number of arguments "
-          "raises")
+          "raises"
+          ". Check: reference (differential cases in tests/library).")
 def _majority(*args: Boolean) -> Boolean:
     if len(args) % 2 == 0:
         raise ValueError("Majority needs an odd number of arguments")
@@ -353,7 +355,8 @@ def _majority(*args: Boolean) -> Boolean:
 
 
 @fn("BooleanVariables", area=AREA, status="added",
-    notes="the distinct variables (non-connective atoms) of a Boolean expression in canonical order")
+    notes="the distinct variables (non-connective atoms) of a Boolean expression in canonical order"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _boolvars(e: Expr) -> ListOf[Expr]:
     c = Conv(False, "BooleanVariables")
     c.to(e)
@@ -398,7 +401,8 @@ def _expr_from_rows(rows, vars_, fname):
     notes="BooleanFunction[k, n] pure function (truth table IntegerDigits[k, 2, 2^n] in Tuples[{True, False}, n] "
           "order; BooleanFunction[8, 2] is And) applied to True/False arguments; BooleanFunction[k, {vars}] and "
           "BooleanFunction[table, {vars}] give an equivalent minimal disjunctive normal form; "
-          "BooleanFunction[table] gives BooleanFunction[k, n]")
+          "BooleanFunction[table] gives BooleanFunction[k, n]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _boolfun(spec: Expr, n: Expr = None) -> Expr:
     if n is None:
         vals, m = _truth_values(spec, "BooleanFunction")
@@ -488,7 +492,8 @@ def _table(e, groups):
 @fn("BooleanTable", area=AREA, status="added",
     notes="truth values over Tuples[{True, False}, n] (BooleanTable[expr] uses BooleanVariables); nested tables for "
           "several variable lists (outermost first); pure BooleanFunction / BooleanCountingFunction / Function; "
-          "non-Boolean expressions are substituted (BooleanTable[f[a, b], {a, b}])")
+          "non-Boolean expressions are substituted (BooleanTable[f[a, b], {a, b}])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _booltable(e: Expr, *groups: Expr) -> Expr:
     if _pure_arity(e, "BooleanTable") is not None:
         expr, vs = _pure_to_expr(e, "BooleanTable")
@@ -525,7 +530,8 @@ def _decide_setup(e, vars_, fname):
 
 
 @fn("SatisfiableQ", area=AREA, status="added", notes="True if some assignment of the variables makes the "
-    "expression True (exact truth table up to 22 variables, SymPy SAT solver beyond)")
+    "expression True (exact truth table up to 22 variables, SymPy SAT solver beyond)"
+    ". Check: reference (differential cases in tests/library).")
 def _satq(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Boolean:
     c, sv = _decide_setup(e, vars_, "SatisfiableQ")
     syms = c.symbols()
@@ -536,7 +542,8 @@ def _satq(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Boolean:
 
 
 @fn("TautologyQ", area=AREA, status="added", notes="True if every assignment of the variables makes the expression "
-    "True")
+    "True"
+    ". Check: reference (differential cases in tests/library).")
 def _tautq(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Boolean:
     c, sv = _decide_setup(e, vars_, "TautologyQ")
     syms = c.symbols()
@@ -547,7 +554,8 @@ def _tautq(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Boolean:
 
 
 @fn("SatisfiabilityCount", area=AREA, status="added", notes="number of assignments (of BooleanVariables or the "
-    "given variables, so extra variables double the count) that make the expression True")
+    "given variables, so extra variables double the count) that make the expression True"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _satcount(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Integer:
     c, sv = _decide_setup(e, vars_, "SatisfiabilityCount")
     m, _ = truth_mask(sv, c.symbols())
@@ -557,7 +565,8 @@ def _satcount(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Integer:
 @fn("SatisfiabilityInstances", area=AREA, status="added",
     notes="SatisfiabilityInstances[expr, vars], [expr, vars, m], [expr, vars, All] and pure-function forms: lists of "
           "truth values that make expr True, enumerated with False before True (lexicographic); {} if unsatisfiable. "
-          "Wolfram does not document which instances it returns first; every returned instance is valid")
+          "Wolfram does not document which instances it returns first; every returned instance is valid"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _satinst(e: Expr, vars_: Var | ListOf[Expr] | Integer = None, m: PosInteger = None) -> ListOf[Expr]:
     if _pure_arity(e, "SatisfiabilityInstances") is not None:
         if vars_ is not None and m is None:
@@ -655,7 +664,8 @@ _FORMS = {"DNF": "DNF", "SOP": "DNF", "CNF": "CNF", "POS": "CNF", "ANF": "ANF", 
     notes="forms \"DNF\"/\"SOP\" (default), \"CNF\"/\"POS\" (minimal two-level forms), \"ANF\" (unique algebraic "
           "normal form, Xor of Ands), \"ESOP\" (given as the ANF, which is an exclusive sum of products), \"NAND\", "
           "\"NOR\", \"AND\", \"OR\" (two-level with Not); BooleanConvert[expr, form, cond] uses cond as a care set "
-          "for DNF/CNF; other forms (IMPLIES, ITE, BFF, BDT, binary NAND/NOR) raise")
+          "for DNF/CNF; other forms (IMPLIES, ITE, BFF, BDT, binary NAND/NOR) raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _bconvert(e: Expr, form: Expr = None, cond: Expr = None) -> Expr:
     if isinstance(form, Expr) and not isinstance(form, str) and cond is None and not isinstance(form, Symbol):
         form, cond = None, form
@@ -739,7 +749,8 @@ def _expand_lists(e):
     notes="expands Boolean connectives into a disjunction of conjunctions (distributing And over Or, pushing Not "
           "inwards, expanding Xor/Implies/Equivalent), removing contradictory and absorbed terms; equations between "
           "lists are split elementwise; non-Boolean atoms (equations, inequalities) are kept as they are "
-          "(LogicalExpand[x y == 0] is not split into cases)")
+          "(LogicalExpand[x y == 0] is not split into cases)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lexpand(e: Expr) -> Expr:
     e2 = _expand_lists(e)
     c = Conv(False, "LogicalExpand")
@@ -813,7 +824,8 @@ def _contains_quantifier(e):
 @fn("Resolve", area=AREA, status="added",
     notes="eliminates ForAll/Exists from purely Boolean formulas (variables over Booleans) and returns an equivalent "
           "minimal DNF; quantifiers over non-Boolean formulas (real/complex/integer quantifier elimination) raise; "
-          "quantifier-free input is returned unchanged")
+          "quantifier-free input is returned unchanged"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _resolve(e: Expr, dom: Expr = None) -> Expr:
     if dom is not None and not (isinstance(dom, Symbol) and dom.name == "Booleans"):
         if _contains_quantifier(e):

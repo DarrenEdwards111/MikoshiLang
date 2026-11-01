@@ -22,7 +22,7 @@ computation itself (bad arguments, a function's own self-check) propagate unchan
 |---|---|---|
 | `Integrate[f, x]` | `D[result, x] - f` is zero (simplification, then sampling at 6 points, 40 digits) | Checked |
 | `Integrate[f, {x, a, b}]` | `mpmath.quad` at 30 digits | Checked |
-| `Solve`, `NSolve` | every solution substituted into every equation. Completeness is **not** checked | Certified when every residual expands to 0 |
+| `Solve`, `NSolve` | every solution substituted into every equation. **Completeness** by root counting when the count is known: one univariate polynomial equation with rational coefficients (`Solve[p == q, x]`, or `Solve[..., x, Reals]` with a Sturm count); the distinct solutions must match the distinct roots of the square-free part. Otherwise completeness is "not checked" | Certified when every residual expands to 0 |
 | `DSolve[eq, y[x], x]` | the solution substituted into the equation | Checked |
 | `D[f, x]` | `mpmath.diff` at sample points | Checked |
 | `Limit[f, x -> a]` | values at `a ± 10^-k` (finite limits) | Checked |
@@ -77,8 +77,10 @@ Independent tables are added on top, whether a head states a check or not:
 Each function gets one status: `pass`, `fail`, `not exercised` (it states a check but nothing could run) or
 `no check stated`. The script exits with status 1 on any failure.
 
-* The default mode runs the heads with a `Check:` line plus the tables, in about 15 seconds. The `Verification`
-  workflow runs it on every push and pull request.
+* The default mode runs the heads with a `Check:` line plus the tables. Since the `Check:` backfill that is 942
+  functions (851 pass, 0 fail, 91 not exercised), about 9 minutes serially or 5 minutes with `--jobs 2` on a
+  busy machine. `--jobs N` runs the reference cases in N worker processes, module by module, with the same
+  outcomes as a serial run. The `Verification` workflow runs it with `--jobs 4` on every push and pull request.
 * `--all` also runs every audited head's reference cases. On main that is 2669 functions in about 6.5 minutes (2325 pass, 0 fail, 344 with no check), so the workflow
   runs it weekly and on demand (`workflow_dispatch`).
 
@@ -91,8 +93,10 @@ Caveats:
   per-test isolation: `test_wolfram_w27`, `w29`, `w30`) are left out of the harness; their heads are `not
   exercised` there (so is a `self-check` head whose only real examples are in those modules), and their cases
   still run in the test suite.
-* Most heads predate the `Check:` convention, so they are reported as `no check stated` (with their reference
-  cases, in `--all` mode) until their notes gain the sentence.
+* Many heads predate the `Check:` convention, so they are reported as `no check stated` (with their reference
+  cases, in `--all` mode) until their notes gain the sentence. The first backfill added the sentence to 647
+  numeric and solving heads, each claiming only the methods (`exact`, `reference`, `self-check`) that pass in
+  the harness.
 
 ## Not in v1
 

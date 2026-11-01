@@ -74,7 +74,8 @@ def _conj_leaves(x):
 
 
 @fn("ConjugateTranspose", area=AREA, status="added",
-    notes="Conjugate[Transpose[m]] (and ConjugateTranspose[m, perm]); a vector or non-array raises like Transpose")
+    notes="Conjugate[Transpose[m]] (and ConjugateTranspose[m, perm]); a vector or non-array raises like Transpose"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _conjtranspose(m: ListOf[Expr], *perm: Expr) -> Expr:
     if not is_list(m):
         raise Unevaluated()
@@ -101,7 +102,8 @@ def _rows(m, fname):
 
 @fn("Diagonal", area=AREA, status="added",
     notes="Diagonal[m] = {m[[1,1]], m[[2,2]], ...} (rectangular matrices too); Diagonal[m, k] is the k-th "
-          "superdiagonal (k < 0: subdiagonal); entries are returned unevaluated-as-given")
+          "superdiagonal (k < 0: subdiagonal); entries are returned unevaluated-as-given"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _diagonal(m: ListOf[Expr], k: Integer = 0) -> ListOf[Expr]:
     rows, d = _rows(m, "Diagonal")
     k = _offset(k, "Diagonal")
@@ -122,13 +124,15 @@ def _triangularize(m, k, keep, fname):
 
 
 @fn("UpperTriangularize", area=AREA, status="added",
-   notes="zeros below the k-th diagonal (keeps m[[i,j]] with j - i >= k; default k = 0); rectangular matrices")
+   notes="zeros below the k-th diagonal (keeps m[[i,j]] with j - i >= k; default k = 0); rectangular matrices"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _upper_triangularize(m: MatrixOf[Expr], k: Integer = 0) -> MatrixOf[Expr]:
     return _triangularize(m, k, lambda dj, kk: dj >= kk, "UpperTriangularize")
 
 
 @fn("LowerTriangularize", area=AREA, status="added",
-   notes="zeros above the k-th diagonal (keeps m[[i,j]] with j - i <= k; default k = 0); rectangular matrices")
+   notes="zeros above the k-th diagonal (keeps m[[i,j]] with j - i <= k; default k = 0); rectangular matrices"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lower_triangularize(m: MatrixOf[Expr], k: Integer = 0) -> MatrixOf[Expr]:
     return _triangularize(m, k, lambda dj, kk: dj <= kk, "LowerTriangularize")
 
@@ -190,7 +194,8 @@ record("Eigenvectors", "linear algebra", "fixed",
 
 @fn("Eigensystem", area=AREA, status="added",
     notes="{Eigenvalues[m], Eigenvectors[m]} with matching order (decreasing absolute value); Eigensystem[m, k] "
-          "and UpTo[k]; generalized {m, a} raises")
+          "and UpTo[k]; generalized {m, a} raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _eigensystem(m: ListOf[Expr], *k: Expr) -> ListOf[Expr]:
     if len(k) > 1:
         raise ValueError("Eigensystem called with too many arguments")
@@ -216,7 +221,8 @@ def _sv_exact(M, fname):
     notes="non-zero singular values in decreasing order (exact for exact matrices, LAPACK for machine matrices, "
           "where values below 100*10^-p times the largest are dropped); SingularValueList[m, k] (k < 0: smallest) "
           "and UpTo[k] use all Min[Dimensions[m]] values, zeros included; Tolerance -> t keeps values >= t times "
-          "the largest; symbolic and generalized {m, a} inputs raise")
+          "the largest; symbolic and generalized {m, a} inputs raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _svlist(m: ListOf[Expr], *rest: Expr) -> ListOf[Expr]:
     _generalized(m, "SingularValueList")
     args, opts = split_options(rest, {"Tolerance"}, "SingularValueList")
@@ -252,7 +258,8 @@ def _svlist(m: ListOf[Expr], *rest: Expr) -> ListOf[Expr]:
     notes="{s, j} with m == s.j.Inverse[s] and j in Jordan normal form (exact, SymPy); a machine matrix must be "
           "numerically diagonalizable (eigenvector matrix condition number < 10^8) and gives "
           "{eigenvectors as columns, diagonal eigenvalues}; otherwise it raises. The order of the Jordan blocks and "
-          "the scaling of s can differ from Wolfram's (the decomposition is not unique)")
+          "the scaling of s can differ from Wolfram's (the decomposition is not unique)"
+          ". Check: reference (differential cases in tests/library).")
 def _jordan(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M = _matrix(m, "JordanDecomposition", square=True)
     kind = _kind(m)
@@ -285,7 +292,8 @@ def _fn_of(f, t):
 @fn("MatrixFunction", area=AREA, status="added",
     notes="MatrixFunction[f, m] for a square matrix and any scalar function f (symbol or pure function): exact "
           "via the Jordan form (SymPy analytic_func, derivatives of f on Jordan blocks); machine matrices via the "
-          "eigendecomposition, which must be well-conditioned (else raises); f is evaluated by MikoshiLang")
+          "eigendecomposition, which must be well-conditioned (else raises); f is evaluated by MikoshiLang"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _matrixfunction(f: Fn, m: MatrixOf[Expr]) -> Expr:
     M = _matrix(m, "MatrixFunction", square=True)
     kind = _kind(m)
@@ -320,7 +328,8 @@ def _matrixfunction(f: Fn, m: MatrixOf[Expr]) -> Expr:
 
 @fn("MatrixMinimalPolynomial", area=AREA, status="added",
     notes="the monic polynomial p of least degree with p(m) == 0 (exact; Krylov dependence of I, m, m^2, ...); "
-          "inexact matrices raise")
+          "inexact matrices raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _minpoly(m: MatrixOf[Expr], x: Var) -> Expr:
     M = _matrix(m, "MatrixMinimalPolynomial", square=True)
     xv = variable(x, "MatrixMinimalPolynomial")
@@ -343,7 +352,8 @@ def _minpoly(m: MatrixOf[Expr], x: Var) -> Expr:
 
 @fn("Adjugate", area=AREA, status="added",
     notes="the adjugate (transposed cofactor matrix), Det[m] Inverse[m] for invertible m, defined for singular m "
-          "too; exact (machine matrices are computed exactly from their binary values and rounded)")
+          "too; exact (machine matrices are computed exactly from their binary values and rounded)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _adjugate(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M = _matrix(m, "Adjugate", square=True)
     kind = _kind(m)
@@ -358,7 +368,8 @@ def _adjugate(m: MatrixOf[Expr]) -> ListOf[Expr]:
 @fn("Minors", area=AREA, status="added",
     notes="Minors[m, k]: determinants of all k x k submatrices, rows and columns subsets in lexicographic order "
           "(Wolfram); Minors[m] = Minors[m, Min[Dimensions[m]] - 1]; Minors[m, k, f] applies f instead of Det; "
-          "Minors[m, 0] = {{1}}")
+          "Minors[m, 0] = {{1}}"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _minors(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     if len(rest) > 2:
         raise ValueError("Minors called with too many arguments")
@@ -380,7 +391,8 @@ def _minors(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
 
 
 @fn("Permanent", area=AREA, status="added",
-    notes="sum over permutations of products of entries (SymPy Matrix.per); square matrices")
+    notes="sum over permutations of products of entries (SymPy Matrix.per); square matrices"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _permanent(m: MatrixOf[Expr]) -> Expr:
     M = _matrix(m, "Permanent", square=True)
     return _out_nested(_expand_poly(sp.sympify(M.per())), _kind(m))
@@ -403,7 +415,8 @@ def _cdot(u, v):
 
 @fn("Projection", area=AREA, status="added",
     notes="Projection[u, v] = (u.Conjugate[v]/v.Conjugate[v]) v; Projection[u, v, f] uses the inner product "
-          "f[u, v]/f[v, v] v; projection onto the zero vector raises")
+          "f[u, v]/f[v, v] v; projection onto the zero vector raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _projection(u: Expr, v: Expr, *f: Expr) -> Expr:
     if f:
         if len(f) > 1:
@@ -426,7 +439,8 @@ def _projection(u: Expr, v: Expr, *f: Expr) -> Expr:
     notes="Gram-Schmidt orthonormal basis using the standard inner product Conjugate[u].v; the output has as "
           "many vectors as the input, linearly dependent vectors become zero vectors; machine vectors whose "
           "residual norm is at most 100 $MachineEpsilon (about 2.2*10^-14) of the original are treated as dependent (Tolerance -> t overrides); "
-          "Orthogonalize[list, f] uses the inner product f on arbitrary elements")
+          "Orthogonalize[list, f] uses the inner product f on arbitrary elements"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _orthogonalize(vs: ListOf[Expr], *rest: Expr) -> ListOf[Expr]:
     args, opts = split_options(rest, {"Tolerance", "Method"}, "Orthogonalize")
     if "Method" in opts and not (isinstance(opts["Method"], str) and opts["Method"] == "GramSchmidt"):
@@ -490,7 +504,8 @@ def _orth_general(items, f):
 
 @fn("LeastSquares", area=AREA, status="added",
     notes="the x minimising Norm[m.x - b] (minimum-norm solution when several exist, = PseudoInverse[m].b); b a "
-          "vector or matrix; exact for exact input, LAPACK lstsq for machine input")
+          "vector or matrix; exact for exact input, LAPACK lstsq for machine input"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _leastsquares(m: MatrixOf[Expr], b: ListOf[Expr]) -> Expr:
     M = _matrix(m, "LeastSquares")
     if not is_list(b):
@@ -521,7 +536,8 @@ def _size2(n, fname):
 
 
 @fn("HilbertMatrix", area=AREA, status="added",
-    notes="entries 1/(i + j - 1); HilbertMatrix[n] and HilbertMatrix[{m, n}]; exact (use N for machine numbers)")
+    notes="entries 1/(i + j - 1); HilbertMatrix[n] and HilbertMatrix[{m, n}]; exact (use N for machine numbers)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hilbert(n: PosInteger | ListOf[PosInteger]) -> MatrixOf[Expr]:
     r, c = _size2(n, "HilbertMatrix")
     return mat_out(sp.Matrix(r, c, lambda i, j: sp.Rational(1, i + j + 1)))
@@ -537,7 +553,8 @@ def _entries(x, fname):
 @fn("ToeplitzMatrix", area=AREA, status="added",
     notes="ToeplitzMatrix[n] (symmetric, successive integers), ToeplitzMatrix[c] (symmetric, first column c), "
           "ToeplitzMatrix[c, r] (first column c, first row r; r[[1]] is ignored and c[[1]] used, as in Wolfram); "
-          "always a dense matrix (Wolfram's TargetStructure option is not supported)")
+          "always a dense matrix (Wolfram's TargetStructure option is not supported)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _toeplitz(c: PosInteger | ListOf[Expr], r: ListOf[Expr] = None) -> ListOf[Expr]:
     if r is None and not is_list(c):
         n = pos_int(c, "ToeplitzMatrix", "size")
@@ -550,7 +567,8 @@ def _toeplitz(c: PosInteger | ListOf[Expr], r: ListOf[Expr] = None) -> ListOf[Ex
 @fn("HankelMatrix", area=AREA, status="added",
     notes="HankelMatrix[n] (successive integers, zeros below the antidiagonal), HankelMatrix[c] (first column c, "
           "zeros below the antidiagonal), HankelMatrix[c, r] (first column c, last row r; r[[1]] is ignored and "
-          "c[[-1]] used, as in Wolfram); always a dense matrix")
+          "c[[-1]] used, as in Wolfram); always a dense matrix"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hankel(c: PosInteger | ListOf[Expr], r: ListOf[Expr] = None) -> ListOf[Expr]:
     if r is None and not is_list(c):
         n = pos_int(c, "HankelMatrix", "size")
@@ -569,7 +587,8 @@ def _hankel(c: PosInteger | ListOf[Expr], r: ListOf[Expr] = None) -> ListOf[Expr
 @fn("VandermondeMatrix", area=AREA, status="added",
     notes="rows {1, x_i, x_i^2, ...}: VandermondeMatrix[{x1, ..., xn}] (n x n) and VandermondeMatrix[x, k] "
           "(n x k), returned as the dense matrix (Wolfram returns a structured array whose Normal this is); "
-          "confluent (repeated) nodes raise")
+          "confluent (repeated) nodes raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _vandermonde(x: ListOf[Expr], k: Expr = None) -> ListOf[Expr]:
     xs = _entries(x, "VandermondeMatrix")
     cols = len(xs) if k is None else pos_int(k, "VandermondeMatrix", "column count")
@@ -583,7 +602,8 @@ def _vandermonde(x: ListOf[Expr], k: Expr = None) -> ListOf[Expr]:
 
 @fn("CauchyMatrix", area=AREA, status="added",
     notes="entries 1/(x_i + y_j) (CauchyMatrix[x] = CauchyMatrix[x, x]), returned as the dense matrix; a zero "
-          "denominator raises")
+          "denominator raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cauchy(x: ListOf[Expr], y: ListOf[Expr] = None) -> ListOf[Expr]:
     xs = [S(v) for v in _entries(x, "CauchyMatrix")]
     ys = xs if y is None else [S(v) for v in _entries(y, "CauchyMatrix")]
@@ -624,7 +644,8 @@ def _simp_out(M, kind):
 @fn("RotationMatrix", area=AREA, status="added",
     notes="RotationMatrix[t] (2D, counterclockwise), RotationMatrix[t, w] (3D, right-handed about the numeric "
           "axis w), RotationMatrix[t, {u, v}] (n-D, in the plane of u and v, from u towards v), RotationMatrix[{u, "
-          "v}] (rotation taking the direction of u to that of v, in their plane; antiparallel vectors raise)")
+          "v}] (rotation taking the direction of u to that of v, in their plane; antiparallel vectors raise)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rotation(t: Numeric | ListOf[Expr], w: ListOf[Expr] = None) -> ListOf[Expr]:
     if w is None and is_list(t):
         return _rotation_uv(*_pair(t, "RotationMatrix"), None)
@@ -684,7 +705,8 @@ def _rotation_uv(u, v, th, kind=None):
 
 @fn("ReflectionMatrix", area=AREA, status="added",
     notes="IdentityMatrix[n] - 2 v.ConjugateTranspose[v]/(Conjugate[v].v): reflection in the hyperplane "
-          "normal to the numeric vector v")
+          "normal to the numeric vector v"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _reflection(v: ListOf[Numeric]) -> ListOf[Expr]:
     xs = _numvec(v, "ReflectionMatrix")
     d = sp.simplify(_cdot(xs, xs))
@@ -696,7 +718,8 @@ def _reflection(v: ListOf[Numeric]) -> ListOf[Expr]:
 
 @fn("ScalingMatrix", area=AREA, status="added",
     notes="ScalingMatrix[{s1, ..., sn}] = DiagonalMatrix[{s1, ..., sn}]; ScalingMatrix[s, v] scales by s along "
-          "the numeric direction v: IdentityMatrix + (s - 1) v.Transpose[v]/v.v")
+          "the numeric direction v: IdentityMatrix + (s - 1) v.Transpose[v]/v.v"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _scaling(s: Numeric | ListOf[Expr], v: ListOf[Expr] = None) -> ListOf[Expr]:
     if v is None:
         xs = _entries(s, "ScalingMatrix")
@@ -714,7 +737,8 @@ def _scaling(s: Numeric | ListOf[Expr], v: ListOf[Expr] = None) -> ListOf[Expr]:
 @fn("ShearingMatrix", area=AREA, status="added",
     notes="ShearingMatrix[t, v, n] = IdentityMatrix + Tan[t] Outer[Times, vp, Normalize[n]] where vp is the unit "
           "vector along the part of v perpendicular to n (Wolfram uses the projection for non-orthogonal v); "
-          "determinant 1")
+          "determinant 1"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _shearing(t: Expr, v: ListOf[Numeric], nrm: ListOf[Numeric]) -> ListOf[Expr]:
     th = sym(t, "ShearingMatrix")
     a, b = _numvec(v, "ShearingMatrix"), _numvec(nrm, "ShearingMatrix")
@@ -777,7 +801,8 @@ def _cross(d, rs):
 @fn("BoxMatrix", area=AREA, status="added",
    notes="1s in a box extending r index positions to each side: BoxMatrix[r] is (2r+1) x (2r+1) ones, "
          "BoxMatrix[r, w] (w x w, box centred), BoxMatrix[{r1, r2, ...}] and sizes {w1, ...}; integer radii only; "
-         "an off-centre box (w - 2r - 1 odd) raises")
+         "an off-centre box (w - 2r - 1 odd) raises"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _box_matrix(r: NonNegInteger | ListOf[Expr], w: Expr = None) -> ListOf[Expr]:
     return _shape(r, w, "BoxMatrix", _box)
 
@@ -815,7 +840,8 @@ def _perm_sign(p):
 @fn("LeviCivitaTensor", area=AREA, status="added",
     notes="the rank-d totally antisymmetric tensor (Signature of the index list), as a dense array: "
           "LeviCivitaTensor[d] (Wolfram returns the equivalent SparseArray; Normal gives this array) and "
-          "LeviCivitaTensor[d, List]")
+          "LeviCivitaTensor[d, List]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _levicivita(d: PosInteger, h: Expr = None) -> Expr:
     n = pos_int(d, "LeviCivitaTensor", "rank")
     if h is not None and not (isinstance(h, Symbol) and h.name in ("List", "SparseArray")):
@@ -1047,7 +1073,8 @@ def _outer_nested(a, b):
 
 @fn("TensorProduct", area=AREA, status="added",
     notes="tensor (outer) product of explicit arrays, dimensions concatenated (Outer[Times, a, b] for arrays); "
-          "numbers act as rank-0 tensors; TensorProduct[t] = t; symbolic factors leave it unevaluated")
+          "numbers act as rank-0 tensors; TensorProduct[t] = t; symbolic factors leave it unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tensorproduct(*ts: Expr) -> Expr:
     if not ts:
         raise Unevaluated()
@@ -1072,7 +1099,8 @@ def _tensorproduct(*ts: Expr) -> Expr:
 
 @fn("TensorRank", area=AREA, status="added",
     notes="the number of indices of an explicit rectangular array (ArrayDepth), 0 for a number; symbols and "
-          "ragged lists stay unevaluated")
+          "ragged lists stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tensorrank(t: Expr) -> Integer:
     if is_list(t):
         d = dims(t)
@@ -1086,7 +1114,8 @@ def _tensorrank(t: Expr) -> Integer:
 
 
 @fn("TensorDimensions", area=AREA, status="added",
-    notes="Dimensions of an explicit rectangular array ({} for a number); symbolic tensors stay unevaluated")
+    notes="Dimensions of an explicit rectangular array ({} for a number); symbolic tensors stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tensordims(t: Expr) -> ListOf[Expr]:
     if is_list(t):
         d = dims(t)
@@ -1101,7 +1130,8 @@ def _tensordims(t: Expr) -> ListOf[Expr]:
 
 @fn("TensorContract", area=AREA, status="added",
     notes="TensorContract[t, {{s1, s2}, ...}] sums over each pair of slots of an explicit array; the remaining "
-          "slots keep their order; paired slots must have equal dimensions and appear once")
+          "slots keep their order; paired slots must have equal dimensions and appear once"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tensorcontract(t: ListOf[Expr], pairs: ListOf[Expr]) -> Expr:
     if not is_list(t):
         raise Unevaluated()
@@ -1155,7 +1185,8 @@ def _tensorcontract(t: ListOf[Expr], pairs: ListOf[Expr]) -> Expr:
 
 @fn("TensorTranspose", area=AREA, status="added",
     notes="TensorTranspose[t, perm] for an explicit array: Transpose[t, perm] with perm a full permutation "
-          "list of the slots (Cycles specifications are not supported)")
+          "list of the slots (Cycles specifications are not supported)"
+          ". Check: reference (differential cases in tests/library).")
 def _tensortranspose(t: ListOf[Expr], perm: Expr) -> Expr:
     if not is_list(t):
         raise Unevaluated()
@@ -1184,7 +1215,8 @@ def _positions(x, prefix=()):
 @fn("ArrayRules", area=AREA, status="added",
     notes="ArrayRules[array] gives {pos -> value, ...} for the entries that differ from 0 (in lexicographic "
           "position order) followed by {_, _, ...} -> 0; ArrayRules[array, default]; works on explicit "
-          "rectangular arrays (SparseArray evaluates to its dense array in MikoshiLang)")
+          "rectangular arrays (SparseArray evaluates to its dense array in MikoshiLang)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arrayrules(x: ListOf[Expr], default: Expr = 0) -> ListOf[Expr]:
     if not is_list(x):
         raise Unevaluated()
@@ -1217,7 +1249,8 @@ def _sparse_rules(r):
     notes="SparseArray[{pos -> v, ...}], SparseArray[rules, dims], SparseArray[rules, dims, default] and "
           "SparseArray[list] (positions may be patterns such as {i_, i_} -> 1; the first matching rule wins). "
           "MikoshiLang has no sparse storage: the result is the equivalent dense array, i.e. Normal[SparseArray[...]] "
-          "in Wolfram (Head is List, not SparseArray); Band[...] -> v specifications are expanded (see Band)")
+          "in Wolfram (Head is List, not SparseArray); Band[...] -> v specifications are expanded (see Band)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sparsearray(spec: Expr, *rest: Expr) -> Expr:
     if len(rest) > 2:
         raise ValueError("SparseArray called with too many arguments")

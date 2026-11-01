@@ -22,6 +22,10 @@ def p(src):
     ("Integrate", ["Sin[x]^2", "x"], "x/2 + Sin[x] Cos[x]/2"),            # sign error
     ("Integrate", ["x Exp[x]", "{x, 0, 1}"], "2"),                          # true value 1
     ("Solve", ["x^2 == 2", "x"], "{{x -> Sqrt[2]}, {x -> 2}}"),
+    ("Solve", ["x^2 == 2", "x"], "{{x -> Sqrt[2]}}"),                       # incomplete: root counting
+    ("Solve", ["x^3 == x", "x", "Reals"], "{{x -> 0}, {x -> 1}}"),          # incomplete over the reals
+    ("Solve", ["x^2 == 4", "x"], "{}"),                                     # no solutions returned
+    ("NSolve", ["x^3 - 2 == 0", "x"], "{{x -> 1.2599210498948732}}"),      # real root only
     ("D", ["Sin[x] x^2", "x"], "2 x Sin[x] - x^2 Cos[x]"),
     ("Limit", ["Sin[x]/x", "x -> 0"], "2"),
     ("Series", ["Exp[x]", "{x, 0, 3}"], "1 + x + x^2/2 + x^3/7"),
@@ -56,6 +60,15 @@ def test_verify_returns_failed_for_a_wrong_result():
     assert out.head == "Failed" and out.args[0] == 3
     assert "Head -> GCD" in str(out).replace('"', "") and "Reason" in str(out)
     assert p("Verify[GCD[12, 18]]").head == "Certified"
+
+
+def test_root_counting_completeness():
+    out = V.CHECKERS["Solve"]([p("x^2 + 1 == 0"), p("x"), p("Reals")], p("{}"))
+    assert out.head == "Certified" and "no real roots" in str(out)
+    out = V.CHECKERS["Solve"]([p("x^2 == 0"), p("x")], p("{{x -> 0}, {x -> 0}}"))   # multiplicity: 1 distinct root
+    assert out.head == "Certified" and "1 distinct complex" in str(out)
+    out = V.CHECKERS["Solve"]([p("a x == 1"), p("x")], p("{{x -> 1/a}}"))            # parameter: count unknown
+    assert "not checked" in str(out)
 
 
 def test_right_results_pass_the_same_checkers():
@@ -138,6 +151,15 @@ def test_markdown_report():
     res = H.run(TESTS, "stated", ["Gamma"])
     md = H.markdown(res, 1.0, "stated")
     assert "| `Gamma` |" in md and "pass" in md
+
+
+def test_reference_runs_in_parallel_match_serial(monkeypatch):
+    mods = [mc for mc in H.load_modules(TESTS) if mc[0] in ("test_special", "test_lists_strings")]
+    monkeypatch.setattr(H, "load_modules", lambda tests_dir: mods)
+    heads = {"BesselJ", "Gamma", "StringTake"}
+    serial = H.run_reference(TESTS, heads, jobs=1)
+    parallel = H.run_reference(TESTS, heads, jobs=2)
+    assert set(serial) == heads and parallel == serial
 
 
 def test_selfcheck_finds_verification_steps_in_helpers_and_distribution_classes():

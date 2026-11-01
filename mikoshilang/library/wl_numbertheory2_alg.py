@@ -230,7 +230,8 @@ def _an_numeric(th_num, cs):
     "coefficients rescaled), a radical for degree <= 2 or a Root object otherwise, with the coefficients reduced "
     "modulo the minimal polynomial and padded; a rational theta gives the number; an approximate theta gives the "
     "numeric value; arithmetic (+, *, integer powers, rationals) between numbers with the same generator stays "
-    "in the field; N gives the numeric value")
+    "in the field; N gives the numeric value"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _algebraicnumber(th: Expr, cs: Expr) -> Expr:
     if not is_list(cs) or not cs.args:
         raise ValueError("AlgebraicNumber: the second argument must be a non-empty list of rational numbers")
@@ -367,7 +368,8 @@ def _field_of(a, fname):
 
 
 @fn("AlgebraicNumberPolynomial", **ADDED, listable=True, notes="AlgebraicNumberPolynomial[AlgebraicNumber[theta, "
-    "{c0, ..., cn}], x] = c0 + c1 x + ... + cn x^n; a rational number gives itself")
+    "{c0, ..., cn}], x] = c0 + c1 x + ... + cn x^n; a rational number gives itself"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _anpoly(a: Expr, x: Expr) -> Expr:
     if is_an(a):
         return ev(Expr("Plus", *[Expr("Times", c, Expr("Power", x, k)) for k, c in enumerate(a.args[1].args)]))
@@ -416,7 +418,8 @@ def _norm_trace(a, fname, opts, which):
 
 @fn("AlgebraicNumberNorm", **ADDED, notes="AlgebraicNumberNorm[a]: the norm of the algebraic number a over Q "
     "(product of its conjugates) in Q(a), or in Q(theta) for AlgebraicNumber[theta, ...]; Extension -> b gives "
-    "the norm in Q(b) (the minimal-polynomial norm to the power [Q(b):Q(a)])")
+    "the norm in Q(b) (the minimal-polynomial norm to the power [Q(b):Q(a)])"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _annorm(a: Expr, *opts: Option) -> Expr:
     pos, o = split_options(opts, ("Extension",), "AlgebraicNumberNorm")
     if pos:
@@ -427,7 +430,8 @@ def _annorm(a: Expr, *opts: Option) -> Expr:
 
 
 @fn("AlgebraicNumberTrace", **ADDED, notes="AlgebraicNumberTrace[a]: the trace of a over Q (sum of its "
-    "conjugates) in Q(a), or in Q(theta) for AlgebraicNumber[theta, ...]; Extension -> b gives the trace in Q(b)")
+    "conjugates) in Q(a), or in Q(theta) for AlgebraicNumber[theta, ...]; Extension -> b gives the trace in Q(b)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _antrace(a: Expr, *opts: Option) -> Expr:
     pos, o = split_options(opts, ("Extension",), "AlgebraicNumberTrace")
     if pos:
@@ -448,7 +452,8 @@ def _vp(n, p):
 
 
 @fn("AlgebraicNumberDenominator", **ADDED, listable=True, notes="the smallest positive integer d such that d a "
-    "is an algebraic integer")
+    "is an algebraic integer"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _anden(a: Expr) -> Expr:
     v = alg_value(a)
     if v is None:
@@ -479,7 +484,8 @@ def _monic_integer(v):
 
 
 @fn("AlgebraicIntegerQ", **ADDED, listable=True, notes="True if a is an algebraic integer (its minimal polynomial "
-    "is monic with integer coefficients); False for approximate numbers, transcendental numbers and symbols")
+    "is monic with integer coefficients); False for approximate numbers, transcendental numbers and symbols"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _algintq(a: Expr) -> Boolean:
     v = alg_value(a)
     if v is None:
@@ -491,7 +497,8 @@ def _algintq(a: Expr) -> Boolean:
 
 
 @fn("AlgebraicUnitQ", **ADDED, listable=True, notes="True if a is an algebraic unit: an algebraic integer whose "
-    "inverse is also an algebraic integer (monic minimal polynomial with constant term +-1)")
+    "inverse is also an algebraic integer (monic minimal polynomial with constant term +-1)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _algunitq(a: Expr) -> Boolean:
     v = alg_value(a)
     if v is None:
@@ -516,7 +523,8 @@ def _cyclotomic_order(P):
 
 
 @fn("RootOfUnityQ", **ADDED, listable=True, notes="True if a is a root of unity (its minimal polynomial is "
-    "cyclotomic); False for other numbers, approximate numbers and symbols")
+    "cyclotomic); False for other numbers, approximate numbers and symbols"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rootofunityq(a: Expr) -> Boolean:
     v = alg_value(a)
     if v is None:
@@ -554,7 +562,8 @@ def _to_nf(v, th):
     "AlgebraicNumber in Q(theta) (raising when a is not in the field); ToNumberField[a] = AlgebraicNumber[a, {0, "
     "1}] in Q(a); ToNumberField[{a1, a2, ...}] expresses all ai in a common field generated by a primitive element "
     "(the primitive element may differ from the Wolfram Language's choice); ToNumberField[list, theta] uses Q("
-    "theta); the All form is not supported")
+    "theta); the All form is not supported"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tonumberfield(a: Expr, th: Expr = None) -> Expr:
     if isinstance(th, Symbol) and th.name == "All":
         raise NotImplementedError("ToNumberField[a, All] is not supported")
@@ -627,7 +636,8 @@ def _check_field_arg(a, fname):
 
 
 @fn("NumberFieldDiscriminant", **ADDED, notes="discriminant of the ring of integers of Q(a) (Q(theta) for "
-    "AlgebraicNumber[theta, ...]), computed with the Round Two algorithm; threads over lists")
+    "AlgebraicNumber[theta, ...]), computed with the Round Two algorithm; threads over lists"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_field_listable
 def _nfdisc(a):
     _check_field_arg(a, "NumberFieldDiscriminant")
@@ -640,7 +650,8 @@ def _nfdisc(a):
 @fn("NumberFieldIntegralBasis", **ADDED, notes="an integral basis of the ring of integers of Q(a) (Round Two "
     "algorithm, Hermite-normal-form basis over the power basis of the canonical generator) as AlgebraicNumber "
     "objects (the first element 1); the basis may differ from the Wolfram Language's choice by a unimodular "
-    "change; threads over lists")
+    "change; threads over lists"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_field_listable
 def _nfbasis(a):
     _check_field_arg(a, "NumberFieldIntegralBasis")
@@ -652,7 +663,8 @@ def _nfbasis(a):
 
 
 @fn("NumberFieldSignature", **ADDED, notes="{r1, r2}: the numbers of real and of pairs of complex embeddings of "
-    "Q(a); threads over lists")
+    "Q(a); threads over lists"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_field_listable
 def _nfsig(a):
     _check_field_arg(a, "NumberFieldSignature")
@@ -713,7 +725,8 @@ def _real_quadratic(a, fname):
 
 @fn("NumberFieldFundamentalUnits", **ADDED, notes="fundamental units of the ring of integers of Q(a): for a real "
     "quadratic field the fundamental unit > 1 (as an AlgebraicNumber); {} for Q and imaginary quadratic fields; "
-    "fields of degree > 2 raise; threads over lists")
+    "fields of degree > 2 raise; threads over lists"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_field_listable
 def _nfunits(a):
     _check_field_arg(a, "NumberFieldFundamentalUnits")
@@ -726,7 +739,8 @@ def _nfunits(a):
 
 
 @fn("NumberFieldRegulator", **ADDED, notes="regulator of Q(a): Log of the fundamental unit for real quadratic "
-    "fields (exact), 1 for Q and imaginary quadratic fields; fields of degree > 2 raise; threads over lists")
+    "fields (exact), 1 for Q and imaginary quadratic fields; fields of degree > 2 raise; threads over lists"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_field_listable
 def _nfreg(a):
     _check_field_arg(a, "NumberFieldRegulator")
@@ -814,7 +828,8 @@ def _class_number_real(d):
 
 @fn("NumberFieldClassNumber", **ADDED, notes="class number of Q(a) for quadratic fields: reduced binary quadratic "
     "forms for imaginary fields and the analytic class number formula (with the exact fundamental unit) for real "
-    "fields; Q gives 1; fields of degree > 2 raise; threads over lists")
+    "fields; Q gives 1; fields of degree > 2 raise; threads over lists"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_field_listable
 def _nfclass(a):
     _check_field_arg(a, "NumberFieldClassNumber")
@@ -879,7 +894,8 @@ def root_reduce_value(v):
 @fn("RootReduce", **ADDED, listable=True, notes="RootReduce[expr] reduces an exact algebraic number (radicals, "
     "Root objects, AlgebraicNumber objects and their combinations) to a single rational number, a quadratic "
     "radical or a Root object; RootReduce[a == b] decides the equation; non-algebraic or symbolic expressions are "
-    "returned unchanged")
+    "returned unchanged"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rootreduce(x: Expr, *opts: Option) -> Expr:
     if opts:
         split_options(opts, ("Method",), "RootReduce")
@@ -921,7 +937,8 @@ def _apply_form(form, r):
 @fn("RootSum", **ADDED, notes="RootSum[f, form] = Sum[form[x], {x roots of f}] (with multiplicity): exact for "
     "rational functions form (via the partial-fraction RootSum algorithm), explicit when every irreducible "
     "factor of f has degree <= 2, numeric when f has approximate coefficients; otherwise unevaluated (N "
-    "evaluates it numerically)")
+    "evaluates it numerically)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rootsum(f: Fn, form: Fn) -> Expr:
     P = _function_poly(f, "RootSum")
     if any(isinstance(c, sp.Float) for c in P.all_coeffs()) or any(c.has(sp.Float) for c in P.all_coeffs()):
@@ -980,7 +997,8 @@ NT.N_PRE["RootSum"] = _num_rootsum
 @fn("RootApproximant", **ADDED, notes="RootApproximant[x] finds a simple algebraic number (rational, quadratic "
     "radical or Root object) approximating the number x to its precision, trying degrees 1, 2, ... (at most 8) "
     "with integer-relation (PSLQ) searches and accepting the first relation whose coefficients are small for the "
-    "precision; RootApproximant[x, n] restricts to degree <= n; raises when none is found")
+    "precision; RootApproximant[x, n] restricts to degree <= n; raises when none is found"
+    ". Check: reference (differential cases in tests/library).")
 def _rootapprox(x: Expr, n: Expr = None) -> Expr:
     import mpmath
     if not is_numeric_value(x):

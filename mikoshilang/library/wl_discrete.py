@@ -130,7 +130,8 @@ def _interval(comps):
 
 @fn("Interval", area=AREA, status="added",
     notes="canonical form only: endpoints ordered, components sorted and overlapping/touching components merged; "
-          "interval arithmetic is not implemented")
+          "interval arithmetic is not implemented"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _interval_fn(*args: Expr) -> Expr:
     if not args:
         raise Unevaluated()
@@ -168,7 +169,8 @@ def _interval_intersection(*ivs: Expr) -> Expr:
 
 
 @fn("IntervalMemberQ", area=AREA, status="added",
-    notes="False for symbolic x; an Interval x must lie within the union")
+    notes="False for symbolic x; an Interval x must lie within the union"
+          ". Check: reference (differential cases in tests/library).")
 def _interval_memberq(iv: Expr, x: Expr) -> Boolean:
     comps = _merge(_components(iv, "IntervalMemberQ"))
     if _head(x, "Interval"):
@@ -218,7 +220,8 @@ def _tidy(e, var_list):
 
 
 @fn("DifferenceDelta", area=AREA, status="added",
-    notes="n-th forward difference sum_k (-1)^(n-k) C(n,k) f(i + k h); result simplified (expanded when polynomial)")
+    notes="n-th forward difference sum_k (-1)^(n-k) C(n,k) f(i + k h); result simplified (expanded when polynomial)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _difference_delta(f: Expr, *specs: Expr) -> Expr:
     if is_list(f):
         return L(*(_difference_delta(x, *specs) for x in f.args))
@@ -240,7 +243,8 @@ def _discrete_shift(f: Expr, *specs: Expr) -> Expr:
 
 
 @fn("DiscreteRatio", area=AREA, status="added",
-    notes="iterated ratio r_{k+1}(i) = r_k(i + h) / r_k(i); simplified with combsimp/simplify")
+    notes="iterated ratio r_{k+1}(i) = r_k(i + h) / r_k(i); simplified with combsimp/simplify"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _discrete_ratio(f: Expr, *specs: Expr) -> Expr:
     if is_list(f):
         return L(*(_discrete_ratio(x, *specs) for x in f.args))
@@ -278,7 +282,8 @@ def _matpow(M, e):
 
 @fn("LinearRecurrence", area=AREA, status="added",
     notes="ker and init must have the same length (Wolfram's 'only the last Length[ker] values are used' case is "
-          "refused); {n} gives the n-th term, {nmin, nmax} needs 1 <= nmin <= nmax; matrix kernels are not supported")
+          "refused); {n} gives the n-th term, {nmin, nmax} needs 1 <= nmin <= nmax; matrix kernels are not supported"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _linear_recurrence(ker: ListOf[Expr], init: ListOf[Expr], spec: Expr) -> Expr:
     kl = list_arg(ker, "LinearRecurrence", "kernel", 1)
     il = list_arg(init, "LinearRecurrence", "initial values", 1)
@@ -358,7 +363,8 @@ def _berlekamp_massey(s):
 
 @fn("FindLinearRecurrence", area=AREA, status="added",
     notes="exact rational sequences only (Berlekamp-Massey); the minimal recurrence is returned only when the list "
-          "holds at least twice its order of terms; stays unevaluated otherwise")
+          "holds at least twice its order of terms; stays unevaluated otherwise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _find_linear_recurrence(lst: ListOf[Expr], dmax: Expr = None) -> ListOf[Expr]:
     items = list_arg(lst, "FindLinearRecurrence", "sequence", 1)
     vals = [_exact_rational(x) for x in items]
@@ -392,7 +398,8 @@ def _flat_eqs(e):
 
 @fn("RecurrenceTable", area=AREA, status="added",
     notes="explicit recurrences: each equation must contain exactly one term of maximal shift, which is solved "
-          "for; initial conditions are f[k] == value; iterator {n, nmax} (from 1) or {n, nmin, nmax}")
+          "for; initial conditions are f[k] == value; iterator {n, nmax} (from 1) or {n, nmin, nmax}"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _recurrence_table(eqns: Expr, expr: Expr, it: Expr) -> ListOf[Expr]:
     fname = "RecurrenceTable"
     if not (is_list(it) and len(it.args) in (2, 3) and isinstance(it.args[0], Symbol)):
@@ -599,7 +606,8 @@ def _periodic_out(terms):
 
 @fn("ContinuedFraction", area=AREA, status="added",
     notes="rationals exactly; quadratic irrationals as {a1, ..., {period}}; other exact reals need the term count "
-          "(certified at two precisions); inexact numbers give only the terms fixed by their precision")
+          "(certified at two precisions); inexact numbers give only the terms fixed by their precision"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _continued_fraction(x: Expr, n: Expr = None) -> Expr:
     fname = "ContinuedFraction"
     if n is not None:
@@ -637,7 +645,8 @@ def _continued_fraction(x: Expr, n: Expr = None) -> Expr:
 
 
 @fn("FromContinuedFraction", area=AREA, status="added",
-    notes="a trailing list is a period (gives the quadratic irrational); symbolic terms allowed for finite lists")
+    notes="a trailing list is a period (gives the quadratic irrational); symbolic terms allowed for finite lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _from_continued_fraction(lst: ListOf[Expr]) -> Expr:
     items = list_arg(lst, "FromContinuedFraction", "continued fraction", 1)
     if is_list(items[-1]):
@@ -657,7 +666,8 @@ def _from_continued_fraction(lst: ListOf[Expr]) -> Expr:
 
 
 @fn("Convergents", area=AREA, status="added",
-    notes="Convergents[list] for finite term lists (symbolic allowed); Convergents[x, n] via ContinuedFraction")
+    notes="Convergents[list] for finite term lists (symbolic allowed); Convergents[x, n] via ContinuedFraction"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _convergents(x: Expr, n: Expr = None) -> ListOf[Expr]:
     if is_list(x):
         if n is not None:
@@ -684,7 +694,8 @@ def _convergents(x: Expr, n: Expr = None) -> ListOf[Expr]:
 
 @fn("QuadraticIrrationalQ", area=AREA, status="added",
     notes="True for irrational real roots of rational quadratics; False for rationals, inexact and symbolic input "
-          "and non-real numbers; raises when algebraicity cannot be decided")
+          "and non-real numbers; raises when algebraicity cannot be decided"
+          ". Check: reference (differential cases in tests/library).")
 def _quadratic_irrational_q(x: Expr) -> Boolean:
     if isinstance(x, (str, bool)) or has_float(x):
         return False
@@ -759,18 +770,25 @@ def _shift_right(n, k):
     return n >> k if n >= 0 else -((-n) >> k)
 
 
-@fn("BitShiftLeft", area=AREA, status="added", listable=True, notes="negative shifts shift right (IntegerPart)")
+@fn("BitShiftLeft", area=AREA, status="added", listable=True, notes="negative shifts shift right (IntegerPart)"
+                                                                    ". Check: exact (exact input gives exact "
+                                                                    "results), reference (differential cases in "
+                                                                    "tests/library).")
 def _bitshiftleft(n: Integer, k: Integer = 1) -> Expr:
     return _shift_right(_bint(n, "BitShiftLeft"), -_bint(k, "BitShiftLeft", "shift"))
 
 
-@fn("BitShiftRight", area=AREA, status="added", listable=True, notes="IntegerPart[n / 2^k] (rounds toward zero)")
+@fn("BitShiftRight", area=AREA, status="added", listable=True, notes="IntegerPart[n / 2^k] (rounds toward zero)"
+                                                                     ". Check: exact (exact input gives exact "
+                                                                     "results), reference (differential cases in "
+                                                                     "tests/library).")
 def _bitshiftright(n: Integer, k: Integer = 1) -> Expr:
     return _shift_right(_bint(n, "BitShiftRight"), _bint(k, "BitShiftRight", "shift"))
 
 
 @fn("BitLength", area=AREA, status="added", listable=True,
-    notes="for negative n, the length of BitNot[n] (two's complement without the sign)")
+    notes="for negative n, the length of BitNot[n] (two's complement without the sign)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _bitlength(n: Integer) -> Expr:
     n = _bint(n, "BitLength")
     return n.bit_length() if n >= 0 else (-1 - n).bit_length()
@@ -804,7 +822,8 @@ def _bitflip(n: Integer, k: Integer) -> Expr:
 
 
 @fn("IntegerExponent", area=AREA, status="added", listable=True,
-    notes="default base 10; IntegerExponent[0, b] = Infinity; negative n uses |n|")
+    notes="default base 10; IntegerExponent[0, b] = Infinity; negative n uses |n|"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _integer_exponent(n: Integer, b: Integer = 10) -> Expr:
     n = int_arg(n, "IntegerExponent")
     b = int_arg(b, "IntegerExponent", "base")
@@ -876,7 +895,8 @@ def _ca_step_cyclic(row, r, table, fname):
 @fn("CellularAutomaton", area=AREA, status="added",
     notes="1D rules (number, {n, k}, {n, k, r} or explicit neighbourhood rules); init a cyclic list or "
           "{{cells}, background}; CellularAutomaton[rule, init] is one step, [rule, init, t] gives t + 1 rows "
-          "(the {{cells}, bg} form uses width m + 2 r t, Wolfram's default region)")
+          "(the {{cells}, bg} form uses width m + 2 r t, Wolfram's default region)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cellular_automaton(rule: Expr, init: Expr, t: Expr = None) -> ListOf[Expr]:
     fname = "CellularAutomaton"
     k, r, table = _ca_rule(rule, fname)
@@ -918,7 +938,8 @@ def _cellular_automaton(rule: Expr, init: Expr, t: Expr = None) -> ListOf[Expr]:
 
 @fn("SubstitutionSystem", area=AREA, status="added",
     notes="single-element rules on strings (character -> string) or lists (element -> list); "
-          "SubstitutionSystem[rule, init, t] gives t + 1 states; neighbourhood rules are not supported")
+          "SubstitutionSystem[rule, init, t] gives t + 1 states; neighbourhood rules are not supported"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _substitution_system(rules: Expr, init: Expr, t: Expr = None) -> Expr:
     fname = "SubstitutionSystem"
     rl = list(rules.args) if is_list(rules) else [rules]
@@ -971,7 +992,10 @@ def _thue_morse(n: NonNegInteger) -> Expr:
     return bin(n).count("1") % 2
 
 
-@fn("RudinShapiro", area=AREA, status="added", listable=True, notes="(-1)^(number of possibly overlapping 11 blocks)")
+@fn("RudinShapiro", area=AREA, status="added", listable=True, notes="(-1)^(number of possibly overlapping 11 blocks)"
+                                                                    ". Check: exact (exact input gives exact "
+                                                                    "results), reference (differential cases in "
+                                                                    "tests/library).")
 def _rudin_shapiro(n: NonNegInteger) -> Expr:
     n = nonneg_int(n, "RudinShapiro")
     return -1 if bin(n & (n >> 1)).count("1") % 2 else 1
@@ -994,7 +1018,8 @@ def _factorint(n, fname):
 
 
 @fn("SquareFreeQ", area=AREA, status="added",
-    notes="integers (0 is not square-free) and polynomials with integer content 1 (via sqf_list)")
+    notes="integers (0 is not square-free) and polynomials with integer content 1 (via sqf_list)"
+          ". Check: reference (differential cases in tests/library).")
 def _square_free_q(x: Expr, *rest: Expr) -> Boolean:
     if rest:
         raise NotImplementedError("SquareFreeQ: the GaussianIntegers / Modulus forms are not supported")
@@ -1024,7 +1049,8 @@ def _square_free_q(x: Expr, *rest: Expr) -> Boolean:
 
 
 @fn("PerfectNumberQ", area=AREA, status="added",
-    notes="even perfect numbers via the 48 known Mersenne prime exponents; odd n beyond 10^1500 raise")
+    notes="even perfect numbers via the 48 known Mersenne prime exponents; odd n beyond 10^1500 raise"
+          ". Check: reference (differential cases in tests/library).")
 def _perfect_number_q(x: Expr) -> Boolean:
     if not _intq(x):
         return False
@@ -1044,7 +1070,9 @@ def _perfect_number_q(x: Expr) -> Boolean:
     raise NotImplementedError("PerfectNumberQ: beyond the verified range of Mersenne primes")
 
 
-@fn("PerfectNumber", area=AREA, status="added", listable=True, notes="k <= 48 (verified Mersenne primes)")
+@fn("PerfectNumber", area=AREA, status="added", listable=True, notes="k <= 48 (verified Mersenne primes)"
+                                                                     ". Check: reference (differential cases in "
+                                                                     "tests/library).")
 def _perfect_number(k: PosInteger) -> Expr:
     k = pos_int(k, "PerfectNumber", "index")
     if k > len(_MERSENNE_EXPONENTS):
@@ -1054,7 +1082,10 @@ def _perfect_number(k: PosInteger) -> Expr:
     return (1 << (p - 1)) * ((1 << p) - 1)
 
 
-@fn("MersennePrimeExponent", area=AREA, status="added", listable=True, notes="k <= 48")
+@fn("MersennePrimeExponent", area=AREA, status="added", listable=True, notes="k <= 48"
+                                                                             ". Check: exact (exact input gives "
+                                                                             "exact results), reference "
+                                                                             "(differential cases in tests/library).")
 def _mersenne_exponent(k: PosInteger) -> Expr:
     k = pos_int(k, "MersennePrimeExponent", "index")
     if k > len(_MERSENNE_EXPONENTS):
@@ -1064,7 +1095,8 @@ def _mersenne_exponent(k: PosInteger) -> Expr:
 
 
 @fn("MersennePrimeExponentQ", area=AREA, status="added", listable=True,
-    notes="decided up to 57885161 and for composite n; larger primes raise")
+    notes="decided up to 57885161 and for composite n; larger primes raise"
+          ". Check: reference (differential cases in tests/library).")
 def _mersenne_exponent_q(x: Expr) -> Boolean:
     if not _intq(x):
         return False
@@ -1076,7 +1108,9 @@ def _mersenne_exponent_q(x: Expr) -> Boolean:
     raise NotImplementedError(f"MersennePrimeExponentQ: cannot decide primality of 2^{n} - 1")
 
 
-@fn("CompositeQ", area=AREA, status="added", listable=True, notes="integers; CompositeQ[-n] == CompositeQ[n]")
+@fn("CompositeQ", area=AREA, status="added", listable=True, notes="integers; CompositeQ[-n] == CompositeQ[n]"
+                                                                  ". Check: reference (differential cases in "
+                                                                  "tests/library).")
 def _composite_q(x: Expr) -> Boolean:
     if not _intq(x):
         if isinstance(x, (Symbol, Expr)) and not isinstance(x, bool):
@@ -1089,7 +1123,9 @@ def _composite_q(x: Expr) -> Boolean:
     return n > 1 and not sp.isprime(n)
 
 
-@fn("PrimeNu", area=AREA, status="added", listable=True, notes="number of distinct prime factors of |n|; 0 raises")
+@fn("PrimeNu", area=AREA, status="added", listable=True, notes="number of distinct prime factors of |n|; 0 raises"
+                                                               ". Check: exact (exact input gives exact results), "
+                                                               "reference (differential cases in tests/library).")
 def _prime_nu(x: Integer) -> Integer:
     n = int_arg(x, "PrimeNu")
     if n == 0:
@@ -1098,7 +1134,8 @@ def _prime_nu(x: Integer) -> Integer:
 
 
 @fn("PrimeOmega", area=AREA, status="added", listable=True,
-    notes="prime factors of |n| counted with multiplicity; 0 raises")
+    notes="prime factors of |n| counted with multiplicity; 0 raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _prime_omega(x: Integer) -> Expr:
     n = int_arg(x, "PrimeOmega")
     if n == 0:
@@ -1107,7 +1144,8 @@ def _prime_omega(x: Integer) -> Expr:
 
 
 @fn("Divisible", area=AREA, status="added", listable=True,
-    notes="exact numbers: n/m an integer (Gaussian integer for complex input)")
+    notes="exact numbers: n/m an integer (Gaussian integer for complex input)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _divisible(n: Expr, m: Expr) -> Boolean:
     a, b = S(n), S(m)
     for v in (a, b):
@@ -1124,7 +1162,9 @@ def _divisible(n: Expr, m: Expr) -> Boolean:
     return bool(re.is_Integer and im.is_Integer)
 
 
-@fn("CoprimeQ", area=AREA, status="added", listable=True, notes="pairwise coprime integers")
+@fn("CoprimeQ", area=AREA, status="added", listable=True, notes="pairwise coprime integers"
+                                                                ". Check: reference (differential cases in "
+                                                                "tests/library).")
 def _coprime_q(*xs: Expr) -> Boolean:
     if len(xs) < 2:
         raise ValueError("CoprimeQ: needs at least two integers")
@@ -1133,7 +1173,8 @@ def _coprime_q(*xs: Expr) -> Boolean:
 
 
 @fn("NumberExpand", area=AREA, status="added",
-    notes="integers only: digit values d b^k, sign carried by every term; length pads with leading zeros")
+    notes="integers only: digit values d b^k, sign carried by every term; length pads with leading zeros"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _number_expand(x: Integer, b: Integer = 10, length: Expr = None) -> ListOf[Expr]:
     n = int_arg(x, "NumberExpand", "number")
     b = int_arg(b, "NumberExpand", "base")
@@ -1155,7 +1196,8 @@ def _number_expand(x: Integer, b: Integer = 10, length: Expr = None) -> ListOf[E
 
 
 @fn("NumberDigit", area=AREA, status="added", listable=True,
-    notes="digit of |x| multiplying b^n; exact reals only (irrationals certified at two precisions)")
+    notes="digit of |x| multiplying b^n; exact reals only (irrationals certified at two precisions)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _number_digit(x: Expr, n: Integer, b: Integer = 10) -> Expr:
     n = int_arg(n, "NumberDigit", "position")
     b = int_arg(b, "NumberDigit", "base")
@@ -1185,7 +1227,9 @@ def _number_digit(x: Expr, n: Integer, b: Integer = 10) -> Expr:
     return int(q.numerator // q.denominator) % b
 
 
-@fn("SquaresR", area=AREA, status="added", listable=True, notes="d <= 200, n <= 10^5 (exact counting)")
+@fn("SquaresR", area=AREA, status="added", listable=True, notes="d <= 200, n <= 10^5 (exact counting)"
+                                                                ". Check: exact (exact input gives exact results), "
+                                                                "reference (differential cases in tests/library).")
 def _squares_r(d: PosInteger, n: Integer) -> Expr:
     d = pos_int(d, "SquaresR", "dimension")
     n = int_arg(n, "SquaresR")
@@ -1213,7 +1257,8 @@ def _squares_r(d: PosInteger, n: Integer) -> Expr:
 
 
 @fn("PowersRepresentations", area=AREA, status="added",
-    notes="non-decreasing k-tuples of non-negative integers whose p-th powers sum to n, in lexicographic order")
+    notes="non-decreasing k-tuples of non-negative integers whose p-th powers sum to n, in lexicographic order"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _powers_representations(n: NonNegInteger, k: PosInteger, p: PosInteger) -> ListOf[Expr]:
     n = nonneg_int(n, "PowersRepresentations")
     k = pos_int(k, "PowersRepresentations", "number of terms")
@@ -1238,7 +1283,8 @@ def _powers_representations(n: NonNegInteger, k: PosInteger, p: PosInteger) -> L
 
 
 @fn("PrimitiveRootList", area=AREA, status="added", listable=True,
-    notes="sorted primitive roots modulo n; {} when none exist; n <= 10^7")
+    notes="sorted primitive roots modulo n; {} when none exist; n <= 10^7"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _primitive_root_list(n: PosInteger) -> ListOf[Expr]:
     n = pos_int(n, "PrimitiveRootList", "modulus")
     if n == 1:
@@ -1254,7 +1300,8 @@ def _primitive_root_list(n: PosInteger) -> ListOf[Expr]:
 
 
 @fn("PowerModList", area=AREA, status="added",
-    notes="all x in [0, m) with x^q == a^p (mod m) for s = p/q; brute force for m <= 10^6")
+    notes="all x in [0, m) with x^q == a^p (mod m) for s = p/q; brute force for m <= 10^6"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _power_mod_list(a: Integer, s: Expr, m: PosInteger) -> ListOf[Expr]:
     a = int_arg(a, "PowerModList")
     m = pos_int(m, "PowerModList", "modulus")
@@ -1278,7 +1325,8 @@ def _power_mod_list(a: Integer, s: Expr, m: PosInteger) -> ListOf[Expr]:
 
 
 @fn("MantissaExponent", area=AREA, status="added", listable=True,
-    notes="{m, e} with 1/b <= |m| < 1 and x == m b^e; exact input stays exact; MantissaExponent[0] = {0, 0}")
+    notes="{m, e} with 1/b <= |m| < 1 and x == m b^e; exact input stays exact; MantissaExponent[0] = {0, 0}"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mantissa_exponent(x: Expr, b: Expr = 10) -> ListOf[Expr]:
     bb = int_arg(b, "MantissaExponent", "base") if not has_float(b) else None
     if bb is None or bb < 2:

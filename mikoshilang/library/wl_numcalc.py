@@ -147,7 +147,8 @@ def _quad_method(opts):
     notes="numerical integration NIntegrate[f, {x, a, b}, {y, c, d}, ...] (later limits may depend on earlier "
           "variables, Wolfram order), infinite ranges, intermediate points {x, a, x1, ..., b} for interior "
           "singularities, complex-valued integrands and complex contours; WorkingPrecision -> p for arbitrary "
-          "precision (mpmath tanh-sinh / Gauss-Legendre: Method -> \"DoubleExponential\" | \"GaussKronrod\")")
+          "precision (mpmath tanh-sinh / Gauss-Legendre: Method -> \"DoubleExponential\" | \"GaussKronrod\")"
+          ". Check: reference (differential cases in tests/library).")
 def _nintegrate(f: Expr, *rest: Expr) -> Expr:
     pos, opts, prec, dps = _opts(rest, "NIntegrate", ("WorkingPrecision", "Method"), goals=True)
     if not pos:
@@ -251,13 +252,15 @@ def _nsum_like(f, rest, fname, op):
 @fn("NSum", area=AREA, status="added",
     notes="NSum[f, {n, nmin, nmax}] and {n, nmin, nmax, dn}, multiple iterators, nmax = Infinity (mpmath nsum: "
           "Richardson/Shanks/Euler-Maclaurin acceleration, alternating series); WorkingPrecision -> p; finite "
-          "short ranges are summed directly; divergent sums raise")
+          "short ranges are summed directly; divergent sums raise"
+          ". Check: reference (differential cases in tests/library).")
 def _nsum(f: Expr, *rest: Expr) -> Expr:
     return _nsum_like(f, rest, "NSum", "sum")
 
 
 @fn("NProduct", area=AREA, status="added",
-    notes="NProduct[f, {n, nmin, nmax}] (also infinite products, mpmath nprod); WorkingPrecision -> p")
+    notes="NProduct[f, {n, nmin, nmax}] (also infinite products, mpmath nprod); WorkingPrecision -> p"
+          ". Check: reference (differential cases in tests/library).")
 def _nproduct(f: Expr, *rest: Expr) -> Expr:
     return _nsum_like(f, rest, "NProduct", "prod")
 
@@ -305,7 +308,8 @@ def _numval(v, prec, dps):
 @fn("NSolve", area=AREA, status="added",
     notes="NSolve[eqns, vars] numerical solutions of polynomial (and rational) equations and systems as "
           "{{x -> x1}, ...} with every complex root repeated by multiplicity; NSolve[eqns, vars, Reals] keeps real "
-          "solutions; WorkingPrecision -> p; transcendental equations raise (use FindRoot)")
+          "solutions; WorkingPrecision -> p; transcendental equations raise (use FindRoot)"
+          ". Check: reference (differential cases in tests/library).")
 def _nsolve(eqs: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts, prec, dps = _opts(rest, "NSolve")
     exprs = _equations(eqs, "NSolve")
@@ -367,7 +371,8 @@ def _tocomplex(v):
 
 @fn("NRoots", area=AREA, status="added",
     notes="NRoots[poly == 0, x] gives x == r1 || x == r2 || ... with roots repeated by multiplicity (machine "
-          "precision, or the precision of approximate coefficients); non-polynomials raise")
+          "precision, or the precision of approximate coefficients); non-polynomials raise"
+          ". Check: reference (differential cases in tests/library).")
 def _nroots(eq: Expr, x: Var, *rest: Expr) -> Expr:
     pos, opts, prec, dps = _opts(rest, "NRoots")
     exprs = _equations(eq, "NRoots")
@@ -386,7 +391,8 @@ def _nroots(eq: Expr, x: Var, *rest: Expr) -> Expr:
 @fn("FindRoot", area=AREA, status="added",
     notes="FindRoot[f, {x, x0}] / [lhs == rhs, {x, x0}] / {x, x0, x1} (secant) / {x, x0, xmin, xmax} (bounded) "
           "and systems FindRoot[{eqs}, {{x, x0}, {y, y0}}] -> {x -> root, ...}; complex starting values search "
-          "in the complex plane; WorkingPrecision -> p; raises when no root is found")
+          "in the complex plane; WorkingPrecision -> p; raises when no root is found"
+          ". Check: reference (differential cases in tests/library).")
 def _findroot(eqs: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts, prec, dps = _opts(rest, "FindRoot", ("WorkingPrecision", "MaxIterations"))
     steps = _max_iterations(opts, "FindRoot")
@@ -458,7 +464,8 @@ def _findroot(eqs: Expr, *rest: Expr) -> ListOf[Expr]:
 
 @fn("FindMaximum", area=AREA, status="added",
     notes="FindMaximum[f, {x, x0}] / {{x, x0}, {y, y0}} -> {fmax, {x -> xmax, ...}}: FindMinimum of -f (local, "
-          "BFGS); non-convergence raises")
+          "BFGS); non-convergence raises"
+          ". Check: reference (differential cases in tests/library).")
 def _findmax(f: Expr, *rest: Expr) -> ListOf[Expr]:
     out = ev(Expr("FindMinimum", Expr("Times", -1, f), *rest))
     if not (isinstance(out, Expr) and out.head == "List" and len(out.args) == 2):
@@ -601,7 +608,8 @@ def _nminimize(f, vs, fname, sense):
     notes="NMinimize[f, vars] / NMinimize[{f, cons}, vars] -> {fmin, {x -> x*, ...}}: global numeric search "
           "(differential evolution when every variable is bounded, plus 40 seeded multi-start SLSQP/BFGS local "
           "searches; constraints: <, <=, >, >=, ==, Inequality, And); like Wolfram's it is a heuristic global "
-          "method; integer domains raise")
+          "method; integer domains raise"
+          ". Check: reference (differential cases in tests/library).")
 def _nmin(f: Expr, vs: Expr, *rest: Expr) -> Expr:
     _nmin_rest(rest, "NMinimize")
     return _nminimize(f, vs, "NMinimize", "min")
@@ -618,7 +626,8 @@ def _nmin_rest(rest: tuple, fname: str) -> None:
 
 
 @fn("NMaximize", area=AREA, status="added",
-    notes="NMaximize[f, vars] / [{f, cons}, vars] -> {fmax, {x -> x*, ...}} (NMinimize of -f)")
+    notes="NMaximize[f, vars] / [{f, cons}, vars] -> {fmax, {x -> x*, ...}} (NMinimize of -f)"
+          ". Check: reference (differential cases in tests/library).")
 def _nmax(f: Expr, vs: Expr, *rest: Expr) -> Expr:
     _nmin_rest(rest, "NMaximize")
     return _nminimize(f, vs, "NMaximize", "max")

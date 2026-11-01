@@ -45,7 +45,8 @@ def _cplx_out(vals, inexact):
 
 @fn("FFT", "DFT", "FourierDFT", "DiscreteFourierTransform", area=AREA, status="fixed",
     notes="X_k = Σ x_j e^(-2πi jk/n) (NumPy fft convention; Wolfram Fourier[] differs by 1/√n and sign); exact "
-          "for exact input (n ≤ 64), complex floats otherwise; legacy FFT rounded results to 6 digits")
+          "for exact input (n ≤ 64), complex floats otherwise; legacy FFT rounded results to 6 digits"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fft(x):
     vals, inexact = _seq(x, "FFT")
     out, inexact = _dft(vals, inexact, -1)
@@ -53,7 +54,8 @@ def _fft(x):
 
 
 @fn("InverseFFT", area=AREA, status="fixed",
-    notes="x_j = (1/n) Σ X_k e^(2πi jk/n) (NumPy ifft); legacy discarded imaginary parts and rounded")
+    notes="x_j = (1/n) Σ X_k e^(2πi jk/n) (NumPy ifft); legacy discarded imaginary parts and rounded"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ifft(x):
     vals, inexact = _seq(x, "InverseFFT")
     out, inexact = _dft(vals, inexact, 1)
@@ -81,16 +83,19 @@ def _trig_tf(fname, kernel):
 
 
 fn("DCT", "DiscreteCosineTransform", area=AREA, status="verified",
-   notes="unnormalised DCT-II, y_k = 2 Σ x_j cos(πk(2j+1)/(2n)) (SciPy dct default); exact for exact input")(
+   notes="unnormalised DCT-II, y_k = 2 Σ x_j cos(πk(2j+1)/(2n)) (SciPy dct default); exact for exact input"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(
     _trig_tf("DCT", lambda m, j, k, n: m.cos(m.pi * k * (2 * j + 1) / (2 * n))))
 fn("DST", "DiscreteSineTransform", area=AREA, status="verified",
-   notes="unnormalised DST-II, y_k = 2 Σ x_j sin(π(k+1)(2j+1)/(2n)) (SciPy dst default); exact for exact input")(
+   notes="unnormalised DST-II, y_k = 2 Σ x_j sin(π(k+1)(2j+1)/(2n)) (SciPy dst default); exact for exact input"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(
     _trig_tf("DST", lambda m, j, k, n: m.sin(m.pi * (k + 1) * (2 * j + 1) / (2 * n))))
 
 
 @fn("HilbertTransform", area=AREA, status="fixed",
     notes="discrete Hilbert transform H[x] (imaginary part of SciPy's analytic signal); floats; legacy returned "
-          "the complex analytic signal x + iH[x] under this name")
+          "the complex analytic signal x + iH[x] under this name"
+          ". Check: reference (differential cases in tests/library).")
 def _hilbert(x):
     vals, _ = _real_seq(x, "HilbertTransform")
     n = len(vals)
@@ -109,7 +114,8 @@ def _hilbert(x):
 
 
 @fn("Convolve", "Convolution", area=AREA, status="fixed",
-    notes="full linear convolution (NumPy convolve 'full'), exact for exact input; legacy rounded to 10 digits")
+    notes="full linear convolution (NumPy convolve 'full'), exact for exact input; legacy rounded to 10 digits"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _conv(a, b):
     xa, fa = _seq(a, "Convolve")
     xb, fb = _seq(b, "Convolve")
@@ -125,7 +131,8 @@ def _conv(a, b):
 @fn("WaveletTransform", area=AREA, status="fixed",
     notes="WaveletTransform[list] or [list, \"Haar\"|\"db1\"]: full Haar decomposition {cA_n, cD_n, ..., cD_1} "
           "(PyWavelets wavedec ordering, orthonormal 1/√2 scaling), exact; length must be a power of 2; other "
-          "wavelets raise (legacy needed PyWavelets, which is not a dependency)")
+          "wavelets raise (legacy needed PyWavelets, which is not a dependency)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _wavelet(x, w="Haar"):
     if w not in ("Haar", "haar", "db1"):
         raise NotImplementedError(f"WaveletTransform: only the Haar (db1) wavelet is supported, not {w!r}")
@@ -228,7 +235,8 @@ def _lt(e, t, s):
 
 
 @fn("InverseLaplaceTransform", area=AREA, status="fixed",
-    notes="inverse Laplace transform for t > 0 (Wolfram form); legacy kept SymPy's HeavisideTheta[t] factor")
+    notes="inverse Laplace transform for t > 0 (Wolfram form); legacy kept SymPy's HeavisideTheta[t] factor"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ilt(e, s, t):
     F, sv, tv = _cont("InverseLaplaceTransform", e, s, t)
     tp = sp.Symbol(tv.name, positive=True)
@@ -240,7 +248,8 @@ def _ilt(e, s, t):
 
 @fn("ZTransform", area=AREA, status="fixed",
     notes="Wolfram ZTransform[f, n, z] = Σ_{n=0}^∞ f(n) z^(-n) via symbolic summation (convergence "
-          "conditions dropped); unevaluated when the sum has no closed form; legacy always returned itself")
+          "conditions dropped); unevaluated when the sum has no closed form; legacy always returned itself"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _zt(e, n, z):
     f, nv, zv = _cont("ZTransform", e, n, z)
     k = sp.Symbol(nv.name, integer=True, nonnegative=True)
@@ -257,7 +266,9 @@ def _zt(e, n, z):
           "partial fractions in w = 1/z give c/(1 - p w)^k -> c Binomial[n + k - 1, k - 1] p^n and c w^m -> "
           "c DiscreteDelta[n - m]; F must stay finite as z -> Infinity (causal sequence). Every result is checked "
           "against the first 12 coefficients of the series of F at z = Infinity. Non-rational F stays "
-          "unevaluated; legacy returned the input")
+          "unevaluated; legacy returned the input"
+          ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
+          "in tests/library).")
 def _izt(e, z, n):
     F = sym(e, "InverseZTransform")
     zv, nv = variable(z, "InverseZTransform"), variable(n, "InverseZTransform")

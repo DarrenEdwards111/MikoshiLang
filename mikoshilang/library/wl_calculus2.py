@@ -207,7 +207,8 @@ def _symspec_ok(s, rank, fname):
 
 @fn("Vectors", area=AREA, status="added",
     notes="Vectors[n] / Vectors[n, dom]: the domain of length-n vectors (dom Complexes by default, Reals, ...); inert "
-          "domain used with Element and VectorSymbol; malformed specifications raise")
+          "domain used with Element and VectorSymbol; malformed specifications raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _vectors(n: NonNegInteger, dom: Expr = None) -> Expr:
     _dim_ok(n, "Vectors")
     if dom is not None:
@@ -217,7 +218,8 @@ def _vectors(n: NonNegInteger, dom: Expr = None) -> Expr:
 
 @fn("Matrices", area=AREA, status="added",
     notes="Matrices[{m, n}] / Matrices[{m, n}, dom] / Matrices[{m, n}, dom, sym]: the domain of m x n matrices "
-          "(sym a Symmetric/Antisymmetric/Hermitian/... specification); inert; malformed specifications raise")
+          "(sym a Symmetric/Antisymmetric/Hermitian/... specification); inert; malformed specifications raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _matrices(dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
     d = _dims_ok(dims, "Matrices")
     if len(d) != 2:
@@ -231,7 +233,8 @@ def _matrices(dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
 
 @fn("Arrays", area=AREA, status="added",
     notes="Arrays[{d1, ..., dk}] / Arrays[dims, dom] / Arrays[dims, dom, sym]: the domain of arrays of the given "
-          "dimensions; inert; malformed specifications raise")
+          "dimensions; inert; malformed specifications raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arrays(dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
     d = _dims_ok(dims, "Arrays")
     if dom is not None:
@@ -244,7 +247,8 @@ def _arrays(dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
 @fn("VectorSymbol", area=AREA, status="added",
     notes="VectorSymbol[\"v\"] / VectorSymbol[\"v\", n] / VectorSymbol[\"v\", {n}] / VectorSymbol[\"v\", n, dom]: a "
           "symbolic vector of length n (inert; used by ArrayExpand, ArraySimplify, TensorDimensions-style functions "
-          "in this module); bad arguments raise")
+          "in this module); bad arguments raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _vectorsymbol(name: String | Var, n: Expr = None, dom: Expr = None) -> Expr:
     if not isinstance(name, (str, Symbol)):
         raise ValueError("VectorSymbol: the name must be a string or a symbol")
@@ -262,7 +266,8 @@ def _vectorsymbol(name: String | Var, n: Expr = None, dom: Expr = None) -> Expr:
 
 @fn("MatrixSymbol", area=AREA, status="added",
     notes="MatrixSymbol[\"A\", {m, n}] / [.., dom] / [.., dom, sym]: a symbolic m x n matrix (inert); ArrayExpand / "
-          "ArraySimplify treat it as a SymPy MatrixSymbol (symmetry Symmetric[{1, 2}] makes Transpose[A] = A)")
+          "ArraySimplify treat it as a SymPy MatrixSymbol (symmetry Symmetric[{1, 2}] makes Transpose[A] = A)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _matrixsymbol(name: String | Var, dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
     if not isinstance(name, (str, Symbol)):
         raise ValueError("MatrixSymbol: the name must be a string or a symbol")
@@ -278,7 +283,8 @@ def _matrixsymbol(name: String | Var, dims: ListOf[Expr], dom: Expr = None, symm
 
 @fn("ArraySymbol", area=AREA, status="added",
     notes="ArraySymbol[\"A\", dims] / [.., dom] / [.., dom, sym]: a symbolic array (inert); rank-1 and rank-2 "
-          "ArraySymbols take part in ArrayExpand / ArraySimplify like VectorSymbol / MatrixSymbol")
+          "ArraySymbols take part in ArrayExpand / ArraySimplify like VectorSymbol / MatrixSymbol"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arraysymbol(name: String | Var, dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
     if not isinstance(name, (str, Symbol)):
         raise ValueError("ArraySymbol: the name must be a string or a symbol")
@@ -620,7 +626,8 @@ def _array_simp(e, fname, simplify):
           "(rank <= 2) and Symbolic*Array with Plus, Times, Dot, Transpose, Inverse, MatrixPower, Tr, Det: "
           "distributes Dot over Plus, Transpose[a.b] -> Transpose[b].Transpose[a], Transpose[a + b] -> ..., "
           "Inverse[a.b] -> Inverse[b].Inverse[a] (SymPy matrix expressions); explicit arrays are expanded "
-          "elementwise; anything else raises")
+          "elementwise; anything else raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arrayexpand(e: Expr, *rest: Expr) -> Expr:
     pos, _o = _opts(rest, {"Assumptions"}, "ArrayExpand")
     if pos:
@@ -632,7 +639,8 @@ def _arrayexpand(e: Expr, *rest: Expr) -> Expr:
     notes="ArraySimplify[expr]: simplifies symbolic-array expressions (Transpose[Transpose[a]] -> a, "
           "a.Inverse[a] -> identity, a.SymbolicIdentityArray[{n}] -> a, a.SymbolicZerosArray -> zeros, "
           "Transpose[a] -> a for MatrixSymbol[.., Symmetric[{1, 2}]] and -a for Antisymmetric) via SymPy matrix "
-          "expressions; explicit arrays are simplified elementwise")
+          "expressions; explicit arrays are simplified elementwise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arraysimplify(e: Expr, *rest: Expr) -> Expr:
     pos, _o = _opts(rest, {"Assumptions"}, "ArraySimplify")
     if pos:
@@ -696,7 +704,8 @@ def _permute(A, perm):
           "symmetry group is the full symmetric group on a set of slots (the others fixed), ZeroSymmetric[{1, ..., "
           "r}] for a zero array, {} for none, else a generating set {{Cycles[..], phase}, ...} (phases +-1 or roots of unity); also reads the "
           "symmetry of MatrixSymbol/ArraySymbol and SymbolicIdentityArray; TensorSymmetry[t, slots] restricts to "
-          "the given slots")
+          "the given slots"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tensorsymmetry(t: Expr, slots: Expr = None) -> Expr:
     if _head(t) and t.head in ("MatrixSymbol", "ArraySymbol"):
         if len(t.args) == 4:
@@ -781,7 +790,8 @@ def _antisym_wedge(A, rank):
 @fn("TensorWedge", area=AREA, status="added",
     notes="TensorWedge[t1, t2, ...]: the exterior product of explicit antisymmetric arrays of equal dimension, "
           "normalized as (p + q)!/(p! q!) Alt(t1 (x) t2) (TensorWedge[{a1, a2}, {b1, b2}] = "
-          "{{0, a1 b2 - a2 b1}, {a2 b1 - a1 b2, 0}}); scalars multiply; symbolic arguments stay unevaluated")
+          "{{0, a1 b2 - a2 b1}, {a2 b1 - a1 b2, 0}}); scalars multiply; symbolic arguments stay unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tensorwedge(*ts: Expr) -> Expr:
     if not ts:
         return 1
@@ -828,7 +838,8 @@ def _tensorwedge(*ts: Expr) -> Expr:
           "(1/k!) LeviCivita_{i1..ik j1..j(n-k)} t_{i1..ik} (t is antisymmetrized in effect); HodgeDual[{a, b, c}] = "
           "{{0, c, -b}, {-c, 0, a}, {b, -a, 0}}; HodgeDual[x, n] for a scalar is x LeviCivitaTensor[n]; "
           "HodgeDual[t, n, slots] dualizes the given slots (the others become the last slots of the result); "
-          "previously quarantined")
+          "previously quarantined"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hodgedual(t: Expr, n: Expr = None, slots: Expr = None) -> Expr:
     if not is_list(t):
         if _contains_symarray(t) or (isinstance(t, Symbol) and n is None):
@@ -916,7 +927,8 @@ def _texpand(e):
 @fn("TensorExpand", area=AREA, status="added",
     notes="TensorExpand[expr]: distributes TensorProduct, TensorWedge and Dot over Plus and pulls numeric factors "
           "out of them (multilinearity), recursively; symbolic factors are treated as tensors (numeric coefficients "
-          "only are scalars), so the result is valid for any ranks")
+          "only are scalars), so the result is valid for any ranks"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tensorexpand(e: Expr, *rest: Expr) -> Expr:
     pos, _o = _opts(rest, {"Assumptions"}, "TensorExpand")
     if pos:
@@ -975,7 +987,8 @@ def _treduce(e):
 @fn("TensorReduce", area=AREA, status="added",
     notes="TensorReduce[expr]: canonical form of tensor polynomials: TensorExpand, then TensorWedge factors of known "
           "rank (VectorSymbol, MatrixSymbol, ArraySymbol) are sorted with the Koszul sign (-1)^(p q), a repeated "
-          "odd-rank factor gives 0, and like terms are collected; explicit arrays evaluate directly")
+          "odd-rank factor gives 0, and like terms are collected; explicit arrays evaluate directly"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tensorreduce(e: Expr, *rest: Expr) -> Expr:
     pos, _o = _opts(rest, {"Assumptions"}, "TensorReduce")
     if pos:
@@ -1047,28 +1060,32 @@ def _points_map(x, f, n, fname):
 
 @fn("ToPolarCoordinates", area=AREA, status="added",
     notes="ToPolarCoordinates[{x, y}] = {Sqrt[x^2 + y^2], ArcTan[x, y]}; {x1, ..., xn} -> hyperspherical {r, "
-          "ArcCos[x1/Sqrt[x1^2 + ... + xn^2]], ..., ArcTan[x(n-1), xn]}; threads over a list of points")
+          "ArcCos[x1/Sqrt[x1^2 + ... + xn^2]], ..., ArcTan[x(n-1), xn]}; threads over a list of points"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _topolar(x: Expr) -> Expr:
     return _points_map(x, _to_polar, None, "ToPolarCoordinates")
 
 
 @fn("FromPolarCoordinates", area=AREA, status="added",
     notes="FromPolarCoordinates[{r, t}] = {r Cos[t], r Sin[t]}; {r, t1, ..., t(n-1)} -> {r Cos[t1], r Sin[t1] "
-          "Cos[t2], ..., r Sin[t1] ... Sin[t(n-1)]}; threads over a list of points")
+          "Cos[t2], ..., r Sin[t1] ... Sin[t(n-1)]}; threads over a list of points"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _frompolar(x: Expr) -> Expr:
     return _points_map(x, _from_polar, None, "FromPolarCoordinates")
 
 
 @fn("ToSphericalCoordinates", area=AREA, status="added",
     notes="ToSphericalCoordinates[{x, y, z}] = {Sqrt[x^2 + y^2 + z^2], ArcTan[z, Sqrt[x^2 + y^2]], ArcTan[x, y]} "
-          "(radius, polar angle from the z axis, azimuth); threads over a list of points")
+          "(radius, polar angle from the z axis, azimuth); threads over a list of points"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tosph(x: Expr) -> Expr:
     return _points_map(x, _to_sph, 3, "ToSphericalCoordinates")
 
 
 @fn("FromSphericalCoordinates", area=AREA, status="added",
     notes="FromSphericalCoordinates[{r, t, p}] = {r Cos[p] Sin[t], r Sin[t] Sin[p], r Cos[t]}; threads over a list "
-          "of points")
+          "of points"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fromsph(x: Expr) -> Expr:
     return _points_map(x, _from_sph, 3, "FromSphericalCoordinates")
 
@@ -1129,7 +1146,8 @@ def _transform_spec(t, fname):
 @fn("CoordinateTransform", area=AREA, status="added",
     notes="CoordinateTransform[\"chart1\" -> \"chart2\", pt]: the coordinates of pt in chart2 (charts Cartesian, "
           "Polar (n-dimensional hyperspherical), Spherical, Cylindrical; {\"chart\", n} gives the dimension); "
-          "threads over a list of points")
+          "threads over a list of points"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _coordtransform(t: Rule, pt: Expr) -> Expr:
     a, b, d = _transform_spec(t, "CoordinateTransform")
 
@@ -1187,7 +1205,8 @@ def _positive_assume(nm, syms):
     notes="TransformedField[\"chart1\" -> \"chart2\", f, {x1, ...} -> {y1, ...}]: a scalar field f (expression) or a "
           "vector field (list of components in the orthonormal frame of chart1) re-expressed in chart2 "
           "coordinates {y1, ...} (charts Cartesian, Polar, Spherical, Cylindrical); simplification assumes the "
-          "standard chart ranges (r > 0, polar angles in (0, Pi)); rank >= 2 tensor fields raise")
+          "standard chart ranges (r > 0, polar angles in (0, Pi)); rank >= 2 tensor fields raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _transformedfield(t: Rule, f: Expr, vars_: Expr) -> Expr:
     a, b, d = _transform_spec(t, "TransformedField")
     if not (is_rule(vars_) and is_list(vars_.args[0]) and is_list(vars_.args[1])):
@@ -1228,7 +1247,8 @@ def _speed_norm(v, t):
 @fn("FrenetSerretSystem", area=AREA, status="added",
     notes="FrenetSerretSystem[{x[t], y[t]}, t] = {{k}, {T, N}} with the signed curvature k = (x' y'' - y' x'')/|r'|^3 "
           "and N = T rotated by Pi/2; FrenetSerretSystem[{x, y, z}, t] = {{k, tau}, {T, N, B}} (curvature, torsion, "
-          "tangent, normal, binormal); t is assumed real; curves of other dimensions raise")
+          "tangent, normal, binormal); t is assumed real; curves of other dimensions raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _frenet(c: Expr, t: Var) -> ListOf[Expr]:
     xs = _vec(c, "FrenetSerretSystem")
     tv = _svar(t, "FrenetSerretSystem")
@@ -1739,7 +1759,8 @@ def _run_asym(f, x, x0, order, fname, discrete=False):
     notes="Asymptotic[f, x -> x0]: the leading term of the asymptotic expansion (verified: f/term -> 1); "
           "Asymptotic[f, {x, x0, n}]: the expansion to order n; SeriesTermGoal -> k: the first k terms (Taylor, Laurent or Puiseux "
           "at finite x0; at Infinity down to x^-n, with exponential/power prefactors and Stirling-type expansions "
-          "of Gamma, Factorial, Binomial, HarmonicNumber via LogGamma); unexpandable input raises")
+          "of Gamma, Factorial, Binomial, HarmonicNumber via LogGamma); unexpandable input raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("Asymptotic")
 def _asymptotic(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "Asymptotic")
@@ -1753,7 +1774,8 @@ def _asymptotic(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     notes="DiscreteAsymptotic[f, n -> Infinity] / {n, Infinity, k}: asymptotic approximation of a sequence (n an "
           "integer): Fibonacci, LucasL, factorials, binomials, HarmonicNumber, CatalanNumber are rewritten "
           "(Binet, Stirling/LogGamma), (-1)^n-type factors are kept as oscillating factors; dominated terms are "
-          "dropped; leading terms are verified")
+          "dropped; leading terms are verified"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("DiscreteAsymptotic")
 def _discasym(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "DiscreteAsymptotic")
@@ -2003,21 +2025,24 @@ def _disc_wrap(f, spec, rest, fname, pick):
     notes="DiscreteLimit[f, n -> Infinity]: the limit of the sequence f(n) over integers n; sequences with periodic "
           "oscillation ((-1)^n, Sin[Pi q n], ...) are split into residue classes n = p m + r (Indeterminate when the "
           "subsequence limits differ); Fibonacci/factorial/binomial forms are rewritten; threads over lists; "
-          "unevaluated when undecided (e.g. Sin[n])")
+          "unevaluated when undecided (e.g. Sin[n])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _disclimit(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     return _disc_wrap(f, spec, rest, "DiscreteLimit", lambda r: r[0] if r[0] == r[1] else sp.nan)
 
 
 @fn("DiscreteMaxLimit", area=AREA, status="added",
     notes="DiscreteMaxLimit[f, n -> Infinity]: lim sup of the sequence f(n) (residue-class splitting for periodic "
-          "oscillation; e.g. (-1)^n -> 1, Sin[n Pi/3] -> Sqrt[3]/2); unevaluated when undecided")
+          "oscillation; e.g. (-1)^n -> 1, Sin[n Pi/3] -> Sqrt[3]/2); unevaluated when undecided"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _discmaxlimit(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     return _disc_wrap(f, spec, rest, "DiscreteMaxLimit", lambda r: r[1])
 
 
 @fn("DiscreteMinLimit", area=AREA, status="added",
     notes="DiscreteMinLimit[f, n -> Infinity]: lim inf of the sequence f(n) (residue-class splitting for periodic "
-          "oscillation); unevaluated when undecided")
+          "oscillation); unevaluated when undecided"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _discminlimit(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     return _disc_wrap(f, spec, rest, "DiscreteMinLimit", lambda r: r[0])
 
@@ -2227,7 +2252,8 @@ def _termwise_param_sum(F, k, a, b, x, x0, n):
           "AsymptoticSum[f, k, {k, Infinity, m}]: the indefinite sum (the tail convention F(Infinity) = 0 for "
           "convergent sums, else Sum over 0..k-1); computed from SymPy's closed form (checked numerically against "
           "direct summation) with Euler-Maclaurin expansions of Hurwitz zeta / generalized harmonic numbers; "
-          "no closed form -> error")
+          "no closed form -> error"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("AsymptoticSum")
 def _asymsum(f: Expr, rng: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticSum")
@@ -2306,7 +2332,8 @@ def _asymsum(f: Expr, rng: Expr, spec: Expr, *rest: Expr) -> Expr:
     notes="AsymptoticProduct[f, {k, a, n}, n -> Infinity | {n, Infinity, m}], AsymptoticProduct[f, {k, a, "
           "Infinity}, {p, p0, m}] and the indefinite AsymptoticProduct[f, k, {k, Infinity, m}] (= Product over "
           "1..k-1): from SymPy's closed form (Gamma / rising factorials, checked numerically) expanded with "
-          "Stirling's series (Product[k, {k, 2, n}] ~ Sqrt[2 Pi] n^(n + 1/2) E^-n); no closed form -> error")
+          "Stirling's series (Product[k, {k, 2, n}] ~ Sqrt[2 Pi] n^(n + 1/2) E^-n); no closed form -> error"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("AsymptoticProduct")
 def _asymprod(f: Expr, rng: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticProduct")
@@ -2357,7 +2384,8 @@ def _num_integral(F, t, a, b):
           "antiderivative checked by differentiation, else term-wise integration of the expansion of f, constant "
           "0); AsymptoticIntegrate[f, {t, a, b}, {p, p0, n}]: expansion of a parametric integral (exact integral "
           "checked numerically, else term-wise integration of the expansion in p (finite p0, each term finite; the "
-          "result is checked against numerical quadrature near p0)); divergent term-wise integrals raise")
+          "result is checked against numerical quadrature near p0)); divergent term-wise integrals raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("AsymptoticIntegrate")
 def _asymint(f: Expr, rng: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions", "PrincipalValue"},
@@ -2478,7 +2506,8 @@ def _branches(F, y, x, x0, n, fname):
     notes="AsymptoticSolve[eqn, {y, y0}, {x, x0, n}]: the branch of y(x) through (x0, y0) as a Taylor series (implicit "
           "function theorem, requires D[eqn, y] != 0 there; Newton iteration on truncated series, residual checked); "
           "AsymptoticSolve[eqn, y | {y}, {x, x0, n} | x -> x0]: every branch, from SymPy's closed-form roots "
-          "expanded in Puiseux series; systems raise")
+          "expanded in Puiseux series; systems raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("AsymptoticSolve")
 def _asymsolve(eqn: Expr, ys: Expr, spec: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticSolve")
@@ -2664,7 +2693,8 @@ def _perturb_ode(ode, yname, x, order, icd, eps, e0, n, fname):
           "nonlinear) ODE at an ordinary point x0 (Taylor coefficients by repeated differentiation of the solved "
           "equation; missing initial values become C[1], C[2], ...); AsymptoticDSolveValue[{ode, ics}, y[x], x, "
           "{e, 0, n}]: regular perturbation expansion in a parameter (each order solved with DSolve, residual "
-          "checked); singular points, singular perturbations and systems raise")
+          "checked); singular points, singular perturbations and systems raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("AsymptoticDSolveValue")
 def _asymdsolve(eqs: Expr, target: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticDSolveValue")
@@ -2750,7 +2780,8 @@ def _first_order_linear(eq, yname, nv):
           "of a recurrence: first-order linear homogeneous recurrences are solved as C[1] times a closed-form "
           "product (Gamma functions, verified); others via RSolveValue (verified by substitution); each free "
           "constant's part is expanded separately (Stirling / exponential scales; Fibonacci -> GoldenRatio^n/Sqrt[5]); "
-          "parameter (perturbation) forms and recurrences without a verified closed form raise")
+          "parameter (perturbation) forms and recurrences without a verified closed form raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("AsymptoticRSolveValue")
 def _asymrsolve(eqs: Expr, target: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions", "GenerateConditions"}, "AsymptoticRSolveValue")
@@ -2842,7 +2873,8 @@ def _dist_arg(d, fname):
 @fn("AsymptoticExpectation", area=AREA, status="added",
     notes="AsymptoticExpectation[expr, x \\[Distributed] dist, a -> a0 | {a, a0, n}]: the asymptotic expansion in a "
           "parameter of the exact Expectation (computed by Expectation, then expanded); raises when the "
-          "expectation has no closed form")
+          "expectation has no closed form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("AsymptoticExpectation")
 def _asymexp(expr: Expr, d: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "AsymptoticExpectation")
@@ -2919,7 +2951,8 @@ def _prob_closed(pred, d, fname):
     notes="AsymptoticProbability[pred, x \\[Distributed] dist, a -> a0 | {a, a0, n}]: the asymptotic expansion in a "
           "parameter of the exact probability (Probability, or 1 - CDF / CDF for one-sided bounds of continuous "
           "distributions); e.g. the Gaussian tail Erfc[a/Sqrt[2]]/2 ~ E^(-a^2/2)/(a Sqrt[2 Pi]); no closed form -> "
-          "error")
+          "error"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 @_term_goal("AsymptoticProbability")
 def _asymprob(pred: Expr, d: Expr, spec: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, {"SeriesTermGoal", "Assumptions"}, "AsymptoticProbability")
@@ -2947,7 +2980,8 @@ def _dq_spec(spec, fname):
 
 @fn("DifferenceQuotient", area=AREA, status="added",
     notes="DifferenceQuotient[f, {x, h}] = (f[x + h] - f[x])/h; {x, n, h}: the n-th forward difference over h^n; "
-          "several specifications apply in turn; threads over lists")
+          "several specifications apply in turn; threads over lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _diffquot(f: Expr, *specs: Expr) -> Expr:
     if not specs:
         raise ValueError("DifferenceQuotient: a specification {x, h} is required")
@@ -2966,7 +3000,8 @@ def _diffquot(f: Expr, *specs: Expr) -> Expr:
 @fn("Casoratian", area=AREA, status="added",
     notes="Casoratian[{y1, ..., yk}, n] = Det[{y_j[n + i]}] (i = 0..k-1), simplified; Casoratian[..., n, True] gives "
           "the matrix; the equation form Casoratian[eqn, y, n] raises (its normalisation constant is not determined "
-          "by the equation)")
+          "by the equation)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _casoratian(ys: ListOf[Expr], n: Var, *rest: Expr) -> Expr:
     if not is_list(ys):
         raise NotImplementedError("Casoratian: the equation form (Casoratian[eqn, y, n]) is not supported; "
@@ -3245,7 +3280,8 @@ def _seq_values(f, nv, fname, count=40):
     notes="DifferenceRootReduce[expr, n]: DifferenceRoot[Function[{y, n}, {rec == 0, ics}]][n] with a linear "
           "recurrence with polynomial coefficients (guessed from exact values, then verified symbolically or "
           "numerically at non-integer points); DifferenceRootReduce[f &]; DifferenceRootReduce[lhs == rhs, n] gives "
-          "True when both sides reduce to the same sequence; non-holonomic inputs raise")
+          "True when both sides reduce to the same sequence; non-holonomic inputs raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _drr(expr: Expr, *rest: Expr) -> Expr:
     fname = "DifferenceRootReduce"
     if not rest:
@@ -3292,7 +3328,8 @@ def _drr(expr: Expr, *rest: Expr) -> Expr:
 @fn("DifferentialRootReduce", area=AREA, status="added",
     notes="DifferentialRootReduce[expr, x]: DifferentialRoot[Function[{y, x}, {ode == 0, ics}]][x], a linear ODE "
           "with polynomial coefficients (SymPy's holonomic conversion, verified by substitution) with initial "
-          "conditions at a regular point (0, else 1, 2, ...); DifferentialRootReduce[f &]; non-holonomic inputs raise")
+          "conditions at a regular point (0, else 1, 2, ...); DifferentialRootReduce[f &]; non-holonomic inputs raise"
+          ". Check: reference (differential cases in tests/library).")
 def _difrr(expr: Expr, *rest: Expr) -> Expr:
     fname = "DifferentialRootReduce"
     if not rest:
@@ -3532,7 +3569,8 @@ def _find_seq_xy(xs, ys, nv, depth=0):
           "terms (rational successive ratios: products, factorials, powers), constant-coefficient linear recurrences "
           "(solved exactly; Fibonacci/LucasL recognised) and sums of hypergeometric differences, each fitted exactly "
           "with at least two confirming terms; FindSequenceFunction[list] gives a pure function; stays unevaluated "
-          "when nothing is found")
+          "when nothing is found"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _findseqfn(data: Expr, *rest: Expr) -> Expr:
     if len(rest) > 1:
         raise ValueError("FindSequenceFunction: too many arguments")
@@ -3553,7 +3591,8 @@ def _findseqfn(data: Expr, *rest: Expr) -> Expr:
 @fn("FindGeneratingFunction", area=AREA, status="added",
     notes="FindGeneratingFunction[{a0, a1, ...}, x]: a rational generating function from a constant-coefficient "
           "linear recurrence (at least two confirming terms), else the sum of the FindSequenceFunction term; "
-          "verified against the series; unevaluated when nothing is found")
+          "verified against the series; unevaluated when nothing is found"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _findgf(data: Expr, x: Var) -> Expr:
     fname = "FindGeneratingFunction"
     if not is_list(data) or len(data.args) < 3:
@@ -3604,7 +3643,8 @@ def _findgf(data: Expr, x: Var) -> Expr:
 
 @fn("ExponentialGeneratingFunction", area=AREA, status="added",
     notes="ExponentialGeneratingFunction[expr, n, x] = Sum[expr x^n/n!, {n, 0, Infinity}] in closed form (SymPy "
-          "summation, checked against the first Taylor coefficients); raises when no closed form is found")
+          "summation, checked against the first Taylor coefficients); raises when no closed form is found"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _egf(expr: Expr, n: Var, x: Var, *rest: Expr) -> Expr:
     fname = "ExponentialGeneratingFunction"
     if rest:
@@ -3632,7 +3672,8 @@ def _egf(expr: Expr, n: Var, x: Var, *rest: Expr) -> Expr:
 
 @fn("FactorialMomentGeneratingFunction", area=AREA, status="added",
     notes="FactorialMomentGeneratingFunction[dist, t] = Expectation[t^x] = MomentGeneratingFunction[dist, Log[t]], "
-          "simplified; raises when the moment generating function is not known")
+          "simplified; raises when the moment generating function is not known"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fmgf(dist: Expr, t: Var, *rest: Expr) -> Expr:
     fname = "FactorialMomentGeneratingFunction"
     if rest:
@@ -3682,7 +3723,8 @@ def _truncate(e, m, activate):
 @fn("TruncateSum", area=AREA, status="added",
     notes="TruncateSum[expr, m]: every Sum and Inactive[Sum] in expr is replaced by the sum of its first m terms "
           "(explicit, activated); symbolic m gives Inactive[Sum][f, {i, a, a + m - 1}]; ActivateResult -> False keeps "
-          "the truncated sums inactive")
+          "the truncated sums inactive"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _truncsum(expr: Expr, m: Expr, *rest: Expr) -> Expr:
     activate = True
     for r_ in rest:
@@ -3880,7 +3922,8 @@ def _stab_cond(eigs, discrete):
 
 @fn("DFixedPoints", area=AREA, status="added",
     notes="DFixedPoints[eqns, x[t] | {x1, ...}, t]: the equilibria of an autonomous ODE system, as points of the "
-          "first-order state (x, x', ..., x^(k-1)) for higher-order equations; sorted; raises for continua")
+          "first-order state (x, x', ..., x^(k-1)) for higher-order equations; sorted; raises for continua"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dfixed(eqs: Expr, xs: Expr, t: Var) -> Expr:
     state, rhs, _tv = _ode_system(eqs, xs, t, "DFixedPoints")
     return out(_fixed(state, rhs, "DFixedPoints"))
@@ -3888,7 +3931,8 @@ def _dfixed(eqs: Expr, xs: Expr, t: Var) -> Expr:
 
 @fn("RFixedPoints", area=AREA, status="added",
     notes="RFixedPoints[eqns, a[n] | {a1, ...}, n]: the fixed points of an autonomous recurrence system (all shifts "
-          "equal), as points of the state (a[n], ..., a[n + k - 1]); sorted; raises for continua")
+          "equal), as points of the state (a[n], ..., a[n + k - 1]); sorted; raises for continua"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rfixed(eqs: Expr, xs: Expr, n: Var) -> Expr:
     state, rhs = _rec_system(eqs, xs, n, "RFixedPoints")
     return out(_fixed(state, [r - s_ for r, s_ in zip(rhs, state)], "RFixedPoints"))
@@ -3954,7 +3998,8 @@ def _stability(state, rhs, pts, discrete, fname):
 @fn("DStabilityConditions", area=AREA, status="added",
     notes="DStabilityConditions[eqns, x, t] (optionally with a list of points): {{point, condition}, ...} for "
           "asymptotic stability from the linearisation (all eigenvalues with negative real part: True/False for "
-          "numeric Jacobians, Re[l] < 0 conditions otherwise); non-hyperbolic numeric cases raise")
+          "numeric Jacobians, Re[l] < 0 conditions otherwise); non-hyperbolic numeric cases raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dstab(eqs: Expr, xs: Expr, t: Var, *rest: Expr) -> Expr:
     fname = "DStabilityConditions"
     state, rhs, _tv = _ode_system(eqs, xs, t, fname)
@@ -3967,7 +4012,8 @@ def _dstab(eqs: Expr, xs: Expr, t: Var, *rest: Expr) -> Expr:
 @fn("RStabilityConditions", area=AREA, status="added",
     notes="RStabilityConditions[eqns, a, n] (optionally with points): {{point, condition}, ...} for asymptotic "
           "stability of the fixed points from the linearisation (all eigenvalues inside the unit circle; a single "
-          "real parameter gives an interval such as -1 < a < 1, otherwise Abs[l] < 1 conditions)")
+          "real parameter gives an interval such as -1 < a < 1, otherwise Abs[l] < 1 conditions)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rstab(eqs: Expr, xs: Expr, n: Var, *rest: Expr) -> Expr:
     fname = "RStabilityConditions"
     state, rhs = _rec_system(eqs, xs, n, fname)
@@ -4028,7 +4074,8 @@ def _ad(x, fname):
 @fn("LyapunovSolve", area=AREA, status="added",
     notes="LyapunovSolve[a, c]: a.x + x.a^H == c; [a, b, c]: a.x + x.b == c; [{a, d}, c]: a.x.d^H + d.x.a^H == c; "
           "[{a, d}, {b, e}, c]: a.x.e + d.x.b == c; exact (Kronecker linear system) or numerical for inexact input; "
-          "raises when the solution is not unique")
+          "raises when the solution is not unique"
+          ". Check: reference (differential cases in tests/library).")
 def _lyap(*args: Expr) -> Expr:
     fname = "LyapunovSolve"
     if len(args) == 2:
@@ -4053,7 +4100,8 @@ def _lyap(*args: Expr) -> Expr:
 @fn("DiscreteLyapunovSolve", area=AREA, status="added",
     notes="DiscreteLyapunovSolve[a, c]: a.x.a^H - x == c; [a, b, c]: a.x.b - x == c; [{a, d}, c]: "
           "a.x.a^H - d.x.d^H == c; [{a, d}, {b, e}, c]: a.x.b - d.x.e == c; exact or numerical; raises when the "
-          "solution is not unique")
+          "solution is not unique"
+          ". Check: reference (differential cases in tests/library).")
 def _dlyap(*args: Expr) -> Expr:
     fname = "DiscreteLyapunovSolve"
     if len(args) == 2:
@@ -4112,7 +4160,8 @@ def _np_out(X):
 @fn("RiccatiSolve", area=AREA, status="added",
     notes="RiccatiSolve[{a, b}, {q, r}] (or {q, r, p}): the stabilising solution of the continuous algebraic Riccati "
           "equation; exact via the stable invariant subspace of the Hamiltonian matrix (verified by substitution) "
-          "for exact input, SciPy's solve_continuous_are for inexact input; unevaluated when no exact solution is found")
+          "for exact input, SciPy's solve_continuous_are for inexact input; unevaluated when no exact solution is found"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _care(ab: Expr, qr: Expr) -> Expr:
     fname = "RiccatiSolve"
     A, B, Q, Rm, P = _riccati_args(ab, qr, fname)
@@ -4170,7 +4219,8 @@ def _stable_subspace(H, n, stable):
 @fn("DiscreteRiccatiSolve", area=AREA, status="added",
     notes="DiscreteRiccatiSolve[{a, b}, {q, r}] (or {q, r, p}): the stabilising solution of the discrete algebraic "
           "Riccati equation; exact via the stable eigenvectors of the symplectic pencil (invertible a, verified by "
-          "substitution) for exact input, SciPy's solve_discrete_are for inexact input; unevaluated otherwise")
+          "substitution) for exact input, SciPy's solve_discrete_are for inexact input; unevaluated otherwise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dare(ab: Expr, qr: Expr) -> Expr:
     fname = "DiscreteRiccatiSolve"
     A, B, Q, Rm, P = _riccati_args(ab, qr, fname)
@@ -4384,14 +4434,16 @@ def _deig(op, u, rng, n, fname, vectors):
     notes="DEigenvalues[{L[u[x]], bcs}, u[x], {x, a, b}, n]: the n smallest-magnitude eigenvalues of L u == lambda u "
           "for constant-coefficient second-order operators on an interval with Dirichlet (DirichletCondition or "
           "u[a] == 0) or Neumann (u'[a] == 0, NeumannValue[0, ...], the default) ends, in closed form; other "
-          "regions, variable coefficients and Robin/periodic conditions raise")
+          "regions, variable coefficients and Robin/periodic conditions raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _deigenvalues(op: Expr, u: Expr, rng: Expr, n: Expr) -> Expr:
     return _deig(op, u, rng, n, "DEigenvalues", False)
 
 
 @fn("DEigensystem", area=AREA, status="added",
     notes="DEigensystem[{L[u[x]], bcs}, u[x], {x, a, b}, n]: {eigenvalues, eigenfunctions} (unnormalised, e.g. "
-          "Sin[k x]) for the same class of problems as DEigenvalues")
+          "Sin[k x]) for the same class of problems as DEigenvalues"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _deigensystem(op: Expr, u: Expr, rng: Expr, n: Expr) -> Expr:
     return _deig(op, u, rng, n, "DEigensystem", True)
 
@@ -4400,7 +4452,8 @@ def _deigensystem(op: Expr, u: Expr, rng: Expr, n: Expr) -> Expr:
     notes="GreenFunction[{L[u[x]], bcs}, u[x] | u, {x, a, b}, y]: the Green's function of a linear ODE of any order "
           "with homogeneous two-point or initial conditions (homogeneous solutions by DSolve; continuity of the "
           "first n-2 derivatives and the jump 1/c_n(y) of the (n-1)th), as HeavisideTheta pieces; u gives "
-          "Function[{x, y}, ...]; PDEs and problems without a unique Green's function raise")
+          "Function[{x, y}, ...]; PDEs and problems without a unique Green's function raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _green(op: Expr, u: Expr, rng: Expr, y: Var, *rest: Expr) -> Expr:
     fname = "GreenFunction"
     if rest:
@@ -4522,7 +4575,8 @@ def _hermite_newton(rows):
     notes="InterpolatingPolynomial[{f1, f2, ...}, x] (nodes 1, 2, ...), [{{x1, f1}, ...}, x] and Hermite data "
           "{{x1, f1, df1, ...}, ...} or {{x1, {f1, df1, ...}}, ...}: the lowest-degree interpolating polynomial in "
           "Newton/Horner form by (confluent) divided differences; symbolic nodes and values allowed; "
-          "multidimensional data and the Modulus option raise")
+          "multidimensional data and the Modulus option raise"
+          ". Check: reference (differential cases in tests/library).")
 def _interppoly(data: Expr, x: Expr, *rest: Expr) -> Expr:
     fname = "InterpolatingPolynomial"
     rest, _o = _opts(rest, set(), fname)
@@ -4570,7 +4624,8 @@ def _fi_eval(expr, xname, fname):
     notes="FunctionInterpolation[expr, {x, xmin, xmax}]: samples expr on a uniform grid (31 points, doubled until "
           "the piecewise interpolant of InterpolationOrder (default 3) agrees with expr at every midpoint to 1e-7 "
           "relative, at most 8193 points) and returns an InterpolatingFunction; several variables and region "
-          "specifications raise")
+          "specifications raise"
+          ". Check: reference (differential cases in tests/library).")
 def _funcinterp(expr: Expr, rng: Expr, *rest: Expr) -> Expr:
     from .wl_interp import _make, _Piecewise
     fname = "FunctionInterpolation"
@@ -4855,7 +4910,8 @@ def _cons_pred(cons, z, fname):
           "0; other functions with infinitely many poles raise); ResidueSum[{f, cons}, z]: the residues at the "
           "poles satisfying cons (bounded constraints Abs[z - c] < r, or any constraint for rational f), with "
           "poles found exactly (polynomial roots, periodic families enumerated, Gamma poles); non-meromorphic "
-          "functions, poles on the constraint boundary and symbolic pole locations raise")
+          "functions, poles on the constraint boundary and symbolic pole locations raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _residuesum(fc: Expr, z: Var, *rest: Expr) -> Expr:
     fname = "ResidueSum"
     rest, _o = _opts(rest, {"GenerateConditions", "PerformanceGoal"}, fname)
@@ -5348,7 +5404,8 @@ _INT_OPTS = {"GenerateConditions", "Assumptions"}
     notes="LineIntegrate[f, {x, y, ...} \u2208 curve] (scalar, f |r'| dt) and LineIntegrate[{p, q, ...}, {x, y, ...} "
           "\u2208 curve] (vector, F.r' dt) over Line (points in order), HalfLine, InfiniteLine, Circle (counterclockwise; "
           "arcs and ellipses) and one-parameter ParametricRegion (increasing parameter); symbolic integration "
-          "checked against numerical quadrature (parameters sampled); unevaluable integrals raise")
+          "checked against numerical quadrature (parameters sampled); unevaluable integrals raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lineint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "LineIntegrate"
     rest, _o = _opts(rest, _INT_OPTS, fname)
@@ -5361,7 +5418,8 @@ def _lineint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
 
 @fn("NLineIntegrate", area=AREA, status="added",
     notes="NLineIntegrate[f | {p, q, ...}, {x, ...} \u2208 curve]: numerical scalar or vector line integral over the "
-          "curves supported by LineIntegrate (adaptive Gauss-Legendre/tanh-sinh quadrature)")
+          "curves supported by LineIntegrate (adaptive Gauss-Legendre/tanh-sinh quadrature)"
+          ". Check: reference (differential cases in tests/library).")
 def _nlineint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "NLineIntegrate"
     rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal"}, fname)
@@ -5375,7 +5433,8 @@ def _nlineint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     notes="SurfaceIntegrate[f, {x, y, z} \u2208 surface] (scalar, f dS) and SurfaceIntegrate[{p, q, r}, ...] (flux "
           "F.n dS) over Sphere, Ball (its boundary), Cuboid and Cube (outward normals), Triangle (scalar only) and "
           "two-parameter ParametricRegion (normal r_u x r_v); in the plane, boundaries of Disk/Circle/Rectangle/"
-          "Triangle/Polygon (outward normal) and parametric curves; results checked by numerical quadrature")
+          "Triangle/Polygon (outward normal) and parametric curves; results checked by numerical quadrature"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _surfint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "SurfaceIntegrate"
     rest, _o = _opts(rest, _INT_OPTS, fname)
@@ -5388,7 +5447,8 @@ def _surfint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
 
 @fn("NSurfaceIntegrate", area=AREA, status="added",
     notes="NSurfaceIntegrate[f | {p, q, r}, {x, y, z} \u2208 surface]: numerical scalar or flux surface integral over "
-          "the surfaces supported by SurfaceIntegrate")
+          "the surfaces supported by SurfaceIntegrate"
+          ". Check: reference (differential cases in tests/library).")
 def _nsurfint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "NSurfaceIntegrate"
     rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal"}, fname)
@@ -5440,7 +5500,8 @@ def _contour_parts(f, zp, z):
           "Triangle, Polygon boundaries, counterclockwise) of meromorphic f by the residue theorem (poles found "
           "exactly); open contours (Line, HalfLine, InfiniteLine, arcs, ParametricRegion[{x[t], y[t]}, ...]) by an "
           "antiderivative or direct parametrised integration; every result is checked against numerical "
-          "quadrature (parameters sampled); poles on the contour and symbolic pole locations raise")
+          "quadrature (parameters sampled); poles on the contour and symbolic pole locations raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _contourint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "ContourIntegrate"
     rest, o = _opts(rest, _INT_OPTS, fname)
@@ -5486,7 +5547,8 @@ def _contourint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
 @fn("NContourIntegrate", area=AREA, status="added",
     notes="NContourIntegrate[f, z \u2208 cont]: numerical contour integral along the contours supported by "
           "ContourIntegrate (Line, HalfLine, InfiniteLine, Circle, arcs, Disk/Rectangle/Triangle/Polygon "
-          "boundaries counterclockwise, ParametricRegion)")
+          "boundaries counterclockwise, ParametricRegion)"
+          ". Check: reference (differential cases in tests/library).")
 def _ncontourint(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     fname = "NContourIntegrate"
     rest, _o = _opts(rest, {"WorkingPrecision", "AccuracyGoal", "PrecisionGoal", "MaxRecursion"}, fname)
@@ -5646,7 +5708,8 @@ def _nfrac(F, x, al, x0, fname, caputo):
     notes="FractionalD[f, {x, alpha}]: the Riemann-Liouville differintegral with lower terminal 0; sums of powers "
           "c x^p (p > -1) in closed form for any (also symbolic) alpha, Gamma(p+1)/Gamma(p+1-alpha) x^(p-alpha); "
           "integer alpha gives D or repeated integrals; other f with numeric alpha via the defining integral "
-          "(D^m I^(m-alpha) f), checked against quadrature; threads over lists")
+          "(D^m I^(m-alpha) f), checked against quadrature; threads over lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fractionald(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     rest, _o = _opts(rest, {"Assumptions", "GenerateConditions"}, "FractionalD")
     if rest:
@@ -5658,7 +5721,8 @@ def _fractionald(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     notes="CaputoD[f, {x, alpha}]: the Caputo differintegral I^(m-alpha) D^m f (m = Ceiling[alpha]) with lower "
           "terminal 0; powers in closed form (constants and x^k with k < alpha give 0; symbolic alpha gives a "
           "Piecewise for polynomial terms); other f with numeric alpha via the defining integral, checked against "
-          "quadrature; threads over lists")
+          "quadrature; threads over lists"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _caputod(f: Expr, spec: Expr, *rest: Expr) -> Expr:
     rest, _o = _opts(rest, {"Assumptions", "GenerateConditions"}, "CaputoD")
     if rest:
@@ -5696,14 +5760,16 @@ def _nfrac_fn(f, spec, x0, rest, fname, caputo):
 @fn("NFractionalD", area=AREA, status="added",
     notes="NFractionalD[f, {x, alpha}, x0]: numerical Riemann-Liouville differintegral at x0 > 0 (Caputo integral "
           "of f^(m) by tanh-sinh quadrature plus the initial-value terms, or numerical differentiation of the "
-          "fractional integral when f^(k)(0) is singular)")
+          "fractional integral when f^(k)(0) is singular)"
+          ". Check: reference (differential cases in tests/library).")
 def _nfractionald(f: Expr, spec: Expr, x0: Expr, *rest: Expr) -> Expr:
     return _nfrac_fn(f, spec, x0, rest, "NFractionalD", False)
 
 
 @fn("NCaputoD", area=AREA, status="added",
     notes="NCaputoD[f, {x, alpha}, x0]: numerical Caputo differintegral at x0 > 0 (tanh-sinh quadrature of the "
-          "defining integral of f^(m))")
+          "defining integral of f^(m))"
+          ". Check: reference (differential cases in tests/library).")
 def _ncaputod(f: Expr, spec: Expr, x0: Expr, *rest: Expr) -> Expr:
     return _nfrac_fn(f, spec, x0, rest, "NCaputoD", True)
 
@@ -5777,7 +5843,8 @@ def _real_num(v):
     notes="IntegrateChangeVariables[Inactive[Integrate][f, x | {x, a, b}], u, u == phi[x] | x == psi[u]]: "
           "integration by substitution, f(psi(u)) psi'(u), returned as Inactive[Integrate][...]; for definite "
           "integrals the inverse branch mapping [ua, ub] onto [a, b] is chosen and the result is checked by "
-          "quadrature; multiple integrals, regions and named coordinate charts raise")
+          "quadrature; multiple integrals, regions and named coordinate charts raise"
+          ". Check: reference (differential cases in tests/library).")
 def _intchange(integral: Expr, u: Expr, trans: Expr, *rest: Expr) -> Expr:
     fname = "IntegrateChangeVariables"
     rest, _o = _opts(rest, {"Assumptions", "GenerateConditions"}, fname)
@@ -5911,7 +5978,8 @@ def _mono_ok(psi, t, ua, ub, a, b):
     notes="DSolveChangeVariables[Inactive[DSolve][ode, y | y[x], x], u, t, trans]: changes the variables of a "
           "single ODE by the chain rule; trans is t == phi[x] or x == psi[t] (independent variable), "
           "y[x] == G[x, u[x]] (dependent variable, t = x) or a list of one of each; returns "
-          "Inactive[DSolve][ode', u | u[t], t]; PDEs, systems and named coordinate charts raise")
+          "Inactive[DSolve][ode', u | u[t], t]; PDEs, systems and named coordinate charts raise"
+          ". Check: reference (differential cases in tests/library).")
 def _dsolvechange(dsolve: Expr, u: Expr, t: Expr, trans: Expr, *rest: Expr) -> Expr:
     fname = "DSolveChangeVariables"
     rest, _o = _opts(rest, {"Assumptions"}, fname)
