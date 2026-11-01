@@ -66,13 +66,13 @@ SQ = "{{0, 0}, {1, 0}, {1, 1}, {0, 1}}"
 
 # ─────────────────────────── cluster processes ───────────────────────────
 # Cauchy (Ghorbani 2013): K(r) = Pi r^2 + (1 - 2 b/Sqrt[r^2 + 4 b^2])/mu, g(r) = 1 + (1 + r^2/(4 b^2))^(-3/2) /
-# (4 Pi b^2 mu) in 2D; mean density mu lambda. Simulated counts: mean mu lambda |W| = 50.
+# (8 Pi b^2 mu) in 2D (the bivariate Cauchy density of the displacement difference, scale 2 b); mean density mu lambda. Simulated counts: mean mu lambda |W| = 50.
 CLUSTER = [
     ("CauchyPointProcess[2, 3, 1, 2]", "CauchyPointProcess[2, 3, 1, 2]"),
     ("MeanPointDensity[CauchyPointProcess[2, 3, 1, 2]]", "6"),
     ("RipleyK[CauchyPointProcess[2, 3, 1, 2], 1]", near(math.pi + (1 - 2 / math.sqrt(5)) / 2, 1e-12)),
-    ("PairCorrelationG[CauchyPointProcess[2, 3, 1, 2], 0]", near(1 + 1 / (8 * math.pi), 1e-12)),
-    ("PairCorrelationG[CauchyPointProcess[2, 3, 1, 2], 2]", near(1 + 2 ** -1.5 / (8 * math.pi), 1e-12)),
+    ("PairCorrelationG[CauchyPointProcess[2, 3, 1, 2], 0]", near(1 + 1 / (16 * math.pi), 1e-12)),
+    ("PairCorrelationG[CauchyPointProcess[2, 3, 1, 2], 2]", near(1 + 2 ** -1.5 / (16 * math.pi), 1e-12)),
     ("MeanPointDensity[CauchyPointProcess[m, l, s, 2]]", "m l"),
     ("CauchyPointProcess[-1, 3, 1, 2]", Raises(ValueError, "CauchyPointProcess: ")),
     ("CauchyPointProcess[1, 3, 1]", Raises(ValueError, "CauchyPointProcess: ")),
@@ -82,9 +82,9 @@ CLUSTER = [
     ("VarianceGammaPointProcess[2, 3, 1, 1, 2]", "VarianceGammaPointProcess[2, 3, 1, 1, 2]"),
     ("MeanPointDensity[VarianceGammaPointProcess[2, 3, 1, 1, 2]]", "6"),
     # VG pcf: 1 + f(r)/mu, f the variance-gamma density of the difference; at alpha = 1, beta = 1, d = 2 (nu = 1):
-    # f(r) = 2 (r^2/2)^(1/2) K_1(r Sqrt[2]) / (2 Pi)
+    # f(r) = 2 (r^2/2)^(1/2) K_1(r Sqrt[2]) / (2 Pi), g = 1 + f/mu
     ("PairCorrelationG[VarianceGammaPointProcess[2, 3, 1, 1, 2], 1.]",
-     near(1 + 2 * math.sqrt(0.5) * 0.36766433, 2e-3)),
+     near(1 + 2 * math.sqrt(0.5) * 0.3141976116 / (2 * math.pi) / 2, 1e-8)),   # K_1(Sqrt[2]) = 0.3141976116
     ("VarianceGammaPointProcess[2, 3, -1, 1, 2]", Raises(ValueError, "VarianceGammaPointProcess: ")),
     ("RipleyK[VarianceGammaPointProcess[2, 3, 1, 1, 2], r]", Raises(NotImplementedError)),
     ("x08v = Table[SeedRandom[k]; Length[RandomPointConfiguration[VarianceGammaPointProcess[10, 5, 1, 0.001, 2], "
@@ -167,9 +167,9 @@ SPD = [
     ("SpatialObservationRegionQ[Line[{{0, 0}, {1, 1}}]]", False),
     ("SpatialObservationRegionQ[Rectangle[{0, 0}, {a, 1}]]", False),
     ("SpatialObservationRegionQ[HalfPlane[{{0, 0}, {1, 0}}, {0, 1}]]", False),
-    (f"SpatialPointSelect[SpatialPointData[{PTS}, Rectangle[]], #[[1]] > 0.5 &][\"PointCount\"]", "2"),
+    (f"SpatialPointSelect[SpatialPointData[{PTS}, Rectangle[]], #Point[[1]] > 0.5 &][\"PointCount\"]", "2"),
     ("SpatialPointSelect[SpatialPointData[{{0.1, 0.2}, {0.3, 0.4}, {0.5, 0.6}} -> {1, 2, 3}, Rectangle[]], "
-     "#[[2]] >= 0.4 &][\"Annotations\"]", "<|1 -> {2, 3}|>"),
+     "#Point[[2]] >= 0.4 &][\"Annotations\"]", "<|1 -> {2, 3}|>"),
     ("SpatialPointSelect[{{1, 2}}, #[[1]] > 0 &]", Raises(TypeError)),
     ("SpatialPointSelect[x08spd, #[[1]] > 0 &]", "SpatialPointSelect[x08spd, #[[1]] > 0 &]"),
 ]
@@ -177,12 +177,12 @@ SPD = [
 # ─────────────────────────── point-data statistics ───────────────────────────
 # PTS in the unit square: pair distances <= 0.3: (0.2,0.5)-(0.4,0.7) = 0.283 only; with no correction
 # K(0.3) = |W| 2/(n (n - 1)) = 2/20 = 0.1. Nearest-neighbour distances: 0.412, 0.283, 0.361, 0.539, 0.283;
-# G_none(0.4) = 3/5 (0.361 <= 0.4: points 2, 3, 5 ... and 0.412 > 0.4) -> 2/5 + 1/5 = 0.6? (0.283, 0.361, 0.283).
+# Nearest-neighbour distances 0.412, 0.283, 0.447, 0.510, 0.283, so G_none(0.4) = 2/5 and G_none(0.5) = 4/5.
 STATS = [
     (f"RipleyK[{{{PTS}, Rectangle[]}}, {{0.1, 0.3, 0.5}}, SpatialBoundaryCorrection -> None]",
      nums([0.0, 0.1, 0.4])),
-    (f"NearestNeighborG[{{{PTS}, Rectangle[]}}, {{0.2, 0.4}}, SpatialBoundaryCorrection -> None]",
-     nums([0.0, 0.6])),
+    (f"NearestNeighborG[{{{PTS}, Rectangle[]}}, {{0.2, 0.4, 0.5}}, SpatialBoundaryCorrection -> None]",
+     nums([0.0, 0.4, 0.8])),
     (f"x08f = RipleyK[{{{PTS}, Rectangle[]}}]; x08f[0.3] == RipleyK[{{{PTS}, Rectangle[]}}, 0.3]", True),
     (f"RipleyK[{{{PTS}, Rectangle[]}}][\"Statistic\"]", "\"RipleyK\""),
     (f"RipleyK[{{{PTS}, Rectangle[]}}, 0.3, SpatialBoundaryCorrection -> \"Hanisch\"]", Raises(ValueError)),
@@ -199,7 +199,7 @@ STATS = [
     ("SeedRandom[5]; x08d = RandomPointConfiguration[PoissonPointProcess[200, 2], Rectangle[]]; "
      "SpatialJ[x08d, 0.03]", between(0.8, 1.2)),
     (f"BesagL[{{{PTS}, Disk[{{0.5, 0.5}}, 0.6]}}, 0.3, SpatialBoundaryCorrection -> \"BorderMargin\"]",
-     is_head("Real") if False else Pred(lambda g: to_complex(g).real >= 0, "non-negative")),
+     Pred(lambda g: to_complex(g).real >= 0, "non-negative")),
     ("PointStatisticFunction[<|\"Statistic\" -> \"RipleyK\", \"Data\" -> SpatialPointData[{{0.1, 0.1}, {0.2, 0.2}}, "
      "Rectangle[]], \"SpatialBoundaryCorrection\" -> \"None\"|>][0.2]", "1.0"),     # |W| 2/(2 1) = 1
     ("PointStatisticFunction[<|\"Statistic\" -> \"Foo\"|>]", Raises(ValueError, "PointStatisticFunction: ")),
@@ -261,7 +261,8 @@ DENS = [
     ("PointDensity[{{{0.1}, {0.1}}, Interval[{0, 1}]}]", Raises(ValueError, "PointDensity: ")),
     ("PointDensity[{{{0.1}, {0.3}}, Interval[{0, 1}]}, \"Foo\"]", Raises(ValueError, "PointDensity: ")),
     ("PointDensity[x08undef]", "PointDensity[x08undef]"),
-    ("PointDensity[{{0.1, 0.2}, {0.3, 0.4}, {0.5, 0.1}}, \"Voronoi\"][\"Method\"]", "\"Voronoi\""),
+    ("PointDensity[{{0.1, 0.2}, {0.3, 0.4}, {0.5, 0.1}}, \"Voronoi\"]", Raises(ValueError, "SpatialPointData: ")),
+    # without a region the Ripley-Rasson region needs interior points (all 3 points are hull vertices)
     ("x08k = SmoothPointDensity[{{{0.5, 0.5}}, Rectangle[{-10, -10}, {10, 10}]}, 1]; x08k[{0.5, 0.5}]",
      near(1 / (2 * math.pi), 1e-12)),
     ("x08e = SmoothPointDensity[{{{0.5, 0.5}}, Rectangle[]}, 0.2, \"Epanechnikov\"]; {x08e[{0.5, 0.5}], "
@@ -286,7 +287,8 @@ DENS = [
 ]
 DENS_SCIPY = [
     ("x08vo = PointDensity[{{{0.25, 0.5}, {0.75, 0.5}, {0.5, 0.2}, {0.5, 0.8}}, Rectangle[]}, \"Voronoi\"]; "
-     "{x08vo[{0.05, 0.5}], x08vo[{0.5, 0.02}]}", nums([1 / 0.255, 1 / 0.245], 1e-9)),
+     "{x08vo[{0.05, 0.5}], x08vo[{0.5, 0.02}]}", nums([1 / 0.254166666666667, 1 / 0.245833333333333], 1e-9)),
+    # cells of the kite: left/right 61/240, bottom/top 59/240 (bisectors through (3/8, 7/20) etc.; areas sum to 1)
     ("x08dl = PointDensity[{{{0, 0}, {1, 0}, {0, 1}, {1, 1}}, Rectangle[]}]; {x08dl[{0, 0}], x08dl[{0.5, 0.5}]}",
      Pred(lambda g: len(g.args) == 2, "two values")),
 ]
@@ -350,8 +352,7 @@ VARIO = [
     ("BinnedVariogramList[x08data]", "BinnedVariogramList[x08data]"),
     # ordinary kriging, linear variogram, two points: weights 1/2, 1/2, variance 1/2 (Cressie 3.2)
     ("x08k1 = SpatialEstimate[{{0}, {1}} -> {1., 3.}, VariogramFunction -> VariogramModel[\"Linear\", {1}]]; "
-     "{x08k1[0.5], x08k1[0.5, \"Variance\"], x08k1[{{0}, {1}}]}", nums([2.0, 0.5, None], 1e-9)
-     if False else Pred(lambda g: abs(to_complex(g.args[0]) - 2) < 1e-9 and abs(to_complex(g.args[1]) - 0.5) < 1e-9
+     "{x08k1[0.5], x08k1[0.5, \"Variance\"], x08k1[{{0}, {1}}]}", Pred(lambda g: abs(to_complex(g.args[0]) - 2) < 1e-9 and abs(to_complex(g.args[1]) - 0.5) < 1e-9
                         and [to_complex(v).real for v in g.args[2].args] == pytest.approx([1.0, 3.0]),
                         "2, 0.5, {1, 3}")),
     ("x08k1 = SpatialEstimate[{{0}, {1}} -> {1., 3.}, VariogramFunction -> VariogramModel[\"Linear\", {1}]]; "
@@ -392,11 +393,14 @@ VARIO_SCIPY = [
     (GRID + "EstimatedVariogramModel[x08z, \"Foo\"]", Raises(ValueError, "EstimatedVariogramModel: ")),
     ("EstimatedVariogramModel[{{0}, {1}, {2}} -> {1, 3, 2}]", Raises(ValueError, "EstimatedVariogramModel: ")),
     ("EstimatedVariogramModel[x08data]", "EstimatedVariogramModel[x08data]"),
-    # exact data from a spherical model: the fitted range is close to the true 6
+    # a random walk: the linear model is fitted (a single path's variogram is dominated by its drift, so only the
+    # form and a positive slope are checked)
     ("x08e1 = Table[{i}, {i, 0, 59}]; SeedRandom[2]; x08e2 = Accumulate[RandomVariate[NormalDistribution[], 60]]; "
-     "Head[EstimatedVariogramModel[x08e1 -> x08e2, \"Linear\"]]", "VariogramModel"),
+     "First[EstimatedVariogramModel[x08e1 -> x08e2, \"Linear\", SpatialNoiseLevel -> 0][\"Parameters\"]]",
+     between(0.1, 100)),
     (GRID + "x08f = SpatialEstimate[x08z]; Abs[x08f[{2.5, 3.5}] - (Sin[1.25] + Cos[3.5/3])]", between(0, 0.05)),
-    (GRID + "x08f = SpatialEstimate[x08z, SpatialNoiseLevel -> 0]; Abs[x08f[{2, 3}] - (Sin[1.] + Cos[1.])]",
+    (GRID + "x08f = SpatialEstimate[x08z, VariogramFunction -> \"Exponential\", SpatialNoiseLevel -> 0]; "
+     "Abs[x08f[{2, 3}] - (Sin[1.] + Cos[1.])]",
      between(0, 1e-6)),
 ]
 

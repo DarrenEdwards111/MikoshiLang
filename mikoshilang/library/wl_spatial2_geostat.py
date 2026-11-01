@@ -537,6 +537,9 @@ def binned(X, z, spec, mo, fname):
         raise ValueError(f"{fname}: the locations must not all coincide")
     keep = D <= mo["MaxDistanceRatio"] * D.max()
     D, dz = D[keep], dz[keep]
+    if not len(D) or D.max() <= 0:
+        raise ValueError(f"{fname}: no pairs of distinct locations within \"MaxDistanceRatio\" "
+                         f"({mo['MaxDistanceRatio']:.4g}) of the largest distance")
     e = _bins(spec, D, float(D.max()), fname)
     idx = np.searchsorted(e, D, side="right") - 1
     idx[D == e[-1]] = len(e) - 2
@@ -829,8 +832,9 @@ class Kriging:
         except np.linalg.LinAlgError:
             cond = np.inf
         if not np.isfinite(cond) or cond > 1e13:
-            raise ValueError(f"{fname}: the kriging system is singular (repeated locations without noise, or too few "
-                             "points for the trend)")
+            raise ValueError(f"{fname}: the kriging system is singular or ill-conditioned (repeated locations or a "
+                             "very smooth variogram such as Gaussian without noise, or too few points for the trend); "
+                             "set a positive SpatialNoiseLevel or another VariogramFunction")
         self.A = A
         self.n, self.q = n, q
 
