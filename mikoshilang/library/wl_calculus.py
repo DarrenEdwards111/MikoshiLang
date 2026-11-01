@@ -170,7 +170,10 @@ def D_expr(f, specs, nonconst=None, opts_expr=None):
         for _ in range(n):
             g = _nonconst_D(_S(g, "D"), sv, nonconst, opts_expr)
         return D_expr(g, rest, nonconst, opts_expr)
-    g = out(_diff_one(v, sv, n))
+    try:
+        g = out(_diff_one(v, sv, n))
+    except NotImplementedError as exc:
+        raise NotImplementedError(f"D: {exc}") from exc
     return D_expr(g, rest, nonconst, opts_expr)
 
 

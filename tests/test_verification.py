@@ -186,3 +186,14 @@ def test_delegated_prose_is_not_a_module_path():
 def test_selfcheck_uses_an_example_that_nests_the_head():
     res = H.run(TESTS, "stated", ["KirchhoffGraph"])
     assert res["KirchhoffGraph"].status == "pass", res["KirchhoffGraph"].failures
+
+
+def test_modules_that_need_fixtures_are_left_out(tmp_path):
+    plain = tmp_path / "test_plain.py"
+    plain.write_text("@pytest.mark.parametrize('case', CASES)\ndef test_plain(case):\n    check(case)\n")
+    fixture_arg = tmp_path / "test_dir.py"
+    fixture_arg.write_text("def test_dir(case, tmpenv):\n    check(case)\n")
+    autouse = tmp_path / "test_iso.py"
+    autouse.write_text("@pytest.fixture(autouse=True)\ndef iso():\n    yield\n")
+    assert not H._needs_fixtures(plain)
+    assert H._needs_fixtures(fixture_arg) and H._needs_fixtures(autouse)

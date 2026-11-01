@@ -22,7 +22,7 @@ from .. import kernel as K
 import importlib
 E = importlib.import_module("mikoshilang.evaluate")
 from .core import fn, record, Unevaluated, REGISTRY, S, R, L, is_list, has_float, is_numeric_value
-from .wl_common import ev, apply, is_sym, split_options, int_value
+from .wl_common import ev, apply, is_sym, split_options, int_value, reject_options
 
 AREA = "number theory (W09)"
 ADDED = dict(area=AREA, status="added")
@@ -2003,6 +2003,7 @@ def _findintnull(xs: Expr, d: Expr = None, *opts: Option) -> ListOf[Expr]:
         raise ValueError("FindIntegerNullVector: the argument must be a list of at least two numbers")
     pos, o = split_options((d,) + opts if d is not None else opts, ("WorkingPrecision", "ZeroTest"),
                            "FindIntegerNullVector")
+    reject_options(o, ("ZeroTest",), "FindIntegerNullVector")
     d = pos[0] if pos else None
     items = list(xs.args)
     for v in items:
