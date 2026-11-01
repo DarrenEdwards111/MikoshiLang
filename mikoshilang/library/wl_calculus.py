@@ -11,6 +11,8 @@ differentiated back, ODE and recurrence solutions are substituted back) or the c
 a clear error.  Kernel builtins (D, Limit, Series, Normal) are replaced with ``kernel_override`` so kernel.py is
 untouched.
 """
+
+from __future__ import annotations
 import sympy as sp
 from sympy.core.function import AppliedUndef
 
@@ -52,7 +54,7 @@ def _real_num(v):
     notes="Wolfram DiracDelta[x1, ...]: 0 when any argument is a nonzero real number, unevaluated otherwise "
           "(DiracDelta[0] stays); complex numeric arguments raise; integrates and transforms through SymPy "
           "(Integrate[f[x] DiracDelta[x - a], {x, -Infinity, Infinity}] -> f[a]); D[HeavisideTheta[x], x] -> DiracDelta[x]")
-def _diracdelta(*args):
+def _diracdelta(*args: Expr) -> Integer:
     vals = [sym(a, "DiracDelta") for a in args]
     for v in vals:
         if v.is_number and v.is_extended_real is False:
@@ -65,7 +67,7 @@ def _diracdelta(*args):
 @fn("HeavisideTheta", area=AREA, status="added",
     notes="Wolfram HeavisideTheta[x1, ...]: 1 when every argument is positive, 0 when any is negative, "
           "unevaluated at 0 (unlike UnitStep[0] = 1 and SymPy's Heaviside(0) = 1/2); D gives DiracDelta")
-def _heaviside(*args):
+def _heaviside(*args: Expr) -> Integer:
     vals = [sym(a, "HeavisideTheta") for a in args]
     for v in vals:
         if v.is_number and v.is_extended_real is False:
@@ -83,7 +85,7 @@ def _heaviside(*args):
           "ConditionalExpression[x, a && b]), otherwise unevaluated (returned by Integrate, Sum, Solve and the "
           "Fourier coefficient functions for parameter conditions; arithmetic on ConditionalExpression objects is "
           "not propagated).  Single implementation shared by batches 4 and 6.")
-def _condexpr(e, c):
+def _condexpr(e: Expr, c: Expr) -> Expr:
     if is_true(c):
         return e
     if is_false(c):
@@ -351,7 +353,7 @@ KL.apply_compound_head = apply_compound_head
           "function (Derivative[1][Sin] -> Cos[#1] &, Derivative[2][#^3 &] -> 6 #1 &); Derivative[n...][f][x...] "
           "evaluates for known f (Sin'[x] -> Cos[x], previously unevaluated) and stays symbolic for undefined f "
           "(f'[x], Derivative[1, 0][f][x, y]); Derivative[0][f] -> f")
-def _derivative_head(*orders):
+def _derivative_head(*orders: Expr) -> Expr:
     for o in orders:
         if not K.is_int(o) or int(o) < 0:
             raise ValueError("Derivative: orders must be non-negative integers")
@@ -511,7 +513,7 @@ def _verify_antiderivative(F, f, x):
          "Log[2]); SymPy convergence conditions are rewritten in Wolfram form (Abs[Arg[a]] < Pi/2 -> Re[a] > 0); "
          "integrals that diverge to +-Infinity give that limit, indeterminate (oscillating/cancelling) ones raise; "
          "HeavisideTheta and DiracDelta integrands are supported; integrals SymPy cannot do stay unevaluated")
-def _integrate(f, *args):
+def _integrate(f: Expr, *args: Expr) -> Expr:
     from .assume import effective, from_sym
     specs, opts = split_opts(args, {"Assumptions", "GenerateConditions", "PrincipalValue"}, "Integrate")
     for s_ in specs:
@@ -793,13 +795,13 @@ def _extreme_limit(a, fname, which):
     notes="upper limit (limsup) MaxLimit[f, x -> a] with Direction and Assumptions: the larger one-sided limit, "
           "or A + |B| for f = A + B Sin[g] / A + B Cos[g] with g -> +-Infinity (MaxLimit[Sin[1/x], x -> 0] -> 1); "
           "other oscillating functions raise")
-def _maxlimit(*a):
+def _maxlimit(*a: Expr) -> Expr:
     return _extreme_limit(list(a), "MaxLimit", "upper")
 
 
 @fn("MinLimit", area=AREA, status="added",
     notes="lower limit (liminf) MinLimit[f, x -> a]; see MaxLimit (MinLimit[Sign[x], x -> 0] -> -1)")
-def _minlimit(*a):
+def _minlimit(*a: Expr) -> Expr:
     return _extreme_limit(list(a), "MinLimit", "lower")
 
 
@@ -1087,7 +1089,7 @@ def _b_normal(a, ev, expr):
 @fn("O", area=AREA, status="added",
     notes="order term O[x]^n / O[x - x0]^n / O[1/x]^n of Series results (stays symbolic); Normal removes it; "
           "SeriesCoefficient, InverseSeries and ComposeSeries read it")
-def _o(*args):
+def _o(*args: Expr) -> Expr:
     if len(args) != 1:
         raise ValueError("O takes one argument")
     raise Unevaluated()
@@ -1146,7 +1148,7 @@ def _fps_coefficient(g, t, nsym, fname):
           "(1/x)^n), several variables {x, x0, nx}, {y, y0, ny}, and SeriesCoefficient[series, n]; a symbolic n "
           "gives Piecewise[{{general term, n >= 0}}, 0] when SymPy finds a formal power series (checked against "
           "10 Taylor coefficients); a coefficient beyond a given series' order is Indeterminate")
-def _seriescoefficient(f, *specs):
+def _seriescoefficient(f: Expr, *specs: Expr) -> Expr:
     if not specs:
         raise ValueError("SeriesCoefficient needs a specification")
     if len(specs) == 1 and not is_list(specs[0]):
@@ -1201,7 +1203,7 @@ def _check_origin(sd, fname, what):
     notes="InverseSeries[s] / InverseSeries[s, y] for a power series s = a1 x + a2 x^2 + ... + O[x]^n about 0 "
           "with a1 != 0: the series of the inverse function to the same order (InverseSeries[Series[Sin[x], "
           "{x, 0, 5}]] -> x + x^3/6 + 3 x^5/40 + O[x]^6); the result is checked by composing back")
-def _inverseseries(s, y=None):
+def _inverseseries(s: Expr, y: Expr = None) -> Expr:
     sd = parse_series(s, "InverseSeries")
     _check_origin(sd, "InverseSeries", "the input")
     x = sd.x
@@ -1231,7 +1233,7 @@ def _inverseseries(s, y=None):
     notes="ComposeSeries[s1, s2, ...] = s1(s2(...)) for power series about 0 where the inner series vanish at 0; "
           "the order is the one the truncations allow (ComposeSeries[Series[Exp[x], {x, 0, 5}], Series[Sin[x], "
           "{x, 0, 5}]] -> 1 + x + x^2/2 - x^4/8 - x^5/15 + O[x]^6)")
-def _composeseries(s1, s2, *more):
+def _composeseries(s1: Expr, s2: Expr, *more: Expr) -> Expr:
     if more:
         return _composeseries(s1, _composeseries(s2, *more))
     A = parse_series(s1, "ComposeSeries")
@@ -1332,14 +1334,14 @@ def _sum_common(fname, op, f, args):
          "parametric series that SymPy sums under a convergence condition: Wolfram's generic value by default "
          "(Sum[x^k, {k, 0, Infinity}] -> 1/(1 - x); previously a recursion error) and "
          "ConditionalExpression[value, cond] with GenerateConditions -> True")
-def _sum(f, *args):
+def _sum(f: Expr, *args: Expr) -> Expr:
     return _sum_common("Sum", "sum", f, args)
 
 
 @replace("Product", AREA,
          "batch 4: as Sum (finite, symbolic and infinite products via SymPy; parametric products give the generic "
          "value, ConditionalExpression with GenerateConditions -> True)")
-def _product(f, *args):
+def _product(f: Expr, *args: Expr) -> Expr:
     return _sum_common("Product", "product", f, args)
 
 
@@ -1347,7 +1349,7 @@ def _product(f, *args):
     notes="SumConvergence[f, n]: True/False for the convergence of Sum[f, {n, k, Infinity}] (SymPy's ratio, root, "
           "integral, comparison, alternating-series tests); the p-series family 1/n^p and n^p r^n with a "
           "parameter gives the Wolfram condition (Re[p] > 1, Abs[r] < 1); undecided cases stay unevaluated")
-def _sumconvergence(f, n, *opts):
+def _sumconvergence(f: Expr, n: Var, *opts: Option) -> Expr:
     v = sym(f, "SumConvergence")
     nv = variable(n, "SumConvergence")
     ni = sp.Symbol(nv.name, integer=True, positive=True)
@@ -1461,7 +1463,7 @@ def _with_constants(e):
          "linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every "
          "solution is substituted back into the recurrence and the initial conditions; free constants are C[1], "
          "C[2], ...; systems raise")
-def _rsolve(eq, fexpr, n):
+def _rsolve(eq: Expr, fexpr: Expr, n: Expr) -> Expr:
     name, nv, sols = _rsolve_core(eq, fexpr, n, "RSolve")
     rules = []
     for s_ in sols:
@@ -1475,7 +1477,7 @@ def _rsolve(eq, fexpr, n):
 @fn("RSolveValue", area=AREA, status="added",
     notes="RSolveValue[eqns, a[n], n] gives the solution value, RSolveValue[eqns, a, n] a pure function, "
           "RSolveValue[eqns, expr, n] the value of expr (e.g. a[10]); checked like RSolve")
-def _rsolvevalue(eq, target, n):
+def _rsolvevalue(eq: Expr, target: Expr, n: Var) -> Expr:
     nv = variable(n, "RSolveValue")
     if isinstance(target, Symbol):
         fexpr, name = target, target.name
@@ -1574,7 +1576,7 @@ def _b_dsolve(a, ev, expr):
 @fn("DSolveValue", area=AREA, status="added",
     notes="DSolveValue[eqns, y[x], x] gives the solution value, DSolveValue[eqns, y, x] a pure function, "
           "DSolveValue[eqns, expr, x] the value of expr; several solutions give a list; checked like DSolve")
-def _dsolvevalue(eqs, target, x):
+def _dsolvevalue(eqs: Expr, target: Expr, x: Expr) -> Expr:
     from ..evaluate import evaluate
     ev = lambda e: evaluate(e, 1)   # noqa: E731
     if isinstance(target, Symbol) or (isinstance(target, Expr) and isinstance(target.head, str)
@@ -1607,7 +1609,7 @@ def _applied(e):
     notes="ImplicitD[f == g, y, x] = dy/dx for y defined implicitly (ImplicitD[x^2 + y^2 == 1, y, x] -> -x/y), "
           "ImplicitD[eqn, y, {x, n}] higher derivatives (expressed in x and y), ImplicitD[{eqns}, {y1, y2}, x] "
           "for systems")
-def _implicitd(eqn, ys, xspec):
+def _implicitd(eqn: Expr, ys: Expr, xspec: Expr) -> Expr:
     if is_list(xspec):
         if len(xspec.args) != 2:
             raise ValueError("ImplicitD: give {x, n}")
@@ -1710,14 +1712,14 @@ def _ft_general(fname, e, t, w, rest, inverse):
          "Wolfram convention (1/√(2π)) ∫ f e^(iωt) dt, numerically verified at frequencies of both signs (raises "
          "if SymPy's closed form cannot be verified); batch 4: FourierParameters -> {a, b} (numeric) gives "
          "Sqrt[|b|/(2π)^(1-a)] ∫ f e^(i b ω t) dt, threads over equations and lists")
-def _ft4(e, t, w, *rest):
+def _ft4(e: Expr, t: Expr, w: Expr, *rest: Expr) -> Expr:
     return _ft_general("FourierTransform", e, t, w, rest, False)
 
 
 @replace("InverseFourierTransform", _TR.AREA,
          "Wolfram convention (1/√(2π)) ∫ F e^(-iωt) dω, numerically verified; batch 4: FourierParameters -> "
          "{a, b} gives Sqrt[|b|/(2π)^(1+a)] ∫ F e^(-i b ω t) dω, threads over equations and lists")
-def _ift4(e, w, t, *rest):
+def _ift4(e: Expr, w: Expr, t: Expr, *rest: Expr) -> Expr:
     return _ft_general("InverseFourierTransform", e, w, t, rest, True)
 
 
@@ -1787,7 +1789,7 @@ def _mk_sincos(name, kind, inverse):
               f"2 Sqrt[|b|/(2π)^(1{'+' if inverse else '-'}a)] times the integral with frequency b ω; the closed "
               "form is checked numerically at three frequencies and returned in the form valid for ω > 0 (as Wolfram); threads over "
               "equations; unevaluated if SymPy has no closed form")
-    def _impl(e, t, w, *rest):
+    def _impl(e: Expr, t: Expr, w: Expr, *rest: Expr) -> Expr:
         return _sincos_transform(name, e, t, w, rest, kind, inverse)
     return _impl
 
@@ -1810,7 +1812,7 @@ def _undef_transform_ok(r, cls):
          "derivatives of undefined functions (LaplaceTransform[f'[t], t, s] -> s LaplaceTransform[f[t], t, s] - "
          "f[0]), HeavisideTheta and DiracDelta shifts, threads over equations and lists; unevaluated when SymPy "
          "cannot transform")
-def _lt4(e, t, s, *rest):
+def _lt4(e: Expr, t: Expr, s: Expr, *rest: Expr) -> Expr:
     _, opts = split_opts(rest, {"Assumptions", "GenerateConditions"}, "LaplaceTransform")
     th = _equation_thread(e, lambda x: _lt4(x, t, s, *rest))
     if th is not None:
@@ -1912,7 +1914,7 @@ def _symbolic_coeff(make_integrand, tv, lo, hi, scale, n, fname, n0_scale=None, 
           "{1, 1}; other parameters raise); integer or symbolic n (symbolic n is integer: a separate n == 0 "
           "value appears as Piecewise[{{c0, n == 0}}, g[n]]); the general term is checked against direct "
           "integrals at n = ±1, ±2, 3, 5")
-def _fcoeff(e, t, n, *rest):
+def _fcoeff(e: Expr, t: Var, n: Expr, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierCoefficient")
     tv = variable(t, "FourierCoefficient")
     f = to_heaviside(sym(e, "FourierCoefficient"))
@@ -1946,14 +1948,14 @@ def _trig_coeff(kind, e, t, n, rest, fname):
 @fn("FourierCosCoefficient", area=AREA, status="added",
     notes="FourierCosCoefficient[f, t, n] = 2/π ∫_0^π f cos(nt) dt, with 1/π ∫_0^π f dt for n = 0 (Wolfram); "
           "symbolic n checked against direct integrals")
-def _fcc(e, t, n, *rest):
+def _fcc(e: Expr, t: Expr, n: Expr, *rest: Expr) -> Expr:
     return _trig_coeff("cos", e, t, n, rest, "FourierCosCoefficient")
 
 
 @fn("FourierSinCoefficient", area=AREA, status="added",
     notes="FourierSinCoefficient[f, t, n] = 2/π ∫_0^π f sin(nt) dt (Wolfram); symbolic n checked against direct "
           "integrals")
-def _fsc(e, t, n, *rest):
+def _fsc(e: Expr, t: Expr, n: Expr, *rest: Expr) -> Expr:
     return _trig_coeff("sin", e, t, n, rest, "FourierSinCoefficient")
 
 
@@ -1964,7 +1966,7 @@ def _fs_order(k, fname):
 @fn("FourierSeries", area=AREA, status="added",
     notes="FourierSeries[f, t, k] = Σ_{n=-k}^{k} FourierCoefficient[f, t, n] E^(I n t) (Wolfram default "
           "parameters; others raise)")
-def _fseries(e, t, k, *rest):
+def _fseries(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierSeries")
     kk = _fs_order(k, "FourierSeries")
     tv = variable(t, "FourierSeries")
@@ -1979,7 +1981,7 @@ def _fseries(e, t, k, *rest):
 @fn("FourierTrigSeries", area=AREA, status="added",
     notes="FourierTrigSeries[f, t, k] = a0 + Σ_{n=1}^{k} (a_n Cos[n t] + b_n Sin[n t]) with a0 = 1/(2π)∫f, "
           "a_n = 1/π ∫_{-π}^{π} f cos(nt), b_n = 1/π ∫_{-π}^{π} f sin(nt) (Wolfram default parameters)")
-def _ftrig(e, t, k, *rest):
+def _ftrig(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierTrigSeries")
     kk = _fs_order(k, "FourierTrigSeries")
     tv = variable(t, "FourierTrigSeries")
@@ -1995,7 +1997,7 @@ def _ftrig(e, t, k, *rest):
 @fn("FourierCosSeries", area=AREA, status="added",
     notes="FourierCosSeries[f, t, k] = Σ_{n=0}^{k} FourierCosCoefficient[f, t, n] Cos[n t] (even extension of f "
           "on [0, π])")
-def _fcosser(e, t, k, *rest):
+def _fcosser(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierCosSeries")
     kk = _fs_order(k, "FourierCosSeries")
     tv = variable(t, "FourierCosSeries")
@@ -2010,7 +2012,7 @@ def _fcosser(e, t, k, *rest):
 @fn("FourierSinSeries", area=AREA, status="added",
     notes="FourierSinSeries[f, t, k] = Σ_{n=1}^{k} FourierSinCoefficient[f, t, n] Sin[n t] (odd extension of f "
           "on [0, π])")
-def _fsinser(e, t, k, *rest):
+def _fsinser(e: Expr, t: Var, k: NonNegInteger, *rest: Expr) -> Expr:
     _fs_opts(rest, "FourierSinSeries")
     kk = _fs_order(k, "FourierSinSeries")
     tv = variable(t, "FourierSinSeries")
@@ -2025,7 +2027,7 @@ def _fsinser(e, t, k, *rest):
 @fn("MellinTransform", area=_TR.AREA, status="added",
     notes="MellinTransform[f, x, s] = ∫_0^∞ x^(s-1) f dx (Wolfram); convergence strip dropped (generic value), "
           "checked numerically at two real s inside the strip; unevaluated if SymPy has no closed form")
-def _mellin(e, x, s, *rest):
+def _mellin(e: Expr, x: Var, s: Var, *rest: Expr) -> Expr:
     import mpmath as mp
     _, opts = split_opts(rest, {"Assumptions", "GenerateConditions"}, "MellinTransform")
     f = sym(e, "MellinTransform")
@@ -2058,7 +2060,7 @@ def _mellin(e, x, s, *rest):
 @fn("InverseMellinTransform", area=_TR.AREA, status="added",
     notes="InverseMellinTransform[F, s, x] via SymPy (fundamental strip inferred); result checked by transforming "
           "back with MellinTransform; unevaluated otherwise")
-def _imellin(e, s, x, *rest):
+def _imellin(e: Expr, s: Var, x: Var, *rest: Expr) -> Expr:
     F = sym(e, "InverseMellinTransform")
     sv, xv = variable(s, "InverseMellinTransform"), variable(x, "InverseMellinTransform")
     xp = sp.Symbol(xv.name, positive=True)
@@ -2145,7 +2147,7 @@ def _wrap_vc(name, impl3, notes):
     orig = REGISTRY_get(name)
 
     @replace(name, _CA.AREA, notes)
-    def _w(f, vs, *chart):
+    def _w(f: Expr, vs: Expr, *chart: Expr) -> Expr:
         if not chart:
             return orig(f, vs)
         if len(chart) != 1:
@@ -2213,7 +2215,7 @@ _orig_arclength = REGISTRY_get("ArcLength")
          "ArcLength[f, {x, a, b}] = ∫ Sqrt[1 + f'^2] (graph of f, MikoshiLang); batch 4: Wolfram's parametric form "
          "ArcLength[{x1[t], ..., xn[t]}, {t, a, b}] = ∫ Sqrt[Σ xi'^2] dt, ArcLength[Line[{p1, ...}]] (polyline), "
          "ArcLength[Circle[c, r]] = 2 π r; numeric input gives numeric output")
-def _arclength4(f, *spec):
+def _arclength4(f: Expr, *spec: Expr) -> Expr:
     if not spec:
         if isinstance(f, Expr) and f.head == "Line" and len(f.args) == 1:
             pts = [[sym(c, "ArcLength") for c in list_arg(p, "ArcLength", "point")]
@@ -2244,7 +2246,7 @@ def _arclength4(f, *spec):
     notes="ArcCurvature[{x1[t], ..., xn[t]}, t] = Sqrt[|r'|^2 |r''|^2 - (r'.r'')^2]/|r'|^3 (t real; gives "
           "|x'y'' - y'x''|/(x'^2 + y'^2)^(3/2) in 2D, |r' x r''|/|r'|^3 in 3D); ArcCurvature[f, x] for the graph "
           "y = f(x): Abs[f'']/(1 + f'^2)^(3/2)")
-def _arccurv(f, t, *rest):
+def _arccurv(f: Expr, t: Expr, *rest: Expr) -> Expr:
     if rest:
         raise NotImplementedError("ArcCurvature: coordinate charts are not supported")
     tv = variable(t, "ArcCurvature")

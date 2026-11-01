@@ -9,6 +9,8 @@
   Resolve) only accept purely Boolean expressions: a non-Boolean atom such as ``x > 0`` raises rather than being
   treated as an independent variable.
 """
+
+from __future__ import annotations
 import itertools
 
 import sympy as sp
@@ -325,7 +327,7 @@ def _minimal(sv, form, syms=None):
 
 @fn("Boole", area=AREA, status="added", listable=True, notes="Boole[True] = 1, Boole[False] = 0; other arguments "
     "stay unevaluated")
-def _boole(x):
+def _boole(x: Expr) -> Integer:
     if x is True:
         return 1
     if x is False:
@@ -337,7 +339,7 @@ def _boole(x):
     notes="True when more than half of the (odd number of) arguments are True, False when more than half are False; "
           "symbolic arguments stay unevaluated unless the count is already decided; an even number of arguments "
           "raises")
-def _majority(*args):
+def _majority(*args: Expr) -> Boolean:
     if len(args) % 2 == 0:
         raise ValueError("Majority needs an odd number of arguments")
     t = sum(1 for a in args if a is True)
@@ -352,7 +354,7 @@ def _majority(*args):
 
 @fn("BooleanVariables", area=AREA, status="added",
     notes="the distinct variables (non-connective atoms) of a Boolean expression in canonical order")
-def _boolvars(e):
+def _boolvars(e: Expr) -> ListOf[Expr]:
     c = Conv(False, "BooleanVariables")
     c.to(e)
     return L(*sorted(c.order, key=K.order_key))
@@ -397,7 +399,7 @@ def _expr_from_rows(rows, vars_, fname):
           "order; BooleanFunction[8, 2] is And) applied to True/False arguments; BooleanFunction[k, {vars}] and "
           "BooleanFunction[table, {vars}] give an equivalent minimal disjunctive normal form; "
           "BooleanFunction[table] gives BooleanFunction[k, n]")
-def _boolfun(spec, n=None):
+def _boolfun(spec: Expr, n: Expr = None) -> Expr:
     if n is None:
         vals, m = _truth_values(spec, "BooleanFunction")
         k = 0
@@ -425,7 +427,7 @@ def _boolfun(spec, n=None):
 @fn("BooleanCountingFunction", area=AREA, status="added",
     notes="BooleanCountingFunction[kmax, n] (at most kmax True), [{k}, n] (exactly k), [{k1, k2, ...}, n], "
           "[{{kmin, kmax}}, n] pure functions; with a variable list gives an equivalent minimal DNF")
-def _bcf(spec, n):
+def _bcf(spec: Expr, n: Expr) -> Expr:
     if is_list(n):
         vars_ = list(n.args)
         counts = _bcf_counts(spec, len(vars_), "BooleanCountingFunction")
@@ -487,7 +489,7 @@ def _table(e, groups):
     notes="truth values over Tuples[{True, False}, n] (BooleanTable[expr] uses BooleanVariables); nested tables for "
           "several variable lists (outermost first); pure BooleanFunction / BooleanCountingFunction / Function; "
           "non-Boolean expressions are substituted (BooleanTable[f[a, b], {a, b}])")
-def _booltable(e, *groups):
+def _booltable(e: Expr, *groups: Expr) -> Expr:
     if _pure_arity(e, "BooleanTable") is not None:
         expr, vs = _pure_to_expr(e, "BooleanTable")
         if not groups:
@@ -524,7 +526,7 @@ def _decide_setup(e, vars_, fname):
 
 @fn("SatisfiableQ", area=AREA, status="added", notes="True if some assignment of the variables makes the "
     "expression True (exact truth table up to 22 variables, SymPy SAT solver beyond)")
-def _satq(e, vars_=None):
+def _satq(e: Expr, vars_: Expr = None) -> Boolean:
     c, sv = _decide_setup(e, vars_, "SatisfiableQ")
     syms = c.symbols()
     if len(syms) > MAX_VARS:
@@ -535,7 +537,7 @@ def _satq(e, vars_=None):
 
 @fn("TautologyQ", area=AREA, status="added", notes="True if every assignment of the variables makes the expression "
     "True")
-def _tautq(e, vars_=None):
+def _tautq(e: Expr, vars_: Expr = None) -> Boolean:
     c, sv = _decide_setup(e, vars_, "TautologyQ")
     syms = c.symbols()
     if len(syms) > MAX_VARS:
@@ -546,7 +548,7 @@ def _tautq(e, vars_=None):
 
 @fn("SatisfiabilityCount", area=AREA, status="added", notes="number of assignments (of BooleanVariables or the "
     "given variables, so extra variables double the count) that make the expression True")
-def _satcount(e, vars_=None):
+def _satcount(e: Expr, vars_: Expr = None) -> Expr:
     c, sv = _decide_setup(e, vars_, "SatisfiabilityCount")
     m, _ = truth_mask(sv, c.symbols())
     return bin(m).count("1")
@@ -556,7 +558,7 @@ def _satcount(e, vars_=None):
     notes="SatisfiabilityInstances[expr, vars], [expr, vars, m], [expr, vars, All] and pure-function forms: lists of "
           "truth values that make expr True, enumerated with False before True (lexicographic); {} if unsatisfiable. "
           "Wolfram does not document which instances it returns first; every returned instance is valid")
-def _satinst(e, vars_=None, m=None):
+def _satinst(e: Expr, vars_: Expr = None, m: Expr = None) -> ListOf[Expr]:
     if _pure_arity(e, "SatisfiabilityInstances") is not None:
         if vars_ is not None and m is None:
             vars_, m = None, vars_
@@ -654,7 +656,7 @@ _FORMS = {"DNF": "DNF", "SOP": "DNF", "CNF": "CNF", "POS": "CNF", "ANF": "ANF", 
           "normal form, Xor of Ands), \"ESOP\" (given as the ANF, which is an exclusive sum of products), \"NAND\", "
           "\"NOR\", \"AND\", \"OR\" (two-level with Not); BooleanConvert[expr, form, cond] uses cond as a care set "
           "for DNF/CNF; other forms (IMPLIES, ITE, BFF, BDT, binary NAND/NOR) raise")
-def _bconvert(e, form=None, cond=None):
+def _bconvert(e: Expr, form: Expr = None, cond: Expr = None) -> Expr:
     if isinstance(form, Expr) and not isinstance(form, str) and cond is None and not isinstance(form, Symbol):
         form, cond = None, form
     fname = "BooleanConvert"
@@ -738,7 +740,7 @@ def _expand_lists(e):
           "inwards, expanding Xor/Implies/Equivalent), removing contradictory and absorbed terms; equations between "
           "lists are split elementwise; non-Boolean atoms (equations, inequalities) are kept as they are "
           "(LogicalExpand[x y == 0] is not split into cases)")
-def _lexpand(e):
+def _lexpand(e: Expr) -> Expr:
     e2 = _expand_lists(e)
     c = Conv(False, "LogicalExpand")
     sv = c.to(e2)
@@ -770,7 +772,7 @@ def _quant(name):
     @fn(name, area=AREA, status="added",
         notes=f"{name}[x, expr] and {name}[x, cond, expr] (x a symbol or list of symbols); evaluates when the body does "
               f"not depend on the variables (e.g. {name}[x, True] = True), otherwise stays for Resolve")
-    def impl(x, a, b=None):
+    def impl(x: Expr, a: Expr, b: Expr = None) -> Expr:
         vs = _qvars(x, name)
         body = a if b is None else Expr("Implies" if name == "ForAll" else "And", a, b)
         if _free_of(body, vs):
@@ -812,7 +814,7 @@ def _contains_quantifier(e):
     notes="eliminates ForAll/Exists from purely Boolean formulas (variables over Booleans) and returns an equivalent "
           "minimal DNF; quantifiers over non-Boolean formulas (real/complex/integer quantifier elimination) raise; "
           "quantifier-free input is returned unchanged")
-def _resolve(e, dom=None):
+def _resolve(e: Expr, dom: Expr = None) -> Expr:
     if dom is not None and not (isinstance(dom, Symbol) and dom.name == "Booleans"):
         if _contains_quantifier(e):
             raise NotImplementedError(f"Resolve: quantifier elimination over {dom!r} is not supported (only Booleans)")
@@ -843,7 +845,7 @@ def _junction(name, op):
     @fn(name, area=AREA, status="added",
         notes=f"{name}[expr, {{a1, ...}}]: {op} of expr over all True/False values of the a_i, as an equivalent "
               "minimal DNF")
-    def impl(e, vars_):
+    def impl(e: Expr, vars_: Expr) -> Expr:
         vs = _var_list(vars_, name)
         body = e
         for v in vs:
@@ -934,7 +936,7 @@ def _equiv_partial(*args):
 def _install(name, impl, min_args, notes):
     from .core import REGISTRY, record
 
-    def f(*args):
+    def f(*args: Expr) -> Expr:
         if len(args) < min_args:
             raise ValueError(f"{name} needs at least {min_args} arguments")
         return impl(*args)

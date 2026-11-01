@@ -5,6 +5,8 @@ binary precision above 53 bits).  Arithmetic is fixed-precision (the result of a
 input precision); Wolfram's significance arithmetic, which also lowers precision on cancellation, is not
 modelled.  A requested precision at or below MachinePrecision gives a machine number.
 """
+
+from __future__ import annotations
 import math
 from fractions import Fraction
 
@@ -79,7 +81,7 @@ def _is_zero_bignum(x):
           "MachinePrecision for machine numbers, the decimal precision of a bignum; the minimum over an "
           "expression (a machine number makes the whole expression MachinePrecision). An arbitrary-precision zero "
           "has Precision 0.")
-def _precision(x):
+def _precision(x: Expr) -> Expr:
     zeros = [leaf for leaf in _leaves(x) if _is_zero_bignum(leaf)]
     p = _min_prec(x)
     if p is None:
@@ -99,7 +101,7 @@ def _abs_log10(v):
 @fn("Accuracy", area=AREA, status="added",
     notes="Accuracy[x] = Precision[x] - Log10[Abs[x]] (digits after the decimal point); Infinity for exact "
           "numbers; machine zero has Accuracy -Log10[$MinMachineNumber] = 307.653; the minimum over an expression")
-def _accuracy(x):
+def _accuracy(x: Expr) -> Expr:
     best = None
     for leaf in _leaves(x):
         p = _num_prec(leaf)
@@ -203,7 +205,7 @@ def _target(p, name):
           "machine numbers keep their exact binary value padded with binary zeros (SetPrecision[0.1, 20] = "
           "0.10000000000000000555), p = Infinity converts approximate numbers to the exact rationals they "
           "represent, p = MachinePrecision gives machine numbers; the result is re-evaluated")
-def _setprecision(x, p):
+def _setprecision(x: Expr, p: Expr) -> Expr:
     from ..evaluate import evaluate
     return _set_prec(x, _target(p, "SetPrecision"), evaluate)
 
@@ -211,7 +213,7 @@ def _setprecision(x, p):
 @fn("SetAccuracy", area=AREA, status="added",
     notes="SetAccuracy[expr, a]: each number gets precision a + Log10[Abs[x]] (an arbitrary-precision zero keeps "
           "accuracy a)")
-def _setaccuracy(x, a):
+def _setaccuracy(x: Expr, a: Expr) -> Expr:
     from ..evaluate import evaluate
     t = _target(a, "SetAccuracy")
     if t[0] == "bits":
@@ -266,7 +268,7 @@ def _chop(x, d):
 @fn("Chop", area=AREA, status="added",
     notes="Chop[expr, delta] replaces approximate real numbers (and real or imaginary parts) with absolute value "
           "below delta (default 10^-10) by exact 0; exact numbers are untouched")
-def _chop_impl(x, delta=None):
+def _chop_impl(x: Expr, delta: Expr = None) -> Expr:
     d = 1e-10 if delta is None else float(number(delta, "Chop", "tolerance"))
     return _chop(x, d)
 
@@ -387,7 +389,7 @@ def _rat_walk(x, dx):
           "convergent within dx, refined to the smallest semiconvergent within dx (Rationalize[Pi, 1/1000] = "
           "201/64); Rationalize[x, 0] gives the simplest rational within the precision of x; applies to every "
           "approximate number of an expression")
-def _rationalize(x, dx=None):
+def _rationalize(x: Expr, dx: Expr = None) -> Expr:
     if dx is None:
         return _rat_walk(x, None)
     d = number(dx, "Rationalize", "tolerance")
@@ -420,7 +422,7 @@ def _ipart_real(v):
 @fn("IntegerPart", area=AREA, status="added", listable=True,
     notes="integer part (truncation toward zero) as an exact integer, separately for real and imaginary parts; "
           "IntegerPart[Infinity] = Infinity")
-def _integerpart(x):
+def _integerpart(x: Expr) -> Expr:
     if isinstance(x, (Symbol, Expr)) and not isinstance(x, sp.Basic):
         v = sym(x, "IntegerPart")
         if not v.is_number:
@@ -437,7 +439,7 @@ def _integerpart(x):
 @fn("FractionalPart", area=AREA, status="added", listable=True,
     notes="FractionalPart[x] = x - IntegerPart[x] (same sign as x: FractionalPart[-2.4] = -0.4), separately "
           "for real and imaginary parts; exact for exact input")
-def _fracpart(x):
+def _fracpart(x: Expr) -> Expr:
     v = sym(x, "FractionalPart")
     if not v.is_number:
         raise Unevaluated()
@@ -518,7 +520,7 @@ def _digits_fixed(q: Fraction, b: int, length: int, top=None):
           "Indeterminate; exact rationals give the exact digits with the recurring block as a nested list "
           "(RealDigits[19/7] = {{2, {7, 1, 4, 2, 8, 5}}, 1}); exact irrationals need len. Digits are of Abs[x]; "
           "an approximate number's digits are those of its exact binary value, rounded at its precision")
-def _realdigits(x, b=10, length=None, start=None):
+def _realdigits(x: Expr, b: Integer = 10, length: Expr = None, start: Expr = None) -> ListOf[Expr]:
     name = "RealDigits"
     base = _int_base(b, name)
     v = sym(x, name)
@@ -601,7 +603,7 @@ def _numexpr(x, name):
 @fn("Rescale", area=AREA, status="added",
     notes="Rescale[x, {min, max}] = (x - min)/(max - min); Rescale[x, {min, max}, {ymin, ymax}]; Rescale[list] "
           "uses Min[list] and Max[list]; works symbolically")
-def _rescale(x, rng=None, out=None):
+def _rescale(x: Expr, rng: Expr = None, out: Expr = None) -> Expr:
     if rng is None:
         if not is_list(x):
             raise ValueError("Rescale[list] needs a list")
@@ -658,7 +660,7 @@ def _clip_one(x, lo, hi, vlo, vhi):
 @fn("Clip", area=AREA, status="added",
     notes="Clip[x] clips to [-1, 1]; Clip[x, {min, max}]; Clip[x, {min, max}, {vmin, vmax}] gives vmin below "
           "and vmax above; threads over lists; symbolic x stays unevaluated")
-def _clip(x, rng=None, vals=None):
+def _clip(x: Expr, rng: Expr = None, vals: Expr = None) -> Expr:
     if rng is None:
         lo, hi = sp.Integer(-1), sp.Integer(1)
         rlo, rhi = -1, 1
@@ -685,7 +687,7 @@ def _clip(x, rng=None, vals=None):
 @fn("Unitize", area=AREA, status="added",
     notes="Unitize[x] is 0 for x == 0 and 1 otherwise (exact integers, also for 0.); Unitize[x, dx] is 0 when "
           "Abs[x] < dx; threads over lists")
-def _unitize(x, dx=None):
+def _unitize(x: Expr, dx: Expr = None) -> Expr:
     if is_list(x):
         return Expr("List", *(_unitize(a, dx) for a in x.args))
     v = sym(x, "Unitize")
@@ -699,7 +701,7 @@ def _unitize(x, dx=None):
 
 @fn("RealAbs", area=AREA, status="added", listable=True,
     notes="absolute value for real numbers; stays unevaluated for symbolic and non-real arguments")
-def _realabs(x):
+def _realabs(x: Expr) -> Expr:
     v = sym(x, "RealAbs")
     if not v.is_number or v.is_real is False:
         raise Unevaluated()
@@ -728,14 +730,14 @@ def _numden(x, which):
 @fn("Numerator", area=AREA, status="added", listable=True,
     notes="numerator of a rational number or of a product with negative exponents (Numerator[x^2 y^-3] = x^2); "
           "sums are not combined over a common denominator (Numerator[a/b + c/d] is the whole sum)")
-def _numerator(x):
+def _numerator(x: Expr) -> Expr:
     return _numden(x, "Numerator")
 
 
 @fn("Denominator", area=AREA, status="added", listable=True,
     notes="denominator of a rational number or of the factors with negative exponents (Denominator[x/y^2] = "
           "y^2); 1 for sums and approximate numbers")
-def _denominator(x):
+def _denominator(x: Expr) -> Expr:
     return _numden(x, "Denominator")
 
 
@@ -765,19 +767,19 @@ def _is_complex_num(x, pred):
 @fn("ExactNumberQ", area=AREA, status="added",
     notes="True for integers, rationals and exact complex numbers; False for approximate numbers and for "
           "numeric expressions such as Pi or Sqrt[2] (which are not numbers)")
-def _exactq(x):
+def _exactq(x: Expr) -> Boolean:
     return _is_complex_num(x, lambda v: not isinstance(v, (float, complex, sp.Float)))
 
 
 @fn("InexactNumberQ", area=AREA, status="added",
     notes="True for approximate (machine or arbitrary-precision) real and complex numbers")
-def _inexactq(x):
+def _inexactq(x: Expr) -> Boolean:
     return _is_complex_num(x, lambda v: isinstance(v, (float, complex, sp.Float)))
 
 
 @fn("MachineNumberQ", area=AREA, status="added",
     notes="True for machine-precision real and complex numbers only")
-def _machineq(x):
+def _machineq(x: Expr) -> Boolean:
     return _is_complex_num(x, lambda v: isinstance(v, (float, complex)) or
                            (isinstance(v, sp.Float) and v._prec <= 53))
 
@@ -790,7 +792,7 @@ def _arg(v):
 
 @fn("Arg", area=AREA, status="added", listable=True,
     notes="argument in (-Pi, Pi]; Arg[0] = 0 (Wolfram); Arg[-1] = Pi; exact for exact input")
-def _arg_impl(z):
+def _arg_impl(z: Expr) -> Expr:
     from .core import numeric_out
     v = sym(z, "Arg")
     if not v.is_number:
@@ -799,7 +801,7 @@ def _arg_impl(z):
 
 
 @fn("ReIm", area=AREA, status="added", listable=True, notes="{Re[z], Im[z]}")
-def _reim(z):
+def _reim(z: Expr) -> ListOf[Expr]:
     from .core import numeric_out
     v = sym(z, "ReIm")
     if not v.is_number:
@@ -809,7 +811,7 @@ def _reim(z):
 
 
 @fn("AbsArg", area=AREA, status="added", listable=True, notes="{Abs[z], Arg[z]}")
-def _absarg(z):
+def _absarg(z: Expr) -> ListOf[Expr]:
     from .core import numeric_out
     v = sym(z, "AbsArg")
     if not v.is_number:
@@ -821,7 +823,7 @@ def _part(name, f):
     @fn(name, area=AREA, status="added", listable=True,
         notes=f"{'real' if name == 'Re' else 'imaginary'} part (Wolfram name; RealPart/ImaginaryPart are the legacy "
               "MikoshiLang names); exact for exact input, 0 (exact) for the imaginary part of a real")
-    def impl(z):
+    def impl(z: Expr) -> Expr:
         from .core import numeric_out
         v = sym(z, name)
         if not v.is_number:

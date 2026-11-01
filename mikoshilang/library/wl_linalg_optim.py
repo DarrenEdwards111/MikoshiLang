@@ -192,7 +192,7 @@ def _dist_out(value, u, v):
 
 def _dist(name, f, notes, scalar=True):
     @fn(name, **ADDED, notes=notes)
-    def impl(u, v):
+    def impl(u: Expr, v: Expr) -> Expr:
         a, b, _vec = _dist_args(u, v, name, scalar)
         return _dist_out(f(a, b), u, v)
     impl.__name__ = "_" + name
@@ -282,7 +282,7 @@ _dist("NormalizedSquaredEuclideanDistance", _nsqeuclid,
 @fn("BinaryDistance", **ADDED,
     notes="BinaryDistance[u, v] = Boole[!(u == v)]: 0 for equal expressions (1 == 1. counts as equal), 1 for "
           "different ones; Boole[u != v] when equality cannot be decided")
-def _binarydistance(u, v):
+def _binarydistance(u: Expr, v: Expr) -> Expr:
     r = ev(Expr("Equal", u, v))
     if r is True:
         return 0
@@ -324,7 +324,7 @@ def _ratio(num, den):
 def _booldist(name, f, formula):
     @fn(name, **ADDED, notes=f"{name}[u, v] = {formula} for Boolean vectors (True/False or 0/1), where nij counts "
                              "positions with u = i, v = j; 0/0 gives 0")
-    def impl(u, v):
+    def impl(u: Expr, v: Expr) -> Expr:
         n11, n10, n01, n00 = _bool_counts(u, v, name)
         return f(n11, n10, n01, n00)
     impl.__name__ = "_" + name
@@ -380,7 +380,7 @@ def _elements(x, fname):
           "numeric data, EditDistance for strings, JaccardDissimilarity for Boolean vectors) or DistanceFunction -> f; "
           "associations use their values; PerformanceGoal is accepted (results are always computed exactly or at "
           "input precision)")
-def _distancematrix(us, *rest):
+def _distancematrix(us: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts = split_options(rest, _DM_OPTS, "DistanceMatrix")
     if len(pos) > 1:
         raise ValueError("DistanceMatrix called with too many arguments")
@@ -509,7 +509,7 @@ def _dtw(s1, s2, rest, fname):
           "Booleans, or DistanceFunction -> f); WarpingDistance[s1, s2, win] with win = r | {\"SlantedBand\", r} | "
           "{\"Band\", r} | Automatic; the result is a machine real; the Parallelogram window and Method settings "
           "raise")
-def _warpingdistance(s1, s2, *rest):
+def _warpingdistance(s1: Expr, s2: Expr, *rest: Expr) -> Expr:
     d, _ = _dtw(s1, s2, rest, "WarpingDistance")
     return float(d)
 
@@ -517,7 +517,7 @@ def _warpingdistance(s1, s2, *rest):
 @fn("WarpingCorrespondence", **ADDED,
     notes="WarpingCorrespondence[s1, s2] = {n, m}: the index lists of the optimal dynamic time warping path (same "
           "windows and DistanceFunction as WarpingDistance; ties prefer the diagonal step)")
-def _warpingcorrespondence(s1, s2, *rest):
+def _warpingcorrespondence(s1: Expr, s2: Expr, *rest: Expr) -> ListOf[Expr]:
     _, path = _dtw(s1, s2, rest, "WarpingCorrespondence")
     return L(L(*(p[0] + 1 for p in path)), L(*(p[1] + 1 for p in path)))
 
@@ -527,7 +527,7 @@ def _warpingcorrespondence(s1, s2, *rest):
           "for numeric features, or DistanceFunction -> f); extractor is any function (e.g. a pure Function or "
           "Identity); FeatureDistance[extractor][e1, e2] operator form; FeatureExtractorFunction objects (machine-"
           "learned extractors from FeatureExtraction) are not available and raise")
-def _featuredistance(*args):
+def _featuredistance(*args: Expr) -> Expr:
     pos, opts = split_options(args, {"DistanceFunction"}, "FeatureDistance")
     if len(pos) == 1:
         raise Unevaluated()
@@ -653,7 +653,7 @@ def band_entries(band, rhs, rank, shape):
           "repeats v along the diagonal to the edge (or end); -> {v1, ...} fills successive positions (cycling when "
           "an end is given); -> array inserts a block; -> {a1, ...} places blocks along the diagonal (cyclically up "
           "to an explicit end, clipped at the edge); negative positions count from the end; Band itself is inert")
-def _band(*args):
+def _band(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -708,7 +708,7 @@ def _companion_coeffs(args, fname):
           "the leading coefficient): ones on the subdiagonal and -c_i down the last column; CompanionMatrix[..., dir] "
           "with dir = Right (default), Bottom (transpose), Top (-c(n-1), ..., -c0 along the first row) or Left "
           "(its transpose); TargetStructure -> \"Dense\" | \"Sparse\" accepted (dense result)")
-def _companionmatrix(*args):
+def _companionmatrix(*args: Expr) -> Expr:
     pos, opts = split_options(args, {"TargetStructure"}, "CompanionMatrix")
     if not pos:
         raise ValueError("CompanionMatrix needs a coefficient list or a polynomial and variable")
@@ -752,7 +752,7 @@ def _sequency(row):
           "entries +-1/Sqrt[n], rows in sequency order (Method -> \"Sequency\", default), Sylvester order "
           "(\"BitComplement\") or Paley/dyadic order (\"GrayCode\"); WorkingPrecision -> p gives numeric entries"
           + _STRUCT_NOTE)
-def _hadamardmatrix(n, *rest):
+def _hadamardmatrix(n: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, _TS | {"Method"}, "HadamardMatrix")
     if pos:
         raise ValueError("HadamardMatrix takes one size argument")
@@ -783,7 +783,7 @@ def _hadamardmatrix(n, *rest):
 @fn("JordanMatrix", **ADDED,
     notes="JordanMatrix[l, n] n x n Jordan block (l on the diagonal, 1 on the superdiagonal); JordanMatrix[l, n, "
           "Right] puts the ones below the diagonal (the transpose); l must be a scalar" + _STRUCT_NOTE)
-def _jordanmatrix(lam, n, *rest):
+def _jordanmatrix(lam: Expr, n: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts = split_options(rest, {"TargetStructure"}, "JordanMatrix")
     if is_list(lam):
         raise ValueError("JordanMatrix: the diagonal value must be a scalar")
@@ -845,7 +845,7 @@ def _perm_list(p, fname):
     notes="PermutationMatrix[permv] has a 1 in column permv[[i]] of row i; also from Cycles[...] (size = largest "
           "moved point), i <-> j, or a permutation matrix (validated); PermutationMatrix[perm, n] pads to n x n; "
           "Det is Signature[permv]" + _STRUCT_NOTE)
-def _permutationmatrix(p, *rest):
+def _permutationmatrix(p: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, _TS, "PermutationMatrix")
     perm = _perm_list(p, "PermutationMatrix")
     n = len(perm)
@@ -880,7 +880,7 @@ def _is_blockdiag_list(x):
 @fn("BlockDiagonalMatrix", **ADDED,
     notes="BlockDiagonalMatrix[{d1, d2, ...}] the block diagonal matrix with square blocks di ({} blocks are 0 x 0); "
           "BlockDiagonalMatrix[mat] accepts a (block diagonal) square matrix" + _STRUCT_NOTE)
-def _blockdiagonalmatrix(x, *rest):
+def _blockdiagonalmatrix(x: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"TargetStructure"}, "BlockDiagonalMatrix")
     if pos:
         raise ValueError("BlockDiagonalMatrix takes one argument")
@@ -910,12 +910,12 @@ def _triangular_check(x, fname, lower):
     return x
 
 
-def _ltm(x, *rest):
+def _ltm(x: MatrixOf[Expr], *rest: Expr) -> Expr:
     split_options(rest, {"TargetStructure"}, "LowerTriangularMatrix")
     return _triangular_check(x, "LowerTriangularMatrix", True)
 
 
-def _utm(x, *rest):
+def _utm(x: MatrixOf[Expr], *rest: Expr) -> Expr:
     split_options(rest, {"TargetStructure"}, "UpperTriangularMatrix")
     return _triangular_check(x, "UpperTriangularMatrix", False)
 
@@ -941,16 +941,22 @@ def _block_triangular(x, fname, lower):
     return x
 
 
-fn("BlockLowerTriangularMatrix", **ADDED,
+@fn("BlockLowerTriangularMatrix", **ADDED,
    notes="BlockLowerTriangularMatrix[lmat] for a square matrix (any square matrix is block lower triangular with "
-         "a single block, as in Wolfram)" + _STRUCT_NOTE)(
-    lambda x, *rest: (split_options(rest, {"TargetStructure"}, "BlockLowerTriangularMatrix"),
-                      _block_triangular(x, "BlockLowerTriangularMatrix", True))[1])
-fn("BlockUpperTriangularMatrix", **ADDED,
+         "a single block, as in Wolfram)" + _STRUCT_NOTE)
+def _block_lower_triangular_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
+    split_options(rest, {"TargetStructure"}, "BlockLowerTriangularMatrix")
+    return _block_triangular(x, "BlockLowerTriangularMatrix", True)
+
+
+@fn("BlockUpperTriangularMatrix", **ADDED,
    notes="BlockUpperTriangularMatrix[umat] for a square matrix (any square matrix is block upper triangular with "
-         "a single block, as in Wolfram)" + _STRUCT_NOTE)(
-    lambda x, *rest: (split_options(rest, {"TargetStructure"}, "BlockUpperTriangularMatrix"),
-                      _block_triangular(x, "BlockUpperTriangularMatrix", False))[1])
+         "a single block, as in Wolfram)" + _STRUCT_NOTE)
+def _block_upper_triangular_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
+    split_options(rest, {"TargetStructure"}, "BlockUpperTriangularMatrix")
+    return _block_triangular(x, "BlockUpperTriangularMatrix", False)
+
+
 
 
 def _triangle_rows(x, fname, conj):
@@ -987,16 +993,22 @@ def _triangle_rows(x, fname, conj):
     return _mout(M)
 
 
-fn("SymmetricMatrix", **ADDED,
+@fn("SymmetricMatrix", **ADDED,
    notes="SymmetricMatrix[smat] validates a symmetric matrix; SymmetricMatrix[{{s11, s12, ...}, {s22, ...}, ...}] "
-         "or the lower-triangular rows {{s11}, {s21, s22}, ...} fill in the other triangle" + _STRUCT_NOTE)(
-    lambda x, *rest: (split_options(rest, {"TargetStructure"}, "SymmetricMatrix"),
-                      _triangle_rows(x, "SymmetricMatrix", False))[1])
-fn("HermitianMatrix", **ADDED,
+         "or the lower-triangular rows {{s11}, {s21, s22}, ...} fill in the other triangle" + _STRUCT_NOTE)
+def _symmetric_matrix(x: ListOf[Expr], *rest: Option) -> Expr:
+    split_options(rest, {"TargetStructure"}, "SymmetricMatrix")
+    return _triangle_rows(x, "SymmetricMatrix", False)
+
+
+@fn("HermitianMatrix", **ADDED,
    notes="HermitianMatrix[hmat] validates a Hermitian matrix; HermitianMatrix[{{h11, h12, ...}, {h22, ...}, ...}] or "
-         "the lower rows {{h11}, {h21, h22}, ...} fill in the conjugate entries" + _STRUCT_NOTE)(
-    lambda x, *rest: (split_options(rest, {"TargetStructure"}, "HermitianMatrix"),
-                      _triangle_rows(x, "HermitianMatrix", True))[1])
+         "the lower rows {{h11}, {h21, h22}, ...} fill in the conjugate entries" + _STRUCT_NOTE)
+def _hermitian_matrix(x: ListOf[Expr], *rest: Option) -> Expr:
+    split_options(rest, {"TargetStructure"}, "HermitianMatrix")
+    return _triangle_rows(x, "HermitianMatrix", True)
+
+
 
 
 def _orth_check(x, fname, conj):
@@ -1011,16 +1023,22 @@ def _orth_check(x, fname, conj):
     return x
 
 
-fn("OrthogonalMatrix", **ADDED,
+@fn("OrthogonalMatrix", **ADDED,
    notes="OrthogonalMatrix[omat] validates a (square, tall or wide) orthogonal matrix: Transpose[o].o (or "
-         "o.Transpose[o]) is the identity" + _STRUCT_NOTE)(
-    lambda x, *rest: (split_options(rest, {"TargetStructure"}, "OrthogonalMatrix"),
-                      _orth_check(x, "OrthogonalMatrix", False))[1])
-fn("UnitaryMatrix", **ADDED,
+         "o.Transpose[o]) is the identity" + _STRUCT_NOTE)
+def _orthogonal_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
+    split_options(rest, {"TargetStructure"}, "OrthogonalMatrix")
+    return _orth_check(x, "OrthogonalMatrix", False)
+
+
+@fn("UnitaryMatrix", **ADDED,
    notes="UnitaryMatrix[umat] validates a unitary matrix: ConjugateTranspose[u].u (or u.ConjugateTranspose[u]) is "
-         "the identity" + _STRUCT_NOTE)(
-    lambda x, *rest: (split_options(rest, {"TargetStructure"}, "UnitaryMatrix"),
-                      _orth_check(x, "UnitaryMatrix", True))[1])
+         "the identity" + _STRUCT_NOTE)
+def _unitary_matrix(x: MatrixOf[Expr], *rest: Option) -> Expr:
+    split_options(rest, {"TargetStructure"}, "UnitaryMatrix")
+    return _orth_check(x, "UnitaryMatrix", True)
+
+
 
 
 def _objarray(x, fname):
@@ -1051,7 +1069,7 @@ def _objarray(x, fname):
     notes="ArrayDot[a, b, k] contracts the last k indices of a with the first k of b; ArrayDot[a, b, {{s1, t1}, "
           "...}] contracts index si of a with index ti of b (remaining indices of a, then of b); exact, symbolic and "
           "numeric arrays")
-def _arraydot(a, b, spec):
+def _arraydot(a: ListOf[Expr], b: ListOf[Expr], spec: Expr) -> Expr:
     np = _np()
     A, B = _objarray(a, "ArrayDot"), _objarray(b, "ArrayDot")
     if K.is_int(spec):
@@ -1191,7 +1209,7 @@ def _float_out(a):
     notes="{l, d} with m == l.d.ConjugateTranspose[l], l unit lower triangular and d diagonal, for a Hermitian (or "
           "real symmetric) matrix, exact, symbolic or machine; a zero pivot (no LDL factorisation without pivoting) "
           "raises (use BunchKaufmanDecomposition)" + _DENSE_NOTE)
-def _ldl(m, *rest):
+def _ldl(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "LDLDecomposition")
     if args:
         raise ValueError("LDLDecomposition called with too many arguments")
@@ -1223,7 +1241,7 @@ _BK_ALPHA = (1 + math.sqrt(17)) / 8
           "(complex symmetric m): Bunch-Kaufman diagonal pivoting (alpha = (1 + Sqrt[17])/8), l unit lower "
           "triangular, b block diagonal with 1x1 and 2x2 blocks, p a permutation matrix; exact or machine numeric "
           "matrices (symbolic matrices raise); pivot choices can differ from Wolfram's on ties" + _DENSE_NOTE)
-def _bunchkaufman(m, *rest):
+def _bunchkaufman(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "BunchKaufmanDecomposition")
     if args:
         raise ValueError("BunchKaufmanDecomposition called with too many arguments")
@@ -1297,7 +1315,7 @@ def _bunchkaufman(m, *rest):
     notes="{c, f} with m == c.f and c, f of full rank MatrixRank[m]: exact and symbolic matrices give c = the pivot "
           "columns of m and f = the non-zero rows of RowReduce[m] (as Wolfram); machine matrices give c with "
           "orthonormal columns (SVD-based, the factorisation is not unique); the zero matrix raises" + _DENSE_NOTE)
-def _rankdecomposition(m, *rest):
+def _rankdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "RankDecomposition", square=False, extra=("Tolerance",))
     if args:
         raise ValueError("RankDecomposition called with too many arguments")
@@ -1340,7 +1358,7 @@ def _int_scale(vec):
     notes="{s, d} with m == s.d.Inverse[s]: s has the eigenvectors (Eigenvectors[m]) as columns and d the "
           "eigenvalues on the diagonal, ordered as Eigensystem; rational eigenvectors are scaled to coprime "
           "integers as Wolfram does; a non-diagonalizable matrix raises" + _DENSE_NOTE)
-def _eigenvaluedecomposition(m, *rest):
+def _eigenvaluedecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "EigenvalueDecomposition")
     if args:
         raise ValueError("EigenvalueDecomposition called with too many arguments")
@@ -1453,7 +1471,7 @@ def _smith(m, rest, fname):
           "each entry dividing the next) for integer matrices; rational matrices are handled by clearing "
           "denominators (as Wolfram); the transformation matrices are not unique and can differ from Wolfram's; "
           "inexact, Gaussian-integer and symbolic matrices raise" + _DENSE_NOTE)
-def _smithdecomposition(m, *rest):
+def _smithdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     U, D, V = _smith(m, rest, "SmithDecomposition")
     return L(_mout(U), _mout(D), _mout(V))
 
@@ -1461,7 +1479,7 @@ def _smithdecomposition(m, *rest):
 @fn("SmithReduce", **ADDED,
     notes="the Smith normal form r of an integer or rational matrix (SmithDecomposition[m][[2]], unique)"
           + _DENSE_NOTE)
-def _smithreduce(m, *rest):
+def _smithreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     return _mout(_smith(m, rest, "SmithReduce")[1])
 
 
@@ -1571,7 +1589,7 @@ def _popov_check(rows, piv, ncols):
           "coefficients).  Exact rational, complex-rational and symbolic coefficients (then x must be given) work "
           "exactly; Modulus -> prime works over GF(p); approximate coefficients are converted to exact rationals, "
           "decomposed exactly and returned as machine numbers.")
-def _popovdecomposition(m, *rest):
+def _popovdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     fname = "PopovDecomposition"
     args, opts = split_options(rest, {"Modulus"}, fname)
     M = _matrix(m, fname)
@@ -1749,7 +1767,7 @@ def _frobenius(m, rest, fname):
           "each dividing the next; exact numeric and symbolic matrices (generic case) via cyclic Krylov "
           "decomposition; s is not unique and can differ from Wolfram's; Modulus and inexact input raise"
           + _DENSE_NOTE)
-def _frobeniusdecomposition(m, *rest):
+def _frobeniusdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     Sm, C = _frobenius(m, rest, "FrobeniusDecomposition")
     return L(_ms(Sm), _ms(C))
 
@@ -1757,7 +1775,7 @@ def _frobeniusdecomposition(m, *rest):
 @fn("FrobeniusReduce", **ADDED,
     notes="the Frobenius (rational canonical) form of a square matrix (unique; FrobeniusDecomposition[m][[2]])"
           + _DENSE_NOTE)
-def _frobeniusreduce(m, *rest):
+def _frobeniusreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     return _ms(_frobenius(m, rest, "FrobeniusReduce")[1])
 
 
@@ -1766,7 +1784,7 @@ def _frobeniusreduce(m, *rest):
           "then imaginary part); machine matrices must be diagonalizable and give the diagonal matrix of "
           "Eigenvalues[m] (decreasing absolute value); Wolfram's block order can differ for exact matrices"
           + _DENSE_NOTE)
-def _jordanreduce(m, *rest):
+def _jordanreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     M, args, _ = _decomp(m, rest, "JordanReduce")
     if args:
         raise ValueError("JordanReduce called with too many arguments")
@@ -1868,7 +1886,7 @@ def _cn_out(kind, X):
           "matrices use t = {pivot columns of m^k, integer null-space basis of m^k} (k the index of m), as "
           "Wolfram; invertible or nilpotent m give t = IdentityMatrix and {} for the empty part; machine matrices "
           "use an SVD basis (t is not unique)" + _DENSE_NOTE)
-def _corenilpotent(m, *rest):
+def _corenilpotent(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "CoreNilpotentDecomposition")
     if args:
         raise ValueError("CoreNilpotentDecomposition called with too many arguments")
@@ -1880,7 +1898,7 @@ def _corenilpotent(m, *rest):
     notes="the Drazin inverse t.BlockDiagonalMatrix[{Inverse[c], 0}].Inverse[t] from the core-nilpotent "
           "decomposition (the inverse for invertible m, zero for nilpotent m); exact, symbolic (generic) or machine "
           "square matrices" + _DENSE_NOTE)
-def _drazininverse(m, *rest):
+def _drazininverse(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     M, args, _ = _decomp(m, rest, "DrazinInverse")
     if args:
         raise ValueError("DrazinInverse called with too many arguments")
@@ -1906,7 +1924,7 @@ def _drazininverse(m, *rest):
     notes="{u, p} with m == u.p, u with orthonormal columns (or rows) and p = MatrixPower[ConjugateTranspose[m]"
           ".m, 1/2] positive semidefinite, via the SVD for machine matrices; exact and arbitrary-precision matrices "
           "raise (use N[m])" + _DENSE_NOTE)
-def _polardecomposition(m, *rest):
+def _polardecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "PolarDecomposition", square=False)
     if args:
         raise ValueError("PolarDecomposition called with too many arguments")
@@ -1954,7 +1972,7 @@ def _schur_blocks(T, real):
           "{m, a} gives the generalized decomposition {q, s, p, t} with m == q.s.ConjugateTranspose[p], a == "
           "q.t.ConjugateTranspose[p] ordered by the generalized eigenvalues; LAPACK reordering (trexc/tgexc) of "
           "SciPy's Schur/QZ forms; numeric matrices only (exact input is evaluated numerically)" + _DENSE_NOTE)
-def _orderedschur(m, *rest):
+def _orderedschur(m: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "OrderedSchurDecomposition"
     args, opts = split_options(rest, {"TargetStructure", "RealBlockDiagonalForm"}, fname)
     _target_structure(opts, fname)
@@ -2074,7 +2092,7 @@ def _reshape_like(flat, x):
           "(sign: largest component positive) and {b1, ...} == m.{a1, ...}; Standardized -> True first shifts each "
           "ai to zero mean; KarhunenLoeveDecomposition[{b1, ...}, m] inverts the transform (missing b's are 0); "
           "machine-precision results")
-def _kld(arrays, *rest):
+def _kld(arrays: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "KarhunenLoeveDecomposition"
     args, opts = split_options(rest, {"Standardized"}, fname)
     std = opts.get("Standardized", False)
@@ -2130,7 +2148,7 @@ record("Standardized", AREA, "added",
           "data (exact numbers are evaluated numerically); the sign of each component is normalised so that the "
           "largest eigenvector component is positive, which can differ from Wolfram's sign choice; symbolic and "
           "arbitrary-precision data raise")
-def _principalcomponents(m, *rest):
+def _principalcomponents(m: Expr, *rest: Expr) -> Expr:
     fname = "PrincipalComponents"
     args, opts = split_options(rest, {"Method"}, fname)
     if args:
@@ -2220,7 +2238,7 @@ def _kind_float(e):
           "expansion along the first row; Method -> Automatic, \"ParlettReid\", \"Householder\", \"Hessenberg\" "
           "and \"Pauli\" give the same value, \"Det\" gives Sqrt[Det[m]] (sign not conformed, as Wolfram); a "
           "non-antisymmetric matrix raises")
-def _pfaffiandet(m, *rest):
+def _pfaffiandet(m: Expr, *rest: Expr) -> Expr:
     fname = "PfaffianDet"
     args, opts = split_options(rest, {"Method"}, fname)
     if args:
@@ -2251,7 +2269,7 @@ def _pfaffiandet(m, *rest):
 
 # ── LinearSolveFunction and TransformationMatrix ──
 
-def _linearsolve_one(m):
+def _linearsolve_one(m: ListOf[Expr]) -> Expr:
     if not is_list(m):
         raise Unevaluated()
     M = _matrix(m, "LinearSolve")
@@ -2273,7 +2291,7 @@ _REGISTRY["LinearSolve"].impls.append((_linearsolve_one, 1, 1))
 @fn("LinearSolveFunction", **ADDED,
     notes="LinearSolve[m] gives LinearSolveFunction[{r, c}, m] (the stored data is the matrix itself, not "
           "Wolfram's factorisation data); f[b] solves m.x == b for a vector or matrix b like LinearSolve[m, b]")
-def _linearsolvefunction(*args):
+def _linearsolvefunction(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -2289,7 +2307,7 @@ KL.COMPOUND_HEAD_HOOKS["LinearSolveFunction"] = _lsf_call
 @fn("TransformationMatrix", **ADDED,
     notes="TransformationMatrix[TransformationFunction[m]] gives the homogeneous matrix m; anything else stays "
           "unevaluated")
-def _transformationmatrix(t):
+def _transformationmatrix(t: Expr) -> Expr:
     tf = isinstance(t, Expr) and t.head == "TransformationFunction"
     if tf and len(t.args) == 1 and is_list(t.args[0]):
         return t.args[0]
@@ -2406,7 +2424,7 @@ def _vec_ineq(name, args):
 
 for _vn, (_vop, _vstrict) in _VEC_OPS.items():
     def _mk(vn):
-        def impl(*args):
+        def impl(*args: Expr) -> Expr:
             return _vec_ineq(vn, args)
         return impl
     fn(_vn, **ADDED,
@@ -3293,7 +3311,7 @@ def _opt_options(opts, fname):
 
 
 def _argopt(fname, sense, what, local):
-    def impl(f, *rest):
+    def impl(f: Expr, *rest: Expr) -> Expr:
         args, opts = split_options(rest, _OPT_OPTS, fname)
         _opt_options(opts, fname)
         if len(args) == 0 and not local:
@@ -3421,7 +3439,7 @@ def _opt_props(prob, x, v, exact, props, default_rules, fname):
 
 def _family(fname, kind):
     """Implementation for LinearOptimization-like functions: kind in lp, qp, lfp, convex."""
-    def impl(*rest):
+    def impl(*rest: Expr) -> Expr:
         args, opts = split_options(rest, _OPT_OPTS, fname)
         _opt_options(opts, fname)
         props = None
@@ -3639,7 +3657,7 @@ fn("GeometricOptimization", **ADDED,
     notes="ParametricConvexOptimization[f, cons, vars, pars] gives ParametricFunction[...]; applying it to "
           "parameter values solves ConvexOptimization[f, cons, vars] with the parameters substituted (each call "
           "re-solves the problem; Wolfram's precompiled solver data are not reproduced)" + _FAMILY_NOTE)
-def _parametricconvex(f, cons, vars_, pars, *rest):
+def _parametricconvex(f: Expr, cons: Expr, vars_: Expr, pars: Expr, *rest: Expr) -> Expr:
     args, opts = split_options(rest, _OPT_OPTS, "ParametricConvexOptimization")
     props = args[0] if args else None
     ps = list(pars.args) if is_list(pars) else [pars]
@@ -3745,7 +3763,7 @@ def _multiaffine(e, pars):
           "functions are affine in each parameter or convex in the parameters (sampled Hessian check) the worst case "
           "is attained at the box vertices, which are all enforced; other uncertainty sets or parameter dependence "
           "raise" + _FAMILY_NOTE)
-def _robustconvex(f, spec, vars_, *rest):
+def _robustconvex(f: Held, spec: Held, vars_: Held, *rest: Held) -> Expr:
     fname = "RobustConvexOptimization"
     f, spec, vars_ = ev(f), spec, ev(vars_)
     rest = [ev(r) for r in rest]
@@ -3854,7 +3872,7 @@ def _knap_item(it, fname):
           "simplex), ties broken by the smaller total cost; the constraints can be maxcost, {maxcost}, {maxpayoff, maxcost}, "
           "{maxpayoff, maxcost, maxcount} or an association of \"MaxTotalPayoff\", \"MaxTotalCost\", "
           "\"MaxTotalCount\"; Quantity payoffs/costs raise")
-def _knapsack(items, capacity, *rest):
+def _knapsack(items: Expr, capacity: Expr, *rest: Expr) -> Expr:
     fname = "KnapsackSolve"
     if rest:
         raise ValueError(f"{fname} called with too many arguments")
@@ -3938,7 +3956,7 @@ def _tour_dist(opts, pts, fname):
           "-> f; exact (Held-Karp dynamic programming) for up to 12 points, a 2-opt/Or-opt local search beyond "
           "that (not guaranteed optimal, like Wolfram's heuristics); the direction of an optimal tour and the choice "
           "among equally short tours can differ from Wolfram's; graphs and GeoPositions raise")
-def _findshortesttour(pts, *rest):
+def _findshortesttour(pts: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "FindShortestTour"
     args, opts = split_options(rest, {"DistanceFunction", "Method"}, fname)
     if isinstance(pts, Expr) and pts.head == "Graph":
@@ -4124,7 +4142,7 @@ def _gp_fit_predict(X, y, Xs, noise):
 
 
 def _bayes(fname, sense):
-    def impl(f, spec, *rest):
+    def impl(f: Fn, spec: Expr, *rest: Expr) -> Expr:
         args, opts = split_options(rest, {"AssumeDeterministic", "InitialEvaluationHistory", "MaxIterations",
                                           "Method", "ProgressReporting", "RandomSeeding"}, fname)
         if args:
@@ -4280,7 +4298,7 @@ fn("BayesianMaximization", **ADDED, notes="BayesianMaximization[f, spec] gives a
     notes="result of BayesianMinimization; obj[\"MinimumConfiguration\"], [\"MinimumValue\"], "
           "[\"EvaluationHistory\"], [\"ObjectiveFunction\"], [\"Method\"], [\"NextConfiguration\"], "
           "[\"Properties\"] and lists of properties")
-def _bmo(*args):
+def _bmo(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -4288,7 +4306,7 @@ def _bmo(*args):
     notes="result of BayesianMaximization; obj[\"MaximumConfiguration\"], [\"MaximumValue\"], "
           "[\"EvaluationHistory\"], [\"ObjectiveFunction\"], [\"Method\"], [\"NextConfiguration\"], "
           "[\"Properties\"] and lists of properties")
-def _bmxo(*args):
+def _bmxo(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -4353,7 +4371,7 @@ def _py_to_ml(x):
           "GamePlayerLabels; properties \"PayoffArray\", \"ComponentPayoffArray\", \"GameActionLabels\", "
           "\"GamePlayerLabels\", \"Dataset\" (Dataset of payoff vectors by action labels) and \"Plot\" "
           "(MatrixGamePlot); \"TreeGame\" and SparseArray/rule specifications raise")
-def _matrixgame(p, *rest):
+def _matrixgame(p: Expr, *rest: Expr) -> Expr:
     fname = "MatrixGame"
     if any(isinstance(r, Expr) and is_rule(r) and r.args[0] == "Validity" for r in rest):
         raise Unevaluated()
@@ -4490,7 +4508,7 @@ def _expected(arr, dims, n, prof, power=1):
           "(probability vectors; also {1 -> s1, ...} rules or <|label -> s|>, and lists of profiles); "
           "MatrixGamePayoff[game, profile, \"Expectation\" | \"Variance\"]; exact for exact strategies; joint "
           "group strategies and the distribution/simulation properties raise")
-def _matrixgamepayoff(game, strat, *rest):
+def _matrixgamepayoff(game: Expr, strat: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "MatrixGamePayoff"
     arr, dims, n, opts = _game_parts(game, fname)
     _, pl = _labels(dims, n, opts)
@@ -4533,7 +4551,7 @@ def _nash_check(arr, dims, n, prof, tol=0):
     notes="True when the strategy profile {s1, ..., sn} is a Nash equilibrium of the matrix game (no player gains "
           "by deviating to any pure action; machine-number strategies use a 10^-9 tolerance); a list of profiles "
           "gives a list; symbolic strategies raise")
-def _verifymatrixgame(game, strat, *rest):
+def _verifymatrixgame(game: Expr, strat: Expr, *rest: Expr) -> Expr:
     fname = "VerifyMatrixGameStrategy"
     if rest:
         raise ValueError(f"{fname} called with too many arguments")
@@ -4556,7 +4574,7 @@ def _frac_of(v):
           "for degenerate games the extreme equilibria with equal-size supports), n-player games give the pure "
           "equilibria only with \"Pure\" (mixed n-player equilibria raise); FindMatrixGameStrategies[game, "
           "\"Pure\" | \"Mixed\"] restricts the kind; the Method option is not supported")
-def _findmatrixgame(game, *rest):
+def _findmatrixgame(game: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "FindMatrixGameStrategies"
     args, opts = split_options(rest, {"Method"}, fname)
     if "Method" in opts and not is_sym(opts["Method"], "Automatic") and opts["Method"] != "SolveValues":
@@ -4663,7 +4681,7 @@ def _game_plot_prims(arr, dims, n, al, pl, strategy=None):
           "action combinations, columns: the rest), each split into one coloured strip per player with the payoff "
           "as Text, and action/player labels (GameActionLabels, GamePlayerLabels options); Graphics options are "
           "passed through; PlotLayout, ColorFunction and strategy thickness are not supported (raise)")
-def _matrixgameplot(game, *rest):
+def _matrixgameplot(game: Expr, *rest: Expr) -> Expr:
     fname = "MatrixGamePlot"
     args, opts = split_options(rest, None, fname) if False else ([r for r in rest if not is_rule(r)],
                                                                  [r for r in rest if is_rule(r)])
@@ -4737,7 +4755,7 @@ def _ksp(v):
           "nodes as child-index paths ({} the root), players in order of appearance (chance players get <||>), "
           "sorted; payoff vectors are matched to the non-chance players in order of appearance; as in Wolfram, "
           "information sets are ignored (each node solved separately)")
-def _findtreegame(game, *rest):
+def _findtreegame(game: Expr, *rest: Expr) -> ListOf[Expr]:
     fname = "FindTreeGameStrategies"
     if rest:
         raise ValueError(f"{fname} called with too many arguments")
@@ -4808,7 +4826,7 @@ def _findtreegame(game, *rest):
           "of a perfect-information TreeGame (at every action node no action gives the moving player a higher "
           "expected payoff than the strategy, given the strategy below it; a 10^-9 tolerance for machine numbers); "
           "every non-chance action node must be specified; information sets are ignored; symbolic strategies raise")
-def _verifytreegame(game, strat, *rest):
+def _verifytreegame(game: Expr, strat: Expr, *rest: Expr) -> Expr:
     fname = "VerifyTreeGameStrategy"
     if rest:
         raise ValueError(f"{fname} called with too many arguments")
@@ -4970,7 +4988,7 @@ def _tm_format(kind, hist, extra, region_override=None):
           "steps {{s, x, dx}, tape} (infinite tapes padded to the region visited), TuringMachine[rule, init] and "
           "TuringMachine[rule][init] one step; multidimensional machines, offset ranges and repetitive "
           "backgrounds raise")
-def _turingmachine(rule, *rest):
+def _turingmachine(rule: Expr, *rest: Expr) -> Expr:
     fname = "TuringMachine"
     if not rest:
         _tm_rule(rule, fname)
@@ -5022,7 +5040,7 @@ def _cell(x, y, color):
           "RulePlot[TuringMachine[n | {n, s, k}]] the icons of each {state, colour} case (head state as a number above "
           "the cell, new colour, state and move below); other systems (and 2D rules) raise; the drawing style differs "
           "from Wolfram's")
-def _ruleplot(system, *rest):
+def _ruleplot(system: Held, *rest: Held) -> Expr:
     fname = "RulePlot"
     gfx = [ev(r) for r in rest if is_rule(r)]
     if not isinstance(system, Expr) or system.head not in ("CellularAutomaton", "TuringMachine") or \
