@@ -39,6 +39,8 @@ from contextvars import ContextVar as _ContextVar
 # were evaluated, and ("splice", chain) for re-evaluations of a rewritten expression.
 _TRACE = _ContextVar("mikoshilang_trace", default=None)
 _TRACE_ARG = _ContextVar("mikoshilang_trace_arg", default=False)
+# TraceOriginal (X01): False, True (record heads and unchanged chains) or "Automatic" (start forms only).
+_TRACE_ORIG = _ContextVar("mikoshilang_trace_original", default=False)
 
 # Evaluation stack for Stack[] (frames [expr, live]; live is False once a later expression on the same evaluation
 # chain replaced it), StackInhibit and StackComplete; the evaluation-chain length for $IterationLimit.
@@ -110,11 +112,12 @@ def _traced(expr, depth):
     finally:
         stack.pop()
         _TRACE_ARG.reset(tok)
-    chain = _trace_chain(expr, frame, r, start=bool(stack) and not is_arg and len(stack) > 1)
+    orig = _TRACE_ORIG.get()
+    chain = _trace_chain(expr, frame, r, start=(bool(stack) and not is_arg and len(stack) > 1) or bool(orig))
     if stack:
         if not is_arg:
             stack[-1].append(("splice", chain))
-        elif len(chain) > 1 or any(isinstance(c, list) for c in chain):
+        elif len(chain) > 1 or any(isinstance(c, list) for c in chain) or orig is True:
             stack[-1].append(("nested", chain))
     return r
 
@@ -150,19 +153,22 @@ def _same(a, b):
         return False
 
 
-def trace_evaluation(expr):
-    """Evaluate expr while recording the Wolfram-style evaluation chain; returns (chain, value)."""
+def trace_evaluation(expr, original=False):
+    """Evaluate expr while recording the Wolfram-style evaluation chain; returns (chain, value).
+    original: the TraceOriginal setting (False, True or "Automatic")."""
     stack = [[]]
     tok = _TRACE.set(stack)
     atok = _TRACE_ARG.set(False)
+    otok = _TRACE_ORIG.set(original)
     try:
         r = evaluate(expr, 1)
     finally:
         _TRACE.reset(tok)
         _TRACE_ARG.reset(atok)
+        _TRACE_ORIG.reset(otok)
     top = stack[0]
     chain = top[0][1] if top else [expr, r]
-    if len(chain) == 1:       # nothing happened: Wolfram returns {}
+    if len(chain) == 1 and original is not True:       # nothing happened: Wolfram returns {}
         chain = []
     return chain, r
 
@@ -280,6 +286,9 @@ def _evaluate_body(expr, depth: int) -> Any:
         if isinstance(target, Expr):
             return ev(Expr(target, *expr.args))
         raise ValueError("Assigned head is not callable")
+
+    if isinstance(head, str) and _TRACE_ORIG.get() is True and _TRACE.get():
+        _TRACE.get()[-1].append(("nested", [Symbol(head)]))     # TraceOriginal -> True: the head's chain {f}
 
     # 3. Special forms that see unevaluated arguments
     handled = kernel.held(expr, ev)

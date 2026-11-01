@@ -450,7 +450,7 @@ CASES = [
     ("DistributionFitTest[w18data, NormalDistribution[], \"AndersonDarling\"]",
      "DistributionFitTest[w18data, NormalDistribution[], \"AndersonDarling\"]"),
     (f"DistributionFitTest[{TA}]", Raises(NotImplementedError)),
-    (f'DistributionFitTest[{TA}, NormalDistribution[], "PearsonChiSquare"]', Raises(NotImplementedError)),
+    (f'DistributionFitTest[{TA}, PoissonDistribution[3], "PearsonChiSquare"]', Raises(NotImplementedError)),  # X02: continuous dists now supported
     (f'DistributionFitTest[{TA}, NormalDistribution[], "Bogus"]', Raises(ValueError)),
     # ── Around family (first-order propagation; hand derivatives) ──
     ("Around[1, 1/10] + Around[2, 1/5]", "Around[3, Sqrt[5]/10]"),

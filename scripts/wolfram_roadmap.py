@@ -131,7 +131,15 @@ def primary_area(sym):
     return max(c, key=lambda a: (c[a], -AREAS.index(a)))
 
 
+# Symbols that the name/area rules above would wrongly mark infeasible (they are plain numeric containers or
+# models, not curated data or audio): implemented in batch X03.
+FEASIBLE_NAMES = {"DiscreteWaveletData", "ContinuousWaveletData", "ShortTimeFourierData", "Spectrogram",
+                  "SpectrogramArray", "StateSpaceModel"}
+
+
 def feasibility(sym):
+    if sym in FEASIBLE_NAMES:
+        return ""
     for rx, why in INFEASIBLE_NAMES:
         if rx.match(sym):
             return why

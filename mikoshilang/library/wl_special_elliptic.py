@@ -2233,8 +2233,8 @@ for _j in (1, 2):
 # Spheroidal joining factor: SpheroidalS1[n, m, c, z] = SpheroidalJoiningFactor[n, m, c] SpheroidalPS[n, m, c, z]
 # (documented for m = 0); for m != 0 the factor is real, the phase (-I)^|m| between the Ferrers function used by Ps
 # and the real Legendre function on z > 1 being removed (this reproduces the documented values for m = 1, -1, 5).
-# (SpheroidalRadialFactor is not implemented: its normalisation does not match DLMF 30.11.4 and could not be
-# reproduced from the documented values.)
+# (SpheroidalRadialFactor, order m = 0 only, is in wl_core_extras_math: for m != 0 its normalisation does
+# not match DLMF 30.11.4 and could not be reproduced from the documented values.)
 # ---------------------------------------------------------------------------------------------------------------
 
 def _sph_joining(n, m, g):
