@@ -194,7 +194,7 @@ def _merge_heights(g):
         if isinstance(e, Expr):
             if e.head == "Line":
                 (x1, y1), (x2, y2) = [[to_complex(c).real for c in p.args] for p in e.args[0].args]
-                if y1 == y2 and y1 > 0:
+                if y1 == y2 and y1 > 0 and x1 != x2:
                     out.append(y1)
             else:
                 for a in e.args:
@@ -638,7 +638,7 @@ def test_hmm_brute_force():
 def test_dendrogram_matches_scipy_linkage():
     import numpy as np
     from scipy.cluster.hierarchy import linkage
-    pts = [1, 2, 4, 7, 11, 12.5]
+    pts = [1, 2, 4.2, 8, 13, 15.5]     # no tied dissimilarities (ties may merge in either order)
     for method, name in (("average", "Average"), ("single", "Single"), ("complete", "Complete"),
                          ("weighted", "WeightedAverage")):
         g = ev(f"Dendrogram[{{{', '.join(map(str, pts))}}}, ClusterDissimilarityFunction -> \"{name}\"]")
