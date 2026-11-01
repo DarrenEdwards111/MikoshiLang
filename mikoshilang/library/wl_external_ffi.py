@@ -379,7 +379,7 @@ def _rawfree(p: Expr) -> Expr:
             _MANAGED[_mo_id(p, "RawMemoryFree")] = False
         except (TypeError, ValueError):
             pass
-    return Symbol("Null")
+    return None
 
 
 def _typed_ptr(p, fname):

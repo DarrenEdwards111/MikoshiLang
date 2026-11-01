@@ -99,10 +99,22 @@ def _tvar_name(x):
     return None
 
 
+class _AnyName(dict):
+    """Alias table that accepts every unknown type name (used when validating Typed/TypeSpecifier, whose type
+    names may come from a TypeDeclaration)."""
+
+    def __contains__(self, k):
+        return isinstance(k, str) and _ALIASES.get(k, k) not in NATIVE and _ALIASES.get(k, k) not in _COMPOUND
+
+    def __getitem__(self, k):
+        return "InertExpression"
+
+
 def parse_type(t, fname, tvars=(), aliases=None):
     """Python representation of a type expression: a native name, ("PackedArray", elem, rank),
     ("ListVector", elem), ("Fn", (args...), ret), ("Literal", v), ("Seq", var), ("Eval", expr) or a TVar."""
-    aliases = aliases or {}
+    if aliases is None:
+        aliases = {}
     if isinstance(t, Expr) and t.head == "TypeSpecifier" and len(t.args) == 1:
         return parse_type(t.args[0], fname, tvars, aliases)
     if isinstance(t, Symbol) and t.name in tvars:
@@ -1026,7 +1038,9 @@ def _compile_spec(v):
 def _target(opt):
     if opt is None or is_sym(opt, "Automatic"):
         t = ev(Symbol("$CompilationTarget"))
-        return t if isinstance(t, str) else "WVM"
+        if t not in ("WVM", "C"):
+            raise ValueError(f"Compile: $CompilationTarget must be \"WVM\" or \"C\", not {_show(t)}")
+        return t
     if opt in ("WVM", "C"):
         return opt
     raise ValueError(f"Compile: CompilationTarget must be \"WVM\" or \"C\", not {_show(opt)}")
@@ -1246,8 +1260,13 @@ def _createenv(*opts: Option) -> Expr:
     items = [("ID", eid)]
     if "TargetSystem" in o:
         ts = o["TargetSystem"]
-        if not (isinstance(ts, str) or is_list(ts) or isinstance(ts, Symbol)):
-            raise ValueError("CreateCompilerEnvironment: TargetSystem must be a name, a list, Automatic or All")
+        names = [ts] if isinstance(ts, str) else (list(ts.args) if is_list(ts) else None)
+        if names is None and not any(is_sym(ts, n) for n in ("Automatic", "All", "Inherited")):
+            raise ValueError("CreateCompilerEnvironment: TargetSystem must be a name, a list, Automatic, All or "
+                             "Inherited")
+        for n in names or ():
+            if n not in _TARGETS:
+                raise ValueError(f"CreateCompilerEnvironment: unknown TargetSystem {_show(n)} (see $TargetSystems)")
         items.append(("TargetSystem", ts if not isinstance(ts, str) else L(ts)))
     return Expr("CompilerEnvironmentObject", _assoc(items))
 
@@ -1372,13 +1391,14 @@ KL.COMPOUND_HEAD_HOOKS["Typed"] = _typed_hook
 @fn("Typed", area=AREA, status="added",
     notes="Typed[x, type] annotates x with a compiler type and stays as it is when evaluated (Function[{Typed[x, "
           "t]}, body] binds x like a plain parameter, as documented; FunctionCompile uses the types); Typed[type] "
-          "is an operator form: Typed[type][f] gives Typed[f, type]. The type is validated: an unknown type name "
+          "is an operator form: Typed[type][f] gives Typed[f, type]. The type is validated structurally (a string "
+          "name, which may come from a TypeDeclaration, a function type, a compound or literal type); anything else "
           "raises ValueError. Check: reference (Wolfram documentation: Function[{Typed[x, \"Real64\"]}, x + 1][\"two\"] "
           "gives 1 + \"two\") in tests.")
 def _typed(x: Expr, t: Expr = None) -> Expr:
     ty = x if t is None else t
     if not (isinstance(ty, Expr) and ty.head == "ForAllType"):
-        parse_type(ty, "Typed", _free_tvars(ty))
+        parse_type(ty, "Typed", _free_tvars(ty), _AnyName())
     raise Unevaluated()
 
 
@@ -1407,7 +1427,7 @@ def _typespecifier(t: Expr) -> Expr:
         raise ValueError(f"TypeSpecifier: {t!r} is not a type name")
     if isinstance(t, (Expr, str)) and not (isinstance(t, str) and (t in _COMPOUND or t not in NATIVE)):
         try:
-            parse_type(t, "TypeSpecifier", _free_tvars(t))
+            parse_type(t, "TypeSpecifier", _free_tvars(t), _AnyName())
         except NotImplementedError:
             pass
     raise Unevaluated()
@@ -1518,3 +1538,22 @@ fn("TypeEvaluate", area=AREA, status="added",
 K.BUILTIN_ATTRIBUTES["Compile"] = {"HoldAll", "Protected"}
 K.BUILTIN_ATTRIBUTES["IfCompiled"] = {"HoldAll", "Protected"}
 K.BUILTIN_ATTRIBUTES["TypeOf"] = {"HoldFirst", "Protected"}
+
+
+_TARGETS = ("Linux-ARM", "Linux-x86-64", "MacOSX-ARM64", "MacOSX-x86-64", "Windows-x86-64")
+E.SYSTEM_VARIABLES["$TargetSystems"] = lambda: L(*_TARGETS)
+record("$TargetSystems", AREA, "added",
+       "$TargetSystems lists the documented TargetSystem names {\"Linux-ARM\", \"Linux-x86-64\", "
+       "\"MacOSX-ARM64\", \"MacOSX-x86-64\", \"Windows-x86-64\"}; they are accepted by "
+       "CreateCompilerEnvironment and FunctionCompile (no machine code is generated for any of them). Check: "
+       "reference (Wolfram documentation output) in tests.")
+record("TargetSystem", AREA, "added",
+       "option of CreateCompilerEnvironment and FunctionCompile naming the machine architectures to target: "
+       "Inherited/Automatic/All, a name from $TargetSystems or a list of them; CreateCompilerEnvironment stores it "
+       "(env[TargetSystem] gives the list) and other strings raise ValueError. No code is generated, so results do "
+       "not depend on it. Check: reference (Wolfram documentation: env[TargetSystem] gives {\"Windows-x86-64\"}) "
+       "in tests.")
+record("CompilerEnvironment", AREA, "added",
+       "option of FunctionCompile: Automatic (use $CompilerEnvironment) or a CompilerEnvironmentObject whose "
+       "declarations are available to the compiled function; other values raise ValueError. Check: reference "
+       "(Wolfram documentation AddTwo example) in tests.")

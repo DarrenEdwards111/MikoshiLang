@@ -1,9 +1,10 @@
-"""Local servers for the W30 (external interfaces) tests: HTTP, raw TCP echo, SMTP and IMAP stubs.
+"""Local servers for the W30 (external interfaces) tests: HTTP and a raw TCP echo server.
 
 Everything binds to 127.0.0.1 on an OS-chosen port, runs in daemon threads and is shut down by the test module's
 fixture. Nothing here talks to any other host, and no real credentials are used anywhere.
 """
 import json
+import urllib.parse
 import socket
 import socketserver
 import threading
@@ -33,7 +34,7 @@ class _Handler(BaseHTTPRequestHandler):
         return self.rfile.read(n) if n else b""
 
     def _route(self):
-        p = self.path.split("?", 1)[0]
+        p = urllib.parse.urlsplit(self.path).path or "/"     # absolute URLs arrive when used as a proxy
         body = self._body()
         if p == "/text":
             return self._send(200, "hello from w30")

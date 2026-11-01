@@ -1980,6 +1980,33 @@ def _urlresponsetime(url: Expr, *rest: Expr | Option) -> Expr:
     return _seconds(vals[prop])
 
 
+@fn("URLExpand", area=AREA, status="added",
+    notes="URLExpand[url] (a string or URL[...]; lists thread) follows the HTTP redirects of a shortened URL and "
+          "gives the final URL as a string (a URL that does not redirect gives itself); options CookieFunction, "
+          "Interactive (accepted), TimeConstraint and VerifySecurityCertificates. Deviation: Wolfram asks the "
+          "Wolfram Cloud; MikoshiLang follows the redirects directly with a GET request (at most 20). A connection "
+          "failure gives Failure[\"ConnectionFailure\", ...] like URLRead; with $AllowInternet = False only "
+          "loopback hosts are contacted. Check: reference (Wolfram documentation) and local-server redirects in "
+          "tests.")
+def _urlexpand(url: Expr, *rest: Option) -> Expr:
+    args, opts = split_opts(rest, {"CookieFunction", "Interactive", "TimeConstraint", "VerifySecurityCertificates"},
+                            "URLExpand")
+    if args:
+        raise TypeError("URLExpand: expected URLExpand[url, options]")
+    if isinstance(url, Symbol):
+        raise Unevaluated()
+    if is_list(url):
+        return L(*(_urlexpand(u, *rest) for u in url.args))
+    u = _url_str(url, "URLExpand")
+    inter = opts.pop("Interactive", True)
+    if inter is not True and inter is not False:
+        raise ValueError("URLExpand: Interactive must be True or False")
+    t, fail = _read_one(u, opts, "URLExpand", follow=True)
+    if fail is not None:
+        return fail
+    return t.url
+
+
 # ═══════════════════════════════════════ option symbols ═══════════════════════════════════════
 
 for _n, _d in {
