@@ -2761,3 +2761,200 @@ def ndsolve_bvp(eqs, unknowns, ranges, fname):
     P = _Problem(fname, items, u, region)
     Dz, sol = _bvp_solve(P, fname)
     return us, {uname: _ifun_of(P, Dz, sol)}, region.xs[0].name
+
+
+# ───────────────────────────── ParametricNDSolve ─────────────────────────────
+
+def _par_specs(pars, fname):
+    """{p1, p2, ...} or {{p, pmin, pmax}, ...} -> [(Symbol, lo, hi)]."""
+    items = list(pars.args) if is_list(pars) else [pars]
+    out = []
+    for it in items:
+        if isinstance(it, Symbol):
+            out.append((it, None, None))
+        elif is_list(it) and len(it.args) == 3 and isinstance(it.args[0], Symbol):
+            lo, hi = (_real(v, fname) for v in it.args[1:])
+            if not lo <= hi:
+                raise ValueError(f"{fname}: parameter ranges must have pmin <= pmax")
+            out.append((it.args[0], lo, hi))
+        else:
+            raise ValueError(f"{fname}: parameters must be symbols or {{p, pmin, pmax}} (got {it})")
+    if not out:
+        raise ValueError(f"{fname}: at least one parameter is required")
+    names = [p[0].name for p in out]
+    if len(set(names)) != len(names):
+        raise ValueError(f"{fname}: the parameters must be distinct")
+    return out
+
+
+def _pf(specs, call):
+    plist = L(*(p if lo is None else L(p, lo, hi) for p, lo, hi in specs))
+    return Expr("ParametricFunction", plist, Expr("Hold", call))
+
+
+def _pnd_args(eqs, unknowns, rest, fname):
+    rest = list(rest)
+    k = len(rest)
+    while k and isinstance(rest[k - 1], Expr) and rest[k - 1].head in ("Rule", "RuleDelayed"):
+        k -= 1
+    pos, opts = rest[:k], rest[k:]
+    if len(pos) < 2:
+        raise ValueError(f"{fname}: the range and the parameters are required")
+    specs = _par_specs(pos[-1], fname)
+    ranges = pos[:-1]
+    names = {p.name for p, _, _ in specs}
+    for r in ranges:
+        if is_list(r) and r.args and isinstance(r.args[0], Symbol) and r.args[0].name in names:
+            raise ValueError(f"{fname}: a parameter cannot also be an independent variable")
+    return specs, ranges, opts
+
+
+@fn("ParametricNDSolveValue", area=AREA, status="added",
+    notes="ParametricNDSolveValue[eqns, u, {x, xmin, xmax}, {p1, p2, ...}] (parameters may be {p, pmin, pmax}) -> "
+          "ParametricFunction[{p1, ...}, Hold[NDSolveValue[eqns, u, {x, xmin, xmax}, opts]]]; pf[v1, ...] substitutes "
+          "the numerical parameter values and calls NDSolveValue (initial-value problems with WhenEvent and step "
+          "options, boundary-value problems), so pf[1.][t] or pf[1.][t0] evaluate the solution; symbolic parameter "
+          "values stay unevaluated, values outside {pmin, pmax} or the wrong number of values raise ValueError; "
+          "parameter sensitivities (D with respect to a parameter) are not supported. Check: delegated (NDSolveValue "
+          "with the parameters substituted; tests compare with closed-form solutions).")
+def _pndsolvevalue(eqs: Expr, unknowns: Expr, *rest: Expr) -> Expr:
+    fname = "ParametricNDSolveValue"
+    specs, ranges, opts = _pnd_args(eqs, unknowns, rest, fname)
+    return _pf(specs, Expr("NDSolveValue", eqs, unknowns, *ranges, *opts))
+
+
+@fn("ParametricNDSolve", area=AREA, status="added",
+    notes="ParametricNDSolve[eqns, u, {x, xmin, xmax}, pars] -> {u -> ParametricFunction[...]} (one rule per unknown "
+          "for systems {u, v}); (u /. sol)[p][x] evaluates NDSolveValue for that unknown with the parameter values "
+          "substituted; same forms and errors as ParametricNDSolveValue. Check: delegated (NDSolveValue; tests compare "
+          "with closed-form solutions).")
+def _pndsolve(eqs: Expr, unknowns: Expr, *rest: Expr) -> ListOf[Expr]:
+    fname = "ParametricNDSolve"
+    specs, ranges, opts = _pnd_args(eqs, unknowns, rest, fname)
+    us = list(unknowns.args) if is_list(unknowns) else [unknowns]
+    return L(*(Expr("Rule", u, _pf(specs, Expr("NDSolveValue", eqs, u, *ranges, *opts))) for u in us))
+
+
+def _pf_parts(head):
+    if len(head.args) != 2 or not _head_is(head.args[1], "Hold") or not is_list(head.args[0]):
+        raise ValueError("ParametricFunction: ParametricFunction[{p, ...}, Hold[call]] expected")
+    specs = []
+    for p in head.args[0].args:
+        if isinstance(p, Symbol):
+            specs.append((p, None, None))
+        else:
+            specs.append((p.args[0], _real(p.args[1], "ParametricFunction"), _real(p.args[2], "ParametricFunction")))
+    return specs, head.args[1].args[0]
+
+
+def _pf_hook(head, args, ev_):
+    specs, call = _pf_parts(head)
+    if len(args) == 1 and args[0] == "Parameters":
+        return L(*(p for p, _, _ in specs))
+    if len(args) != len(specs):
+        raise ValueError(f"ParametricFunction: {len(specs)} parameter value(s) expected, got {len(args)}")
+    vals = []
+    for a, (p, lo, hi) in zip(args, specs):
+        try:
+            z = complex(sp.N(S(a)))
+        except Exception:
+            return K.UNHANDLED
+        if lo is not None and (z.imag != 0 or not lo - 1e-12 <= z.real <= hi + 1e-12):
+            raise ValueError(f"ParametricFunction: the value {a} of {p} is outside the range [{lo}, {hi}]")
+        vals.append(a)
+    rules = L(*(Expr("Rule", p, v) for (p, _, _), v in zip(specs, vals)))
+    held = ev_(Expr("ReplaceAll", Expr("Hold", call), rules))
+    return ev_(held.args[0])
+
+
+KL.COMPOUND_HEAD_HOOKS["ParametricFunction"] = _pf_hook
+
+record("ParametricFunction", AREA, "added",
+       "ParametricFunction[{p, ...}, Hold[NDSolveValue[...]]] from ParametricNDSolve / ParametricNDSolveValue: "
+       "pf[v, ...] solves with the numerical values substituted (symbolic values stay unevaluated, wrong counts and "
+       "out-of-range values raise ValueError), pf[\"Parameters\"] lists the parameters. Check: delegated "
+       "(NDSolveValue).")
+
+
+# ───────────────────────────── inert symbols and options ─────────────────────────────
+
+def _hold_all(*names):
+    from ..evaluate import set_hold_all
+    for n in names:
+        set_hold_all(n)
+
+
+_hold_all("WhenEvent")
+
+for _name, _note in (
+        ("DirichletCondition",
+         "DirichletCondition[u[x, ...] == value, pred] (inert): consumed by NDSolve / NDSolveValue boundary-value "
+         "problems and NDEigensystem / NDEigenvalues on intervals and rectangles (value fixed at the boundary nodes "
+         "where pred is True; True = whole boundary); produced by the *Condition PDE boundary heads. Check: tests "
+         "solve problems with known closed forms."),
+        ("NeumannValue",
+         "NeumannValue[g - q u, pred] (inert): in NDSolve / NDEigensystem a term f + NeumannValue[...] on the "
+         "right-hand side sets the outward flux n.(c Grad u + alpha u - gamma) to g - q u where pred holds (on the "
+         "left-hand side the sign flips); no condition = NeumannValue[0, ...]; produced by the *Value PDE boundary "
+         "heads. Check: reference (Wolfram NDEigensystem example -Laplacian + NeumannValue[u, x == 1] -> 0.740174) "
+         "in tests."),
+        ("PeriodicBoundaryCondition",
+         "PeriodicBoundaryCondition[k u[x], pred, f] (inert): in 1-D NDEigensystem / NDSolve boundary-value "
+         "problems identifies u at the end point where pred holds with k u at the other end f[x] (and the fluxes "
+         "likewise); 2-D periodic conditions raise NotImplementedError. Check: reference (Bloch spectrum "
+         "(n + alpha/(2 Pi))^2 for k = Exp[I alpha]) in tests."),
+        ("NeumannBoundaryUnitNormal",
+         "NeumannBoundaryUnitNormal[{x, ...}] (inert symbolic outward unit normal) appears in the values returned "
+         "by the PDE boundary heads (e.g. MassFluxValue, HeatSymmetryValue) unless \"BoundaryUnitNormal\" is given; "
+         "the solvers here require explicit normals or scalar fluxes. Check: reference (Wolfram documentation "
+         "outputs of the *Value heads) in tests."),
+        ("WhenEvent",
+         "WhenEvent[event, action] (HoldAll, inert) inside NDSolve / NDSolveValue initial-value problems: events "
+         "a == b (either crossing) or a > b / a < b (becoming True) located by SciPy root finding; actions "
+         "\"StopIntegration\" (the solution domain ends there), \"RemoveEvent\", resets y[t] -> value / y'[t] -> "
+         "value, lists of actions and any expression evaluated for side effects (Sow, counters) with the current "
+         "state substituted; discrete variables, event options and integration in both directions from an "
+         "interior initial point raise NotImplementedError. Check: reference (bouncing ball impact time Sqrt[2 h/g] "
+         "and restitution) in tests."),
+        ("AccuracyGoal",
+         "AccuracyGoal -> a (option): honoured by NDSolve / NDSolveValue (absolute tolerance 10^-a, Infinity -> "
+         "pure relative control) and by the existing FindRoot, NIntegrate, NMinimize ... implementations. Check: "
+         "numeric cross-check in tests."),
+        ("PrecisionGoal",
+         "PrecisionGoal -> p (option): honoured by NDSolve / NDSolveValue (relative tolerance max(10^-p, 2.3*10^-14)) "
+         "and by NIntegrate, FindRoot ... Check: numeric cross-check in tests."),
+        ("WorkingPrecision",
+         "WorkingPrecision -> MachinePrecision (option): NDSolve and the W26 solvers compute in machine precision "
+         "(other values raise NotImplementedError); higher precision is honoured by NIntegrate / FindRoot / N where "
+         "implemented. Check: reference in tests."),
+        ("MaxIterations",
+         "MaxIterations -> n (option): honoured by FindRoot, FindMinimum, NMinimize ... (iteration cap; exceeding it "
+         "raises). Check: reference in tests."),
+        ("MaxStepFraction",
+         "MaxStepFraction -> f (option, 0 < f <= 1): NDSolve limits each step to f times the integration range. "
+         "Check: numeric cross-check in tests."),
+        ("MaxStepSize",
+         "MaxStepSize -> h (option): NDSolve limits each step to h (SciPy max_step); Infinity / Automatic = no limit. "
+         "Check: numeric cross-check in tests (StepMonitor step spacing)."),
+        ("MaxSteps",
+         "MaxSteps -> n (option): NDSolve raises ValueError when more than n steps would be needed (instead of "
+         "Wolfram's truncated solution with NDSolve::mxst); Infinity / Automatic = no limit. Check: reference in "
+         "tests."),
+        ("StartingStepSize",
+         "StartingStepSize -> h (option): NDSolve's first step size (SciPy first_step); larger than the range raises "
+         "ValueError. Check: numeric cross-check in tests."),
+        ("Tolerance",
+         "Tolerance -> t (option): honoured by SingularValueList, MatrixRank, NullSpace, Orthogonalize and the other "
+         "linear-algebra heads that document it. Check: reference in tests."),
+        ("EvaluationMonitor",
+         "EvaluationMonitor :> expr (option): evaluated at every function evaluation by NDSolve (with x and y[x] "
+         "replaced by the current values) and by FindRoot, NIntegrate, NMinimize ... Check: reference in tests."),
+        ("StepMonitor",
+         "StepMonitor :> expr (option): evaluated after every accepted step of NDSolve (x, y[x], y'[x] replaced by "
+         "the step values; the monitor runs once the integration finishes) and by FindRoot, FindMinimum ... Check: "
+         "reference in tests."),
+        ("VerifyConvergence",
+         "VerifyConvergence -> True | False (option): honoured by Sum / NSum / Product convergence checks where "
+         "implemented. Check: reference in tests."),
+):
+    record(_name, AREA, "added", _note)

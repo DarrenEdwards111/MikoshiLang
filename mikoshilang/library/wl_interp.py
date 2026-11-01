@@ -277,6 +277,8 @@ def _ndsolve(eqs, unknowns, rng, opts, fname):
         else:
             flat.append(e)
     odes, ics = [], []
+    events = [e for e in flat if isinstance(e, Expr) and e.head == "WhenEvent"]
+    flat = [e for e in flat if not (isinstance(e, Expr) and e.head == "WhenEvent")]
     for e in flat:
         if not (isinstance(e, Expr) and e.head == "Equal" and len(e.args) == 2):
             raise ValueError(f"{fname}: {e} is not an equation")
@@ -366,18 +368,26 @@ def _ndsolve(eqs, unknowns, rng, opts, fname):
     if not (min(a, b) - 1e-12 <= t0 <= max(a, b) + 1e-12):
         raise ValueError(f"{fname}: the initial point must lie in the integration range")
     y0 = np.array(y0, dtype=complex if any(isinstance(v, complex) for v in y0) else float)
+    ctl = _ivp_controls(opts, a, b, fname)
+    subst = _Subst(funcs, comps, order, xv, rhs, table, state, fname)
+    evs = [_Event(e, subst, funcs, xv, fname) for e in events]
+    mon_step, mon_eval = opts.get("StepMonitor"), opts.get("EvaluationMonitor")
+    if mon_eval is not None:
+        base_rhs = rhs
+
+        def rhs(t, y):      # noqa: F811 - EvaluationMonitor wraps every right-hand-side evaluation
+            _eval_with(mon_eval, subst.rules(t, y))
+            return base_rhs(t, y)
     pieces = []
-    for end in (a, b):
-        if abs(end - t0) < 1e-15:
-            continue
-        r = None
-        for method in ("DOP853", "Radau"):
-            r = si.solve_ivp(rhs, (t0, end), y0, method=method, dense_output=True, rtol=1e-10, atol=1e-12)
-            if r.success:
-                break
-        if not r.success:
-            raise ValueError(f"{fname}: integration failed ({r.message}) near {fname} x = {r.t[-1]}")
-        pieces.append((min(t0, end), max(t0, end), r.sol))
+    ends = [end for end in (a, b) if abs(end - t0) >= 1e-15]
+    if evs and len(ends) > 1:
+        raise NotImplementedError(f"{fname}: WhenEvent needs the initial point at one end of the range")
+    lo_hi = [a, b]
+    for end in ends:
+        segs, stop = _integrate(si, rhs, t0, end, y0, ctl, evs, subst, mon_step, fname)
+        pieces.extend(segs)
+        if stop is not None:
+            lo_hi = [min(t0, stop), max(t0, stop)]
 
     def dense(t):
         for lo, hi, s in pieces:
@@ -385,6 +395,7 @@ def _ndsolve(eqs, unknowns, rng, opts, fname):
                 return s(t)
         lo, hi, s = min(pieces, key=lambda p: min(abs(t - p[0]), abs(t - p[1])))
         return s(t)
+    a, b = lo_hi
     out = {}
     for f in funcs:
         def rhs_k(t, y, f=f):
@@ -393,13 +404,235 @@ def _ndsolve(eqs, unknowns, rng, opts, fname):
     return us, out, xv
 
 
+# ───────────────────────────── NDSolve step control, monitors and WhenEvent (W26) ─────────────────────────────
+
+_METHODS = {"ExplicitRungeKutta": ("DOP853",), "ImplicitRungeKutta": ("Radau",), "BDF": ("BDF",),
+            "LSODA": ("LSODA",), "StiffnessSwitching": ("LSODA",)}
+
+
+def _is_auto(v):
+    return v is None or (isinstance(v, Symbol) and v.name == "Automatic")
+
+
+def _is_inf(v):
+    return (isinstance(v, Symbol) and v.name == "Infinity") or (isinstance(v, Expr) and v.head == "DirectedInfinity")
+
+
+def _posnum(v, name, fname, integer=False):
+    try:
+        z = complex(sp.N(sym(v, fname)))
+    except Exception:
+        raise ValueError(f"{fname}: {name} must be a positive number, Infinity or Automatic")
+    if z.imag != 0 or not z.real > 0 or (integer and z.real != int(z.real)):
+        raise ValueError(f"{fname}: {name} must be a positive {'integer' if integer else 'number'}, Infinity or "
+                         "Automatic")
+    return z.real
+
+
+def _ivp_controls(opts, a, b, fname):
+    """solve_ivp settings from AccuracyGoal, PrecisionGoal, MaxStepSize, MaxStepFraction, StartingStepSize,
+    MaxSteps and Method."""
+    m = opts.get("Method")
+    if _is_auto(m):
+        methods = ("DOP853", "Radau")
+    elif isinstance(m, str) and m in _METHODS:
+        methods = _METHODS[m]
+    else:
+        raise NotImplementedError(f"{fname}: Method -> {m} is not supported (Automatic, " +
+                                  ", ".join(f'"{k}"' for k in _METHODS) + ")")
+    ctl = {"methods": methods, "rtol": 1e-10, "atol": 1e-12, "max_step": np.inf, "first_step": None,
+           "max_steps": None}
+    ag, pg = opts.get("AccuracyGoal"), opts.get("PrecisionGoal")
+    if not _is_auto(ag):
+        ctl["atol"] = 1e-300 if _is_inf(ag) else 10.0 ** (-_posnum(ag, "AccuracyGoal", fname))
+    if not _is_auto(pg):
+        ctl["rtol"] = 2.3e-14 if _is_inf(pg) else max(10.0 ** (-_posnum(pg, "PrecisionGoal", fname)), 2.3e-14)
+    ms = opts.get("MaxStepSize")
+    if not _is_auto(ms) and not _is_inf(ms):
+        ctl["max_step"] = _posnum(ms, "MaxStepSize", fname)
+    mf = opts.get("MaxStepFraction")
+    if not _is_auto(mf) and not _is_inf(mf):
+        f = _posnum(mf, "MaxStepFraction", fname)
+        if f > 1:
+            raise ValueError(f"{fname}: MaxStepFraction must be at most 1")
+        ctl["max_step"] = min(ctl["max_step"], f * abs(b - a))
+    st = opts.get("StartingStepSize")
+    if not _is_auto(st):
+        ctl["first_step"] = _posnum(st, "StartingStepSize", fname)
+    mx = opts.get("MaxSteps")
+    if not _is_auto(mx) and not _is_inf(mx):
+        ctl["max_steps"] = int(_posnum(mx, "MaxSteps", fname, integer=True))
+    return ctl
+
+
+def _eval_with(e, rules):
+    """Evaluate the held expression e after substituting the rules (monitor and event actions)."""
+    held = ev(Expr("ReplaceAll", Expr("Hold", e), rules))
+    return ev(held.args[0]) if isinstance(held, Expr) and held.head == "Hold" and len(held.args) == 1 else ev(held)
+
+
+class _Subst:
+    """Replacement rules {x -> t, y[x] -> value, y'[x] -> value, ...} for a state vector, and lambdified
+    expressions of the state."""
+
+    def __init__(self, funcs, comps, order, xv, rhs, table, state, fname):
+        self.funcs, self.comps, self.order, self.xv = funcs, comps, order, xv
+        self.rhs, self.table, self.state, self.fname = rhs, table, state, fname
+
+    def rules(self, t, y):
+        d = self.rhs(t, y)
+        x = Symbol(self.xv)
+        out = []
+        for f in self.funcs:
+            for k in range(self.order[f] + 1):
+                v = y[self.comps[f][k]] if k < self.order[f] else d[self.comps[f][-1]]
+                lhs = Expr(f, x) if k == 0 else Expr(Expr(Expr("Derivative", k), Symbol(f)), x)
+                out.append(Expr("Rule", lhs, _num_out(v)))
+        out.append(Expr("Rule", x, float(t)))
+        return L(*out)
+
+    def lambdify(self, e):
+        tab = dict(self.table)
+        se = sym(_to_sym(e, self.funcs, self.xv, tab), self.fname)
+        tops = [tab[(f, self.order[f])] for f in self.funcs]
+        allowed = {sp.Symbol(self.xv)} | set(self.state) | set(tops)
+        if not se.free_symbols <= allowed:
+            raise ValueError(f"{self.fname}: the event {e} involves unknown symbols "
+                             f"{', '.join(sorted(map(str, se.free_symbols - allowed)))}")
+        fl = sp.lambdify([sp.Symbol(self.xv)] + list(self.state) + tops, se, "numpy")
+
+        def g(t, y):
+            d = self.rhs(t, y)
+            return float(np.real(fl(t, *y, *[d[self.comps[f][-1]] for f in self.funcs])))
+        return g
+
+
+_EVENT_DIR = {"Equal": 0, "Greater": 1, "GreaterEqual": 1, "Less": -1, "LessEqual": -1}
+
+
+class _Event:
+    """WhenEvent[condition, action]: condition a == b (crossing either way) or a > b / a < b (becoming True);
+    actions "StopIntegration", "RemoveEvent", y[x] -> value / y'[x] -> value resets, lists of these, or any
+    expression evaluated for its side effects."""
+
+    def __init__(self, we, subst, funcs, xv, fname):
+        if len(we.args) != 2:
+            raise NotImplementedError(f"{fname}: WhenEvent[event, action] with options is not supported")
+        cond, self.action = we.args
+        cond = ev(cond)
+        if not (isinstance(cond, Expr) and cond.head in _EVENT_DIR and len(cond.args) == 2):
+            raise NotImplementedError(f"{fname}: WhenEvent conditions must be equations or inequalities a == b, "
+                                      f"a > b, a < b (got {cond})")
+        self.direction = _EVENT_DIR[cond.head]
+        self.g = subst.lambdify(Expr("Plus", cond.args[0], Expr("Times", -1, cond.args[1])))
+        self.subst, self.funcs, self.xv, self.fname = subst, funcs, xv, fname
+
+    def scipy_fn(self):
+        def f(t, y):
+            return self.g(t, y)
+        f.terminal = True
+        f.direction = self.direction
+        return f
+
+    def fire(self, t, y):
+        """Apply the action at (t, y): ("stop" | "remove" | None, new state)."""
+        acts = list(self.action.args) if is_list(self.action) else [self.action]
+        rules = self.subst.rules(t, y)
+        ynew = np.array(y, copy=True)
+        res = None
+        for act in acts:
+            if isinstance(act, str):
+                if act == "StopIntegration":
+                    res = "stop"
+                elif act == "RemoveEvent":
+                    res = res or "remove"
+                elif act not in ("CrossDiscontinuity", "RestartIntegration"):
+                    raise NotImplementedError(f"{self.fname}: the WhenEvent action \"{act}\" is not supported")
+                continue
+            if isinstance(act, Expr) and act.head in ("Rule", "RuleDelayed") and len(act.args) == 2:
+                term = _parse_term(act.args[0], self.funcs, self.xv)
+                if term is None or not (isinstance(term[2], Symbol) and term[2].name == self.xv):
+                    raise NotImplementedError(f"{self.fname}: WhenEvent rules must reset y[{self.xv}] or a "
+                                              "derivative of it (discrete variables are not supported)")
+                f, k, _ = term
+                if k >= len(self.subst.comps[f]):
+                    raise ValueError(f"{self.fname}: cannot reset derivative {k} of {f} (the equation is of order "
+                                     f"{len(self.subst.comps[f])})")
+                v = _eval_with(act.args[1], rules)
+                try:
+                    z = complex(sp.N(sym(v, self.fname)))
+                except Exception:
+                    raise ValueError(f"{self.fname}: the WhenEvent reset value {v} is not numerical")
+                if np.iscomplexobj(ynew) or z.imag == 0:
+                    ynew[self.subst.comps[f][k]] = z if np.iscomplexobj(ynew) else z.real
+                else:
+                    ynew = ynew.astype(complex)
+                    ynew[self.subst.comps[f][k]] = z
+                continue
+            _eval_with(act, rules)
+        return res, ynew
+
+
+def _solve(si, rhs, t, end, y, ctl, events, fname):
+    kw = {"rtol": ctl["rtol"], "atol": ctl["atol"], "dense_output": True, "max_step": ctl["max_step"]}
+    if ctl["first_step"] is not None:
+        if ctl["first_step"] > abs(end - t):
+            raise ValueError(f"{fname}: StartingStepSize is larger than the integration range")
+        kw["first_step"] = ctl["first_step"]
+    r = None
+    for method in ctl["methods"]:
+        r = si.solve_ivp(rhs, (t, end), y, method=method, events=events, **kw)
+        if r.success:
+            return r
+    raise ValueError(f"{fname}: integration failed ({r.message}) near x = {r.t[-1]}")
+
+
+def _integrate(si, rhs, t0, end, y0, ctl, evs, subst, mon_step, fname):
+    """Integrate from t0 to end, handling WhenEvent actions; ([(lo, hi, dense)], stop point or None)."""
+    segs, t, y, steps, nev = [], t0, np.array(y0), 0, 0
+    active = list(evs)
+    span = max(1.0, abs(end - t0))
+    while True:
+        r = _solve(si, rhs, t, end, y, ctl, [e.scipy_fn() for e in active] or None, fname)
+        steps += len(r.t) - 1
+        if ctl["max_steps"] is not None and steps > ctl["max_steps"]:
+            raise ValueError(f"{fname}: the maximum number of steps (MaxSteps -> {ctl['max_steps']}) was reached "
+                             f"before x = {end}")
+        if mon_step is not None:
+            for tt, yy in zip(r.t[1:], r.y.T[1:]):
+                _eval_with(mon_step, subst.rules(tt, yy))
+        if r.status != 1:
+            segs.append((min(t, end), max(t, end), r.sol))
+            return segs, None
+        hits = [(abs(te[0] - t), i, te[0], ye[0]) for i, (te, ye) in enumerate(zip(r.t_events, r.y_events))
+                if len(te)]
+        _, k, te, ye = min(hits, key=lambda h: h[0])
+        segs.append((min(t, te), max(t, te), r.sol))
+        nev += 1
+        if nev > 10000:
+            raise ValueError(f"{fname}: more than 10000 events were detected (Zeno behaviour?)")
+        act, ynew = active[k].fire(te, ye)
+        if act == "stop":
+            return segs, te
+        if act == "remove":
+            active.pop(k)
+        delta = np.sign(end - t0) * 1e-10 * span
+        if abs(end - te) <= abs(delta) * 2:
+            segs.append((min(te, end), max(te, end), lambda _t, v=ynew: v))
+            return segs, None
+        r2 = _solve(si, rhs, te, te + delta, ynew, dict(ctl, first_step=None), None, fname)
+        segs.append((min(te, te + delta), max(te, te + delta), r2.sol))
+        t, y = te + delta, r2.y[:, -1]
+
+
 def _ndopts(rest, fname):
-    pos, opts = split_options(rest, {"WorkingPrecision", "Method", "MaxSteps", "PrecisionGoal", "AccuracyGoal"},
-                              fname)
+    pos, opts = split_options(rest, {"WorkingPrecision", "Method", "MaxSteps", "PrecisionGoal", "AccuracyGoal",
+                                     "MaxStepSize", "MaxStepFraction", "StartingStepSize", "StepMonitor",
+                                     "EvaluationMonitor"}, fname)
     wp = opts.get("WorkingPrecision")
     if wp is not None and not (isinstance(wp, Symbol) and wp.name == "MachinePrecision"):
         raise NotImplementedError(f"{fname}: only machine precision is supported")
-    return pos
+    return pos, opts
 
 
 @fn("NDSolve", area=AREA, status="added",
@@ -409,8 +642,8 @@ def _ndopts(rest, fname):
           "rtol 1e-10; the initial point may be inside the range; machine precision only; boundary-value "
           "problems, DAEs, PDEs and delay equations raise")
 def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Expr]:
-    pos = _ndopts(rest, "NDSolve")
-    us, out, xv = _ndsolve(eqs, unknowns, rng, {"ranges": pos}, "NDSolve")
+    pos, opts = _ndopts(rest, "NDSolve")
+    us, out, xv = _ndsolve(eqs, unknowns, rng, dict(opts, ranges=pos), "NDSolve")
     rules = []
     for u in us:
         f = _fname(u)
@@ -425,7 +658,7 @@ def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Exp
     notes="NDSolveValue[{odes, ics}, y, {x, xmin, xmax}] -> InterpolatingFunction (y[x] -> ifun[x], {y, z} -> "
           "list); same solver and limits as NDSolve")
 def _ndsolvevalue(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> Expr:
-    pos = _ndopts(rest, "NDSolveValue")
-    us, out, xv = _ndsolve(eqs, unknowns, rng, {"ranges": pos}, "NDSolveValue")
+    pos, opts = _ndopts(rest, "NDSolveValue")
+    us, out, xv = _ndsolve(eqs, unknowns, rng, dict(opts, ranges=pos), "NDSolveValue")
     vals = [out[_fname(u)] if isinstance(u, Symbol) else ev(Expr(out[_fname(u)], *u.args)) for u in us]
     return L(*vals) if is_list(unknowns) else vals[0]
