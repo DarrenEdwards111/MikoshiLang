@@ -306,8 +306,9 @@ CASES += [
     ("Map[Simplify, Activate[SolidMechanicsPDEComponent[" + V3 + ", " + LM + "]] + (l + m) Grad[Div[{u[x, y, z], "
      "v[x, y, z], w[x, y, z]}, {x, y, z}], {x, y, z}] + m {Laplacian[u[x, y, z], {x, y, z}], Laplacian[v[x, y, z], "
      "{x, y, z}], Laplacian[w[x, y, z], {x, y, z}]}]", "{0, 0, 0}"),
-    ("Simplify[SolidMechanicsPDEComponent[" + V3 + ", " + YN + "][[1, 1, 1, 1, 1, 1]] + (Y (1 - nu))/((1 + nu) "
-     "(1 - 2 nu))]", "0"),
+    # the u-term's coefficient matrix, found by pattern so the case does not depend on the order of the Plus terms
+    ("Simplify[First[Cases[SolidMechanicsPDEComponent[" + V3 + ", " + YN + "][[1]], Inactive[Div][Dot[m_, "
+     "Inactive[Grad][u[x, y, z], _]], _] :> m[[1, 1]]]] + (Y (1 - nu))/((1 + nu) (1 - 2 nu))]", "0"),
     ("Simplify[Activate[SolidMechanicsPDEComponent[{{u[t, x, y, z], v[t, x, y, z], w[t, x, y, z]}, t, {x, y, z}}, "
      "<|\"LameParameter\" -> l, \"ShearModulus\" -> m, \"MassDensity\" -> rho|>]][[1]] - rho D[u[t, x, y, z], {t, 2}] "
      "+ (l + m) D[Div[{u[t, x, y, z], v[t, x, y, z], w[t, x, y, z]}, {x, y, z}], x] + m Laplacian[u[t, x, y, z], "
@@ -545,7 +546,7 @@ CASES += [
      Near(1 + np.sin(50) / 5, 1e-9)),
     ("NDSolveValue[{y'[t] == -y[t], y[0] == 1}, y, {t, 0, 1}, PrecisionGoal -> -1]", Raises(ValueError)),
     ("NDSolveValue[{y'[t] == -y[t], y[0] == 1}, y, {t, 0, 1}, AccuracyGoal -> \"x\"]", Raises(ValueError)),
-    ("NIntegrate[Exp[-x^2], {x, 0, 1}, PrecisionGoal -> 6, AccuracyGoal -> 8]", Near(0.7468241328124271, 1e-8)),
+    ("NIntegrate[Exp[-x^2], {x, 0, 1}, PrecisionGoal -> 6, AccuracyGoal -> 7]", Near(0.7468241328124271, 1e-8)),
     ("NDSolveValue[{y'[t] == -y[t], y[0] == 1}, y, {t, 0, 1}, WorkingPrecision -> MachinePrecision][1]",
      Near(np.exp(-1))),
     ("NDSolveValue[{y'[t] == -y[t], y[0] == 1}, y, {t, 0, 1}, WorkingPrecision -> 30]", Raises(NotImplementedError)),

@@ -10,9 +10,11 @@ Expected values follow the Wolfram Language semantics (reference.wolfram.com: Ex
 Plus "Flat, Orderless", FindRoot "MaxIterations"); structural checks use ``===`` so that the exact canonical form,
 not only mathematical equality, is tested.  Placeholder symbols are prefixed ``fz`` and defined only inside Block.
 """
+import math
+
 import pytest
 
-from _harness import Raises, check, ids
+from _harness import Pred, Raises, check, ids
 
 LISTS = [
     ("Expand[2 fzf[{a}]] === 2 fzf[{a}]", True),
@@ -67,6 +69,11 @@ CANONICAL = [
 ]
 
 NI = Raises(NotImplementedError)
+
+
+def Near(want, tol):
+    return Pred(lambda g: isinstance(g, (int, float)) and not isinstance(g, bool) and abs(g - want) <= tol,
+                f"~{want}")
 OPTIONS = [
     # FindRoot honours MaxIterations (mpmath maxsteps); too few iterations is an error, never an unconverged value
     ("FindRoot[Cos[x] - x, {x, 1}, MaxIterations -> 1]",
@@ -118,8 +125,11 @@ OPTIONS = [
     ("Interpolation[{1, 2, 3, 4}, PeriodicInterpolation -> True]", NI),
     ("Interpolation[{1, 2, 3, 4}, PeriodicInterpolation -> False][2]", 2.0),
     ("ListInterpolation[{1, 2, 3, 4}, Method -> \"Spline\"]", NI),
-    ("NDSolve[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, Method -> \"ExplicitRungeKutta\"]", NI),
-    ("NDSolve[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, PrecisionGoal -> 12]", NI),
+    # NDSolve implements Method, AccuracyGoal and PrecisionGoal since W26; an unknown method still raises
+    ("NDSolveValue[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, Method -> \"ExplicitRungeKutta\"][1]", Near(math.e, 1e-8)),
+    ("NDSolveValue[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, PrecisionGoal -> 12][1]", Near(math.e, 1e-9)),
+    ("NDSolve[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, Method -> \"Nope\"]", NI),
+    ("NSum[1/n^2, {n, 1, Infinity}, VerifyConvergence -> 3]", Raises(ValueError)),
 ]
 
 CASES = LISTS + CANONICAL + OPTIONS

@@ -188,6 +188,14 @@ def _nintegrate(f: Expr, *rest: Expr) -> Expr:
 # ───────────────────────────── NSum / NProduct ─────────────────────────────
 
 def _nsum_like(f, rest, fname, op):
+    # VerifyConvergence: convergence is always checked (a divergent sum raises ValueError), so True is the
+    # behaviour and False can only turn a Wolfram value into a clear error, never a wrong result (W26 tests)
+    vc = [r for r in rest if isinstance(r, Expr) and r.head in ("Rule", "RuleDelayed") and len(r.args) == 2
+          and isinstance(r.args[0], Symbol) and r.args[0].name == "VerifyConvergence"]
+    for r in vc:
+        if not (isinstance(r.args[1], bool) or (isinstance(r.args[1], Symbol) and r.args[1].name == "Automatic")):
+            raise ValueError(f"{fname}: VerifyConvergence must be True or False")
+    rest = tuple(r for r in rest if r not in vc)
     pos, opts, prec, dps = _opts(rest, fname, goals=True)
     if not pos:
         raise ValueError(f"{fname}: an iterator {{n, nmin, nmax}} is required")
