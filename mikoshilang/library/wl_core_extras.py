@@ -77,7 +77,7 @@ _OPTION_NOTES = {
     "RuntimeAttributes": "RuntimeAttributes: option of Compile; {} or {Listable} (threading over higher-rank "
                          "arguments) as handled by Compile in wl_external_compile (W30); other attributes raise "
                          "ValueError. Inert as an expression.",
-    "RuntimeOptions": "RuntimeOptions: option of Compile (\"Speed\", \"Quality\" or nested settings) validated by "
+    "RuntimeOptions": "RuntimeOptions: option of Compile (\"Speed\", \"Quality\" or nested settings) accepted by "
                       "Compile in wl_external_compile (W30). Inert as an expression.",
 }
 for _n, _d in _OPTION_NOTES.items():

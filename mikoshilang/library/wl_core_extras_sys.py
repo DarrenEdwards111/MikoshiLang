@@ -7,7 +7,7 @@ from functools import lru_cache
 
 from ..expr import Expr, Symbol
 from .. import kernel as K
-from .core import fn, L, is_list
+from .core import fn, L, is_list, Unevaluated
 from .wl_common import ev, is_sym
 
 AREA = "core extras (X01)"
@@ -165,7 +165,15 @@ def _assoc_get(a, k):
           "\"MissedQueryParts\" keys of index searches are not given. Check: exact (a temporary directory with "
           "known files) in tests.")
 def _textsearchreport(src: Expr, form: Expr) -> Expr:
-    r = ev(Expr("TextSearch", src, form, "ContentObject"))
+    if isinstance(src, Symbol):
+        raise Unevaluated()
+    try:
+        r = ev(Expr("TextSearch", src, form, "ContentObject"))
+    except (ValueError, TypeError, NotImplementedError) as e:
+        msg = str(e)
+        if not msg.startswith("TextSearchReport: "):
+            msg = "TextSearchReport: " + msg.split(": ", 1)[-1]
+        raise type(e)(msg) from e
     if not is_list(r):
         raise ValueError(f"TextSearchReport: TextSearch did not return results for {form!r}")
     rows = []

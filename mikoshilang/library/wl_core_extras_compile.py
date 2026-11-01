@@ -763,3 +763,11 @@ def _fromrawpointer(*args: Expr) -> Expr:
 
 
 _install()
+
+
+# The Compile`... heads above are internal forms produced by the compiler rewrites (not System symbols): they stay
+# in the dispatch registry but are not listed as audited heads.
+from .core import STATUS as _STATUS  # noqa: E402
+
+for _n in (_KE, _IC, _IEV, _IOP, _CTI, _CEX, _TRP, _FRP):
+    _STATUS.pop(_n, None)

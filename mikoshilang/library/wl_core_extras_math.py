@@ -151,11 +151,14 @@ def _norm_reps(D, m):
 
 @fn("NumberFieldNormRepresentatives", area=AREA, status="added", listable=True,
     notes="Partial (quadratic fields). NumberFieldNormRepresentatives[a, m] for a quadratic algebraic number a "
-          "gives one algebraic integer of norm +m or -m from each class of associates (elements whose quotient "
-          "is a unit) of the ring of integers of Q(a), as AlgebraicNumber[a, {c0, c1}] (= c0 + c1 a). The "
-          "representatives are chosen by an explicit rule, which can differ from Wolfram's undocumented choice by a "
-          "unit factor: for real fields the representative alpha > 0 with Sqrt[m] <= alpha < Sqrt[m] eps (eps > 1 "
-          "the fundamental unit; every class has exactly one), for imaginary fields the associate with the "
+          "gives one algebraic integer from each class of associates (elements whose quotient is a unit) "
+          "of norm +m or -m in the ring of integers of Q(a), as AlgebraicNumber[a, {c0, c1}] (= c0 + c1 a); as in "
+          "the documented examples the representative has norm exactly m whenever its class contains such an "
+          "element (real fields whose fundamental unit has norm -1), else norm -m (e.g. Sqrt[3], 2 gives an "
+          "element of norm -2). The representatives are chosen by an explicit rule, which can differ from "
+          "Wolfram's undocumented choice by a unit factor: for real fields the representative alpha > 0 with "
+          "|m|^(1/2) <= alpha < |m|^(1/2) eps (eps > 1 the fundamental unit; every class has exactly one), "
+          "multiplied by eps when that fixes the sign of the norm; for imaginary fields (norms are positive) the associate with the "
           "smallest positive rational part. They are found by solving X^2 - D Y^2 = +-4m for alpha = (X + Y "
           "Sqrt[D])/2. Fields of degree other than 2 raise NotImplementedError; m must be a nonzero integer "
           "(ValueError); Listable. Check: reference (the documentation: the classes for Sqrt[2], 7 are those of "
@@ -167,12 +170,24 @@ def _nfnr(a: Expr, m: Integer) -> ListOf[Expr]:
         if isinstance(m, Symbol):
             raise Unevaluated()
         raise TypeError(f"{fname}: the norm must be an integer, not {_show(m)}")
+    msign = 1 if int(m) > 0 else -1
     m = abs(int(m))
     if m == 0:
         raise ValueError(f"{fname}: the norm must be a nonzero integer")
     D, p, q, r = _quadratic_data(a, fname)
+    reps = _norm_reps(D, m)
+    if D > 0:
+        ex, ey = _fundamental_unit(D)
+        unit_neg = (ex * ex - D * ey * ey) // 4 == -1
+        fixed = []
+        for X, Y in reps:
+            if (X * X - D * Y * Y) // 4 * msign < 0 and unit_neg:
+                # multiply by the fundamental unit of norm -1 to get norm exactly m
+                X, Y = (X * ex + D * Y * ey) // 2, (X * ey + Y * ex) // 2
+            fixed.append((X, Y))
+        reps = fixed
     out = []
-    for X, Y in _norm_reps(D, m):
+    for X, Y in reps:
         # alpha = X/2 + (Y/2) sqrt(D),  sqrt(D) = (r a - p) / q
         c1 = sp.Rational(Y * r, 2 * q)
         c0 = sp.Rational(X, 2) - sp.Rational(Y * p, 2 * q)
