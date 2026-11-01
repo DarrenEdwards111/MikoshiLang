@@ -1824,3 +1824,557 @@ class Queue(Proc):
             if out is not None:
                 out.append((t, x))
         return out if out is not None else [(t0, x)]
+
+
+# ─────────────────────────── SDE and transformed processes ───────────────────────────
+
+def _var_spec(v, fname, what):
+    if isinstance(v, Symbol):
+        return v, sp.Integer(0)
+    if is_list(v) and len(v.args) == 2 and isinstance(v.args[0], Symbol):
+        return v.args[0], _p(v.args[1], fname, f"initial {what}")
+    raise ValueError(f"{fname}: the {what} must be a symbol or {{symbol, initial value}}")
+
+
+class Ito(Proc):
+    """ItoProcess[{a, b}, x, t] / ItoProcess[{a, b, c}, {x, x0}, {t, t0}] (scalar), dx = a dt + b dw."""
+
+    def parse(self, a, fname):
+        h = self.name
+        if len(a) == 1:
+            raise NotImplementedError(f"{fname}: {h}[proc] (conversion of a named process) is not supported")
+        if len(a) == 5 or (a and isinstance(a[0], Expr) and a[0].head in ("Equal", "List") and
+                           any(isinstance(x, Expr) and x.head == "Equal" for x in (a[0].args if is_list(a[0]) else [a[0]]))):
+            raise NotImplementedError(f"{fname}: the stochastic differential equation form of {h} is not supported; "
+                                      "use {drift, diffusion}")
+        if len(a) == 4:
+            raise NotImplementedError(f"{fname}: a correlated Wiener process covariance is not supported")
+        if len(a) != 3 or not is_list(a[0]) or len(a[0].args) not in (2, 3):
+            raise ValueError(f"{fname}: {h} expects [{{a, b}}, x, t] or [{{a, b, c}}, {{x, x0}}, {{t, t0}}]")
+        if any(is_list(c) for c in a[0].args):
+            raise NotImplementedError(f"{fname}: vector {h} is not supported")
+        xs, x0 = _var_spec(a[1], fname, "state")
+        ts_, t0 = _var_spec(a[2], fname, "time")
+        self.xs, self.ts = sp.Symbol(xs.name), sp.Symbol(ts_.name)
+        self.x0, self.t0 = x0, t0
+        co = [_p(c, fname, "coefficient") for c in a[0].args]
+        self.drift, self.diff = co[0], co[1]
+        self.outx = co[2] if len(co) == 3 else self.xs
+        if h == "StratonovichProcess":
+            self.drift = sp.simplify(self.drift + self.diff * sp.diff(self.diff, self.xs) / 2)
+        self.p = [x0, t0]
+        self.extra = (self.drift.free_symbols | self.diff.free_symbols | self.outx.free_symbols) - {self.xs, self.ts}
+
+    def numeric(self):
+        return not self.extra and _num(self.x0) and _num(self.t0)
+
+    def check_time(self, t, fname):
+        _nonneg_time(t, fname, self.t0)
+
+    def path(self, rng, times):
+        fa = sp.lambdify((self.xs, self.ts), self.drift, "math")
+        fb = sp.lambdify((self.xs, self.ts), self.diff, "math")
+        fc = sp.lambdify((self.xs, self.ts), self.outx, "math")
+        x, t = _f(self.x0), _f(self.t0)
+        if times[0] < t - 1e-12:
+            raise ValueError(f"RandomFunction: the time range must start at or after t0 = {self.t0}")
+        dt = times[1] - times[0] if len(times) > 1 else 0.0
+        out = []
+        for tt in times:
+            while tt - t > 1e-12 * max(1.0, abs(tt)):
+                h = min(dt if dt > 0 else tt - t, tt - t)
+                x = x + fa(x, t) * h + fb(x, t) * math.sqrt(h) * rng.standard_normal()
+                t += h
+            out.append(float(fc(x, t)))
+        return out
+
+
+def _component_specs(spec, fname):
+    items = list(spec.args) if is_list(spec) else [spec]
+    out = []
+    for d in items:
+        if not (isinstance(d, Expr) and d.head == "Distributed" and len(d.args) == 2 and isinstance(d.args[0], Symbol)):
+            raise ValueError(f"{fname}: expected x \\[Distributed] proc or a list of them")
+        out.append((d.args[0], proc_of(d.args[1], fname)))
+    return out
+
+
+def _subst(e, reps):
+    """replace subexpressions (MikoshiLang) using a dict keyed by expressions"""
+    if e in reps:
+        return reps[e]
+    if isinstance(e, Expr):
+        return Expr(_subst(e.head, reps) if isinstance(e.head, Expr) else e.head, *(_subst(a, reps) for a in e.args))
+    return e
+
+
+class Transformed(Proc):
+    def parse(self, a, fname):
+        if len(a) != 3 or not isinstance(a[2], Symbol):
+            raise ValueError(f"{fname}: TransformedProcess expects [expr, x \\[Distributed] proc, t]")
+        self.expr, self.tv = a[0], a[2]
+        self.comps = _component_specs(a[1], fname)
+        self.dtime = all(c.dtime for _, c in self.comps)
+        self.p = []
+
+    def numeric(self):
+        return all(c.numeric() for _, c in self.comps)
+
+    def check_time(self, t, fname):
+        for _, c in self.comps:
+            c.check_time(t, fname)
+
+    def slice(self, t):
+        if len(self.comps) != 1:
+            raise NotImplementedError("SliceDistribution: slices of TransformedProcess with several component "
+                                      "processes are not supported")
+        x, c = self.comps[0]
+        y = Symbol("x\u0303")
+        e = _subst(self.expr, {Expr(x, self.tv): y})
+        e = _subst(e, {self.tv: R(t)})
+        if _contains(e, x):
+            raise NotImplementedError("SliceDistribution: the transformation must use the component only as "
+                                      f"{x}[{self.tv}]")
+        return Expr("TransformedDistribution", e, Expr("Distributed", y, c.slice(t)))
+
+    def path(self, rng, times):
+        vals = []
+        for x, c in self.comps:
+            vals.append(c.path(rng, times))
+        out = []
+        for k, tt in enumerate(times):
+            reps = {Expr(x, self.tv): R(sp.Float(vals[i][k]) if isinstance(vals[i][k], float) else vals[i][k])
+                    for i, (x, c) in enumerate(self.comps)}
+            e = _subst(self.expr, reps)
+            e = _subst(e, {self.tv: tt})
+            v = _ev(Expr("N", e))
+            out.append(v)
+        return out
+
+
+def _contains(e, x):
+    if e == x:
+        return True
+    if isinstance(e, Expr):
+        return _contains(e.head, x) or any(_contains(a, x) for a in e.args)
+    return False
+
+
+# ─────────────────────────── registry ───────────────────────────
+
+CLASSES = {
+    "WienerProcess": Wiener, "BrownianBridgeProcess": BrownianBridge, "GeometricBrownianMotionProcess": GBM,
+    "OrnsteinUhlenbeckProcess": OU, "CoxIngersollRossProcess": CIR, "PoissonProcess": Poisson,
+    "TelegraphProcess": Telegraph, "CompoundPoissonProcess": CompoundPoisson, "RenewalProcess": Renewal,
+    "CompoundRenewalProcess": CompoundRenewal, "InhomogeneousPoissonProcess": InhomPoisson,
+    "BernoulliProcess": Bernoulli, "BinomialProcess": Binomial, "RandomWalkProcess": RandomWalk,
+    "WhiteNoiseProcess": WhiteNoise, "FractionalBrownianMotionProcess": FBM,
+    "FractionalGaussianNoiseProcess": FGN,
+    "ARProcess": ARMA, "MAProcess": ARMA, "ARMAProcess": ARMA, "ARIMAProcess": ARMA, "FARIMAProcess": ARMA,
+    "SARMAProcess": ARMA, "SARIMAProcess": ARMA, "ARCHProcess": GARCH, "GARCHProcess": GARCH,
+    "DiscreteMarkovProcess": Markov, "ContinuousMarkovProcess": Markov, "QueueingProcess": Queue,
+    "ItoProcess": Ito, "StratonovichProcess": Ito, "TransformedProcess": Transformed,
+}
+
+
+def is_proc(x):
+    return isinstance(x, Expr) and isinstance(x.head, str) and x.head in CLASSES
+
+
+def proc_of(x, fname):
+    if not is_proc(x):
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: {x} is not a random process")
+    return CLASSES[x.head](x, fname)
+
+
+def is_slice(x):
+    return isinstance(x, Expr) and is_proc(x.head) and len(x.args) == 1
+
+
+# ─────────────────────────── constructors ───────────────────────────
+
+_CTOR_NOTES = {
+    "WienerProcess": "WienerProcess[mu, sigma] (WienerProcess[] = WienerProcess[0, 1]); slice NormalDistribution[mu t, "
+                     "sigma Sqrt[t]], covariance sigma^2 Min[s, t]; simulation by exact Gaussian increments",
+    "BrownianBridgeProcess": "BrownianBridgeProcess[sigma, {t1, a}, {t2, b}] (also [{t1, a}, {t2, b}] and [] = [1, "
+                             "{0, 0}, {1, 0}]); slices are normal on (t1, t2); exact sequential simulation",
+    "GeometricBrownianMotionProcess": "GeometricBrownianMotionProcess[mu, sigma, x0]; slice LogNormalDistribution[Log[x0] "
+                                      "+ (mu - sigma^2/2) t, sigma Sqrt[t]]; exact simulation",
+    "OrnsteinUhlenbeckProcess": "OrnsteinUhlenbeckProcess[mu, sigma, theta] (stationary) and [mu, sigma, theta, x0]: "
+                                "dx = theta (mu - x) dt + sigma dw; normal slices, exact transition simulation",
+    "CoxIngersollRossProcess": "CoxIngersollRossProcess[mu, sigma, theta, x0]: dx = theta (mu - x) dt + sigma Sqrt[x] "
+                               "dw; slice c x with x ~ NoncentralChiSquareDistribution (exact), exact simulation",
+    "PoissonProcess": "PoissonProcess[mu]; slice PoissonDistribution[mu t], covariance mu Min[s, t]",
+    "TelegraphProcess": "TelegraphProcess[mu]: (-1)^N(t), N a PoissonProcess[mu], starting at 1; slice "
+                        "2 x - 1 with x ~ BernoulliDistribution[(1 + E^(-2 mu t))/2]",
+    "CompoundPoissonProcess": "CompoundPoissonProcess[lambda, jdist]; slice CompoundPoissonDistribution[lambda t, "
+                              "jdist], mean lambda t Mean[jdist], covariance lambda Min[s, t] E[J^2]",
+    "RenewalProcess": "RenewalProcess[rdist] counting process with inter-event times rdist; RandomFunction only "
+                      "(the slice distribution has no closed form and raises NotImplementedError)",
+    "CompoundRenewalProcess": "CompoundRenewalProcess[rdist, jdist]; RandomFunction only (slices raise "
+                              "NotImplementedError)",
+    "InhomogeneousPoissonProcess": "InhomogeneousPoissonProcess[lambda[t], t]; slice PoissonDistribution[Integrate["
+                                   "lambda, {u, 0, t}]] (NotImplementedError without a closed form); simulation by "
+                                   "inverting the integrated intensity",
+    "BernoulliProcess": "BernoulliProcess[p] (discrete time); slice BernoulliDistribution[p], i.i.d.",
+    "BinomialProcess": "BinomialProcess[p] (discrete time, counts of successes); slice BinomialDistribution[t, p]",
+    "RandomWalkProcess": "RandomWalkProcess[p] (steps +1 with probability p, -1 otherwise) and RandomWalkProcess[{p, "
+                         "q}] (+1 with p, -1 with q, 0 otherwise); slice 2 x - t with x ~ BinomialDistribution[t, p]",
+    "WhiteNoiseProcess": "WhiteNoiseProcess[] (standard normal), WhiteNoiseProcess[sigma] and WhiteNoiseProcess[dist]; "
+                         "i.i.d. slices dist",
+    "FractionalBrownianMotionProcess": "FractionalBrownianMotionProcess[mu, sigma, h] (and [h] = [0, 1, h]); slice "
+                                       "NormalDistribution[mu t, sigma t^h], covariance sigma^2/2 (|s|^2h + |t|^2h - "
+                                       "|t - s|^2h); exact Cholesky simulation (up to 4000 points)",
+    "FractionalGaussianNoiseProcess": "FractionalGaussianNoiseProcess[mu, sigma, h] (and [h]); stationary normal "
+                                      "slices, covariance sigma^2/2 (|k+1|^2h - 2|k|^2h + |k-1|^2h); exact simulation",
+    "ARProcess": "ARProcess[{a1, ...}, v] and ARProcess[c, {a1, ...}, v]: x_t = c + Sum a_i x_(t-i) + e_t, e_t ~ "
+                 "N(0, v); ARProcess[p] is an estimation template",
+    "MAProcess": "MAProcess[{b1, ...}, v] and MAProcess[c, {b1, ...}, v]: x_t = c + e_t + Sum b_j e_(t-j)",
+    "ARMAProcess": "ARMAProcess[{a...}, {b...}, v] and ARMAProcess[c, {a...}, {b...}, v]",
+    "ARIMAProcess": "ARIMAProcess[{a...}, d, {b...}, v] (and with constant c): the d-th difference is "
+                    "ARMAProcess[{a...}, {b...}, v]",
+    "FARIMAProcess": "FARIMAProcess[{a...}, d, {b...}, v] with fractional -1/2 < d < 1/2; covariance, slices and "
+                     "simulation need an empty AR part (others raise NotImplementedError)",
+    "SARMAProcess": "SARMAProcess[{a...}, {b...}, {s, {alpha...}, {beta...}}, v]: multiplicative seasonal ARMA",
+    "SARIMAProcess": "SARIMAProcess[{a...}, d, {b...}, {s, {alpha...}, D, {beta...}}, v]",
+    "ARCHProcess": "ARCHProcess[kappa, {alpha1, ...}]: x_t = sigma_t z_t, sigma_t^2 = kappa + Sum alpha_i x_(t-i)^2",
+    "GARCHProcess": "GARCHProcess[kappa, {alpha...}, {beta...}]: sigma_t^2 = kappa + Sum alpha_i x_(t-i)^2 + Sum "
+                    "beta_j sigma_(t-j)^2; mean 0, variance kappa/(1 - Sum alpha - Sum beta) when weakly stationary",
+    "DiscreteMarkovProcess": "DiscreteMarkovProcess[i0, m] / DiscreteMarkovProcess[p0, m] (states 1..n, rows of m sum "
+                             "to 1); slice EmpiricalDistribution[p0.m^t -> Range[n]]; Graph input and the [n] template "
+                             "are not supported",
+    "ContinuousMarkovProcess": "ContinuousMarkovProcess[i0 | p0, q] (transition rate matrix, rows sum to 0) and "
+                               "[i0 | p0, m, mu] (embedded chain m, holding rates mu); slice EmpiricalDistribution["
+                               "p0.MatrixExp[q t] -> Range[n]]",
+    "QueueingProcess": "QueueingProcess[a, s, c, k, x0] with a an arrival rate or distribution, s a service rate or "
+                       "distribution, c servers, capacity k (default Infinity) and initial size x0; QueueProperties "
+                       "and StationaryDistribution for M/M/c/k (and M/G/1 measures); RandomFunction by event "
+                       "simulation",
+    "ItoProcess": "ItoProcess[{a, b}, x, t] and ItoProcess[{a, b, c}, {x, x0}, {t, t0}] (scalar): dx = a dt + b dw, "
+                  "output c; RandomFunction uses the Euler-Maruyama scheme with the given step (an approximation of "
+                  "strong order 1/2); slices, the SDE-equation form, vector processes and ItoProcess[proc] raise "
+                  "NotImplementedError",
+    "StratonovichProcess": "StratonovichProcess[{a, b}, x, t] (and with {x, x0}, {t, t0}): simulated as the "
+                           "equivalent Ito process with drift a + b b_x/2 (Euler-Maruyama)",
+    "TransformedProcess": "TransformedProcess[expr, x \\[Distributed] proc, t] (or a list of components); slices "
+                          "(one component) are TransformedDistribution[expr /. x[t] -> y, y ~ proc[t]]; RandomFunction "
+                          "transforms simulated component paths",
+}
+
+
+def _register_ctor(name):
+    def impl(*args: Expr) -> Expr:
+        if name == "WienerProcess" and not args:
+            return Expr(name, 0, 1)
+        del _CONDS[:]
+        CLASSES[name](Expr(name, *args), name)
+        raise Unevaluated()
+    impl.__name__ = "_ctor_" + name
+    fn(name, area=AREA, status="added",
+       notes=_CTOR_NOTES[name] + ". Inert process object; parameters are validated (invalid numeric parameters "
+                                 "raise ValueError, wrong kinds TypeError, unsupported forms NotImplementedError); "
+                                 "symbolic parameters are allowed. Check: exact (closed forms) and reference values "
+                                 "(Wolfram documentation, SciPy/statsmodels) in tests.")(impl)
+
+
+for _n in CLASSES:
+    _register_ctor(_n)
+
+
+# ─────────────────────────── slices ───────────────────────────
+
+def _times_arg(t, fname):
+    if is_list(t):
+        return [_p(v, fname, "time") for v in t.args]
+    return _p(t, fname, "time")
+
+
+@fn("SliceDistribution", area=AREA, status="added",
+    notes="SliceDistribution[proc, t] (also entered as proc[t]) gives the named distribution of the state at time t "
+          "(NormalDistribution, PoissonDistribution, LogNormalDistribution, ...; see each process); "
+          "SliceDistribution[proc, {t1, ...}] gives MultinormalDistribution[means, covariances] for Gaussian "
+          "processes (others raise NotImplementedError). Times outside the process domain raise ValueError; "
+          "processes whose slices have no closed form raise NotImplementedError. "
+          "Check: exact closed forms; reference (Wolfram documentation, moment identities) in tests.")
+def _slicedist(proc: Expr, t: Real | Var | ListOf[Real]) -> Expr:
+    pr = proc_of(proc, "SliceDistribution")
+    ts_ = _times_arg(t, "SliceDistribution")
+    if isinstance(ts_, list):
+        for v in ts_:
+            pr.check_time(v, "SliceDistribution")
+        if not pr.gaussian:
+            raise NotImplementedError(f"SliceDistribution: multi-time slices of {pr.name} are not supported "
+                                      "(Gaussian processes only)")
+        means = [sp.simplify(pr.mean(v)) for v in ts_]
+        cov = [[sp.simplify(pr.cov(a, b)) for b in ts_] for a in ts_]
+        return Expr("MultinormalDistribution", R(means), R(cov))
+    pr.check_time(ts_, "SliceDistribution")
+    return pr.slice(ts_)
+
+
+def slice_dist(x):
+    pr = proc_of(x.head, "SliceDistribution")
+    return _ev(Expr("SliceDistribution", x.head, x.args[0])), pr
+
+
+def _slice_first(args):
+    return bool(args) and is_slice(args[0])
+
+
+def _moment_impl(which):
+    def impl(x: Expr, *rest: Expr) -> Expr:
+        pr = proc_of(x.head, which)
+        t = _times_arg(x.args[0], which)
+        if isinstance(t, list):
+            d = _ev(Expr("SliceDistribution", x.head, x.args[0]))
+            return _ev(Expr(which, d, *rest))
+        pr.check_time(t, which)
+        if which == "Mean":
+            v = pr.mean(t)
+        elif which == "Variance":
+            v = pr.var(t)
+        else:
+            v = sp.sqrt(pr.var(t))
+        return _out(sp.simplify(v) if not _inexact(v) else v, x)
+    return impl
+
+
+for _w in ("Mean", "Variance", "StandardDeviation"):
+    W.extend(_w, _moment_impl(_w), _slice_first,
+             f"{_w}[proc[t]] for random processes (closed form, also where the slice distribution is not named)")
+
+
+def _via_slice(which):
+    def impl(x: Expr, *rest: Expr) -> Expr:
+        d, _ = slice_dist(x)
+        return _ev(Expr(which, d, *rest))
+    return impl
+
+
+for _w in ("PDF", "CDF", "InverseCDF", "SurvivalFunction", "HazardFunction", "Quantile", "Median", "Skewness",
+           "Kurtosis", "Moment", "CentralMoment", "Cumulant", "CharacteristicFunction", "MomentGeneratingFunction",
+           "RandomVariate"):
+    W.extend(_w, _via_slice(_w), _slice_first, f"{_w}[proc[t], ...] uses SliceDistribution[proc, t]")
+
+
+def _dist_second(args):
+    return len(args) == 2 and isinstance(args[1], Expr) and args[1].head == "Distributed" and \
+        len(args[1].args) == 2 and is_slice(args[1].args[1])
+
+
+def _via_slice2(which):
+    def impl(f: Expr, spec: Expr) -> Expr:
+        d, _ = slice_dist(spec.args[1])
+        return _ev(Expr(which, f, Expr("Distributed", spec.args[0], d)))
+    return impl
+
+
+for _w in ("Expectation", "Probability", "NExpectation", "NProbability"):
+    W.extend(_w, _via_slice2(_w), _dist_second, f"{_w}[expr, x \\[Distributed] proc[t]] uses the slice distribution")
+
+
+# ─────────────────────────── covariance and correlation functions ───────────────────────────
+
+def _stationary_or_raise(pr, fname):
+    try:
+        st = pr.stationary()
+    except Unevaluated:
+        return
+    if st is False:
+        raise ValueError(f"{fname}: {pr.name} is not weakly stationary; give two times s, t")
+
+
+def _proc_cf(kind, pr, s, t, fname):
+    pr.check_time(s, fname)
+    pr.check_time(t, fname)
+    c = pr.cov(s, t)
+    if kind == "cov":
+        v = c
+    elif kind == "abs":
+        v = c + pr.mean(s) * pr.mean(t)
+    else:
+        v = c / sp.sqrt(pr.var(s) * pr.var(t))
+    return v if _inexact(v) else sp.simplify(v)
+
+
+def _lags(spec, fname, start=0):
+    if is_list(spec):
+        a = list(spec.args)
+        if len(a) == 1 and is_list(a[0]):
+            return [_p(v, fname, "lag") for v in a[0].args], True
+        if len(a) == 1:
+            lo, hi, st = sp.Integer(start), _p(a[0], fname, "lag"), sp.Integer(1)
+        elif len(a) == 2:
+            lo, hi, st = _p(a[0], fname, "lag"), _p(a[1], fname, "lag"), sp.Integer(1)
+        elif len(a) == 3:
+            lo, hi, st = (_p(v, fname, "lag") for v in a)
+        else:
+            raise ValueError(f"{fname}: invalid lag specification")
+        if not (_num(lo) and _num(hi) and _num(st)):
+            raise Unevaluated()
+        if not st > 0:
+            raise ValueError(f"{fname}: the lag step must be positive")
+        out, k = [], 0
+        while lo + k * st <= hi:
+            out.append(lo + k * st)
+            k += 1
+        return out, True
+    return [_p(spec, fname, "lag")], False
+
+
+def _ts_out(lags, vals, listed):
+    from .wl_processes_ts import make_ts
+    if not listed:
+        return vals[0]
+    return make_ts(list(zip(lags, vals)))
+
+
+def _data_values(x, fname):
+    """list of paths (lists of SymPy values) from a list, TimeSeries or TemporalData"""
+    from .wl_processes_ts import td_paths, series_of
+    if isinstance(x, Expr) and x.head == "TemporalData" and x.args and is_list(x.args[0]):
+        paths, _ = td_paths(x)
+        vals = [[v for _, v in p] for p in paths]
+    elif is_list(x) and x.args and not all(is_list(v) and len(v.args) == 2 for v in x.args):
+        vals = [list(x.args)]
+    else:
+        h, pairs, _ = series_of(x, fname)
+        vals = [[v for _, v in pairs]]
+    out = []
+    for path in vals:
+        row = []
+        for v in path:
+            if is_list(v):
+                raise NotImplementedError(f"{fname}: vector-valued data is not supported")
+            sv = S(v)
+            if not (isinstance(sv, sp.Basic) and sv.is_number):
+                if isinstance(sv, sp.Basic) and sv.free_symbols:
+                    raise Unevaluated()
+                raise TypeError(f"{fname}: data values must be numbers")
+            row.append(sv)
+        out.append(row)
+    return out
+
+
+def _sample_cf(kind, xs, h, fname):
+    n = len(xs)
+    if not (_num(h) and h.is_Integer):
+        if _num(h):
+            raise ValueError(f"{fname}: lags must be integers for data")
+        raise Unevaluated()
+    h = abs(int(h))
+    if h >= n:
+        raise ValueError(f"{fname}: the lag {h} must be smaller than the data length {n}")
+    if kind == "abs":
+        return sum(xs[i + h] * xs[i] for i in range(n - h)) / n
+    m = sum(xs) / n
+    c = sum((xs[i + h] - m) * (xs[i] - m) for i in range(n - h)) / n
+    if kind == "cov":
+        return c
+    c0 = sum((v - m) ** 2 for v in xs) / n
+    if c0 == 0:
+        raise ValueError(f"{fname}: the data has zero variance")
+    return c / c0
+
+
+def _durbin_levinson(r, hmax):
+    """partial autocorrelations phi_kk, k = 1..hmax, from autocorrelations r[0..hmax]"""
+    out, phi = [], []
+    for k in range(1, hmax + 1):
+        if k == 1:
+            a = r[1] / r[0]
+            phi = [a]
+        else:
+            num = r[k] - sum(phi[j] * r[k - 1 - j] for j in range(k - 1))
+            den = r[0] - sum(phi[j] * r[j + 1] for j in range(k - 1))
+            a = num / den
+            phi = [phi[j] - a * phi[k - 2 - j] for j in range(k - 1)] + [a]
+        out.append(sp.simplify(a) if not _inexact(a) else a)
+    return out
+
+
+def _cf_function(name, kind):
+    def impl(x: Expr, h: Expr, t: Expr = None) -> Expr:
+        if is_proc(x):
+            pr = proc_of(x, name)
+            if not pr.has_cov:
+                raise NotImplementedError(f"{name}: not available for {pr.name}")
+            if kind == "pacf":
+                if t is not None:
+                    raise ValueError(f"{name}: expected {name}[proc, h]")
+                if not isinstance(pr, ARMA):
+                    raise NotImplementedError(f"{name}: only weakly stationary time series processes are supported")
+                pr._need_stationary(name)
+                lags, listed = _lags(h, name, start=1)
+                vals = []
+                for k in lags:
+                    if not (_num(k) and k.is_Integer):
+                        if _num(k):
+                            raise ValueError(f"{name}: lags must be integers")
+                        raise Unevaluated()
+                    if k < 1:
+                        raise ValueError(f"{name}: lags must be positive")
+                    r = [pr.acvf(j) for j in range(int(k) + 1)]
+                    vals.append(_out(_durbin_levinson(r, int(k))[-1], x))
+                return _ts_out(lags, vals, listed)
+            if t is not None:
+                return _out(_proc_cf(kind, pr, _p(h, name, "time"), _p(t, name, "time"), name), x, h, t)
+            _stationary_or_raise(pr, name)
+            lags, listed = _lags(h, name)
+            vals = []
+            for k in lags:
+                if pr.dtime and _num(k) and not k.is_Integer:
+                    raise ValueError(f"{name}: lags of a discrete-time process must be integers")
+                ref = pr.t0 if not pr.dtime else sp.Integer(0)
+                vals.append(_out(_proc_cf(kind, pr, ref + sp.Abs(k) if _num(k) else ref + k, ref, name)
+                                 if not isinstance(pr, ARMA) else _proc_cf(kind, pr, k, sp.Integer(0), name), x, h))
+            return _ts_out(lags, vals, listed)
+        if t is not None:
+            raise ValueError(f"{name}: data takes a single lag specification")
+        paths = _data_values(x, name)
+        lags, listed = _lags(h, name, start=1 if kind == "pacf" else 0)
+        vals = []
+        for k in lags:
+            if kind == "pacf":
+                if not (_num(k) and k.is_Integer):
+                    if _num(k):
+                        raise ValueError(f"{name}: lags must be integers")
+                    raise Unevaluated()
+                if k < 1:
+                    raise ValueError(f"{name}: lags must be positive")
+                tot = 0
+                for xs in paths:
+                    r = [_sample_cf("corr", xs, sp.Integer(j), name) for j in range(int(k) + 1)]
+                    tot += _durbin_levinson(r, int(k))[-1]
+            else:
+                tot = sum(_sample_cf(kind, xs, k, name) for xs in paths)
+            v = tot / len(paths)
+            vals.append(_out(sp.nsimplify(v) if False else v, x))
+        return _ts_out(lags, vals, listed)
+    return impl
+
+
+_CF_NOTES = {
+    "CovarianceFunction": "CovarianceFunction[proc, s, t] = Cov[x[s], x[t]] in closed form; CovarianceFunction[proc, "
+                          "hspec] for weakly stationary processes (Cov[x[t + h], x[t]]; non-stationary processes raise "
+                          "ValueError); CovarianceFunction[data, hspec] = (1/n) Sum_(i=1)^(n-h) (x_(i+h) - xbar)(x_i - "
+                          "xbar) (Wolfram's biased estimator), averaged over the paths of TemporalData",
+    "CorrelationFunction": "CorrelationFunction[proc, s, t] = Cov[x[s], x[t]]/(sd[s] sd[t]); [proc, hspec] for weakly "
+                           "stationary processes; [data, hspec] = sample covariance at lag h / sample covariance at 0",
+    "AbsoluteCorrelationFunction": "AbsoluteCorrelationFunction[proc, s, t] = E[x[s] x[t]]; [proc, hspec] for weakly "
+                                   "stationary processes; [data, hspec] = (1/n) Sum x_(i+h) x_i",
+    "PartialCorrelationFunction": "PartialCorrelationFunction[proc, hspec] for weakly stationary ARMA-type processes "
+                                  "and [data, hspec] (Durbin-Levinson recursion on the (sample) autocorrelations); "
+                                  "lags start at 1 ({hmax} = 1..hmax); lag 0 raises ValueError",
+}
+
+for _name, _kind in (("CovarianceFunction", "cov"), ("CorrelationFunction", "corr"),
+                     ("AbsoluteCorrelationFunction", "abs"), ("PartialCorrelationFunction", "pacf")):
+    fn(_name, area=AREA, status="added",
+       notes=_CF_NOTES[_name] + ". hspec: h, {hmax} (0..hmax), {hmin, hmax}, {hmin, hmax, dh} or {{h1, ...}}; a lag "
+             "list gives a TimeSeries over the lags. Exact for exact input; vector-valued data raises "
+             "NotImplementedError; symbolic lags stay unevaluated where no closed form exists. "
+             "Check: exact; reference (Wolfram documentation identities, statsmodels acf/acovf/pacf_yw values) "
+             "in tests.")(_cf_function(_name, _kind))
