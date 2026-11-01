@@ -30,7 +30,7 @@ def _types(name):
 @pytest.mark.parametrize("name, params, result", [
     ("Xor", ["Boolean..."], "Boolean"),
     ("Boole", ["Boolean"], "Integer"),
-    ("SatisfiabilityCount", ["Expr", "Var | ListOf[Expr]"], "Integer"),
+    ("SatisfiabilityCount", ["Expr", "Var | ListOf[Expr] | Integer"], "Integer"),
     ("Iff", ["Boolean..."], "Boolean"),
     ("BaseEncode", ["Expr", "String"], "String"),
     ("KeyComplement", ["ListOf[Expr]"], "Assoc"),
@@ -45,7 +45,7 @@ def test_narrowed_signatures(name, params, result):
     ('Implies["p", q]', "Implies", "Boolean"),
     ("ForAll[1, x > 0]", "ForAll", "Var | ListOf[Var]"),
     ('SatisfiabilityInstances[a || b, {a, b}, 0]', "SatisfiabilityInstances", "PosInteger"),
-    ('Hash["abc", 5]', "Hash", "String"),
+    ('Hash["abc", 5]', "Hash", "String | ListOf[Expr]"),
     ('BaseEncode[ByteArray[{1, 2}], 64]', "BaseEncode", "String"),
     ("Snippet[\"a\", 0]", "Snippet", "PosInteger"),
     ("KeyComplement[<|a -> 1|>]", "KeyComplement", "ListOf[Expr]"),
@@ -57,7 +57,7 @@ def test_narrowed_mismatches(src, head, expected):
 @pytest.mark.parametrize("src", [
     "Xor[True, False]", "Xor[x, y]", "Implies[x > 0, y]", "Boole[{True, False, x}]", "Majority[True, False, True]",
     "SatisfiabilityCount[a || b, {a, b}]", "SatisfiableQ[a && !a]", "ForAll[{x, y}, True]", "Exists[x, x || y]",
-    'Hash["abc", "MD5"]', 'BaseEncode[ByteArray[{1, 2, 3}]]', 'CharacterName["ξ"]',
+    'Hash["abc", "MD5"]', 'Hash["abc", {"SHA", 256}, "HexString"]', "SatisfiabilityInstances[BooleanFunction[30, 3], 3]", 'BaseEncode[ByteArray[{1, 2, 3}]]', 'CharacterName["ξ"]',
     "KeyComplement[{<|a -> 1, b -> 2|>, <|b -> 5|>}]", "Merge[{<|a -> 1|>, <|a -> 3|>}, Total]",
     "Iff[True, True]", 'SyntaxLength["a[b]"]',
 ])

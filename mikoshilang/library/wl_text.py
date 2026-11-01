@@ -566,7 +566,7 @@ def _expression_hash(x):
           "of the expression (Wolfram documents its value as implementation-dependent). Formats Integer, "
           "DecimalString, HexString, HexStringLittleEndian, Base36String, Base64Encoding, ByteArray. MD2 and "
           "the BLAKE2 parallel/XOF variants raise.")
-def _hash(x: Expr, t: String = "Expression", fmt: String = "Integer") -> Expr:
+def _hash(x: Expr, t: String | ListOf[Expr] = "Expression", fmt: String = "Integer") -> Expr:
     if t == "Expression":
         return _hash_format(_expression_hash(x), 64, fmt, "Hash")
     f, bits = _hash_function(t, "Hash")

@@ -526,7 +526,7 @@ def _decide_setup(e, vars_, fname):
 
 @fn("SatisfiableQ", area=AREA, status="added", notes="True if some assignment of the variables makes the "
     "expression True (exact truth table up to 22 variables, SymPy SAT solver beyond)")
-def _satq(e: Expr, vars_: Var | ListOf[Expr] = None) -> Boolean:
+def _satq(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Boolean:
     c, sv = _decide_setup(e, vars_, "SatisfiableQ")
     syms = c.symbols()
     if len(syms) > MAX_VARS:
@@ -537,7 +537,7 @@ def _satq(e: Expr, vars_: Var | ListOf[Expr] = None) -> Boolean:
 
 @fn("TautologyQ", area=AREA, status="added", notes="True if every assignment of the variables makes the expression "
     "True")
-def _tautq(e: Expr, vars_: Var | ListOf[Expr] = None) -> Boolean:
+def _tautq(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Boolean:
     c, sv = _decide_setup(e, vars_, "TautologyQ")
     syms = c.symbols()
     if len(syms) > MAX_VARS:
@@ -548,7 +548,7 @@ def _tautq(e: Expr, vars_: Var | ListOf[Expr] = None) -> Boolean:
 
 @fn("SatisfiabilityCount", area=AREA, status="added", notes="number of assignments (of BooleanVariables or the "
     "given variables, so extra variables double the count) that make the expression True")
-def _satcount(e: Expr, vars_: Var | ListOf[Expr] = None) -> Integer:
+def _satcount(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Integer:
     c, sv = _decide_setup(e, vars_, "SatisfiabilityCount")
     m, _ = truth_mask(sv, c.symbols())
     return bin(m).count("1")
@@ -558,7 +558,7 @@ def _satcount(e: Expr, vars_: Var | ListOf[Expr] = None) -> Integer:
     notes="SatisfiabilityInstances[expr, vars], [expr, vars, m], [expr, vars, All] and pure-function forms: lists of "
           "truth values that make expr True, enumerated with False before True (lexicographic); {} if unsatisfiable. "
           "Wolfram does not document which instances it returns first; every returned instance is valid")
-def _satinst(e: Expr, vars_: Var | ListOf[Expr] = None, m: PosInteger = None) -> ListOf[Expr]:
+def _satinst(e: Expr, vars_: Var | ListOf[Expr] | Integer = None, m: PosInteger = None) -> ListOf[Expr]:
     if _pure_arity(e, "SatisfiabilityInstances") is not None:
         if vars_ is not None and m is None:
             vars_, m = None, vars_
