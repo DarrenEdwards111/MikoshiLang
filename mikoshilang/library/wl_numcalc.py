@@ -22,6 +22,9 @@ _OPTS = {"WorkingPrecision", "PrecisionGoal", "AccuracyGoal", "Method", "MaxIter
 
 def _opts(args, fname):
     pos, opts = split_options(args, _OPTS, fname)
+    for k in ("EvaluationMonitor", "StepMonitor"):
+        if k in opts:
+            raise NotImplementedError(f"{fname}: the option {k} is not supported")
     wp = opts.get("WorkingPrecision")
     if wp is None or (isinstance(wp, Symbol) and wp.name == "MachinePrecision"):
         prec, dps = "m", 15
