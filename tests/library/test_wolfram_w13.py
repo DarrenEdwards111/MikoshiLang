@@ -403,16 +403,27 @@ SYMMETRIC = [
     ("Encrypt[\"pw\", \"x\"][\"Properties\"]", "{\"Data\", \"InitializationVector\", \"OriginalForm\"}"),
     ("EncryptedObject[<|\"x\" -> 1|>]", Raises(ValueError)),
     ("Head[Encrypt[\"pw\", 1]] === EncryptedObject", "True"),
+    # Each file case is self-contained (its own key and files), so the cases pass in any order and on any
+    # pytest-xdist worker.  The wrong-key case uses a fixed IV: with a random IV a wrong AES-CBC key gives
+    # valid PKCS#7 padding about 1 time in 256, so that case was flaky.
     (f"w13fk = GenerateSymmetricKey[\"w13file\"]; EncryptFile[w13fk, {F('data.csv')}]", f"{F('data.csv.mx')}"),
-    (f"Head[Import[{F('data.csv.mx')}]]", "EncryptedObject"),
-    (f"EncryptFile[w13fk, {F('data.csv')}]", Raises(ValueError)),
-    (f"EncryptFile[w13fk, {F('data.csv')}, {F('enc2.bin')}]; DecryptFile[w13fk, {F('enc2.bin')}, {F('dec2.csv')}]; "
-     f"Import[{F('dec2.csv')}]", "{{1, 2}, {3, 4}}"),
-    (f"DecryptFile[w13fk, {F('data.csv.mx')}, {F('dec1.csv')}]", f"{F('dec1.csv')}"),
-    (f"DecryptFile[w13fk, {F('data.csv.mx')}]", Raises(ValueError)),
-    (f"DecryptFile[GenerateSymmetricKey[\"wrong\"], {F('data.csv.mx')}, {F('dec3.csv')}]", Raises(ValueError)),
-    (f"DecryptFile[w13fk, {F('data.csv.mx')}, {F('dec1.csv')}, OverwriteTarget -> True]", f"{F('dec1.csv')}"),
-    (f"EncryptFile[w13fk, {F('nonexistent.txt')}]", Raises(ValueError)),
+    (f"EncryptFile[GenerateSymmetricKey[\"w13file\"], {F('data.csv')}, {F('imp.mx')}]; Head[Import[{F('imp.mx')}]]",
+     "EncryptedObject"),
+    (f"EncryptFile[GenerateSymmetricKey[\"w13file\"], {F('data.csv')}, {F('twice.mx')}]; "
+     f"EncryptFile[GenerateSymmetricKey[\"w13file\"], {F('data.csv')}, {F('twice.mx')}]", Raises(ValueError)),
+    (f"w13fk2 = GenerateSymmetricKey[\"w13file\"]; EncryptFile[w13fk2, {F('data.csv')}, {F('enc2.bin')}]; "
+     f"DecryptFile[w13fk2, {F('enc2.bin')}, {F('dec2.csv')}]; Import[{F('dec2.csv')}]", "{{1, 2}, {3, 4}}"),
+    (f"w13fk3 = GenerateSymmetricKey[\"w13file\"]; EncryptFile[w13fk3, {F('data.csv')}, {F('d1.csv.mx')}]; "
+     f"DecryptFile[w13fk3, {F('d1.csv.mx')}, {F('dec1.csv')}]", f"{F('dec1.csv')}"),
+    (f"w13fk4 = GenerateSymmetricKey[\"w13file\"]; EncryptFile[w13fk4, {F('data.csv')}, {F('back.csv.mx')}]; "
+     f"DecryptFile[w13fk4, {F('back.csv.mx')}]; DecryptFile[w13fk4, {F('back.csv.mx')}]", Raises(ValueError)),
+    (f"EncryptFile[GenerateSymmetricKey[\"w13file\"], {F('data.csv')}, {F('wrong.mx')}, "
+     f"Method -> <|\"InitializationVector\" -> ByteArray[Range[16]]|>]; "
+     f"DecryptFile[GenerateSymmetricKey[\"wrong\"], {F('wrong.mx')}, {F('dec3.csv')}]", Raises(ValueError)),
+    (f"w13fk5 = GenerateSymmetricKey[\"w13file\"]; EncryptFile[w13fk5, {F('data.csv')}, {F('ow.csv.mx')}]; "
+     f"DecryptFile[w13fk5, {F('ow.csv.mx')}, {F('ow.csv')}]; "
+     f"DecryptFile[w13fk5, {F('ow.csv.mx')}, {F('ow.csv')}, OverwriteTarget -> True]", f"{F('ow.csv')}"),
+    (f"EncryptFile[GenerateSymmetricKey[\"w13file\"], {F('nonexistent.txt')}]", Raises(ValueError)),
 ]
 
 DERIVED = [
@@ -765,6 +776,19 @@ def test_primitive_vectors():
 
 CASES = (SERIALISATION + FORMATS + REGISTRY + FILES + MISC + HASHES_AND_CIPHERS + SYMMETRIC + DERIVED + ASYMMETRIC
          + SIGNATURES + PEM + CONVENTIONS)
+
+
+# Globals that later cases reuse (w13sk, w13rk, w13rs, w13sig) are defined once per process here, so every case
+# passes whichever pytest-xdist worker runs it; the defining cases still redefine them consistently.
+_PRELUDE = ("w13sk = Import[" + F("ec1.pem") + "]; "
+            "w13rk = GenerateAsymmetricKeyPair[Method -> <|\"KeySize\" -> 1024|>]; "
+            "w13rs = GenerateAsymmetricKeyPair[Method -> <|\"KeySize\" -> 1024|>]; "
+            "w13sig = GenerateDigitalSignature[\"m\", w13rs[\"PrivateKey\"]]; Null")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _w13_prelude():
+    ev(_PRELUDE)
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c[0].replace(D, "TMP")[:80] for c in CASES])

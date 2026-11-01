@@ -43,7 +43,7 @@ def _seq_spec_list(spec, fname):
 # ─────────────────────────── construction ───────────────────────────
 
 @fn("Array", **ADDED, notes="Array[f, n], Array[f, {n1, n2, ...}], origin r or {r1, ...}, {a, b} ranges and head h")
-def _array(f, dims, origin=None, head=None):
+def _array(f: Fn, dims: Expr, origin: Expr = None, head: Expr = None) -> Expr:
     ds = _seq_spec_list(dims, "Array")
     k = len(ds)
     if origin is None:
@@ -84,7 +84,7 @@ def _array(f, dims, origin=None, head=None):
 
 
 @fn("ConstantArray", **ADDED, notes="ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}]")
-def _constarray(c, dims):
+def _constarray(c: Expr, dims: Expr) -> Expr:
     ds = _seq_spec_list(dims, "ConstantArray")
     if math.prod(ds) > K.MAX_TABLE:
         raise ValueError("ConstantArray: too many elements")
@@ -95,7 +95,7 @@ def _constarray(c, dims):
 
 
 @fn("Subdivide", **ADDED, notes="Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values")
-def _subdivide(a, b=None, c=None):
+def _subdivide(a: Expr, b: Expr = None, c: Expr = None) -> ListOf[Expr]:
     if b is None:
         lo, hi, n = 0, 1, a
     elif c is None:
@@ -108,7 +108,7 @@ def _subdivide(a, b=None, c=None):
 
 
 @fn("PowerRange", **ADDED, notes="PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r]")
-def _powerrange(a, b=None, r=None):
+def _powerrange(a: Expr, b: Expr = None, r: Expr = None) -> ListOf[Expr]:
     if b is None:
         lo, hi, ratio = 1, a, 10
     else:
@@ -130,7 +130,7 @@ def _powerrange(a, b=None, r=None):
 
 
 @fn("Subsequences", **ADDED, notes="contiguous subsequences by length then position; Subsequences[list, n | {n} | {m, n}]")
-def _subsequences(x, spec=None):
+def _subsequences(x: Expr, spec: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Subsequences")
     n = len(items)
     lo, hi = 0, n
@@ -157,7 +157,7 @@ K.BUILTIN_ATTRIBUTES["Reap"] = {"HoldFirst", "Protected"}
 
 @fn("Sow", **ADDED, notes="Sow[e] and Sow[e, tag] give e and record it for the innermost enclosing Reap "
                           "(outside Reap, Sow just returns e)")
-def _sow(e, tag=None):
+def _sow(e: Expr, tag: Expr = None) -> Expr:
     stack = _REAP.get()
     if stack:
         t = Symbol("None") if tag is None else tag
@@ -172,7 +172,7 @@ def _sow(e, tag=None):
 
 @fn("Reap", **ADDED, notes="Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and "
                            "Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list]")
-def _reap(expr, patt=None, f=None):
+def _reap(expr: Expr, patt: Expr = None, f: Fn = None) -> ListOf[Expr]:
     pats = None if patt is None else (list(ev(patt).args) if is_list(ev(patt)) else [ev(patt)])
     stack = list(_REAP.get() or [])
     frame = (pats if patt is not None else None, [])
@@ -222,7 +222,7 @@ def _positions(spec, fname):
 
 
 @fn("Extract", **ADDED, notes="Extract[expr, pos], Extract[expr, {pos1, pos2, ...}] and Extract[expr, pos, h]")
-def _extract(x, spec, h=None):
+def _extract(x: Expr, spec: Expr, h: Fn = None) -> Expr:
     single = not (is_list(spec) and spec.args and all(is_list(p) for p in spec.args))
     out = []
     for p in _positions(spec, "Extract"):
@@ -308,7 +308,7 @@ def _expand_all(x, pos, fname):
 
 @fn("MapAt", **ADDED, notes="MapAt[f, expr, n | {i, j, ...} | {{...}, ...}]; positions may use negative indices, "
                             "All, Span and Key; a repeated position applies f repeatedly")
-def _mapat(f, x, spec):
+def _mapat(f: Fn, x: Expr, spec: Expr) -> Expr:
     out = x
     for p in _positions(spec, "MapAt"):
         for q in _expand_all(x, p, "MapAt"):
@@ -318,7 +318,7 @@ def _mapat(f, x, spec):
 
 @fn("ReplacePart", **ADDED, notes="ReplacePart[expr, pos -> new], lists of rules, lists of positions, position "
                                   "patterns such as {i_, i_} -> 0 and pos :> new (evaluated per position)")
-def _replacepart(x, rules):
+def _replacepart(x: Expr, rules: Expr) -> Expr:
     rs = list(rules.args) if is_list(rules) else [rules]
     if not all(is_rule(r) for r in rs):
         raise ValueError("ReplacePart: the second argument must be a rule or a list of rules")
@@ -365,7 +365,7 @@ def _replacepart(x, rules):
 
 @fn("Delete", **ADDED, notes="Delete[expr, n], Delete[expr, {i, j, ...}] and Delete[expr, {{...}, ...}] (positions "
                              "refer to the original expression)")
-def _delete(x, spec):
+def _delete(x: Expr, spec: Expr) -> Expr:
     rps = []
     for p in _positions(spec, "Delete"):
         rp = _resolve(x, p, "Delete")
@@ -397,7 +397,7 @@ def _delete_at(x, rp):
 
 @fn("Insert", **ADDED, notes="Insert[list, elem, n] (negative n counts from the end: -1 appends), "
                              "Insert[expr, elem, {i, j, ...}] and several positions {{...}, ...}")
-def _insert(x, elem, spec):
+def _insert(x: Expr, elem: Expr, spec: Expr) -> Expr:
     poss = _positions(spec, "Insert")
 
     def ins(e, pos):
@@ -443,7 +443,7 @@ def _insert(x, elem, spec):
 
 @fn("FirstPosition", **ADDED, notes="first position matching patt in Position order; Missing[\"NotFound\"] or the "
                                     "given default; optional level specification")
-def _firstposition(x, patt, default=None, levels=None):
+def _firstposition(x: Expr, patt: Expr, default: Expr = None, levels: Expr = None) -> Expr:
     args = [x, patt] + ([levels] if levels is not None else []) + [1]
     if levels is None:
         args = [x, patt, Expr("List", 0, Symbol("Infinity")), 1]
@@ -454,7 +454,7 @@ def _firstposition(x, patt, default=None, levels=None):
 
 
 @fn("SelectFirst", **ADDED, notes="first element with crit[e] True, else Missing[\"NotFound\"] or the default")
-def _selectfirst(x, crit, default=None):
+def _selectfirst(x: Expr, crit: Fn, default: Expr = None) -> Expr:
     for e in items_of(x, "SelectFirst"):
         if true(crit, e):
             return e
@@ -463,7 +463,7 @@ def _selectfirst(x, crit, default=None):
 
 @fn("FirstCase", **ADDED, notes="FirstCase[expr, patt | patt :> rhs, default, levelspec]; default level {1}; "
                                 "Missing[\"NotFound\"] when nothing matches")
-def _firstcase(x, patt, default=None, levels=None):
+def _firstcase(x: Expr, patt: Expr, default: Expr = None, levels: Expr = None) -> Expr:
     args = [x, patt] + ([levels] if levels is not None else [L(1)]) + [1]
     r = ev(Expr("Cases", *args))
     if r.args:
@@ -473,7 +473,7 @@ def _firstcase(x, patt, default=None, levels=None):
 
 @fn("Pick", **ADDED, notes="Pick[list, sel] keeps elements whose selector is True; Pick[list, sel, patt] those whose "
                            "selector matches patt; nested selector lists pick at deeper levels")
-def _pick(x, sel, patt=None):
+def _pick(x: Expr, sel: Expr, patt: Expr = None) -> Expr:
     def ok(s):
         if patt is None:
             return s is True
@@ -499,7 +499,7 @@ def _pick(x, sel, patt=None):
 
 
 @fn("TakeWhile", **ADDED, notes="leading elements for which crit is True")
-def _takewhile(x, crit):
+def _takewhile(x: Expr, crit: Fn) -> Expr:
     out = []
     for e in items_of(x, "TakeWhile"):
         if not true(crit, e):
@@ -509,7 +509,7 @@ def _takewhile(x, crit):
 
 
 @fn("LengthWhile", **ADDED, notes="number of leading elements for which crit is True")
-def _lengthwhile(x, crit):
+def _lengthwhile(x: Expr, crit: Fn) -> Expr:
     n = 0
     for e in items_of(x, "LengthWhile"):
         if not true(crit, e):
@@ -519,12 +519,12 @@ def _lengthwhile(x, crit):
 
 
 @fn("TakeDrop", **ADDED, notes="TakeDrop[list, spec] = {Take[list, spec], Drop[list, spec]}")
-def _takedrop(x, spec):
+def _takedrop(x: Expr, spec: Expr) -> ListOf[Expr]:
     return L(ev(Expr("Take", x, spec)), ev(Expr("Drop", x, spec)))
 
 
 @fn("TakeList", **ADDED, notes="TakeList[list, {n1, n2, ...}] gives successive pieces; ni may be UpTo[k] or All")
-def _takelist(x, specs):
+def _takelist(x: Expr, specs: ListOf[Expr]) -> ListOf[Expr]:
     items = items_of(x, "TakeList")
     if not is_list(specs):
         raise ValueError("TakeList: the second argument must be a list of counts")
@@ -541,7 +541,7 @@ def _takelist(x, specs):
 
 
 @fn("DeleteAdjacentDuplicates", **ADDED, notes="removes elements equal (SameQ, or the given test) to their predecessor")
-def _deladj(x, test=None):
+def _deladj(x: Expr, test: Fn = None) -> Expr:
     items = items_of(x, "DeleteAdjacentDuplicates")
     t = tester(test)
     out = []
@@ -554,7 +554,7 @@ def _deladj(x, test=None):
 
 @fn("DeleteElements", **ADDED, notes="DeleteElements[list, elems] removes every occurrence of the elements; "
                                      "DeleteElements[list, n -> elems] at most n of each")
-def _delelems(x, elems):
+def _delelems(x: Expr, elems: Expr) -> Expr:
     items = items_of(x, "DeleteElements")
     limit = None
     if is_rule(elems):
@@ -603,12 +603,12 @@ def _extremal_by(x, f, n, fname, largest):
 
 @fn("MaximalBy", **ADDED, notes="MaximalBy[list, f]: all elements maximising f (canonical order of f values), in "
                                 "their original order; MaximalBy[list, f, n | UpTo[n]]: the n largest by f")
-def _maximalby(x, f, n=None):
+def _maximalby(x: Expr, f: Expr, n: Expr = None) -> Expr:
     return _extremal_by(x, f, n, "MaximalBy", True)
 
 
 @fn("MinimalBy", **ADDED, notes="MinimalBy[list, f]: all elements minimising f; MinimalBy[list, f, n]: the n smallest by f")
-def _minimalby(x, f, n=None):
+def _minimalby(x: Expr, f: Expr, n: Expr = None) -> Expr:
     return _extremal_by(x, f, n, "MinimalBy", False)
 
 
@@ -640,23 +640,23 @@ def _take_extreme(x, n, fname, largest, f=None):
 
 @fn("TakeLargest", **ADDED, notes="the n largest numeric elements in decreasing order (Missing[...] ignored); UpTo[n]; "
                                   "an association gives an association")
-def _takelargest(x, n):
+def _takelargest(x: Expr, n: Expr) -> Expr:
     return _take_extreme(x, n, "TakeLargest", True)
 
 
 @fn("TakeSmallest", **ADDED, notes="the n smallest numeric elements in increasing order (Missing[...] ignored); "
                                    "UpTo[n]; an association gives an association")
-def _takesmallest(x, n):
+def _takesmallest(x: Expr, n: Expr) -> Expr:
     return _take_extreme(x, n, "TakeSmallest", False)
 
 
 @fn("TakeLargestBy", **ADDED, notes="the n elements with the largest numeric f values, in decreasing order of f")
-def _takelargestby(x, f, n):
+def _takelargestby(x: Expr, f: Expr, n: Expr) -> Expr:
     return _take_extreme(x, n, "TakeLargestBy", True, f)
 
 
 @fn("TakeSmallestBy", **ADDED, notes="the n elements with the smallest numeric f values, in increasing order of f")
-def _takesmallestby(x, f, n):
+def _takesmallestby(x: Expr, f: Expr, n: Expr) -> Expr:
     return _take_extreme(x, n, "TakeSmallestBy", False, f)
 
 
@@ -675,12 +675,12 @@ def _position_extreme(x, n, fname, largest):
 
 @fn("PositionLargest", **ADDED, notes="positions of the largest element(s); PositionLargest[list, n] positions of the "
                                       "n largest in decreasing order")
-def _poslargest(x, n=None):
+def _poslargest(x: Expr, n: Expr = None) -> Expr:
     return _position_extreme(x, n, "PositionLargest", True)
 
 
 @fn("PositionSmallest", **ADDED, notes="positions of the smallest element(s); PositionSmallest[list, n]")
-def _possmallest(x, n=None):
+def _possmallest(x: Expr, n: Expr = None) -> Expr:
     return _position_extreme(x, n, "PositionSmallest", False)
 
 
@@ -735,7 +735,7 @@ def _seq_rule(r):
 @fn("SequenceCases", **ADDED, notes="non-overlapping runs matching a list pattern ({a, _}, {__Integer}, "
                                     "{x_, y_} /; cond, ...; the longest match at each start) or patt -> rhs; "
                                     "Overlaps -> True")
-def _seqcases(x, patt, *rest):
+def _seqcases(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_options(rest, {"Overlaps"}, "SequenceCases")
     items = items_of(x, "SequenceCases")
     p, r = _seq_rule(patt)
@@ -752,7 +752,7 @@ def _seqcases(x, patt, *rest):
 
 @fn("SequencePosition", **ADDED, notes="{start, end} of runs matching a list pattern; overlapping "
                                        "matches are included (Overlaps -> True default); Overlaps -> False")
-def _seqpos(x, patt, *rest):
+def _seqpos(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_options(rest, {"Overlaps"}, "SequencePosition")
     items = items_of(x, "SequencePosition")
     out = [L(i + 1, j) for i, j, _ in _seq_matches(items, patt, "SequencePosition",
@@ -763,14 +763,14 @@ def _seqpos(x, patt, *rest):
 
 
 @fn("SequenceCount", **ADDED, notes="number of non-overlapping occurrences of a sublist or list pattern")
-def _seqcount(x, patt, *rest):
+def _seqcount(x: Expr, patt: Expr, *rest: Expr) -> Integer:
     rest, opts = split_options(rest, {"Overlaps"}, "SequenceCount")
     return len(_seq_matches(items_of(x, "SequenceCount"), patt, "SequenceCount", opts.get("Overlaps") is True))
 
 
 @fn("SequenceReplace", **ADDED, notes="replaces non-overlapping runs matching a list pattern -> rhs (rhs is one "
                                        "element)")
-def _seqreplace(x, rules, n=None):
+def _seqreplace(x: Expr, rules: Expr, n: Expr = None) -> Expr:
     items = items_of(x, "SequenceReplace")
     rs = list(rules.args) if is_list(rules) and rules.args and all(is_rule(r) for r in rules.args) else [rules]
     if not all(is_rule(r) for r in rs):
@@ -798,7 +798,7 @@ def _seqreplace(x, rules, n=None):
 
 @fn("SequenceSplit", **ADDED, notes="splits at runs matching a list pattern (empty pieces at the ends "
                                     "dropped, as Wolfram); patt -> rhs keeps rhs between the pieces")
-def _seqsplit(x, patt, n=None):
+def _seqsplit(x: Expr, patt: Expr, n: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "SequenceSplit")
     p, r = _seq_rule(patt)
     matches = _seq_matches(items, p, "SequenceSplit")
@@ -822,7 +822,7 @@ def _seqsplit(x, patt, n=None):
 
 @fn("Level", **ADDED, notes="Level[expr, levelspec] (post-order, as Wolfram; associations are one level of values); "
                             "Level[expr, spec, f] gives f[parts...]; Heads -> True")
-def _level(x, spec, *rest):
+def _level(x: Expr, spec: Expr, *rest: Expr) -> Expr:
     rest, opts = split_options(rest, {"Heads"}, "Level")
     sp_ = KL.level_spec(spec, (1, 1))
     parts = [e for _, e in KL.walk(x, sp_, heads=opts.get("Heads") is True, ev=ev)]
@@ -833,7 +833,7 @@ def _level(x, spec, *rest):
 
 @fn("Depth", **ADDED, notes="1 for atoms, else 1 + the maximum depth of the elements (heads ignored; an association "
                             "is one level)")
-def _depth(x, *rest):
+def _depth(x: Expr, *rest: Expr) -> Expr:
     return KL.depth(x)
 
 
@@ -870,7 +870,7 @@ def _array_depth(x):
 
 
 @fn("ArrayDepth", **ADDED, notes="depth to which expr is a full array of lists (0 for non-lists)")
-def _arraydepth(x):
+def _arraydepth(x: Expr) -> Expr:
     return _array_depth(x)
 
 
@@ -882,7 +882,7 @@ def _leaves(x, d):
 
 @fn("ArrayQ", **ADDED, notes="ArrayQ[expr], ArrayQ[expr, n] (n may be a pattern) and ArrayQ[expr, n, test] for the "
                              "elements")
-def _arrayq(x, n=None, test=None):
+def _arrayq(x: Expr, n: Expr = None, test: Fn = None) -> Boolean:
     if not is_list(x):
         return False
     d = _array_depth(x)
@@ -903,14 +903,14 @@ def _arrayq(x, n=None, test=None):
 
 
 @fn("VectorQ", **ADDED, notes="a list none of whose elements is a list; VectorQ[expr, test]")
-def _vectorq(x, test=None):
+def _vectorq(x: Expr, test: Fn = None) -> Boolean:
     if not is_list(x) or any(is_list(e) for e in x.args):
         return False
     return test is None or all(true(test, e) for e in x.args)
 
 
 @fn("MatrixQ", **ADDED, notes="a list of equal-length lists (depth-2 full array); MatrixQ[expr, test]")
-def _matrixq(x, test=None):
+def _matrixq(x: Expr, test: Fn = None) -> Boolean:
     if not is_list(x) or not x.args or not all(is_list(r) for r in x.args):
         return False
     n = len(x.args[0].args)
@@ -922,7 +922,7 @@ def _matrixq(x, test=None):
 # ─────────────────────────── rearranging ───────────────────────────
 
 @fn("Split", **ADDED, notes="runs of identical (SameQ) adjacent elements; Split[list, test] tests adjacent pairs")
-def _split(x, test=None):
+def _split(x: Expr, test: Fn = None) -> ListOf[Expr]:
     items = items_of(x, "Split")
     t = tester(test)
     out = []
@@ -935,7 +935,7 @@ def _split(x, test=None):
 
 
 @fn("SplitBy", **ADDED, notes="runs with identical f values; SplitBy[list, {f1, f2, ...}] splits recursively")
-def _splitby(x, f):
+def _splitby(x: Expr, f: Expr) -> Expr:
     items = items_of(x, "SplitBy")
     fs = list(f.args) if is_list(f) else [f]
 
@@ -957,7 +957,7 @@ def _splitby(x, f):
 
 @fn("Gather", area=AREA, status="promoted",
     notes="classes of identical (SameQ) elements in order of first appearance; Gather[list, test]")
-def _gather(x, test=None):
+def _gather(x: Expr, test: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Gather")
     _keys, groups = classes(items, test=test) if test is not None else classes(items)
     return L(*(L(*g) for g in groups))
@@ -965,7 +965,7 @@ def _gather(x, test=None):
 
 @fn("GatherBy", **ADDED, notes="classes with identical f values, in order of first appearance; GatherBy[list, {f1, "
                                "f2}] nests")
-def _gatherby(x, f):
+def _gatherby(x: Expr, f: Expr) -> Expr:
     items = items_of(x, "GatherBy")
     fs = list(f.args) if is_list(f) else [f]
 
@@ -979,7 +979,7 @@ def _gatherby(x, f):
 
 @fn("FlattenAt", **ADDED, notes="FlattenAt[list, n], FlattenAt[list, {i, j, ...}] and several positions "
                                 "{{...}, ...}: splices the sublist at that position into its parent")
-def _flattenat(x, spec):
+def _flattenat(x: Expr, spec: Expr) -> Expr:
     poss = _positions(spec, "FlattenAt")
     rps = [_resolve(x, p, "FlattenAt") for p in poss]
     out = x
@@ -1002,7 +1002,7 @@ def _flatten_at(x, rp):
 
 @fn("ArrayReshape", **ADDED, notes="ArrayReshape[list, dims]: the flattened elements arranged with the given dimensions, "
                                    "padded with 0 (or the given padding) when there are too few")
-def _arrayreshape(x, dims, pad=0):
+def _arrayreshape(x: Expr, dims: Expr, pad: Expr = 0) -> Expr:
     ds = _seq_spec_list(dims, "ArrayReshape")
     flat = ev(Expr("Flatten", x)).args if is_list(x) else [x]
     total = math.prod(ds)
@@ -1020,7 +1020,7 @@ def _arrayreshape(x, dims, pad=0):
 
 @fn("ArrayFlatten", **ADDED, notes="ArrayFlatten[{{m11, m12, ...}, ...}] builds a block matrix; scalar blocks (e.g. 0) "
                                    "become constant blocks of the matching size")
-def _arrayflatten(x, r=None):
+def _arrayflatten(x: Expr, r: Expr = None) -> ListOf[Expr]:
     if r is not None and not (is_int(r) and int(r) == 2):
         raise NotImplementedError("ArrayFlatten: only rank-2 block matrices are supported")
     rows = items_of(x, "ArrayFlatten")
@@ -1104,7 +1104,7 @@ def _ragged_dims(x):
 
 @fn("PadLeft", **ADDED, notes="PadLeft[list, n, x] pads on the left with x (default 0) or keeps the last n elements; "
                               "PadLeft[list, {n1, n2}] and PadLeft[ragged] (to a full array); cyclic list padding raises")
-def _padleft(x, n=None, padval=0):
+def _padleft(x: Expr, n: Expr = None, padval: Expr = 0) -> Expr:
     if n is None:
         dims = _ragged_dims(x)
         return _pad(x, L(*dims), 0, True, "PadLeft")
@@ -1113,7 +1113,7 @@ def _padleft(x, n=None, padval=0):
 
 @fn("PadRight", **ADDED, notes="PadRight[list, n, x] pads on the right with x (default 0) or keeps the first n elements; "
                                "PadRight[list, {n1, n2}] and PadRight[ragged]; cyclic list padding raises")
-def _padright(x, n=None, padval=0):
+def _padright(x: Expr, n: Expr = None, padval: Expr = 0) -> Expr:
     if n is None:
         dims = _ragged_dims(x)
         return _pad(x, L(*dims), 0, False, "PadRight")
@@ -1161,19 +1161,19 @@ def _sortby_order(items, fs, p, fname):
 
 
 @fn("ReverseSort", **ADDED, notes="Reverse[Sort[list]] (reverse canonical order); ReverseSort[list, p]")
-def _reversesort(x, p=None):
+def _reversesort(x: Expr, p: Expr = None) -> Expr:
     s = ev(Expr("Sort", x, *(() if p is None else (p,))))
     return ev(Expr("Reverse", s))
 
 
 @fn("ReverseSortBy", **ADDED, notes="Reverse[SortBy[list, f]]: decreasing f values, ties in reverse canonical order")
-def _reversesortby(x, f):
+def _reversesortby(x: Expr, f: Expr) -> Expr:
     return ev(Expr("Reverse", ev(Expr("SortBy", x, f))))
 
 
 @fn("Ordering", **ADDED, notes="positions that put the list in canonical order (stable); Ordering[list, n] the first n "
                                "(negative n: the last n), Ordering[list, n, p] with ordering p")
-def _ordering(x, n=None, p=None):
+def _ordering(x: Expr, n: Expr = None, p: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Ordering")
     idx = list(range(len(items)))
     if p is None:
@@ -1190,7 +1190,7 @@ def _ordering(x, n=None, p=None):
 
 @fn("OrderingBy", **ADDED, notes="positions that sort the list by f (ties by canonical order of the elements); "
                                  "OrderingBy[list, f, n]")
-def _orderingby(x, f, n=None):
+def _orderingby(x: Expr, f: Expr, n: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "OrderingBy")
     order = _sortby_order(items, [f], None, "OrderingBy")
     if n is not None:
@@ -1201,7 +1201,7 @@ def _orderingby(x, f, n=None):
 
 @fn("NumericalSort", **ADDED, notes="sorts numeric elements by numerical value (ties by canonical order); "
                                     "non-numeric elements raise")
-def _numericalsort(x):
+def _numericalsort(x: Expr) -> Expr:
     items = items_of(x, "NumericalSort")
     keyed = sorted(((_num_key(e, "NumericalSort"), i, e) for i, e in enumerate(items)), key=lambda t: (t[0], t[1]))
     out = []
@@ -1217,14 +1217,14 @@ def _numericalsort(x):
 
 
 @fn("DeleteDuplicatesBy", **ADDED, notes="keeps the first element for each distinct (SameQ) value of f")
-def _deldupby(x, f):
+def _deldupby(x: Expr, f: Fn) -> Expr:
     items = items_of(x, "DeleteDuplicatesBy")
     _k, groups = classes(items, keyf=lambda e: apply(f, e))
     return _rebuild(x, [g[0] for g in groups]) if not is_assoc(x) else L(*(g[0] for g in groups))
 
 
 @fn("Catenate", **ADDED, notes="joins a list of lists (and/or associations, whose values are used) into one list")
-def _catenate(x):
+def _catenate(x: Expr) -> ListOf[Expr]:
     parts = items_of(x, "Catenate")
     out = []
     for p in parts:
@@ -1247,7 +1247,7 @@ def _opt_test(rest, fname):
 
 
 def _contains(fname, check):
-    def impl(a, b, *rest):
+    def impl(a: Expr, b: Expr, *rest: Expr) -> Expr:
         t = tester(_opt_test(rest, fname))
         xs, ys = items_of(a, fname), items_of(b, fname)
         return check(xs, ys, lambda u, v: t(u, v))
@@ -1272,7 +1272,7 @@ fn("IntersectingQ", **ADDED, notes="the lists have at least one element in commo
 
 
 @fn("DuplicateFreeQ", **ADDED, notes="no two elements are SameQ (or equivalent under the given test)")
-def _dupfreeq(x, test=None):
+def _dupfreeq(x: Expr, test: Expr = None) -> Boolean:
     items = items_of(x, "DuplicateFreeQ")
     return len(dedup(items, test)) == len(items)
 
@@ -1286,24 +1286,24 @@ def _counts(x):
 
 
 @fn("CountsBy", **ADDED, notes="<|f[e] -> count, ...|> in order of first appearance")
-def _countsby(x, f):
+def _countsby(x: Expr, f: Fn) -> Expr:
     keys, groups = classes(items_of(x, "CountsBy"), keyf=lambda e: apply(f, e))
     return KL.make_assoc([(k, len(g)) for k, g in zip(keys, groups)])
 
 
 @fn("CountDistinct", **ADDED, notes="number of distinct (SameQ) elements; CountDistinct[list, test]")
-def _countdistinct(x, test=None):
+def _countdistinct(x: Expr, test: Expr = None) -> Integer:
     return len(dedup(items_of(x, "CountDistinct"), test))
 
 
 @fn("CountDistinctBy", **ADDED, notes="number of distinct values of f")
-def _countdistinctby(x, f):
+def _countdistinctby(x: Expr, f: Fn) -> Integer:
     keys, _ = classes(items_of(x, "CountDistinctBy"), keyf=lambda e: apply(f, e))
     return len(keys)
 
 
 @fn("PositionIndex", **ADDED, notes="<|e -> {positions}, ...|> in order of first appearance")
-def _positionindex(x):
+def _positionindex(x: Expr) -> Expr:
     items = items_of(x, "PositionIndex")
     if is_assoc(x):
         keys = KL.assoc_keys(x)
@@ -1365,7 +1365,7 @@ def _bin_index(v, edges):
 
 @fn("BinCounts", **ADDED, notes="counts in bins [b_k, b_k+1): BinCounts[data, dx] (bins at multiples of dx), "
                                 "BinCounts[data, {min, max, dx}] and BinCounts[data, {{b1, b2, ...}}]")
-def _bincounts(data, spec=None):
+def _bincounts(data: Expr, spec: Expr = None) -> ListOf[Expr]:
     if spec is None:
         raise NotImplementedError("BinCounts[data] with automatic bins is not supported; give a bin width")
     items = items_of(data, "BinCounts")
@@ -1380,7 +1380,7 @@ def _bincounts(data, spec=None):
 
 @fn("BinLists", **ADDED, notes="the elements falling in each bin [b_k, b_k+1), with the same bin specifications "
                                "as BinCounts")
-def _binlists(data, spec=None):
+def _binlists(data: Expr, spec: Expr = None) -> ListOf[Expr]:
     if spec is None:
         raise NotImplementedError("BinLists[data] with automatic bins is not supported; give a bin width")
     items = items_of(data, "BinLists")
@@ -1394,7 +1394,7 @@ def _binlists(data, spec=None):
 
 
 @fn("Ratios", **ADDED, notes="successive ratios a[i+1]/a[i]; Ratios[list, n] for n-th ratios")
-def _ratios(x, n=1):
+def _ratios(x: Expr, n: Integer = 1) -> ListOf[Expr]:
     items = items_of(x, "Ratios")
     k = int_value(n, "Ratios", "order", 0)
     for _ in range(k):
@@ -1404,7 +1404,7 @@ def _ratios(x, n=1):
 
 @fn("MinMax", **ADDED, notes="{Min[list], Max[list]}; MinMax[list, d] = {min - d, max + d}; "
                              "MinMax[list, {dmin, dmax}]; Scaled[s] pads by s times the range")
-def _minmax(x, d=None):
+def _minmax(x: Expr, d: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "MinMax")
     lo, hi = ev(Expr("Min", L(*items))), ev(Expr("Max", L(*items)))
     if d is None:
@@ -1421,13 +1421,13 @@ def _minmax(x, d=None):
 # ─────────────────────────── functional ───────────────────────────
 
 @fn("MapApply", **ADDED, notes="MapApply[f, expr] = f @@@ expr = Apply[f, expr, {1}]")
-def _mapapply(f, x):
+def _mapapply(f: Expr, x: Expr) -> Expr:
     return ev(Expr("Apply", f, x, L(1)))
 
 
 @fn("Scan", **ADDED, notes="evaluates f on each element (or each part at the given levels) for its side effects; "
                            "returns Null (Return[v] inside f returns v)")
-def _scan(f, x, levels=None):
+def _scan(f: Fn, x: Expr, levels: Expr = None) -> Expr:
     spec = KL.level_spec(levels, (1, 1))
     if KL.atomq(x) and not is_assoc(x) and spec[0] > 0:
         return None
@@ -1440,7 +1440,7 @@ def _scan(f, x, levels=None):
 
 
 @fn("Through", **ADDED, notes="Through[p[f, g][x]] = p[f[x], g[x]]; Through[expr, h] only when p is h")
-def _through(x, h=None):
+def _through(x: Expr, h: Expr = None) -> Expr:
     if not isinstance(x, Expr) or not isinstance(x.head, Expr):
         return x
     p = x.head
@@ -1452,7 +1452,7 @@ def _through(x, h=None):
 @fn("Operate", **ADDED, notes="Operate[p, f[x, y]] = p[f][x, y]; Operate[p, expr, 0] = p[expr]; Operate[p, expr, n] "
                               "applies p to the head n levels down (f[a][b] at level 2 gives p[f][a][b]); an atomic "
                               "head that deep leaves expr unchanged")
-def _operate(p, x, n=1):
+def _operate(p: Fn, x: Expr, n: Integer = 1) -> Expr:
     k = int_value(n, "Operate", "level", 0)
 
     def go(e, k):
@@ -1470,7 +1470,7 @@ def _operate(p, x, n=1):
 
 
 @fn("Construct", **ADDED, notes="Construct[f, x, y, ...] = f[x, y, ...]")
-def _construct(f, *args):
+def _construct(f: Fn, *args: Expr) -> Expr:
     return apply(f, *args)
 
 
@@ -1511,17 +1511,17 @@ def _nestwhile(f, x, test, m=None, mx=None, n=None, keep=False, fname="NestWhile
 
 
 @fn("NestWhile", **ADDED, notes="applies f while test[result] is True; NestWhile[f, x, test, m | All, max, n]")
-def _nw(f, x, test, m=None, mx=None, n=None):
+def _nw(f: Fn, x: Expr, test: Expr, m: Expr = None, mx: Expr = None, n: Expr = None) -> Expr:
     return _nestwhile(f, x, test, m, mx, n, False, "NestWhile")
 
 
 @fn("NestWhileList", **ADDED, notes="the list of results of NestWhile, starting with x")
-def _nwl(f, x, test, m=None, mx=None, n=None):
+def _nwl(f: Fn, x: Expr, test: Expr, m: Expr = None, mx: Expr = None, n: Expr = None) -> Expr:
     return _nestwhile(f, x, test, m, mx, n, True, "NestWhileList")
 
 
 @fn("ComposeList", **ADDED, notes="ComposeList[{f1, f2, ...}, x] = {x, f1[x], f2[f1[x]], ...}")
-def _composelist(fs, x):
+def _composelist(fs: Expr, x: Expr) -> ListOf[Expr]:
     out = [x]
     for f in items_of(fs, "ComposeList"):
         out.append(apply(f, out[-1]))
@@ -1529,7 +1529,7 @@ def _composelist(fs, x):
 
 
 def _truth_over(fname, mode):
-    def impl(x, test, levels=None):
+    def impl(x: Expr, test: Fn, levels: Expr = None) -> Boolean:
         if levels is not None:
             parts = [e for _, e in KL.walk(x, KL.level_spec(levels, (1, 1)), ev=ev)]
         else:
@@ -1554,7 +1554,7 @@ fn("NoneTrue", **ADDED, notes="test[e] is True for no element; optional level")(
 
 
 @fn("BlockMap", **ADDED, notes="BlockMap[f, list, n] = Map[f, Partition[list, n]]; BlockMap[f, list, n, d]")
-def _blockmap(f, x, n, d=None):
+def _blockmap(f: Expr, x: Expr, n: Expr, d: Expr = None) -> Expr:
     parts = ev(Expr("Partition", x, n, *(() if d is None else (d,))))
     return ev(Expr("Map", f, parts))
 
@@ -1562,7 +1562,7 @@ def _blockmap(f, x, n, d=None):
 # ─────────────────────────── tests and ordering ───────────────────────────
 
 @fn("OrderedQ", **ADDED, notes="True when the elements are in canonical (non-decreasing) order, or ordered by p")
-def _orderedq(x, p=None):
+def _orderedq(x: Expr, p: Fn = None) -> Boolean:
     items = items_of(x, "OrderedQ")
     for u, v in zip(items, items[1:]):
         if p is None:
@@ -1576,7 +1576,7 @@ def _orderedq(x, p=None):
 
 
 @fn("Order", **ADDED, notes="1 if e1 comes before e2 in canonical order, -1 if after, 0 if identical")
-def _order(a, b):
+def _order(a: Expr, b: Expr) -> Expr:
     if same(a, b):
         return 0
     ka, kb = canonical(a, "Order"), canonical(b, "Order")
@@ -1585,7 +1585,7 @@ def _order(a, b):
 
 @fn("Between", **ADDED, notes="min <= x <= max for {min, max}, or within any interval of {{min1, max1}, ...}; "
                               "Between[{min, max}] is an operator form")
-def _between(x, spec):
+def _between(x: Expr, spec: ListOf[Expr]) -> Boolean:
     if not is_list(spec):
         raise ValueError("Between: the range must be {min, max}")
     ranges = list(spec.args) if spec.args and all(is_list(r) for r in spec.args) else [spec]
@@ -1602,17 +1602,17 @@ def _between(x, spec):
 
 
 @fn("BooleanQ", area=AREA, status="promoted", notes="True exactly for True and False")
-def _booleanq(x):
+def _booleanq(x: Expr) -> Boolean:
     return isinstance(x, bool)
 
 
 @fn("AppendTo", **ADDED, notes="AppendTo[s, e] sets s = Append[s, e] and returns the new value (s must have a value)")
-def _appendto(s, e):
+def _appendto(s: Expr, e: Expr) -> Expr:
     return _modify_symbol(s, lambda v: ev(Expr("Append", v, e)), "AppendTo")
 
 
 @fn("PrependTo", **ADDED, notes="PrependTo[s, e] sets s = Prepend[s, e] and returns the new value")
-def _prependto(s, e):
+def _prependto(s: Expr, e: Expr) -> Expr:
     return _modify_symbol(s, lambda v: ev(Expr("Prepend", v, e)), "PrependTo")
 
 
@@ -1654,7 +1654,7 @@ def _apply_rules(e, rules):
     notes="Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); "
           "Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives "
           "a list of results")
-def _replace(e, r, spec=None):
+def _replace(e: Expr, r: Expr, spec: Expr = None) -> Expr:
     if is_list(r) and r.args and all(is_list(x) for x in r.args):
         return L(*(_replace(e, x, spec) for x in r.args))
     rules = _rule_list(r, "Replace")
@@ -1668,7 +1668,7 @@ def _replace(e, r, spec=None):
     notes="all results of applying the rules to the whole expression in every way they match (sequence patterns "
           "give one result per split; Orderless heads give each distinct binding once, in matcher order rather "
           "than Wolfram's); ReplaceList[expr, rules, n] keeps at most n")
-def _replacelist(e, r, n=None):
+def _replacelist(e: Expr, r: Expr, n: Expr = None) -> ListOf[Expr]:
     rules = _rule_list(r, "ReplaceList")
     lim = None if n is None else int_value(n, "ReplaceList", "count", lo=0)
     out = []
@@ -1689,7 +1689,7 @@ def _replacelist(e, r, n=None):
 
 
 @fn("Minus", **ADDED, notes="Minus[x] = -x (Times[-1, x]); threads over lists")
-def _minus(x):
+def _minus(x: Expr) -> Expr:
     return ev(Expr("Times", -1, x))
 
 
@@ -1720,22 +1720,22 @@ def _matches_all(x, patt, fname):
 
 
 @fn("AllMatch", **ADDED, notes="True if every element (or association value) matches the pattern; operator form")
-def _allmatch(x, patt):
+def _allmatch(x: Expr, patt: Expr) -> Boolean:
     return all(_matches_all(x, patt, "AllMatch"))
 
 
 @fn("AnyMatch", **ADDED, notes="True if some element matches the pattern; operator form")
-def _anymatch(x, patt):
+def _anymatch(x: Expr, patt: Expr) -> Boolean:
     return any(_matches_all(x, patt, "AnyMatch"))
 
 
 @fn("NoneMatch", **ADDED, notes="True if no element matches the pattern; operator form")
-def _nonematch(x, patt):
+def _nonematch(x: Expr, patt: Expr) -> Boolean:
     return not any(_matches_all(x, patt, "NoneMatch"))
 
 
 @fn("Comap", **ADDED, notes="Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys)")
-def _comap(fs, x):
+def _comap(fs: Expr, x: Expr) -> Expr:
     if is_assoc(fs):
         return Expr("Association", *(Expr("Rule", r.args[0], apply(KL.rule_value(r, ev), x)) for r in fs.args))
     if not isinstance(fs, Expr) or KL.atomq(fs):
@@ -1744,7 +1744,7 @@ def _comap(fs, x):
 
 
 @fn("ComapApply", **ADDED, notes="ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...}")
-def _comapapply(fs, xs):
+def _comapapply(fs: Expr, xs: Expr) -> Expr:
     args = items_of(xs, "ComapApply")
     if is_assoc(fs):
         return Expr("Association", *(Expr("Rule", r.args[0], apply(KL.rule_value(r, ev), *args)) for r in fs.args))
@@ -1777,7 +1777,7 @@ def _fold_pairs(f, args, fname):
     notes="FoldPairList[f, y0, {x1, ...}]: f[y, x] returns {output, new y}; the list of outputs; "
           "FoldPairList[f, y0, list, g] gives g[{output, y}] instead; FoldPairList[f, list] starts from the first "
           "element")
-def _foldpairlist(f, *args):
+def _foldpairlist(f: Expr, *args: Expr) -> ListOf[Expr]:
     g = None
     if len(args) == 3:
         args, g = args[:2], args[2]
@@ -1786,7 +1786,7 @@ def _foldpairlist(f, *args):
 
 
 @fn("FoldPair", **ADDED, notes="the last output of FoldPairList; FoldPair[f, y0, list, g] gives g[last pair]")
-def _foldpair(f, *args):
+def _foldpair(f: Expr, *args: Expr) -> Expr:
     g = None
     if len(args) == 3:
         args, g = args[:2], args[2]
@@ -1797,7 +1797,7 @@ def _foldpair(f, *args):
 
 
 @fn("ReverseApplied", **ADDED, notes="ReverseApplied[f][a, b, c] = f[c, b, a]")
-def _reverseapplied(*args):
+def _reverseapplied(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -1808,7 +1808,7 @@ def _lex_key(e):
 @fn("LexicographicSort", **ADDED,
     notes="sorts expressions by comparing their elements in canonical order, a proper prefix first; "
           "LexicographicSort[list, p] uses ordering function p on elements")
-def _lexsort(x, p=None):
+def _lexsort(x: Expr, p: Fn = None) -> Expr:
     items = items_of(x, "LexicographicSort")
     if p is None:
         return _rebuild(x, sorted(items, key=_lex_key))
@@ -1843,7 +1843,7 @@ def _leafcount(e, heads=True):
 @fn("LeafCount", **ADDED,
     notes="number of atomic subexpressions including heads (Rational and Complex count as 3); Heads -> False "
           "skips heads")
-def _leafcountf(e, *opts):
+def _leafcountf(e: Expr, *opts: Option) -> Expr:
     _, o = split_options(opts, {"Heads"}, "LeafCount")
     heads = o.get("Heads", True)
     return _leafcount(e, heads is not False)

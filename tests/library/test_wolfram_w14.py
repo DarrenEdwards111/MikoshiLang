@@ -324,6 +324,9 @@ CONTAINERS = [
     ("GraphicsComplex[{{0, 0}, {1, 0}, {0, 1}}, Polygon[{1, 2, 3}]]",
      "GraphicsComplex[{{0, 0}, {1, 0}, {0, 1}}, Polygon[{1, 2, 3}]]"),
     ("Normal[GraphicsComplex[{{0, 0}, {1, 0}, {0, 1}}, Polygon[{1, 2, 3}]]]", "Polygon[{{0, 0}, {1, 0}, {0, 1}}]"),
+    # inside GraphicsComplex primitives hold point indices, so Graphics does not check them as coordinates
+    ("Head[Graphics[GraphicsComplex[{{0, 0}, {1, 0}, {0, 1}, {1, 1}}, Polygon[{{1, 2, 4}, {1, 4, 3}}]]]]", "Graphics"),
+    ("Head[Graphics3D[GraphicsComplex[{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}}, Polygon[{{1, 2, 3}}]]]]", "Graphics3D"),
     ("Normal[GraphicsComplex[{{0, 0}, {1, 0}}, Line[{1, 2}], VertexColors -> {Red, Blue}]]",
      "Line[{{0, 0}, {1, 0}}, VertexColors -> {RGBColor[1, 0, 0], RGBColor[0, 0, 1]}]"),
     ("Normal[GraphicsComplex[{{0, 0}, {3, 4}}, {Red, Point[{1, 2}]}]]", "{RGBColor[1, 0, 0], Point[{{0, 0}, {3, 4}}]}"),
@@ -697,7 +700,8 @@ if HAVE_MPL:
          Pred(lambda g: all(abs(int(v) - 127) <= 1 for v in g.args), "~{127, 127, 127}")),
         ("Rasterize[Graphics[{Disk[]}], \"Data\", RasterSize -> -1]", Raises(ValueError)),
         ("Rasterize[Graphics3D[{Sphere[]}], \"Data\"]", Raises(NotImplementedError)),
-        ("Rasterize[Graphics[{Disk[]}, Axes -> True], \"Data\"]", Raises(NotImplementedError)),
+        # axes are drawn since W15; an option still without a renderer raises
+        ("Rasterize[Graphics[{Disk[]}, ImagePadding -> 20], \"Data\"]", Raises(NotImplementedError)),
         ("Rasterize[Graphics[{LinearGradientFilling[{Red, Blue}], Rectangle[]}], \"Data\"]", Raises(NotImplementedError)),
     ]
 else:

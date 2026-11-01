@@ -129,7 +129,7 @@ def ba_bytes(x, fname="ByteArray"):
 @fn("ByteArray", area=AREA, status="added",
     notes="ByteArray[{b1, ...}] (bytes 0..255) and ByteArray[\"base64\"]; the evaluated form is "
           "ByteArray[\"base64\"] (Wolfram's InputForm); Normal and Length work on it")
-def _bytearray(x):
+def _bytearray(x: Expr) -> Expr:
     if isinstance(x, str):
         if x == "":
             raise Unevaluated()
@@ -153,7 +153,7 @@ def _bytearray(x):
 
 
 @fn("ByteArrayQ", area=AREA, status="added", notes="True for a valid ByteArray object, False otherwise")
-def _bytearrayq(x):
+def _bytearrayq(x: Expr) -> Boolean:
     if not is_bytearray(x):
         return False
     try:
@@ -204,7 +204,7 @@ def _codec(enc, fname):
 @fn("StringToByteArray", area=AREA, status="added",
     notes="bytes of a string in UTF-8 (default) or a named $CharacterEncodings encoding; a character the "
           "encoding cannot represent raises")
-def _str2ba(s, enc=None):
+def _str2ba(s: String, enc: Expr = None) -> Expr:
     s = _str(s, "StringToByteArray")
     c = _codec(enc, "StringToByteArray")
     try:
@@ -215,7 +215,7 @@ def _str2ba(s, enc=None):
 
 @fn("ByteArrayToString", area=AREA, status="added",
     notes="decodes a ByteArray (or {}) as UTF-8 (default) or a named encoding; invalid data raises")
-def _ba2str(b, enc=None):
+def _ba2str(b: Expr, enc: Expr = None) -> Expr:
     data = _bytes_of(b, "ByteArrayToString")
     c = _codec(enc, "ByteArrayToString")
     try:
@@ -300,7 +300,7 @@ def _a85_encode(b):
 @fn("BaseEncode", area=AREA, status="added",
     notes="\"Base64\" (RFC 4648, padded; default), \"Base16\" (upper-case hex) and "
           "\"Base85ASCII\" (Ascii85 with the z shortcut, no padding) encodings of a ByteArray")
-def _baseencode(b, enc="Base64"):
+def _baseencode(b: Expr, enc: Expr = "Base64") -> Expr:
     data = _bytes_of(b, "BaseEncode")
     if enc == "Base64":
         return base64.b64encode(data).decode("ascii")
@@ -314,7 +314,7 @@ def _baseencode(b, enc="Base64"):
 @fn("BaseDecode", area=AREA, status="added",
     notes="inverse of BaseEncode, giving a ByteArray; characters outside the alphabet are dropped; Base64 input "
           "must be padded to a multiple of 4 (otherwise an error)")
-def _basedecode(s, enc="Base64"):
+def _basedecode(s: String, enc: Expr = "Base64") -> Expr:
     s = _str(s, "BaseDecode")
     try:
         if enc == "Base64":
@@ -566,7 +566,7 @@ def _expression_hash(x):
           "of the expression (Wolfram documents its value as implementation-dependent). Formats Integer, "
           "DecimalString, HexString, HexStringLittleEndian, Base36String, Base64Encoding, ByteArray. MD2 and "
           "the BLAKE2 parallel/XOF variants raise.")
-def _hash(x, t="Expression", fmt="Integer"):
+def _hash(x: Expr, t: Expr = "Expression", fmt: Expr = "Integer") -> Expr:
     if t == "Expression":
         return _hash_format(_expression_hash(x), 64, fmt, "Hash")
     f, bits = _hash_function(t, "Hash")
@@ -617,7 +617,7 @@ _HASH_FORMATS = {"Integer", "DecimalString", "HexString", "HexStringLittleEndian
 @fn("FileHash", area=AREA, status="added",
     notes="hash of the raw bytes of a file (default MD5, format Integer); FileHash[{file, range}, ...] with "
           "n, -n, {n}, {m, n}, 0 or All byte ranges; the legacy FileHash[file, type, range, format] is accepted")
-def _filehash(f, t="MD5", *rest):
+def _filehash(f: Expr, t: Expr = "MD5", *rest: Expr) -> Expr:
     rng = Symbol("All")
     if is_list(f) and len(f.args) == 2:
         f, rng = f.args
@@ -687,7 +687,7 @@ def _ngram_n(n, fname):
 @fn("CharacterCounts", area=AREA, status="added",
     notes="association of character (or n-character) counts, by decreasing count with ties in reverse order of "
           "first appearance; IgnoreCase; threads over lists of strings; BioSequence letters")
-def _charcounts(s, *rest):
+def _charcounts(s: Expr, *rest: Expr) -> Expr:
     args, o = _opts(rest, {"IgnoreCase"}, "CharacterCounts")
     ic = _bool_opt(o, "IgnoreCase", "CharacterCounts")
     if len(args) > 1:
@@ -710,7 +710,7 @@ def _is_letter(c):
 @fn("LetterCounts", area=AREA, status="added",
     notes="association of letter (LetterQ) or letter n-gram counts, optionally allowing extra characters; "
           "Wolfram's *Counts ordering; IgnoreCase; threads over lists")
-def _lettercounts(s, *rest):
+def _lettercounts(s: Expr, *rest: Expr) -> Expr:
     args, o = _opts(rest, {"IgnoreCase"}, "LetterCounts")
     ic = _bool_opt(o, "IgnoreCase", "LetterCounts")
     if len(args) > 2:
@@ -741,14 +741,14 @@ def _word_spans(t):
 
 @fn("WordCount", area=AREA, status="added",
     notes="number of words, identified as by TextWords (hyphenated and apostrophe words count once)")
-def _wordcount(s):
+def _wordcount(s: String) -> Integer:
     return len(_word_spans(_str(s, "WordCount")))
 
 
 @fn("WordCounts", area=AREA, status="added",
     notes="association of word counts (words as in TextWords); WordCounts[s, n] counts n-grams of consecutive "
           "words separated only by whitespace (keys are lists of words); Wolfram's *Counts ordering; IgnoreCase")
-def _wordcounts(s, *rest):
+def _wordcounts(s: Expr, *rest: Expr) -> Expr:
     args, o = _opts(rest, {"IgnoreCase"}, "WordCounts")
     ic = _bool_opt(o, "IgnoreCase", "WordCounts")
     if len(args) > 1:
@@ -899,7 +899,7 @@ def _stem_word(word):
 @fn("WordStem", area=AREA, status="added", listable=True,
     notes="Porter stemming algorithm (reference implementation: bli->ble, logi->log), preserving the word's "
           "case and surrounding punctuation; listable")
-def _wordstem(w):
+def _wordstem(w: String) -> Expr:
     w = _str(w, "WordStem")
     if not w:
         return w
@@ -953,7 +953,7 @@ for _cp in range(0xC0, 0x180):
           "gives a list; types without a reproducible table (LongName, TeXName), "
           "and characters outside the table, raise. Greek epsilon/phi forms are omitted (Wolfram's naming of the "
           "lunate/curly variants differs from Unicode's)")
-def _charname(c, typ=None):
+def _charname(c: Expr, typ: Expr = None) -> Expr:
     if isinstance(c, int) and not isinstance(c, bool):
         if not 0 <= c <= 0x10FFFF:
             raise ValueError("CharacterName: character code out of range")
@@ -990,7 +990,7 @@ def _charname(c, typ=None):
 
 @fn("CharacterNormalize", area=AREA, status="added",
     notes="Unicode normalization forms NFC, NFD, NFKC, NFKD; threads over lists of strings")
-def _charnormalize(s, form):
+def _charnormalize(s: Expr, form: Expr) -> Expr:
     if form not in ("NFC", "NFD", "NFKC", "NFKD"):
         raise ValueError(f"CharacterNormalize: unknown normalization form {form!r}")
     return _thread_strings(s, lambda t: unicodedata.normalize(form, _str(t, "CharacterNormalize")))
@@ -1018,12 +1018,12 @@ def _stringapply(f, s):
 @fn("StringApply", area=AREA, status="added",
     notes="applies f to Characters[s] and joins the result (nested lists of strings keep their structure, "
           "joined at the innermost level); StringApply[f] operator form; threads over lists")
-def _stringapply2(f, s):
+def _stringapply2(f: Fn, s: Expr) -> Expr:
     return _stringapply(f, s)
 
 
 @fn("StringApply", area=AREA, status="added")
-def _stringapply1(f):
+def _stringapply1(f: Expr) -> Expr:
     raise Unevaluated()
 
 
@@ -1054,7 +1054,7 @@ def _syntax_state(s):
 
 @fn("SyntaxQ", area=AREA, status="added",
     notes="True if the string parses as one Wolfram Language expression (InputForm); other forms raise")
-def _syntaxq(s, form=None):
+def _syntaxq(s: String, form: Expr = None) -> Boolean:
     s = _str(s, "SyntaxQ")
     if form is not None and not is_sym(form, "InputForm"):
         raise NotImplementedError("SyntaxQ: only InputForm syntax is supported")
@@ -1064,7 +1064,7 @@ def _syntaxq(s, form=None):
 @fn("SyntaxLength", area=AREA, status="added",
     notes="length of the longest prefix that is syntactically valid so far (the position of the first syntax "
           "error); StringLength + 1 when the whole string is valid but incomplete")
-def _syntaxlength(s):
+def _syntaxlength(s: String) -> Expr:
     s = _str(s, "SyntaxLength")
     st = _syntax_state(s)
     if st == "ok":
@@ -1273,7 +1273,7 @@ def _alignment_opts(rest, fname, extra=()):
     notes="score of an optimal global (Needleman-Wunsch/Gotoh) alignment as a machine real: +1 per match, -1 "
           "per mismatch/insertion/deletion (SimilarityRules overrides, patterns allowed), minus GapPenalty per "
           "gap run; IgnoreCase; strings, lists or BioSequences. Named matrices (BLOSUM62, ...) raise")
-def _nws(a, b, *rest):
+def _nws(a: Expr, b: Expr, *rest: Expr) -> Expr:
     o, gap, ic, sc = _alignment_opts(rest, "NeedlemanWunschSimilarity")
     x, y, _ = _seq_pair(a, b, "NeedlemanWunschSimilarity", ic)
     return float(_align(x, y, sc, gap)[0])
@@ -1282,7 +1282,7 @@ def _nws(a, b, *rest):
 @fn("SmithWatermanSimilarity", area=AREA, status="added",
     notes="score of an optimal local (Smith-Waterman/Gotoh) alignment as a machine real (0. if nothing "
           "matches); options as NeedlemanWunschSimilarity")
-def _sws(a, b, *rest):
+def _sws(a: Expr, b: Expr, *rest: Expr) -> Expr:
     o, gap, ic, sc = _alignment_opts(rest, "SmithWatermanSimilarity")
     x, y, _ = _seq_pair(a, b, "SmithWatermanSimilarity", ic)
     return float(_align(x, y, sc, gap, local=True)[0])
@@ -1331,7 +1331,7 @@ def _segments(x, y, ops, kind, merge, span):
           "GapPenalty, IgnoreCase (lower-cases both strings), MergeDifferences, SimilarityRules. Among equally "
           "good alignments the choice follows Wolfram's documented examples; other methods and named "
           "similarity matrices raise")
-def _seqalign(a, b, *rest):
+def _seqalign(a: Expr, b: Expr, *rest: Expr) -> Expr:
     o, gap, ic, sc = _alignment_opts(rest, "SequenceAlignment", ("MergeDifferences", "Method"))
     merge = _bool_opt(o, "MergeDifferences", "SequenceAlignment", True)
     method = o.get("Method", "Global")
@@ -1347,7 +1347,7 @@ def _seqalign(a, b, *rest):
 @fn("DamerauLevenshteinDistance", area=AREA, status="added",
     notes="minimum number of insertions, deletions, substitutions and adjacent transpositions (unrestricted "
           "Damerau-Levenshtein distance, a metric); strings, lists or BioSequences; IgnoreCase")
-def _dldist(a, b, *rest):
+def _dldist(a: Expr, b: Expr, *rest: Expr) -> Expr:
     args, o = _opts(rest, {"IgnoreCase"}, "DamerauLevenshteinDistance")
     if args:
         raise ValueError("DamerauLevenshteinDistance called with too many arguments")
@@ -1393,7 +1393,7 @@ def _runs(ps):
     notes="positions {pos1, pos2} of a longest common (not necessarily contiguous) sequence, each a list of "
           "{start, end} runs; {} if there is none; choice among equally long sequences as in Wolfram's "
           "examples; IgnoreCase")
-def _lcseqpos(a, b, *rest):
+def _lcseqpos(a: Expr, b: Expr, *rest: Expr) -> ListOf[Expr]:
     args, o = _opts(rest, {"IgnoreCase"}, "LongestCommonSequencePositions")
     if args:
         raise ValueError("LongestCommonSequencePositions called with too many arguments")
@@ -1424,7 +1424,7 @@ def _lcseqpos(a, b, *rest):
 @fn("LongestCommonSubsequencePositions", area=AREA, status="added",
     notes="positions {{s1, e1}, {s2, e2}} of a longest contiguous common run (the earliest in s1); {} if none; "
           "IgnoreCase")
-def _lcsubpos(a, b, *rest):
+def _lcsubpos(a: Expr, b: Expr, *rest: Expr) -> ListOf[Expr]:
     args, o = _opts(rest, {"IgnoreCase"}, "LongestCommonSubsequencePositions")
     if args:
         raise ValueError("LongestCommonSubsequencePositions called with too many arguments")
@@ -1455,7 +1455,7 @@ def _order_le(a, b):
 @fn("LongestOrderedSequence", area=AREA, status="added",
     notes="longest subsequence whose successive elements satisfy the ordering function (default: canonical "
           "order for lists, character codes for strings), by patience sorting; IgnoreCase lower-cases strings")
-def _longestordered(s, *rest):
+def _longestordered(s: Expr, *rest: Expr) -> Expr:
     args, o = _opts(rest, {"IgnoreCase"}, "LongestOrderedSequence")
     if len(args) > 1:
         raise ValueError("LongestOrderedSequence called with too many arguments")
@@ -1538,7 +1538,7 @@ def _take_axis(x, axis, p):
     notes="minimal block that repeats (with an incomplete final repeat allowed) to give a list, array, string or "
           "association; FindRepeat[x, n] needs n complete repeats ({} or \"\" if none); FindRepeat[x, {n1, ...}] "
           "per array level; SameTest")
-def _findrepeat(x, *rest):
+def _findrepeat(x: Expr, *rest: Expr) -> Expr:
     args, o = _opts(rest, {"SameTest"}, "FindRepeat")
     if len(args) > 1:
         raise ValueError("FindRepeat called with too many arguments")
@@ -1607,7 +1607,7 @@ def _deep_same(u, v, same, depth):
     notes="{transient, repeat} with the shortest transient after which a minimal block repeats at least n "
           "complete times (an incomplete final repeat allowed); {list, {}} if none; strings give strings; "
           "SameTest")
-def _findtransient(x, n, *rest):
+def _findtransient(x: Expr, n: Expr, *rest: Expr) -> ListOf[Expr]:
     args, o = _opts(rest, {"SameTest"}, "FindTransientRepeat")
     if args:
         raise ValueError("FindTransientRepeat called with too many arguments")
@@ -1828,7 +1828,7 @@ def _template_ctx(args):
           "the template's own bound association is searched first; :> values are inserted unevaluated; a "
           "missing slot without \"DefaultValue\" inserts Missing[\"TemplateSlotAbsent\", key] (\"\" in string "
           "templates)")
-def _templateapply(t, *args):
+def _templateapply(t: Expr, *args: Expr) -> Expr:
     return _template_apply(_as_template(t), _template_ctx(args))
 
 
@@ -1936,7 +1936,7 @@ def _find_template_file(name):
     notes="TemplateObject[{pieces}, InsertionFunction -> TextString, CombinerFunction -> StringJoin] from a "
           "string or File: `` sequential slots, `n` positional, `name` named, <* expr *> template expressions "
           "with #name/#n slots; \\` escapes; an optional association of default values")
-def _stringtemplate(src, *rest):
+def _stringtemplate(src: Expr, *rest: Expr) -> Expr:
     pos, o = _t_opts(rest, "StringTemplate", ("InsertionFunction", "CombinerFunction"))
     if any(not is_assoc(p) for p in pos) or len(pos) > 1:
         raise ValueError("StringTemplate: the optional second argument must be an association")
@@ -2208,7 +2208,7 @@ def _xml_template(text, rest, fname="XMLTemplate"):
           "template (inserter, combiner), get path=, comment and verbatim, plus `slot` and <* expr *>; "
           "InsertionFunction \"HTMLFragment\" (escapes & < >) by default, \"JSON\" supported; block tags alone on "
           "a line drop that line")
-def _xmltemplate(src, *rest):
+def _xmltemplate(src: Expr, *rest: Expr) -> Expr:
     return _xml_template(_template_source(src, "XMLTemplate"), rest)
 
 
@@ -2218,7 +2218,7 @@ _XML_EXT = {".html", ".htm", ".xml", ".xhtml", ".svg"}
 @fn("FileTemplate", area=AREA, status="added",
     notes="template from a file (string path or File, searched in the working directory then $TemplatePath): "
           ".html/.htm/.xml/.xhtml/.svg files are XMLTemplates, anything else a StringTemplate")
-def _filetemplate(src, *rest):
+def _filetemplate(src: Expr, *rest: Expr) -> Expr:
     if isinstance(src, Expr) and src.head == "File" and src.args:
         path = src.args[0]
     elif isinstance(src, str):
@@ -2238,7 +2238,7 @@ def _filetemplate(src, *rest):
 @fn("FileTemplateApply", area=AREA, status="added",
     notes="applies a template (TemplateObject, string or File) and writes the result (strings as is, other "
           "results as TextString) to the given file, or a new temporary .txt file; returns the file name")
-def _filetemplateapply(t, *rest):
+def _filetemplateapply(t: Expr, *rest: Expr) -> Expr:
     if len(rest) > 2:
         raise ValueError("FileTemplateApply called with too many arguments")
     args = list(rest[:1])
@@ -2384,7 +2384,7 @@ def _strand(x):
           "and sequence collections; properties SequenceString, SequenceLength, SequenceType, SequenceBondList, "
           "SequenceBondCount, SequencePattern, AbbreviationSequence, ChemicalList, ChemicalPatternList, HELM. "
           "Masses, molecules and entity-backed sequences are not available")
-def _biosequence(*args):
+def _biosequence(*args: Expr) -> Expr:
     if len(args) == 1:
         a = args[0]
         if isinstance(a, str):
@@ -2487,7 +2487,7 @@ def _fully_specified(x):
     notes="True for a valid BioSequence (letters in the type's alphabet); BioSequenceQ[x, type] also checks "
           "the type (a string pattern such as \"DNA\" | \"RNA\", \"HybridStrand\", \"SequenceCollection\"), "
           "\"FullySpecified\" or \"FullySpecifiedtype\" (no degenerate letters)")
-def _biosequenceq(x, *rest):
+def _biosequenceq(x: Expr, *rest: Expr) -> Boolean:
     if len(rest) > 1:
         raise ValueError("BioSequenceQ called with too many arguments")
     if not _bio_valid(x):
@@ -2525,7 +2525,7 @@ def _complement_str(s, t):
 @fn("BioSequenceComplement", area=AREA, status="added",
     notes="complementary DNA/RNA strand letter by letter (degenerate letters too: R<->Y, K<->M, B<->V, D<->H); "
           "unevaluated for peptides and invalid sequences")
-def _biocomp(x):
+def _biocomp(x: Expr) -> Expr:
     if isinstance(x, str):
         x = ev(Expr("BioSequence", x))
     t, s, b = _nucleic(x, "BioSequenceComplement")
@@ -2535,7 +2535,7 @@ def _biocomp(x):
 @fn("BioSequenceReverseComplement", area=AREA, status="added",
     notes="reverse of the complementary DNA/RNA strand (bond positions mirrored); unevaluated for peptides and "
           "invalid sequences")
-def _biorevcomp(x):
+def _biorevcomp(x: Expr) -> Expr:
     if isinstance(x, str):
         x = ev(Expr("BioSequence", x))
     t, s, b = _nucleic(x, "BioSequenceReverseComplement")
@@ -2555,7 +2555,7 @@ def _mirror_bond(bd, n):
 @fn("BioSequenceTranscribe", area=AREA, status="added",
     notes="DNA -> RNA (T -> U) and RNA -> DNA (U -> T), circular forms kept; unevaluated for peptides and "
           "invalid sequences")
-def _biotranscribe(x):
+def _biotranscribe(x: Expr) -> Expr:
     if isinstance(x, str):
         x = ev(Expr("BioSequence", x))
     t, s, b = _nucleic(x, "BioSequenceTranscribe")
@@ -2628,7 +2628,7 @@ def _translate_codon(c, tab):
           "degenerate codon gives its amino acid if all its instances agree, else X); genetic codes 1-5 and 11 "
           "by number or name, a 64-letter TCAG-ordered string or codon rules; third argument True (start codons "
           "of codes 1, 2, 11 give M), a table, or rules for the first codon")
-def _biotranslate(x, table=None, start=None):
+def _biotranslate(x: Expr, table: Expr = None, start: Expr = None) -> Expr:
     if isinstance(x, str):
         x = ev(Expr("BioSequence", x))
     t, s, _ = _nucleic(x, "BioSequenceTranslate")
@@ -2675,7 +2675,7 @@ def _instances_of(s, t):
 @fn("BioSequenceInstances", area=AREA, status="added",
     notes="all fully specified sequences matching a degenerate BioSequence, sorted; BioSequenceInstances[seq, n] "
           "gives at most n of them (the first n in sorted order)")
-def _bioinstances(x, n=None):
+def _bioinstances(x: Expr, n: Expr = None) -> ListOf[Expr]:
     p = _bio_parts(x)
     if p is None or not _bio_valid(x) or not isinstance(p[0], str):
         raise Unevaluated()
@@ -2711,7 +2711,7 @@ def _set_bonds(x, bonds):
           "codons TTG/CTG/ATG), \"DropFromStopLetter\", {\"DeleteBond\", bond} and {\"AddToCollection\", seqs}; "
           "\"AddBond\" (which validates base pairing chemistry) and the bond-representation conversions are not "
           "supported")
-def _biomodify(x, op):
+def _biomodify(x: Expr, op: Expr) -> Expr:
     if not _bio_valid(x):
         raise Unevaluated()
     p = _bio_parts(x)
@@ -2968,7 +2968,7 @@ def _diff_opts(rest, fname):
           "DiffGranularity; lists by element; File contents by line) as DiffObject[1, {type, 3}, "
           "<|\"Changes\" -> hunks|>]: {{i, j, k} -> common} and {p1 -> base, p2 -> rev1, p3 -> rev2} hunks; "
           "matching uses an optimal alignment of each revision against the base; other views raise")
-def _diff3(o, a, b, *rest):
+def _diff3(o: Expr, a: Expr, b: Expr, *rest: Expr) -> Expr:
     gran = _diff_opts(rest, "Diff3")
     xo, g1 = _diff_tokens(o, gran, "Diff3")
     xa, g2 = _diff_tokens(a, gran, "Diff3")
@@ -3100,7 +3100,7 @@ def _head_sym(x):
           "second input; three-way diffs merge both revisions, giving Failure[\"DiffObjectContainsConflicts\", "
           "...] if they conflict; Failure[\"WrongType\", ...] for the wrong kind of input; DiffApply[obj, File[in], "
           "File[out]] writes the result")
-def _diffapply(obj, x, *rest):
+def _diffapply(obj: Expr, x: Expr, *rest: Expr) -> Expr:
     d = _dobj(obj)
     if d is None:
         raise Unevaluated()
@@ -3179,7 +3179,7 @@ _STREAM_COUNTER = [2]
 @fn("StringToStream", area=AREA, status="added",
     notes="InputStream[String, n] reading from the string; Find and FindList read records from it (the "
           "stream keeps its position); Read/ReadList/Close belong to the stream I/O batch")
-def _stringtostream(s):
+def _stringtostream(s: Expr) -> Expr:
     if not isinstance(s, str):
         if isinstance(s, Symbol):
             raise Unevaluated()
@@ -3292,7 +3292,7 @@ _FIND_OPTS = {"AnchoredSearch", "IgnoreCase", "RecordSeparators", "WordSearch", 
     notes="first record (line) containing the text (or any of a list of texts) in an InputStream[String, n] "
           "(advancing the stream past it) or a file (searched from its start); EndOfFile if none; "
           "AnchoredSearch, IgnoreCase, RecordSeparators, WordSearch, WordSeparators")
-def _find(src, text, *rest):
+def _find(src: Expr, text: Expr, *rest: Expr) -> Expr:
     args, o = _opts(rest, _FIND_OPTS, "Find")
     if args:
         raise ValueError("Find called with too many arguments")
@@ -3314,7 +3314,7 @@ def _find(src, text, *rest):
     notes="all records (lines) containing the text (or any of several texts) in a file, list of files, "
           "File[...] or InputStream[String, n]; FindList[src, text, n] keeps the first n; {} if none; options "
           "as Find")
-def _findlist(src, text, *rest):
+def _findlist(src: Expr, text: Expr, *rest: Expr) -> ListOf[Expr]:
     args, o = _opts(rest, _FIND_OPTS, "FindList")
     if len(args) > 1:
         raise ValueError("FindList called with too many arguments")
@@ -3438,7 +3438,7 @@ def _format_q(data, fmt, fname):
     notes="heuristic import format of a string: magic numbers for binary formats (PNG, GIF, JPEG, PDF, ZIP, "
           "GZIP, TIFF, WAV, WXF, ...), else JSON, XML, HTML, SVG, TSV, CSV, Table (numeric columns) or Text; "
           "\"Binary\" for unrecognised binary data")
-def _stringformat(s):
+def _stringformat(s: Expr) -> Expr:
     if not isinstance(s, str):
         if isinstance(s, Symbol):
             raise Unevaluated()
@@ -3449,7 +3449,7 @@ def _stringformat(s):
 @fn("StringFormatQ", area=AREA, status="added",
     notes="whether the string is (heuristically) in the format or any of a list of formats; \"Text\" and "
           "\"Binary\" are the generic text/binary classes")
-def _stringformatq(s, fmt):
+def _stringformatq(s: Expr, fmt: Expr) -> Boolean:
     if not isinstance(s, str):
         return False
     return _format_q(_string_bytes(s), fmt, "StringFormatQ")
@@ -3457,7 +3457,7 @@ def _stringformatq(s, fmt):
 
 @fn("ByteArrayFormat", area=AREA, status="added",
     notes="heuristic import format of a ByteArray (as StringFormat)")
-def _bytearrayformat(b):
+def _bytearrayformat(b: Expr) -> Expr:
     if not is_bytearray(b):
         if isinstance(b, Symbol):
             raise Unevaluated()
@@ -3467,7 +3467,7 @@ def _bytearrayformat(b):
 
 @fn("ByteArrayFormatQ", area=AREA, status="added",
     notes="whether a ByteArray is (heuristically) in the format or any of a list of formats")
-def _bytearrayformatq(b, fmt):
+def _bytearrayformatq(b: Expr, fmt: Expr) -> Boolean:
     if not is_bytearray(b):
         return False
     return _format_q(ba_bytes(b), fmt, "ByteArrayFormatQ")
@@ -3501,7 +3501,7 @@ def _file_fields(path):
     notes="ContentObject[<|field -> value, ...|>] document for search indices; ContentObject[\"text\"] gives "
           "<|\"Plaintext\" -> text|>, ContentObject[File[f]] gives Location, FileName, FileExtension, "
           "FileByteCount, Title and Plaintext -> Text[File[f]] (no dates); co[\"field\"], co[\"Snippet\"]")
-def _contentobject(x):
+def _contentobject(x: Expr) -> Expr:
     if is_assoc(x):
         raise Unevaluated()
     if isinstance(x, str):
@@ -3569,7 +3569,7 @@ def _snippet_text(text, n):
 @fn("Snippet", area=AREA, status="added",
     notes="Snippet[doc] / Snippet[doc, n]: the first n lines (default 1) of a ContentObject's text or of a "
           "File, long lines wrapped at 80 characters; a string is its own snippet")
-def _snippet(x, n=1):
+def _snippet(x: Expr, n: Expr = 1) -> Expr:
     n = _int(n, "Snippet", "line count", 1)
     if isinstance(x, str):
         return x
@@ -3749,7 +3749,7 @@ def _check_search_opts(o, fname):
           "associations; SearchIndexObject[File[~/.mikoshilang/SearchIndices/id]] (the index lives in the "
           "session; nothing is written); ContentFieldOptions weights and DocumentWeightingRules are kept as "
           "defaults for TextSearch")
-def _createsearchindex(*args):
+def _createsearchindex(*args: Expr) -> Expr:
     pos, o = _opts(args, _SEARCH_OPTS, "CreateSearchIndex")
     _check_search_opts(o, "CreateSearchIndex")
     if len(pos) > 1:
@@ -3763,7 +3763,7 @@ def _createsearchindex(*args):
 
 @fn("AddToSearchIndex", area=AREA, status="added",
     notes="adds files, directories, ContentObjects or associations to an index; returns the index")
-def _addtosearchindex(obj, src):
+def _addtosearchindex(obj: Expr, src: Expr) -> Expr:
     st = _get_index(obj, "AddToSearchIndex")
     if st is None:
         raise Unevaluated()
@@ -3776,7 +3776,7 @@ def _addtosearchindex(obj, src):
 @fn("UpdateSearchIndex", area=AREA, status="added",
     notes="re-reads the files and directories an index was built from (adding new files, dropping deleted "
           "ones); returns the index")
-def _updatesearchindex(obj):
+def _updatesearchindex(obj: Expr) -> Expr:
     st = _get_index(obj, "UpdateSearchIndex")
     if st is None:
         raise Unevaluated()
@@ -3792,7 +3792,7 @@ def _updatesearchindex(obj):
 
 @fn("DeleteSearchIndex", area=AREA, status="added",
     notes="deletes an index; later searches with it raise")
-def _deletesearchindex(obj):
+def _deletesearchindex(obj: Expr) -> Expr:
     iid = _index_id(obj)
     if iid is None:
         raise Unevaluated()
@@ -3803,7 +3803,7 @@ def _deletesearchindex(obj):
 
 
 @fn("SearchIndices", area=AREA, status="added", notes="the SearchIndexObjects that currently exist")
-def _searchindices():
+def _searchindices() -> ListOf[Expr]:
     return L(*(_index_obj(i) for i in _SEARCH_INDICES))
 
 
@@ -4211,7 +4211,7 @@ def _text_search(src, q, o):
           "lower-cased with plural stemming; results ranked by BM25 (Lucene's formula, k1 = 1.2, b = 0.75); "
           "ContentFieldOptions weights, DocumentWeightingRules, MaxItems; third argument a property, \"Count\" "
           "or \"ContentObject\"; numeric range queries raise")
-def _textsearch(src, q, *rest):
+def _textsearch(src: Expr, q: Expr, *rest: Expr) -> Expr:
     pos, o = _opts(rest, _SEARCH_OPTS, "TextSearch")
     res = _text_search(src, q, o)
     obj = Expr("SearchResultObject", src, q, L(), Expr("Association", Expr("Rule", "Results", L(*res))))

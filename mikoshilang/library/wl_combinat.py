@@ -12,6 +12,8 @@ Conventions follow the Wolfram Language reference pages:
   for a sorted base); ``GroupMultiplicationTable[[i, j]]`` is the position of
   ``PermutationProduct[g_i, g_j]``.
 """
+
+from __future__ import annotations
 import itertools
 import math
 
@@ -178,7 +180,7 @@ def _out(p, kind, n=None):
 @fn("Cycles", area=AREA, status="added",
     notes="canonical form: 1-cycles dropped, each cycle starts with its smallest point, cycles sorted by first "
           "point; repeated or non-positive points raise")
-def _cycles(spec):
+def _cycles(spec: Expr) -> Expr:
     c = _cycles_raw(Expr("Cycles", spec), "Cycles")
     if c is None:
         raise Unevaluated()
@@ -187,7 +189,7 @@ def _cycles(spec):
 
 @fn("PermutationCyclesQ", area=AREA, status="added", notes="True for a valid Cycles object (disjoint positive "
     "integer cycles), else False")
-def _pcq(x):
+def _pcq(x: Expr) -> Boolean:
     if not _is_cycles(x):
         return False
     try:
@@ -197,13 +199,13 @@ def _pcq(x):
 
 
 @fn("PermutationListQ", area=AREA, status="added", notes="True for a rearrangement of Range[n] (n >= 0)")
-def _plq(x):
+def _plq(x: Expr) -> Boolean:
     return _perm_list_q(x)
 
 
 @fn("PermutationCycles", area=AREA, status="added",
     notes="disjoint-cycle form of a permutation list (i -> p_i) or canonical form of a Cycles object")
-def _pcycles(p):
+def _pcycles(p: Expr) -> Expr:
     perm, _ = perm_of(p, "PermutationCycles")
     return _cycles_expr(perm.cycles())
 
@@ -211,7 +213,7 @@ def _pcycles(p):
 @fn("PermutationList", area=AREA, status="added",
     notes="PermutationList[perm] (length PermutationMax) and PermutationList[perm, n] padded to length n; n smaller "
           "than the largest moved point raises")
-def _plist(p, n=None):
+def _plist(p: Expr, n: Expr = None) -> ListOf[Expr]:
     perm, kind = perm_of(p, "PermutationList")
     if n is None:
         k = len(p.args) if kind == "list" else perm.degree()
@@ -225,7 +227,7 @@ def _plist(p, n=None):
 @fn("PermutationProduct", area=AREA, status="added",
     notes="left-to-right product (apply the first permutation first); PermutationProduct[] = Cycles[{}], "
           "PermutationProduct[x] = x; all permutation lists give a list, otherwise Cycles")
-def _pprod(*ps):
+def _pprod(*ps: Expr) -> Expr:
     if not ps:
         return Expr("Cycles", L())
     if len(ps) == 1:
@@ -242,32 +244,32 @@ def _pprod(*ps):
 
 @fn("InversePermutation", area=AREA, status="added", notes="inverse of a Cycles object or permutation list "
     "(same representation as the input)")
-def _pinv(p):
+def _pinv(p: Expr) -> Expr:
     perm, kind = perm_of(p, "InversePermutation")
     return _out(perm.inverse(), kind, len(p.args) if kind == "list" else None)
 
 
 @fn("PermutationPower", area=AREA, status="added", notes="n-th power (n any integer, negative = inverse powers)")
-def _ppow(p, n):
+def _ppow(p: Expr, n: Integer) -> Expr:
     perm, kind = perm_of(p, "PermutationPower")
     k = int_arg(n, "PermutationPower", "exponent")
     return _out(perm.power(k), kind, len(p.args) if kind == "list" else None)
 
 
 @fn("PermutationOrder", area=AREA, status="added", notes="LCM of the cycle lengths; identity -> 1")
-def _porder(p):
+def _porder(p: Expr) -> Expr:
     perm, _ = perm_of(p, "PermutationOrder")
     return perm.order()
 
 
 @fn("PermutationSupport", area=AREA, status="added", notes="sorted list of the points moved")
-def _psupport(p):
+def _psupport(p: Expr) -> ListOf[Expr]:
     perm, _ = perm_of(p, "PermutationSupport")
     return L(*sorted(perm.m))
 
 
 @fn("PermutationLength", area=AREA, status="added", notes="number of points moved")
-def _plength(p):
+def _plength(p: Expr) -> Integer:
     if _is_group(p):
         return len(_group_support(p))
     perm, _ = perm_of(p, "PermutationLength")
@@ -276,7 +278,7 @@ def _plength(p):
 
 @fn("PermutationMax", area=AREA, status="added", notes="largest moved point; identity -> -Infinity (Max of the "
     "empty support)")
-def _pmax(p):
+def _pmax(p: Expr) -> Expr:
     if _is_group(p):
         s = _group_support(p)
     else:
@@ -285,7 +287,7 @@ def _pmax(p):
 
 
 @fn("PermutationMin", area=AREA, status="added", notes="smallest moved point; identity -> Infinity")
-def _pmin(p):
+def _pmin(p: Expr) -> Expr:
     if _is_group(p):
         s = _group_support(p)
     else:
@@ -308,7 +310,7 @@ def _replace_points(e, perm):
 @fn("PermutationReplace", area=AREA, status="added",
     notes="replaces each positive integer in expr (at any depth in lists) by its image; Cycles objects in expr are "
           "relabelled (conjugated); a group gives the list of images under GroupElements")
-def _preplace(e, p):
+def _preplace(e: Expr, p: Expr) -> Expr:
     if _is_group(p):
         return L(*(_replace_points(e, g) for g in _group_elements(p, "PermutationReplace")))
     perm, _ = perm_of(p, "PermutationReplace")
@@ -330,7 +332,7 @@ def _permute(e, perm, fname):
 @fn("Permute", area=AREA, status="added",
     notes="Permute[expr, perm] moves part i to position perm(i) (Permute[{a, b, c}, {2, 3, 1}] = {c, a, b}); a "
           "group gives the list over GroupElements")
-def _permute_fn(e, p):
+def _permute_fn(e: Expr, p: Expr) -> Expr:
     if _is_group(p):
         return L(*(_permute(e, g, "Permute") for g in _group_elements(p, "Permute")))
     perm, _ = perm_of(p, "Permute")
@@ -342,7 +344,7 @@ def _permute_fn(e, p):
 @fn("FindPermutation", area=AREA, status="added",
     notes="FindPermutation[e1, e2]: Cycles p with Permute[e1, p] == e2; FindPermutation[e] relative to Sort[e]; "
           "repeated elements (ambiguous) raise")
-def _findperm(e1, e2=None):
+def _findperm(e1: Expr, e2: Expr = None) -> Expr:
     from .. import kernel as K
     if e2 is None:
         if not isinstance(e1, Expr) or isinstance(e1, Symbol):
@@ -370,7 +372,7 @@ def _findperm(e1, e2=None):
 
 @fn("Signature", area=AREA, status="added",
     notes="sign (+1/-1) of the permutation that sorts the list into canonical order; 0 if any element is repeated")
-def _signature(x):
+def _signature(x: ListOf[Expr]) -> Expr:
     from .. import kernel as K
     if not is_list(x):
         raise Unevaluated()
@@ -397,7 +399,7 @@ def _signature(x):
 @fn("RandomPermutation", area=AREA, status="added",
     notes="RandomPermutation[n] (uniform on Range[n], a Cycles object), [n, k] k of them, [group], [group, k]; "
           "reproducible after SeedRandom (the stream differs from Wolfram's generator)")
-def _randperm(n, k=None):
+def _randperm(n: Expr, k: Expr = None) -> Expr:
     from .statistics import _RNG
     if _is_group(n):
         elems = _group_elements(n, "RandomPermutation")
@@ -579,7 +581,7 @@ def _position(elems, p):
 
 
 @fn("GroupElementQ", area=AREA, status="added", notes="membership test for a permutation in a group")
-def _gelemq(g, p):
+def _gelemq(g: Expr, p: Expr) -> Boolean:
     if not _is_group(g):
         raise Unevaluated()
     perm, _ = perm_of(p, "GroupElementQ")
@@ -595,7 +597,7 @@ def _gelemq(g, p):
 
 @fn("GroupElementPosition", area=AREA, status="added",
     notes="position of a permutation (or list of them) in GroupElements[group]; non-members raise")
-def _gelempos(g, p):
+def _gelempos(g: Expr, p: Expr) -> Expr:
     if not _is_group(g):
         raise Unevaluated()
     elems = _group_elements(g, "GroupElementPosition")
@@ -613,7 +615,7 @@ def _gelempos(g, p):
 
 @fn("GroupMultiplicationTable", area=AREA, status="added",
     notes="m[[i, j]] = position of PermutationProduct[g_i, g_j] in GroupElements (array indexing)")
-def _gmult(g):
+def _gmult(g: Expr) -> ListOf[Expr]:
     if not _is_group(g):
         raise Unevaluated()
     elems = _group_elements(g, "GroupMultiplicationTable")
@@ -626,7 +628,7 @@ def _gmult(g):
 @fn("GroupOrbits", area=AREA, status="added",
     notes="GroupOrbits[group] orbits of the support points; GroupOrbits[group, {p1, ...}] orbits of the given "
           "points; each orbit sorted, orbits ordered by smallest point")
-def _gorbits(g, pts=None):
+def _gorbits(g: Expr, pts: Expr = None) -> ListOf[Expr]:
     if not _is_group(g):
         raise Unevaluated()
     gens, deg = _group_gens(g, "GroupOrbits")
@@ -656,7 +658,7 @@ def _gorbits(g, pts=None):
 def _named_group(h):
     @fn(h, area=AREA, status="added", notes=f"{h}[n] inert group object (permutation representation on 1..n) for "
         "GroupOrder, GroupElements, GroupMultiplicationTable, GroupOrbits, Permute, ...")
-    def impl(n):
+    def impl(n: Expr) -> Expr:
         if _intq(n):
             k = int(n)
             if k < 0 or (k == 0 and h in ("CyclicGroup", "DihedralGroup")):
@@ -671,7 +673,7 @@ for _h in ("SymmetricGroup", "AlternatingGroup", "CyclicGroup", "DihedralGroup")
 
 @fn("AbelianGroup", area=AREA, status="added", notes="AbelianGroup[{n1, n2, ...}] inert object (direct product of "
     "cyclic groups); GroupOrder supported")
-def _abelian(ns):
+def _abelian(ns: Expr) -> Expr:
     if is_list(ns):
         for v in ns.args:
             if _intq(v) and int(v) <= 0:
@@ -681,7 +683,7 @@ def _abelian(ns):
 
 @fn("PermutationGroup", area=AREA, status="added", notes="PermutationGroup[{g1, ...}] inert group generated by "
     "Cycles objects or permutation lists")
-def _pgroup(gens):
+def _pgroup(gens: Expr) -> Expr:
     if is_list(gens):
         for p in gens.args:
             perm_of(p, "PermutationGroup")
@@ -700,7 +702,7 @@ def _frob_check(a, fname):
 @fn("FrobeniusNumber", area=AREA, status="added",
     notes="largest integer not a non-negative integer combination of the a_i; -1 if some a_i = 1; Infinity when "
           "GCD > 1 (round-robin shortest paths over residues of the smallest a_i)")
-def _frobnum(a):
+def _frobnum(a: Expr) -> Expr:
     ns = sorted(set(_frob_check(a, "FrobeniusNumber")))
     g = 0
     for v in ns:
@@ -732,7 +734,7 @@ def _frobnum(a):
 @fn("FrobeniusSolve", area=AREA, status="added",
     notes="all non-negative integer solutions of a.x == b, sorted lexicographically; the 3-argument form (first m "
           "solutions) raises because Wolfram's selection order is not reproduced")
-def _frobsolve(a, b):
+def _frobsolve(a: Expr, b: Integer) -> ListOf[Expr]:
     ns = _frob_check(a, "FrobeniusSolve")
     t = int_value(b, "FrobeniusSolve", "target")
     if t < 0:
@@ -763,7 +765,7 @@ def _exact_int_or_uneval(n, fname):
 @fn("Hyperfactorial", area=AREA, status="added", listable=True,
     notes="Product[k^k, {k, n}] for integers n >= 0 (Hyperfactorial[0] = 1); approximate real arguments via mpmath "
           "hyperfac; exact non-integers stay unevaluated")
-def _hyperfac(n):
+def _hyperfac(n: Expr) -> Expr:
     if _intq(n):
         k = int(n)
         if k < 0:
@@ -787,7 +789,7 @@ def _hyperfac(n):
 @fn("PolygonalNumber", area=AREA, status="added", listable=True,
     notes="PolygonalNumber[n] = n (n + 1)/2 (triangular); PolygonalNumber[r, n] = n ((r - 2) n - (r - 4))/2; "
           "exact numeric arguments of any kind; symbolic arguments stay unevaluated")
-def _polygonal(r, n=None):
+def _polygonal(r: Expr, n: Expr = None) -> Expr:
     if n is None:
         r, n = 3, r
     if not (is_numeric_value(r) and is_numeric_value(n)):
@@ -799,7 +801,7 @@ def _polygonal(r, n=None):
 
 @fn("AlternatingFactorial", area=AREA, status="added", listable=True,
     notes="Sum[(-1)^(n - k) k!, {k, n}] for integers n >= 0 (OEIS A005165); other arguments stay unevaluated")
-def _altfact(n):
+def _altfact(n: Expr) -> Expr:
     k = _exact_int_or_uneval(n, "AlternatingFactorial")
     if k < 0:
         raise NotImplementedError("AlternatingFactorial: negative integers are not supported")
@@ -812,7 +814,7 @@ def _altfact(n):
 
 @fn("Fibonorial", area=AREA, status="added", listable=True,
     notes="Product[Fibonacci[k], {k, n}] for integers n >= 0 (OEIS A003266); other arguments stay unevaluated")
-def _fibonorial(n):
+def _fibonorial(n: Expr) -> Expr:
     k = _exact_int_or_uneval(n, "Fibonorial")
     if k < 0:
         raise NotImplementedError("Fibonorial: negative integers are not supported")

@@ -9,6 +9,8 @@ numbers give machine numbers); exact arguments give exact values where Wolfram g
 unevaluated, and N[f[exact args], p] evaluates to p digits.  Where a case cannot be computed reliably the call
 raises a clear error rather than returning a doubtful number.
 """
+
+from __future__ import annotations
 import inspect
 
 import mpmath
@@ -34,10 +36,11 @@ def _register(name, nargs, impl, notes, listable=True, numeric=True, hold=False)
     lo, hi = (nargs, nargs) if isinstance(nargs, int) else nargs
     for n in range(lo, hi + 1):
         def make(n):
-            def f(*args):
+            def f(*args: Expr) -> Expr:
                 return impl(*(_as_expr(a) for a in args))
             f.__signature__ = inspect.Signature(
-                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD) for i in range(n)])
+                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation="Expr")
+                 for i in range(n)], return_annotation="Expr")
             f.__name__ = f"_{name}_{n}"
             return f
         fn(name, area=AREA, status=STATUS, notes=notes, listable=listable, hold=hold)(make(n))
@@ -928,7 +931,7 @@ _PAULI = {
 }
 
 
-def _pauli(k, *opts):
+def _pauli(k: Expr, *opts: Option) -> Expr:
     from .wl_common import split_options
     _a, o = split_options(opts, {"TargetStructure", "WorkingPrecision"}, "PauliMatrix")
     if _a:
@@ -2426,11 +2429,11 @@ def _sympy_meijerg_back():
 _sympy_meijerg_back()
 
 
-def _meijerg_reduce(expr, x, *opts):
+def _meijerg_reduce(expr: Expr, x: Expr, *opts: Option) -> Expr:
     return _reduce_common("MeijerGReduce", expr, x, False)
 
 
-def _foxh_reduce(expr, x, *opts):
+def _foxh_reduce(expr: Expr, x: Expr, *opts: Option) -> Expr:
     return _reduce_common("FoxHReduce", expr, x, True)
 
 
