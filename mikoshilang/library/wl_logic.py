@@ -327,7 +327,7 @@ def _minimal(sv, form, syms=None):
 
 @fn("Boole", area=AREA, status="added", listable=True, notes="Boole[True] = 1, Boole[False] = 0; other arguments "
     "stay unevaluated")
-def _boole(x: Expr) -> Integer:
+def _boole(x: Boolean) -> Integer:
     if x is True:
         return 1
     if x is False:
@@ -339,7 +339,7 @@ def _boole(x: Expr) -> Integer:
     notes="True when more than half of the (odd number of) arguments are True, False when more than half are False; "
           "symbolic arguments stay unevaluated unless the count is already decided; an even number of arguments "
           "raises")
-def _majority(*args: Expr) -> Boolean:
+def _majority(*args: Boolean) -> Boolean:
     if len(args) % 2 == 0:
         raise ValueError("Majority needs an odd number of arguments")
     t = sum(1 for a in args if a is True)
@@ -526,7 +526,7 @@ def _decide_setup(e, vars_, fname):
 
 @fn("SatisfiableQ", area=AREA, status="added", notes="True if some assignment of the variables makes the "
     "expression True (exact truth table up to 22 variables, SymPy SAT solver beyond)")
-def _satq(e: Expr, vars_: Expr = None) -> Boolean:
+def _satq(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Boolean:
     c, sv = _decide_setup(e, vars_, "SatisfiableQ")
     syms = c.symbols()
     if len(syms) > MAX_VARS:
@@ -537,7 +537,7 @@ def _satq(e: Expr, vars_: Expr = None) -> Boolean:
 
 @fn("TautologyQ", area=AREA, status="added", notes="True if every assignment of the variables makes the expression "
     "True")
-def _tautq(e: Expr, vars_: Expr = None) -> Boolean:
+def _tautq(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Boolean:
     c, sv = _decide_setup(e, vars_, "TautologyQ")
     syms = c.symbols()
     if len(syms) > MAX_VARS:
@@ -548,7 +548,7 @@ def _tautq(e: Expr, vars_: Expr = None) -> Boolean:
 
 @fn("SatisfiabilityCount", area=AREA, status="added", notes="number of assignments (of BooleanVariables or the "
     "given variables, so extra variables double the count) that make the expression True")
-def _satcount(e: Expr, vars_: Expr = None) -> Expr:
+def _satcount(e: Expr, vars_: Var | ListOf[Expr] | Integer = None) -> Integer:
     c, sv = _decide_setup(e, vars_, "SatisfiabilityCount")
     m, _ = truth_mask(sv, c.symbols())
     return bin(m).count("1")
@@ -558,7 +558,7 @@ def _satcount(e: Expr, vars_: Expr = None) -> Expr:
     notes="SatisfiabilityInstances[expr, vars], [expr, vars, m], [expr, vars, All] and pure-function forms: lists of "
           "truth values that make expr True, enumerated with False before True (lexicographic); {} if unsatisfiable. "
           "Wolfram does not document which instances it returns first; every returned instance is valid")
-def _satinst(e: Expr, vars_: Expr = None, m: Expr = None) -> ListOf[Expr]:
+def _satinst(e: Expr, vars_: Var | ListOf[Expr] | Integer = None, m: PosInteger = None) -> ListOf[Expr]:
     if _pure_arity(e, "SatisfiabilityInstances") is not None:
         if vars_ is not None and m is None:
             vars_, m = None, vars_
@@ -772,7 +772,7 @@ def _quant(name):
     @fn(name, area=AREA, status="added",
         notes=f"{name}[x, expr] and {name}[x, cond, expr] (x a symbol or list of symbols); evaluates when the body does "
               f"not depend on the variables (e.g. {name}[x, True] = True), otherwise stays for Resolve")
-    def impl(x: Expr, a: Expr, b: Expr = None) -> Expr:
+    def impl(x: Var | ListOf[Var], a: Expr, b: Expr = None) -> Expr:
         vs = _qvars(x, name)
         body = a if b is None else Expr("Implies" if name == "ForAll" else "And", a, b)
         if _free_of(body, vs):
@@ -845,7 +845,7 @@ def _junction(name, op):
     @fn(name, area=AREA, status="added",
         notes=f"{name}[expr, {{a1, ...}}]: {op} of expr over all True/False values of the a_i, as an equivalent "
               "minimal DNF")
-    def impl(e: Expr, vars_: Expr) -> Expr:
+    def impl(e: Expr, vars_: Var | ListOf[Var]) -> Expr:
         vs = _var_list(vars_, name)
         body = e
         for v in vs:
@@ -936,7 +936,7 @@ def _equiv_partial(*args):
 def _install(name, impl, min_args, notes):
     from .core import REGISTRY, record
 
-    def f(*args: Expr) -> Expr:
+    def f(*args: Boolean) -> Boolean:
         if len(args) < min_args:
             raise ValueError(f"{name} needs at least {min_args} arguments")
         return impl(*args)

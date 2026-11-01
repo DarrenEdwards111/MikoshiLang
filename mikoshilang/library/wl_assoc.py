@@ -239,7 +239,7 @@ def _associationthread(ks: Expr, vs: Expr = None) -> Expr:
 @fn("Merge", **ADDED,
     notes="Merge[{a1, a2, ...}, f] gives <|k -> f[{values for k}]|> with keys in order of first appearance; rule "
           "lists act as associations")
-def _merge(xs: Expr, f: Fn) -> Expr:
+def _merge(xs: ListOf[Expr], f: Fn) -> Expr:
     if not is_list(xs):
         if isinstance(xs, Symbol):
             raise Unevaluated()
@@ -284,7 +284,7 @@ def _assoc_list(xs, fname):
 
 
 @fn("KeyComplement", **ADDED, notes="entries of the first association whose keys are in none of the others")
-def _keycomplement(xs: Expr) -> Expr:
+def _keycomplement(xs: ListOf[Expr]) -> Assoc:
     a = _assoc_list(xs, "KeyComplement")
     if not a:
         raise ValueError("KeyComplement: needs at least one association")
@@ -294,7 +294,7 @@ def _keycomplement(xs: Expr) -> Expr:
 
 @fn("KeyIntersection", **ADDED,
     notes="each association restricted to the keys common to all, in the order of the first association")
-def _keyintersection(xs: Expr) -> ListOf[Expr]:
+def _keyintersection(xs: ListOf[Expr]) -> ListOf[Expr]:
     a = _assoc_list(xs, "KeyIntersection")
     if not a:
         return L()
@@ -305,7 +305,7 @@ def _keyintersection(xs: Expr) -> ListOf[Expr]:
 @fn("KeyUnion", **ADDED,
     notes="each association extended to the union of keys (in order of first appearance); absent keys get "
           "Missing[\"KeyAbsent\", k] (or f[k] with KeyUnion[list, f])")
-def _keyunion(xs: Expr, f: Fn = None) -> ListOf[Expr]:
+def _keyunion(xs: ListOf[Expr], f: Fn = None) -> ListOf[Expr]:
     a = _assoc_list(xs, "KeyUnion")
     keys, seen = [], set()
     for b in a:
