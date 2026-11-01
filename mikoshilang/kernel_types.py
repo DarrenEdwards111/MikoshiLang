@@ -6,7 +6,7 @@ annotations, so their signatures are written here. Each entry is a list of overl
 
 How to read them:
 
-* A numeric type (``Number``, ``Real``, ``Integer``) still accepts symbolic arguments: ``x``, ``n + 1`` and
+* A numeric type (``Numeric``, ``Real``, ``Integer``) still accepts symbolic arguments: ``x``, ``n + 1`` and
   ``f[y]`` are "not known yet", never mismatches. Only *concrete* values of another kind (strings, ``True``,
   lists, associations, rules) are reported. ``| Expr`` is therefore only written where concrete values of
   other kinds are valid too.
@@ -17,7 +17,7 @@ How to read them:
 """
 from __future__ import annotations
 
-ARITH = "Number | ListOf[Expr] | Assoc"
+ARITH = "Numeric | ListOf[Expr] | Assoc"
 ORDER = "Real | ListOf[Expr]"
 LEVEL = "Expr"                       # level specifications: n, {n}, {m, n}, Infinity, All
 
@@ -48,7 +48,7 @@ KERNEL_SIGNATURES = {
     "Reverse": [([_E], _E, _E)], "Take": [([_E], _E, _E)], "Drop": [([_E], _E, _E)],
     "Sort": [([_E], _E, _E)], "Total": [([_E], _E, _E)], "Flatten": [([_E], _E, _E)],
     "Transpose": [([_E], _E, _E)], "Normal": [([_E], _E, _E)],
-    "Range": [(["Number"], "Number", "ListOf[Expr]")],
+    "Range": [(["Numeric"], "Numeric", "ListOf[Expr]")],
     "Cases": [([_E], _E, _E)], "DeleteCases": [([_E], _E, _E)], "Count": [([_E], _E, _I)],
     "Position": [([_E], _E, "ListOf[Expr]")], "Select": [([_E, _F], _E, _E)],
     "Thread": [([_E], _E, _E)], "Dot": [([], _E, _E)], "DotProduct": [([], _E, _E)],

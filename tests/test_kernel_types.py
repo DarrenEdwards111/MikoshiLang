@@ -19,7 +19,7 @@ def _report(src):
 
 def test_kernel_signatures_parse():
     sigs = kernel_signatures("Plus")
-    assert sigs and sigs[0].rest == ("Or", (("Number",), ("ListOf", ("Expr",)), ("Assoc",)))
+    assert sigs and sigs[0].rest == ("Or", (("Numeric",), ("ListOf", ("Expr",)), ("Assoc",)))
 
 
 def test_kernel_signatures_unknown_head():
@@ -44,7 +44,7 @@ def test_check_kernel_call_reports_and_returns_signature():
     s = Session(check_types="report")
     s.evaluate('Plus["a", 1]')
     assert [(m["function"], m["position"], m["expected"]) for m in s.type_mismatches][:1] == [
-        ("Plus", 1, "Number | ListOf[Expr] | Assoc")]
+        ("Plus", 1, "Numeric | ListOf[Expr] | Assoc")]
 
 
 def test_check_kernel_call_raises_in_raise_mode():
@@ -65,13 +65,13 @@ def test_signatures_of_held_kernel_head():
 
 
 def test_typesignature_shows_kernel_signature():
-    assert str(Session().evaluate("TypeSignature[Plus]")).startswith("{{(Number | ListOf[Expr] | Assoc)")
+    assert str(Session().evaluate("TypeSignature[Plus]")).startswith("{{(Numeric | ListOf[Expr] | Assoc)")
 
 
 # ---- what the kernel signatures catch, and what they leave alone -----------------------------------------------
 
 @pytest.mark.parametrize("src, head, expected", [
-    ('Plus["a", 1]', "Plus", "Number | ListOf[Expr] | Assoc"),
+    ('Plus["a", 1]', "Plus", "Numeric | ListOf[Expr] | Assoc"),
     ("Nest[f, x, -1]", "Nest", "NonNegInteger"),
     ("StringLength[3]", "StringLength", "String | ListOf[Expr]"),
     ("Det[{1, 2}]", "Det", "MatrixOf[Expr]"),
@@ -94,7 +94,7 @@ def test_kernel_symbolic_and_valid_calls_are_clean(src):
 # ---- narrowed library signatures --------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("src, head, expected", [
-    ('Gamma["a"]', "Gamma", "Number"),
+    ('Gamma["a"]', "Gamma", "Numeric"),
     ('Prime[0]', "Prime", "PosInteger"),
     ('StringReverse[5]', "StringReverse", "String"),
     ('Partition[{1, 2, 3}, 0]', "Partition", "PosInteger"),

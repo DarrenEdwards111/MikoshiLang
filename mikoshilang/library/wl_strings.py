@@ -686,7 +686,7 @@ def _roman(n):
 @fn("IntegerString", area=AREA, status="added",
     notes="digits of |n| (the sign is dropped, as Wolfram) in base 2-36 with lower-case letters, padded with "
           "zeros or truncated to the last len digits; IntegerString[n, \"Roman\"]; threads over lists")
-def _intstring(n: Integer | ListOf[Expr], b: Integer = 10, length: NonNegInteger = None) -> Expr:
+def _intstring(n: Integer | ListOf[Expr], b: Integer | String = 10, length: NonNegInteger = None) -> Expr:
     if is_list(n):
         return L(*(_intstring(x, b, length) for x in n.args))
     k = int_arg(n, "IntegerString", "integer")
@@ -712,7 +712,7 @@ def _intstring(n: Integer | ListOf[Expr], b: Integer = 10, length: NonNegInteger
 @fn("RomanNumeral", area=AREA, status="added",
     notes="Roman numeral string of n for 1-4999 (sign dropped); RomanNumeral[0] gives \"N\"; threads over "
           "lists; the overbar forms for n >= 5000 are not supported")
-def _romannum(n: Integer) -> String:
+def _romannum(n: Integer | ListOf[Integer]) -> String | ListOf[String]:
     if is_list(n):
         return L(*(_romannum(x) for x in n.args))
     k = abs(int_arg(n, "RomanNumeral", "integer"))

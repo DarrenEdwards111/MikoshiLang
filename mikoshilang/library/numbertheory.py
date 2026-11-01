@@ -22,7 +22,7 @@ def _intq(x):
 
 @fn("IsPrime", area=AREA, status="verified", listable=True,
     notes="MikoshiLang alias of PrimeQ (same kernel implementation)")
-def _isprime(n: Number) -> Boolean:
+def _isprime(n: Numeric) -> Boolean:
     return Expr("PrimeQ", n)
 
 
@@ -117,7 +117,7 @@ def _divisorcount(n: Integer) -> Integer:
 
 @fn("DivisorSigma", area=AREA, status="fixed", listable=True,
     notes="DivisorSigma[k, n] = sum of d^k over divisors of n; exact for any exact k (legacy truncated k)")
-def _divisorsigma(k: Number, n: Integer) -> Number:
+def _divisorsigma(k: Numeric, n: Integer) -> Numeric:
     m = _nonzero(n, "DivisorSigma")
     kk = number(k, "DivisorSigma", "power", real=False)
     return numeric_out(sp.Add(*[sp.Integer(d) ** kk for d in sp.divisors(m)]), k)
@@ -137,7 +137,7 @@ def _mobius(n: Integer) -> Integer:
 
 @fn("PowerMod", area=AREA, status="fixed", listable=True,
     notes="negative exponents use the modular inverse and raise when it does not exist; rational exponents raise")
-def _powermod(a: Number, b: Number, m: Integer):
+def _powermod(a: Numeric, b: Numeric, m: Integer):
     aa, bb, mm = int_arg(a, "PowerMod"), int_arg(b, "PowerMod", "exponent"), int_arg(m, "PowerMod", "modulus")
     if mm == 0:
         raise ValueError("PowerMod: modulus must be non-zero")
@@ -197,7 +197,7 @@ def _rationals(args, fname):
 
 @fn("GCD", area=AREA, status="fixed", listable=True,
     notes="now variadic, exact for rationals, GCD[] = 0; legacy truncated reals (GCD[2.5, 5] = 1)")
-def _gcd(*args: Number) -> Number:
+def _gcd(*args: Numeric) -> Numeric:
     vals = _rationals(args, "GCD")
     if not vals:
         return 0
@@ -209,7 +209,7 @@ def _gcd(*args: Number) -> Number:
 
 @fn("LCM", area=AREA, status="fixed", listable=True,
     notes="now variadic, exact for rationals, LCM[] = 1; legacy truncated reals")
-def _lcm(*args: Number) -> Number:
+def _lcm(*args: Numeric) -> Numeric:
     vals = _rationals(args, "LCM")
     if not vals:
         return 1
@@ -221,7 +221,7 @@ def _lcm(*args: Number) -> Number:
 
 @fn("ExtendedGCD", area=AREA, status="fixed",
     notes="returned {x, y, g}; Wolfram order is {g, {x, y}} with g = a x + b y")
-def _egcd(a: Number, b: Number) -> ListOf[Expr]:
+def _egcd(a: Numeric, b: Numeric) -> ListOf[Expr]:
     aa, bb = int_arg(a, "ExtendedGCD"), int_arg(b, "ExtendedGCD")
     # iterative extended Euclid (same minimal Bezout pair as SymPy igcdex)
     x0, y0, x1, y1, r0, r1 = 1, 0, 0, 1, aa, bb
@@ -244,7 +244,7 @@ def _fib(n):
     return (-1) ** (-n + 1) * sp.fibonacci(-n)
 
 
-def _fibonacci(n: Number, x: Number = None) -> Number:
+def _fibonacci(n: Numeric, x: Numeric = None) -> Numeric:
     if x is not None:
         k = nonneg_int(n, "Fibonacci", "index")
         return R(sp.expand(sp.fibonacci(k, sym(x, "Fibonacci"))))
@@ -262,7 +262,7 @@ fn("Fibonacci", area=AREA, status="fixed", listable=True,
 fn("FibonacciNumber", area=AREA, status="fixed", listable=True, notes="MikoshiLang alias of Fibonacci")(_fibonacci)
 
 
-def _lucas(n: Number) -> Number:
+def _lucas(n: Numeric) -> Numeric:
     if _intq(n):
         k = int(n)
         return R(sp.lucas(k) if k >= 0 else (-1) ** (-k) * sp.lucas(-k))
@@ -278,7 +278,7 @@ fn("Lucas", area=AREA, status="fixed", listable=True,
 fn("LucasL", area=AREA, status="promoted", listable=True, notes="Lucas numbers L_n")(_lucas)
 
 
-def _bernoulli(n: Integer, x: Number = None) -> Number:
+def _bernoulli(n: Integer, x: Numeric = None) -> Numeric:
     k = nonneg_int(n, "BernoulliB", "index")
     if x is not None:
         return R(sp.expand(sp.bernoulli(k, sym(x, "BernoulliB"))))
@@ -291,7 +291,7 @@ fn("BernoulliNumber", area=AREA, status="fixed", listable=True, notes=B1)(_berno
 fn("BernoulliB", area=AREA, status="promoted", listable=True, notes="BernoulliB[n] and BernoulliB[n, x]")(_bernoulli)
 
 
-def _euler(n: Integer, x: Number = None) -> Number:
+def _euler(n: Integer, x: Numeric = None) -> Numeric:
     k = nonneg_int(n, "EulerE", "index")
     if x is not None:
         return R(sp.expand(sp.euler(k, sym(x, "EulerE"))))
@@ -312,13 +312,13 @@ def _catalan_call(*args):
 
 @fn("CatalanNumber", area=AREA, status="fixed", listable=True,
     notes="exact for any exact argument, symbolic n stays unevaluated; " + NO_TRUNC)
-def _catalan(n: Number) -> Number:
+def _catalan(n: Numeric) -> Numeric:
     if not is_numeric_value(n):
         raise Unevaluated()
     return numeric_out(sp.catalan(S(n)), n)
 
 
-def _bell(n: Integer, x: Number = None) -> Number:
+def _bell(n: Integer, x: Numeric = None) -> Numeric:
     k = nonneg_int(n, "BellB", "index")
     if x is not None:
         return R(sp.expand(sp.bell(k, sym(x, "BellB"))))
@@ -708,7 +708,7 @@ B2 = "number theory (batch 2)"
 @fn("LucasL", area=AREA, status="fixed", listable=True,
     notes="LucasL[n, x] Lucas polynomials L_0 = 2, L_1 = x, L_n = x L_(n-1) + L_(n-2) (LucasL[3, x] = x^3 + 3 x); "
           "the 2-argument form was missing")
-def _lucas_poly(n: Number, x: Number) -> Number:
+def _lucas_poly(n: Numeric, x: Numeric) -> Numeric:
     k = nonneg_int(n, "LucasL", "index")
     xv = sym(x, "LucasL")
     a, b = sp.Integer(2), xv
@@ -722,7 +722,7 @@ def _lucas_poly(n: Number, x: Number) -> Number:
 @fn("HarmonicNumber", area=AREA, status="fixed", listable=True,
     notes="HarmonicNumber[n] for rational n in closed form (HarmonicNumber[1/2] = 2 - 2 Log[2], legacy left it "
           "unevaluated); HarmonicNumber[n, r]")
-def _harmonic_b2(n: Number, r: Number = 1) -> Number:
+def _harmonic_b2(n: Numeric, r: Numeric = 1) -> Numeric:
     if not is_numeric_value(n):
         raise Unevaluated()
     sn, sr = S(n), sym(r, "HarmonicNumber")
@@ -748,7 +748,7 @@ _replace_first("HarmonicNumber", _harmonic_b2)
 @fn("CatalanNumber", area=AREA, status="fixed", listable=True,
     notes="CatalanNumber[n] for any exact n via 4^n Gamma[n + 1/2]/(Sqrt[Pi] Gamma[n + 2]) "
           "(CatalanNumber[1/2] = 8/(3 Pi), legacy left it unevaluated); symbolic n stays unevaluated")
-def _catalan_b2(n: Number) -> Number:
+def _catalan_b2(n: Numeric) -> Numeric:
     if not is_numeric_value(n):
         raise Unevaluated()
     v = sp.catalan(S(n))
@@ -763,7 +763,7 @@ _replace_first("CatalanNumber", _catalan_b2)
 @fn("PowerMod", area=AREA, status="fixed", listable=True,
     notes="PowerMod[a, 1/r, m] is the smallest modular r-th root of a (PowerMod[3, 1/2, 11] = 5), unevaluated "
           "when none exists; other rational exponents p/r use the root then the power")
-def _powermod_root(a: Number, b: Number, m: Integer):
+def _powermod_root(a: Numeric, b: Numeric, m: Integer):
     bb = sym(b, "PowerMod")
     if bb.is_Integer:
         return _powermod(a, b, m)
@@ -837,7 +837,7 @@ def _primroot2(n: Integer, k: Integer):
 
 @fn("MangoldtLambda", area=B2, status="added", listable=True,
     notes="von Mangoldt function: Log[p] if n is a power of the prime p, else 0; MangoldtLambda[1] = 0")
-def _mangoldt(n: Integer) -> Number:
+def _mangoldt(n: Integer) -> Numeric:
     k = int_arg(n, "MangoldtLambda")
     if k < 1:
         raise ValueError("MangoldtLambda: argument must be a positive integer")

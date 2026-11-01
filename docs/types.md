@@ -70,7 +70,7 @@ a list, an association, a rule or `True`/`False` where the type excludes it.
   result is.
 * **Kernel built-ins** (`Plus`, `Times`, `Power`, `Greater`, `Range`, `Nest`, `StringJoin`, `Det`, ...) have
   hand-written signatures in `mikoshilang/kernel_types.py`, checked in evaluator step 8. They are deliberately
-  lenient: `Plus` takes `Number | ListOf[Expr] | Assoc` (symbols and other non-concrete expressions always pass),
+  lenient: `Plus` takes `Numeric | ListOf[Expr] | Assoc` (symbols and other non-concrete expressions always pass),
   so `Plus["a", 1]`, `Nest[f, x, -1]`, `StringLength[3]`, `Det[{1, 2}]` and `Not["a"]` are mismatches while
   every symbolic call is clean. Held kernel heads (`Block`, `Set`, ...) show `{Held...} -> Expr`.
   `TypeSignature[Plus]` shows the signature.

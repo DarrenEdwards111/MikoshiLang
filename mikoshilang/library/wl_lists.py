@@ -95,7 +95,7 @@ def _constarray(c: Expr, dims: NonNegInteger | ListOf[NonNegInteger]) -> ListOf[
 
 
 @fn("Subdivide", **ADDED, notes="Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values")
-def _subdivide(a: Number, b: Number = None, c: PosInteger = None) -> ListOf[Expr]:
+def _subdivide(a: Numeric, b: Numeric = None, c: PosInteger = None) -> ListOf[Expr]:
     if b is None:
         lo, hi, n = 0, 1, a
     elif c is None:
@@ -108,7 +108,7 @@ def _subdivide(a: Number, b: Number = None, c: PosInteger = None) -> ListOf[Expr
 
 
 @fn("PowerRange", **ADDED, notes="PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r]")
-def _powerrange(a: Number, b: Number = None, r: Number = None) -> ListOf[Expr]:
+def _powerrange(a: Numeric, b: Numeric = None, r: Numeric = None) -> ListOf[Expr]:
     if b is None:
         lo, hi, ratio = 1, a, 10
     else:

@@ -184,7 +184,7 @@ def _fromcc(n: NonNegInteger | ListOf[NonNegInteger]) -> String:
 @fn("AlphabetPosition", area=AREA, status="fixed",
     notes="like Wolfram LetterNumber: position in the English alphabet, 0 for non-letters; multi-character "
           "strings give a list (legacy returned 0)")
-def _alphapos(s: String) -> ListOf[Integer]:
+def _alphapos(s: String) -> Integer | ListOf[Integer]:
     st = _s(s, "AlphabetPosition")
     vals = [ord(c.lower()) - 96 if c.isascii() and c.isalpha() else 0 for c in st]
     return vals[0] if len(vals) == 1 else L(*vals)
