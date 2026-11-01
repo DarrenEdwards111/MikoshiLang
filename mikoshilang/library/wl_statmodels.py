@@ -2656,12 +2656,17 @@ def _likelihood(d: Expr, x: ListOf[Real] | ListOf[Expr]) -> Real | Expr:
     return out(sp.simplify(v) if not has_float(x) and not has_float(d) else v, [d, x])
 
 
+PROCESS_LOGLIKELIHOOD = {}    # X02: head -> fn(proc, data) (set by wl_statmodels2_ts)
+
+
 @fn("LogLikelihood", area=AREA, status="added",
     notes="LogLikelihood[dist, {x1, x2, ...}] = Sum[Log[PDF[dist, xi]]] for univariate distributions (exact for "
           "exact input, logarithms of the positive density factors split; an observation outside the support gives -Infinity). Random "
           "processes and multivariate observations raise NotImplementedError; a non-list TypeError. Check: "
           "reference values from scipy.stats logpdf sums and Log[Likelihood] (tested).")
 def _loglikelihood(d: Expr, x: ListOf[Real] | ListOf[Expr]) -> Real | Expr:
+    if isinstance(d, Expr) and d.head in PROCESS_LOGLIKELIHOOD:     # X02: hidden Markov processes
+        return PROCESS_LOGLIKELIHOOD[d.head](d, x)
     _, terms = _pdf_terms(d, x, "LogLikelihood")
     if any(t == 0 for t in terms):
         return R(-sp.oo)
