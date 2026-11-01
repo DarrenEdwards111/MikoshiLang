@@ -89,7 +89,8 @@ Caveats:
 * `exact` is vacuous for a head whose cases are all inexact or expect errors.
 * Test modules whose cases only run inside pytest fixtures (a temporary working directory, local servers,
   per-test isolation: `test_wolfram_w27`, `w29`, `w30`) are left out of the harness; their heads are `not
-  exercised` there, and their cases still run in the test suite.
+  exercised` there (so is a `self-check` head whose only real examples are in those modules), and their cases
+  still run in the test suite.
 * Most heads predate the `Check:` convention, so they are reported as `no check stated` (with their reference
   cases, in `--all` mode) until their notes gain the sentence.
 

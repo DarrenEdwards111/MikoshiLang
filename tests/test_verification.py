@@ -175,3 +175,10 @@ def test_modules_that_need_fixtures_are_left_out(tmp_path):
     autouse.write_text("@pytest.fixture(autouse=True)\ndef iso():\n    yield\n")
     assert not H._needs_fixtures(plain)
     assert H._needs_fixtures(fixture_arg) and H._needs_fixtures(autouse)
+
+
+def test_selfcheck_with_examples_only_in_left_out_modules_is_not_exercised():
+    # SetDirectory's real examples live in test_wolfram_w27, which needs pytest fixtures and is left out
+    res = H.run(TESTS, "stated", ["SetDirectory", "SetFileDate", "URLResponseTime"])
+    for name in ("SetDirectory", "SetFileDate", "URLResponseTime"):
+        assert res[name].status == "not exercised", (name, res[name].failures)
