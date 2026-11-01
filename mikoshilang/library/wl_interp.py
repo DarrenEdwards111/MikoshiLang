@@ -88,6 +88,8 @@ def apply_ifun(head, args, order=0):
     """ifun[x] (or Derivative[order][ifun][x])."""
     if len(head.args) != 2 or not isinstance(head.args[1], str) or head.args[1] not in _REG:
         raise ValueError("InterpolatingFunction: this function's data is not available in this session")
+    if order == 0 and len(args) == 1 and args[0] == "Domain":
+        return head.args[0]
     dims = len(head.args[0].args) if is_list(head.args[0]) else 1
     if dims > 1:
         return _apply_nd(head, args, order, dims)
@@ -250,7 +252,7 @@ def _ndsolve(eqs, unknowns, rng, opts, fname):
     try:
         import scipy.integrate as si
     except ImportError:
-        raise NotImplementedError(f"{fname} requires SciPy (pip install mikoshilang[signal])")
+        raise NotImplementedError(f"{fname}: requires SciPy (pip install mikoshilang[signal])")
     us = list(unknowns.args) if is_list(unknowns) else [unknowns]
     funcs = [_fname(u) for u in us]
     it = list_arg(rng, fname, "range")
@@ -451,8 +453,9 @@ def _ivp_controls(opts, a, b, fname):
     if not _is_auto(ms) and not _is_inf(ms):
         ctl["max_step"] = _posnum(ms, "MaxStepSize", fname)
     mf = opts.get("MaxStepFraction")
-    if not _is_auto(mf) and not _is_inf(mf):
-        f = _posnum(mf, "MaxStepFraction", fname)
+    if not _is_inf(mf):
+        # Wolfram's default MaxStepFraction is 1/10 (it also keeps event detection from skipping crossings)
+        f = 0.1 if _is_auto(mf) else _posnum(mf, "MaxStepFraction", fname)
         if f > 1:
             raise ValueError(f"{fname}: MaxStepFraction must be at most 1")
         ctl["max_step"] = min(ctl["max_step"], f * abs(b - a))
@@ -607,6 +610,13 @@ def _integrate(si, rhs, t0, end, y0, ctl, evs, subst, mon_step, fname):
         hits = [(abs(te[0] - t), i, te[0], ye[0]) for i, (te, ye) in enumerate(zip(r.t_events, r.y_events))
                 if len(te)]
         _, k, te, ye = min(hits, key=lambda h: h[0])
+        if abs(te - t) <= 1e-12 * span:
+            # an event condition already met at the start of the integration is not an event (Wolfram)
+            step = np.sign(end - t0) * min(1e-8 * span, abs(end - t) / 2)
+            r2 = _solve(si, rhs, t, t + step, y, dict(ctl, first_step=None), None, fname)
+            segs.append((min(t, t + step), max(t, t + step), r2.sol))
+            t, y = t + step, r2.y[:, -1]
+            continue
         segs.append((min(t, te), max(t, te), r.sol))
         nev += 1
         if nev > 10000:
@@ -629,6 +639,9 @@ def _ndopts(rest, fname):
     pos, opts = split_options(rest, {"WorkingPrecision", "Method", "MaxSteps", "PrecisionGoal", "AccuracyGoal",
                                      "MaxStepSize", "MaxStepFraction", "StartingStepSize", "StepMonitor",
                                      "EvaluationMonitor"}, fname)
+    for p in pos:
+        if isinstance(p, Expr) and p.head in ("Rule", "RuleDelayed") and len(p.args) == 2:
+            raise ValueError(f"{fname}: {p.args[0]} is not a known option for {fname}")
     wp = opts.get("WorkingPrecision")
     if wp is not None and not (isinstance(wp, Symbol) and wp.name == "MachinePrecision"):
         raise NotImplementedError(f"{fname}: only machine precision is supported")

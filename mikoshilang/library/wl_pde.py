@@ -591,8 +591,8 @@ def _finish(e, subs):
 _HEAT_KEYS = ("HeatConvectionVelocity", "HeatSource", "MassDensity", "Material", "ModelForm", "RegionSymmetry",
               "SpecificHeatCapacity", "ThermalConductivity", "Thickness", "CrossSectionalArea", "CoordinateChart",
               # boundary-condition keys that may share the same association
-              "AmbientTemperature", "HeatTransferCoefficient", "Emissivity", "StefanBoltzmannConstant",
-              "HeatFlux", "Temperature", "SurfaceArea")
+              "AmbientTemperature", "HeatTransferCoefficient", "Emissivity",
+              "HeatFlux")
 
 
 @fn("HeatTransferPDEComponent", area=AREA, status="added",
@@ -628,7 +628,7 @@ def _heat_component(vars_: Expr, pars: Assoc) -> Expr:
 
 _MASS_KEYS = ("MassConvectionVelocity", "DiffusionCoefficient", "MassReactionRate", "MassSource", "ModelForm",
               "RegionSymmetry", "CoordinateChart", "Thickness", "CrossSectionalArea",
-              "AmbientConcentration", "MassTransferCoefficient", "MassFlux", "Concentration")
+              "AmbientConcentration", "MassTransferCoefficient", "MassFlux")
 
 
 @fn("MassTransportPDEComponent", area=AREA, status="added",
@@ -660,8 +660,7 @@ def _mass_component(vars_: Expr, pars: Assoc) -> Expr:
 
 _ACOUSTIC_KEYS = ("DipoleSource", "MassDensity", "MonopoleSource", "SoundSpeed", "RegionSymmetry",
                   "CoordinateChart", "Thickness", "CrossSectionalArea",
-                  "AcousticPressure", "NormalVelocity", "NormalAcceleration", "Impedance", "SpecificImpedance",
-                  "InwardPressure", "IncomingPressure")
+                  "AcousticPressure")
 
 
 def _recip(x):
@@ -724,7 +723,7 @@ def _electrostatic_component(vars_: Expr, pars: Assoc) -> Expr:
 
 _EC_KEYS = ("CrossSectionalArea", "CurrentSource", "ElectricalConductivity", "ExternalCurrentSource", "Material",
             "Thickness", "Polarization", "RelativePermittivity", "VacuumPermittivity", "RegionSymmetry",
-            "CoordinateChart", "ElectricPotential", "CurrentDensity", "ElectricCurrentDensity")
+            "CoordinateChart", "ElectricPotential", "CurrentDensity")
 
 
 @fn("ElectricCurrentPDEComponent", area=AREA, status="added",
@@ -754,7 +753,7 @@ def _electric_current_component(vars_: Expr, pars: Assoc) -> Expr:
     return _finish(_plus(*parts), subs)
 
 
-_MS_KEYS = ("Magnetization", "RelativePermeability", "RecoilPermeability", "RemanentMagneticFluxDensity",
+_MS_KEYS = ("Magnetization", "RelativePermeability", "RemanentMagneticFluxDensity",
             "Thickness", "CrossSectionalArea", "VacuumPermeability", "RegionSymmetry", "CoordinateChart", "Material",
             "MagneticFluxDensity", "MagneticPotential")
 
@@ -763,7 +762,7 @@ _MS_KEYS = ("Magnetization", "RelativePermeability", "RecoilPermeability", "Rema
     notes="MagnetostaticPDEComponent[vars, pars] (stationary scalar potential Vm) -> Inactive[Div][-(d mu0 mur) . "
           "Inactive[Grad][Vm, X], X] + Inactive[Div][d mu0 M, X]; with \"RemanentMagneticFluxDensity\" Br -> "
           "Inactive[Div][-(d mu0 murec) . Inactive[Grad][Vm, X], X] + Inactive[Div][d Br, X] "
-          "(\"RecoilPermeability\" murec, default 1); \"VacuumPermeability\" mu0 defaults to the exact 4 Pi 10^-7 = "
+          "(\"RelativePermeability\" is then the recoil permeability murec, as documented); \"VacuumPermeability\" mu0 defaults to the exact 4 Pi 10^-7 = "
           "Pi/2500000; giving both M and Br raises ValueError; time-dependent vars raise NotImplementedError. "
           "Check: reference (Wolfram documentation forms) in tests.")
 def _magnetostatic_component(vars_: Expr, pars: Assoc) -> Expr:
@@ -777,7 +776,7 @@ def _magnetostatic_component(vars_: Expr, pars: Assoc) -> Expr:
         raise ValueError(f"{fname}: give either \"Magnetization\" or \"RemanentMagneticFluxDensity\", not both")
     if "RemanentMagneticFluxDensity" in keys:
         Br = _vector(keys["RemanentMagneticFluxDensity"], V.n, fname, "\"RemanentMagneticFluxDensity\"")
-        c = ev(Expr("Times", d, mu0, _p(keys, "RecoilPermeability", 1)))
+        c = ev(Expr("Times", d, mu0, _p(keys, "RelativePermeability", 1)))    # recoil permeability
         src = ev(Expr("Times", d, Br))
     else:
         M = _vector(_p(keys, "Magnetization", _zero_vec(V.n)), V.n, fname, "\"Magnetization\"")
@@ -786,9 +785,9 @@ def _magnetostatic_component(vars_: Expr, pars: Assoc) -> Expr:
     return _finish(_plus(_diffusion(V.u, V.XL, c, fname, axi), _derivterm(V.XL, src, fname, axi)), subs)
 
 
-_MAG_KEYS = ("ExternalCurrentSource", "Magnetization", "RelativePermeability", "RecoilPermeability",
+_MAG_KEYS = ("ExternalCurrentSource", "Magnetization", "RelativePermeability",
              "RemanentMagneticFluxDensity", "VacuumPermeability", "ElectricalConductivity", "CoordinateChart",
-             "Material", "MagneticFluxDensity", "MagneticPotential", "SurfaceCurrentDensity")
+             "Material", "MagneticFluxDensity", "MagneticPotential")
 
 
 def _curlcurl_rows(As, X, nu):
@@ -824,11 +823,10 @@ def _magnetic_component(vars_: Expr, pars: Assoc) -> Expr:
     mu0 = _p(keys, "VacuumPermeability", MU0)
     if "Magnetization" in keys and "RemanentMagneticFluxDensity" in keys:
         raise ValueError(f"{fname}: give either \"Magnetization\" or \"RemanentMagneticFluxDensity\", not both")
-    for k in ("RelativePermeability", "RecoilPermeability"):
-        if k in keys and is_list(keys[k]):
-            raise NotImplementedError(f"{fname}: only scalar \"{k}\" values are supported")
+    if "RelativePermeability" in keys and is_list(keys["RelativePermeability"]):
+        raise NotImplementedError(f"{fname}: only scalar \"RelativePermeability\" values are supported")
     if "RemanentMagneticFluxDensity" in keys:
-        mu = ev(Expr("Times", mu0, _p(keys, "RecoilPermeability", 1)))
+        mu = ev(Expr("Times", mu0, _p(keys, "RelativePermeability", 1)))      # recoil permeability
         M = ev(Expr("Times", Expr("Power", mu, -1),
                     _vector(keys["RemanentMagneticFluxDensity"], 3, fname, "\"RemanentMagneticFluxDensity\"")))
     else:
@@ -1908,7 +1906,7 @@ def _scipy_linalg(fname):
     try:
         import scipy.linalg as sl
     except ImportError:
-        raise NotImplementedError(f"{fname} requires SciPy (pip install scipy)")
+        raise NotImplementedError(f"{fname}: requires SciPy (pip install scipy)")
     return sl
 
 
@@ -2334,7 +2332,8 @@ def _assemble(P, Dz, eigen):
                     B[idx] = 0
                 done.add(idx)
     # periodic conditions and two-point equations (1-D)
-    for c in P.extra:
+    # value conditions first, so a derivative two-point condition can be recognised as part of a periodic pair
+    for c in sorted(P.extra, key=_has_derivative):
         if _head_is(c, "PeriodicBoundaryCondition") or _head_is(c, "Equal"):
             if P.region.dim != 1:
                 raise NotImplementedError(f"{fname}: periodic and pointwise conditions are only supported in 1-D")
@@ -2379,6 +2378,12 @@ def _nv_parts(P, val):
     if P.t is not None and (q.has(tv[0]) or c0.has(tv[0])):
         raise NotImplementedError(f"{fname}: time-dependent Neumann values are not supported")
     return q, c0
+
+
+def _has_derivative(e) -> bool:
+    if isinstance(e, Expr):
+        return e.head == "Derivative" or _has_derivative(e.head) or any(_has_derivative(a) for a in e.args)
+    return False
 
 
 def _point_condition(P, Dz, c, A, B, rhs, done, eigen):
@@ -2454,12 +2459,14 @@ def _point_condition(P, Dz, c, A, B, rhs, done, eigen):
     ee = sp.expand(e.xreplace(syms))
     row = np.zeros(Dz.size, dtype=complex)
     pts_used = set()
+    coef = {}
     for atom, sy in syms.items():
         cf = ee.coeff(sy)
         if cf.free_symbols & set(syms.values()) or cf.has(uf):
             raise NotImplementedError(f"{fname}: boundary conditions must be linear")
         k, i_ = reps[atom]
         pts_used.add(i_)
+        coef[(k, i_)] = coef.get((k, i_), 0) + complex(sp.N(cf))
         Dk = Dz.Dk.get((k,))
         if Dk is None:
             Dk = np.linalg.matrix_power(Dz.Dk[(1,)], k)
@@ -2471,21 +2478,37 @@ def _point_condition(P, Dz, c, A, B, rhs, done, eigen):
     if not pts_used:
         raise ValueError(f"{fname}: the condition {c} does not involve {P.uname}")
     if len(pts_used) == 2:
-        # u[a] == k u[b]: periodic-type identification of values and fluxes
-        r0, rN = row[0], row[N]
-        if np.count_nonzero(np.abs(row) > 1e-14) != 2 or abs(c0) > 0:
-            raise NotImplementedError(f"{fname}: two-point conditions must have the form u[a] == k u[b]")
-        m = -rN / r0                       # u(a) == m u(b); fluxes then satisfy F(a) == m F(b)
-        fa_, _ = flux_full(0)
-        fb_, _ = flux_full(N)
-        for i_, r in ((N, row / r0), (0, fa_ - m * fb_)):
-            if i_ in done:
-                raise ValueError(f"{fname}: conflicting conditions at an end point")
-            A[i_] = r
-            rhs[i_] = 0
-            if eigen:
-                B[i_] = 0
-            done.add(i_)
+        ks = {k for k, _ in coef}
+        if len(ks) != 1 or len(coef) != 2 or abs(c0) > 0:
+            raise NotImplementedError(f"{fname}: two-point conditions must have the form u[a] == m u[b] or "
+                                      f"Derivative[k][u][a] == m Derivative[k][u][b]")
+        (k,) = ks
+        m = -coef[(k, N)] / coef[(k, 0)]       # D^k u(a) == m D^k u(b)
+        if k == 0:
+            # u[a] == m u[b] (Wolfram: a periodic-type condition): values and fluxes are identified
+            fa_, _ = flux_full(0)
+            fb_, _ = flux_full(N)
+            for i_, r in ((N, row / row[0]), (0, fa_ - m * fb_)):
+                if i_ in done:
+                    raise ValueError(f"{fname}: conflicting conditions at an end point")
+                A[i_] = r
+                rhs[i_] = 0
+                if eigen:
+                    B[i_] = 0
+                done.add(i_)
+            done.add(("periodic", round(m.real, 12), round(m.imag, 12)))
+            return
+        if k == 1 and ("periodic", round(m.real, 12), round(m.imag, 12)) in done:
+            return                             # u'[a] == m u'[b] is already part of the periodic identification
+        free = [i_ for i_ in (N, 0) if i_ not in done]
+        if not free:
+            raise ValueError(f"{fname}: too many boundary conditions")
+        i_ = free[0]
+        A[i_] = row
+        rhs[i_] = 0
+        if eigen:
+            B[i_] = 0
+        done.add(i_)
         return
     (i_,) = pts_used
     if i_ in done:
@@ -2918,21 +2941,24 @@ for _name, _note in (
          "and restitution) in tests."),
         ("AccuracyGoal",
          "AccuracyGoal -> a (option): honoured by NDSolve / NDSolveValue (absolute tolerance 10^-a, Infinity -> "
-         "pure relative control) and by the existing FindRoot, NIntegrate, NMinimize ... implementations. Check: "
-         "numeric cross-check in tests."),
+         "pure relative control); accepted by the existing NIntegrate / FindRoot / NMinimize implementations. "
+         "Check: numeric cross-check in tests (looser goals take fewer NDSolve steps)."),
         ("PrecisionGoal",
          "PrecisionGoal -> p (option): honoured by NDSolve / NDSolveValue (relative tolerance max(10^-p, 2.3*10^-14)) "
-         "and by NIntegrate, FindRoot ... Check: numeric cross-check in tests."),
+         "; accepted by NIntegrate / FindRoot. Check: numeric cross-check in tests (looser goals take fewer "
+         "NDSolve steps)."),
         ("WorkingPrecision",
          "WorkingPrecision -> MachinePrecision (option): NDSolve and the W26 solvers compute in machine precision "
          "(other values raise NotImplementedError); higher precision is honoured by NIntegrate / FindRoot / N where "
          "implemented. Check: reference in tests."),
         ("MaxIterations",
-         "MaxIterations -> n (option): honoured by FindRoot, FindMinimum, NMinimize ... (iteration cap; exceeding it "
-         "raises). Check: reference in tests."),
+         "MaxIterations -> n (option): an iteration cap honoured by MandelbrotSetIterationCount, "
+         "MandelbrotSetMemberQ, MandelbrotSetDistance and BayesianMinimization; NDSolve has no iterations (use "
+         "MaxSteps) and rejects it. Check: reference in tests."),
         ("MaxStepFraction",
-         "MaxStepFraction -> f (option, 0 < f <= 1): NDSolve limits each step to f times the integration range. "
-         "Check: numeric cross-check in tests."),
+         "MaxStepFraction -> f (option, 0 < f <= 1, default 1/10 as in Wolfram; Infinity = no limit): NDSolve "
+         "limits each step to f times the integration range. Check: numeric cross-check in tests (StepMonitor "
+         "step spacing)."),
         ("MaxStepSize",
          "MaxStepSize -> h (option): NDSolve limits each step to h (SciPy max_step); Infinity / Automatic = no limit. "
          "Check: numeric cross-check in tests (StepMonitor step spacing)."),
@@ -2944,17 +2970,18 @@ for _name, _note in (
          "StartingStepSize -> h (option): NDSolve's first step size (SciPy first_step); larger than the range raises "
          "ValueError. Check: numeric cross-check in tests."),
         ("Tolerance",
-         "Tolerance -> t (option): honoured by SingularValueList, MatrixRank, NullSpace, Orthogonalize and the other "
-         "linear-algebra heads that document it. Check: reference in tests."),
+         "Tolerance -> t (option): honoured by SingularValueList (singular values below t times the largest are "
+         "dropped) and the other linear-algebra heads that document it. Check: reference in tests."),
         ("EvaluationMonitor",
          "EvaluationMonitor :> expr (option): evaluated at every function evaluation by NDSolve (with x and y[x] "
-         "replaced by the current values) and by FindRoot, NIntegrate, NMinimize ... Check: reference in tests."),
+         "replaced by the current values); FindRoot / NIntegrate / NSolve raise NotImplementedError for it rather "
+         "than ignore it. Check: reference in tests."),
         ("StepMonitor",
          "StepMonitor :> expr (option): evaluated after every accepted step of NDSolve (x, y[x], y'[x] replaced by "
-         "the step values; the monitor runs once the integration finishes) and by FindRoot, FindMinimum ... Check: "
-         "reference in tests."),
+         "the step values; the monitor runs once the integration finishes); FindRoot / NIntegrate / NSolve raise "
+         "NotImplementedError for it rather than ignore it. Check: reference in tests."),
         ("VerifyConvergence",
-         "VerifyConvergence -> True | False (option): honoured by Sum / NSum / Product convergence checks where "
-         "implemented. Check: reference in tests."),
+         "VerifyConvergence -> True | False (option): accepted by NSum, which raises ValueError for a divergent "
+         "sum such as Sum[1/n]. Check: reference in tests."),
 ):
     record(_name, AREA, "added", _note)
