@@ -538,3 +538,629 @@ def _histogram(data: ListOf[Real] | ListOf[ListOf[Real]], *rest: Expr | Option) 
     bspec = pos[1] if len(pos) > 1 else None
     hspec = pos[2] if len(pos) > 2 else None
     return histogram_1d(fname, pos[0], bspec, hspec, o, gopts, orient=orient.name)
+
+
+# ───────────────────────────── 2-D histograms ─────────────────────────────
+
+def values_2d(d, fname):
+    """[(x, y)] of a list of pairs (missing / non-real pairs dropped; symbolic -> Unevaluated)."""
+    d, _st, _w = P2._unwrap(d, fname)
+    if isinstance(d, Expr) and d.head in ("WeightedData", "Tabular", "Dataset", "TimeSeries", "QuantityArray"):
+        raise NotImplementedError(f"{fname}: {d.head} data is not supported")
+    if not K.is_list(d):
+        if isinstance(d, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of pairs {{x, y}}, not {K_input(d)}")
+    out = []
+    for p in d.args:
+        if is_missing(p):
+            continue
+        if not K.is_list(p) or len(p.args) != 2:
+            if isinstance(p, (int, float, str)) or K.is_list(p):
+                raise ValueError(f"{fname}: the data must be a list of pairs {{x, y}}; {K_input(p)} is not a pair")
+            if isinstance(p, (Symbol, Expr)):
+                raise Unevaluated()
+        xs = [P2.scalar(c, fname) for c in p.args]
+        if any(v is None for v in xs):
+            continue
+        out.append(tuple(_frac(c) if isinstance(_frac(c), Fraction) else v for c, v in zip(p.args, xs)))
+    if not out:
+        raise ValueError(f"{fname}: the data has no numeric pairs")
+    return out
+
+
+def _is_1d_spec(s):
+    return (s is None or is_sym(s, "Automatic") or isinstance(s, str) or (K.is_int(s) and not isinstance(s, bool))
+            or K.is_list(s) or isinstance(s, Symbol) or (isinstance(s, Expr) and s.head == "Function"))
+
+
+def split_2d_spec(spec, fname):
+    """(xspec, yspec) of a 2-D bin specification."""
+    if K.is_list(spec) and len(spec.args) == 2 and spec.args[0] != "Log" and all(_is_1d_spec(a) for a in spec.args) \
+            and not all(num(a) is not None and not K.is_int(a) for a in spec.args):
+        return spec.args[0], spec.args[1]
+    return spec, spec
+
+
+def heights_2d(C, xe, ye, ntotal, hspec, fname):
+    np = _np()
+    C = np.array(C, dtype=float)
+    wx = np.array([float(b) - float(a) for a, b in zip(xe, xe[1:])])
+    wy = np.array([float(b) - float(a) for a, b in zip(ye, ye[1:])])
+    area = np.outer(wx, wy)
+    N = float(ntotal) or 1.0
+    if hspec is None or is_sym(hspec, "Automatic"):
+        hspec = "Count"
+    if isinstance(hspec, str):
+        if hspec == "Count":
+            return C
+        if hspec == "Probability":
+            return C / N
+        if hspec == "Intensity":
+            return C / area
+        if hspec in ("PDF", "ProbabilityDensity"):
+            return C / (N * area)
+        if hspec in ("CumulativeCount", "CDF"):
+            cum = C.cumsum(axis=0).cumsum(axis=1)
+            return cum if hspec == "CumulativeCount" else cum / N
+        if hspec in ("SurvivalCount", "SF"):
+            sv = C[::-1, ::-1].cumsum(axis=0).cumsum(axis=1)[::-1, ::-1]
+            return sv if hspec == "SurvivalCount" else sv / N
+        if hspec in ("HF", "CHF"):
+            raise NotImplementedError(f"{fname}: the height specification {hspec!r} is not supported")
+        raise ValueError(f"{fname}: unknown height specification {hspec!r}")
+    if K.is_list(hspec) and len(hspec.args) == 2 and hspec.args[0] == "Log":
+        raise NotImplementedError(f"{fname}: logarithmic height specifications are not supported")
+    if isinstance(hspec, Symbol) or (isinstance(hspec, Expr) and hspec.head == "Function"):
+        r = ev(Expr(hspec, bins_expr(xe), bins_expr(ye), L(*[L(*[int(c) for c in row]) for row in C])))
+        try:
+            H = np.array([[num(v) for v in row.args] for row in r.args], dtype=float)
+        except (AttributeError, TypeError, ValueError):
+            raise ValueError(f"{fname}: the height function must return a matrix of numbers, not {K_input(r)}")
+        if H.shape != C.shape or not np.isfinite(H).all():
+            raise ValueError(f"{fname}: the height function must return a {C.shape[0]} x {C.shape[1]} matrix of "
+                             "real numbers")
+        return H
+    raise ValueError(f"{fname}: {K_input(hspec)} is not a valid height specification")
+
+
+def hist2d(pairs, bspec, hspec, fname, data_expr=None):
+    """(x edges, y edges, heights[i][j]) with counts of x in [x_i, x_(i+1)) and y in [y_j, y_(j+1))."""
+    sx, sy = split_2d_spec(bspec, fname)
+    xs = [p[0] for p in pairs]
+    ys = [p[1] for p in pairs]
+    xe = bin_edges(xs, sx, fname)
+    ye = bin_edges(ys, sy, fname)
+    import bisect
+    fx, fy = [float(e) for e in xe], [float(e) for e in ye]
+    C = [[0] * (len(ye) - 1) for _ in range(len(xe) - 1)]
+    for x, y in pairs:
+        if _lt(x, xe[0]) or not _lt(x, xe[-1]) or _lt(y, ye[0]) or not _lt(y, ye[-1]):
+            continue
+        i = bisect.bisect_right(fx, float(x)) - 1
+        j = bisect.bisect_right(fy, float(y)) - 1
+        # exact edges: re-check with exact comparisons
+        while i > 0 and _lt(x, xe[i]):
+            i -= 1
+        while i < len(xe) - 2 and not _lt(x, xe[i + 1]):
+            i += 1
+        while j > 0 and _lt(y, ye[j]):
+            j -= 1
+        while j < len(ye) - 2 and not _lt(y, ye[j + 1]):
+            j += 1
+        C[i][j] += 1
+    H = heights_2d(C, xe, ye, len(pairs), hspec, fname)
+    return xe, ye, H
+
+
+_H2_NOTE = (" 2-D bin specifications: one 1-D specification for both coordinates (Automatic, n, {dx}, {min, max, "
+            "dx}, {{b1, ...}}, a rule name, {\"Log\", spec}) or {xspec, yspec}; heights \"Count\", \"Probability\", "
+            "\"Intensity\" (count/area), \"PDF\", \"CumulativeCount\"/\"CDF\" and \"SurvivalCount\"/\"SF\" (2-D "
+            "cumulative sums) or fh[xbins, ybins, counts]; \"HF\", \"CHF\" and log heights raise NotImplementedError. "
+            "Bins are half-open; pairs with missing or non-real coordinates are dropped.")
+
+_H2_DEFAULTS = dict(_HIST_DEFAULTS)
+_H2_DEFAULTS.update({"ColorFunction": AUTO, "ColorFunctionScaling": True, "PlotLegends": NONE, "Mesh": NONE,
+                     "MeshStyle": AUTO, "BubbleSizes": AUTO, "BubbleScale": AUTO, "PlotStyle": AUTO,
+                     "ClippingStyle": NONE})
+
+
+def _cf_values(o, fname, H):
+    """Colours rgb(cf(t)) for the heights (scaled to [0, 1] by the maximum unless ColorFunctionScaling False)."""
+    np = _np()
+    cf = color_function(o.get("ColorFunction", AUTO), fname, lambda t: blend(DENSITY_GRADIENT, t))
+    hmin = float(np.min(H[H > 0])) if (H > 0).any() else 0.0
+    hmax = float(np.max(H)) if H.size else 1.0
+    scale = o.get("ColorFunctionScaling", True) is not False
+
+    def col(h):
+        if not scale:
+            return rgb(cf(h))
+        t = (h - hmin) / (hmax - hmin) if hmax > hmin else 1.0
+        return rgb(cf(t))
+    return col
+
+
+def _hist2d_args(args, fname):
+    pos, opts = split_args(args, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _H2_DEFAULTS)
+    return pos, o, gopts
+
+
+@fn("Histogram3D", area=AREA, status="added",
+    notes="Histogram3D[{{x1, y1}, ...}], [data, bspec], [data, bspec, hspec] and lists of datasets: Graphics3D[{{"
+          "style, Cuboid[{x_i, y_j, 0}, {x_(i+1), y_(j+1), h_ij}], ...}, ...}] (zero bins omitted), BoxRatios {1, 1, "
+          "0.4}, Axes." + _H2_NOTE + " Options: ChartStyle, ChartBaseStyle, ChartLegends, PlotRange and Graphics3D "
+          "options; others raise NotImplementedError. Symbolic data stays unevaluated. Check: exact (integer "
+          "counts compared with independent counting in tests).")
+def _histogram3d(data: MatrixOf[Real] | ListOf[MatrixOf[Real]], *rest: Expr | Option) -> Expr:
+    fname = "Histogram3D"
+    pos, opts = split_args((data,) + rest, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _HIST_DEFAULTS, dim=3)
+    _unsupported(o, fname, ("ChartStyle", "ChartBaseStyle", "ChartLegends"))
+    du, _, _ = P2._unwrap(pos[0], fname)
+    multi = K.is_list(du) and du.args and all(K.is_list(a) and a.args and all(K.is_list(p) for p in a.args)
+                                              for a in du.args)
+    sets = [values_2d(a, fname) for a in du.args] if multi else [values_2d(pos[0], fname)]
+    allp = [p for s in sets for p in s]
+    bspec = pos[1] if len(pos) > 1 else None
+    hspec = pos[2] if len(pos) > 2 else None
+    sx, sy = split_2d_spec(bspec, fname)
+    xe = bin_edges([p[0] for p in allp], sx, fname)
+    ye = bin_edges([p[1] for p in allp], sy, fname)
+    fixed = L(L(L(*[_out(e) for e in xe])), L(L(*[_out(e) for e in ye])))
+    styles = chart_styles(o, len(sets), fname, opacity=0.5 if len(sets) > 1 else None)
+    content, hmax = [], 0.0
+    for s, st in zip(sets, styles):
+        _, _, H = hist2d(s, fixed, hspec, fname)
+        cubes = []
+        for i in range(len(xe) - 1):
+            for j in range(len(ye) - 1):
+                h = float(H[i][j])
+                if h == 0:
+                    continue
+                hmax = max(hmax, h)
+                cubes.append(Expr("Cuboid", pt(xe[i], ye[j], 0.0), pt(xe[i + 1], ye[j + 1], h)))
+        if st is not None:
+            content.append(L(st, *cubes))
+    r = P2.resolve_plot_range(o["PlotRange"], fname, [(fval(xe[0]), fval(xe[-1])), (fval(ye[0]), fval(ye[-1])),
+                                                      (0.0, hmax or 1.0)], dims=3)
+    g = finish_graphics(L(*content), gopts, [("Axes", True), ("BoxRatios", L(1, 1, 0.4)),
+                                             ("PlotRange", range_expr(r))], dim=3)
+    return _legend(g, o, styles, fname)
+
+
+def density_hist_content(pairs, bspec, hspec, o, fname):
+    xe, ye, H = hist2d(pairs, bspec, hspec, fname)
+    col = _cf_values(o, fname, H)
+    content = []
+    for i in range(len(xe) - 1):
+        for j in range(len(ye) - 1):
+            h = float(H[i][j])
+            if h == 0:
+                continue
+            content.append(L(col(h), Expr("Rectangle", pt(xe[i], ye[j]), pt(xe[i + 1], ye[j + 1]))))
+    return content, xe, ye, H
+
+
+@fn("DensityHistogram", area=AREA, status="added",
+    notes="DensityHistogram[{{x1, y1}, ...}], [data, bspec], [data, bspec, hspec]: Graphics[{{colour_ij, "
+          "Rectangle[{x_i, y_j}, {x_(i+1), y_(j+1)}]}, ...}] with colour ColorFunction((h - hmin)/(hmax - hmin)) "
+          "(hmin the smallest non-zero height; default gradient as DensityPlot, an approximation of Wolfram's); "
+          "empty bins are not drawn; Frame, AspectRatio 1." + _H2_NOTE + " Options: ColorFunction (colour head "
+          "or pure function), ColorFunctionScaling, PlotRange and Graphics options; others raise "
+          "NotImplementedError. Check: exact (counts compared with independent counting in tests).")
+def _densityhistogram(data: MatrixOf[Real], *rest: Expr | Option) -> Expr:
+    fname = "DensityHistogram"
+    pos, o, gopts = _hist2d_args((data,) + rest, fname)
+    _unsupported(o, fname, ("ColorFunction", "ColorFunctionScaling"))
+    pairs = values_2d(pos[0], fname)
+    content, xe, ye, _ = density_hist_content(pairs, pos[1] if len(pos) > 1 else None,
+                                              pos[2] if len(pos) > 2 else None, o, fname)
+    r = _range_2d(o, fname, (fval(xe[0]), fval(xe[-1])), (fval(ye[0]), fval(ye[-1])))
+    return finish_graphics(L(*content), gopts, [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr(r)),
+                                                ("PlotRangePadding", 0)])
+
+
+def _bubble_sizes(spec, fname, default=(0.2, 1.0)):
+    if spec is None or is_sym(spec, "Automatic"):
+        return default
+    if K.is_list(spec) and len(spec.args) == 2:
+        a = num(spec.args[0])
+        b = num(spec.args[1])
+        if a is None or b is None or a < 0 or b < 0:
+            raise ValueError(f"{fname}: BubbleSizes must be {{smin, smax}} with non-negative numbers")
+        return a, b
+    raise NotImplementedError(f"{fname}: BubbleSizes -> {K_input(spec)} is not supported; give {{smin, smax}}")
+
+
+def _bubble_scale(spec, fname, default):
+    if spec is None or is_sym(spec, "Automatic"):
+        return default
+    if spec in ("Diameter", "Area"):
+        return spec
+    raise NotImplementedError(f"{fname}: BubbleScale -> {K_input(spec)} is not supported (\"Diameter\", \"Area\")")
+
+
+def bubble_diameters(zs, smin, smax, scale):
+    """Diameters as fractions in [smin, smax]: the measure (diameter, or area for "Area") is interpolated linearly
+    between the smallest and largest z."""
+    zlo, zhi = min(zs), max(zs)
+    out = []
+    for z in zs:
+        t = (z - zlo) / (zhi - zlo) if zhi > zlo else 1.0
+        if scale == "Area":
+            out.append(math.sqrt(smin ** 2 + t * (smax ** 2 - smin ** 2)))
+        else:
+            out.append(smin + t * (smax - smin))
+    return out
+
+
+@fn("BubbleHistogram", area=AREA, status="added",
+    notes="BubbleHistogram[{{x1, y1}, ...}], [data, bspec], [data, bspec, hspec]: Graphics[{{colour, Disk[centre_ij, "
+          "r_ij]}, ...}] with one bubble per non-empty bin at its centre. As documented, BubbleScale \"Diameter\" "
+          "(default) makes the diameter proportional to the height scale and BubbleSizes {0.2, 1} (default) maps "
+          "the smallest height to 20% and the largest to 100% of the bin size (the smaller bin side); here the "
+          "diameter (or area, BubbleScale -> \"Area\") is interpolated linearly between those. Colour "
+          "ColorFunction of the scaled height (default gradient as DensityHistogram); Frame, AspectRatio 1."
+          + _H2_NOTE + " Options: BubbleSizes, BubbleScale, ColorFunction, ColorFunctionScaling, PlotRange and "
+          "Graphics options; others raise NotImplementedError. Check: exact (counts) and reference (bubble "
+          "diameters from the documented size rule in tests).")
+def _bubblehistogram(data: MatrixOf[Real], *rest: Expr | Option) -> Expr:
+    fname = "BubbleHistogram"
+    pos, o, gopts = _hist2d_args((data,) + rest, fname)
+    _unsupported(o, fname, ("ColorFunction", "ColorFunctionScaling", "BubbleSizes", "BubbleScale"))
+    pairs = values_2d(pos[0], fname)
+    xe, ye, H = hist2d(pairs, pos[1] if len(pos) > 1 else None, pos[2] if len(pos) > 2 else None, fname)
+    smin, smax = _bubble_sizes(o["BubbleSizes"], fname)
+    scale = _bubble_scale(o["BubbleScale"], fname, "Diameter")
+    col = _cf_values(o, fname, H)
+    cells = [(i, j, float(H[i][j])) for i in range(len(xe) - 1) for j in range(len(ye) - 1) if H[i][j] != 0]
+    content = []
+    if cells:
+        ds = bubble_diameters([c[2] for c in cells], smin, smax, scale)
+        for (i, j, h), dfrac in zip(cells, ds):
+            w = min(fval(xe[i + 1]) - fval(xe[i]), fval(ye[j + 1]) - fval(ye[j]))
+            c = ((fval(xe[i]) + fval(xe[i + 1])) / 2, (fval(ye[j]) + fval(ye[j + 1])) / 2)
+            content.append(L(col(h), GRAY_EDGE, Expr("Disk", pt(*c), fl(dfrac * w / 2))))
+    r = _range_2d(o, fname, (fval(xe[0]), fval(xe[-1])), (fval(ye[0]), fval(ye[-1])))
+    return finish_graphics(L(*content), gopts, [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr(r)),
+                                                ("PlotRangePadding", 0)])
+
+
+def _matrix_columns(data, fname):
+    du, _, _ = P2._unwrap(data, fname)
+    if not K.is_list(du) or not du.args:
+        if isinstance(du, (Symbol, Expr)) and not K.is_list(du):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a matrix {{{{y11, ..., y1n}}, ...}}, not {K_input(du)}")
+    if not all(K.is_list(r) for r in du.args):
+        raise ValueError(f"{fname}: the data must be a matrix (a list of rows)")
+    n = len(du.args[0].args)
+    if n < 2 or any(len(r.args) != n for r in du.args):
+        raise ValueError(f"{fname}: every row must have the same number (>= 2) of columns")
+    return [[r.args[j] for r in du.args] for j in range(n)]
+
+
+def pairwise_grid(fname, data, opts, panel, diag):
+    """GraphicsGrid of n x n panels: panel {i, j} (i != j) = panel(points {y_kj, y_ki}), diagonal = diag(column i)."""
+    o, gopts = split_options(fname, opts, _H2_DEFAULTS)
+    _unsupported(o, fname, ("ColorFunction", "ColorFunctionScaling", "ChartStyle"))
+    cols = _matrix_columns(data, fname)
+    n = len(cols)
+    rows = []
+    for i in range(n):
+        row = []
+        for j in range(n):
+            if i == j:
+                vals = values_of(L(*cols[i]), fname)
+                row.append(diag(vals, o))
+                continue
+            pairs = []
+            for a, b in zip(cols[j], cols[i]):
+                xa, xb = P2.scalar(a, fname), P2.scalar(b, fname)
+                if xa is not None and xb is not None:
+                    pairs.append((_frac(a) if isinstance(_frac(a), Fraction) else xa,
+                                  _frac(b) if isinstance(_frac(b), Fraction) else xb))
+            row.append(panel(pairs, o))
+        rows.append(L(*row))
+    return Expr("GraphicsGrid", L(*rows), *gopts)
+
+
+def _diag_hist(fname):
+    def diag(vals, o):
+        g = histogram_1d(fname, L(*[_out(v) for v in vals]), None, None, o, [], "Bottom")
+        return g
+    return diag
+
+
+@fn("PairwiseDensityHistogram", area=AREA, status="added",
+    notes="PairwiseDensityHistogram[{{y11, ..., y1n}, ...}]: GraphicsGrid of n x n panels; panel {i, j} (i != j) is "
+          "the DensityHistogram (automatic bins) of the points {y_kj, y_ki}, the diagonal panel i the Histogram of "
+          "column i. Rows with missing values in a pair are dropped for that panel. Options: ColorFunction, "
+          "ColorFunctionScaling, ChartStyle (diagonal histograms) and GraphicsGrid options; others raise "
+          "NotImplementedError. Check: exact (panel counts compared with DensityHistogram of the column pairs in "
+          "tests).")
+def _pairwisedensityhistogram(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "PairwiseDensityHistogram"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+
+    def panel(pairs, o):
+        content, xe, ye, _ = density_hist_content(pairs, None, None, o, fname)
+        return Expr("Graphics", L(*content), Expr("Rule", Symbol("Frame"), True),
+                    Expr("Rule", Symbol("AspectRatio"), 1),
+                    Expr("Rule", Symbol("PlotRange"), range_expr([(fval(xe[0]), fval(xe[-1])),
+                                                                  (fval(ye[0]), fval(ye[-1]))])))
+    return pairwise_grid(fname, pos[0], opts_, panel, _diag_hist(fname))
+
+
+# ───────────────────────────── paired, categorical and date histograms ─────────────────────────────
+
+@fn("PairedHistogram", area=AREA, status="added",
+    notes="PairedHistogram[data1, data2], [data1, data2, bspec], [data1, data2, bspec, hspec] and lists of datasets "
+          "on each side: back-to-back histograms with the bins along the vertical axis, data1 to the left "
+          "(Rectangle[{-h_i, b_i}, {0, b_(i+1)}]) and data2 to the right (Rectangle[{0, b_i}, {h_i, b_(i+1)}]); "
+          "automatic bins are computed from all datasets combined (as documented). " + _HIST_NOTE + " Options: "
+          "ChartStyle, ChartBaseStyle, ChartLegends, PlotRange and Graphics options; others raise "
+          "NotImplementedError. Check: exact (counts compared with Histogram of each side in tests).")
+def _pairedhistogram(d1: ListOf[Real], d2: ListOf[Real], *rest: Expr | Option) -> Expr:
+    fname = "PairedHistogram"
+    pos, opts = split_args((d1, d2) + rest, fname, 2, 4)
+    o, gopts = split_options(fname, opts, _HIST_DEFAULTS)
+    _unsupported(o, fname, ("ChartStyle", "ChartBaseStyle", "ChartLegends"))
+    left = datasets_1d(pos[0], fname)
+    right = datasets_1d(pos[1], fname)
+    allv = [v for vs, _ in left + right for v in vs]
+    edges = bin_edges(allv, pos[2] if len(pos) > 2 else None, fname)
+    widths = [float(b) - float(a) for a, b in zip(edges, edges[1:])]
+    hspec = pos[3] if len(pos) > 3 else None
+    nl, nr = len(left), len(right)
+    styles = chart_styles(o, nl + nr, fname, opacity=0.5 if max(nl, nr) > 1 else None)
+    content, hmax = [], 0.0
+    for side, sets, off in ((-1, left, 0), (1, right, nl)):
+        for k0, (vs, st) in enumerate(sets):
+            k = off + k0
+            hs = heights(bin_counts(vs, edges), widths, len(vs), hspec, fname, bins_expr(edges))
+            rs = []
+            for i, h in enumerate(hs):
+                if h == 0:
+                    continue
+                hmax = max(hmax, abs(h))
+                a, b = fval(edges[i]), fval(edges[i + 1])
+                x0, x1 = (min(0.0, side * h), max(0.0, side * h))
+                rs.append(Expr("Rectangle", pt(x0, a), pt(x1, b)))
+            s = styles[k]
+            if s is not None:
+                content.append(L(s, *rs))
+    r = _range_2d(o, fname, (-(hmax or 1.0), hmax or 1.0), (fval(edges[0]), fval(edges[-1])))
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("PlotRange", range_expr(r))])
+    return _legend(g, o, styles, fname)
+
+
+def _category_items(d, fname):
+    d, _st, _w = P2._unwrap(d, fname)
+    if isinstance(d, Expr) and d.head == "Association":
+        d = L(*[v for _, v in P2._assoc_items(d)])
+    if isinstance(d, Expr) and d.head in ("WeightedData", "Tabular", "Dataset", "TimeSeries", "EventSeries"):
+        raise NotImplementedError(f"{fname}: {d.head} data is not supported")
+    if not K.is_list(d):
+        if isinstance(d, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of category values, not {K_input(d)}")
+    out = []
+    for c in d.args:
+        if is_missing(c):
+            continue
+        if isinstance(c, Expr) and c.head in ("Nominal", "Ordinal"):
+            raise NotImplementedError(f"{fname}: {c.head} category values are not supported")
+        out.append(c)
+    return out
+
+
+def _cat_key(c):
+    return K_input(c)
+
+
+@fn("CategoricalHistogram", area=AREA, status="added",
+    notes="CategoricalHistogram[{c1, c2, ...}], [data, spec], [data, spec, hspec] and lists of datasets: one bar per "
+          "category at x = 1, 2, ... (Rectangle[{k - 0.4, 0}, {k + 0.4, h_k}]; several datasets share the slot, "
+          "side by side), with Ticks labelling the categories. Categories (any expressions, compared structurally) "
+          "are in decreasing order of frequency (ties: first appearance) as documented; spec: Automatic, "
+          "\"Decreasing\", \"Increasing\", n (the n most common) or {cat1, cat2, ...} (only these, in this order). "
+          "Heights: \"Count\", \"Probability\" (fraction of all values), \"CumulativeCount\", \"CDF\" (in bar "
+          "order); other specs, Nominal/Ordinal values, OrdinalScale and property associations raise "
+          "NotImplementedError. Missing values are dropped. Options: ChartStyle, ChartBaseStyle, ChartLegends, "
+          "PlotRange and Graphics options. Check: exact (counts compared with Tally in tests).")
+def _categoricalhistogram(data: ListOf[Expr], *rest: Expr | Option) -> Expr:
+    fname = "CategoricalHistogram"
+    pos, opts = split_args((data,) + rest, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _HIST_DEFAULTS)
+    _unsupported(o, fname, ("ChartStyle", "ChartBaseStyle", "ChartLegends"))
+    du, _, _ = P2._unwrap(pos[0], fname)
+    multi = K.is_list(du) and du.args and all(K.is_list(a) for a in du.args)
+    sets = [_category_items(a, fname) for a in du.args] if multi else [_category_items(pos[0], fname)]
+    tally, first, rep = {}, {}, {}
+    for s in sets:
+        for c in s:
+            k = _cat_key(c)
+            tally[k] = tally.get(k, 0) + 1
+            first.setdefault(k, len(first))
+            rep.setdefault(k, c)
+    if not tally:
+        raise ValueError(f"{fname}: the data has no category values")
+    spec = pos[1] if len(pos) > 1 else AUTO
+    keys = sorted(tally, key=lambda k: (-tally[k], first[k]))
+    if is_sym(spec, "Automatic") or spec == "Decreasing":
+        pass
+    elif spec == "Increasing":
+        keys = sorted(tally, key=lambda k: (tally[k], first[k]))
+    elif K.is_int(spec) and not isinstance(spec, bool):
+        keys = keys[:pos_int(spec, fname, "the number of categories")]
+    elif K.is_list(spec):
+        keys = []
+        for c in spec.args:
+            if is_rule(c):
+                raise NotImplementedError(f"{fname}: category labels cat -> lab are not supported")
+            keys.append(_cat_key(c))
+            rep.setdefault(_cat_key(c), c)
+    else:
+        raise NotImplementedError(f"{fname}: the category specification {K_input(spec)} is not supported")
+    hspec = pos[2] if len(pos) > 2 else "Count"
+    if hspec not in ("Count", "Probability", "CumulativeCount", "CDF"):
+        raise NotImplementedError(f"{fname}: the height specification {K_input(hspec)} is not supported")
+    styles = chart_styles(o, len(sets), fname)
+    m = len(sets)
+    w = 0.8 / m
+    content, hmax = [], 0.0
+    for d, (s, st) in enumerate(zip(sets, styles)):
+        cnt = {}
+        for c in s:
+            cnt[_cat_key(c)] = cnt.get(_cat_key(c), 0) + 1
+        hs = [float(cnt.get(k, 0)) for k in keys]
+        if hspec in ("CumulativeCount", "CDF"):
+            acc, cum = 0.0, []
+            for h in hs:
+                acc += h
+                cum.append(acc)
+            hs = cum
+        if hspec in ("Probability", "CDF"):
+            hs = [h / len(s) if s else 0.0 for h in hs]
+        rs = []
+        for k, h in enumerate(hs):
+            if h == 0:
+                continue
+            x0 = k + 1 - 0.4 + d * w
+            rs.append(Expr("Rectangle", pt(x0, 0.0), pt(x0 + w, h)))
+            hmax = max(hmax, h)
+        if st is not None:
+            content.append(L(st, *rs))
+    ticks = L(L(*[L(k + 1, rep[key]) for k, key in enumerate(keys)]), AUTO)
+    r = _range_2d(o, fname, (0.5, len(keys) + 0.5), (0.0, hmax or 1.0))
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("Ticks", ticks),
+                                             ("PlotRange", range_expr(r))])
+    return _legend(g, o, styles, fname)
+
+
+_DATE_UNITS = ("Year", "Quarter", "Month", "Week", "Day", "Hour", "Minute", "Second")
+
+
+def date_values(d, fname):
+    d, _, _ = P2._unwrap(d, fname)
+    if isinstance(d, Expr) and d.head in ("TimeSeries", "EventSeries", "TemporalData", "WeightedData"):
+        raise NotImplementedError(f"{fname}: {d.head} data is not supported")
+    if not K.is_list(d):
+        if isinstance(d, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the data must be a list of dates, not {K_input(d)}")
+    out = []
+    for x in d.args:
+        if is_missing(x):
+            continue
+        out.append(P2.abs_time(x, fname))
+    if not out:
+        raise ValueError(f"{fname}: the data has no dates")
+    return out
+
+
+def _to_dt(t):
+    import datetime as dt
+    return dt.datetime(1900, 1, 1) + dt.timedelta(seconds=t)
+
+
+def _from_dt(d):
+    import datetime as dt
+    return (d - dt.datetime(1900, 1, 1)).total_seconds()
+
+
+def _floor_unit(d, unit, k=1):
+    import datetime as dt
+    if unit == "Year":
+        return dt.datetime(d.year - (d.year % k if k > 1 else 0), 1, 1)
+    if unit == "Quarter":
+        return dt.datetime(d.year, 3 * ((d.month - 1) // 3) + 1, 1)
+    if unit == "Month":
+        return dt.datetime(d.year, d.month, 1)
+    if unit == "Week":
+        day = dt.datetime(d.year, d.month, d.day)
+        return day - dt.timedelta(days=day.weekday())
+    if unit == "Day":
+        return dt.datetime(d.year, d.month, d.day)
+    if unit == "Hour":
+        return dt.datetime(d.year, d.month, d.day, d.hour)
+    if unit == "Minute":
+        return dt.datetime(d.year, d.month, d.day, d.hour, d.minute)
+    return dt.datetime(d.year, d.month, d.day, d.hour, d.minute, d.second)
+
+
+def _add_unit(d, unit, k):
+    import datetime as dt
+    if unit in ("Year", "Quarter", "Month"):
+        months = {"Year": 12, "Quarter": 3, "Month": 1}[unit] * k
+        m = d.month - 1 + months
+        return d.replace(year=d.year + m // 12, month=m % 12 + 1)
+    secs = {"Week": 604800, "Day": 86400, "Hour": 3600, "Minute": 60, "Second": 1}[unit] * k
+    return d + dt.timedelta(seconds=secs)
+
+
+def date_edges(ts, spec, fname):
+    """Calendar bin edges (AbsoluteTime) for a date bin specification."""
+    lo, hi = min(ts), max(ts)
+    if spec is None or is_sym(spec, "Automatic"):
+        span = hi - lo
+        unit = "Year" if span > 3 * 365.25 * 86400 else "Month" if span > 90 * 86400 else \
+            "Day" if span > 3 * 86400 else "Hour" if span > 3 * 3600 else "Minute" if span > 180 else "Second"
+        k = 1
+    elif isinstance(spec, str):
+        if spec not in _DATE_UNITS:
+            raise ValueError(f"{fname}: {spec!r} is not a date bin unit ({', '.join(_DATE_UNITS)})")
+        unit, k = spec, 1
+    elif K.is_list(spec) and len(spec.args) == 2 and isinstance(spec.args[0], str):
+        unit = spec.args[0]
+        if unit not in _DATE_UNITS:
+            raise ValueError(f"{fname}: {unit!r} is not a date bin unit")
+        k = pos_int(spec.args[1], fname, "the number of units per bin")
+        if unit in ("Quarter", "Week") and k != 1:
+            raise NotImplementedError(f"{fname}: multiples of {unit} are not supported")
+    else:
+        raise NotImplementedError(f"{fname}: the date bin specification {K_input(spec)} is not supported; use a "
+                                  "unit such as \"Month\" or {\"Day\", n}")
+    d = _floor_unit(_to_dt(lo), unit)
+    edges = [_from_dt(d)]
+    while edges[-1] <= hi:
+        d = _add_unit(d, unit, k)
+        edges.append(_from_dt(d))
+        if len(edges) > 100000:
+            raise ValueError(f"{fname}: too many date bins; use a coarser unit")
+    return edges
+
+
+@fn("DateHistogram", area=AREA, status="added",
+    notes="DateHistogram[{date1, date2, ...}], [dates, bspec], [dates, bspec, hspec] and lists of datasets: a "
+          "histogram on the AbsoluteTime axis (seconds since 1 Jan 1900, as DateListPlot) with calendar bins: bspec "
+          "\"Year\", \"Quarter\", \"Month\", \"Week\" (ISO weeks from Monday), \"Day\", \"Hour\", \"Minute\", "
+          "\"Second\" or {unit, n}; Automatic picks the unit from the span (> 3 years: Year, > 90 days: Month, > 3 "
+          "days: Day, > 3 hours: Hour, > 3 minutes: Minute, else Second). Dates: DateObject, date lists, date "
+          "strings or AbsoluteTime numbers. Heights as Histogram (\"Count\", \"Probability\", \"PDF\" per second, "
+          "...). Date ticks at whole calendar units. Options as Histogram. Check: exact (calendar bins and counts "
+          "compared with hand-counted dates in tests).")
+def _datehistogram(data: ListOf[Expr], *rest: Expr | Option) -> Expr:
+    fname = "DateHistogram"
+    pos, opts = split_args((data,) + rest, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _HIST_DEFAULTS)
+    _unsupported(o, fname, ("ChartStyle", "ChartBaseStyle", "ChartLegends", "ChartLayout"))
+    du, _, _ = P2._unwrap(pos[0], fname)
+    multi = K.is_list(du) and du.args and all(K.is_list(a) and a.args and all(P2.is_date(x) or is_missing(x)
+                                                                              for x in a.args)
+                                              and not P2.is_date(a) for a in du.args)
+    sets = [date_values(a, fname) for a in du.args] if multi else [date_values(pos[0], fname)]
+    edges = date_edges([t for s in sets for t in s], pos[1] if len(pos) > 1 else None, fname)
+    data_lists = L(*[L(*s) for s in sets]) if multi else L(*sets[0])
+    g = histogram_1d(fname, data_lists, L(L(*edges)), pos[2] if len(pos) > 2 else None, o, gopts)
+    ticks = P2.date_ticks(edges[0], edges[-1])
+    inner = unwrap_legend(g)
+    new = Expr(inner.head, *inner.args, Expr("Rule", Symbol("Ticks"), L(ticks, AUTO)))
+    return new if g is inner else Expr("Legended", new, *g.args[1:])
+
+
+def unwrap_legend(g):
+    return g.args[0] if isinstance(g, Expr) and g.head == "Legended" else g
