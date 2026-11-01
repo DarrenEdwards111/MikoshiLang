@@ -1973,7 +1973,8 @@ def _same_array(a, b) -> bool:
 @fn("SymmetrizedReplacePart", **ADDED,
     notes="SymmetrizedReplacePart[sa, {pos -> val, ...}] replaces independent values (dependent positions are mapped "
           "to their independent component); SymmetrizedReplacePart[array, rules, sym] needs an array that already has the "
-          "symmetry sym (non-symmetric input raises instead of being averaged)")
+          "symmetry sym (non-symmetric input raises instead of being averaged). Check: reference; tests compare "
+          "hand-derived symmetric/antisymmetric results and the raised non-symmetric cases.")
 def _symreplace(x: Expr, rules: Expr, sym: Expr = None) -> Expr:
     parts = _sa_parts(x, "SymmetrizedReplacePart")
     if parts is None:
