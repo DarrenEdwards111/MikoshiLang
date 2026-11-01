@@ -857,9 +857,6 @@ def _nfroots(a):
     return L(-1, 1, *[make_an(th, P, cs) for cs in roots])
 
 
-error("NumberFieldNormRepresentatives", AREA, "NumberFieldNormRepresentatives is not implemented: the Wolfram "
-      "Language's choice of norm "
-      "representatives is not documented")
 
 
 # ─────────────────────────── Root objects ───────────────────────────

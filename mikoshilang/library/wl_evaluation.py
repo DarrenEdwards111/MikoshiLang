@@ -440,7 +440,8 @@ def _install_parse_hook():
 def all_symbols():
     """Full names of every symbol that exists (System` names included)."""
     d = _ctxdata()
-    out = {"System`" + n for n in system_names()} | {MIKOSHI_CONTEXT + n for n in MIKOSHI_NAMES}
+    # internal heads registered with a context (Compile`...) are already full names
+    out = {n if "`" in n else "System`" + n for n in system_names()} | {MIKOSHI_CONTEXT + n for n in MIKOSHI_NAMES}
     out |= {"Global`" + n for n in (d["globals"] | _defined_bare()) if not is_system(n)}
     out |= {n for n in d["symbols"]}
     for k in list(st().own) + list(st().down) + list(st().attrs):
@@ -770,15 +771,26 @@ _CONTINUES = {"PLUS", "MINUS", "TIMES", "DIVIDE", "POWER", "SET", "SETDELAYED", 
               "RIGHTCOMPOSITION", "SPAN"}
 
 
+class StopSource(Exception):
+    """Raised by an expression to end the reading of the current file (X01: PackageInitialize[ctx, None],
+    which evaluates the rest of its file itself); value is the result Get returns."""
+    def __init__(self, value=None):
+        super().__init__("StopSource")
+        self.value = NULL if value is None else value
+
+
 def run_source(text):
     """Parse and evaluate text one top-level expression at a time (as Get does); the last result."""
     from ..parser import parse
     result = NULL
-    for chunk in split_statements(text):
-        e = parse(chunk)
-        if e is None:
-            continue
-        result = E.evaluate(e)
+    try:
+        for chunk in split_statements(text):
+            e = parse(chunk)
+            if e is None:
+                continue
+            result = E.evaluate(e)
+    except StopSource as stop:
+        return stop.value
     return result
 
 
@@ -3058,13 +3070,17 @@ def _trace_parse(rest, fname):
         if isinstance(form, Symbol) and (st().down.get(form.name) or
                                          any(K._def_key(l) == form.name for l, _ in st().exact.values())):
             form = Expr("Alternatives", form, Expr(form.name, Expr("BlankNullSequence")))
-    if "TraceOriginal" in opts and opts["TraceOriginal"] is not False:
-        raise NotImplementedError(f"{fname}: TraceOriginal -> True is not supported")
+    if "TraceOriginal" in opts:
+        to = opts["TraceOriginal"]
+        if not (to is True or to is False or is_sym(to, "Automatic")):
+            raise ValueError(f"{fname}: TraceOriginal must be True, False or Automatic")
     return form, opts
 
 
 def _traced_chain(e, form, opts):
-    chain, r = E.trace_evaluation(e)
+    to = opts.get("TraceOriginal", False)
+    chain, r = E.trace_evaluation(e, original=(True if to is True else ("Automatic" if is_sym(to, "Automatic")
+                                                                        else False)))
     if "TraceOff" in opts:
         chain = _trace_off(chain, opts["TraceOff"])
     if "TraceOn" in opts:
@@ -3191,6 +3207,8 @@ def _hval(name):
 
 # Optional hook (text, parse) -> expr used by main_loop to parse each input (W29: $Echo, $SyntaxHandler).
 INPUT_HOOK = None
+# Calls f(n, history) at the end of main-loop line n (X01: MessageList[n] and the $MessageList reset).
+LINE_END_HOOKS = []
 
 
 def main_loop(source, whole=True):
@@ -3226,6 +3244,8 @@ def main_loop(source, whole=True):
             h[n]["out"] = value
         finally:
             E._STACK.reset(tok)
+            for hook in LINE_END_HOOKS:
+                hook(n, h)
             if _line() == n:
                 st().own["$Line"] = n + 1
         hl = st().own.get("$HistoryLength")
@@ -3617,24 +3637,12 @@ SKIPPED = {
     "IncludeDefinitions": "Wolfram Cloud deployment option",
     "PartProtection": "Wolfram Cloud (CloudExpression) option",
     "Anonymous": "Wolfram Cloud (permissions) setting",
-    "InertEvaluate": "compiled-code (FunctionCompile) construct",
-    "InertExpression": "compiled-code (FunctionCompile) construct",
-    "DownValuesFunction": "compiled-code (FunctionCompile) construct",
-    "RuntimeAttributes": "Compile option (compiler not part of this batch)",
-    "RuntimeOptions": "Compile option (compiler not part of this batch)",
     "InitializationObject": "persistence framework (PersistenceLocation) not available",
     "InitializationObjects": "persistence framework (PersistenceLocation) not available",
     "InitializationValue": "persistence framework (PersistenceLocation) not available",
     "Initialize": "persistence framework (PersistenceLocation) not available",
     "$Initialization": "persistence/kernel start-up file settings",
     "$PreInitialization": "persistence/kernel start-up file settings",
-    "Symmetrize": "needs SymmetrizedArray and Symmetric/Antisymmetric symmetry objects (other batches)",
-    "AbsoluteOptions": "needs the graphics option catalogue (Graphics batch)",
-    "PackageExported": "Structured Package Format (PackageScope/PackageExport files)",
-    "PackageImport": "Structured Package Format (PackageScope/PackageExport files)",
-    "PackageScoped": "Structured Package Format (PackageScope/PackageExport files)",
-    "PackageInitialize": "Structured Package Format (PackageScope/PackageExport files)",
-    "TraceOriginal": "MikoshiLang's trace records only forms that change, so the original forms cannot be tested",
 }
 
 
