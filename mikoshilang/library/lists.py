@@ -1,4 +1,6 @@
 """List and set functions (Wolfram canonical order and SameQ equality)."""
+
+from __future__ import annotations
 import sympy as sp
 
 from ..expr import Expr, Symbol
@@ -75,7 +77,7 @@ def _union(*args):
 
 @fn("Intersection", area=AREA, status="fixed",
     notes="variadic; canonical order (legacy sorted by string form); SameTest -> f")
-def _intersection(*args):
+def _intersection(*args: ListOf[Expr] | Option) -> ListOf[Expr]:
     pos, test = _set_args(args, "Intersection")
     ls = _lists(pos, "Intersection")
     common = [x for x in ls[0] if all(_member_t(x, l, test) for l in ls[1:])]
@@ -85,7 +87,7 @@ def _intersection(*args):
 @fn("Complement", area=AREA, status="fixed",
     notes="Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form); "
           "SameTest -> f")
-def _complement(*args):
+def _complement(*args: ListOf[Expr] | Option) -> ListOf[Expr]:
     pos, test = _set_args(args, "Complement")
     ls = _lists(pos, "Complement")
     rest = [x for l in ls[1:] for x in l]
@@ -93,33 +95,33 @@ def _complement(*args):
 
 
 @fn("SetDifference", area=AREA, status="fixed", notes="alias of Complement[a, b] (canonical order)")
-def _setdiff(a, b):
+def _setdiff(a: ListOf[Expr], b: ListOf[Expr]) -> ListOf[Expr]:
     return _complement(a, b)
 
 
 @fn("SymmetricDifference", area=AREA, status="fixed",
     notes="elements in exactly one of the two lists, canonical order (legacy sorted by string form)")
-def _symdiff(a, b):
+def _symdiff(a: ListOf[Expr], b: ListOf[Expr]) -> ListOf[Expr]:
     x, y = list_arg(a, "SymmetricDifference"), list_arg(b, "SymmetricDifference")
     return _sorted_set([v for v in x if not _member(v, y)] + [v for v in y if not _member(v, x)])
 
 
 @fn("Cardinality", area=AREA, status="fixed",
     notes="number of distinct elements (legacy returned Length, counting duplicates)")
-def _card(a):
+def _card(a: ListOf[Expr]) -> Integer:
     return len(_dedup(list_arg(a, "Cardinality")))
 
 
 @fn("ElementQ", area=AREA, status="fixed",
     notes="ElementQ[x, list]: SameQ membership (legacy used ==, so ElementQ[1, {1.0}] was True; MemberQ "
           "gives False)")
-def _elementq(x, lst):
+def _elementq(x, lst: ListOf[Expr]) -> Boolean:
     return _member(x, list_arg(lst, "ElementQ"))
 
 
 @fn("SubsetQ", area=AREA, status="fixed",
     notes="SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse)")
-def _subsetq(a, b):
+def _subsetq(a: ListOf[Expr], b: ListOf[Expr]) -> Boolean:
     big, small = list_arg(a, "SubsetQ"), list_arg(b, "SubsetQ")
     return all(_member(x, big) for x in small)
 
@@ -137,7 +139,7 @@ def _deldup(a, test=None):
 @fn("Riffle", area=AREA, status="fixed",
     notes="Riffle[list, x] and Riffle[list, {y1, ...}] (interleaves when the second list has n or n - 1 "
           "elements; legacy inserted the whole list each time)")
-def _riffle(a, b):
+def _riffle(a: ListOf[Expr], b) -> ListOf[Expr]:
     items = list_arg(a, "Riffle")
     n = len(items)
     if is_list(b) and len(b.args) in (n, n - 1) and n > 0:
@@ -158,7 +160,7 @@ def _riffle(a, b):
 @fn("Interleave", area=AREA, status="fixed",
     notes="{a1, b1, ..., a2, b2, ...} for two or more lists (MikoshiLang); unequal lengths now raise (legacy "
           "silently truncated)")
-def _interleave(a, b, *more):
+def _interleave(a: ListOf[Expr], b: ListOf[Expr], *more: ListOf[Expr]) -> ListOf[Expr]:
     ls = [list_arg(v, "Interleave") for v in (a, b) + more]
     if len({len(v) for v in ls}) != 1:
         raise ValueError("Interleave: lists must have the same length")
@@ -168,7 +170,7 @@ def _interleave(a, b, *more):
 @fn("Partition", area=AREA, status="fixed",
     notes="Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); "
           "Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n")
-def _partition(a, n, d=None):
+def _partition(a: ListOf[Expr], n: PosInteger, d: PosInteger = None) -> ListOf[Expr]:
     items = list_arg(a, "Partition")
     if isinstance(n, Expr) and n.head == "UpTo" and len(n.args) == 1:
         k = pos_int(n.args[0], "Partition", "block size")
@@ -185,19 +187,19 @@ def _partition(a, n, d=None):
 
 
 @fn("Chunk", area=AREA, status="verified", notes="consecutive blocks of size n, last one possibly shorter (MikoshiLang)")
-def _chunk(a, n):
+def _chunk(a: ListOf[Expr], n: PosInteger) -> ListOf[Expr]:
     items = list_arg(a, "Chunk")
     k = pos_int(n, "Chunk", "block size")
     return L(*(L(*items[i:i + k]) for i in range(0, len(items), k)))
 
 
 @fn("SlidingWindow", area=AREA, status="verified", notes="overlapping windows = Partition[list, n, 1] (MikoshiLang)")
-def _sliding(a, n):
+def _sliding(a: ListOf[Expr], n: PosInteger) -> ListOf[Expr]:
     return _partition(a, n, 1)
 
 
 @fn("RotateLeft", area=AREA, status="verified", notes="RotateLeft[list] and RotateLeft[list, n] (n may be negative)")
-def _rotl(a, n=1):
+def _rotl(a: ListOf[Expr], n: Integer = 1) -> ListOf[Expr]:
     items = list_arg(a, "RotateLeft")
     k = int_arg(n, "RotateLeft", "shift")
     if not items:
@@ -207,7 +209,7 @@ def _rotl(a, n=1):
 
 
 @fn("RotateRight", area=AREA, status="verified", notes="RotateRight[list] and RotateRight[list, n]")
-def _rotr(a, n=1):
+def _rotr(a: ListOf[Expr], n: Integer = 1) -> ListOf[Expr]:
     k = int_arg(n, "RotateRight", "shift")
     return _rotl(a, -k)
 
@@ -225,7 +227,7 @@ def _accumulate(a):
 
 @fn("Differences", area=AREA, status="fixed",
     notes="exact successive differences, Differences[list, n] for n-th differences (legacy used rounded floats)")
-def _differences(a, n=1):
+def _differences(a: ListOf[Expr], n: NonNegInteger = 1) -> ListOf[Expr]:
     items = list_arg(a, "Differences")
     k = nonneg_int(n, "Differences", "order")
     vals = [sym(x, "Differences") for x in items]
