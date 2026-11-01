@@ -88,6 +88,20 @@ Verify[Solve[x^2 == 2, x]]        (* Certified[..., <|"Method" -> "Substitution 
 Verify[Integrate[Sin[x]^2, x]]    (* Checked[x/2 - Cos[x] Sin[x]/2, <|"Method" -> "Differentiation", ...|>] *)
 ```
 
+## Types (opt-in)
+
+Library heads carry signatures read from their Python annotations; user functions can declare one. Checking is
+off by default and costs nothing measurable when off. Guide: [docs/types.md](docs/types.md).
+
+```python
+from mikoshilang import Session
+s = Session(check_types=True)
+s.evaluate("TypeSignature[area, {Real, Real} -> Real]; area[w_, h_] := w h")
+s.evaluate("TypeSignature[BitLength]")      # {{Integer} -> Expr}
+s.evaluate('area[2, "3"]')                  # TypeError: area: argument 2 '3' is not of type Real (type check)
+s.evaluate("area[2, h]")                    # 2 h: symbolic arguments are never type errors
+```
+
 ## Language contract
 
 What is implemented, and checked by value-level tests (see `tests/`):

@@ -78,6 +78,9 @@ Each function gets one status: `pass`, `fail`, `not exercised` (it states a chec
 Caveats:
 
 * `exact` is vacuous for a head whose cases are all inexact or expect errors.
+* Test modules whose cases only run inside pytest fixtures (a temporary working directory, local servers,
+  per-test isolation: `test_wolfram_w27`, `w29`, `w30`) are left out of the harness; their heads are `not
+  exercised` there, and their cases still run in the test suite.
 * `self-check` only confirms the verification code exists. Its execution is covered by the head's cases.
 * Most heads predate the `Check:` convention, so they are reported as `no check stated` (with their reference
   cases, in `--all` mode) until their notes gain the sentence.

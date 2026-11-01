@@ -192,6 +192,9 @@ def load_modules(tests_dir: Path) -> List[Tuple[str, list]]:
         sys.path.insert(0, str(tests_dir))
     out = []
     for p in sorted(tests_dir.glob("test_*.py")):
+        if _needs_fixtures(p):
+            NEEDS_FIXTURES.add(p.stem)
+            continue
         try:
             mod = importlib.import_module(p.stem)
         except Exception:            # optional dependency missing: those cases are skipped
@@ -200,6 +203,22 @@ def load_modules(tests_dir: Path) -> List[Tuple[str, list]]:
         if cases:
             out.append((p.stem, cases))
     return out
+
+
+NEEDS_FIXTURES: set = set()
+_FIXTURE_ARG = re.compile(r"^def test_\w+\(case,\s*\w", re.M)
+_AUTOUSE_PER_TEST = re.compile(r"^@pytest\.fixture\(autouse=True\)", re.M)
+
+
+def _needs_fixtures(path: Path) -> bool:
+    """A module whose cases only run inside pytest fixtures (a temporary working directory, local servers,
+    per-test isolation) cannot be replayed outside pytest: the harness leaves it out, so its heads count as
+    not exercised there rather than failing. Its cases still run in the test suite."""
+    try:
+        src = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return bool(_FIXTURE_ARG.search(src) or _AUTOUSE_PER_TEST.search(src))
 
 
 def load_cases(tests_dir: Path) -> Dict[str, list]:

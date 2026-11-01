@@ -38,13 +38,21 @@ class Session:
                    (any importable module). Functions registered with ``@session.function`` are always callable,
                    because the host program chose to expose them. An allow-list is a convenience, not a security
                    boundary: run untrusted input in an external process sandbox.
+    check_types:   opt-in type checking against library signatures (from the implementations' annotations) and
+                   ``TypeSignature`` declarations: ``True`` raises ``TypeError("f: ...")`` for an argument or
+                   result that is a concrete value of the wrong kind, ``"report"`` appends the mismatch to
+                   ``session.type_mismatches`` and carries on. Off (the default) it costs nothing measurable.
     """
 
-    def __init__(self, allow_network=False, allow_python=False):
+    def __init__(self, allow_network=False, allow_python=False, check_types=False):
         from .interop import python_permission
         self.state = SessionState()
         self.allow_network = allow_network
         self.allow_python = python_permission(allow_python)
+        if check_types not in (False, True, "report"):
+            raise ValueError(f"Session: check_types must be False, True or \"report\", not {check_types!r}")
+        self.check_types = check_types
+        self.type_mismatches: list = []
 
     @contextmanager
     def _active(self):
@@ -54,7 +62,12 @@ class Session:
         python_token = _python.set(self.allow_python)
         token = _state.set(self.state)
         try:
-            yield
+            if self.check_types:
+                from .types import checking
+                with checking("raise" if self.check_types is True else "report", self.type_mismatches):
+                    yield
+            else:
+                yield
         finally:
             _state.reset(token)
             _python.reset(python_token)
