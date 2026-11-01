@@ -68,14 +68,30 @@ def test_nested_checking_restores_gate():
     s = Session(check_types="report")
     out = s.evaluate('TypeCheck[BitLength["q"]]')                       # TypeCheck inside a checking session
     assert "Mismatches" in str(out) and _typestate.ACTIVE == 0
-    # TypeCheck's own result is evaluated again under the session's mode, as every result is
-    assert [m["function"] for m in s.type_mismatches] == ["BitLength"]
+    # TypeCheck's result is final: it is not evaluated (and checked) again under the session's mode
+    assert s.type_mismatches == []
     r = Session(check_types=True)
     assert str(r.evaluate("TypeCheck[BitLength[8]]")).startswith('<|"Result" -> 4')
     assert _typestate.ACTIVE == 0
 
 
-def test_hold_attributes_skip_argument_checks():
-    s = Session(check_types=True)
-    s.evaluate("SetAttributes[hh, HoldAll]; TypeSignature[hh, {Integer} -> Expr]; hh[x_] := Hold[x]")
-    assert str(s.evaluate("hh[1 + 1]")) == "Hold[1 + 1]"
+def test_typecheck_reports_inside_raising_session():
+    r = Session(check_types=True)
+    out = r.evaluate('TypeCheck[BitLength["q"]]')
+    assert 'BitLength["q"]' in str(out) and '"Expected" -> "Integer"' in str(out)
+    with pytest.raises(TypeError, match="^BitLength: argument 1"):
+        r.evaluate('BitLength["q"]')
+    assert _typestate.ACTIVE == 0
+
+
+def test_sign_constraints_are_enforced():
+    from mikoshilang.library.core import REGISTRY
+    assert any(("PosInteger",) in sig.params for sig in REGISTRY["FareySequence"].signature)
+    r = Session(check_types=True)
+    with pytest.raises(TypeError, match="FareySequence: argument 1 0 is not of type PosInteger"):
+        r.evaluate("FareySequence[0]")
+    with pytest.raises(ValueError):                    # unchecked: the function's own ValueError
+        Session().evaluate("FareySequence[0]")
+    s = Session(check_types="report")
+    s.evaluate("TypeSignature[tsNN, {NonNegInteger} -> Integer]; tsNN[n_] := n; tsNN[-1]; tsNN[0]")
+    assert [(m["function"], m["expected"]) for m in s.type_mismatches] == [("tsNN", "NonNegInteger")]

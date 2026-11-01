@@ -107,6 +107,15 @@ CORE_AREAS = {"Core Language & Structure", "Data Manipulation & Analysis", "Symb
               "Time-Related Computation"}
 
 
+# Reviewed placements that override the guide-page heuristics (symbol -> (area, priority, reason)).
+PLACEMENT_OVERRIDES = {
+    "Fourier": ("Symbolic & Numeric Computation", 1,
+                "discrete Fourier transform: core numerics (and the Fourier identities of the verification pillar), "
+                "not only signal processing"),
+    "InverseFourier": ("Symbolic & Numeric Computation", 1, "inverse of Fourier"),
+}
+
+
 def implemented_names():
     """Names whose evaluation MikoshiLang implements with reviewed, tested Wolfram semantics."""
     lib = {n for n, (_a, s, _n) in library.STATUS.items() if s in ("verified", "fixed", "promoted", "kernel",
@@ -122,7 +131,15 @@ def primary_area(sym):
     return max(c, key=lambda a: (c[a], -AREAS.index(a)))
 
 
+# Symbols that the name/area rules above would wrongly mark infeasible (they are plain numeric containers or
+# models, not curated data or audio): implemented in batch X03.
+FEASIBLE_NAMES = {"DiscreteWaveletData", "ContinuousWaveletData", "ShortTimeFourierData", "Spectrogram",
+                  "SpectrogramArray", "StateSpaceModel"}
+
+
 def feasibility(sym):
+    if sym in FEASIBLE_NAMES:
+        return ""
     for rx, why in INFEASIBLE_NAMES:
         if rx.match(sym):
             return why
@@ -151,6 +168,9 @@ def build():
     for s in DOCUMENTED:
         area = primary_area(s)
         why = feasibility(s)
+        override = PLACEMENT_OVERRIDES.get(s)
+        if override:
+            area, why = override[0], ""
         done = s in impl
         if done:
             status = "implemented"
@@ -158,7 +178,8 @@ def build():
             status = "infeasible"
         else:
             status = "missing"
-        rows.append(dict(symbol=s, area=area, status=status, priority="" if status == "infeasible" else priority(s, area),
+        prio = override[1] if override else priority(s, area)
+        rows.append(dict(symbol=s, area=area, status=status, priority="" if status == "infeasible" else prio,
                          reason=why if status == "infeasible" else "", eiwl=EIWL.get(s, 0),
                          guides=" ".join((SYMBOL_GUIDES.get(s) or [])[:4])))
     extra = sorted(n for n in impl if n not in set(DOCUMENTED) and re.match(r"^[A-Z$]", n))
@@ -214,6 +235,8 @@ def render(rows, extra):
       "`scripts/wolfram_data/infeasible_names.json`. "
       "Infeasible does not mean impossible: a local substitute (e.g. a small bundled dataset) could be added "
       "later, but it would not reproduce Wolfram's results.\n"
+      "* **Reviewed placements**: " + "; ".join(f"`{k}` is placed in *{a}* at P{p} ({why})"
+                                                 for k, (a, p, why) in PLACEMENT_OVERRIDES.items()) + ".\n"
       "* **Implemented**: the head has a `verified`, `fixed`, `promoted`, `kernel` or `added` status in "
       "`mikoshilang.library.STATUS` (each enforced by differential tests in `tests/library`), or is evaluated by "
       "the kernel itself (builtins, held special forms and structural heads such as `List`, `Rule`, `Function` "

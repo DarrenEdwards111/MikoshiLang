@@ -1058,20 +1058,20 @@ def _r_short(e, c):
 
 @fn("Skeleton", area=AREA, status="added",
     notes="Skeleton[k] inert: k omitted elements, shown as <<k>> (what Short inserts)")
-def _skeleton(k: Expr) -> Expr:
+def _skeleton(k: NonNegInteger) -> Expr:
     raise Unevaluated()
 
 
 @fn("StringSkeleton", area=AREA, status="added",
     notes="StringSkeleton[k] inert: k omitted characters of a string, shown as an ellipsis")
-def _stringskeleton(k: Expr) -> Expr:
+def _stringskeleton(k: NonNegInteger) -> Expr:
     raise Unevaluated()
 
 
 @fn("InsertLinebreaks", area=AREA, status="added",
     notes="InsertLinebreaks[s, n] (default 78) replaces whitespace by newlines so no line exceeds n characters; "
           "words longer than n are broken every n characters")
-def _insertlinebreaks(s: Expr, n: Expr = 78) -> Expr:
+def _insertlinebreaks(s: String, n: PosInteger = 78) -> String:
     if not isinstance(s, str):
         if isinstance(s, (Symbol, Expr)):
             raise Unevaluated()
@@ -1926,7 +1926,7 @@ def string_form_text(tmpl, args, c=None):
 @fn("StringForm", area=AREA, status="added",
     notes="StringForm[\"... `` ... `n` ...\", e1, e2, ...] inert: shows the template with `` replaced by successive "
           "ei and `n` by en (\\` is a literal backquote); out-of-range or unmatched placeholders raise")
-def _stringform(tmpl: Expr, *args: Expr) -> Expr:
+def _stringform(tmpl: String, *args: Expr) -> Expr:
     if not isinstance(tmpl, str):
         if isinstance(tmpl, Symbol):
             raise Unevaluated()
@@ -2045,7 +2045,7 @@ def text_string(x, opts):
     notes="TextString[expr, opts] human-readable string: strings unchanged, numbers in decimal notation (6 digits "
           "for machine reals, rationals as decimals), symbols by name, Missing per MissingString (default \"\"), lists "
           "per ListFormat, Row/Column/TableForm/Grid as text, otherwise InputForm; BooleanStrings")
-def _textstring(x: Expr, *opts: Option) -> Expr:
+def _textstring(x: Expr, *opts: Option) -> String:
     rest, o = split_opts(opts, TEXTSTRING_OPTIONS, "TextString")
     if rest:
         raise ValueError("TextString called with too many arguments")

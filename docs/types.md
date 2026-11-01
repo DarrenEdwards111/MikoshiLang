@@ -44,6 +44,14 @@ s = Session(check_types=True)        # raise TypeError("f: argument 2 '3' is not
 r = Session(check_types="report")    # carry on; mismatches collect in r.type_mismatches
 ```
 
+## Context
+
+`TypeSignature`, `TypeMatchQ`, `TypeCheck`, `Verify`, `Certified`, `Checked`, `Unchecked` and `Failed` are
+MikoshiLang extensions, not Wolfram symbols, so they live in the `Mikoshi`` context:
+`Context[Verify]` is `"Mikoshi`"`, and `Mikoshi`Verify[...]` is the full name. `Mikoshi`` is on the default
+`$ContextPath` (`{"System`", "Mikoshi`", "Global`"}`), so the short names work everywhere, including inside
+`BeginPackage`. They are protected, like `System`` symbols.
+
 ## What counts as a mismatch
 
 The checker runs at call boundaries, after the arguments are evaluated and before the implementation runs
@@ -53,13 +61,19 @@ a list, an association, a rule or `True`/`False` where the type excludes it.
 
 * **Symbolic arguments are never mismatches.** `x`, `n + 1` and `f[y]` may become anything, and the function
   may legitimately leave such a call unevaluated (CONVENTIONS §3).
-* **Sign constraints are values, not kinds.** For `PosInteger` and `NonNegInteger` arguments the checker only
-  tests that the value is an integer. The function itself raises `ValueError` for `0` or `-1`, as CONVENTIONS
-  §2 prescribes. `TypeMatchQ` does test the sign.
+* **Sign constraints are enforced.** `0` is not a `PosInteger` and `-1` is not a `NonNegInteger`, so a
+  checking session reports `PolygonalNumber[3, -1]` as a mismatch, as `TypeMatchQ` does. Without checking, the
+  function raises its own `ValueError` (CONVENTIONS §2).
+* **`TypeCheck` always reports.** Inside a `Session(check_types=True)`, `TypeCheck[expr]` still returns its
+  report instead of raising. Its result is final and is not evaluated again under the session's mode.
 * Held arguments (`Held`, or a user function with `HoldAll`/`HoldFirst`/`HoldRest`) are not checked. Their
   result is.
-* Kernel built-ins such as `Plus` and `Map` are not covered. Only library heads and declared user functions
-  are.
+* **Kernel built-ins** (`Plus`, `Times`, `Power`, `Greater`, `Range`, `Nest`, `StringJoin`, `Det`, ...) have
+  hand-written signatures in `mikoshilang/kernel_types.py`, checked in evaluator step 8. They are deliberately
+  lenient: `Plus` takes `Numeric | ListOf[Expr] | Assoc` (symbols and other non-concrete expressions always pass),
+  so `Plus["a", 1]`, `Nest[f, x, -1]`, `StringLength[3]`, `Det[{1, 2}]` and `Not["a"]` are mismatches while
+  every symbolic call is clean. Held kernel heads (`Block`, `Set`, ...) show `{Held...} -> Expr`.
+  `TypeSignature[Plus]` shows the signature.
 
 ## Cost
 

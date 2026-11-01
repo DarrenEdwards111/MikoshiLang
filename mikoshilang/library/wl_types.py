@@ -75,7 +75,8 @@ def _assoc(pairs):
           "<|\"Result\" -> value, \"Mismatches\" -> {<|\"Function\" -> f, \"Position\" -> i, \"Value\" -> v, "
           "\"Expected\" -> type|>, ...}|>. A mismatch is a concrete argument (or result) of the wrong kind; "
           "symbolic arguments never are. Position is the argument number, \"Result\" or \"Count\" (wrong number "
-          "of arguments for a declared function). MikoshiLang extension. Check: exact; seeded mismatches in "
+          "of arguments for a declared function). Inside a Session(check_types=True) it still reports instead of "
+          "raising: its result is returned as is, not evaluated again. MikoshiLang extension. Check: exact; seeded mismatches in "
           "tests.")
 def _type_check(expr: Held) -> Assoc:
     from .wl_common import ev
@@ -91,8 +92,9 @@ def _type_check(expr: Held) -> Assoc:
 
 
 def _hold_type_check():
-    from ..evaluate import set_hold_all
+    from ..evaluate import set_hold_all, set_final_result
     set_hold_all("TypeCheck")
+    set_final_result("TypeCheck")
 
 
 _hold_type_check()
