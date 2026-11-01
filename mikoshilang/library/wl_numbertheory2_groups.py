@@ -342,7 +342,8 @@ def _less_key(n):
 
 
 @fn("RightCosetRepresentative", **ADDED, notes="RightCosetRepresentative[group, g]: the smallest permutation (in "
-    "image-list order, as Sort[..., Less]) of the right coset {PermutationProduct[h, g] : h in group}")
+    "image-list order, as Sort[..., Less]) of the right coset {PermutationProduct[h, g] : h in group}"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rcoset(g: Expr, x: Expr) -> Expr:
     gens, deg = _group_arg(g, "RightCosetRepresentative")
     perm, kind = C.perm_of(x, "RightCosetRepresentative")
@@ -413,7 +414,8 @@ def _word_value(gens, word, fname):
 
 
 @fn("GroupElementFromWord", **ADDED, notes="GroupElementFromWord[group, {i1, i2, ...}] = PermutationProduct of the "
-    "generators GroupGenerators[group][[|ik|]] (inverted for negative ik), applied left to right")
+    "generators GroupGenerators[group][[|ik|]] (inverted for negative ik), applied left to right"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gfromword(g: Expr, word: Expr) -> Expr:
     if not C._is_group(g):
         raise Unevaluated()
@@ -553,7 +555,8 @@ def _cycle_monomial(p, deg, xs):
 
 @fn("CycleIndexPolynomial", **ADDED, notes="CycleIndexPolynomial[perm, {x1, ..., xn}] = Product[x_k^(number of "
     "k-cycles)] (fixed points up to PermutationMax, or up to the degree given as a third argument, count as "
-    "1-cycles); for a group the average over its elements")
+    "1-cycles); for a group the average over its elements"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cycleindex(g: Expr, xs: Expr, d: Expr = None) -> Expr:
     if not is_list(xs) or not xs.args:
         raise ValueError("CycleIndexPolynomial: the variables must be a non-empty list")

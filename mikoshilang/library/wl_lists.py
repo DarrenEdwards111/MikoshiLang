@@ -1857,7 +1857,9 @@ def _base_digits(n, b):
     return d[::-1]
 
 
-@fn("IntegerLength", **ADDED, notes="number of base-b digits of |n| (default 10); IntegerLength[0] = 0; threads")
+@fn("IntegerLength", **ADDED, notes="number of base-b digits of |n| (default 10); IntegerLength[0] = 0; threads"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _integerlength(n, b=10):
     if is_list(n):
         return L(*(_integerlength(x, b) for x in n.args))
@@ -1868,7 +1870,8 @@ def _integerlength(n, b=10):
 
 @fn("IntegerReverse", **ADDED,
     notes="the integer with the base-b digits of |n| reversed; IntegerReverse[n, b, len] pads to len digits "
-          "first; threads")
+          "first; threads"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _integerreverse(n, b=10, length=None):
     if is_list(n):
         return L(*(_integerreverse(x, b, length) for x in n.args))

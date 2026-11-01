@@ -516,7 +516,8 @@ def _verify_antiderivative(F, f, x):
          "and PrincipalValue -> True (Cauchy principal value, Integrate[1/x, {x, -1, 2}, PrincipalValue -> True] -> "
          "Log[2]); SymPy convergence conditions are rewritten in Wolfram form (Abs[Arg[a]] < Pi/2 -> Re[a] > 0); "
          "integrals that diverge to +-Infinity give that limit, indeterminate (oscillating/cancelling) ones raise; "
-         "HeavisideTheta and DiracDelta integrands are supported; integrals SymPy cannot do stay unevaluated")
+         "HeavisideTheta and DiracDelta integrands are supported; integrals SymPy cannot do stay unevaluated"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _integrate(f: Expr, *args: Expr) -> Expr:
     from .assume import effective, from_sym
     specs, opts = split_opts(args, {"Assumptions", "GenerateConditions", "PrincipalValue"}, "Integrate")
@@ -1340,14 +1341,16 @@ def _sum_common(fname, op, f, args):
          "divergent sums to +-Infinity give that limit, other non-convergent sums stay unevaluated), plus "
          "parametric series that SymPy sums under a convergence condition: Wolfram's generic value by default "
          "(Sum[x^k, {k, 0, Infinity}] -> 1/(1 - x); previously a recursion error) and "
-         "ConditionalExpression[value, cond] with GenerateConditions -> True")
+         "ConditionalExpression[value, cond] with GenerateConditions -> True"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sum(f: Expr, *args: Expr) -> Expr:
     return _sum_common("Sum", "sum", f, args)
 
 
 @replace("Product", AREA,
          "batch 4: as Sum (finite, symbolic and infinite products via SymPy; parametric products give the generic "
-         "value, ConditionalExpression with GenerateConditions -> True)")
+         "value, ConditionalExpression with GenerateConditions -> True)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _product(f: Expr, *args: Expr) -> Expr:
     return _sum_common("Product", "product", f, args)
 
@@ -1470,7 +1473,8 @@ def _with_constants(e):
          "batch 4: RSolve[eqns, a[n], n] -> {{a[n] -> ...}} and RSolve[eqns, a, n] -> {{a -> Function[{n}, ...]}}; "
          "linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every "
          "solution is substituted back into the recurrence and the initial conditions; free constants are C[1], "
-         "C[2], ...; systems raise")
+         "C[2], ...; systems raise"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rsolve(eq: Expr, fexpr: Expr, n: Expr) -> Expr:
     name, nv, sols = _rsolve_core(eq, fexpr, n, "RSolve")
     rules = []
@@ -1722,14 +1726,16 @@ def _ft_general(fname, e, t, w, rest, inverse):
 @replace("FourierTransform", _TR.AREA,
          "Wolfram convention (1/√(2π)) ∫ f e^(iωt) dt, numerically verified at frequencies of both signs (raises "
          "if SymPy's closed form cannot be verified); batch 4: FourierParameters -> {a, b} (numeric) gives "
-         "Sqrt[|b|/(2π)^(1-a)] ∫ f e^(i b ω t) dt, threads over equations and lists")
+         "Sqrt[|b|/(2π)^(1-a)] ∫ f e^(i b ω t) dt, threads over equations and lists"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ft4(e: Expr, t: Expr, w: Expr, *rest: Expr) -> Expr:
     return _ft_general("FourierTransform", e, t, w, rest, False)
 
 
 @replace("InverseFourierTransform", _TR.AREA,
          "Wolfram convention (1/√(2π)) ∫ F e^(-iωt) dω, numerically verified; batch 4: FourierParameters -> "
-         "{a, b} gives Sqrt[|b|/(2π)^(1+a)] ∫ F e^(-i b ω t) dω, threads over equations and lists")
+         "{a, b} gives Sqrt[|b|/(2π)^(1+a)] ∫ F e^(-i b ω t) dω, threads over equations and lists"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ift4(e: Expr, w: Expr, t: Expr, *rest: Expr) -> Expr:
     return _ft_general("InverseFourierTransform", e, w, t, rest, True)
 
@@ -1822,7 +1828,8 @@ def _undef_transform_ok(r, cls):
          "∫_0^∞ f e^(-st) dt (same convention as Wolfram/SymPy), convergence conditions dropped; batch 4: "
          "derivatives of undefined functions (LaplaceTransform[f'[t], t, s] -> s LaplaceTransform[f[t], t, s] - "
          "f[0]), HeavisideTheta and DiracDelta shifts, threads over equations and lists; unevaluated when SymPy "
-         "cannot transform")
+         "cannot transform"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lt4(e: Expr, t: Expr, s: Expr, *rest: Expr) -> Expr:
     _, opts = split_opts(rest, {"Assumptions", "GenerateConditions"}, "LaplaceTransform")
     th = _equation_thread(e, lambda x: _lt4(x, t, s, *rest))
@@ -2219,13 +2226,17 @@ from .core import list_arg   # noqa: E402
 
 _wrap_vc("Grad", _g3, "Grad[f, {x1, ..., xn}] (Cartesian; a vector field gives the Jacobian); batch 4: "
          "Grad[f, vars, chart] for \"Cartesian\", \"Polar\" {r, θ}, \"Cylindrical\" {r, θ, z}, \"Spherical\" "
-         "{r, θ, φ} (θ polar angle) in the orthonormal basis (Wolfram)")
+         "{r, θ, φ} (θ polar angle) in the orthonormal basis (Wolfram)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _wrap_vc("Div", _d3, "Div[{f1, ..., fn}, {x1, ..., xn}] (Cartesian); batch 4: Div[F, vars, chart] for Polar, "
-         "Cylindrical, Spherical (orthonormal components, Wolfram)")
+         "Cylindrical, Spherical (orthonormal components, Wolfram)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _wrap_vc("Curl", _c3, "3D curl and the 2D scalar curl; batch 4: Curl[F, vars, chart] for Polar (scalar), "
-         "Cylindrical and Spherical (orthonormal components, Wolfram)")
+         "Cylindrical and Spherical (orthonormal components, Wolfram)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _wrap_vc("Laplacian", _l3, "Laplacian[f, {x1, ..., xn}] (Cartesian); batch 4: Laplacian[f, vars, chart] for "
-         "Polar, Cylindrical, Spherical (Wolfram)")
+         "Polar, Cylindrical, Spherical (Wolfram)"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 _orig_arclength = REGISTRY_get("ArcLength")
@@ -2234,7 +2245,8 @@ _orig_arclength = REGISTRY_get("ArcLength")
 @replace("ArcLength", _CA.AREA,
          "ArcLength[f, {x, a, b}] = ∫ Sqrt[1 + f'^2] (graph of f, MikoshiLang); batch 4: Wolfram's parametric form "
          "ArcLength[{x1[t], ..., xn[t]}, {t, a, b}] = ∫ Sqrt[Σ xi'^2] dt, ArcLength[Line[{p1, ...}]] (polyline), "
-         "ArcLength[Circle[c, r]] = 2 π r; numeric input gives numeric output")
+         "ArcLength[Circle[c, r]] = 2 π r; numeric input gives numeric output"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arclength4(f: Expr, *spec: Expr) -> Expr:
     if not spec:
         if isinstance(f, Expr) and f.head == "Line" and len(f.args) == 1:
@@ -2285,3 +2297,10 @@ def _arccurv(f: Expr, t: Expr, *rest: Expr) -> Expr:
         num = sp.sqrt(sp.simplify(n1 * n2 - dot ** 2))
     den = sp.Add(*(a ** 2 for a in d1)) ** sp.Rational(3, 2)
     return out(sp.simplify(num / den).xreplace({tr: tv}))
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "FourierCosTransform", "FourierSinTransform", "InverseFourierCosTransform", "InverseFourierSinTransform")

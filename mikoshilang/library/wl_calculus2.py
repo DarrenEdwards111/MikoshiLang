@@ -6076,3 +6076,13 @@ def _dsolvechange(dsolve: Expr, u: Expr, t: Expr, trans: Expr, *rest: Expr) -> E
     head = dsolve.head
     return Expr(head, Expr("Equal", _wlf(lhs_), _wlf(rhs_)),
                 Expr(uu.name, tt) if applied else uu, tt)
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "Antisymmetric", "Symmetric")
+_add_check("reference (differential cases in tests/library).",
+          "Antihermitian", "AsymptoticEqual", "AsymptoticEquivalent", "AsymptoticGreater", "AsymptoticGreaterEqual",
+          "AsymptoticLess", "AsymptoticLessEqual", "Hermitian", "ZeroSymmetric")

@@ -531,7 +531,8 @@ def _syt(shape):
           "to right and down columns), sorted by row word, as Combinatorica Tableaux[shape]; their number equals "
           "HookLengthFormula[shape]. YoungTableaux[n]: all standard tableaux with n cells (over all partitions in "
           "reverse-lexicographic order), whose number is the number of involutions of n. Refuses more than "
-          f"{_SYT_LIMIT} tableaux. Legacy built one tableau and returned its size")
+          f"{_SYT_LIMIT} tableaux. Legacy built one tableau and returned its size"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _young(arg):
     if is_list(arg):
         shape = [pos_int(p, "YoungTableaux", "part") for p in list_arg(arg, "YoungTableaux")]

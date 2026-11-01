@@ -1391,3 +1391,11 @@ def _mantissa_exponent(x: Expr, b: Expr = 10) -> ListOf[Expr]:
     if e is None:
         raise ValueError("MantissaExponent: cannot certify the exponent")
     return L(R(v / sp.Integer(bb) ** e), e)
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "BitAnd", "BitClear", "BitFlip", "BitGet", "BitNot", "BitOr", "BitSet", "BitXor", "DiscreteShift",
+          "FareySequence", "IntervalIntersection", "IntervalUnion", "ThueMorse")

@@ -5793,3 +5793,10 @@ def _normal_w05(a, ev_, expr):
 
 
 K._BUILTINS["Normal"] = _normal_w05
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "Expand", "Factor", "FullSimplify", "MatrixRank", "NullSpace", "RowReduce", "Simplify")

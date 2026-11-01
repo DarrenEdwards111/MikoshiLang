@@ -55,7 +55,8 @@ def _rot(a):
     "turning by ti then stepping ri (default 1); AnglePath[t0 | {x, y} | {{x, y}, t0} | {{x, y}, {dx, dy}}, steps]; "
     "AnglePath[init, steps, form] with form Position, FrameAngle, RelativeAngle, FrameMatrix, RelativeMatrix or a "
     "list; exact input gives exact (unsimplified) coordinates, approximate input machine numbers; "
-    "WorkingPrecision -> MachinePrecision forces numbers. Transformation forms raise (no TransformationFunction)")
+    "WorkingPrecision -> MachinePrecision forces numbers. Transformation forms raise (no TransformationFunction)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _anglepath(*args: Expr) -> Expr:
     args, opts = split_options(args, {"WorkingPrecision"}, "AnglePath")
     if not 1 <= len(args) <= 3:
@@ -205,7 +206,8 @@ def hilbert_points(n):
 
 @fn("HilbertCurve", **ADDED, notes="HilbertCurve[n] is Line[...] through all 4^n integer points of the "
     "(2^n - 1)-square, from {0, 0} to {2^n - 1, 0} (unit steps); HilbertCurve[n, 2] the same; other dimensions "
-    "raise; DataRange -> {{x0, x1}, {y0, y1}} rescales")
+    "raise; DataRange -> {{x0, x1}, {y0, y1}} rescales"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hilbert(*args: Expr) -> Expr:
     args, dr = _curve_opts(args, "HilbertCurve")
     if not 1 <= len(args) <= 2:
@@ -253,7 +255,8 @@ def peano_points(n):
 
 @fn("PeanoCurve", **ADDED, notes="PeanoCurve[n] is Line[...] through all 9^n integer points of the "
     "(3^n - 1)-square from {0, 0} to {3^n - 1, 3^n - 1} (PeanoCurve[1] = Line[{{0, 0}, {1, 0}, {2, 0}, {2, 1}, "
-    "{1, 1}, {0, 1}, {0, 2}, {1, 2}, {2, 2}}]); DataRange rescales")
+    "{1, 1}, {0, 1}, {0, 2}, {1, 2}, {2, 2}}]); DataRange rescales"
+    ". Check: reference (differential cases in tests/library).")
 def _peano(*args: Expr) -> Expr:
     args, dr = _curve_opts(args, "PeanoCurve")
     if len(args) != 1:
@@ -281,7 +284,8 @@ def koch_points(n):
 
 @fn("KochCurve", **ADDED, notes="KochCurve[n] is Line[...] of the n-step Koch curve from {0., 0.} to {1., 0.} "
     "(KochCurve[1] = Line[{{0., 0.}, {0.333333, 0.}, {0.5, 0.288675}, {0.666667, 0.}, {1., 0.}}]); DataRange "
-    "rescales; custom step specifications KochCurve[n, {t1, ...}] raise")
+    "rescales; custom step specifications KochCurve[n, {t1, ...}] raise"
+    ". Check: reference (differential cases in tests/library).")
 def _koch(*args: Expr) -> Expr:
     args, dr = _curve_opts(args, "KochCurve")
     if len(args) != 1:
@@ -415,7 +419,8 @@ def _thread(x, f):
 @fn("MandelbrotSetIterationCount", **ADDED, notes="MandelbrotSetIterationCount[c]: the number of iterations "
     "z -> z^2 + c from 0 before |z| > 2 (MaxIterations -> 1000 by default; the maximum if never escaping; "
     "MaxIterations + 1 for points known to be inside: the main cardioid and the period-2 disk); threads over "
-    "lists; machine-precision iteration")
+    "lists; machine-precision iteration"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _msic(*args: Expr) -> Expr:
     args, mx, prec = _iter_opts(args, "MandelbrotSetIterationCount", 1000)
     if len(args) != 1:
@@ -431,7 +436,8 @@ def _msic(*args: Expr) -> Expr:
 
 @fn("MandelbrotSetMemberQ", **ADDED, notes="MandelbrotSetMemberQ[c] is True if the orbit of 0 under z^2 + c does "
     "not leave |z| <= 2 within MaxIterations (default 1000) iterations or c is known to be inside (cardioid, "
-    "period-2 disk); threads over lists; non-numeric arguments give False")
+    "period-2 disk); threads over lists; non-numeric arguments give False"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _msmq(*args: Expr) -> Boolean | ListOf[Boolean]:
     args, mx, prec = _iter_opts(args, "MandelbrotSetMemberQ", 1000)
     if len(args) != 1:
@@ -460,7 +466,8 @@ def _mandel_distance(c, mx):
 
 @fn("MandelbrotSetDistance", **ADDED, notes="MandelbrotSetDistance[c] estimates the distance from c to the "
     "Mandelbrot set with the exterior distance estimate 2 |z_n| Log|z_n| / |z_n'| (MaxIterations -> 100; 0 for "
-    "points that do not escape, exact 0 for points known to be inside); the \"Interior\" estimate raises")
+    "points that do not escape, exact 0 for points known to be inside); the \"Interior\" estimate raises"
+    ". Check: reference (differential cases in tests/library).")
 def _msd(*args: Expr) -> Expr:
     args, mx, prec = _iter_opts(args, "MandelbrotSetDistance", 100)
     if len(args) == 2:
@@ -534,7 +541,8 @@ def _boett_common(fname, c, z, mx, prec_from_n=None):
 @fn("MandelbrotSetBoettcher", **ADDED, listable=True, notes="MandelbrotSetBoettcher[c] is the Boettcher "
     "coordinate Phi(c) = lim z_n^(1/2^n) (z_0 = c, z -> z^2 + c) for c outside the Mandelbrot set; approximate c "
     "evaluates (any precision), exact c stays unevaluated (N evaluates it); points whose orbit does not escape "
-    "within MaxIterations (100) stay unevaluated")
+    "within MaxIterations (100) stay unevaluated"
+    ". Check: reference (differential cases in tests/library).")
 def _msb(*args: Expr) -> Expr:
     args, mx, prec = _iter_opts(args, "MandelbrotSetBoettcher", 100)
     if len(args) != 1:
@@ -546,7 +554,8 @@ def _msb(*args: Expr) -> Expr:
 
 @fn("JuliaSetBoettcher", **ADDED, notes="JuliaSetBoettcher[c, z] is the Boettcher coordinate lim z_n^(1/2^n) of z "
     "for the quadratic map z -> z^2 + c (z_0 = z); approximate input evaluates, exact input stays unevaluated (N "
-    "evaluates it); threads over lists of z; non-escaping orbits stay unevaluated")
+    "evaluates it); threads over lists of z; non-escaping orbits stay unevaluated"
+    ". Check: reference (differential cases in tests/library).")
 def _jsb(*args: Expr) -> Expr:
     args, mx, prec = _iter_opts(args, "JuliaSetBoettcher", 100)
     if len(args) != 2:
@@ -650,7 +659,8 @@ def _init3d(init, fname):
     "advances r (default 1) along the local x axis; steps {{r, rot}, ...} or {{r1, ...}, {rot1, ...}}; forms "
     "Position, FrameMatrix (relative to the initial frame), EulerMatrix, EulerAngles or a list of them; the "
     "transformation forms and FrameAngles raise; exact input gives exact coordinates for up to 200 steps, "
-    "machine numbers otherwise or for approximate input")
+    "machine numbers otherwise or for approximate input"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _anglepath3d(*args: Expr) -> Expr:
     fname = "AnglePath3D"
     args, opts = split_options(args, {"WorkingPrecision"}, fname)
@@ -824,7 +834,8 @@ def _julia_points(pc, qc, tol, bound, polynomial, limit=400000):
     "function f of degree >= 2: points {x, y} approximating the Julia set by inverse iteration from a repelling "
     "fixed point, keeping preimages at least \"ClosenessTolerance\" (default 0.004) apart and within \"Bound\" "
     "(default 6; unbounded for polynomials) of the origin; the points and their order may differ from the "
-    "Wolfram Language's, every point lies (numerically) on the Julia set")
+    "Wolfram Language's, every point lies (numerically) on the Julia set"
+    ". Check: reference (differential cases in tests/library).")
 def _juliasetpoints(*args: Expr) -> ListOf[Expr]:
     fname = "JuliaSetPoints"
     pos, opts = [], {}
