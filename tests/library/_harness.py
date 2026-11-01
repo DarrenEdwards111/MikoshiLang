@@ -35,6 +35,7 @@ import pytest
 import sympy as sp
 
 from mikoshilang.evaluate import evaluate
+from mikoshilang.kernel import SessionState, _state, state
 from mikoshilang.expr import Expr, Symbol
 from mikoshilang.math_ops import to_sympy
 from mikoshilang.parser import parse
@@ -153,12 +154,28 @@ def close(got, want, tol):
 def check(case):
     _check(case[0], case)
     if isinstance(case[0], Via) and not isinstance(case[1], Raises):
+        tok = _state.set(_snapshot(state()))          # the probe must not change the session later cases see
         try:
             _check(case[0].probe(), case)
         except Exception:
             return
+        finally:
+            _state.reset(tok)
         raise AssertionError(f"{case[0]}: the expected value does not depend on {case[0].inner}'s own output "
                              f"(it also holds with {case[0].inner} replaced by {PROBE})")
+
+
+def _snapshot(st):
+    """A copy of session state ``st`` whose definitions can change without affecting ``st``."""
+    new = SessionState()
+    new.own = dict(st.own)
+    new.exact = dict(st.exact)
+    new.down = {k: list(v) for k, v in st.down.items()}
+    new.attrs = {k: set(v) for k, v in st.attrs.items()}
+    new.counter, new.escape_seq = st.counter, st.escape_seq
+    new.temporaries = set(st.temporaries)
+    new.ext = {k: dict(v) for k, v in st.ext.items()}
+    return new
 
 
 def _check(src, case):
