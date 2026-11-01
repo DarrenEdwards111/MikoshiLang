@@ -713,3 +713,34 @@ def _nbodysimulation(law: Expr, states: Expr, t: Expr) -> Expr:
     _SIMS[sid] = sim
     return Expr("NBodySimulationData", Expr("Association", Expr("Rule", "Bodies", len(names)),
                                             Expr("Rule", "SimulationTime", float(Tend)), Expr("Rule", "ID", sid)))
+
+
+# ═══════════════════════════════════════════════ SpheroidalRadialFactor ═══════════════════════════════════════════════
+
+import mpmath as _mp
+
+from . import wl_special_elliptic as _SE
+
+
+def _srf(n, m, c):
+    name = "SpheroidalRadialFactor"
+    n, m = _SE._sph_nm(n, m, name)
+    if m != 0:
+        raise NotImplementedError(f"{name}: only order m = 0 is supported (the normalisation used for m != 0 is not "
+                                  "documented and does not match DLMF 30.11.4)")
+    g2 = _SE._sph_g2(c, name)
+    if g2 == 0:
+        return _mp.mpf(1)
+
+    def run():
+        return _SE._sph_radial_coeffs(n, 0, g2)[1]
+    return _SE._verified(run, name)
+
+
+_SE.mpfun("SpheroidalRadialFactor", 3, _srf,
+          notes="Partial (order m = 0). SpheroidalRadialFactor[n, 0, c] is A_n^0(c^2) = Sum_k (-1)^k a^0_{n,k}(c^2) "
+                "(DLMF 30.11.4) with the Meixner-Schaefke normalised expansion coefficients of Ps_n^0 used by "
+                "SpheroidalS1 (so SpheroidalRadialFactor[n, 0, 0] = 1); integer n >= 0, real or purely imaginary c, "
+                "arbitrary precision (evaluated at two working precisions which must agree). m != 0 (whose "
+                "normalisation is undocumented) and non-integer n or m raise NotImplementedError. Check: reference "
+                "(N[SpheroidalRadialFactor[7, 0, 1/4], 50] from the documentation, all 50 digits) in tests.")
