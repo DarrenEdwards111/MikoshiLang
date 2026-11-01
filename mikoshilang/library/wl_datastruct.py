@@ -909,7 +909,9 @@ def _datastructure(typ, data, *rest):
     return _wrap(_create(typ, [data, *rest]))
 
 
-@fn("DataStructureQ", area=AREA, status="added", notes="DataStructureQ[x] / DataStructureQ[x, \"type\"]")
+@fn("DataStructureQ", area=AREA, status="added", notes="DataStructureQ[x] / DataStructureQ[x, \"type\"]"
+                                                       ". Check: exact (exact input gives exact results), reference "
+                                                       "(differential cases in tests/library).")
 def _datastructureq(x: Expr, typ: Expr = None) -> Boolean:
     if not is_ds(x):
         return False

@@ -42,7 +42,9 @@ def _seq_spec_list(spec, fname):
 
 # ─────────────────────────── construction ───────────────────────────
 
-@fn("Array", **ADDED, notes="Array[f, n], Array[f, {n1, n2, ...}], origin r or {r1, ...}, {a, b} ranges and head h")
+@fn("Array", **ADDED, notes="Array[f, n], Array[f, {n1, n2, ...}], origin r or {r1, ...}, {a, b} ranges and head h"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _array(f: Fn, dims: Expr, origin: Expr = None, head: Expr = None) -> Expr:
     ds = _seq_spec_list(dims, "Array")
     k = len(ds)
@@ -83,7 +85,9 @@ def _array(f: Fn, dims: Expr, origin: Expr = None, head: Expr = None) -> Expr:
     return ev(build(0, []))
 
 
-@fn("ConstantArray", **ADDED, notes="ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}]")
+@fn("ConstantArray", **ADDED, notes="ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}]"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _constarray(c: Expr, dims: Expr) -> Expr:
     ds = _seq_spec_list(dims, "ConstantArray")
     if math.prod(ds) > K.MAX_TABLE:
@@ -94,7 +98,9 @@ def _constarray(c: Expr, dims: Expr) -> Expr:
     return build(0)
 
 
-@fn("Subdivide", **ADDED, notes="Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values")
+@fn("Subdivide", **ADDED, notes="Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _subdivide(a: Expr, b: Expr = None, c: Expr = None) -> ListOf[Expr]:
     if b is None:
         lo, hi, n = 0, 1, a
@@ -107,7 +113,9 @@ def _subdivide(a: Expr, b: Expr = None, c: Expr = None) -> ListOf[Expr]:
                                           Expr("Plus", hi, Expr("Times", -1, lo))))) for k in range(n + 1)))
 
 
-@fn("PowerRange", **ADDED, notes="PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r]")
+@fn("PowerRange", **ADDED, notes="PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r]"
+                                 ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                 "tests/library).")
 def _powerrange(a: Expr, b: Expr = None, r: Expr = None) -> ListOf[Expr]:
     if b is None:
         lo, hi, ratio = 1, a, 10
@@ -129,7 +137,9 @@ def _powerrange(a: Expr, b: Expr = None, r: Expr = None) -> ListOf[Expr]:
     return L(*out)
 
 
-@fn("Subsequences", **ADDED, notes="contiguous subsequences by length then position; Subsequences[list, n | {n} | {m, n}]")
+@fn("Subsequences", **ADDED, notes="contiguous subsequences by length then position; Subsequences[list, n | {n} | {m, n}]"
+                                   ". Check: exact (exact input gives exact results), reference (differential cases "
+                                   "in tests/library).")
 def _subsequences(x: Expr, spec: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Subsequences")
     n = len(items)
@@ -171,7 +181,9 @@ def _sow(e: Expr, tag: Expr = None) -> Expr:
 
 
 @fn("Reap", **ADDED, notes="Reap[expr] -> {value, {{sown...} per tag in order of first use}}; Reap[expr, patt] and "
-                           "Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list]")
+                           "Reap[expr, {p1, ...}] keep matching tags; Reap[expr, patt, f] applies f[tag, list]"
+                           ". Check: exact (exact input gives exact results), reference (differential cases in "
+                           "tests/library).")
 def _reap(expr: Expr, patt: Expr = None, f: Fn = None) -> ListOf[Expr]:
     pats = None if patt is None else (list(ev(patt).args) if is_list(ev(patt)) else [ev(patt)])
     stack = list(_REAP.get() or [])
@@ -221,7 +233,9 @@ def _positions(spec, fname):
     raise ValueError(f"{fname}: {spec!r} is not a valid position specification")
 
 
-@fn("Extract", **ADDED, notes="Extract[expr, pos], Extract[expr, {pos1, pos2, ...}] and Extract[expr, pos, h]")
+@fn("Extract", **ADDED, notes="Extract[expr, pos], Extract[expr, {pos1, pos2, ...}] and Extract[expr, pos, h]"
+                              ". Check: exact (exact input gives exact results), reference (differential cases in "
+                              "tests/library).")
 def _extract(x: Expr, spec: Expr, h: Fn = None) -> Expr:
     single = not (is_list(spec) and spec.args and all(is_list(p) for p in spec.args))
     out = []
@@ -307,7 +321,9 @@ def _expand_all(x, pos, fname):
 
 
 @fn("MapAt", **ADDED, notes="MapAt[f, expr, n | {i, j, ...} | {{...}, ...}]; positions may use negative indices, "
-                            "All, Span and Key; a repeated position applies f repeatedly")
+                            "All, Span and Key; a repeated position applies f repeatedly"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _mapat(f: Fn, x: Expr, spec: Expr) -> Expr:
     out = x
     for p in _positions(spec, "MapAt"):
@@ -317,7 +333,9 @@ def _mapat(f: Fn, x: Expr, spec: Expr) -> Expr:
 
 
 @fn("ReplacePart", **ADDED, notes="ReplacePart[expr, pos -> new], lists of rules, lists of positions, position "
-                                  "patterns such as {i_, i_} -> 0 and pos :> new (evaluated per position)")
+                                  "patterns such as {i_, i_} -> 0 and pos :> new (evaluated per position)"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _replacepart(x: Expr, rules: Expr) -> Expr:
     rs = list(rules.args) if is_list(rules) else [rules]
     if not all(is_rule(r) for r in rs):
@@ -364,7 +382,9 @@ def _replacepart(x: Expr, rules: Expr) -> Expr:
 
 
 @fn("Delete", **ADDED, notes="Delete[expr, n], Delete[expr, {i, j, ...}] and Delete[expr, {{...}, ...}] (positions "
-                             "refer to the original expression)")
+                             "refer to the original expression)"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")
 def _delete(x: Expr, spec: Expr) -> Expr:
     rps = []
     for p in _positions(spec, "Delete"):
@@ -396,7 +416,9 @@ def _delete_at(x, rp):
 
 
 @fn("Insert", **ADDED, notes="Insert[list, elem, n] (negative n counts from the end: -1 appends), "
-                             "Insert[expr, elem, {i, j, ...}] and several positions {{...}, ...}")
+                             "Insert[expr, elem, {i, j, ...}] and several positions {{...}, ...}"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")
 def _insert(x: Expr, elem: Expr, spec: Expr) -> Expr:
     poss = _positions(spec, "Insert")
 
@@ -442,7 +464,9 @@ def _insert(x: Expr, elem: Expr, spec: Expr) -> Expr:
 
 
 @fn("FirstPosition", **ADDED, notes="first position matching patt in Position order; Missing[\"NotFound\"] or the "
-                                    "given default; optional level specification")
+                                    "given default; optional level specification"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _firstposition(x: Expr, patt: Expr, default: Expr = None, levels: Expr = None) -> Expr:
     args = [x, patt] + ([levels] if levels is not None else []) + [1]
     if levels is None:
@@ -453,7 +477,9 @@ def _firstposition(x: Expr, patt: Expr, default: Expr = None, levels: Expr = Non
     return KL.missing("NotFound") if default is None else default
 
 
-@fn("SelectFirst", **ADDED, notes="first element with crit[e] True, else Missing[\"NotFound\"] or the default")
+@fn("SelectFirst", **ADDED, notes="first element with crit[e] True, else Missing[\"NotFound\"] or the default"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _selectfirst(x: Expr, crit: Fn, default: Expr = None) -> Expr:
     for e in items_of(x, "SelectFirst"):
         if true(crit, e):
@@ -462,7 +488,9 @@ def _selectfirst(x: Expr, crit: Fn, default: Expr = None) -> Expr:
 
 
 @fn("FirstCase", **ADDED, notes="FirstCase[expr, patt | patt :> rhs, default, levelspec]; default level {1}; "
-                                "Missing[\"NotFound\"] when nothing matches")
+                                "Missing[\"NotFound\"] when nothing matches"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _firstcase(x: Expr, patt: Expr, default: Expr = None, levels: Expr = None) -> Expr:
     args = [x, patt] + ([levels] if levels is not None else [L(1)]) + [1]
     r = ev(Expr("Cases", *args))
@@ -472,7 +500,9 @@ def _firstcase(x: Expr, patt: Expr, default: Expr = None, levels: Expr = None) -
 
 
 @fn("Pick", **ADDED, notes="Pick[list, sel] keeps elements whose selector is True; Pick[list, sel, patt] those whose "
-                           "selector matches patt; nested selector lists pick at deeper levels")
+                           "selector matches patt; nested selector lists pick at deeper levels"
+                           ". Check: exact (exact input gives exact results), reference (differential cases in "
+                           "tests/library).")
 def _pick(x: Expr, sel: Expr, patt: Expr = None) -> Expr:
     def ok(s):
         if patt is None:
@@ -498,7 +528,9 @@ def _pick(x: Expr, sel: Expr, patt: Expr = None) -> Expr:
     return v
 
 
-@fn("TakeWhile", **ADDED, notes="leading elements for which crit is True")
+@fn("TakeWhile", **ADDED, notes="leading elements for which crit is True"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _takewhile(x: Expr, crit: Fn) -> Expr:
     out = []
     for e in items_of(x, "TakeWhile"):
@@ -508,7 +540,9 @@ def _takewhile(x: Expr, crit: Fn) -> Expr:
     return _rebuild(x, out) if not is_assoc(x) else L(*out)
 
 
-@fn("LengthWhile", **ADDED, notes="number of leading elements for which crit is True")
+@fn("LengthWhile", **ADDED, notes="number of leading elements for which crit is True"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _lengthwhile(x: Expr, crit: Fn) -> Expr:
     n = 0
     for e in items_of(x, "LengthWhile"):
@@ -518,12 +552,16 @@ def _lengthwhile(x: Expr, crit: Fn) -> Expr:
     return n
 
 
-@fn("TakeDrop", **ADDED, notes="TakeDrop[list, spec] = {Take[list, spec], Drop[list, spec]}")
+@fn("TakeDrop", **ADDED, notes="TakeDrop[list, spec] = {Take[list, spec], Drop[list, spec]}"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _takedrop(x: Expr, spec: Expr) -> ListOf[Expr]:
     return L(ev(Expr("Take", x, spec)), ev(Expr("Drop", x, spec)))
 
 
-@fn("TakeList", **ADDED, notes="TakeList[list, {n1, n2, ...}] gives successive pieces; ni may be UpTo[k] or All")
+@fn("TakeList", **ADDED, notes="TakeList[list, {n1, n2, ...}] gives successive pieces; ni may be UpTo[k] or All"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _takelist(x: Expr, specs: ListOf[Expr]) -> ListOf[Expr]:
     items = items_of(x, "TakeList")
     if not is_list(specs):
@@ -540,7 +578,9 @@ def _takelist(x: Expr, specs: ListOf[Expr]) -> ListOf[Expr]:
     return L(*out)
 
 
-@fn("DeleteAdjacentDuplicates", **ADDED, notes="removes elements equal (SameQ, or the given test) to their predecessor")
+@fn("DeleteAdjacentDuplicates", **ADDED, notes="removes elements equal (SameQ, or the given test) to their predecessor"
+                                               ". Check: exact (exact input gives exact results), reference "
+                                               "(differential cases in tests/library).")
 def _deladj(x: Expr, test: Fn = None) -> Expr:
     items = items_of(x, "DeleteAdjacentDuplicates")
     t = tester(test)
@@ -553,7 +593,9 @@ def _deladj(x: Expr, test: Fn = None) -> Expr:
 
 
 @fn("DeleteElements", **ADDED, notes="DeleteElements[list, elems] removes every occurrence of the elements; "
-                                     "DeleteElements[list, n -> elems] at most n of each")
+                                     "DeleteElements[list, n -> elems] at most n of each"
+                                     ". Check: exact (exact input gives exact results), reference (differential "
+                                     "cases in tests/library).")
 def _delelems(x: Expr, elems: Expr) -> Expr:
     items = items_of(x, "DeleteElements")
     limit = None
@@ -602,12 +644,16 @@ def _extremal_by(x, f, n, fname, largest):
 
 
 @fn("MaximalBy", **ADDED, notes="MaximalBy[list, f]: all elements maximising f (canonical order of f values), in "
-                                "their original order; MaximalBy[list, f, n | UpTo[n]]: the n largest by f")
+                                "their original order; MaximalBy[list, f, n | UpTo[n]]: the n largest by f"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _maximalby(x: Expr, f: Expr, n: Expr = None) -> Expr:
     return _extremal_by(x, f, n, "MaximalBy", True)
 
 
-@fn("MinimalBy", **ADDED, notes="MinimalBy[list, f]: all elements minimising f; MinimalBy[list, f, n]: the n smallest by f")
+@fn("MinimalBy", **ADDED, notes="MinimalBy[list, f]: all elements minimising f; MinimalBy[list, f, n]: the n smallest by f"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _minimalby(x: Expr, f: Expr, n: Expr = None) -> Expr:
     return _extremal_by(x, f, n, "MinimalBy", False)
 
@@ -639,23 +685,31 @@ def _take_extreme(x, n, fname, largest, f=None):
 
 
 @fn("TakeLargest", **ADDED, notes="the n largest numeric elements in decreasing order (Missing[...] ignored); UpTo[n]; "
-                                  "an association gives an association")
+                                  "an association gives an association"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _takelargest(x: Expr, n: Expr) -> Expr:
     return _take_extreme(x, n, "TakeLargest", True)
 
 
 @fn("TakeSmallest", **ADDED, notes="the n smallest numeric elements in increasing order (Missing[...] ignored); "
-                                   "UpTo[n]; an association gives an association")
+                                   "UpTo[n]; an association gives an association"
+                                   ". Check: exact (exact input gives exact results), reference (differential cases "
+                                   "in tests/library).")
 def _takesmallest(x: Expr, n: Expr) -> Expr:
     return _take_extreme(x, n, "TakeSmallest", False)
 
 
-@fn("TakeLargestBy", **ADDED, notes="the n elements with the largest numeric f values, in decreasing order of f")
+@fn("TakeLargestBy", **ADDED, notes="the n elements with the largest numeric f values, in decreasing order of f"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _takelargestby(x: Expr, f: Expr, n: Expr) -> Expr:
     return _take_extreme(x, n, "TakeLargestBy", True, f)
 
 
-@fn("TakeSmallestBy", **ADDED, notes="the n elements with the smallest numeric f values, in increasing order of f")
+@fn("TakeSmallestBy", **ADDED, notes="the n elements with the smallest numeric f values, in increasing order of f"
+                                     ". Check: exact (exact input gives exact results), reference (differential "
+                                     "cases in tests/library).")
 def _takesmallestby(x: Expr, f: Expr, n: Expr) -> Expr:
     return _take_extreme(x, n, "TakeSmallestBy", False, f)
 
@@ -674,12 +728,16 @@ def _position_extreme(x, n, fname, largest):
 
 
 @fn("PositionLargest", **ADDED, notes="positions of the largest element(s); PositionLargest[list, n] positions of the "
-                                      "n largest in decreasing order")
+                                      "n largest in decreasing order"
+                                      ". Check: exact (exact input gives exact results), reference (differential "
+                                      "cases in tests/library).")
 def _poslargest(x: Expr, n: Expr = None) -> Expr:
     return _position_extreme(x, n, "PositionLargest", True)
 
 
-@fn("PositionSmallest", **ADDED, notes="positions of the smallest element(s); PositionSmallest[list, n]")
+@fn("PositionSmallest", **ADDED, notes="positions of the smallest element(s); PositionSmallest[list, n]"
+                                       ". Check: exact (exact input gives exact results), reference (differential "
+                                       "cases in tests/library).")
 def _possmallest(x: Expr, n: Expr = None) -> Expr:
     return _position_extreme(x, n, "PositionSmallest", False)
 
@@ -734,7 +792,9 @@ def _seq_rule(r):
 
 @fn("SequenceCases", **ADDED, notes="non-overlapping runs matching a list pattern ({a, _}, {__Integer}, "
                                     "{x_, y_} /; cond, ...; the longest match at each start) or patt -> rhs; "
-                                    "Overlaps -> True")
+                                    "Overlaps -> True"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _seqcases(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_options(rest, {"Overlaps"}, "SequenceCases")
     items = items_of(x, "SequenceCases")
@@ -751,7 +811,9 @@ def _seqcases(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
 
 
 @fn("SequencePosition", **ADDED, notes="{start, end} of runs matching a list pattern; overlapping "
-                                       "matches are included (Overlaps -> True default); Overlaps -> False")
+                                       "matches are included (Overlaps -> True default); Overlaps -> False"
+                                       ". Check: exact (exact input gives exact results), reference (differential "
+                                       "cases in tests/library).")
 def _seqpos(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_options(rest, {"Overlaps"}, "SequencePosition")
     items = items_of(x, "SequencePosition")
@@ -762,14 +824,18 @@ def _seqpos(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
     return L(*out)
 
 
-@fn("SequenceCount", **ADDED, notes="number of non-overlapping occurrences of a sublist or list pattern")
+@fn("SequenceCount", **ADDED, notes="number of non-overlapping occurrences of a sublist or list pattern"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _seqcount(x: Expr, patt: Expr, *rest: Expr) -> Integer:
     rest, opts = split_options(rest, {"Overlaps"}, "SequenceCount")
     return len(_seq_matches(items_of(x, "SequenceCount"), patt, "SequenceCount", opts.get("Overlaps") is True))
 
 
 @fn("SequenceReplace", **ADDED, notes="replaces non-overlapping runs matching a list pattern -> rhs (rhs is one "
-                                       "element)")
+                                       "element)"
+                                       ". Check: exact (exact input gives exact results), reference (differential "
+                                       "cases in tests/library).")
 def _seqreplace(x: Expr, rules: Expr, n: Expr = None) -> Expr:
     items = items_of(x, "SequenceReplace")
     rs = list(rules.args) if is_list(rules) and rules.args and all(is_rule(r) for r in rules.args) else [rules]
@@ -797,7 +863,9 @@ def _seqreplace(x: Expr, rules: Expr, n: Expr = None) -> Expr:
 
 
 @fn("SequenceSplit", **ADDED, notes="splits at runs matching a list pattern (empty pieces at the ends "
-                                    "dropped, as Wolfram); patt -> rhs keeps rhs between the pieces")
+                                    "dropped, as Wolfram); patt -> rhs keeps rhs between the pieces"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _seqsplit(x: Expr, patt: Expr, n: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "SequenceSplit")
     p, r = _seq_rule(patt)
@@ -821,7 +889,9 @@ def _seqsplit(x: Expr, patt: Expr, n: Expr = None) -> ListOf[Expr]:
 # ─────────────────────────── structure ───────────────────────────
 
 @fn("Level", **ADDED, notes="Level[expr, levelspec] (post-order, as Wolfram; associations are one level of values); "
-                            "Level[expr, spec, f] gives f[parts...]; Heads -> True")
+                            "Level[expr, spec, f] gives f[parts...]; Heads -> True"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _level(x: Expr, spec: Expr, *rest: Expr) -> Expr:
     rest, opts = split_options(rest, {"Heads"}, "Level")
     sp_ = KL.level_spec(spec, (1, 1))
@@ -832,7 +902,9 @@ def _level(x: Expr, spec: Expr, *rest: Expr) -> Expr:
 
 
 @fn("Depth", **ADDED, notes="1 for atoms, else 1 + the maximum depth of the elements (heads ignored; an association "
-                            "is one level)")
+                            "is one level)"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _depth(x: Expr, *rest: Expr) -> Expr:
     return KL.depth(x)
 
@@ -869,7 +941,9 @@ def _array_depth(x):
     return len(KL.array_dims(x)) if is_list(x) else 0
 
 
-@fn("ArrayDepth", **ADDED, notes="depth to which expr is a full array of lists (0 for non-lists)")
+@fn("ArrayDepth", **ADDED, notes="depth to which expr is a full array of lists (0 for non-lists)"
+                                 ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                 "tests/library).")
 def _arraydepth(x: Expr) -> Expr:
     return _array_depth(x)
 
@@ -881,7 +955,8 @@ def _leaves(x, d):
 
 
 @fn("ArrayQ", **ADDED, notes="ArrayQ[expr], ArrayQ[expr, n] (n may be a pattern) and ArrayQ[expr, n, test] for the "
-                             "elements")
+                             "elements"
+                             ". Check: reference (differential cases in tests/library).")
 def _arrayq(x: Expr, n: Expr = None, test: Fn = None) -> Boolean:
     if not is_list(x):
         return False
@@ -902,14 +977,16 @@ def _arrayq(x: Expr, n: Expr = None, test: Fn = None) -> Boolean:
     return True
 
 
-@fn("VectorQ", **ADDED, notes="a list none of whose elements is a list; VectorQ[expr, test]")
+@fn("VectorQ", **ADDED, notes="a list none of whose elements is a list; VectorQ[expr, test]"
+                              ". Check: reference (differential cases in tests/library).")
 def _vectorq(x: Expr, test: Fn = None) -> Boolean:
     if not is_list(x) or any(is_list(e) for e in x.args):
         return False
     return test is None or all(true(test, e) for e in x.args)
 
 
-@fn("MatrixQ", **ADDED, notes="a list of equal-length lists (depth-2 full array); MatrixQ[expr, test]")
+@fn("MatrixQ", **ADDED, notes="a list of equal-length lists (depth-2 full array); MatrixQ[expr, test]"
+                              ". Check: reference (differential cases in tests/library).")
 def _matrixq(x: Expr, test: Fn = None) -> Boolean:
     if not is_list(x) or not x.args or not all(is_list(r) for r in x.args):
         return False
@@ -921,7 +998,9 @@ def _matrixq(x: Expr, test: Fn = None) -> Boolean:
 
 # ─────────────────────────── rearranging ───────────────────────────
 
-@fn("Split", **ADDED, notes="runs of identical (SameQ) adjacent elements; Split[list, test] tests adjacent pairs")
+@fn("Split", **ADDED, notes="runs of identical (SameQ) adjacent elements; Split[list, test] tests adjacent pairs"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _split(x: Expr, test: Fn = None) -> ListOf[Expr]:
     items = items_of(x, "Split")
     t = tester(test)
@@ -934,7 +1013,9 @@ def _split(x: Expr, test: Fn = None) -> ListOf[Expr]:
     return L(*(_rebuild(x, g) for g in out))
 
 
-@fn("SplitBy", **ADDED, notes="runs with identical f values; SplitBy[list, {f1, f2, ...}] splits recursively")
+@fn("SplitBy", **ADDED, notes="runs with identical f values; SplitBy[list, {f1, f2, ...}] splits recursively"
+                              ". Check: exact (exact input gives exact results), reference (differential cases in "
+                              "tests/library).")
 def _splitby(x: Expr, f: Expr) -> Expr:
     items = items_of(x, "SplitBy")
     fs = list(f.args) if is_list(f) else [f]
@@ -956,7 +1037,8 @@ def _splitby(x: Expr, f: Expr) -> Expr:
 
 
 @fn("Gather", area=AREA, status="promoted",
-    notes="classes of identical (SameQ) elements in order of first appearance; Gather[list, test]")
+    notes="classes of identical (SameQ) elements in order of first appearance; Gather[list, test]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gather(x: Expr, test: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Gather")
     _keys, groups = classes(items, test=test) if test is not None else classes(items)
@@ -964,7 +1046,9 @@ def _gather(x: Expr, test: Expr = None) -> ListOf[Expr]:
 
 
 @fn("GatherBy", **ADDED, notes="classes with identical f values, in order of first appearance; GatherBy[list, {f1, "
-                               "f2}] nests")
+                               "f2}] nests"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _gatherby(x: Expr, f: Expr) -> Expr:
     items = items_of(x, "GatherBy")
     fs = list(f.args) if is_list(f) else [f]
@@ -978,7 +1062,9 @@ def _gatherby(x: Expr, f: Expr) -> Expr:
 
 
 @fn("FlattenAt", **ADDED, notes="FlattenAt[list, n], FlattenAt[list, {i, j, ...}] and several positions "
-                                "{{...}, ...}: splices the sublist at that position into its parent")
+                                "{{...}, ...}: splices the sublist at that position into its parent"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _flattenat(x: Expr, spec: Expr) -> Expr:
     poss = _positions(spec, "FlattenAt")
     rps = [_resolve(x, p, "FlattenAt") for p in poss]
@@ -1001,7 +1087,9 @@ def _flatten_at(x, rp):
 
 
 @fn("ArrayReshape", **ADDED, notes="ArrayReshape[list, dims]: the flattened elements arranged with the given dimensions, "
-                                   "padded with 0 (or the given padding) when there are too few")
+                                   "padded with 0 (or the given padding) when there are too few"
+                                   ". Check: exact (exact input gives exact results), reference (differential cases "
+                                   "in tests/library).")
 def _arrayreshape(x: Expr, dims: Expr, pad: Expr = 0) -> Expr:
     ds = _seq_spec_list(dims, "ArrayReshape")
     flat = ev(Expr("Flatten", x)).args if is_list(x) else [x]
@@ -1019,7 +1107,9 @@ def _arrayreshape(x: Expr, dims: Expr, pad: Expr = 0) -> Expr:
 
 
 @fn("ArrayFlatten", **ADDED, notes="ArrayFlatten[{{m11, m12, ...}, ...}] builds a block matrix; scalar blocks (e.g. 0) "
-                                   "become constant blocks of the matching size")
+                                   "become constant blocks of the matching size"
+                                   ". Check: exact (exact input gives exact results), reference (differential cases "
+                                   "in tests/library).")
 def _arrayflatten(x: Expr, r: Expr = None) -> ListOf[Expr]:
     if r is not None and not (is_int(r) and int(r) == 2):
         raise NotImplementedError("ArrayFlatten: only rank-2 block matrices are supported")
@@ -1103,7 +1193,9 @@ def _ragged_dims(x):
 
 
 @fn("PadLeft", **ADDED, notes="PadLeft[list, n, x] pads on the left with x (default 0) or keeps the last n elements; "
-                              "PadLeft[list, {n1, n2}] and PadLeft[ragged] (to a full array); cyclic list padding raises")
+                              "PadLeft[list, {n1, n2}] and PadLeft[ragged] (to a full array); cyclic list padding raises"
+                              ". Check: exact (exact input gives exact results), reference (differential cases in "
+                              "tests/library).")
 def _padleft(x: Expr, n: Expr = None, padval: Expr = 0) -> Expr:
     if n is None:
         dims = _ragged_dims(x)
@@ -1112,7 +1204,9 @@ def _padleft(x: Expr, n: Expr = None, padval: Expr = 0) -> Expr:
 
 
 @fn("PadRight", **ADDED, notes="PadRight[list, n, x] pads on the right with x (default 0) or keeps the first n elements; "
-                               "PadRight[list, {n1, n2}] and PadRight[ragged]; cyclic list padding raises")
+                               "PadRight[list, {n1, n2}] and PadRight[ragged]; cyclic list padding raises"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _padright(x: Expr, n: Expr = None, padval: Expr = 0) -> Expr:
     if n is None:
         dims = _ragged_dims(x)
@@ -1160,19 +1254,25 @@ def _sortby_order(items, fs, p, fname):
     return KL.sort_items(idx, ev, p, fname, key=lambda i: keys[i][0])
 
 
-@fn("ReverseSort", **ADDED, notes="Reverse[Sort[list]] (reverse canonical order); ReverseSort[list, p]")
+@fn("ReverseSort", **ADDED, notes="Reverse[Sort[list]] (reverse canonical order); ReverseSort[list, p]"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _reversesort(x: Expr, p: Expr = None) -> Expr:
     s = ev(Expr("Sort", x, *(() if p is None else (p,))))
     return ev(Expr("Reverse", s))
 
 
-@fn("ReverseSortBy", **ADDED, notes="Reverse[SortBy[list, f]]: decreasing f values, ties in reverse canonical order")
+@fn("ReverseSortBy", **ADDED, notes="Reverse[SortBy[list, f]]: decreasing f values, ties in reverse canonical order"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _reversesortby(x: Expr, f: Expr) -> Expr:
     return ev(Expr("Reverse", ev(Expr("SortBy", x, f))))
 
 
 @fn("Ordering", **ADDED, notes="positions that put the list in canonical order (stable); Ordering[list, n] the first n "
-                               "(negative n: the last n), Ordering[list, n, p] with ordering p")
+                               "(negative n: the last n), Ordering[list, n, p] with ordering p"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _ordering(x: Expr, n: Expr = None, p: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Ordering")
     idx = list(range(len(items)))
@@ -1189,7 +1289,9 @@ def _ordering(x: Expr, n: Expr = None, p: Expr = None) -> ListOf[Expr]:
 
 
 @fn("OrderingBy", **ADDED, notes="positions that sort the list by f (ties by canonical order of the elements); "
-                                 "OrderingBy[list, f, n]")
+                                 "OrderingBy[list, f, n]"
+                                 ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                 "tests/library).")
 def _orderingby(x: Expr, f: Expr, n: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "OrderingBy")
     order = _sortby_order(items, [f], None, "OrderingBy")
@@ -1200,7 +1302,8 @@ def _orderingby(x: Expr, f: Expr, n: Expr = None) -> ListOf[Expr]:
 
 
 @fn("NumericalSort", **ADDED, notes="sorts numeric elements by numerical value (ties by canonical order); "
-                                    "non-numeric elements raise")
+                                    "non-numeric elements raise"
+                                    ". Check: reference (differential cases in tests/library).")
 def _numericalsort(x: Expr) -> Expr:
     items = items_of(x, "NumericalSort")
     keyed = sorted(((_num_key(e, "NumericalSort"), i, e) for i, e in enumerate(items)), key=lambda t: (t[0], t[1]))
@@ -1216,14 +1319,18 @@ def _numericalsort(x: Expr) -> Expr:
     return _rebuild(x, out)
 
 
-@fn("DeleteDuplicatesBy", **ADDED, notes="keeps the first element for each distinct (SameQ) value of f")
+@fn("DeleteDuplicatesBy", **ADDED, notes="keeps the first element for each distinct (SameQ) value of f"
+                                         ". Check: exact (exact input gives exact results), reference (differential "
+                                         "cases in tests/library).")
 def _deldupby(x: Expr, f: Fn) -> Expr:
     items = items_of(x, "DeleteDuplicatesBy")
     _k, groups = classes(items, keyf=lambda e: apply(f, e))
     return _rebuild(x, [g[0] for g in groups]) if not is_assoc(x) else L(*(g[0] for g in groups))
 
 
-@fn("Catenate", **ADDED, notes="joins a list of lists (and/or associations, whose values are used) into one list")
+@fn("Catenate", **ADDED, notes="joins a list of lists (and/or associations, whose values are used) into one list"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _catenate(x: Expr) -> ListOf[Expr]:
     parts = items_of(x, "Catenate")
     out = []
@@ -1254,24 +1361,32 @@ def _contains(fname, check):
     return impl
 
 
-fn("ContainsAll", **ADDED, notes="every element of e2 occurs in e1 (SameQ or SameTest)")(
+fn("ContainsAll", **ADDED, notes="every element of e2 occurs in e1 (SameQ or SameTest)"
+                                 ". Check: reference (differential cases in tests/library).")(
     _contains("ContainsAll", lambda xs, ys, t: all(any(t(x, y) for x in xs) for y in ys)))
-fn("ContainsAny", **ADDED, notes="some element of e2 occurs in e1")(
+fn("ContainsAny", **ADDED, notes="some element of e2 occurs in e1"
+                                 ". Check: reference (differential cases in tests/library).")(
     _contains("ContainsAny", lambda xs, ys, t: any(any(t(x, y) for x in xs) for y in ys)))
-fn("ContainsNone", **ADDED, notes="no element of e2 occurs in e1")(
+fn("ContainsNone", **ADDED, notes="no element of e2 occurs in e1"
+                                  ". Check: reference (differential cases in tests/library).")(
     _contains("ContainsNone", lambda xs, ys, t: not any(any(t(x, y) for x in xs) for y in ys)))
-fn("ContainsOnly", **ADDED, notes="every element of e1 occurs in e2")(
+fn("ContainsOnly", **ADDED, notes="every element of e1 occurs in e2"
+                                  ". Check: reference (differential cases in tests/library).")(
     _contains("ContainsOnly", lambda xs, ys, t: all(any(t(x, y) for y in ys) for x in xs)))
-fn("ContainsExactly", **ADDED, notes="e1 and e2 have the same distinct elements")(
+fn("ContainsExactly", **ADDED, notes="e1 and e2 have the same distinct elements"
+                                     ". Check: reference (differential cases in tests/library).")(
     _contains("ContainsExactly", lambda xs, ys, t: all(any(t(x, y) for y in ys) for x in xs)
               and all(any(t(x, y) for x in xs) for y in ys)))
-fn("DisjointQ", **ADDED, notes="the lists have no element in common")(
+fn("DisjointQ", **ADDED, notes="the lists have no element in common"
+                               ". Check: reference (differential cases in tests/library).")(
     _contains("DisjointQ", lambda xs, ys, t: not any(t(x, y) for x in xs for y in ys)))
-fn("IntersectingQ", **ADDED, notes="the lists have at least one element in common")(
+fn("IntersectingQ", **ADDED, notes="the lists have at least one element in common"
+                                   ". Check: reference (differential cases in tests/library).")(
     _contains("IntersectingQ", lambda xs, ys, t: any(t(x, y) for x in xs for y in ys)))
 
 
-@fn("DuplicateFreeQ", **ADDED, notes="no two elements are SameQ (or equivalent under the given test)")
+@fn("DuplicateFreeQ", **ADDED, notes="no two elements are SameQ (or equivalent under the given test)"
+                                     ". Check: reference (differential cases in tests/library).")
 def _dupfreeq(x: Expr, test: Expr = None) -> Boolean:
     items = items_of(x, "DuplicateFreeQ")
     return len(dedup(items, test)) == len(items)
@@ -1285,24 +1400,32 @@ def _counts(x):
     return KL.make_assoc([(k, len(g)) for k, g in zip(keys, groups)])
 
 
-@fn("CountsBy", **ADDED, notes="<|f[e] -> count, ...|> in order of first appearance")
+@fn("CountsBy", **ADDED, notes="<|f[e] -> count, ...|> in order of first appearance"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _countsby(x: Expr, f: Fn) -> Expr:
     keys, groups = classes(items_of(x, "CountsBy"), keyf=lambda e: apply(f, e))
     return KL.make_assoc([(k, len(g)) for k, g in zip(keys, groups)])
 
 
-@fn("CountDistinct", **ADDED, notes="number of distinct (SameQ) elements; CountDistinct[list, test]")
+@fn("CountDistinct", **ADDED, notes="number of distinct (SameQ) elements; CountDistinct[list, test]"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _countdistinct(x: Expr, test: Expr = None) -> Integer:
     return len(dedup(items_of(x, "CountDistinct"), test))
 
 
-@fn("CountDistinctBy", **ADDED, notes="number of distinct values of f")
+@fn("CountDistinctBy", **ADDED, notes="number of distinct values of f"
+                                      ". Check: exact (exact input gives exact results), reference (differential "
+                                      "cases in tests/library).")
 def _countdistinctby(x: Expr, f: Fn) -> Integer:
     keys, _ = classes(items_of(x, "CountDistinctBy"), keyf=lambda e: apply(f, e))
     return len(keys)
 
 
-@fn("PositionIndex", **ADDED, notes="<|e -> {positions}, ...|> in order of first appearance")
+@fn("PositionIndex", **ADDED, notes="<|e -> {positions}, ...|> in order of first appearance"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _positionindex(x: Expr) -> Expr:
     items = items_of(x, "PositionIndex")
     if is_assoc(x):
@@ -1364,7 +1487,9 @@ def _bin_index(v, edges):
 
 
 @fn("BinCounts", **ADDED, notes="counts in bins [b_k, b_k+1): BinCounts[data, dx] (bins at multiples of dx), "
-                                "BinCounts[data, {min, max, dx}] and BinCounts[data, {{b1, b2, ...}}]")
+                                "BinCounts[data, {min, max, dx}] and BinCounts[data, {{b1, b2, ...}}]"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _bincounts(data: Expr, spec: Expr = None) -> ListOf[Expr]:
     if spec is None:
         raise NotImplementedError("BinCounts[data] with automatic bins is not supported; give a bin width")
@@ -1379,7 +1504,9 @@ def _bincounts(data: Expr, spec: Expr = None) -> ListOf[Expr]:
 
 
 @fn("BinLists", **ADDED, notes="the elements falling in each bin [b_k, b_k+1), with the same bin specifications "
-                               "as BinCounts")
+                               "as BinCounts"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _binlists(data: Expr, spec: Expr = None) -> ListOf[Expr]:
     if spec is None:
         raise NotImplementedError("BinLists[data] with automatic bins is not supported; give a bin width")
@@ -1393,7 +1520,9 @@ def _binlists(data: Expr, spec: Expr = None) -> ListOf[Expr]:
     return L(*(L(*b) for b in out))
 
 
-@fn("Ratios", **ADDED, notes="successive ratios a[i+1]/a[i]; Ratios[list, n] for n-th ratios")
+@fn("Ratios", **ADDED, notes="successive ratios a[i+1]/a[i]; Ratios[list, n] for n-th ratios"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")
 def _ratios(x: Expr, n: Integer = 1) -> ListOf[Expr]:
     items = items_of(x, "Ratios")
     k = int_value(n, "Ratios", "order", 0)
@@ -1403,7 +1532,9 @@ def _ratios(x: Expr, n: Integer = 1) -> ListOf[Expr]:
 
 
 @fn("MinMax", **ADDED, notes="{Min[list], Max[list]}; MinMax[list, d] = {min - d, max + d}; "
-                             "MinMax[list, {dmin, dmax}]; Scaled[s] pads by s times the range")
+                             "MinMax[list, {dmin, dmax}]; Scaled[s] pads by s times the range"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")
 def _minmax(x: Expr, d: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "MinMax")
     lo, hi = ev(Expr("Min", L(*items))), ev(Expr("Max", L(*items)))
@@ -1420,7 +1551,9 @@ def _minmax(x: Expr, d: Expr = None) -> ListOf[Expr]:
 
 # ─────────────────────────── functional ───────────────────────────
 
-@fn("MapApply", **ADDED, notes="MapApply[f, expr] = f @@@ expr = Apply[f, expr, {1}]")
+@fn("MapApply", **ADDED, notes="MapApply[f, expr] = f @@@ expr = Apply[f, expr, {1}]"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _mapapply(f: Expr, x: Expr) -> Expr:
     return ev(Expr("Apply", f, x, L(1)))
 
@@ -1439,7 +1572,9 @@ def _scan(f: Fn, x: Expr, levels: Expr = None) -> Expr:
     return None
 
 
-@fn("Through", **ADDED, notes="Through[p[f, g][x]] = p[f[x], g[x]]; Through[expr, h] only when p is h")
+@fn("Through", **ADDED, notes="Through[p[f, g][x]] = p[f[x], g[x]]; Through[expr, h] only when p is h"
+                              ". Check: exact (exact input gives exact results), reference (differential cases in "
+                              "tests/library).")
 def _through(x: Expr, h: Expr = None) -> Expr:
     if not isinstance(x, Expr) or not isinstance(x.head, Expr):
         return x
@@ -1451,7 +1586,9 @@ def _through(x: Expr, h: Expr = None) -> Expr:
 
 @fn("Operate", **ADDED, notes="Operate[p, f[x, y]] = p[f][x, y]; Operate[p, expr, 0] = p[expr]; Operate[p, expr, n] "
                               "applies p to the head n levels down (f[a][b] at level 2 gives p[f][a][b]); an atomic "
-                              "head that deep leaves expr unchanged")
+                              "head that deep leaves expr unchanged"
+                              ". Check: exact (exact input gives exact results), reference (differential cases in "
+                              "tests/library).")
 def _operate(p: Fn, x: Expr, n: Integer = 1) -> Expr:
     k = int_value(n, "Operate", "level", 0)
 
@@ -1469,7 +1606,9 @@ def _operate(p: Fn, x: Expr, n: Integer = 1) -> Expr:
     return ev(go(x, k))
 
 
-@fn("Construct", **ADDED, notes="Construct[f, x, y, ...] = f[x, y, ...]")
+@fn("Construct", **ADDED, notes="Construct[f, x, y, ...] = f[x, y, ...]"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _construct(f: Fn, *args: Expr) -> Expr:
     return apply(f, *args)
 
@@ -1510,17 +1649,23 @@ def _nestwhile(f, x, test, m=None, mx=None, n=None, keep=False, fname="NestWhile
     return L(*out) if keep else out[-1]
 
 
-@fn("NestWhile", **ADDED, notes="applies f while test[result] is True; NestWhile[f, x, test, m | All, max, n]")
+@fn("NestWhile", **ADDED, notes="applies f while test[result] is True; NestWhile[f, x, test, m | All, max, n]"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _nw(f: Fn, x: Expr, test: Expr, m: Expr = None, mx: Expr = None, n: Expr = None) -> Expr:
     return _nestwhile(f, x, test, m, mx, n, False, "NestWhile")
 
 
-@fn("NestWhileList", **ADDED, notes="the list of results of NestWhile, starting with x")
+@fn("NestWhileList", **ADDED, notes="the list of results of NestWhile, starting with x"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _nwl(f: Fn, x: Expr, test: Expr, m: Expr = None, mx: Expr = None, n: Expr = None) -> Expr:
     return _nestwhile(f, x, test, m, mx, n, True, "NestWhileList")
 
 
-@fn("ComposeList", **ADDED, notes="ComposeList[{f1, f2, ...}, x] = {x, f1[x], f2[f1[x]], ...}")
+@fn("ComposeList", **ADDED, notes="ComposeList[{f1, f2, ...}, x] = {x, f1[x], f2[f1[x]], ...}"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _composelist(fs: Expr, x: Expr) -> ListOf[Expr]:
     out = [x]
     for f in items_of(fs, "ComposeList"):
@@ -1546,14 +1691,21 @@ def _truth_over(fname, mode):
     return impl
 
 
-fn("AllTrue", **ADDED, notes="test[e] is True for every element (stops at the first failure); optional level")(
+fn("AllTrue", **ADDED, notes="test[e] is True for every element (stops at the first failure); optional level"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")(
     _truth_over("AllTrue", "all"))
-fn("AnyTrue", **ADDED, notes="test[e] is True for some element (stops at the first success); optional level")(
+fn("AnyTrue", **ADDED, notes="test[e] is True for some element (stops at the first success); optional level"
+                             ". Check: reference (differential cases in tests/library).")(
     _truth_over("AnyTrue", "any"))
-fn("NoneTrue", **ADDED, notes="test[e] is True for no element; optional level")(_truth_over("NoneTrue", "none"))
+fn("NoneTrue", **ADDED, notes="test[e] is True for no element; optional level"
+                              ". Check: reference (differential cases in "
+                              "tests/library).")(_truth_over("NoneTrue", "none"))
 
 
-@fn("BlockMap", **ADDED, notes="BlockMap[f, list, n] = Map[f, Partition[list, n]]; BlockMap[f, list, n, d]")
+@fn("BlockMap", **ADDED, notes="BlockMap[f, list, n] = Map[f, Partition[list, n]]; BlockMap[f, list, n, d]"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _blockmap(f: Expr, x: Expr, n: Expr, d: Expr = None) -> Expr:
     parts = ev(Expr("Partition", x, n, *(() if d is None else (d,))))
     return ev(Expr("Map", f, parts))
@@ -1561,7 +1713,8 @@ def _blockmap(f: Expr, x: Expr, n: Expr, d: Expr = None) -> Expr:
 
 # ─────────────────────────── tests and ordering ───────────────────────────
 
-@fn("OrderedQ", **ADDED, notes="True when the elements are in canonical (non-decreasing) order, or ordered by p")
+@fn("OrderedQ", **ADDED, notes="True when the elements are in canonical (non-decreasing) order, or ordered by p"
+                               ". Check: reference (differential cases in tests/library).")
 def _orderedq(x: Expr, p: Fn = None) -> Boolean:
     items = items_of(x, "OrderedQ")
     for u, v in zip(items, items[1:]):
@@ -1575,7 +1728,9 @@ def _orderedq(x: Expr, p: Fn = None) -> Boolean:
     return True
 
 
-@fn("Order", **ADDED, notes="1 if e1 comes before e2 in canonical order, -1 if after, 0 if identical")
+@fn("Order", **ADDED, notes="1 if e1 comes before e2 in canonical order, -1 if after, 0 if identical"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _order(a: Expr, b: Expr) -> Expr:
     if same(a, b):
         return 0
@@ -1584,7 +1739,8 @@ def _order(a: Expr, b: Expr) -> Expr:
 
 
 @fn("Between", **ADDED, notes="min <= x <= max for {min, max}, or within any interval of {{min1, max1}, ...}; "
-                              "Between[{min, max}] is an operator form")
+                              "Between[{min, max}] is an operator form"
+                              ". Check: reference (differential cases in tests/library).")
 def _between(x: Expr, spec: ListOf[Expr]) -> Boolean:
     if not is_list(spec):
         raise ValueError("Between: the range must be {min, max}")
@@ -1601,7 +1757,8 @@ def _between(x: Expr, spec: ListOf[Expr]) -> Boolean:
     return False
 
 
-@fn("BooleanQ", area=AREA, status="promoted", notes="True exactly for True and False")
+@fn("BooleanQ", area=AREA, status="promoted", notes="True exactly for True and False"
+                                                    ". Check: reference (differential cases in tests/library).")
 def _booleanq(x: Expr) -> Boolean:
     return isinstance(x, bool)
 
@@ -1653,7 +1810,8 @@ def _apply_rules(e, rules):
 @fn("Replace", **ADDED,
     notes="Replace[expr, rules] tries the rules on the whole expression only (unlike ReplaceAll); "
           "Replace[expr, rules, levelspec] at the given levels, deepest parts first; a list of rule lists gives "
-          "a list of results")
+          "a list of results"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _replace(e: Expr, r: Expr, spec: Expr = None) -> Expr:
     if is_list(r) and r.args and all(is_list(x) for x in r.args):
         return L(*(_replace(e, x, spec) for x in r.args))
@@ -1667,7 +1825,8 @@ def _replace(e: Expr, r: Expr, spec: Expr = None) -> Expr:
 @fn("ReplaceList", **ADDED,
     notes="all results of applying the rules to the whole expression in every way they match (sequence patterns "
           "give one result per split; Orderless heads give each distinct binding once, in matcher order rather "
-          "than Wolfram's); ReplaceList[expr, rules, n] keeps at most n")
+          "than Wolfram's); ReplaceList[expr, rules, n] keeps at most n"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _replacelist(e: Expr, r: Expr, n: Expr = None) -> ListOf[Expr]:
     rules = _rule_list(r, "ReplaceList")
     lim = None if n is None else int_value(n, "ReplaceList", "count", lo=0)
@@ -1688,7 +1847,9 @@ def _replacelist(e: Expr, r: Expr, n: Expr = None) -> ListOf[Expr]:
     return L(*out)
 
 
-@fn("Minus", **ADDED, notes="Minus[x] = -x (Times[-1, x]); threads over lists")
+@fn("Minus", **ADDED, notes="Minus[x] = -x (Times[-1, x]); threads over lists"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _minus(x: Expr) -> Expr:
     return ev(Expr("Times", -1, x))
 
@@ -1719,22 +1880,27 @@ def _matches_all(x, patt, fname):
     return [K.first_match(patt, e, ev) is not None for e in items]
 
 
-@fn("AllMatch", **ADDED, notes="True if every element (or association value) matches the pattern; operator form")
+@fn("AllMatch", **ADDED, notes="True if every element (or association value) matches the pattern; operator form"
+                               ". Check: reference (differential cases in tests/library).")
 def _allmatch(x: Expr, patt: Expr) -> Boolean:
     return all(_matches_all(x, patt, "AllMatch"))
 
 
-@fn("AnyMatch", **ADDED, notes="True if some element matches the pattern; operator form")
+@fn("AnyMatch", **ADDED, notes="True if some element matches the pattern; operator form"
+                               ". Check: reference (differential cases in tests/library).")
 def _anymatch(x: Expr, patt: Expr) -> Boolean:
     return any(_matches_all(x, patt, "AnyMatch"))
 
 
-@fn("NoneMatch", **ADDED, notes="True if no element matches the pattern; operator form")
+@fn("NoneMatch", **ADDED, notes="True if no element matches the pattern; operator form"
+                                ". Check: reference (differential cases in tests/library).")
 def _nonematch(x: Expr, patt: Expr) -> Boolean:
     return not any(_matches_all(x, patt, "NoneMatch"))
 
 
-@fn("Comap", **ADDED, notes="Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys)")
+@fn("Comap", **ADDED, notes="Comap[{f, g, ...}, x] = {f[x], g[x], ...} (any head; associations keep their keys)"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _comap(fs: Expr, x: Expr) -> Expr:
     if is_assoc(fs):
         return Expr("Association", *(Expr("Rule", r.args[0], apply(KL.rule_value(r, ev), x)) for r in fs.args))
@@ -1743,7 +1909,9 @@ def _comap(fs: Expr, x: Expr) -> Expr:
     return ev(Expr(fs.head, *(K.call(f, x) for f in fs.args)))
 
 
-@fn("ComapApply", **ADDED, notes="ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...}")
+@fn("ComapApply", **ADDED, notes="ComapApply[{f, g, ...}, {x, y}] = {f[x, y], g[x, y], ...}"
+                                 ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                 "tests/library).")
 def _comapapply(fs: Expr, xs: Expr) -> Expr:
     args = items_of(xs, "ComapApply")
     if is_assoc(fs):
@@ -1776,7 +1944,8 @@ def _fold_pairs(f, args, fname):
 @fn("FoldPairList", **ADDED,
     notes="FoldPairList[f, y0, {x1, ...}]: f[y, x] returns {output, new y}; the list of outputs; "
           "FoldPairList[f, y0, list, g] gives g[{output, y}] instead; FoldPairList[f, list] starts from the first "
-          "element")
+          "element"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _foldpairlist(f: Expr, *args: Expr) -> ListOf[Expr]:
     g = None
     if len(args) == 3:
@@ -1785,7 +1954,9 @@ def _foldpairlist(f: Expr, *args: Expr) -> ListOf[Expr]:
     return L(*(p.args[0] if g is None else apply(g, p) for p in pairs))
 
 
-@fn("FoldPair", **ADDED, notes="the last output of FoldPairList; FoldPair[f, y0, list, g] gives g[last pair]")
+@fn("FoldPair", **ADDED, notes="the last output of FoldPairList; FoldPair[f, y0, list, g] gives g[last pair]"
+                               ". Check: exact (exact input gives exact results), reference (differential cases in "
+                               "tests/library).")
 def _foldpair(f: Expr, *args: Expr) -> Expr:
     g = None
     if len(args) == 3:
@@ -1796,7 +1967,9 @@ def _foldpair(f: Expr, *args: Expr) -> Expr:
     return pairs[-1].args[0] if g is None else apply(g, pairs[-1])
 
 
-@fn("ReverseApplied", **ADDED, notes="ReverseApplied[f][a, b, c] = f[c, b, a]")
+@fn("ReverseApplied", **ADDED, notes="ReverseApplied[f][a, b, c] = f[c, b, a]"
+                                     ". Check: exact (exact input gives exact results), reference (differential "
+                                     "cases in tests/library).")
 def _reverseapplied(*args: Expr) -> Expr:
     raise Unevaluated()
 
@@ -1807,7 +1980,8 @@ def _lex_key(e):
 
 @fn("LexicographicSort", **ADDED,
     notes="sorts expressions by comparing their elements in canonical order, a proper prefix first; "
-          "LexicographicSort[list, p] uses ordering function p on elements")
+          "LexicographicSort[list, p] uses ordering function p on elements"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lexsort(x: Expr, p: Fn = None) -> Expr:
     items = items_of(x, "LexicographicSort")
     if p is None:
@@ -1842,7 +2016,8 @@ def _leafcount(e, heads=True):
 
 @fn("LeafCount", **ADDED,
     notes="number of atomic subexpressions including heads (Rational and Complex count as 3); Heads -> False "
-          "skips heads")
+          "skips heads"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _leafcountf(e: Expr, *opts: Option) -> Expr:
     _, o = split_options(opts, {"Heads"}, "LeafCount")
     heads = o.get("Heads", True)

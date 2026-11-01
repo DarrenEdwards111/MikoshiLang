@@ -69,7 +69,9 @@ def _suchthat(*args: Expr) -> Expr:
     raise Unevaluated()
 
 
-@fn("Cyclic", **ADDED, notes="Cyclic[{x1, ..., xn}] cyclic specification; Cyclic[{...}][k] = x[[Mod[k, n, 1]]]")
+@fn("Cyclic", **ADDED, notes="Cyclic[{x1, ..., xn}] cyclic specification; Cyclic[{...}][k] = x[[Mod[k, n, 1]]]"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")
 def _cyclic(spec: ListOf[Expr]) -> Expr:
     if not is_list(spec):
         raise ValueError("Cyclic: the argument must be a list {x1, x2, ...}")
@@ -201,7 +203,8 @@ def _alpha_cmp(a, b, settings, fname):
     notes="1 / -1 / 0 for alphabetical (dictionary) order of two strings: punctuation < digits < letters, letters by "
           "base letter, then diacritics, then case (CaseOrdering \"LowerFirst\" default or \"UpperFirst\"); options "
           "IgnoreCase, IgnoreDiacritics, IgnorePunctuation; English collation only (other languages raise); "
-          "AlphabeticOrder[] / AlphabeticOrder[\"English\"] / AlphabeticOrder[opts] operator forms")
+          "AlphabeticOrder[] / AlphabeticOrder[\"English\"] / AlphabeticOrder[opts] operator forms"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _alphaorder(*args: Expr) -> Expr:
     pos, opts = split_options(args, _ALPHA_OPTS, "AlphabeticOrder")
     if len(pos) < 2:
@@ -230,7 +233,8 @@ KL.COMPOUND_HEAD_HOOKS["AlphabeticOrder"] = _alphaorder_op
 
 @fn("AlphabeticSort", **ADDED,
     notes="sorts strings into alphabetical order (the AlphabeticOrder collation; stable); AlphabeticSort[list, "
-          "\"English\"] and the CaseOrdering / IgnoreCase / IgnoreDiacritics / IgnorePunctuation options")
+          "\"English\"] and the CaseOrdering / IgnoreCase / IgnoreDiacritics / IgnorePunctuation options"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _alphasort(x: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts = split_options(rest, _ALPHA_OPTS, "AlphabeticSort")
     if len(pos) > 1:
@@ -262,7 +266,8 @@ def _order_val(r, fname):
 @fn("LexicographicOrder", **ADDED,
     notes="Order of the first differing pair of elements (canonical Order or ordering function p); if one list "
           "is a prefix of the other the shorter comes first; strings compare by Characters; any common head; "
-          "LexicographicOrder[p] operator form")
+          "LexicographicOrder[p] operator form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lexorder(a: Expr, b: Expr, p: Fn = None) -> Expr:
     if isinstance(a, str) and isinstance(b, str):
         xa, xb = list(a), list(b)
@@ -336,7 +341,8 @@ def _cmp_real(u, v):
 @fn("NumericalOrder", **ADDED,
     notes="1 if e1 < e2, -1 if e1 > e2, 0 if numerically equal (no tolerance); complex numbers by real part then "
           "|imaginary part|; numeric expressions precede non-numeric ones; otherwise canonical Order (dates and "
-          "quantities raise)")
+          "quantities raise)"
+          ". Check: reference (differential cases in tests/library).")
 def _numorder(a: Expr, b: Expr) -> Expr:
     va, vb = _num_value(a), _num_value(b)
     if va is None and vb is None:
@@ -410,14 +416,17 @@ def _fold_while_args(args, fname):
 @fn("FoldWhile", **ADDED,
     notes="folds f over the list while test of the most recent m (default 1, or All) results is True; returns the "
           "first result failing the test (or the last one); FoldWhile[f, list, test]; extra n / -n steps; "
-          "FoldWhile[f, test] operator form")
+          "FoldWhile[f, test] operator form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _foldwhile(*args: Expr) -> Expr:
     if len(args) == 2:
         raise Unevaluated()
     return _fold_while(*_fold_while_args(args, "FoldWhile"), "FoldWhile", False)
 
 
-@fn("FoldWhileList", **ADDED, notes="the list of FoldWhile results, starting with x")
+@fn("FoldWhileList", **ADDED, notes="the list of FoldWhile results, starting with x"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _foldwhilelist(*args: Expr) -> Expr:
     if len(args) == 2:
         raise Unevaluated()
@@ -459,7 +468,8 @@ def _sequence_fold(f, seeds, lst, k, fname):
 @fn("SequenceFold", **ADDED,
     notes="SequenceFold[f, {x1, ..., xn}, list]: f of the last n results and the next element (a recurrence); "
           "{x} gives Fold, {} applies f to each element; k = n (f of the last n results only, len + 1 steps); "
-          "k > n + 1 raises")
+          "k > n + 1 raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _seqfold(f: Fn, seeds: Expr, lst: Expr, k: Expr = None) -> Expr:
     out = _sequence_fold(f, seeds, lst, k, "SequenceFold")
     if not out:
@@ -467,7 +477,9 @@ def _seqfold(f: Fn, seeds: Expr, lst: Expr, k: Expr = None) -> Expr:
     return out[-1]
 
 
-@fn("SequenceFoldList", **ADDED, notes="the seeds followed by the successive results of SequenceFold")
+@fn("SequenceFoldList", **ADDED, notes="the seeds followed by the successive results of SequenceFold"
+                                       ". Check: exact (exact input gives exact results), reference (differential "
+                                       "cases in tests/library).")
 def _seqfoldlist(f: Fn, seeds: Expr, lst: Expr, k: Expr = None) -> ListOf[Expr]:
     return L(*_sequence_fold(f, seeds, lst, k, "SequenceFoldList"))
 
@@ -475,7 +487,8 @@ def _seqfoldlist(f: Fn, seeds: Expr, lst: Expr, k: Expr = None) -> ListOf[Expr]:
 @fn("ReplaceAt", **ADDED,
     notes="ReplaceAt[expr, rules, n | {i, j, ...} | {{...}, ...}]: Replace (level 0, first matching rule) at the "
           "given parts; negative indices, All, Span, keys; repeated positions apply the rules repeatedly; "
-          "ReplaceAt[rules, pos] operator form")
+          "ReplaceAt[rules, pos] operator form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _replaceat(x: Expr, rules: Expr, spec: Expr) -> Expr:
     rl = _dispatch_rules(rules, "ReplaceAt")
 
@@ -517,7 +530,8 @@ def _subset_positions(x, spec, fname):
 @fn("SubsetMap", **ADDED,
     notes="SubsetMap[f, list, {i, j, ...}] replaces the elements at the given positions by the elements of "
           "f[{e_i, e_j, ...}] (f must return a list of the same length); positions {pos1, ...}, i ;; j or part "
-          "specs with All / Span; SubsetMap[f, pos] operator form")
+          "specs with All / Span; SubsetMap[f, pos] operator form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _subsetmap(f: Fn, x: Expr, spec: Expr) -> Expr:
     poss = _subset_positions(x, spec, "SubsetMap")
     resolved = [WL._resolve(x, q, "SubsetMap") for q in poss]
@@ -536,7 +550,8 @@ KL.operator_form("SubsetMap", 2, "middle")
 
 @fn("AssociationComap", **ADDED,
     notes="AssociationComap[{f1, f2, ...}, x] = <|f1 -> f1[x], ...|> (a repeated key keeps its last value); "
-          "AssociationComap[fs] operator form")
+          "AssociationComap[fs] operator form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _assoccomap(fs: Expr, x: Expr) -> Expr:
     if is_assoc(fs):
         raise ValueError("AssociationComap: the keys must be given as a list")
@@ -551,7 +566,8 @@ KL.operator_form("AssociationComap", 1, "last")
 
 @fn("AllSameBy", **ADDED,
     notes="True when f[e] is the same (SameQ) for every element (short-circuits; lists of length 0 or 1 give "
-          "True); AllSameBy[f] operator form")
+          "True); AllSameBy[f] operator form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _allsameby(x: Expr, f: Fn) -> Boolean:
     items = items_of(x, "AllSameBy")
     if len(items) < 2:
@@ -568,7 +584,8 @@ KL.operator_form("AllSameBy", 1, "first")
 
 @fn("UniqueElements", **ADDED,
     notes="for each list, the elements (without repeats, in order) that are not in any other list; "
-          "UniqueElements[lists, test] uses test for equivalence")
+          "UniqueElements[lists, test] uses test for equivalence"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _uniqueelements(lists: ListOf[Expr], test: Fn = None) -> ListOf[Expr]:
     if not is_list(lists):
         raise ValueError("UniqueElements: a list of lists is expected")
@@ -595,7 +612,8 @@ def _uniqueelements(lists: ListOf[Expr], test: Fn = None) -> ListOf[Expr]:
 @fn("Discard", **ADDED,
     notes="removes the elements for which crit is True (opposite of Select); Discard[data, crit, n] removes only "
           "the first n; data may be a list, any expression or an association; crit -> \"Element\" | \"Index\" | "
-          "{props}; Discard[crit] operator form")
+          "{props}; Discard[crit] operator form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _discard(x: Expr, crit: Fn, n: Expr = None) -> Expr:
     prop = None
     if is_rule(crit) and not (isinstance(crit.args[0], Expr) and crit.args[0].head in ("Rule",)):
@@ -654,7 +672,8 @@ def _elementwise(f, args):
 
 @fn("Elementwise", **ADDED,
     notes="Elementwise[f][args...] threads f over all lists among the arguments to the deepest common level "
-          "(makes non-listable functions behave as listable)")
+          "(makes non-listable functions behave as listable)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _elementwise_head(f: Expr) -> Expr:
     raise Unevaluated()
 
@@ -818,7 +837,8 @@ def _subset_args(x, rest, fname, default_overlaps):
 @fn("SubsetCases", **ADDED,
     notes="sublists (in any order, not necessarily contiguous) matching a list pattern, given in the pattern's order; "
           "longest matches first, non-overlapping by default (Overlaps -> True gives all); patt -> rhs; n matches; "
-          "Alternatives tried in order")
+          "Alternatives tried in order"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _subsetcases(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
     items, limit, ov = _subset_args(x, rest, "SubsetCases", False)
     rhs = None
@@ -834,7 +854,9 @@ def _subsetcases(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
 
 
 @fn("SubsetCount", **ADDED, notes="number of sublists matching patt in any order (non-overlapping by default; "
-                                  "Overlaps -> True counts all)")
+                                  "Overlaps -> True counts all)"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _subsetcount(x: Expr, patt: Expr, *rest: Expr) -> Integer:
     items, limit, ov = _subset_args(x, rest, "SubsetCount", False)
     if limit is not None:
@@ -843,7 +865,9 @@ def _subsetcount(x: Expr, patt: Expr, *rest: Expr) -> Integer:
 
 
 @fn("SubsetPosition", **ADDED, notes="positions {i, j, ...} (in the pattern's order) of sublists matching patt in any "
-                                     "order; overlapping by default (Overlaps -> False excludes); first n")
+                                     "order; overlapping by default (Overlaps -> False excludes); first n"
+                                     ". Check: exact (exact input gives exact results), reference (differential "
+                                     "cases in tests/library).")
 def _subsetposition(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
     items, limit, ov = _subset_args(x, rest, "SubsetPosition", True)
     return L(*(L(*(i + 1 for i in perm)) for perm, _b in _subset_matches(items, patt, ov, limit, "SubsetPosition")))
@@ -852,7 +876,8 @@ def _subsetposition(x: Expr, patt: Expr, *rest: Expr) -> ListOf[Expr]:
 @fn("SubsetReplace", **ADDED,
     notes="replaces sublists matching a rule's pattern (in any order) by its right-hand side, inserted at the position "
           "of the element matched first; rules applied in order to untransformed elements; first n replacements; "
-          "SubsetReplace[rules] operator form")
+          "SubsetReplace[rules] operator form"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _subsetreplace(x: Expr, rules: Expr, n: Expr = None) -> Expr:
     items = items_of(x, "SubsetReplace")
     rl = _dispatch_rules(rules, "SubsetReplace")
@@ -997,7 +1022,8 @@ def _pad_specs(spec, depth, fname):
 @fn("ArrayPad", **ADDED,
     notes="ArrayPad[array, m | {m, n} | {{m1, n1}, ...}, padding]: constant padding (default 0) or \"Fixed\", "
           "\"Periodic\", \"Reflected\", \"Reversed\"; negative amounts trim; any depth of full array (cyclic "
-          "constant lists and the differences / extrapolated paddings raise)")
+          "constant lists and the differences / extrapolated paddings raise)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arraypad(a: Expr, spec: Expr, pad: Expr = 0) -> Expr:
     dims = _full_dims(a)
     if not dims:
@@ -1015,7 +1041,8 @@ def _arraypad(a: Expr, spec: Expr, pad: Expr = 0) -> Expr:
 @fn("CenterArray", **ADDED,
     notes="CenterArray[a, n | {n1, n2, ...}, pad]: a centred in an array of the given dimensions (extra padding on "
           "the right; Inherited keeps a dimension; a lower-rank a is centred at the deepest levels); CenterArray[n] "
-          "has a single 1; non-list a means {a}; trimming by an odd amount raises; padding as in ArrayPad")
+          "has a single 1; non-list a means {a}; trimming by an odd amount raises; padding as in ArrayPad"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _centerarray(a: Expr, n: Expr = None, pad: Expr = 0, *rest: Expr) -> Expr:
     if n is None:
         a, n = L(1), a
@@ -1081,7 +1108,8 @@ def _from_nested_any(v):
 @fn("ArrayFilter", **ADDED,
     notes="ArrayFilter[f, array, r | {r1, r2, ...} | template] applies f to the range-r blocks around every element "
           "(template 0s become Missing[]); Padding -> \"Fixed\" (default), None (smaller result), a constant, "
-          "\"Periodic\", \"Reflected\" or \"Reversed\"")
+          "\"Periodic\", \"Reflected\" or \"Reversed\""
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arrayfilter(f: Expr, a: Expr, r: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"Padding"}, "ArrayFilter")
     if pos:
@@ -1151,7 +1179,8 @@ def _reduce_groups(spec, depth, fname):
 
 @fn("ArrayReduce", **ADDED,
     notes="ArrayReduce[f, array, n | n1 ;; n2 | {n1, n2, ...} | {{...}, {...}}]: f applied to the vectors (or "
-          "arrays) along the given dimensions, which are removed; f's result takes the place of each vector")
+          "arrays) along the given dimensions, which are removed; f's result takes the place of each vector"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arrayreduce(f: Fn, a: Expr, spec: Expr) -> Expr:
     dims = _full_dims(a)
     if not dims:
@@ -1192,7 +1221,9 @@ def _arrayreduce(f: Fn, a: Expr, spec: Expr) -> Expr:
 
 
 @fn("UnitVector", **ADDED, notes="UnitVector[n, k]: length-n vector with 1 at position k; UnitVector[k] = "
-                                 "UnitVector[2, k]")
+                                 "UnitVector[2, k]"
+                                 ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                 "tests/library).")
 def _unitvector(n: Expr, k: Expr = None) -> ListOf[Expr]:
     if k is None:
         n, k = 2, n
@@ -1206,7 +1237,8 @@ def _unitvector(n: Expr, k: Expr = None) -> ListOf[Expr]:
 @fn("RangeSpace", **ADDED,
     notes="basis of the range (column space) of a matrix: for exact and symbolic matrices the nonzero rows of "
           "RowReduce[Transpose[a]] (generic values for symbols); for approximate matrices the left singular vectors "
-          "of the nonzero singular values (Tolerance option)")
+          "of the nonzero singular values (Tolerance option)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rangespace(a: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"Tolerance", "Method", "Modulus", "ZeroTest"}, "RangeSpace")
     if pos:
@@ -1413,7 +1445,8 @@ _NEAREST_OPTS = {"DistanceFunction", "Method", "WorkingPrecision"}
           "list, {e1 -> v1, ...}, {e1, ...} -> {v1, ...}, {e1, ...} -> \"Element\" | \"Index\" | \"Distance\" | "
           "{props} | All, or an association; lists of query points thread; distances: |x - y| for numbers, the "
           "Euclidean norm for vectors, EditDistance for strings, Jaccard dissimilarity for Boolean vectors, or "
-          "DistanceFunction -> f; Nearest[data] gives a NearestFunction")
+          "DistanceFunction -> f; Nearest[data] gives a NearestFunction"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nearest(data: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, _NEAREST_OPTS, "Nearest")
     dist = _nearest_dist_opt(opts, "Nearest")
@@ -1446,7 +1479,8 @@ KL.COMPOUND_HEAD_HOOKS["NearestFunction"] = _nf_apply
 
 @fn("NearestTo", **ADDED,
     notes="operator form: NearestTo[x][elems] = Nearest[elems, x]; NearestTo[x, n | {n, r}]; applied to a "
-          "NearestFunction nf it gives nf[x, ...]")
+          "NearestFunction nf it gives nf[x, ...]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nearestto(*args: Expr) -> Expr:
     if not 1 <= len([a for a in args if not is_rule(a)]) <= 2:
         raise ValueError("NearestTo takes a point x and optionally a count n or {n, r}")
@@ -1594,7 +1628,8 @@ def _na_valid(x):
 
 @fn("NumericArrayQ", **ADDED,
     notes="True for a valid NumericArray; NumericArrayQ[expr, tpatt] also tests the type against a pattern, "
-          "NumericArrayQ[expr, tpatt, dpatt] the array depth")
+          "NumericArrayQ[expr, tpatt, dpatt] the array depth"
+          ". Check: reference (differential cases in tests/library).")
 def _numericarrayq(x: Expr, tpatt: Expr = None, dpatt: Expr = None) -> Boolean:
     if not _na_valid(x):
         return False
@@ -1605,7 +1640,8 @@ def _numericarrayq(x: Expr, tpatt: Expr = None, dpatt: Expr = None) -> Boolean:
     return True
 
 
-@fn("NumericArrayType", **ADDED, notes="the element type string of a NumericArray")
+@fn("NumericArrayType", **ADDED, notes="the element type string of a NumericArray"
+                                       ". Check: reference (differential cases in tests/library).")
 def _numericarraytype(x: Expr) -> Expr:
     if not _na_valid(x):
         if isinstance(x, Symbol):
@@ -1904,7 +1940,8 @@ def _symarray(x: Expr, dims: Expr = None, sym: Expr = None) -> Expr:
 @fn("SymmetrizedArrayRules", **ADDED,
     notes="independent nonzero rules of a SymmetrizedArray followed by {_, _, ...} -> 0; for an ordinary array, the "
           "rules of the array symmetrized with sym (Symmetrize: the phase-weighted group average); without sym the "
-          "array's own nonzero rules")
+          "array's own nonzero rules"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _symarrayrules(x: Expr, sym: Expr = None) -> ListOf[Expr]:
     parts = _sa_parts(x, "SymmetrizedArrayRules")
     if parts is not None:
@@ -1947,7 +1984,8 @@ def _symindep(dims: Expr, sym: Expr) -> ListOf[Expr]:
 
 
 @fn("SymmetrizedDependentComponents", **ADDED,
-    notes="sorted list of the components related to comp by the symmetry sym (its orbit, including comp)")
+    notes="sorted list of the components related to comp by the symmetry sym (its orbit, including comp)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _symdep(comp: Expr, sym: Expr) -> ListOf[Expr]:
     if not (is_list(comp) and comp.args and all(is_int(v) and int(v) >= 1 for v in comp.args)):
         raise ValueError("SymmetrizedDependentComponents: the component must be a list of positive integers")
@@ -2087,7 +2125,8 @@ def _check_range(spec, fname):
 @fn("RepeatingElement", **ADDED,
     notes="RepeatingElement[spec], RepeatingElement[spec, max | {min, max} | {n, {min, max}} | {{i, n}, {min, max}}]: "
           "an inert interpreter/form specification (count specifications are validated; Interpreter and forms are "
-          "not available)")
+          "not available)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _repeating(spec: Expr, rng: Expr = None) -> Expr:
     if rng is not None:
         _check_range(rng, "RepeatingElement")
@@ -2096,7 +2135,8 @@ def _repeating(spec: Expr, rng: Expr = None) -> Expr:
 
 @fn("AnySubset", **ADDED,
     notes="AnySubset[{c1, ...} | {lab -> c, ...} | EntityClass[...]], AnySubset[choices, max | {min, max}]: an inert "
-          "interpreter/form specification (arguments are validated)")
+          "interpreter/form specification (arguments are validated)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _anysubset(choices: Expr, rng: Expr = None) -> Expr:
     if not (is_list(choices) or (isinstance(choices, Expr) and choices.head == "EntityClass")
             or isinstance(choices, Symbol)):
@@ -2168,7 +2208,8 @@ def _rs_dim(nested, axis, n, kind, fname, below):
           "point sampling on 1..m (n samples at 1 + (k-1)(m-1)/(n-1); Scaled[s] gives Round[s (m-1)] + 1 samples), "
           "separably along each dimension, exact for exact data; Resampling -> \"Linear\" (default), \"Nearest\" "
           "(halfway averages), \"NearestLeft\", \"NearestRight\". \"Bin\" schemes, subranges, Automatic dimensions, "
-          "DataRange, Antialiasing -> True and other kernels raise")
+          "DataRange, Antialiasing -> True and other kernels raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arrayresample(a: Expr, dspec: Expr, *rest: Expr) -> Expr:
     fname = "ArrayResample"
     pos, opts = split_options(rest, {"Resampling", "Padding", "DataRange", "Antialiasing"}, fname)
@@ -2497,7 +2538,8 @@ def _make_generator(name, args):
           "\"Take\" [src, n], \"Map\" [f, src], \"FoldList\" [f, x, src], \"Permutations\" [list], \"Subsets\" [list], "
           "\"Tuples\" [list, n | {lists}]: a lazy stateful iterator; sources may be expressions, incremental objects "
           "or incremental function instances (consumed, not copied). Values are taken with NextValue; Table/Do "
-          "iteration over an incremental object is not supported")
+          "iteration over an incremental object is not supported"
+          ". Check: reference (differential cases in tests/library).")
 def _incobject(name: Expr, handle: Expr = None) -> Expr:
     if handle is not None:
         if isinstance(handle, Expr) and handle.head == "IncrementalObjectHandle":

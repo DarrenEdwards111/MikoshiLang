@@ -74,7 +74,8 @@ def _union(*args):
 
 
 @fn("Intersection", area=AREA, status="fixed",
-    notes="variadic; canonical order (legacy sorted by string form); SameTest -> f")
+    notes="variadic; canonical order (legacy sorted by string form); SameTest -> f"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _intersection(*args):
     pos, test = _set_args(args, "Intersection")
     ls = _lists(pos, "Intersection")
@@ -84,7 +85,8 @@ def _intersection(*args):
 
 @fn("Complement", area=AREA, status="fixed",
     notes="Complement[all, e1, e2, ...] in canonical order (legacy: 2 arguments only, sorted by string form); "
-          "SameTest -> f")
+          "SameTest -> f"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _complement(*args):
     pos, test = _set_args(args, "Complement")
     ls = _lists(pos, "Complement")
@@ -92,33 +94,39 @@ def _complement(*args):
     return _set_result([x for x in ls[0] if not _member_t(x, rest, test)], test)
 
 
-@fn("SetDifference", area=AREA, status="fixed", notes="alias of Complement[a, b] (canonical order)")
+@fn("SetDifference", area=AREA, status="fixed", notes="alias of Complement[a, b] (canonical order)"
+                                                      ". Check: exact (exact input gives exact results), reference "
+                                                      "(differential cases in tests/library).")
 def _setdiff(a, b):
     return _complement(a, b)
 
 
 @fn("SymmetricDifference", area=AREA, status="fixed",
-    notes="elements in exactly one of the two lists, canonical order (legacy sorted by string form)")
+    notes="elements in exactly one of the two lists, canonical order (legacy sorted by string form)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _symdiff(a, b):
     x, y = list_arg(a, "SymmetricDifference"), list_arg(b, "SymmetricDifference")
     return _sorted_set([v for v in x if not _member(v, y)] + [v for v in y if not _member(v, x)])
 
 
 @fn("Cardinality", area=AREA, status="fixed",
-    notes="number of distinct elements (legacy returned Length, counting duplicates)")
+    notes="number of distinct elements (legacy returned Length, counting duplicates)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _card(a):
     return len(_dedup(list_arg(a, "Cardinality")))
 
 
 @fn("ElementQ", area=AREA, status="fixed",
     notes="ElementQ[x, list]: SameQ membership (legacy used ==, so ElementQ[1, {1.0}] was True; MemberQ "
-          "gives False)")
+          "gives False)"
+          ". Check: reference (differential cases in tests/library).")
 def _elementq(x, lst):
     return _member(x, list_arg(lst, "ElementQ"))
 
 
 @fn("SubsetQ", area=AREA, status="fixed",
-    notes="SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse)")
+    notes="SubsetQ[l1, l2] is True when l2 is a subset of l1 (Wolfram order; legacy tested the reverse)"
+          ". Check: reference (differential cases in tests/library).")
 def _subsetq(a, b):
     big, small = list_arg(a, "SubsetQ"), list_arg(b, "SubsetQ")
     return all(_member(x, big) for x in small)
@@ -136,7 +144,8 @@ def _deldup(a, test=None):
 
 @fn("Riffle", area=AREA, status="fixed",
     notes="Riffle[list, x] and Riffle[list, {y1, ...}] (interleaves when the second list has n or n - 1 "
-          "elements; legacy inserted the whole list each time)")
+          "elements; legacy inserted the whole list each time)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _riffle(a, b):
     items = list_arg(a, "Riffle")
     n = len(items)
@@ -157,7 +166,8 @@ def _riffle(a, b):
 
 @fn("Interleave", area=AREA, status="fixed",
     notes="{a1, b1, ..., a2, b2, ...} for two or more lists (MikoshiLang); unequal lengths now raise (legacy "
-          "silently truncated)")
+          "silently truncated)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _interleave(a, b, *more):
     ls = [list_arg(v, "Interleave") for v in (a, b) + more]
     if len({len(v) for v in ls}) != 1:
@@ -167,7 +177,8 @@ def _interleave(a, b, *more):
 
 @fn("Partition", area=AREA, status="fixed",
     notes="Partition[list, n] and Partition[list, n, d] (incomplete blocks dropped, as Wolfram); "
-          "Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n")
+          "Partition[list, UpTo[n]] (and UpTo[n], d) keeps a shorter final block; legacy truncated non-integer n"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _partition(a, n, d=None):
     items = list_arg(a, "Partition")
     if isinstance(n, Expr) and n.head == "UpTo" and len(n.args) == 1:
@@ -184,19 +195,25 @@ def _partition(a, n, d=None):
     return L(*(L(*items[i:i + k]) for i in range(0, len(items) - k + 1, step)))
 
 
-@fn("Chunk", area=AREA, status="verified", notes="consecutive blocks of size n, last one possibly shorter (MikoshiLang)")
+@fn("Chunk", area=AREA, status="verified", notes="consecutive blocks of size n, last one possibly shorter (MikoshiLang)"
+                                                 ". Check: exact (exact input gives exact results), reference "
+                                                 "(differential cases in tests/library).")
 def _chunk(a, n):
     items = list_arg(a, "Chunk")
     k = pos_int(n, "Chunk", "block size")
     return L(*(L(*items[i:i + k]) for i in range(0, len(items), k)))
 
 
-@fn("SlidingWindow", area=AREA, status="verified", notes="overlapping windows = Partition[list, n, 1] (MikoshiLang)")
+@fn("SlidingWindow", area=AREA, status="verified", notes="overlapping windows = Partition[list, n, 1] (MikoshiLang)"
+                                                         ". Check: exact (exact input gives exact results), "
+                                                         "reference (differential cases in tests/library).")
 def _sliding(a, n):
     return _partition(a, n, 1)
 
 
-@fn("RotateLeft", area=AREA, status="verified", notes="RotateLeft[list] and RotateLeft[list, n] (n may be negative)")
+@fn("RotateLeft", area=AREA, status="verified", notes="RotateLeft[list] and RotateLeft[list, n] (n may be negative)"
+                                                      ". Check: exact (exact input gives exact results), reference "
+                                                      "(differential cases in tests/library).")
 def _rotl(a, n=1):
     items = list_arg(a, "RotateLeft")
     k = int_arg(n, "RotateLeft", "shift")
@@ -206,7 +223,9 @@ def _rotl(a, n=1):
     return L(*(items[k:] + items[:k]))
 
 
-@fn("RotateRight", area=AREA, status="verified", notes="RotateRight[list] and RotateRight[list, n]")
+@fn("RotateRight", area=AREA, status="verified", notes="RotateRight[list] and RotateRight[list, n]"
+                                                       ". Check: exact (exact input gives exact results), reference "
+                                                       "(differential cases in tests/library).")
 def _rotr(a, n=1):
     k = int_arg(n, "RotateRight", "shift")
     return _rotl(a, -k)
@@ -224,7 +243,8 @@ def _accumulate(a):
 
 
 @fn("Differences", area=AREA, status="fixed",
-    notes="exact successive differences, Differences[list, n] for n-th differences (legacy used rounded floats)")
+    notes="exact successive differences, Differences[list, n] for n-th differences (legacy used rounded floats)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _differences(a, n=1):
     items = list_arg(a, "Differences")
     k = nonneg_int(n, "Differences", "order")
