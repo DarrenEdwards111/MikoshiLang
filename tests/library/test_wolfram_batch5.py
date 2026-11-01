@@ -319,7 +319,8 @@ GRAPHS = [
     ("Graph[{1 \\[UndirectedEdge] 2, 2 \\[DirectedEdge] 3}]", "Graph[{1, 2, 3}, {UndirectedEdge[1, 2], DirectedEdge[2, 3]}]"),
     ("Graph[Graph[{1 <-> 2}]]", "Graph[{1, 2}, {UndirectedEdge[1, 2]}]"),
     ("Graph[{1, 2}, {1 <-> 3}]", Raises()), ("Graph[{{1, 2}}]", Raises()), ("Graph[{1 <-> 2}, Foo -> 1]", Raises()),
-    ("Graph[{UndirectedEdge[1, 2, t]}]", Raises()), ("Graph[{1, 1}, {}]", Raises()),
+    ("Graph[{UndirectedEdge[1, 2, t]}]", "Graph[{1, 2}, {UndirectedEdge[1, 2, t]}]"),  # tags kept since W24
+    ("FindShortestPath[Graph[{UndirectedEdge[1, 2, t]}], 1, 2]", Raises()), ("Graph[{1, 1}, {}]", Raises()),
     ("Graph[{1 <-> 2}, EdgeWeight -> {1, 2}]", Raises()), ("Graph[{1 <-> 2}, EdgeWeight -> {-1}]", Raises()),
     ("Graph[{1 <-> 2}, VertexWeight -> {1}]", Raises()),
     ("1 <-> 2", "TwoWayRule[1, 2]"), ("(a <-> b)[[2]]", "b"), ("x \\[Distributed] d", "Distributed[x, d]"),
@@ -554,7 +555,7 @@ GRAPHS = [
     ("EdgeCount[TuranGraph[5, 2]]", "6"), ("BipartiteGraphQ[TuranGraph[5, 2]]", True), ("EdgeCount[TuranGraph[7, 3]]", "16"),
     ("SeedRandom[5]; RandomGraph[{6, 7}] === (SeedRandom[5]; RandomGraph[{6, 7}])", True),
     ("EdgeCount[RandomGraph[{10, 20}]]", "20"), ("SimpleGraphQ[RandomGraph[{8, 12}]]", True),
-    ("Length[RandomGraph[{5, 3}, 4]]", "4"), ("RandomGraph[{4, 7}]", Raises()), ("RandomGraph[BernoulliGraphDistribution[5, 0.5]]", Raises()),
+    ("Length[RandomGraph[{5, 3}, 4]]", "4"), ("RandomGraph[{4, 7}]", Raises()), ("RandomGraph[{5}]", Raises()),  # graph distributions are sampled since W24
     # traversal (Reap/Sow with scan events)
     ("Reap[BreadthFirstScan[GridGraph[{2, 2}], 1, {\"PrevisitVertex\" -> Sow}]][[2, 1]]", "{1, 2, 3, 4}"),
     ("Reap[BreadthFirstScan[" + G1 + ", 4, {\"DiscoverVertex\" -> (Sow[{#1, #2, #3}] &)}]][[2, 1]]",

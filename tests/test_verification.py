@@ -113,3 +113,13 @@ def test_markdown_report():
     res = H.run(TESTS, "stated", ["Gamma"])
     md = H.markdown(res, 1.0, "stated")
     assert "| `Gamma` |" in md and "pass" in md
+
+
+def test_selfcheck_finds_verification_steps_in_helpers_and_distribution_classes():
+    import mikoshilang  # noqa: F401
+    # WaveletFilterCoefficients verifies in a helper; TracyWidomDistribution in the class its table entry names
+    for head in ("WaveletFilterCoefficients", "TracyWidomDistribution"):
+        r = H.Result(head, ["self-check"], "self-check")
+        H._run_selfcheck(r, [], None)
+        assert r.status == "pass", (head, r.failures)
+    assert not any("raise ArithmeticError" in s for s in H._impl_sources("GCD"))
