@@ -32,15 +32,18 @@ def _as_expr(a):
     return a
 
 
-def _register(name, nargs, impl, notes, listable=True, numeric=True, hold=False):
+def _register(name, nargs, impl, notes, listable=True, numeric=True, hold=False, ann=None):
     lo, hi = (nargs, nargs) if isinstance(nargs, int) else nargs
+    # numeric listable heads see scalars (after threading): Numeric arguments and values (symbolic ones pass)
+    if ann is None:
+        ann = "Numeric" if listable and numeric else "Expr"
     for n in range(lo, hi + 1):
         def make(n):
             def f(*args: Expr) -> Expr:
                 return impl(*(_as_expr(a) for a in args))
             f.__signature__ = inspect.Signature(
-                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation="Expr")
-                 for i in range(n)], return_annotation="Expr")
+                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=ann)
+                 for i in range(n)], return_annotation=ann)
             f.__name__ = f"_{name}_{n}"
             return f
         fn(name, area=AREA, status=STATUS, notes=notes, listable=listable, hold=hold)(make(n))
@@ -298,16 +301,17 @@ def _comb_value(v):
 
 _register("HeavisidePi", (1, 8), _product_fn("HeavisidePi", _pi_value),
           "HeavisidePi[x] = 1 for |x| < 1/2, 0 for |x| > 1/2, unevaluated at x = +-1/2 (reference); "
-          "HeavisidePi[x1, x2, ...] is the product", numeric=False)
+          "HeavisidePi[x1, x2, ...] is the product", numeric=False, ann="Numeric")
 _register("HeavisideLambda", (1, 8), _product_fn("HeavisideLambda", _lambda_value),
           "HeavisideLambda[x] = 1 - |x| for |x| < 1 and 0 otherwise (the convolution of two HeavisidePi); "
-          "multivariate form is the product", numeric=False)
+          "multivariate form is the product", numeric=False, ann="Numeric")
 _register("UnitTriangle", (1, 8), _product_fn("UnitTriangle", _lambda_value),
           "UnitTriangle[x] = Piecewise[{{x + 1, -1 <= x < 0}, {1 - x, 0 <= x <= 1}}] (0 otherwise); "
-          "UnitTriangle[x1, ...] is the product", numeric=False)
+          "UnitTriangle[x1, ...] is the product", numeric=False, ann="Numeric")
 _register("DiracComb", (1, 8), _product_fn("DiracComb", _comb_value),
           "DiracComb[x] = Sum[DiracDelta[x - n], {n, -Infinity, Infinity}]: 0 for real non-integer x, "
-          "unevaluated at integers and for symbolic x; multivariate form is the product", numeric=False)
+          "unevaluated at integers and for symbolic x; multivariate form is the product", numeric=False,
+          ann="Numeric")
 
 
 def _discrete_indicator(x, x1, us):
@@ -749,7 +753,7 @@ def _norlundb(*args):
 _register("NorlundB", (2, 3), _norlundb,
           "NorlundB[n, a] Norlund polynomials and NorlundB[n, a, x] generalized Bernoulli polynomials from "
           "(t/(E^t - 1))^a E^(x t) = Sum[NorlundB[n, a, x] t^n/n!] (exact power-series arithmetic) for "
-          "non-negative integer n; NorlundB[n, 1] = BernoulliB[n]", numeric=False)
+          "non-negative integer n; NorlundB[n, 1] = BernoulliB[n]", numeric=False, ann="Numeric")
 
 
 def _pascal_binomial(n, m):
@@ -771,7 +775,7 @@ def _pascal_binomial(n, m):
 _register("PascalBinomial", 2, _pascal_binomial,
           "PascalBinomial[n, m] agrees with Binomial except for negative integer n, where it is the iterated "
           "limit that preserves Pascal's identity: n(n-1)...(n-m+1)/m! for integer m >= 0, 0 for negative "
-          "integer m, ComplexInfinity for non-integer m (reference definition)", numeric=False)
+          "integer m, ComplexInfinity for non-integer m (reference definition)", numeric=False, ann="Numeric")
 
 
 # ───────────────────────────── Ramanujan tau and its L-function ─────────────────────────────
@@ -846,7 +850,7 @@ def _tau(n):
 _register("RamanujanTau", 1, _tau,
           "RamanujanTau[n]: coefficients of Delta = q Prod[(1 - q^k)^24]; tau(p) from the divisor-sum identity "
           "n^4 sigma(n) - 24 Sum (35k^4 - 52k^3 n + 18k^2 n^2) sigma(k) sigma(n-k), multiplicativity and "
-          "tau(p^(e+1)) = tau(p) tau(p^e) - p^11 tau(p^(e-1)); 0 for n <= 0", numeric=False)
+          "tau(p^(e+1)) = tau(p) tau(p^e) - p^11 tau(p^(e-1)); 0 for n <= 0", numeric=False, ann="Numeric")
 
 
 def _tau_L(s):

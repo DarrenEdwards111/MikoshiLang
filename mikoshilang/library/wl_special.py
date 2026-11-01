@@ -114,15 +114,17 @@ def special(name, nargs, mpf, exact=None, notes="", status="added", listable=Tru
         e = REGISTRY.get(name)
         if e is not None:
             e.impls = [(f, a, b) for (f, a, b) in e.impls if not (a <= hi and (b is None or b >= lo))]
-    # register one implementation per arity
+    # register one implementation per arity; listable heads see scalars (after threading), so their arguments
+    # and values are Numeric (symbolic arguments always pass the type check)
+    ann = "Numeric" if listable else "Expr"
     for n in range(lo, hi + 1):
         def make(n):
             def f(*args: Expr) -> Expr:
                 return impl(*args)
             import inspect
-            params = [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation="Expr")
+            params = [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=ann)
                       for i in range(n)]
-            f.__signature__ = inspect.Signature(params, return_annotation="Expr")
+            f.__signature__ = inspect.Signature(params, return_annotation=ann)
             return f
         fn(name, area=AREA, status=status, notes=notes, listable=listable)(make(n))
     MP_NUMERIC[name] = _dispatcher(name)

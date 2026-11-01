@@ -98,13 +98,15 @@ def mpfun(name, nargs, mpf, exact=None, notes="", listable=True, symbolic=None, 
         return from_mp(out, prec)
 
     import inspect
+    # listable heads see scalars (after threading): Numeric arguments and values (symbolic ones pass)
+    ann = "Numeric" if listable else "Expr"
     for n in range(lo, hi + 1):
         def make(n):
             def f(*args: Expr) -> Expr:
                 return impl(*args)
             f.__signature__ = inspect.Signature(
-                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation="Expr")
-                 for i in range(n)], return_annotation="Expr")
+                [inspect.Parameter(f"a{i}", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=ann)
+                 for i in range(n)], return_annotation=ann)
             f.__name__ = f"_{name}_{n}"
             return f
         fn(name, area=AREA, status=status, notes=notes, listable=listable)(make(n))
