@@ -611,7 +611,7 @@ def _poly_struct(e, vs, rational, test):
 
 
 def _structq(fname, rational):
-    def impl(e: Expr, v: Expr, *test: Expr) -> Boolean:
+    def impl(e: Expr, v: Var | ListOf[Var], *test: Expr) -> Boolean:
         if len(test) > 1:
             raise ValueError(f"{fname} called with too many arguments")
         vs = _vars(v, fname)
@@ -827,7 +827,7 @@ def _pfe(e: Expr, x: Var, *prop: Expr) -> Expr:
           "symbols, as Wolfram); Modulus -> prime works over GF(p) with representatives 0..p-1; checked"
           ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
           "in tests/library).")
-def _pegcd(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
+def _pegcd(p: Expr, q: Expr, x: Var, *rest: Expr) -> ListOf[Expr]:
     rest, opts = _opts(rest, {"Modulus"}, "PolynomialExtendedGCD")
     if rest:
         raise ValueError("PolynomialExtendedGCD called with too many arguments")
@@ -961,7 +961,7 @@ def _order_pq(P, Q, fname):
           "psc_0 = Resultant and psc_n = lc(q)^(deg p - deg q); the first k vanish exactly when p and q have k "
           "common roots; deg p < deg q and Modulus raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _subresultants(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
+def _subresultants(p: Expr, q: Expr, x: Var, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("Subresultants: options (Modulus) are not supported")
     xs, P, Q = _sres_setup(p, q, x, "Subresultants")
@@ -976,7 +976,7 @@ def _subresultants(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
     notes="SubresultantPolynomials[p, q, x]: the subresultant polynomials {S_0, ..., S_n} (n = deg q <= deg p) "
           "from the Sylvester submatrices, S_0 = Resultant[p, q, x] and S_n = lc(q)^(deg p - deg q - 1) q; deg p < "
           "deg q and Modulus raise")
-def _subrespolys(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
+def _subrespolys(p: Expr, q: Expr, x: Var, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("SubresultantPolynomials: options (Modulus) are not supported")
     xs, P, Q = _sres_setup(p, q, x, "SubresultantPolynomials")
@@ -988,7 +988,7 @@ def _subrespolys(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
     notes="SubresultantPolynomialRemainders[p, q, x]: the subresultant polynomial remainder sequence {p, q, ...} "
           "(each term a multiple of the corresponding Euclidean remainder; the last is a multiple of the GCD), "
           "computed with SymPy's determinant-based subresultant PRS; Modulus raises")
-def _subresprs(p: Expr, q: Expr, x: Expr, *rest: Expr) -> ListOf[Expr]:
+def _subresprs(p: Expr, q: Expr, x: Var, *rest: Expr) -> ListOf[Expr]:
     if rest:
         raise NotImplementedError("SubresultantPolynomialRemainders: options (Modulus) are not supported")
     xs, P, Q = _sres_setup(p, q, x, "SubresultantPolynomialRemainders")
@@ -3522,7 +3522,7 @@ def _in_dom(v, dom):
           "the system is proved to have no solution (0-dimensional Solve or an empty solveset); otherwise a search "
           "that finds nothing raises"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _findinstance(expr: Expr, vars_: Expr, *rest: Expr) -> Expr:
+def _findinstance(expr: Expr, vars_: Var | ListOf[Var], *rest: Expr) -> Expr:
     fname = "FindInstance"
     rest, opts = _opts(rest, ("WorkingPrecision", "RandomSeeding"), fname)
     vs = _vars(vars_, fname)
@@ -5096,7 +5096,7 @@ def _ldl_psd(G):
           "decomposition when the Gram matrix is not unique. Raises when no decomposition is found (p may not be a "
           "sum of squares)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _psos(p: Expr, vars_: Expr) -> Expr:
+def _psos(p: Expr, vars_: Var | ListOf[Var]) -> Expr:
     fname = "PolynomialSumOfSquaresList"
     vs = _vars(vars_, fname)
     X = [sp.Symbol(v.name) for v in vs]

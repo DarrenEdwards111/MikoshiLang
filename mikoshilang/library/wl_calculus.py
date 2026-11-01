@@ -1474,7 +1474,7 @@ def _with_constants(e):
          "linear recurrences with constant or polynomial coefficients and initial conditions (SymPy rsolve); every "
          "solution is substituted back into the recurrence and the initial conditions; free constants are C[1], "
          "C[2], ...; systems raise")
-def _rsolve(eq: Expr, fexpr: Expr, n: Expr) -> Expr:
+def _rsolve(eq: Expr, fexpr: Expr, n: Var) -> Expr:
     name, nv, sols = _rsolve_core(eq, fexpr, n, "RSolve")
     rules = []
     for s_ in sols:
@@ -1964,7 +1964,7 @@ def _trig_coeff(kind, e, t, n, rest, fname):
     notes="FourierCosCoefficient[f, t, n] = 2/π ∫_0^π f cos(nt) dt, with 1/π ∫_0^π f dt for n = 0 (Wolfram); "
           "symbolic n checked against direct integrals"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _fcc(e: Expr, t: Expr, n: Expr, *rest: Expr) -> Expr:
+def _fcc(e: Expr, t: Var, n: Expr, *rest: Expr) -> Expr:
     return _trig_coeff("cos", e, t, n, rest, "FourierCosCoefficient")
 
 
@@ -1972,7 +1972,7 @@ def _fcc(e: Expr, t: Expr, n: Expr, *rest: Expr) -> Expr:
     notes="FourierSinCoefficient[f, t, n] = 2/π ∫_0^π f sin(nt) dt (Wolfram); symbolic n checked against direct "
           "integrals"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _fsc(e: Expr, t: Expr, n: Expr, *rest: Expr) -> Expr:
+def _fsc(e: Expr, t: Var, n: Expr, *rest: Expr) -> Expr:
     return _trig_coeff("sin", e, t, n, rest, "FourierSinCoefficient")
 
 
@@ -2270,7 +2270,7 @@ def _arclength4(f: Expr, *spec: Expr) -> Expr:
           "|x'y'' - y'x''|/(x'^2 + y'^2)^(3/2) in 2D, |r' x r''|/|r'|^3 in 3D); ArcCurvature[f, x] for the graph "
           "y = f(x): Abs[f'']/(1 + f'^2)^(3/2)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _arccurv(f: Expr, t: Expr, *rest: Expr) -> Expr:
+def _arccurv(f: Expr, t: Var, *rest: Expr) -> Expr:
     if rest:
         raise NotImplementedError("ArcCurvature: coordinate charts are not supported")
     tv = variable(t, "ArcCurvature")

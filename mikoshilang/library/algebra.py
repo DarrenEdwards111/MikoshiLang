@@ -1,4 +1,6 @@
 """Polynomial and symbolic algebra (SymPy-backed, Wolfram conventions)."""
+
+from __future__ import annotations
 import sympy as sp
 
 from ..expr import Expr, Symbol
@@ -49,7 +51,7 @@ def _factor(e):
 @fn("Collect", area=AREA, status="verified", notes="Collect[e, x] and Collect[e, {x, y}]"
                                                    ". Check: exact (exact input gives exact results), reference "
                                                    "(differential cases in tests/library).")
-def _collect(e, v):
+def _collect(e: Expr, v: Var | ListOf[Var]) -> Expr:
     return R(sp.collect(sp.expand(sym(e, "Collect")), _vars(v, "Collect")))
 
 
@@ -57,7 +59,7 @@ def _collect(e, v):
     notes="legacy used Poly.nth, failing for non-polynomial expressions and negative powers; now "
           "Coefficient[e, x] and Coefficient[e, x, n] on the expanded expression (n may be 0 or negative)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _coefficient(e, x, n=1):
+def _coefficient(e: Expr, x: Expr, n: Integer = 1) -> Expr:
     v = sp.expand(sym(e, "Coefficient"))
     form = sym(x, "Coefficient")
     k = int_arg(n, "Coefficient", "power")
@@ -81,7 +83,7 @@ def _coeff_list(p, gens):
     notes="returned coefficients from the highest power down; Wolfram lists them from x^0 upwards; "
           "nested lists for {x, y}"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _coefflist(e, v):
+def _coefflist(e: Expr, v: Var | ListOf[Var]) -> Expr:
     p = sp.expand(sym(e, "CoefficientList"))
     gens = _vars(v, "CoefficientList")
     if not p.is_polynomial(*gens):
@@ -102,7 +104,7 @@ def _coefflist(e, v):
     notes="Wolfram constant Degree = Pi/180 (30 Degree -> Pi/6, Sin[30 Degree] -> 1/2, N[Degree] -> 0.0174533); "
           "Degree[...] used as a function raises ValueError pointing to Exponent; legacy Degree[p, x] returned the "
           "polynomial degree")
-def _degree_call(*args):
+def _degree_call(*args: Expr) -> Expr:
     raise ValueError("Degree is the constant Pi/180, not a function; use Exponent[p, x] for the degree of a "
                      "polynomial")
 
@@ -128,14 +130,14 @@ def _exponent(e, x):
 @fn("Discriminant", area=AREA, status="verified", notes="SymPy discriminant (same normalisation as Wolfram)"
                                                         ". Check: exact (exact input gives exact results), reference "
                                                         "(differential cases in tests/library).")
-def _disc(p, x):
+def _disc(p: Expr, x: Var) -> Expr:
     return R(sp.discriminant(sym(p, "Discriminant"), variable(x, "Discriminant")))
 
 
 @fn("Resultant", area=AREA, status="verified", notes="Sylvester resultant (SymPy)"
                                                      ". Check: exact (exact input gives exact results), reference "
                                                      "(differential cases in tests/library).")
-def _resultant(p, q, x):
+def _resultant(p: Expr, q: Expr, x: Var) -> Expr:
     return R(sp.resultant(sym(p, "Resultant"), sym(q, "Resultant"), variable(x, "Resultant")))
 
 
@@ -150,21 +152,21 @@ def _polydiv(p, q, x, fname):
 @fn("PolynomialQuotient", area=AREA, status="verified", notes="quotient over the rationals (SymPy div)"
                                                               ". Check: exact (exact input gives exact results), "
                                                               "reference (differential cases in tests/library).")
-def _pquo(p, q, x):
+def _pquo(p: Expr, q: Expr, x: Var) -> Expr:
     return R(sp.expand(_polydiv(p, q, x, "PolynomialQuotient")[0]))
 
 
 @fn("PolynomialRemainder", area=AREA, status="verified", notes="remainder over the rationals (SymPy div)"
                                                                ". Check: exact (exact input gives exact results), "
                                                                "reference (differential cases in tests/library).")
-def _prem(p, q, x):
+def _prem(p: Expr, q: Expr, x: Var) -> Expr:
     return R(sp.expand(_polydiv(p, q, x, "PolynomialRemainder")[1]))
 
 
 @fn("PolynomialDivision", area=AREA, status="verified", notes="{quotient, remainder} (MikoshiLang)"
                                                               ". Check: exact (exact input gives exact results), "
                                                               "reference (differential cases in tests/library).")
-def _pdiv(p, q, x):
+def _pdiv(p: Expr, q: Expr, x: Var) -> ListOf[Expr]:
     qq, rr = _polydiv(p, q, x, "PolynomialDivision")
     return L(R(sp.expand(qq)), R(sp.expand(rr)))
 
@@ -172,7 +174,7 @@ def _pdiv(p, q, x):
 @fn("PartialFractions", area=AREA, status="verified", notes="MikoshiLang alias of Apart[e, x]"
                                                             ". Check: exact (exact input gives exact results), "
                                                             "reference (differential cases in tests/library).")
-def _partial(e, x):
+def _partial(e: Expr, x: Var) -> Expr:
     return R(sp.apart(sym(e, "PartialFractions"), variable(x, "PartialFractions")))
 
 
@@ -180,7 +182,7 @@ def _partial(e, x):
     notes="legacy treated variables as complex (ComplexExpand[Re[x + I y]] stayed symbolic); Wolfram assumes "
           "all variables are real"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _complexexpand(e):
+def _complexexpand(e: Expr) -> Expr:
     v = sym(e, "ComplexExpand")
     reals = {s: sp.Symbol(s.name, real=True) for s in v.free_symbols}
     out = sp.expand_complex(v.xreplace(reals))
@@ -191,7 +193,7 @@ def _complexexpand(e):
     notes="legacy used powsimp (which combines powers, the opposite operation); now Wolfram PowerExpand: "
           "(a b)^c -> a^c b^c, (a^b)^c -> a^(b c), Log[a b] -> Log[a] + Log[b], Sqrt[x^2] -> x"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _powerexpand(e):
+def _powerexpand(e: Expr) -> Expr:
     v = sym(e, "PowerExpand")
     v = sp.expand_log(v, force=True)
     v = sp.powdenest(v, force=True)
@@ -202,14 +204,14 @@ def _powerexpand(e):
 @fn("TrigExpand", area=AREA, status="verified", notes="SymPy expand_trig followed by Expand"
                                                       ". Check: exact (exact input gives exact results), reference "
                                                       "(differential cases in tests/library).")
-def _trigexpand(e):
+def _trigexpand(e: Expr) -> Expr:
     return R(sp.expand(sp.expand_trig(sym(e, "TrigExpand"))))
 
 
 @fn("TrigReduce", area=AREA, status="verified", notes="products and powers of trig functions to multiple angles (SymPy fu TR8)"
                                                       ". Check: exact (exact input gives exact results), reference "
                                                       "(differential cases in tests/library).")
-def _trigreduce(e):
+def _trigreduce(e: Expr) -> Expr:
     from sympy.simplify.fu import TR8
     return R(sp.expand(TR8(sym(e, "TrigReduce"))))
 
@@ -217,21 +219,21 @@ def _trigreduce(e):
 @fn("TrigToExp", area=AREA, status="verified", notes="rewrite trig/hyperbolic functions as exponentials"
                                                      ". Check: exact (exact input gives exact results), reference "
                                                      "(differential cases in tests/library).")
-def _trigtoexp(e):
+def _trigtoexp(e: Expr) -> Expr:
     return R(sp.expand(sym(e, "TrigToExp").rewrite(sp.exp)))
 
 
 @fn("ExpToTrig", area=AREA, status="verified", notes="rewrite exponentials as trig/hyperbolic functions"
                                                      ". Check: exact (exact input gives exact results), reference "
                                                      "(differential cases in tests/library).")
-def _exptotrig(e):
+def _exptotrig(e: Expr) -> Expr:
     return R(sp.expand(sym(e, "ExpToTrig").rewrite(sp.cos)))
 
 
 @fn("CompleteTheSquare", area=AREA, status="fixed",
     notes="a (x - h)^2 + k form (MikoshiLang); non-quadratics now raise instead of returning an Error expression"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _cts(e, x):
+def _cts(e: Expr, x: Var) -> Expr:
     v = variable(x, "CompleteTheSquare")
     p = sp.expand(sym(e, "CompleteTheSquare"))
     if not p.is_polynomial(v) or sp.degree(p, v) != 2:
@@ -246,7 +248,7 @@ def _cts(e, x):
     notes="roots {(-b + Sqrt[b^2 - 4ac])/(2a), (-b - Sqrt[...])/(2a)} (MikoshiLang); a = 0 now raises "
           "instead of dividing by zero"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _quadformula(a, b, c):
+def _quadformula(a: Numeric, b: Numeric, c: Numeric) -> ListOf[Expr]:
     sa, sb, sc = sym(a, "QuadraticFormula"), sym(b, "QuadraticFormula"), sym(c, "QuadraticFormula")
     if sa == 0:
         raise ValueError("QuadraticFormula: leading coefficient a must be non-zero")
@@ -258,7 +260,7 @@ def _quadformula(a, b, c):
     notes="legacy multiplied by conj(d)/conj(d) (a no-op) and only simplified; now SymPy radsimp, "
           "e.g. 1/(1 + Sqrt[2]) -> -1 + Sqrt[2]"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _ratdenom(e):
+def _ratdenom(e: Expr) -> Expr:
     return R(sp.radsimp(sym(e, "RationalizeDenominator")))
 
 

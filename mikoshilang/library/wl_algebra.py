@@ -155,7 +155,7 @@ def _expandden(e: Expr) -> Expr:
     notes="PolynomialQ[e, x] / PolynomialQ[e, {x, ...}]: True if e is a polynomial in the variables (coefficients "
           "may be anything free of them; nonnegative integer powers only); PolynomialQ[e] in all its variables"
           ". Check: reference (differential cases in tests/library).")
-def _polyq(e: Expr, v: Expr = None) -> Boolean:
+def _polyq(e: Expr, v: Var | ListOf[Var] = None) -> Boolean:
     try:
         p = sym(e, "PolynomialQ")
     except Exception:
@@ -229,7 +229,7 @@ def _poly(e, v, fname):
           "(third argument: \"Lexicographic\", \"DegreeLexicographic\", \"DegreeReverseLexicographic\"); "
           "CoefficientRules[p] uses Variables[p]; CoefficientRules[0, vars] -> {}"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _coeffrules(e: Expr, v: Expr = None, order: Expr = None) -> ListOf[Expr]:
+def _coeffrules(e: Expr, v: Var | ListOf[Var] = None, order: Expr = None) -> ListOf[Expr]:
     P, gens = _poly(e, v, "CoefficientRules")
     if P.is_zero:
         return L()
@@ -241,7 +241,7 @@ def _coeffrules(e: Expr, v: Expr = None, order: Expr = None) -> ListOf[Expr]:
     notes="MonomialList[p, {x1, ...}] -> the terms (coefficient times monomial) in lexicographic order (third "
           "argument: monomial order); MonomialList[p] uses Variables[p]"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _monolist(e: Expr, v: Expr = None, order: Expr = None) -> ListOf[Expr]:
+def _monolist(e: Expr, v: Var | ListOf[Var] = None, order: Expr = None) -> ListOf[Expr]:
     P, gens = _poly(e, v, "MonomialList")
     if P.is_zero:
         return L()
@@ -354,7 +354,7 @@ def _pqr(p: Expr, q: Expr, x: Expr) -> ListOf[Expr]:
           "is unique)"
           ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
           "in tests/library).")
-def _preduce(p: Expr, qs: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
+def _preduce(p: Expr, qs: Expr, vs: Var | ListOf[Var], *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_opts(rest, {"MonomialOrder"}, "PolynomialReduce")
     gens = _vars_opt(vs, "PolynomialReduce")
     P = sp.expand(sym(p, "PolynomialReduce"))
@@ -414,7 +414,7 @@ def _pmod(p: Expr, m: Expr) -> Expr:
           "(Wolfram's order); GroebnerBasis[polys, vars, elims] eliminates elims; equations are moved to one "
           "side; Modulus -> p"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _groebner(polys: Expr, vs: Expr, *rest: Expr) -> ListOf[Expr]:
+def _groebner(polys: Expr, vs: Var | ListOf[Var], *rest: Expr) -> ListOf[Expr]:
     rest, opts = split_opts(rest, {"MonomialOrder", "Modulus"}, "GroebnerBasis",
                             extra_known=("CoefficientDomain", "Sort", "Method"))
     elims = _vars_opt(rest[0], "GroebnerBasis") if rest else []
@@ -566,7 +566,7 @@ def _content_split(p, vs):
           "kernel displays distributed); FactorTerms[p, x] also pulls out factors free of x; the leading "
           "coefficient of the remaining polynomial is made positive"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _factorterms(e: Expr, v: Expr = None) -> Expr:
+def _factorterms(e: Expr, v: Var | ListOf[Var] = None) -> Expr:
     c, g, r = _content_split(sym(e, "FactorTerms"), _vars_opt(v, "FactorTerms"))
     return out(sp.Mul(c, g, r, evaluate=False) if (g != 1 or c != 1) else r)
 
@@ -575,7 +575,7 @@ def _factorterms(e: Expr, v: Expr = None) -> Expr:
     notes="FactorTermsList[p] -> {numeric factor, polynomial}; FactorTermsList[p, {x, ...}] -> {numeric factor, "
           "factor free of the variables, remaining polynomial}"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _factortermslist(e: Expr, v: Expr = None) -> ListOf[Expr]:
+def _factortermslist(e: Expr, v: Var | ListOf[Var] = None) -> ListOf[Expr]:
     vs = _vars_opt(v, "FactorTermsList")
     c, g, r = _content_split(sym(e, "FactorTermsList"), vs)
     if vs:
@@ -629,7 +629,7 @@ def _decompose(e: Expr, x: Var) -> ListOf[Expr]:
     notes="HornerForm[p] / HornerForm[p, x] / HornerForm[p, {x, y}]: nested Horner form (SymPy horner); rational "
           "functions: HornerForm of numerator and denominator"
           ". Check: reference (differential cases in tests/library).")
-def _horner(e: Expr, v: Expr = None) -> Expr:
+def _horner(e: Expr, v: Var | ListOf[Var] = None) -> Expr:
     p = sym(e, "HornerForm")
     vs = _vars_opt(v, "HornerForm") or []
     n, d = sp.fraction(sp.together(p))
@@ -698,7 +698,7 @@ def _irredq(e: Expr, *rest: Expr) -> Boolean:
     notes="SymmetricPolynomial[k, {x1, ..., xn}]: the k-th elementary symmetric polynomial (0 for k > n, 1 for "
           "k = 0)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _sympoly(k: NonNegInteger, vs: Expr) -> Expr:
+def _sympoly(k: NonNegInteger, vs: Var | ListOf[Var]) -> Expr:
     kk = nonneg_int(k, "SymmetricPolynomial", "degree")
     xs = _vars_opt(vs, "SymmetricPolynomial")
     if kk > len(xs):
@@ -713,7 +713,7 @@ def _sympoly(k: NonNegInteger, vs: Expr) -> Expr:
           "writes p in the si; checked by expansion"
           ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
           "in tests/library).")
-def _symred(e: Expr, vs: Expr, names: Expr = None) -> ListOf[Expr]:
+def _symred(e: Expr, vs: Var | ListOf[Var], names: Expr = None) -> ListOf[Expr]:
     from sympy.polys.polyfuncs import symmetrize
     f = sp.expand(sym(e, "SymmetricReduction"))
     xs = _vars_opt(vs, "SymmetricReduction")
@@ -1359,7 +1359,7 @@ def _solvevalues(*a: Expr) -> ListOf[Expr]:
           "Wolfram; radicals up to degree 4 unless Cubics/Quartics -> False, Root objects beyond); a single root "
           "gives x == r; no roots gives False"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _roots(eq: Expr, x: Expr, *rest: Expr) -> Expr:
+def _roots(eq: Expr, x: Var, *rest: Expr) -> Expr:
     rest, opts = split_opts(rest, {"Cubics", "Quartics"}, "Roots", extra_known=("Modulus", "Multiplicity"))
     kind, f = _rel_parts(eq, "Roots")
     if kind != "eq":
@@ -1406,7 +1406,7 @@ def _torules(e: Expr) -> Expr:
           "elimination), returned as p == 0 relations joined with And (Wolfram may arrange the two sides "
           "differently); True when nothing remains"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _eliminate(eqs: Expr, vs: Expr) -> Expr:
+def _eliminate(eqs: Expr, vs: Var | ListOf[Var]) -> Expr:
     parts = [_rel_parts(e, "Eliminate") for e in _flatten_and(eqs)]
     if any(k != "eq" for k, _ in parts):
         raise ValueError("Eliminate: expected equations")
@@ -1904,7 +1904,7 @@ _PIECEWISE_HEADS = (sp.floor, sp.ceiling, sp.sign, sp.Heaviside, sp.Piecewise, s
           "domain; functions with jumps such as Floor raise); checked by sampling; other domains raise"
           ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
           "in tests/library).")
-def _functiondomain(f: Expr, x: Expr, dom: Expr = None) -> Expr:
+def _functiondomain(f: Expr, x: Var, dom: Expr = None) -> Expr:
     from sympy.calculus.util import continuous_domain
     if dom is not None and not (isinstance(dom, Symbol) and dom.name == "Reals"):
         raise NotImplementedError("FunctionDomain: only the real domain is supported")

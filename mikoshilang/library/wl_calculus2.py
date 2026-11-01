@@ -209,7 +209,7 @@ def _symspec_ok(s, rank, fname):
     notes="Vectors[n] / Vectors[n, dom]: the domain of length-n vectors (dom Complexes by default, Reals, ...); inert "
           "domain used with Element and VectorSymbol; malformed specifications raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _vectors(n: Expr, dom: Expr = None) -> Expr:
+def _vectors(n: NonNegInteger, dom: Expr = None) -> Expr:
     _dim_ok(n, "Vectors")
     if dom is not None:
         _dom_ok(dom, "Vectors")
@@ -249,7 +249,7 @@ def _arrays(dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
           "symbolic vector of length n (inert; used by ArrayExpand, ArraySimplify, TensorDimensions-style functions "
           "in this module); bad arguments raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _vectorsymbol(name: Expr, n: Expr = None, dom: Expr = None) -> Expr:
+def _vectorsymbol(name: String | Var, n: Expr = None, dom: Expr = None) -> Expr:
     if not isinstance(name, (str, Symbol)):
         raise ValueError("VectorSymbol: the name must be a string or a symbol")
     if n is None:
@@ -268,7 +268,7 @@ def _vectorsymbol(name: Expr, n: Expr = None, dom: Expr = None) -> Expr:
     notes="MatrixSymbol[\"A\", {m, n}] / [.., dom] / [.., dom, sym]: a symbolic m x n matrix (inert); ArrayExpand / "
           "ArraySimplify treat it as a SymPy MatrixSymbol (symmetry Symmetric[{1, 2}] makes Transpose[A] = A)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _matrixsymbol(name: Expr, dims: Expr, dom: Expr = None, symm: Expr = None) -> Expr:
+def _matrixsymbol(name: String | Var, dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
     if not isinstance(name, (str, Symbol)):
         raise ValueError("MatrixSymbol: the name must be a string or a symbol")
     d = _dims_ok(dims, "MatrixSymbol")
@@ -285,7 +285,7 @@ def _matrixsymbol(name: Expr, dims: Expr, dom: Expr = None, symm: Expr = None) -
     notes="ArraySymbol[\"A\", dims] / [.., dom] / [.., dom, sym]: a symbolic array (inert); rank-1 and rank-2 "
           "ArraySymbols take part in ArrayExpand / ArraySimplify like VectorSymbol / MatrixSymbol"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _arraysymbol(name: Expr, dims: Expr, dom: Expr = None, symm: Expr = None) -> Expr:
+def _arraysymbol(name: String | Var, dims: ListOf[Expr], dom: Expr = None, symm: Expr = None) -> Expr:
     if not isinstance(name, (str, Symbol)):
         raise ValueError("ArraySymbol: the name must be a string or a symbol")
     d = _dims_ok(dims, "ArraySymbol")
@@ -3002,7 +3002,7 @@ def _diffquot(f: Expr, *specs: Expr) -> Expr:
           "the matrix; the equation form Casoratian[eqn, y, n] raises (its normalisation constant is not determined "
           "by the equation)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _casoratian(ys: ListOf[Expr], n: Expr, *rest: Expr) -> Expr:
+def _casoratian(ys: ListOf[Expr], n: Var, *rest: Expr) -> Expr:
     if not is_list(ys):
         raise NotImplementedError("Casoratian: the equation form (Casoratian[eqn, y, n]) is not supported; "
                                   "give an explicit list of solutions")
@@ -3593,7 +3593,7 @@ def _findseqfn(data: Expr, *rest: Expr) -> Expr:
           "linear recurrence (at least two confirming terms), else the sum of the FindSequenceFunction term; "
           "verified against the series; unevaluated when nothing is found"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _findgf(data: Expr, x: Expr) -> Expr:
+def _findgf(data: Expr, x: Var) -> Expr:
     fname = "FindGeneratingFunction"
     if not is_list(data) or len(data.args) < 3:
         raise ValueError(f"{fname}: at least three terms are required")
@@ -3645,7 +3645,7 @@ def _findgf(data: Expr, x: Expr) -> Expr:
     notes="ExponentialGeneratingFunction[expr, n, x] = Sum[expr x^n/n!, {n, 0, Infinity}] in closed form (SymPy "
           "summation, checked against the first Taylor coefficients); raises when no closed form is found"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _egf(expr: Expr, n: Expr, x: Expr, *rest: Expr) -> Expr:
+def _egf(expr: Expr, n: Var, x: Var, *rest: Expr) -> Expr:
     fname = "ExponentialGeneratingFunction"
     if rest:
         raise NotImplementedError(f"{fname}: multivariate generating functions and options are not supported")
@@ -3674,7 +3674,7 @@ def _egf(expr: Expr, n: Expr, x: Expr, *rest: Expr) -> Expr:
     notes="FactorialMomentGeneratingFunction[dist, t] = Expectation[t^x] = MomentGeneratingFunction[dist, Log[t]], "
           "simplified; raises when the moment generating function is not known"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _fmgf(dist: Expr, t: Expr, *rest: Expr) -> Expr:
+def _fmgf(dist: Expr, t: Var, *rest: Expr) -> Expr:
     fname = "FactorialMomentGeneratingFunction"
     if rest:
         raise ValueError(f"{fname}: too many arguments")
@@ -3924,7 +3924,7 @@ def _stab_cond(eigs, discrete):
     notes="DFixedPoints[eqns, x[t] | {x1, ...}, t]: the equilibria of an autonomous ODE system, as points of the "
           "first-order state (x, x', ..., x^(k-1)) for higher-order equations; sorted; raises for continua"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _dfixed(eqs: Expr, xs: Expr, t: Expr) -> Expr:
+def _dfixed(eqs: Expr, xs: Expr, t: Var) -> Expr:
     state, rhs, _tv = _ode_system(eqs, xs, t, "DFixedPoints")
     return out(_fixed(state, rhs, "DFixedPoints"))
 
@@ -3933,7 +3933,7 @@ def _dfixed(eqs: Expr, xs: Expr, t: Expr) -> Expr:
     notes="RFixedPoints[eqns, a[n] | {a1, ...}, n]: the fixed points of an autonomous recurrence system (all shifts "
           "equal), as points of the state (a[n], ..., a[n + k - 1]); sorted; raises for continua"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _rfixed(eqs: Expr, xs: Expr, n: Expr) -> Expr:
+def _rfixed(eqs: Expr, xs: Expr, n: Var) -> Expr:
     state, rhs = _rec_system(eqs, xs, n, "RFixedPoints")
     return out(_fixed(state, [r - s_ for r, s_ in zip(rhs, state)], "RFixedPoints"))
 
@@ -4000,7 +4000,7 @@ def _stability(state, rhs, pts, discrete, fname):
           "asymptotic stability from the linearisation (all eigenvalues with negative real part: True/False for "
           "numeric Jacobians, Re[l] < 0 conditions otherwise); non-hyperbolic numeric cases raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _dstab(eqs: Expr, xs: Expr, t: Expr, *rest: Expr) -> Expr:
+def _dstab(eqs: Expr, xs: Expr, t: Var, *rest: Expr) -> Expr:
     fname = "DStabilityConditions"
     state, rhs, _tv = _ode_system(eqs, xs, t, fname)
     if len(rest) > 1:
@@ -4014,7 +4014,7 @@ def _dstab(eqs: Expr, xs: Expr, t: Expr, *rest: Expr) -> Expr:
           "stability of the fixed points from the linearisation (all eigenvalues inside the unit circle; a single "
           "real parameter gives an interval such as -1 < a < 1, otherwise Abs[l] < 1 conditions)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _rstab(eqs: Expr, xs: Expr, n: Expr, *rest: Expr) -> Expr:
+def _rstab(eqs: Expr, xs: Expr, n: Var, *rest: Expr) -> Expr:
     fname = "RStabilityConditions"
     state, rhs = _rec_system(eqs, xs, n, fname)
     if len(rest) > 1:
@@ -4454,7 +4454,7 @@ def _deigensystem(op: Expr, u: Expr, rng: Expr, n: Expr) -> Expr:
           "first n-2 derivatives and the jump 1/c_n(y) of the (n-1)th), as HeavisideTheta pieces; u gives "
           "Function[{x, y}, ...]; PDEs and problems without a unique Green's function raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _green(op: Expr, u: Expr, rng: Expr, y: Expr, *rest: Expr) -> Expr:
+def _green(op: Expr, u: Expr, rng: Expr, y: Var, *rest: Expr) -> Expr:
     fname = "GreenFunction"
     if rest:
         raise NotImplementedError(f"{fname}: time-dependent and PDE forms are not supported")
@@ -4912,7 +4912,7 @@ def _cons_pred(cons, z, fname):
           "poles found exactly (polynomial roots, periodic families enumerated, Gamma poles); non-meromorphic "
           "functions, poles on the constraint boundary and symbolic pole locations raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _residuesum(fc: Expr, z: Expr, *rest: Expr) -> Expr:
+def _residuesum(fc: Expr, z: Var, *rest: Expr) -> Expr:
     fname = "ResidueSum"
     rest, _o = _opts(rest, {"GenerateConditions", "PerformanceGoal"}, fname)
     if rest:
