@@ -168,7 +168,7 @@ EIG_K = (" Eigenvalues[m, k] gives the k largest in absolute value (k < 0: the |
 @fn("Eigenvalues", area="linear algebra", status="fixed",
     notes="eigenvalues with multiplicity in Wolfram order (decreasing absolute value; legacy returned SymPy's "
           "dict order)." + EIG_K)
-def _eigenvalues_k(m: Expr, k: Expr) -> ListOf[Expr]:
+def _eigenvalues_k(m: ListOf[Expr], k: Expr) -> ListOf[Expr]:
     return L(*_take_k(list(_eigvals(m).args), k, "Eigenvalues"))
 
 
@@ -176,7 +176,7 @@ def _eigenvalues_k(m: Expr, k: Expr) -> ListOf[Expr]:
     notes="ordered like Eigenvalues, exact vectors scaled so the last non-zero entry is 1, zero vectors pad "
           "defective matrices (Wolfram); machine matrices give unit vectors. Eigenvectors[m, k] and UpTo[k] as "
           "for Eigenvalues")
-def _eigenvectors_k(m: Expr, k: Expr) -> ListOf[Expr]:
+def _eigenvectors_k(m: ListOf[Expr], k: Expr) -> ListOf[Expr]:
     return L(*_take_k(list(_eigvecs(m).args), k, "Eigenvectors"))
 
 
@@ -191,7 +191,7 @@ record("Eigenvectors", "linear algebra", "fixed",
 @fn("Eigensystem", area=AREA, status="added",
     notes="{Eigenvalues[m], Eigenvectors[m]} with matching order (decreasing absolute value); Eigensystem[m, k] "
           "and UpTo[k]; generalized {m, a} raises")
-def _eigensystem(m: Expr, *k: Expr) -> ListOf[Expr]:
+def _eigensystem(m: ListOf[Expr], *k: Expr) -> ListOf[Expr]:
     if len(k) > 1:
         raise ValueError("Eigensystem called with too many arguments")
     vals, vecs = list(_eigvals(m).args), list(_eigvecs(m).args)
@@ -217,7 +217,7 @@ def _sv_exact(M, fname):
           "where values below 100*10^-p times the largest are dropped); SingularValueList[m, k] (k < 0: smallest) "
           "and UpTo[k] use all Min[Dimensions[m]] values, zeros included; Tolerance -> t keeps values >= t times "
           "the largest; symbolic and generalized {m, a} inputs raise")
-def _svlist(m: Expr, *rest: Expr) -> Expr:
+def _svlist(m: ListOf[Expr], *rest: Expr) -> ListOf[Expr]:
     _generalized(m, "SingularValueList")
     args, opts = split_options(rest, {"Tolerance"}, "SingularValueList")
     if len(args) > 1:
@@ -344,7 +344,7 @@ def _minpoly(m: MatrixOf[Expr], x: Var) -> Expr:
 @fn("Adjugate", area=AREA, status="added",
     notes="the adjugate (transposed cofactor matrix), Det[m] Inverse[m] for invertible m, defined for singular m "
           "too; exact (machine matrices are computed exactly from their binary values and rounded)")
-def _adjugate(m: MatrixOf[Expr]) -> Expr:
+def _adjugate(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M = _matrix(m, "Adjugate", square=True)
     kind = _kind(m)
     if M.rows == 1:
@@ -359,7 +359,7 @@ def _adjugate(m: MatrixOf[Expr]) -> Expr:
     notes="Minors[m, k]: determinants of all k x k submatrices, rows and columns subsets in lexicographic order "
           "(Wolfram); Minors[m] = Minors[m, Min[Dimensions[m]] - 1]; Minors[m, k, f] applies f instead of Det; "
           "Minors[m, 0] = {{1}}")
-def _minors(m: Expr, *rest: Expr) -> Expr:
+def _minors(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     if len(rest) > 2:
         raise ValueError("Minors called with too many arguments")
     M = _matrix(m, "Minors")
@@ -427,7 +427,7 @@ def _projection(u: Expr, v: Expr, *f: Expr) -> Expr:
           "many vectors as the input, linearly dependent vectors become zero vectors; machine vectors whose "
           "residual norm is at most 100 $MachineEpsilon (about 2.2*10^-14) of the original are treated as dependent (Tolerance -> t overrides); "
           "Orthogonalize[list, f] uses the inner product f on arbitrary elements")
-def _orthogonalize(vs: Expr, *rest: Expr) -> Expr:
+def _orthogonalize(vs: ListOf[Expr], *rest: Expr) -> ListOf[Expr]:
     args, opts = split_options(rest, {"Tolerance", "Method"}, "Orthogonalize")
     if "Method" in opts and not (isinstance(opts["Method"], str) and opts["Method"] == "GramSchmidt"):
         raise NotImplementedError("Orthogonalize: only Method -> \"GramSchmidt\" is supported")
@@ -522,7 +522,7 @@ def _size2(n, fname):
 
 @fn("HilbertMatrix", area=AREA, status="added",
     notes="entries 1/(i + j - 1); HilbertMatrix[n] and HilbertMatrix[{m, n}]; exact (use N for machine numbers)")
-def _hilbert(n: Expr) -> MatrixOf[Expr]:
+def _hilbert(n: PosInteger | ListOf[PosInteger]) -> MatrixOf[Expr]:
     r, c = _size2(n, "HilbertMatrix")
     return mat_out(sp.Matrix(r, c, lambda i, j: sp.Rational(1, i + j + 1)))
 
@@ -538,7 +538,7 @@ def _entries(x, fname):
     notes="ToeplitzMatrix[n] (symmetric, successive integers), ToeplitzMatrix[c] (symmetric, first column c), "
           "ToeplitzMatrix[c, r] (first column c, first row r; r[[1]] is ignored and c[[1]] used, as in Wolfram); "
           "always a dense matrix (Wolfram's TargetStructure option is not supported)")
-def _toeplitz(c: Expr, r: Expr = None) -> ListOf[Expr]:
+def _toeplitz(c: PosInteger | ListOf[Expr], r: ListOf[Expr] = None) -> ListOf[Expr]:
     if r is None and not is_list(c):
         n = pos_int(c, "ToeplitzMatrix", "size")
         c = L(*range(1, n + 1))
@@ -551,7 +551,7 @@ def _toeplitz(c: Expr, r: Expr = None) -> ListOf[Expr]:
     notes="HankelMatrix[n] (successive integers, zeros below the antidiagonal), HankelMatrix[c] (first column c, "
           "zeros below the antidiagonal), HankelMatrix[c, r] (first column c, last row r; r[[1]] is ignored and "
           "c[[-1]] used, as in Wolfram); always a dense matrix")
-def _hankel(c: Expr, r: Expr = None) -> ListOf[Expr]:
+def _hankel(c: PosInteger | ListOf[Expr], r: ListOf[Expr] = None) -> ListOf[Expr]:
     if r is None and not is_list(c):
         n = pos_int(c, "HankelMatrix", "size")
         c = L(*range(1, n + 1))
@@ -570,7 +570,7 @@ def _hankel(c: Expr, r: Expr = None) -> ListOf[Expr]:
     notes="rows {1, x_i, x_i^2, ...}: VandermondeMatrix[{x1, ..., xn}] (n x n) and VandermondeMatrix[x, k] "
           "(n x k), returned as the dense matrix (Wolfram returns a structured array whose Normal this is); "
           "confluent (repeated) nodes raise")
-def _vandermonde(x: ListOf[Expr], k: Expr = None) -> Expr:
+def _vandermonde(x: ListOf[Expr], k: Expr = None) -> ListOf[Expr]:
     xs = _entries(x, "VandermondeMatrix")
     cols = len(xs) if k is None else pos_int(k, "VandermondeMatrix", "column count")
     for i in range(len(xs)):
@@ -584,7 +584,7 @@ def _vandermonde(x: ListOf[Expr], k: Expr = None) -> Expr:
 @fn("CauchyMatrix", area=AREA, status="added",
     notes="entries 1/(x_i + y_j) (CauchyMatrix[x] = CauchyMatrix[x, x]), returned as the dense matrix; a zero "
           "denominator raises")
-def _cauchy(x: Expr, y: Expr = None) -> Expr:
+def _cauchy(x: ListOf[Expr], y: ListOf[Expr] = None) -> ListOf[Expr]:
     xs = [S(v) for v in _entries(x, "CauchyMatrix")]
     ys = xs if y is None else [S(v) for v in _entries(y, "CauchyMatrix")]
     out = []
@@ -625,7 +625,7 @@ def _simp_out(M, kind):
     notes="RotationMatrix[t] (2D, counterclockwise), RotationMatrix[t, w] (3D, right-handed about the numeric "
           "axis w), RotationMatrix[t, {u, v}] (n-D, in the plane of u and v, from u towards v), RotationMatrix[{u, "
           "v}] (rotation taking the direction of u to that of v, in their plane; antiparallel vectors raise)")
-def _rotation(t: Expr, w: Expr = None) -> Expr:
+def _rotation(t: Numeric | ListOf[Expr], w: ListOf[Expr] = None) -> ListOf[Expr]:
     if w is None and is_list(t):
         return _rotation_uv(*_pair(t, "RotationMatrix"), None)
     th = sym(t, "RotationMatrix")
@@ -685,7 +685,7 @@ def _rotation_uv(u, v, th, kind=None):
 @fn("ReflectionMatrix", area=AREA, status="added",
     notes="IdentityMatrix[n] - 2 v.ConjugateTranspose[v]/(Conjugate[v].v): reflection in the hyperplane "
           "normal to the numeric vector v")
-def _reflection(v: ListOf[Numeric]) -> Expr:
+def _reflection(v: ListOf[Numeric]) -> ListOf[Expr]:
     xs = _numvec(v, "ReflectionMatrix")
     d = sp.simplify(_cdot(xs, xs))
     if d == 0:
@@ -697,7 +697,7 @@ def _reflection(v: ListOf[Numeric]) -> Expr:
 @fn("ScalingMatrix", area=AREA, status="added",
     notes="ScalingMatrix[{s1, ..., sn}] = DiagonalMatrix[{s1, ..., sn}]; ScalingMatrix[s, v] scales by s along "
           "the numeric direction v: IdentityMatrix + (s - 1) v.Transpose[v]/v.v")
-def _scaling(s: Expr, v: Expr = None) -> Expr:
+def _scaling(s: Numeric | ListOf[Expr], v: ListOf[Expr] = None) -> ListOf[Expr]:
     if v is None:
         xs = _entries(s, "ScalingMatrix")
         n = len(xs)
@@ -715,7 +715,7 @@ def _scaling(s: Expr, v: Expr = None) -> Expr:
     notes="ShearingMatrix[t, v, n] = IdentityMatrix + Tan[t] Outer[Times, vp, Normalize[n]] where vp is the unit "
           "vector along the part of v perpendicular to n (Wolfram uses the projection for non-orthogonal v); "
           "determinant 1")
-def _shearing(t: Expr, v: ListOf[Numeric], nrm: ListOf[Numeric]) -> Expr:
+def _shearing(t: Expr, v: ListOf[Numeric], nrm: ListOf[Numeric]) -> ListOf[Expr]:
     th = sym(t, "ShearingMatrix")
     a, b = _numvec(v, "ShearingMatrix"), _numvec(nrm, "ShearingMatrix")
     if len(a) != len(b):
@@ -778,18 +778,18 @@ def _cross(d, rs):
    notes="1s in a box extending r index positions to each side: BoxMatrix[r] is (2r+1) x (2r+1) ones, "
          "BoxMatrix[r, w] (w x w, box centred), BoxMatrix[{r1, r2, ...}] and sizes {w1, ...}; integer radii only; "
          "an off-centre box (w - 2r - 1 odd) raises")
-def _box_matrix(r: Expr, w: Expr = None) -> ListOf[Expr]:
+def _box_matrix(r: NonNegInteger | ListOf[Expr], w: Expr = None) -> ListOf[Expr]:
     return _shape(r, w, "BoxMatrix", _box)
 
 
 @fn("CrossMatrix", area=AREA, status="added",
    notes="1s on the central row and column (central lines in higher dimensions) extending r positions: "
          "CrossMatrix[r] is (2r+1) x (2r+1), CrossMatrix[r, w], CrossMatrix[{r1, ...}]; integer radii only")
-def _cross_matrix(r: Expr, w: Expr = None) -> ListOf[Expr]:
+def _cross_matrix(r: NonNegInteger | ListOf[Expr], w: Expr = None) -> ListOf[Expr]:
     return _shape(r, w, "CrossMatrix", _cross)
 
 
-def _diamond(r: Expr, w: Expr = None) -> Expr:
+def _diamond(r: NonNegInteger | ListOf[Expr], w: Expr = None) -> ListOf[Expr]:
     rs = _radii(r, "DiamondMatrix")
     if len(set(rs)) != 1:
         raise NotImplementedError("DiamondMatrix: different radii per dimension are not supported")
@@ -1102,7 +1102,7 @@ def _tensordims(t: Expr) -> ListOf[Expr]:
 @fn("TensorContract", area=AREA, status="added",
     notes="TensorContract[t, {{s1, s2}, ...}] sums over each pair of slots of an explicit array; the remaining "
           "slots keep their order; paired slots must have equal dimensions and appear once")
-def _tensorcontract(t: ListOf[Expr], pairs: Expr) -> Expr:
+def _tensorcontract(t: ListOf[Expr], pairs: ListOf[Expr]) -> Expr:
     if not is_list(t):
         raise Unevaluated()
     d = dims(t)
