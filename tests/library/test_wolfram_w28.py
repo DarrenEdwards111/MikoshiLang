@@ -165,7 +165,261 @@ NEIGHBOURHOOD = [
                                                                                  "^MeanShiftFilter: ")),
 ]
 
-CASES = NEIGHBOURHOOD
+B5 = "{{0,0,0,0,0,0},{0,0,0,1,1,0},{0,1,1,1,1,0},{0,0,1,1,0,0},{0,0,0,1,1,0},{0,0,0,0,0,0}}"
+K3 = "{{0,0,0},{0,1,1},{0,0,1}}"
+SQ = "{{0,0,0,0,0},{0,1,1,1,0},{0,1,1,1,0},{0,1,1,1,0},{0,0,0,0,0}}"
+BI = 'Image[{{1, 1, 1}, {1, 0, 1}, {1, 1, 1}}, "Bit"]'
+
+MORPHOLOGY = [
+    # Dilation (reference: Dilation page examples)
+    (f"Dilation[{B5}, {K3}]",
+     "{{0,0,1,1,0,0},{1,1,1,1,1,0},{1,1,1,1,1,0},{0,1,1,1,0,0},{0,0,1,1,1,0},{0,0,0,0,0,0}}"),
+    ("Dilation[{{2,3,2,5,5},{1,4,1,2,5},{3,2,1,4,5},{2,1,2,3,1},{1,1,2,4,2}}, 1]",
+     "{{4,4,5,5,5},{4,4,5,5,5},{4,4,4,5,5},{3,3,4,5,5},{2,2,4,4,4}}"),
+    ("Dilation[{0, 0, 1, 0, 0}, 1]", "{0, 1, 1, 1, 0}"),                                   # hand-worked
+    ("Dilation[{1/2, 0, 0}, 1]", "{1/2, 1/2, 0}"),
+    ("Image[{{0., 1.}, {0., 0.}}] // Dilation[#, 1] & // ImageData", N([[1, 1], [1, 1]])),
+    ("Dilation[{1, w28x}, 1]", "Dilation[{1, w28x}, 1]"),
+    ("Dilation[{1, 0}, -1]", Raises(ValueError, "^Dilation: ")),
+    ("Dilation[{{1, 0}}, {{1, 1}, {1, 1}}]", Raises(NotImplementedError, "^Dilation: ")),
+    ("Dilation[\"w28s\", 1]", Raises(TypeError, "^Dilation: ")),
+    # Erosion (reference: Erosion page examples)
+    (f"Erosion[{B5}, {K3}]",
+     "{{0,0,0,0,0,0},{0,0,0,1,0,0},{0,1,1,0,0,0},{0,0,1,0,0,0},{0,0,0,0,0,0},{0,0,0,0,0,0}}"),
+    ("Erosion[{{2,3,2,5,5},{1,4,2,3,5},{3,2,2,4,5},{2,1,2,3,1},{1,1,2,4,2}}, 1]",
+     "{{1,1,2,2,3},{1,1,2,2,3},{1,1,1,1,1},{1,1,1,1,1},{1,1,1,1,1}}"),
+    ("Erosion[{1, 1, 1, 0, 1}, 1]", "{1, 1, 0, 0, 0}"),                                   # hand-worked
+    ("Image[{{1., 1.}, {0., 1.}}] // Erosion[#, 1] & // ImageData", N([[0, 0], [0, 0]])),
+    ("Erosion[{1, w28x}, 1]", "Erosion[{1, w28x}, 1]"),
+    ("Erosion[{1, 0}, -1]", Raises(ValueError, "^Erosion: ")),
+    ("Erosion[{{1, 0}}, {{1, 1}, {1, 1}}]", Raises(NotImplementedError, "^Erosion: ")),
+    # Opening / Closing (reference: Opening and Closing page examples)
+    ("Opening[{1,1,1,0,0,1,1,0,0,0,1}, {1,1,1}]", "{1,1,1,0,0,0,0,0,0,0,0}"),
+    ("Opening[{0, 3, 3, 3, 0, 5}, 1]", "{0, 3, 3, 3, 0, 0}"),                                    # hand-worked
+    (f"Opening[{SQ}, 1]", SQ),                                                           # 3x3 block survives
+    ("Opening[{1, w28x}, 1]", "Opening[{1, w28x}, 1]"),
+    ("Opening[{1, 0}, -1]", Raises(ValueError, "^Opening: ")),
+    ("Closing[{1,1,1,0,0,1,1,0,0,0,1}, {1,1,1}]", "{1,1,1,1,1,1,1,0,0,0,1}"),
+    ("Closing[{5, 0, 5}, 1]", "{5, 5, 5}"),                                                # hand-worked
+    ("Closing[{1, 0, 0, 0, 1}, 1]", "{1, 0, 0, 0, 1}"),
+    ("Closing[{1, w28x}, 1]", "Closing[{1, w28x}, 1]"),
+    ("Closing[{1, 0}, -1]", Raises(ValueError, "^Closing: ")),
+    # Top / bottom hat (definition: f - Opening[f], Closing[f] - f)
+    ("TopHatTransform[{1/2, 3, 1, 0}, 1]", "{0, 5/2, 1/2, 0}"),
+    ("TopHatTransform[{0, 3, 3, 3, 0, 5}, 1]", "{0, 0, 0, 0, 0, 5}"),
+    ("TopHatTransform[{1, w28x}, 1]", "TopHatTransform[{1, w28x}, 1]"),
+    ("TopHatTransform[{1, 0}, -1]", Raises(ValueError, "^TopHatTransform: ")),
+    ("BottomHatTransform[{1/2, 3, 1, 0}, 1]", "{5/2, 0, 0, 1}"),
+    ("BottomHatTransform[{5, 0, 5}, 1]", "{0, 5, 0}"),
+    ("BottomHatTransform[{1, w28x}, 1]", "BottomHatTransform[{1, w28x}, 1]"),
+    ("BottomHatTransform[{1, 0}, -1]", Raises(ValueError, "^BottomHatTransform: ")),
+    # Geodesic transforms (reference: GeodesicDilation / GeodesicErosion / GeodesicOpening / GeodesicClosing pages)
+    ("GeodesicDilation[{0,0,1,1,0}, {w28a,w28b,3,4,0}]", "{Min[0, w28a], Min[1, w28b], 1, 1, 0}"),
+    ("GeodesicDilation[{0,0,1,0,0}, {1,1,1,1,0}]", "{1, 1, 1, 1, 0}"),                    # hand-worked
+    ("GeodesicDilation[{0,0,1,0,0}, {1,0,1,1,1}]", "{0, 0, 1, 1, 1}"),
+    ("GeodesicDilation[{0, 1}, {1}]", Raises(ValueError, "^GeodesicDilation: ")),
+    ("GeodesicErosion[{0,0,1,1,0}, {w28a,w28b,3,4,0}]", "{Max[0, w28a], Max[0, w28b], 3, 4, 0}"),
+    ("GeodesicErosion[{0,0,1,0,0}, {1,0,3,4,0}]", "{1, 0, 3, 4, 0}"),
+    ("GeodesicErosion[{1,1,0,1,1}, {1,0,3,4,0}]", "{1, 0, 3, 4, 1}"),
+    ("GeodesicErosion[{0, 1}, {1}]", Raises(ValueError, "^GeodesicErosion: ")),
+    ("GeodesicOpening[{0,1,0,1,1,1}, 1]", "{0, 0, 0, 1, 1, 1}"),
+    ("GeodesicOpening[{{0,0,0,0,0},{0,1,1,1,0},{0,1,1,0,0},{0,0,1,1,0},{0,0,0,0,0}}, 1]",
+     "{{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0}}"),
+    (f"GeodesicOpening[{SQ}, 1]", SQ),
+    ("GeodesicOpening[{1, w28x}, 1]", "GeodesicOpening[{1, w28x}, 1]"),
+    ("GeodesicOpening[{1, 0}, -1]", Raises(ValueError, "^GeodesicOpening: ")),
+    ("GeodesicClosing[{{1,1,1,1,1},{1,0,0,0,1},{1,0,0,1,1},{1,1,0,0,1},{1,1,1,1,1}}, 1]",
+     "{{1,1,1,1,1},{1,1,1,1,1},{1,1,1,1,1},{1,1,1,1,1},{1,1,1,1,1}}"),
+    ("GeodesicClosing[{1, 0, 1}, 1]", "{1, 1, 1}"),                                         # hand-worked
+    ("GeodesicClosing[{1, 0, 0, 0, 1}, 1]", "{1, 0, 0, 0, 1}"),
+    ("GeodesicClosing[{1, w28x}, 1]", "GeodesicClosing[{1, w28x}, 1]"),
+    ("GeodesicClosing[{1, 0}, -1]", Raises(ValueError, "^GeodesicClosing: ")),
+]
+
+SEGMENTATION = [
+    # MaxDetect / MinDetect (reference: MaxDetect and MinDetect page examples)
+    ("MaxDetect[{1, 2, 1, 2, 3, 2}]", "{0, 1, 0, 0, 1, 0}"),
+    ("MaxDetect[{{7,8,2,2},{8,4,7,4},{7,1,3,3},{1,1,9,3}}]", "{{0,1,0,0},{1,0,0,0},{0,0,0,0},{0,0,1,0}}"),
+    ("MaxDetect[{0, 3, 1, 5, 4}, 2]", "{0, 0, 0, 1, 1}"),
+    ("MaxDetect[{2, 2, 2}]", "{1, 1, 1}"),                                                   # one plateau
+    ("MaxDetect[{1, w28x}]", "MaxDetect[{1, w28x}]"),
+    ("MaxDetect[{1, 2}, -1]", Raises(ValueError, "^MaxDetect: ")),
+    ("MinDetect[{1, 2, 1, 3, 2, 3}]", "{1, 0, 1, 0, 1, 0}"),
+    ("MinDetect[{{7,8,2,2},{8,4,7,4},{7,1,3,3},{1,1,9,3}}]", "{{0,0,1,1},{0,0,0,0},{0,1,0,0},{1,1,0,0}}"),
+    ("MinDetect[{3, 0, 1}]", "{0, 1, 0}"),
+    ("MinDetect[{1, w28x}]", "MinDetect[{1, w28x}]"),
+    ("MinDetect[{1, 2}, -1]", Raises(ValueError, "^MinDetect: ")),
+    # FillingTransform (definition: reconstruction by erosion from the border)
+    ("FillingTransform[{{1,1,1,1},{1,0,0,1},{1,1,1,1}}]", "{{1,1,1,1},{1,1,1,1},{1,1,1,1}}"),
+    ("FillingTransform[{{1,1,1,1},{1,0,0,1},{1,1,0,1}}]", "{{1,1,1,1},{1,0,0,1},{1,1,0,1}}"),   # hole open
+    ("FillingTransform[{{5,5,5},{5,1,5},{5,5,5}}, 2]", "{{5,5,5},{5,3,5},{5,5,5}}"),          # h-fill
+    ("FillingTransform[{{5,5,5,5,5},{5,1,5,0,5},{5,5,5,5,5}}, {{0,0,0,0,0},{0,1,0,0,0},{0,0,0,0,0}}]",
+     "{{5,5,5,5,5},{5,5,5,0,5},{5,5,5,5,5}}"),                                               # marker
+    ("FillingTransform[{{0.5,0.5,0.5},{0.5,0.1,0.5},{0.5,0.5,0.5}}]", N([[0.5] * 3] * 3)),
+    (f"FillingTransform[{BI}] // ImageData", "{{1,1,1},{1,1,1},{1,1,1}}"),
+    ("FillingTransform[{1, w28x}]", "FillingTransform[{1, w28x}]"),
+    ("FillingTransform[{1, 0}, -1]", Raises(ValueError, "^FillingTransform: ")),
+    ("FillingTransform[{1, 0}, Padding -> \"Periodic\"]", Raises(NotImplementedError, "^FillingTransform: ")),
+    # HitMissTransform (reference: hand-worked; documented 1 / -1 / 0 kernel convention)
+    ("HitMissTransform[{{0,0,0},{0,1,0},{0,1,0}}, {{-1,-1,-1},{-1,1,-1},{0,0,0}}]", "{{0,0,0},{0,1,0},{0,0,0}}"),
+    ("HitMissTransform[{0, 1, 0, 1, 1}, {-1, 1, -1}]", "{0, 1, 0, 0, 0}"),                    # isolated ones
+    ("HitMissTransform[{1, 1, 1}, {1, 1, 1}]", "{1, 1, 1}"),                                  # Padding 1
+    ("HitMissTransform[{1, 0}, {1, 1}]", Raises(NotImplementedError, "^HitMissTransform: ")),
+    ("HitMissTransform[{1, 0}, {2, 1, 0}]", Raises(ValueError, "^HitMissTransform: ")),
+    # MorphologicalComponents (reference: MorphologicalComponents page example)
+    ("MorphologicalComponents[{{0,0,1,2},{0,0,3,4},{5,0,0,0},{6,7,0,0}}]", "{{0,0,1,1},{0,0,1,1},{2,0,0,0},{2,2,0,0}}"),
+    ("MorphologicalComponents[{{1,0,1},{0,1,0}}, CornerNeighbors -> False]", "{{1,0,2},{0,3,0}}"),
+    ("MorphologicalComponents[{{1,0,1},{0,1,0}}]", "{{1,0,1},{0,1,0}}"),
+    ("MorphologicalComponents[{0, 0}]", "{0, 0}"),
+    ("MorphologicalComponents[{1, w28x}]", "MorphologicalComponents[{1, w28x}]"),
+    ("MorphologicalComponents[{1, 0}, Method -> \"Nearest\"]", Raises(NotImplementedError, "^MorphologicalComponents: ")),
+    # DeleteBorderComponents (reference: DeleteBorderComponents page example)
+    ("DeleteBorderComponents[{{0,0,0,0},{0,1,0,0},{0,0,0,0},{0,0,0,2}}]", "{{0,0,0,0},{0,1,0,0},{0,0,0,0},{0,0,0,0}}"),
+    ("DeleteBorderComponents[{1, 0, 1}]", "{0, 0, 0}"),
+    ("DeleteBorderComponents[{0, 1, 0}]", "{0, 1, 0}"),
+    ("DeleteBorderComponents[{1, w28x}]", "DeleteBorderComponents[{1, w28x}]"),
+    ("DeleteBorderComponents[\"w28s\"]", Raises(TypeError, "^DeleteBorderComponents: ")),
+    # FindThreshold (reference: FindThreshold page examples; Otsu over 256 bins)
+    ("FindThreshold[{1, 2, 3, 10, 11}]", N(2.9921875)),
+    ("FindThreshold[{0, 0, 1, 1}]", Pred(lambda g: 0 <= _num(g) < 1, "between the clusters")),
+    ("FindThreshold[{1, 2, 3, 10, 11}, Method -> \"Mean\"]", N(5.4)),
+    ("FindThreshold[{1, 2, 3, 10, 11}, Method -> \"Median\"]", N(3)),
+    ("FindThreshold[Image[{{0.1, 0.9}, {0.2, 0.8}}]]", Pred(lambda g: 0.2 <= _num(g) < 0.8, "between")),
+    ("FindThreshold[w28x]", "FindThreshold[w28x]"),
+    ("FindThreshold[{1, 2}, Method -> \"Entropy\"]", Raises(NotImplementedError, "^FindThreshold: ")),
+    ("FindThreshold[{1, 2}, Method -> \"w28bad\"]", Raises(ValueError, "^FindThreshold: ")),
+    # Binarize (definition: pixels above the threshold become 1)
+    ("Binarize[Image[{{0.1, 0.9}, {0.2, 0.8}}]] // ImageData", "{{0, 1}, {0, 1}}"),
+    ("Binarize[Image[{{0.1, 0.9}, {0.2, 0.8}}], 0.5] // ImageData", "{{0, 1}, {0, 1}}"),
+    ("Binarize[Image[{{0.1, 0.9}, {0.2, 0.8}}], {0.15, 0.85}] // ImageData", "{{0, 0}, {1, 1}}"),
+    ("Binarize[Image[{{0.1, 0.9}, {0.2, 0.8}}], # > 0.15 &] // ImageData", "{{0, 1}, {1, 1}}"),
+    ("Binarize[Image[{{0.1, 0.9}}]]", ImgType("Bit")),
+    ("Binarize[w28x]", "Binarize[w28x]"),
+    ("Binarize[{1, 2}]", Raises(TypeError, "^Binarize: ")),
+    # LocalAdaptiveBinarize (definition: value > mean of the neighbourhood)
+    ("LocalAdaptiveBinarize[Image[{{0.1, 0.5, 0.9}}], 1] // ImageData", "{{0, 0, 1}}"),
+    ("LocalAdaptiveBinarize[Image[{{0.5, 0.5, 0.5}}], 1] // ImageData", "{{0, 0, 0}}"),
+    ("LocalAdaptiveBinarize[Image[{{0.1, 0.5, 0.9}}], 1]", ImgType("Bit")),
+    ("LocalAdaptiveBinarize[w28x, 1]", "LocalAdaptiveBinarize[w28x, 1]"),
+    ("LocalAdaptiveBinarize[Image[{{0.1}}], -1]", Raises(ValueError, "^LocalAdaptiveBinarize: ")),
+    # MorphologicalBinarize (definition: values > t2 plus the connected values > t1)
+    ("MorphologicalBinarize[Image[{{0.9, 0.5, 0.1, 0.5}}], {0.3, 0.8}] // ImageData", "{{1, 1, 0, 0}}"),
+    ("MorphologicalBinarize[Image[{{0.5, 0.5}}], {0.3, 0.8}] // ImageData", "{{0, 0}}"),
+    ("MorphologicalBinarize[Image[{{0.9, 0.5}}], {0.3, 0.8}]", ImgType("Bit")),
+    ("MorphologicalBinarize[w28x, {0.3, 0.8}]", "MorphologicalBinarize[w28x, {0.3, 0.8}]"),
+    ("MorphologicalBinarize[Image[{{0.5}}]]", Raises(NotImplementedError, "^MorphologicalBinarize: ")),
+    # Threshold (reference: Threshold page examples)
+    ("Threshold[{1, 10^-1, 10^-2, 10^-8, 10^-11}]", "{1, 1/10, 1/100, 1/100000000, 0}"),
+    ("Threshold[{-3,1,-2,0,2,-1,0,1,-3,3,2}, 3/2]", "{-3,0,-2,0,2,0,0,0,-3,3,2}"),
+    ("Threshold[{-3,1,-2,0,2,-1,0,1,-3,3,2}, {\"LargestValues\", 3}]", "{-3,0,0,0,0,0,0,0,-3,3,0}"),
+    ("Threshold[{1., 1., 8.12619*10^-17, 1.18674*10^-16, 0.}]", N([1, 1, 0, 0, 0])),
+    ("Threshold[{-3, 1, 2}, {\"Soft\", 1}]", "{-2, 0, 1}"),
+    ("Threshold[{1, w28x}, 1/2]", "Threshold[{1, w28x}, 1/2]"),
+    ("Threshold[{1 + I, 2}]", Raises(NotImplementedError, "^Threshold: ")),
+    ("Threshold[{1, 2}, -1]", Raises(ValueError, "^Threshold: ")),
+]
+
+DISTANCE = [
+    # DistanceTransform (reference: hand-worked distances)
+    (f"DistanceTransform[Image[{SQ}]] // ImageData", N([[0] * 5, [0, 1, 1, 1, 0], [0, 1, 2, 1, 0], [0, 1, 1, 1, 0], [0] * 5])),
+    ("DistanceTransform[Image[{{1,1,1},{1,1,1},{1,1,1}}], Padding -> 0] // ImageData", N([[1, 1, 1], [1, 2, 1], [1, 1, 1]])),
+    ("DistanceTransform[Image[{{0,1,1,1}}], DistanceFunction -> ManhattanDistance] // ImageData", N([[0, 1, 2, 3]])),
+    ("DistanceTransform[Image[{{0,0,0},{0,0,0},{0,0,1}}], Padding -> 1] // ImageData",
+     N([[0, 0, 0], [0, 0, 0], [0, 0, 1]])),
+    ("DistanceTransform[Image[{{0,1,1},{1,1,1},{1,1,1}}]] // ImageData",
+     N([[0, 1, 2], [1, math.sqrt(2), math.sqrt(5)], [2, math.sqrt(5), math.sqrt(8)]])),     # brute force
+    ("DistanceTransform[Image[{{0,1,1},{1,1,1},{1,1,1}}], DistanceFunction -> ChessboardDistance] // ImageData",
+     N([[0, 1, 2], [1, 1, 2], [2, 2, 2]])),
+    ("DistanceTransform[Image[{{0, 1}}]]", ImgType("Real32")),
+    ("DistanceTransform[w28x]", "DistanceTransform[w28x]"),
+    ("DistanceTransform[{{0, 1}}]", Raises(TypeError, "^DistanceTransform: ")),
+    ("DistanceTransform[Image[{{1, 1}}]]", Raises(ValueError, "^DistanceTransform: ")),
+    ("DistanceTransform[Image[{{0, 1}}], DistanceFunction -> CosineDistance]",
+     Raises(NotImplementedError, "^DistanceTransform: ")),
+    # InverseDistanceTransform (reference: documented round trip with DistanceTransform)
+    ("InverseDistanceTransform[DistanceTransform[Image[{{0,0,0,0,0},{0,1,1,1,0},{0,1,1,1,0},{0,1,1,0,0},{0,0,0,0,0}}]]]"
+     " // ImageData", "{{0,0,0,0,0},{0,1,1,1,0},{0,1,1,1,0},{0,1,1,0,0},{0,0,0,0,0}}"),
+    ("InverseDistanceTransform[Image[{{0,0,0},{0,1.2,0},{0,0,0}}]] // ImageData", "{{0,1,0},{1,1,1},{0,1,0}}"),
+    ("InverseDistanceTransform[Image[{{0,0,0},{0,2,0},{0,0,0}}]] // ImageData", "{{1,1,1},{1,1,1},{1,1,1}}"),
+    ("InverseDistanceTransform[Image[{{0,0,0},{0,1.2,0},{0,0,0}}], DistanceFunction -> ChessboardDistance] // ImageData",
+     "{{1,1,1},{1,1,1},{1,1,1}}"),
+    ("InverseDistanceTransform[Image[{{0, 1}}]]", ImgType("Bit")),
+    ("InverseDistanceTransform[w28x]", "InverseDistanceTransform[w28x]"),
+    ("InverseDistanceTransform[{{0, 1}}]", Raises(TypeError, "^InverseDistanceTransform: ")),
+    ("InverseDistanceTransform[Image[{{0, 1}}], DistanceFunction -> CosineDistance]",
+     Raises(NotImplementedError, "^InverseDistanceTransform: ")),
+    # SkeletonTransform (reference: centres of maximal disks, verified by the documented round trip)
+    ("SkeletonTransform[Image[{{0,0,0,0,0,0,0},{0,1,1,1,1,1,0},{0,1,1,1,1,1,0},{0,1,1,1,1,1,0},{0,0,0,0,0,0,0}}]]"
+     " // ImageData", N([[0] * 7, [0] * 7, [0, 0, 2, 2, 2, 0, 0], [0] * 7, [0] * 7])),
+    (f"SkeletonTransform[Image[{SQ}]] // ImageData", N([[0] * 5, [0] * 5, [0, 0, 2, 0, 0], [0] * 5, [0] * 5])),
+    (f"InverseDistanceTransform[SkeletonTransform[Image[{SQ}]]] // ImageData", SQ),
+    ("SkeletonTransform[Image[{{0, 1}}]]", ImgType("Real32")),
+    ("SkeletonTransform[w28x]", "SkeletonTransform[w28x]"),
+    ("SkeletonTransform[{{0, 1}}]", Raises(TypeError, "^SkeletonTransform: ")),
+    ("SkeletonTransform[Image[{{0, 1}}], Method -> \"ReducedMedialAxis\"]",
+     Raises(NotImplementedError, "^SkeletonTransform: ")),
+]
+
+COMPONENTS = [
+    # DeleteSmallComponents (definition: Otsu threshold of the component sizes)
+    ("DeleteSmallComponents[{{1,1,1,0},{1,1,1,0},{0,0,0,0},{3,0,0,2}}]", "{{1,1,1,0},{1,1,1,0},{0,0,0,0},{0,0,0,0}}"),
+    ("DeleteSmallComponents[{{1,1,1,0},{1,1,1,0},{1,1,1,0},{0,2,2,2}}]", "{{1,1,1,0},{1,1,1,0},{1,1,1,0},{0,0,0,0}}"),
+    ("DeleteSmallComponents[Image[{{1, 1, 0, 1, 0, 1, 1, 1}}, \"Bit\"], 2] // ImageData", "{{0, 0, 0, 0, 0, 1, 1, 1}}"),
+    ("DeleteSmallComponents[{1, 1, 0, 0, 0, 2, 2, 2}, 2]", "{0, 0, 0, 0, 0, 2, 2, 2}"),      # labels, not pieces,
+    ("DeleteSmallComponents[{1, 0, 1}]", "{1, 0, 1}"),                                     # one size only
+    ("DeleteSmallComponents[{1, w28x}]", "DeleteSmallComponents[{1, w28x}]"),
+    ("DeleteSmallComponents[{1, 0}, -1]", Raises(ValueError, "^DeleteSmallComponents: ")),
+    # ComponentMeasurements (reference: ComponentMeasurements page Count example; hand-worked geometry)
+    ("ComponentMeasurements[Image[{{0,0,0,0,0,0,0},{0,0,0,1,1,1,0},{0,0,0,1,0,1,0},{0,0,0,1,1,1,0},{0,0,0,0,0,0,0},"
+     "{0,1,0,1,1,1,0},{0,0,0,0,0,0,0}}, \"Bit\"], \"Count\"]", "{1 -> 8, 2 -> 1, 3 -> 3}"),
+    ("ComponentMeasurements[{{1,1,0},{0,0,0},{0,0,2}}, {\"Centroid\", \"BoundingBox\"}]",
+     "{1 -> {{1., 2.5}, {{0, 2}, {2, 3}}}, 2 -> {{2.5, 0.5}, {{2, 0}, {3, 1}}}}"),
+    ("ComponentMeasurements[{{1,1,0},{0,0,0},{0,0,2}}, \"Count\", #Count > 1 &]", "{1 -> 2}"),
+    ("ComponentMeasurements[{Image[{{0.2, 0.4, 0}}], {{1, 1, 0}}}, \"Mean\"]",
+     Pred(lambda g: abs(_num(g.args[0].args[1]) - 0.3) < 1e-9, "1 -> 0.3")),
+    ("ComponentMeasurements[{{1,0,2}}, \"LabelCount\"]", "2"),
+    ("ComponentMeasurements[{{1,1,2}}, \"Neighbors\"]", "{1 -> {2}, 2 -> {1}}"),
+    ("ComponentMeasurements[{{1,1,0},{0,0,2}}, \"Count\", \"PropertyAssociation\"]", "<|\"Count\" -> {2, 1}|>"),
+    ("ComponentMeasurements[w28x, \"Count\"]", "ComponentMeasurements[w28x, \"Count\"]"),
+    ("ComponentMeasurements[{{1, 0}}, \"Eccentricity\"]", Raises(NotImplementedError, "^ComponentMeasurements: ")),
+    ("ComponentMeasurements[{{1, 0}}, \"Mean\"]", Raises(NotImplementedError, "^ComponentMeasurements: ")),
+    ("ComponentMeasurements[{{1, 0}}, 5]", Raises(TypeError, "^ComponentMeasurements: ")),
+    # SelectComponents (reference: hand-worked, consistent with ComponentMeasurements)
+    ("SelectComponents[{{1,1,0},{0,0,0},{0,0,2}}, #Count > 1 &]", "{{1,1,0},{0,0,0},{0,0,0}}"),
+    ("SelectComponents[{{1,1,0},{0,0,0},{0,0,2}}, \"Count\", 1]", "{{0,0,0},{0,0,0},{0,0,2}}"),
+    ("SelectComponents[{{1,1,0},{0,0,0},{0,0,2}}, \"Count\", -1]", "{{1,1,0},{0,0,0},{0,0,0}}"),
+    ("SelectComponents[{{1,1,0},{0,0,0},{0,0,2}}, \"Large\"]", "{{1,1,0},{0,0,0},{0,0,0}}"),
+    ("SelectComponents[w28x, \"Large\"]", "SelectComponents[w28x, \"Large\"]"),
+    ("SelectComponents[{{1, 0}}, \"w28bad\"]", Raises(ValueError, "^SelectComponents: ")),
+    ("SelectComponents[{{1, 0}}, \"Eccentricity\", 1]", Raises(NotImplementedError, "^SelectComponents: ")),
+    # MorphologicalPerimeter (definition: foreground with a background neighbour)
+    ("MorphologicalPerimeter[{{1,1,1},{1,1,1},{1,1,1}}]", "{{1,1,1},{1,0,1},{1,1,1}}"),
+    (f"MorphologicalPerimeter[{SQ}]", "{{0,0,0,0,0},{0,1,1,1,0},{0,1,0,1,0},{0,1,1,1,0},{0,0,0,0,0}}"),
+    ("MorphologicalPerimeter[{{1,1,1},{1,1,1},{1,1,1}}, Padding -> 1]", "{{0,0,0},{0,0,0},{0,0,0}}"),
+    ("MorphologicalPerimeter[{1, w28x}]", "MorphologicalPerimeter[{1, w28x}]"),
+    ("MorphologicalPerimeter[{1, 0}, Padding -> 2]", Raises(NotImplementedError, "^MorphologicalPerimeter: ")),
+    # MorphologicalEulerNumber (definition: regions minus holes)
+    ("MorphologicalEulerNumber[Image[{{1,1,1,0,0},{1,0,1,0,1},{1,1,1,0,0}}]]", "1"),
+    ("MorphologicalEulerNumber[{{1,0,1},{0,0,0},{1,0,1}}]", "4"),
+    ("MorphologicalEulerNumber[{{1,1,1},{1,0,1},{1,1,1}}]", "0"),
+    ("MorphologicalEulerNumber[{{1,0},{0,1}}, CornerNeighbors -> False]", "2"),
+    ("MorphologicalEulerNumber[w28x]", "MorphologicalEulerNumber[w28x]"),
+    ("MorphologicalEulerNumber[{{{1}}}]", Raises(NotImplementedError, "^MorphologicalEulerNumber: ")),
+    # Pruning (reference: Pruning page example)
+    ("Pruning[{{0,0,1,0,0},{0,0,1,0,0},{1,1,1,1,1},{1,0,0,0,1},{1,1,1,1,1}}]",
+     "{{0,0,0,0,0},{0,0,0,0,0},{1,1,1,1,1},{1,0,0,0,1},{1,1,1,1,1}}"),
+    ("Pruning[{{0,0,1,0,0},{0,0,1,0,0},{1,1,1,1,1},{1,0,0,0,1},{1,1,1,1,1}}, {1}]",
+     "{{0,0,0,0,0},{0,0,1,0,0},{1,1,1,1,1},{1,0,0,0,1},{1,1,1,1,1}}"),
+    ("Pruning[{{0,0,1,0,0},{0,0,1,0,0},{1,1,1,1,1},{1,0,0,0,1},{1,1,1,1,1}}, 2]",
+     "{{0,0,0,0,0},{0,0,0,0,0},{1,1,1,1,1},{1,0,0,0,1},{1,1,1,1,1}}"),
+    ("Pruning[{{0,0,1,0,0},{0,0,1,0,0},{1,1,1,1,1},{1,0,0,0,1},{1,1,1,1,1}}, 1]",
+     "{{0,0,1,0,0},{0,0,1,0,0},{1,1,1,1,1},{1,0,0,0,1},{1,1,1,1,1}}"),                 # branch of 2 kept
+    ("Pruning[{1, w28x}]", "Pruning[{1, w28x}]"),
+    ("Pruning[{{1, 0}}, -1]", Raises(ValueError, "^Pruning: ")),
+    ("Pruning[{{1, 0}}, Padding -> 1]", Raises(NotImplementedError, "^Pruning: ")),
+]
+
+CASES = NEIGHBOURHOOD + MORPHOLOGY + SEGMENTATION + DISTANCE + COMPONENTS
 
 SCIPY_HEADS = set()
 
