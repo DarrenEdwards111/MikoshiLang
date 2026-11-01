@@ -395,7 +395,8 @@ COMP = [
     ('FunctionCompile[FunctionDeclaration[w30rt, Typed[{"Integer64"} -> "Integer64"]@Function[a, a/2]], Function[Typed[a, "Integer64"], w30rt[a]]][3]', Raises(TypeError)),
     ('FunctionCompile[TypeDeclaration["Macro", "w30fooInteger", "MachineInteger"], Function[Typed[arg, "w30fooInteger"], arg + 2]][5]', '7'),
     ('FunctionCompile[TypeDeclaration["Alias", "w30Int", "Integer64"], Function[Typed[arg, "w30Int"], arg * 3]][5]', '15'),
-    ('FunctionCompile[TypeDeclaration["Product", "w30Prod", <|"a" -> "MachineInteger"|>], Function[Typed[x, "Integer64"], x]]', Raises(NotImplementedError)),
+    # X01 implemented product types (CreateTypeInstance); this used to raise NotImplementedError
+    ('FunctionCompile[TypeDeclaration["Product", "w30Prod", <|"a" -> "MachineInteger"|>], Function[Typed[x, "Integer64"], x]][4]', '4'),
     ('TypeDeclaration["Product", "w30Prod", <|"field1" -> "MachineInteger", "field2" -> "Boolean"|>] // Head', 'TypeDeclaration'),
     ('TypeDeclaration["Struct", "w30x", "Integer64"]', Raises(ValueError)),
     ('TypeDeclaration["Macro", 5, "Integer64"]', Raises(TypeError)),

@@ -27,6 +27,10 @@ _LOADING = []          # stack of the SPF file being read: dicts with "ctx", "fi
 _PACKAGES = {}         # ctx -> {"root", "props", "files", "exported", "scoped"} of loaded SPF packages
 
 
+for _h in ("PackageExported", "PackageScoped", "PackageImport"):
+    K.BUILTIN_ATTRIBUTES[_h] = {"HoldAll", "Protected"}
+
+
 def _WE():
     from . import wl_evaluation as WE
     return WE

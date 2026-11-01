@@ -4607,9 +4607,6 @@ atexit.register(_shutdown)
 # ═══════════════════════════════════════════ symbols left out ═══════════════════════════════════════════
 
 _SKIPS = {
-    "KernelEvaluate": "a compiled-code (FunctionCompile) construct that calls the kernel from compiled code; "
-                      "MikoshiLang has no compiler",
-    "KernelFunction": "a compiled-code (FunctionCompile) type wrapping kernel functions; MikoshiLang has no compiler",
     "KernelConfigurationEdit": "opens the notebook front end's kernel-configuration dialog; there is no front end",
     "FindSettings": "settings of the notebook front end's Find interface; there is no front end",
     "EvaluationElements": "an option of NotebookEvaluate (which notebook cells to evaluate); notebooks are not "
@@ -4619,7 +4616,6 @@ _SKIPS = {
                       "not supported",
     "MaxDuration": "an option of AudioCapture/AudioRecord limiting recording time; audio capture is not supported",
     "TimeGoal": "an option of Classify/Predict and other machine-learning trainers, which are not available",
-    "Parallelization": "an option of Compile/FunctionCompile (parallel compiled code); there is no compiler",
     "EvaluationEnvironment": "an option of InitializationValue (persistent initialization values), which is not "
                              "available",
     "RemoteRunProcess": "runs a process on a remote machine over SSH with authentication; remote hosts are not "
