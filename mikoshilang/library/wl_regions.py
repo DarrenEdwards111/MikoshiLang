@@ -2455,7 +2455,32 @@ class BoolR(Region):
                 return A.integrate(g, Xs) - B.integrate(g, Xs)
             if B.dim is not None and A.dim is not None and B.dim < A.dim:
                 return A.integrate(g, Xs)
+        ie = self._incl_excl()
+        if ie is not None:
+            A, B, I, ca, cb, ci = ie
+            tot = ca * A.integrate(g, Xs) + cb * B.integrate(g, Xs)
+            if not isinstance(I, EmptyR) and I.dim == A.dim:
+                tot += ci * I.integrate(g, Xs)
+            return tot
         self.need("integration (overlapping parts that cannot be resolved exactly)")
+
+    def _incl_excl(self):
+        """Two full-dimensional parts whose intersection resolves exactly: (A, B, A n B, cA, cB, cI) with
+        int over self = cA int A + cB int B + cI int (A n B) (inclusion-exclusion), else None."""
+        P = getattr(self, "parts_", self.parts) if self.op == "Union" else self.parts
+        if len(P) != 2 or self.op not in ("Union", "Difference", "SymmetricDifference"):
+            return None
+        A, B = P
+        if A.dim is None or A.dim != B.dim or A.dim != self.edim:
+            return None
+        try:
+            I = BoolR("Intersection", [A, B], f=self.f).res
+        except (NotImplementedError, ValueError):
+            return None
+        if I is None or (not isinstance(I, EmptyR) and I.dim is None):
+            return None
+        return {"Union": (A, B, I, 1, 1, -1), "Difference": (A, B, I, 1, 0, -1),
+                "SymmetricDifference": (A, B, I, 1, 1, -2)}[self.op]
 
     def _dims(self):
         if self.res is not None:
@@ -2468,6 +2493,13 @@ class BoolR(Region):
             if within(B, A) and B.dim == A.dim and lt(B.measure(), A.measure()):
                 return A.dim
             if B.dim is not None and A.dim is not None and B.dim < A.dim:
+                return A.dim
+        ie = self._incl_excl()
+        if ie is not None:
+            A, B, I, ca, cb, ci = ie
+            m = ca * A.measure() + cb * B.measure() + (ci * I.measure() if not isinstance(I, EmptyR)
+                                                         and I.dim == A.dim else 0)
+            if lt(0, m):
                 return A.dim
         return None
 
