@@ -307,6 +307,62 @@ def prop_arg(rest, fname, nmax):
     return rest + [None] * (nmax - len(rest)), prop
 
 
+def test_spec(fname, args, tests):
+    """the Wolfram test specification (last argument of the *EquivalenceTest / IndependenceTest / CorrelationTest /
+    DistributionFitTest families): "test", {"test1", ...}, "prop" or {"prop", test | {tests}}.
+    Returns (prop or None, [tests], several?)"""
+    auto = ("All", "Automatic", "AllTests", "AutomaticTest")
+    if len(args) > 1:
+        raise ValueError(f"{fname}: too many arguments")
+    if not args:
+        spec = None
+    else:
+        spec = args[0]
+    if isinstance(spec, Symbol):
+        spec = spec.name
+
+    def tests_of(t):
+        if isinstance(t, Symbol):
+            t = t.name
+        if isinstance(t, str):
+            if t in auto:
+                return None, False
+            if t not in tests:
+                raise ValueError(f"{fname}: unknown test {t!r} (use one of {', '.join(tests)})")
+            return [t], False
+        if is_list(t) and t.args:
+            out_ = []
+            for q in t.args:
+                r, _ = tests_of(q)
+                if r is None:
+                    return None, True
+                out_ += r
+            return out_, True
+        raise TypeError(f"{fname}: invalid test specification {t!r}")
+    prop = None
+    chosen, several = None, False
+    if spec is None or (isinstance(spec, str) and spec in auto):
+        chosen = None
+    elif isinstance(spec, str) and spec in tests:
+        chosen = [spec]
+    elif isinstance(spec, str):
+        if spec not in TEST_PROPS + ("HypothesisTestData", "TestConclusion") and not spec.endswith("Table"):
+            raise ValueError(f"{fname}: unknown test or property {spec!r} (tests: {', '.join(tests)})")
+        prop = spec
+    elif is_list(spec) and len(spec.args) == 2 and not (isinstance(spec.args[0], str) and spec.args[0] in tests) \
+            and not (isinstance(spec.args[0], str) and spec.args[0] in auto):
+        prop = spec.args[0]
+        chosen, several = tests_of(spec.args[1])
+    elif is_list(spec):
+        chosen, several = tests_of(spec)
+    else:
+        raise TypeError(f"{fname}: invalid test specification {spec!r}")
+    if chosen is None:
+        raise NotImplementedError(f"{fname}: automatic test selection (and All) is not supported; name the test, "
+                                  f"e.g. {fname}[..., {{\"PValue\", \"{tests[0]}\"}}] (one of {', '.join(tests)})")
+    return prop, chosen, several
+
+
 def fstat(x):
     """a test statistic as a machine number"""
     return float(x) if not isinstance(x, sp.Basic) else fl(x)
@@ -931,7 +987,15 @@ def _ztest_core(x, s2, mu0, fname, paired):
         if len(a) != len(b):
             raise ValueError(f"{fname}: paired samples must have the same length")
         v = [p - q for p, q in zip(a, b)]
-        d = ("one", v)
+        if s2 is None:
+            var = _fvar(v)
+        elif is_list(s2) and len(s2.args) == 2:
+            var = math.fsum(_variance_arg(t, fname) for t in s2.args)
+        else:
+            # a scalar s2 is the (common) variance of each population, so Var[x - y] = 2 s2 (this reproduces
+            # the Wolfram documentation example PairedZTest[{armSpan, ht}, .4^2, 0] = 1.73854)
+            var = 2 * _variance_arg(s2, fname)
+        return (_fmean(v) - m0) / math.sqrt(var / len(v))
     if d[0] == "one":
         v = _fvec(d[1])
         var = _fvar(v) if s2 is None else _variance_arg(s2, fname)
@@ -977,9 +1041,11 @@ fn("ZTest", area=AREA, status="added",
          "reference values from the closed form and statsmodels.stats.weightstats.ztest.")(_ztest_impl("ZTest", False))
 fn("PairedZTest", area=AREA, status="added",
    notes="PairedZTest[data] and [{data1, data2}, s2, mu0, prop]: the z-test of the mean of data (or of the paired "
-         "differences data1 - data2) against mu0 with known variance s2 (sample variance when omitted); options as "
-         "for ZTest. Unequal sample lengths raise ValueError; multivariate data NotImplementedError. Check: "
-         "reference values from the closed form (identical to ZTest on the differences).")(
+         "differences data1 - data2) against mu0 with known population variance s2 (for paired data the variance of "
+         "each population, so Var[data1 - data2] = 2 s2, or s1^2 + s2^2 for {s1^2, s2^2}; the sample variance of the "
+         "differences when omitted); options as for ZTest. Unequal sample lengths raise ValueError; multivariate data NotImplementedError. Check: "
+         "reference values from the Wolfram documentation (PairedZTest[{armSpan, ht}, .4^2, 0] = 1.73854, p = "
+         "0.0410576 Greater) and the closed form.")(
     _ztest_impl("PairedZTest", True))
 
 
@@ -1332,8 +1398,7 @@ def _conover_test(x: ListOf[ListOf[Real]], *rest: Real | String | Option) -> Rea
     if len(gs) == 2:
         n1, n2 = len(gs[0]), len(gs[1])
         N = n1 + n2
-        stat = (S[0] - n1 * Sbar) / math.sqrt(n1 * n2 / (N - 1) * D2 * (N - 1) / N) if False else \
-            (S[0] - n1 * Sbar) / math.sqrt(n1 * n2 * D2 / N)
+        stat = (S[0] - n1 * Sbar) / math.sqrt(n1 * n2 * D2 / N)
         return test_result(name, stat, p_normal(stat, alt), prop, o)
     return test_result(name, T, chi2_sf(T, df), prop, o, df)
 
@@ -1342,29 +1407,6 @@ def _siegel_tukey_ranks(vals):
     """Siegel-Tukey ranks of the pooled values (alternating from the extremes; ties averaged)"""
     n = len(vals)
     order = sorted(range(n), key=lambda i: vals[i])
-    pos_rank = [0] * n
-    lo, hi = 0, n - 1
-    rank = 1
-    take_low = True
-    while lo <= hi:
-        if take_low:
-            pos_rank[lo] = rank
-            rank += 1
-            lo += 1
-            if lo <= hi:
-                pos_rank[lo] = rank
-                rank += 1
-                lo += 1
-        else:
-            pos_rank[hi] = rank
-            rank += 1
-            hi -= 1
-            if lo <= hi:
-                pos_rank[hi] = rank
-                rank += 1
-                hi -= 1
-        take_low = not take_low
-    # first step takes only one low value
     pos_rank = [0] * n
     seq = []
     lo, hi = 0, n - 1
@@ -1450,40 +1492,25 @@ def _equiv_impl(name, tests, one):
         args, o = opts(rest, ("SignificanceLevel", "VerifyTestAssumptions"), name)
         verify_opt(o, name)
         gs = groups(x, name)
-        prop, test = None, None
-        if len(args) > 2:
-            raise ValueError(f"{name}: too many arguments")
-        if len(args) == 2:
-            prop, test = args
-        elif len(args) == 1:
-            a = args[0]
-            if isinstance(a, str) and a in tests:
-                test = a
-            elif isinstance(a, Symbol) and a.name in ("All", "Automatic"):
-                test = a.name
-            else:
-                prop = a
-        if isinstance(test, Symbol):
-            test = test.name
-        if test in (None, "Automatic", "All"):
-            raise NotImplementedError(f"{name}: automatic test selection is not supported; name the test, e.g. "
-                                      f"{name}[data, \"PValue\", \"{tests[0]}\"] (one of {', '.join(tests)})")
-        if test not in tests:
-            raise ValueError(f"{name}: unknown test {test!r} (use one of {', '.join(tests)})")
-        try:
-            s, p, df = one(test, gs, o)
-        except ValueError as e:
-            msg = str(e)
-            raise ValueError(msg if msg.startswith(name) else f"{name}: {msg}")
-        return test_result(name, s, p, prop if not (isinstance(prop, Symbol)) else None, o, df)
+        prop, chosen, several = test_spec(name, args, tests)
+        res = []
+        for test in chosen:
+            try:
+                s_, p_, df = one(test, gs, o)
+            except ValueError as e:
+                msg = str(e)
+                raise ValueError(msg if msg.startswith(name) else f"{name}: {msg}")
+            res.append(test_result(name, s_, p_, prop, o, df))
+        return L(*res) if several else res[0]
     return impl
 
 
 fn("VarianceEquivalenceTest", area=AREA, status="added",
-   notes="VarianceEquivalenceTest[{data1, data2, ...}, \"test\"] and [data, prop, \"test\"] for the tests "
+   notes="VarianceEquivalenceTest[{data1, data2, ...}, spec] with spec \"test\", {\"test1\", ...} or {prop, test} "
+         "(or {prop, {tests}}) for the tests "
          "\"Bartlett\" (chi-square), \"BrownForsythe\" and \"Levene\" (ANOVA F on absolute deviations), \"Conover\" "
          "(squared ranks, chi-square) and \"FisherRatio\" (two datasets, two-sided F); Wolfram's automatic test "
-         "selection (no test, Automatic or All) raises NotImplementedError; unknown tests ValueError; options "
+         "selection (no test, Automatic, All, \"AllTests\", or a property without a test) raises NotImplementedError; unknown tests ValueError; options "
          "SignificanceLevel, VerifyTestAssumptions. Check: reference values from scipy.stats.bartlett and "
          "scipy.stats.levene.")(_equiv_impl("VarianceEquivalenceTest", _VE_TESTS, _ve_one))
 
@@ -1549,18 +1576,28 @@ def _le_one(test, gs, o):
             ties += sum(c ** 3 - c for c in cnt.values())
         Q = 12 * sum(float(Ri) ** 2 for Ri in R) / (n * k * (k + 1)) - 3 * n * (k + 1)
         Q = Q / (1 - ties / (n * k * (k * k - 1)))
-        return Q, chi2_sf(Q, k - 1), k - 1
+        # Iman-Davenport F form of the Friedman statistic, F = (n - 1) Q/(n (k - 1) - Q) ~ F[k - 1, (n - 1)(k - 1)]
+        # (reproduces the Wolfram documentation example: 56.0345, p = 2.21282*10^-8)
+        d1, d2 = k - 1, (n - 1) * (k - 1)
+        if n * (k - 1) - Q <= 0:
+            return math.inf, 0.0, L(d1, d2)
+        F = (n - 1) * Q / (n * (k - 1) - Q)
+        return F, f_sf(F, d1, d2), L(d1, d2)
     raise ValueError(f"unknown test {test!r}")
 
 
 fn("LocationEquivalenceTest", area=AREA, status="added",
-   notes="LocationEquivalenceTest[{data1, data2, ...}, \"test\"] and [data, prop, \"test\"] for \"KruskalWallis\" "
+   notes="LocationEquivalenceTest[{data1, data2, ...}, spec] with spec \"test\", {\"test1\", ...} or {prop, test} "
+         "for \"KruskalWallis\" "
          "(tie-corrected H; p-value from the F approximation (N - k) H/((k - 1)(N - 1 - H)) ~ FRatioDistribution[k - "
          "1, N - k], which reproduces the Wolfram documentation example), \"KSampleT\" (one-way ANOVA F), "
-         "\"CompleteBlockF\" (randomized complete block ANOVA, equal lengths) and \"FriedmanRank\" (tie-corrected "
-         "Friedman chi-square); automatic test selection raises NotImplementedError; options SignificanceLevel, "
+         "\"CompleteBlockF\" (randomized complete block ANOVA, equal lengths; blocks are the positions) and "
+         "\"FriedmanRank\" (tie-corrected Friedman Q reported in the Iman-Davenport form F = (n - 1) Q/(n (k - 1) - Q) "
+         "~ FRatioDistribution[k - 1, (n - 1)(k - 1)], which reproduces the Wolfram documentation example); automatic test selection (no test, All, or a property without a test) raises "
+         "NotImplementedError; options SignificanceLevel, "
          "VerifyTestAssumptions. Check: reference values from the Wolfram documentation (H = 43.6429, p = "
-         "1.17225*10^-14), scipy.stats.f_oneway and scipy.stats.friedmanchisquare.")(
+         "1.17225*10^-14; CompleteBlockF 5.9168, p = 0.00359111; FriedmanRank 56.0345, p = 2.21282*10^-8), "
+         "scipy.stats.f_oneway and scipy.stats.friedmanchisquare.")(
     _equiv_impl("LocationEquivalenceTest", ("KruskalWallis", "KSampleT", "CompleteBlockF", "FriedmanRank"), _le_one))
 
 
@@ -1614,7 +1651,10 @@ def _kendall_parts(a, b):
     var = (n * (n - 1) * (2 * n + 5) - ta[0] - tb[0]) / 18 + ta[2] * tb[2] / (9 * n * (n - 1) * (n - 2)) + \
         ta[1] * tb[1] / (2 * n * (n - 1))
     n0 = n * (n - 1) / 2
-    tau = S / math.sqrt((n0 - ta[1] / 2) * (n0 - tb[1] / 2))
+    den = (n0 - ta[1] / 2) * (n0 - tb[1] / 2)
+    if den <= 0:
+        raise ValueError("a vector is constant, so the rank correlation is undefined")
+    tau = S / math.sqrt(den)
     return S, var, tau
 
 
@@ -1636,14 +1676,20 @@ def _corr_test(name, kind):
         except ValueError as e:
             raise ValueError(f"{name}: {e}")
         if kind == "Kendall":
-            S, var, tau = _kendall_parts(a, b)
+            try:
+                S, var, tau = _kendall_parts(a, b)
+            except ValueError as e:
+                raise ValueError(f"{name}: {e}")
             if var <= 0:
                 raise ValueError(f"{name}: a vector is constant")
             return test_result(name, tau, p_normal(S / math.sqrt(var), alt), prop, o)
         if kind == "GK":
             if has_ties(a) or has_ties(b):
                 raise NotImplementedError(f"{name}: data with ties is not supported")
-            S, var, _ = _kendall_parts(a, b)
+            try:
+                S, var, _ = _kendall_parts(a, b)
+            except ValueError as e:
+                raise ValueError(f"{name}: {e}")
             C_D = S
             gamma = C_D / (n * (n - 1) / 2)
             sd = math.sqrt(var)
@@ -1738,45 +1784,33 @@ _INDEP = {"PearsonCorrelation": "Pearson", "SpearmanRank": "Spearman", "KendallT
 
 def _select_test(name, rest, allowed):
     args, o = opts(rest, TEST_OPTS, name)
-    prop, test = None, None
-    if len(args) > 2:
-        raise ValueError(f"{name}: too many arguments")
-    if len(args) == 2:
-        prop, test = args
-    elif len(args) == 1:
-        if isinstance(args[0], str) and args[0] in allowed:
-            test = args[0]
-        elif isinstance(args[0], Symbol) and args[0].name in ("All", "Automatic"):
-            test = args[0].name
-        else:
-            prop = args[0]
-    if isinstance(test, Symbol):
-        test = test.name
-    if test in (None, "Automatic", "All"):
-        raise NotImplementedError(f"{name}: automatic test selection is not supported; name the test (one of "
-                                  f"{', '.join(allowed)})")
-    if test not in allowed:
-        if test in ("PillaiTrace", "WilksW"):
-            raise NotImplementedError(f"{name}: the {test} test is not supported here")
-        raise ValueError(f"{name}: unknown test {test!r}")
-    return prop, test, o
+    allowed_all = tuple(allowed) + ("PillaiTrace", "WilksW")
+    prop, chosen, several = test_spec(name, args, allowed_all)
+    for t in chosen:
+        if t not in allowed:
+            raise NotImplementedError(f"{name}: the {t} test is not supported here")
+    return prop, chosen, several, o
 
 
 @fn("IndependenceTest", area=AREA, status="added",
-    notes="IndependenceTest[v1, v2, \"test\"] and [v1, v2, prop, \"test\"] with test one of \"PearsonCorrelation\", "
+    notes="IndependenceTest[v1, v2, spec] with spec \"test\", {\"test1\", ...} or {prop, test} with test one of \"PearsonCorrelation\", "
           "\"SpearmanRank\", \"KendallTau\", \"GoodmanKruskalGamma\", \"BlomqvistBeta\" (as the corresponding *Test "
-          "functions) and \"HoeffdingD\" (statistic only); automatic test selection (no test, Automatic, All) and the "
+          "functions) and \"HoeffdingD\" (statistic only); automatic test selection (no test, Automatic, All, or a "
+          "property without a test) and the "
           "matrix tests \"PillaiTrace\" and \"WilksW\" raise NotImplementedError. Check: delegated to the individual "
           "tests (identical results, checked in tests).")
-def _independence(v1: ListOf[Real], v2: ListOf[Real], *rest: String | Option) -> Real | Expr:
-    prop, test, o = _select_test("IndependenceTest", rest, tuple(_INDEP))
+def _independence(v1: ListOf[Real], v2: ListOf[Real], *rest: String | ListOf[String] | Option) -> Real | Expr:
+    if isinstance(v1, Symbol) or isinstance(v2, Symbol):
+        raise Unevaluated()
+    prop, chosen, several, o = _select_test("IndependenceTest", rest, tuple(_INDEP))
     extra = [prop] if prop is not None else []
     optr = [rule(Symbol(k), v) for k, v in o.items()]
-    return _corr_test("IndependenceTest", _INDEP[test])(v1, v2, *extra, *optr)
+    res = [_corr_test("IndependenceTest", _INDEP[t])(v1, v2, *extra, *optr) for t in chosen]
+    return L(*res) if several else res[0]
 
 
 @fn("CorrelationTest", area=AREA, status="added",
-    notes="CorrelationTest[{{x1, y1}, ...}, \"test\"], [data, 0, \"test\"] and [data, 0, prop, \"test\"] with test "
+    notes="CorrelationTest[{{x1, y1}, ...}, 0, spec] with spec \"test\", {\"test1\", ...} or {prop, test}, test "
           "\"PearsonCorrelation\" or \"SpearmanRank\": the test of zero correlation (as PearsonCorrelationTest / "
           "SpearmanRankTest of the two columns); a non-zero rho0, the comparison of two populations and automatic "
           "test selection raise NotImplementedError. Check: delegated to PearsonCorrelationTest / SpearmanRankTest "
@@ -1791,14 +1825,15 @@ def _correlation_test(data: MatrixOf[Real], *rest: Real | String | Option) -> Re
             raise NotImplementedError(f"{name}: comparing the correlations of two populations is not supported")
         if _num(r0, name, "rho0") != 0:
             raise NotImplementedError(f"{name}: testing a non-zero correlation rho0 is not supported")
-    prop, test, o = _select_test(name, rest, ("PearsonCorrelation", "SpearmanRank"))
+    prop, chosen, several, o = _select_test(name, rest, ("PearsonCorrelation", "SpearmanRank"))
     m = mat(data, name, min_rows=3)
     if len(m[0]) != 2:
         raise ValueError(f"{name}: the data must be bivariate {{{{x1, y1}}, ...}}")
     cols = columns([list(r.args) for r in data.args])
     extra = [prop] if prop is not None else []
     optr = [rule(Symbol(k), v) for k, v in o.items()]
-    return _corr_test(name, _INDEP[test])(L(*cols[0]), L(*cols[1]), *extra, *optr)
+    res = [_corr_test(name, _INDEP[t])(L(*cols[0]), L(*cols[1]), *extra, *optr) for t in chosen]
+    return L(*res) if several else res[0]
 
 
 # ─────────────────────────── goodness-of-fit tests ───────────────────────────
@@ -1867,7 +1902,7 @@ def shapiro_wilk(x):
 
 
 def _uni_data(x, fname, min_len=3):
-    if is_matrix(x):
+    if is_matrix(x) or (is_list(x) and any(is_list(a) for a in x.args)):
         raise NotImplementedError(f"{fname}: multivariate data is not supported")
     v, _ = vec(x, fname, min_len=min_len)
     return sorted(_fvec(v))
@@ -2131,46 +2166,41 @@ _DFT = {"AndersonDarling": "AndersonDarlingTest", "CramerVonMises": "CramerVonMi
         "ShapiroWilk": "ShapiroWilkTest", "JarqueBeraALM": "JarqueBeraALMTest"}
 
 
+_DFT_ALL = tuple(_DFT) + ("PearsonChiSquare", "MardiaCombined", "MardiaKurtosis", "MardiaSkewness",
+                          "BaringhausHenze")
+
+
 @fn("DistributionFitTest", area=AREA, status="added",
-    notes="DistributionFitTest[data, dist, prop, \"test\"] (and [data, dist, \"test\"]) with test one of "
-          "\"AndersonDarling\", \"CramerVonMises\", \"KolmogorovSmirnov\", \"Kuiper\", \"WatsonUSquare\" (fully "
-          "specified dist) or \"ShapiroWilk\", \"JarqueBeraALM\" (normality; dist may be Automatic or "
-          "NormalDistribution[]); identical to the corresponding *Test function. Automatic test selection, "
-          "estimated distributions and the Pearson chi-square test raise NotImplementedError. Check: delegated to "
-          "the named test functions (identical results checked in tests).")
-def _dft(x: ListOf[Real], d: Expr = None, *rest: String | Option) -> Real | Expr:
+    notes="DistributionFitTest[data, dist, spec] with spec \"test\", {\"test1\", ...} or {prop, test} (or {prop, "
+          "{tests}}), test one of \"AndersonDarling\", \"CramerVonMises\", \"KolmogorovSmirnov\", \"Kuiper\", "
+          "\"WatsonUSquare\" (fully specified dist) or \"ShapiroWilk\", \"JarqueBeraALM\" (normality; dist Automatic "
+          "or NormalDistribution[]); identical to the corresponding *Test function. Automatic test selection "
+          "(DistributionFitTest[data], [data, dist], All, a property without a test), estimated distributions, the "
+          "Pearson chi-square and multivariate tests raise NotImplementedError; unknown tests ValueError. Check: "
+          "delegated to the named test functions (identical results checked in tests).")
+def _dft(x: ListOf[Real], d: Expr = None, *rest: String | ListOf[String] | Option) -> Real | Expr:
     name = "DistributionFitTest"
+    if isinstance(x, Symbol):
+        raise Unevaluated()
     args, o = opts(rest, GOF_OPTS, name)
-    prop, test = None, None
-    if len(args) == 2:
-        prop, test = args
-    elif len(args) == 1:
-        if isinstance(args[0], str) and args[0] in _DFT:
-            test = args[0]
-        else:
-            prop = args[0]
-    elif len(args) > 2:
-        raise ValueError(f"{name}: too many arguments")
-    if isinstance(test, Symbol):
-        test = test.name
-    if test in (None, "Automatic", "All"):
-        raise NotImplementedError(f"{name}: automatic test selection is not supported; name the test (one of "
-                                  f"{', '.join(_DFT)})")
-    if test == "PearsonChiSquare":
-        raise NotImplementedError(f"{name}: the Pearson chi-square test is not supported")
-    if test not in _DFT:
-        raise ValueError(f"{name}: unknown test {test!r}")
+    prop, chosen, several = test_spec(name, args, _DFT_ALL)
     optr = [rule(Symbol(k), v) for k, v in o.items()]
     extra = [prop] if prop is not None else []
-    if test in ("ShapiroWilk", "JarqueBeraALM"):
-        if d is not None and not (isinstance(d, Symbol) and d.name == "Automatic") and \
-                not (isinstance(d, Expr) and d.head == "NormalDistribution" and not d.args):
-            raise NotImplementedError(f"{name}: the {test} test only tests normality (use Automatic)")
-        return ev(Expr(_DFT[test], x, *extra, *optr))
-    if test == "KolmogorovSmirnov":
-        if o:
-            raise NotImplementedError(f"{name}: options are not supported with the KolmogorovSmirnov test")
-        if prop is not None and prop not in ("PValue", "TestStatistic"):
-            raise NotImplementedError(f'{name}: the KolmogorovSmirnov test supports "PValue" and "TestStatistic"')
-        return ev(Expr("KolmogorovSmirnovTest", x, d, *extra))
-    return ev(Expr(_DFT[test], x, d if d is not None else Symbol("Automatic"), *extra, *optr))
+    res = []
+    for test in chosen:
+        if test not in _DFT:
+            raise NotImplementedError(f"{name}: the {test} test is not supported")
+        if test in ("ShapiroWilk", "JarqueBeraALM"):
+            if d is not None and not (isinstance(d, Symbol) and d.name == "Automatic") and \
+                    not (isinstance(d, Expr) and d.head == "NormalDistribution" and not d.args):
+                raise NotImplementedError(f"{name}: the {test} test only tests normality (use Automatic)")
+            res.append(ev(Expr(_DFT[test], x, *extra, *optr)))
+        elif test == "KolmogorovSmirnov":
+            if o:
+                raise NotImplementedError(f"{name}: options are not supported with the KolmogorovSmirnov test")
+            if prop is not None and prop not in ("PValue", "TestStatistic"):
+                raise NotImplementedError(f'{name}: the KolmogorovSmirnov test supports "PValue" and "TestStatistic"')
+            res.append(ev(Expr("KolmogorovSmirnovTest", x, d, *extra)))
+        else:
+            res.append(ev(Expr(_DFT[test], x, d if d is not None else Symbol("Automatic"), *extra, *optr)))
+    return L(*res) if several else res[0]
