@@ -13,7 +13,7 @@ import sympy as sp
 
 from ..expr import Expr, Symbol
 from .core import fn, R, L, rule, sym, variable, list_arg, is_list, record
-from .wl_common import split_options, ev
+from .wl_common import split_options, ev, reject_options
 
 AREA = "numerics (batch 2)"
 
@@ -159,6 +159,12 @@ def _order(opts, fname):
     return o
 
 
+def _no_periodic(opts: dict, fname: str) -> None:
+    v = opts.get("PeriodicInterpolation", False)
+    if not (v is False or (isinstance(v, Symbol) and v.name == "Automatic")):
+        raise NotImplementedError(f"{fname}: PeriodicInterpolation -> {v} is not supported")
+
+
 @fn("Interpolation", area=AREA, status="added",
     notes="Interpolation[{f1, f2, ...}] (x = 1, 2, ...) and Interpolation[{{x1, f1}, ...}] -> InterpolatingFunction: "
           "piecewise polynomials of InterpolationOrder (default 3) through the nearest order+1 points "
@@ -168,6 +174,7 @@ def _interpolation(data: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"InterpolationOrder", "Method", "PeriodicInterpolation"}, "Interpolation")
     if opts.get("Method") is not None:
         raise NotImplementedError("Interpolation: only the default method is supported")
+    _no_periodic(opts, "Interpolation")
     xs, ys = _points(data, "Interpolation")
     f = _make(_Piecewise(xs, ys, _order(opts, "Interpolation")), xs[0], xs[-1])
     if pos:
@@ -180,6 +187,8 @@ def _interpolation(data: Expr, *rest: Expr) -> Expr:
           "equally spaced grid -> InterpolatingFunction (same piecewise polynomials as Interpolation); 1-D only")
 def _listinterp(data: ListOf[Expr], *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"InterpolationOrder", "Method", "PeriodicInterpolation"}, "ListInterpolation")
+    reject_options(opts, ("Method",), "ListInterpolation")
+    _no_periodic(opts, "ListInterpolation")
     vals = list_arg(data, "ListInterpolation", "data", min_len=2)
     if any(is_list(v) for v in vals):
         raise NotImplementedError("ListInterpolation: only one-dimensional data is supported")

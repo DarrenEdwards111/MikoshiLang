@@ -66,7 +66,7 @@ def _format_hook(name):
             if len(a) != 1:
                 return None
             return _paren(op + F.input_form(a[0], prec), prec, parent)
-        if name == "MinusPlus" and len(a) == 1:
+        if name in ("MinusPlus", "PlusMinus") and len(a) == 1:
             return _paren(op + F.input_form(a[0], F.P_UMINUS + 1), F.P_UMINUS, parent)
         if kind == "nary":
             if len(a) < 2:
@@ -129,7 +129,7 @@ def _forms(name):
     elif kind in ("left", "right"):
         form = (f"Input form x {shown} y (typed as {chars}; binary, precedence {prec}, grouping to the {kind}); "
                 "printed in that form for exactly two arguments, otherwise in functional form")
-        if name == "MinusPlus":
+        if name in ("MinusPlus", "PlusMinus"):
             form += f"; also prefix {shown}x, like unary minus"
     elif kind == "prefix":
         form = (f"Input form {shown}x (typed as {chars}; prefix, precedence {prec}); printed {shown}x for one "
@@ -210,6 +210,31 @@ _plain_inert("NotExists", "NotExists[x, y] represents the statement that there e
 _plain_inert("Ket", "Ket[x] is the quantum ket |x> (Dirac notation).", status="promoted")
 _plain_inert("Bra", "Bra[x] is the quantum bra <x| (Dirac notation).", status="promoted")
 _plain_inert("BraKet", "BraKet[a, b] is the quantum bracket <a|b> (Dirac notation).", status="promoted")
+
+
+# ───────────────────── operators added in the fix-up pass (FIX1) ─────────────────────
+
+AREA_FIX1 = "notation: operators added in the correctness fix-up pass"
+
+# Precedes, Congruent, RightArrow, LeftRightArrow, UpArrow, PlusMinus, Del, Square: inert, from notation_ops.OPS.
+register_notation("FIX1", AREA_FIX1)
+
+
+def _fmt_dbar(e, parent):
+    return "\\[LeftDoubleBracketingBar]" + ", ".join(F.input_form(x) for x in e.args) + "\\[RightDoubleBracketingBar]"
+
+
+_register_inert("DoubleBracketingBar", AREA_FIX1, extra=(
+    "DoubleBracketingBar[x, y, ...] has no built-in meaning (as in Wolfram; it is not Norm): it stays as entered "
+    "with its arguments evaluated, accepts any number of arguments (including none), has no attributes and never "
+    "raises. Input form \\[LeftDoubleBracketingBar] x, y, ... \\[RightDoubleBracketingBar] (Wolfram's private-use "
+    "characters U+F605 / U+F606 are accepted too), printed back with the long names. Check: exact (inert: the call "
+    "is returned unchanged); reference (Wolfram documentation) for parsing and printing in tests."))
+F.FORMAT_HOOKS["DoubleBracketingBar"] = _fmt_dbar
+wl_text._NAMED.setdefault(N.LEFT_DBAR, "LeftDoubleBracketingBar")
+wl_text._NAMED.setdefault(N.RIGHT_DBAR, "RightDoubleBracketingBar")
+wl_forms._NAMED_CHARS.setdefault(N.LEFT_DBAR, "LeftDoubleBracketingBar")
+wl_forms._NAMED_CHARS.setdefault(N.RIGHT_DBAR, "RightDoubleBracketingBar")
 
 
 # ───────────────────────────── NotElement ─────────────────────────────
