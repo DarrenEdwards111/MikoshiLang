@@ -426,6 +426,12 @@ class CIR(Proc):
         return Expr("TransformedDistribution", Expr("Times", R(c), x),
                     Expr("Distributed", x, _dist("NoncentralChiSquareDistribution", k, lam)))
 
+    def scaled(self, t):
+        """(c, k, lambda): X(t) = c Y with Y ~ NoncentralChiSquareDistribution[k, lambda]"""
+        m, s, th, x0 = self.p
+        e = sp.exp(-th * t)
+        return s ** 2 * (1 - e) / (4 * th), 4 * th * m / s ** 2, 4 * th * x0 * e / (s ** 2 * (1 - e))
+
     def cov(self, s_, t):
         m, s, th, x0 = self.p
         return sp.exp(-th * sp.Abs(t - s_)) * self.var(sp.Min(s_, t))
@@ -2166,6 +2172,19 @@ for _w in ("Mean", "Variance", "StandardDeviation"):
 
 def _via_slice(which):
     def impl(x: Expr, *rest: Expr) -> Expr:
+        if which in ("PDF", "CDF", "SurvivalFunction") and len(rest) == 1 and x.head.head == "CoxIngersollRossProcess":
+            # X(t) = c Y with Y noncentral chi-square: evaluate through Y at the point x/c
+            pr = proc_of(x.head, which)
+            t = _times_arg(x.args[0], which)
+            if not isinstance(t, list):
+                pr.check_time(t, which)
+                c, k, lam = pr.scaled(t)
+                pt = sym(rest[0], which)
+                if _inexact(pt):
+                    c, k, lam = (sp.Float(_f(v)) for v in (c, k, lam))
+                y = _dist("NoncentralChiSquareDistribution", k, lam)
+                v = _ev(Expr(which, y, R(pt / c)))
+                return _ev(Expr("Times", v, R(1 / c))) if which == "PDF" else v
         d, _ = slice_dist(x)
         return _ev(Expr(which, d, *rest))
     return impl
