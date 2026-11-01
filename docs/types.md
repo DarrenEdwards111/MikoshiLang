@@ -44,6 +44,14 @@ s = Session(check_types=True)        # raise TypeError("f: argument 2 '3' is not
 r = Session(check_types="report")    # carry on; mismatches collect in r.type_mismatches
 ```
 
+## Context
+
+`TypeSignature`, `TypeMatchQ`, `TypeCheck`, `Verify`, `Certified`, `Checked`, `Unchecked` and `Failed` are
+MikoshiLang extensions, not Wolfram symbols, so they live in the `Mikoshi`` context:
+`Context[Verify]` is `"Mikoshi`"`, and `Mikoshi`Verify[...]` is the full name. `Mikoshi`` is on the default
+`$ContextPath` (`{"System`", "Mikoshi`", "Global`"}`), so the short names work everywhere, including inside
+`BeginPackage`. They are protected, like `System`` symbols.
+
 ## What counts as a mismatch
 
 The checker runs at call boundaries, after the arguments are evaluated and before the implementation runs

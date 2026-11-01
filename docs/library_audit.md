@@ -119,7 +119,7 @@ Existing heads whose semantics were corrected are recorded as `fixed`. Each head
 
 Remaining unreviewed quarantined names: **5261** (all raise NotImplementedError; see below).
 
-Differential test cases in tests/library: **13548**.
+Differential test cases in tests/library: **13551**.
 
 
 ## By area
@@ -935,16 +935,16 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `$Context` | added | 23 | current context (default "Global`"); set by Begin, BeginPackage, End, EndPackage; assignable (validated); Block localises it |
-| `$ContextAliases` | added | 23 | association "alias`" -> "context`" used when parsing qualified names; $ContextAliases["a`"] = "ctx`" and =. update it; Needs[ctx -> alias] adds one |
-| `$ContextPath` | added | 23 | contexts searched (before $Context) when a name is parsed; default {"System`", "Global`"}; modified by BeginPackage, EndPackage, Needs, DeclarePackage |
+| `$Context` | added | 24 | current context (default "Global`"); set by Begin, BeginPackage, End, EndPackage; assignable (validated); Block localises it |
+| `$ContextAliases` | added | 24 | association "alias`" -> "context`" used when parsing qualified names; $ContextAliases["a`"] = "ctx`" and =. update it; Needs[ctx -> alias] adds one |
+| `$ContextPath` | added | 24 | contexts searched (before $Context) when a name is parsed; default {"System`", "Mikoshi`", "Global`"} (Mikoshi` holds MikoshiLang's own symbols such as TypeSignature and Verify, which stay visible inside packages); modified by BeginPackage, EndPackage, Needs, DeclarePackage |
 | `$Epilog` | added | 3 | expression evaluated when the REPL session ends |
 | `$HistoryLength` | added | 3 | number of In/Out lines kept by the main loop (default Infinity) |
 | `$IterationLimit` | added | 6 | maximum length of an evaluation chain (default 4096): each rewrite of an expression by a definition or rule counts once; exceeding it raises $IterationLimit::itlim |
 | `$Line` | added | 3 | number of the current main-loop input line; assignable |
 | `$ModuleNumber` | added | 4 | the number the next Module or Unique symbol gets (x$nnn); assignable |
 | `$NewSymbol` | added | 3 | if set, $NewSymbol[name, context] is evaluated before a new symbol is created by the parser |
-| `$Packages` | added | 21 | contexts of loaded packages (BeginPackage adds; Needs consults it) |
+| `$Packages` | added | 22 | contexts of loaded packages (BeginPackage adds; Needs consults it) |
 | `$Post` | added | 3 | function applied to each main-loop result before it is stored in Out |
 | `$Pre` | added | 3 | function applied to each main-loop input before evaluation (unevaluated if it holds) |
 | `$PrePrint` | added | 3 | function applied to each main-loop result before it is printed (not stored) |
@@ -963,7 +963,7 @@ Cases = number of differential test cases in which the head occurs.
 | `CheckArguments` | added | 6 | CheckArguments[f[args], n] is True when args is n positional arguments followed by options known to f (Options[f]), else False; {min, max} counts; <\|"ExtraOptions" -> ..., "OptionsMode" -> ...\|> |
 | `Constant` | added | 3 | attribute: Dt treats the symbol as a constant (Dt[c] = 0, Dt[c[x], x] = 0) |
 | `Constants` | added | 5 | option Constants -> {...} of Dt and D (symbols treated as constant / as depending on the variable) |
-| `Context` | added | 28 | Context[] gives $Context; Context[symbol] and Context["name"] the context of a symbol (System` for built-ins, Global` for unqualified user symbols); a name that does not exist raises |
+| `Context` | added | 29 | Context[] gives $Context; Context[symbol] and Context["name"] the context of a symbol (System` for built-ins, Mikoshi` for MikoshiLang's own symbols such as TypeSignature and Verify, Global` for unqualified user symbols); a name that does not exist raises |
 | `Contexts` | added | 4 | Contexts[] and Contexts["pattern"]: the contexts of all existing symbols (and their parent contexts), $ContextPath and $Packages, sorted; ResolveContextAliases option |
 | `CurryApplied` | added | 6 | CurryApplied[f, n][x1]...[xn] = f[x1, ..., xn]; CurryApplied[n][f] = CurryApplied[f, n]; CurryApplied[f, {i1, ...}] and k -> {i1, ...} reorder |
 | `DeclarePackage` | added | 4 | DeclarePackage["ctx`", {"name1", ...}] creates ctx`name with attribute Stub and prepends ctx` to $ContextPath; the first use of such a symbol calls Needs["ctx`"] and evaluates it again |
@@ -3128,7 +3128,7 @@ Cases = number of differential test cases in which the head occurs.
 | `Symbol` | added | 10 | Symbol["name"] gives the symbol (evaluated); invalid names raise |
 | `SymbolName` | added | 4 | name of a symbol as a string (no context prefix) |
 | `TextWords` | added | 3 | words of the text: runs of letters/digits, keeping internal apostrophes and hyphens (rule-based; Wolfram's tokenizer may differ on unusual punctuation) |
-| `ToExpression` | added | 14 | parses and evaluates InputForm text; ToExpression[s, InputForm, h] wraps the unevaluated parse in h (e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated |
+| `ToExpression` | added | 15 | parses and evaluates InputForm text; ToExpression[s, InputForm, h] wraps the unevaluated parse in h (e.g. Hold); invalid syntax gives $Failed; non-strings are returned evaluated |
 | `ToLowerCase` | added | 4 | lower-cases every letter; threads over lists |
 | `ToUpperCase` | added | 14 | upper-cases every letter; threads over lists |
 | `UpperCaseQ` | added | 4 | True when every character of the string satisfies the test (so True for ""); non-strings False |
@@ -3337,15 +3337,15 @@ Cases = number of differential test cases in which the head occurs.
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `TypeCheck` | added | 8 | TypeCheck[expr] evaluates expr with type checking in report mode and gives <\|"Result" -> value, "Mismatches" -> {<\|"Function" -> f, "Position" -> i, "Value" -> v, "Expected" -> type\|>, ...}\|>. A mismatch is a concrete argument (or result) of the wrong kind; symbolic arguments never are. Position is the argument number, "Result" or "Count" (wrong number of arguments for a declared function). MikoshiLang extension. Check: exact; seeded mismatches in tests. |
-| `TypeMatchQ` | added | 27 | TypeMatchQ[value, type] is True when value is known to have the type (Integer, Real, ListOf[t], t1 \| t2, ...) and False otherwise, including for symbolic values whose type is not known yet (x is not an Integer). An unknown type raises ValueError. MikoshiLang extension. Check: exact; reference values for every type in tests. |
-| `TypeSignature` | added | 15 | TypeSignature[f] gives the signatures of f as {{t1, t2, ...} -> result, ...}: user declarations in this session first, otherwise the library signature read from the Python annotations of each implementation (RepeatedNull[t] stands for any number of further arguments); {} if none is known. TypeSignature[f, {t1, ...} -> r] declares a signature for a user function (repeat it for overloads) and returns it; RepeatedNull[t] is allowed last. The declaration is checked only when checking is on (Session(check_types=...) or TypeCheck). A non-symbol f raises TypeError; an unknown type raises ValueError. MikoshiLang extension. Check: exact; the signatures of library heads are compared with their annotations in tests. |
+| `TypeCheck` | added | 8 | TypeCheck[expr] evaluates expr with type checking in report mode and gives <\|"Result" -> value, "Mismatches" -> {<\|"Function" -> f, "Position" -> i, "Value" -> v, "Expected" -> type\|>, ...}\|>. A mismatch is a concrete argument (or result) of the wrong kind; symbolic arguments never are. Position is the argument number, "Result" or "Count" (wrong number of arguments for a declared function). Inside a Session(check_types=True) it still reports instead of raising: its result is returned as is, not evaluated again. MikoshiLang extension. Check: exact; seeded mismatches in tests. |
+| `TypeMatchQ` | added | 28 | TypeMatchQ[value, type] is True when value is known to have the type (Integer, Real, ListOf[t], t1 \| t2, ...) and False otherwise, including for symbolic values whose type is not known yet (x is not an Integer). An unknown type raises ValueError. MikoshiLang extension. Check: exact; reference values for every type in tests. |
+| `TypeSignature` | added | 16 | TypeSignature[f] gives the signatures of f as {{t1, t2, ...} -> result, ...}: user declarations in this session first, otherwise the library signature read from the Python annotations of each implementation (RepeatedNull[t] stands for any number of further arguments); {} if none is known. TypeSignature[f, {t1, ...} -> r] declares a signature for a user function (repeat it for overloads) and returns it; RepeatedNull[t] is allowed last. The declaration is checked only when checking is on (Session(check_types=...) or TypeCheck). A non-symbol f raises TypeError; an unknown type raises ValueError. MikoshiLang extension. Check: exact; the signatures of library heads are compared with their annotations in tests. |
 
 ### verification (V1)
 
 | Function | Status | Cases | Notes |
 |---|---|---|---|
-| `Verify` | added | 38 | Verify[expr] evaluates expr and checks the result independently: Integrate by differentiation (or mpmath quadrature for definite integrals), Solve/NSolve by substituting every solution (completeness is not checked), DSolve by substitution, D by numerical differentiation, Limit and Series numerically, FactorInteger and PrimeQ with primality proofs (deterministic Miller-Rabin below 3.3*10^24, Pratt certificates above) or compositeness witnesses, GCD by a Bezout identity, Factor by expansion, Simplify/FullSimplify/Expand/Together/Apart/TrigExpand by equivalence with the input, Inverse and LinearSolve by multiplying back, Det by a second algorithm and Eigenvalues through the characteristic polynomial. It gives Certified[value, info] when an exact certificate was checked, Checked[value, info] when the evidence is symbolic simplification or numerical sampling, and Unchecked[value, reason] when no checker applies; a failed check raises ArithmeticError. MikoshiLang extension. Check: self-check; seeded wrong results are caught in tests. |
+| `Verify` | added | 39 | Verify[expr] evaluates expr and checks the result independently: Integrate by differentiation (or mpmath quadrature for definite integrals), Solve/NSolve by substituting every solution (completeness is not checked), DSolve by substitution, D by numerical differentiation, Limit and Series numerically, FactorInteger and PrimeQ with primality proofs (deterministic Miller-Rabin below 3.3*10^24, Pratt certificates above) or compositeness witnesses, GCD by a Bezout identity, Factor by expansion, Simplify/FullSimplify/Expand/Together/Apart/TrigExpand by equivalence with the input, Inverse and LinearSolve by multiplying back, Det by a second algorithm and Eigenvalues through the characteristic polynomial. It gives Certified[value, info] when an exact certificate was checked, Checked[value, info] when the evidence is symbolic simplification or numerical sampling, and Unchecked[value, reason] when no checker applies; a failed check gives Failed[value, <\|"Head" -> h, "Reason" -> text\|>] (errors raised by the computation itself propagate). MikoshiLang extension. Check: self-check; seeded wrong results are caught in tests. |
 
 ## Quarantine decision for the remaining names
 

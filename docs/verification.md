@@ -44,6 +44,14 @@ Verify[Integrate[Sin[x]^2, x]]       (* Checked[x/2 - Cos[x] Sin[x]/2, <|"Method
 Verify[Sort[{3, 1, 2}]]              (* Unchecked[{1, 2, 3}, "no checker for Sort"] *)
 ```
 
+## Context
+
+`TypeSignature`, `TypeMatchQ`, `TypeCheck`, `Verify`, `Certified`, `Checked`, `Unchecked` and `Failed` are
+MikoshiLang extensions, not Wolfram symbols, so they live in the `Mikoshi`` context:
+`Context[Verify]` is `"Mikoshi`"`, and `Mikoshi`Verify[...]` is the full name. `Mikoshi`` is on the default
+`$ContextPath` (`{"System`", "Mikoshi`", "Global`"}`), so the short names work everywhere, including inside
+`BeginPackage`. They are protected, like `System`` symbols.
+
 ## Executable Check: lines
 
 `python scripts/verify_library.py` reads each head's `Check:` sentence and runs the methods it names:
