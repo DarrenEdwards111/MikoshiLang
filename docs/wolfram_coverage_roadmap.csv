@@ -1276,7 +1276,7 @@ ConformAudio,Sound & Video,infeasible,,audio / video,0,AudioEditing
 ConformDates,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 ConformImages,Images,implemented,2,,1,ImageRepresentation
 ConformationMethod,Sound & Video,infeasible,,audio / video,0,VideoProcessing VideoCreation VideoEditing
-Congruent,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms RelationalOperatorsAndCharacters
+Congruent,Notebook Documents & Presentation,implemented,3,,0,SymbolicNotationalForms RelationalOperatorsAndCharacters
 ConicGradientFilling,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
 ConicHullRegion,Visualization & Graphics,implemented,3,,0,GeometricSpecialRegions GraphicsObjects
 ConicOptimization,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays MatrixBasedMinimization ConvexOptimization
@@ -1627,7 +1627,7 @@ Degree,Symbolic & Numeric Computation,implemented,1,,4,MathematicalFunctions Geo
 DegreeCentrality,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
 DegreeGraphDistribution,Graphs & Networks,implemented,2,,0,RandomGraphs
 Deinitialization,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
-Del,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
+Del,Notebook Documents & Presentation,implemented,3,,0,SymbolicNotationalForms
 DelaunayMesh,Geometry,implemented,2,,0,GeometricComputation MeshRegions SpatialPointCollections
 Delayed,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,5,AutomatedReports WebOperations CloudFunctionsAndDeployment HTTPRequestsAndResponses
 Deletable,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,WindowProperties Stylesheets
@@ -1846,7 +1846,7 @@ DotDashed,Visualization & Graphics,implemented,3,,0,GraphicsObjects GraphicsDire
 DotEqual,"Options, system variables & unclassified",implemented,3,,0,
 DotLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 Dotted,Visualization & Graphics,implemented,3,,0,GraphicsObjects GraphicsDirectives
-DoubleBracketingBar,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
+DoubleBracketingBar,Notebook Documents & Presentation,implemented,3,,0,SymbolicNotationalForms
 DoubleDownArrow,"Options, system variables & unclassified",implemented,3,,0,
 DoubleLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
 DoubleLeftRightArrow,"Options, system variables & unclassified",implemented,3,,0,
@@ -3466,7 +3466,7 @@ LeftDownTeeVector,"Options, system variables & unclassified",implemented,3,,0,
 LeftDownVector,"Options, system variables & unclassified",implemented,3,,0,
 LeftDownVectorBar,"Options, system variables & unclassified",implemented,3,,0,
 LeftJoinAcross,Data Manipulation & Analysis,implemented,2,,0,TabularTransformation
-LeftRightArrow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathematicalTypesetting
+LeftRightArrow,Notebook Documents & Presentation,implemented,3,,0,MathematicalTypesetting
 LeftRightVector,"Options, system variables & unclassified",implemented,3,,0,
 LeftTee,"Options, system variables & unclassified",implemented,3,,0,
 LeftTeeArrow,"Options, system variables & unclassified",implemented,3,,0,
@@ -4674,7 +4674,7 @@ PlotStyle,Visualization & Graphics,implemented,1,,3,DataVisualization FunctionVi
 PlotTheme,Visualization & Graphics,implemented,1,,7,GraphicsOptionsAndStyling MolecularStructureAndComputation PlottingOptions
 Pluralize,Core Language & Structure,infeasible,,curated data,0,StringManipulation WorkingWithTemplates TextConstruction
 Plus,Core Language & Structure,implemented,1,,54,Associations Syntax HandlingArraysOfData MathematicalFunctions
-PlusMinus,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
+PlusMinus,Notebook Documents & Presentation,implemented,3,,0,SymbolicNotationalForms
 Pochhammer,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions GammaFunctionsAndRelatedFunctions
 PodStates,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,WolframAlphaIntegration
 PodWidth,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,WolframAlphaIntegration
@@ -4769,7 +4769,7 @@ PowersRepresentations,Symbolic & Numeric Computation,implemented,2,,0,NumberTheo
 PreDecrement,Core Language & Structure,implemented,1,,0,Assignments
 PreIncrement,Core Language & Structure,implemented,1,,0,Assignments
 PrecedenceForm,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
-Precedes,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
+Precedes,Notebook Documents & Presentation,implemented,3,,0,SymbolicNotationalForms
 PrecedesEqual,"Options, system variables & unclassified",implemented,3,,0,
 PrecedesSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
 PrecedesTilde,"Options, system variables & unclassified",implemented,3,,0,
@@ -5177,7 +5177,7 @@ RiemannSiegelZ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions 
 RiemannXi,Symbolic & Numeric Computation,implemented,2,,0,ZetaFunctionsAndPolylogarithms
 Riffle,Core Language & Structure,implemented,1,,2,ListManipulation RearrangingAndRestructuringLists AnnotatingAndCombiningGraphics TextualElementsInNotebooks
 Right,Visualization & Graphics,implemented,2,,1,3DGraphicsOptions
-RightArrow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,ArrowsAndArrowLikeForms
+RightArrow,Notebook Documents & Presentation,implemented,3,,0,ArrowsAndArrowLikeForms
 RightArrowBar,"Options, system variables & unclassified",implemented,3,,0,
 RightArrowLeftArrow,"Options, system variables & unclassified",implemented,3,,0,
 RightComposition,Core Language & Structure,implemented,1,,6,Syntax FunctionCompositionAndOperatorForms
@@ -5620,7 +5620,7 @@ SpotLight,Visualization & Graphics,implemented,3,,0,3DGraphicsOptions GraphicsDi
 Sqrt,Symbolic & Numeric Computation,implemented,1,,5,MathematicalFunctions GPUComputing ArithmeticFunctions ElementaryFunctions
 SqrtBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 SqrtBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-Square,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
+Square,Notebook Documents & Presentation,implemented,3,,0,SymbolicNotationalForms
 SquareFreeQ,Higher Mathematical Computation,implemented,2,,0,NumberTheoreticFunctions PolynomialFactoring NumberRecognition PrimeNumbers
 SquareIntersection,"Options, system variables & unclassified",implemented,3,,0,
 SquareMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
@@ -6377,7 +6377,7 @@ UnsavedVariables,"Options, system variables & unclassified",missing,3,,0,
 Unset,Core Language & Structure,implemented,1,,0,LanguageOverview VariablesAndFunctions Syntax Assignments
 UnsetShared,Core Language & Structure,implemented,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration Concurrency ResourceSharingInParallelComputing
 Until,Core Language & Structure,implemented,1,,0,ProceduralProgramming LoopingConstructs
-UpArrow,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms
+UpArrow,Notebook Documents & Presentation,implemented,3,,0,SymbolicNotationalForms
 UpArrowBar,"Options, system variables & unclassified",implemented,3,,0,
 UpArrowDownArrow,"Options, system variables & unclassified",implemented,3,,0,
 UpDownArrow,"Options, system variables & unclassified",implemented,3,,0,
