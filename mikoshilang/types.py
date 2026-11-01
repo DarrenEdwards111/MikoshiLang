@@ -387,7 +387,16 @@ def signatures_of(name: str) -> List[Signature]:
         return list(d)
     from .library.core import REGISTRY
     e = REGISTRY.get(name)
-    return entry_signature(e) if e is not None else []
+    if e is not None:
+        return entry_signature(e)
+    from .kernel_types import kernel_signatures
+    k = kernel_signatures(name)
+    if k is not None:
+        return list(k)
+    from . import kernel
+    if name in kernel._HELD:
+        return [Signature([], ("Held",), EXPR_T)]
+    return []
 
 
 # ─────────────────────────── checking ───────────────────────────
@@ -464,6 +473,22 @@ def check_library_call(head: str, f, args, held: bool):
     sig = function_signature(f, held)
     check_args(head, sig, args)
     return sig
+
+
+def check_kernel_call(head: str, args) -> Optional[Signature]:
+    """Hook for kernel built-ins (step 8 of the evaluator): checks the arguments against the hand-written
+    signature (mikoshilang.kernel_types) and returns it for the result check."""
+    if _mode.get() is None:
+        return None
+    from .kernel_types import kernel_signatures
+    sigs = kernel_signatures(head)
+    if not sigs:
+        return None
+    fitting = [s for s in sigs if s.accepts_count(len(args))]
+    if not fitting:
+        return None                      # the built-in reports a wrong argument count itself
+    check_args(head, fitting[0], args)
+    return fitting[0]
 
 
 def select_declared(head: str, args) -> Optional[List[Signature]]:
