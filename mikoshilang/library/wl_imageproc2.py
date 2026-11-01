@@ -519,7 +519,11 @@ def _gaborfilter(x: Expr, r: NonNegInteger | ListOf[Expr], k: Real | ListOf[Real
     args = [r, kexpr] + list(pos)
     if "Standardized" in o:
         args.append(Expr("Rule", Symbol("Standardized"), o["Standardized"]))
-    G = _ev(Expr("GaborMatrix", *args))
+    try:
+        G = _ev(Expr("GaborMatrix", *args))
+    except (TypeError, ValueError, NotImplementedError) as exc:
+        msg = str(exc)
+        raise type(exc)(f"{fname}: " + (msg.split(": ", 1)[1] if msg.startswith("GaborMatrix: ") else msg)) from None
     if isinstance(G, Expr) and G.head == "GaborMatrix":
         raise Unevaluated()
     ker = np.array(WI._numeric_array(G, fname), dtype=float)

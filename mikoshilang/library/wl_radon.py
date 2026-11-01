@@ -160,6 +160,10 @@ def _radontransform(f: Expr, xy: ListOf[Symbol], pphi: ListOf[Symbol], *opts: Op
     pn, phin = _vars(pphi, fname, "transform variables")
     _options(opts, fname)
     fe = _sym_expr(f, fname)
+    if any(getattr(a.func, "__name__", "") not in ("Boole", "UnitStep", "HeavisideTheta", "Less", "LessEqual",
+                                                     "Greater", "GreaterEqual")
+           for a in fe.atoms(sp.core.function.AppliedUndef)):
+        raise Unevaluated()
     X, Y = sp.Symbol(xn), sp.Symbol(yn)
     p, phi = sp.Symbol(pn, real=True), sp.Symbol(phin, real=True)
     s = sp.Dummy("s", real=True)
@@ -231,6 +235,8 @@ def _inverseradontransform(g: Expr, pphi: ListOf[Symbol], xy: ListOf[Symbol], *o
     xn, yn = _vars(xy, fname, "result variables")
     _options(opts, fname)
     ge = _sym_expr(g, fname)
+    if ge.atoms(sp.core.function.AppliedUndef):
+        raise Unevaluated()
     P, PHI = sp.Symbol(pn), sp.Symbol(phin)
     if ge.has(PHI) and sp.simplify(sp.diff(ge, PHI)) != 0:
         raise NotImplementedError(f"{fname}: only transforms independent of {phin} (radial functions) are supported")
