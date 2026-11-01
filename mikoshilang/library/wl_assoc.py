@@ -58,7 +58,8 @@ def _assoc(x, fname):
 
 @fn("Association", **ADDED,
     notes="normalises <|...|>: lists of rules and nested associations are flattened in, a repeated key keeps its "
-          "first position and takes the last value; non-rule arguments raise")
+          "first position and takes the last value; non-rule arguments raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _association(*args: Expr) -> Expr:
     if all(is_rule(a) for a in args):
         tags = [K.tag(a.args[0]) for a in args]
@@ -73,7 +74,8 @@ def _association(*args: Expr) -> Expr:
     return _normal_assoc(rules)
 
 
-@fn("AssociationQ", **ADDED, notes="True for a valid association")
+@fn("AssociationQ", **ADDED, notes="True for a valid association"
+                                   ". Check: reference (differential cases in tests/library).")
 def _associationq(x: Expr) -> Boolean:
     return is_assoc(x) and all(is_rule(r) for r in x.args)
 
@@ -126,7 +128,8 @@ def _thread_assoc(x, f, fname):
 
 @fn("KeyTake", **ADDED,
     notes="entries for the given keys in the order the keys are listed (absent keys ignored); rule lists give "
-          "rule lists; lists of associations thread")
+          "rule lists; lists of associations thread"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _keytake(x: Expr, ks: Expr) -> Expr:
     keys = _key_list(ks)
 
@@ -140,14 +143,18 @@ def _keytake(x: Expr, ks: Expr) -> Expr:
     return _thread_assoc(x, one, "KeyTake")
 
 
-@fn("KeyDrop", **ADDED, notes="entries whose keys are not listed; rule lists and lists of associations thread")
+@fn("KeyDrop", **ADDED, notes="entries whose keys are not listed; rule lists and lists of associations thread"
+                              ". Check: exact (exact input gives exact results), reference (differential cases in "
+                              "tests/library).")
 def _keydrop(x: Expr, ks: Expr) -> Expr:
     tags = {K.tag(k) for k in _key_list(ks)}
     return _thread_assoc(x, lambda a: Expr("Association", *(r for r in a.args if K.tag(r.args[0]) not in tags)),
                          "KeyDrop")
 
 
-@fn("KeySort", **ADDED, notes="entries ordered by canonical order of keys, or by the ordering function p")
+@fn("KeySort", **ADDED, notes="entries ordered by canonical order of keys, or by the ordering function p"
+                              ". Check: exact (exact input gives exact results), reference (differential cases in "
+                              "tests/library).")
 def _keysort(x: Expr, p: Expr = None) -> Expr:
     def one(a):
         rs = KL.sort_items(list(a.args), ev, p, "KeySort", key=lambda r: r.args[0])
@@ -155,7 +162,9 @@ def _keysort(x: Expr, p: Expr = None) -> Expr:
     return _thread_assoc(x, one, "KeySort")
 
 
-@fn("KeySortBy", **ADDED, notes="entries ordered by canonical order of f[key] (stable for ties)")
+@fn("KeySortBy", **ADDED, notes="entries ordered by canonical order of f[key] (stable for ties)"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _keysortby(x: Expr, f: Fn) -> Expr:
     def one(a):
         keyed = [(apply(f, r.args[0]), r) for r in a.args]
@@ -164,19 +173,25 @@ def _keysortby(x: Expr, f: Fn) -> Expr:
     return _thread_assoc(x, one, "KeySortBy")
 
 
-@fn("KeySelect", **ADDED, notes="entries whose key k gives crit[k] True")
+@fn("KeySelect", **ADDED, notes="entries whose key k gives crit[k] True"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")
 def _keyselect(x: Expr, crit: Fn) -> Expr:
     return _thread_assoc(x, lambda a: Expr("Association", *(r for r in a.args if true(crit, r.args[0]))),
                          "KeySelect")
 
 
-@fn("KeyMap", **ADDED, notes="KeyMap[f, assoc] applies f to every key (later entries win when keys collide)")
+@fn("KeyMap", **ADDED, notes="KeyMap[f, assoc] applies f to every key (later entries win when keys collide)"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")
 def _keymap(f: Fn, x: Expr) -> Expr:
     return _thread_assoc(x, lambda a: _normal_assoc([Expr(r.head, apply(f, r.args[0]), r.args[1]) for r in a.args]),
                          "KeyMap")
 
 
-@fn("KeyValueMap", **ADDED, notes="{f[k1, v1], f[k2, v2], ...}")
+@fn("KeyValueMap", **ADDED, notes="{f[k1, v1], f[k2, v2], ...}"
+                                  ". Check: exact (exact input gives exact results), reference (differential cases "
+                                  "in tests/library).")
 def _keyvaluemap(f: Fn, x: Expr) -> ListOf[Expr]:
     a = _assoc(x, "KeyValueMap")
     return L(*(apply(f, r.args[0], KL.rule_value(r, ev)) for r in a.args))
@@ -191,7 +206,8 @@ def _lookup1(a, k, default):
 
 @fn("Lookup", **ADDED,
     notes="Lookup[assoc, key] (Missing[\"KeyAbsent\", key] if absent), Lookup[assoc, key, default], a list of keys "
-          "gives a list, a list of associations threads; rule lists act as associations")
+          "gives a list, a list of associations threads; rule lists act as associations"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lookup(x: Expr, k: Expr, default: Expr = None) -> Expr:
     def keyed(a):
         if is_list(k):
@@ -204,7 +220,8 @@ def _lookup(x: Expr, k: Expr, default: Expr = None) -> Expr:
 
 @fn("AssociationMap", **ADDED,
     notes="AssociationMap[f, {k1, ...}] gives <|k1 -> f[k1], ...|>; on an association f is applied to each rule "
-          "and must return a rule")
+          "and must return a rule"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _associationmap(f: Fn, x: Expr) -> Expr:
     if is_assoc(x):
         out = []
@@ -223,7 +240,8 @@ def _associationmap(f: Fn, x: Expr) -> Expr:
 
 @fn("AssociationThread", **ADDED,
     notes="AssociationThread[{k...}, {v...}] or [{k...} -> {v...}]; lengths must agree; repeated keys keep the "
-          "last value")
+          "last value"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _associationthread(ks: Expr, vs: Expr = None) -> Expr:
     if vs is None:
         if not is_rule(ks):
@@ -238,7 +256,8 @@ def _associationthread(ks: Expr, vs: Expr = None) -> Expr:
 
 @fn("Merge", **ADDED,
     notes="Merge[{a1, a2, ...}, f] gives <|k -> f[{values for k}]|> with keys in order of first appearance; rule "
-          "lists act as associations")
+          "lists act as associations"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _merge(xs: Expr, f: Fn) -> Expr:
     if not is_list(xs):
         if isinstance(xs, Symbol):
@@ -256,7 +275,8 @@ def _merge(xs: Expr, f: Fn) -> Expr:
     return Expr("Association", *(Expr("Rule", k, apply(f, L(*v))) for k, v in zip(keys, vals)))
 
 
-@fn("KeyExistsQ", **ADDED, notes="True if the key is present (SameQ on keys)")
+@fn("KeyExistsQ", **ADDED, notes="True if the key is present (SameQ on keys)"
+                                 ". Check: reference (differential cases in tests/library).")
 def _keyexistsq(x: Expr, k: Expr) -> Boolean:
     return KL.assoc_has(_assoc(x, "KeyExistsQ"), k)
 
@@ -265,12 +285,14 @@ def _matchq(e, p):
     return ev(Expr("MatchQ", e, p)) is True
 
 
-@fn("KeyMemberQ", **ADDED, notes="True if some key matches the pattern")
+@fn("KeyMemberQ", **ADDED, notes="True if some key matches the pattern"
+                                 ". Check: reference (differential cases in tests/library).")
 def _keymemberq(x: Expr, p: Expr) -> Boolean:
     return any(_matchq(r.args[0], p) for r in _assoc(x, "KeyMemberQ").args)
 
 
-@fn("KeyFreeQ", **ADDED, notes="True if no key matches the pattern")
+@fn("KeyFreeQ", **ADDED, notes="True if no key matches the pattern"
+                               ". Check: reference (differential cases in tests/library).")
 def _keyfreeq(x: Expr, p: Expr) -> Boolean:
     return not any(_matchq(r.args[0], p) for r in _assoc(x, "KeyFreeQ").args)
 
@@ -283,7 +305,9 @@ def _assoc_list(xs, fname):
     return [_assoc(x, fname) for x in xs.args]
 
 
-@fn("KeyComplement", **ADDED, notes="entries of the first association whose keys are in none of the others")
+@fn("KeyComplement", **ADDED, notes="entries of the first association whose keys are in none of the others"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 def _keycomplement(xs: Expr) -> Expr:
     a = _assoc_list(xs, "KeyComplement")
     if not a:
@@ -293,7 +317,8 @@ def _keycomplement(xs: Expr) -> Expr:
 
 
 @fn("KeyIntersection", **ADDED,
-    notes="each association restricted to the keys common to all, in the order of the first association")
+    notes="each association restricted to the keys common to all, in the order of the first association"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _keyintersection(xs: Expr) -> ListOf[Expr]:
     a = _assoc_list(xs, "KeyIntersection")
     if not a:
@@ -304,7 +329,8 @@ def _keyintersection(xs: Expr) -> ListOf[Expr]:
 
 @fn("KeyUnion", **ADDED,
     notes="each association extended to the union of keys (in order of first appearance); absent keys get "
-          "Missing[\"KeyAbsent\", k] (or f[k] with KeyUnion[list, f])")
+          "Missing[\"KeyAbsent\", k] (or f[k] with KeyUnion[list, f])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _keyunion(xs: Expr, f: Fn = None) -> ListOf[Expr]:
     a = _assoc_list(xs, "KeyUnion")
     keys, seen = [], set()
@@ -363,14 +389,16 @@ def _is_missing(x):
     return isinstance(x, Expr) and x.head == "Missing"
 
 
-@fn("MissingQ", **ADDED, notes="True for Missing[...] expressions")
+@fn("MissingQ", **ADDED, notes="True for Missing[...] expressions"
+                               ". Check: reference (differential cases in tests/library).")
 def _missingq(x: Expr) -> Boolean:
     return _is_missing(x)
 
 
 @fn("DeleteMissing", **ADDED,
     notes="drops Missing[...] elements of a list (or entries of an association); DeleteMissing[list, n] works "
-          "down to level n (n a positive integer or Infinity)")
+          "down to level n (n a positive integer or Infinity)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _deletemissing(x: Expr, n: Expr = 1) -> Expr:
     from .core import pos_int
     inf = isinstance(n, Expr) and n.head == "DirectedInfinity" or isinstance(n, Symbol) and n.name == "Infinity"

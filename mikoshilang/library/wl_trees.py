@@ -119,7 +119,8 @@ def height(t):
 
 @fn("Tree", area=AREA, status="added",
     notes="Tree[data, {subtrees}] / Tree[data, <|k -> subtree|>] / Tree[data, None] (leaf); Tree[{...}] = "
-          "Tree[Null, {...}]; non-Tree children become leaves; presentation options are kept")
+          "Tree[Null, {...}]; non-Tree children become leaves; presentation options are kept"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tree(*args: Expr) -> Expr:
     args = list(args)
     opts = []
@@ -148,22 +149,30 @@ def _tree(*args: Expr) -> Expr:
     return out
 
 
-@fn("TreeQ", area=AREA, status="added", notes="True for a valid Tree object")
+@fn("TreeQ", area=AREA, status="added", notes="True for a valid Tree object"
+                                              ". Check: exact (exact input gives exact results), reference "
+                                              "(differential cases in tests/library).")
 def _treeq(x: Expr) -> Boolean:
     return is_tree(x)
 
 
-@fn("TreeData", area=AREA, status="added", notes="the data at the root of a tree")
+@fn("TreeData", area=AREA, status="added", notes="the data at the root of a tree"
+                                                 ". Check: exact (exact input gives exact results), reference "
+                                                 "(differential cases in tests/library).")
 def _treedata(t: Expr) -> Expr:
     return data(_need_tree(t, "TreeData"))
 
 
-@fn("TreeChildren", area=AREA, status="added", notes="the children (list, association or None) of the root")
+@fn("TreeChildren", area=AREA, status="added", notes="the children (list, association or None) of the root"
+                                                     ". Check: exact (exact input gives exact results), reference "
+                                                     "(differential cases in tests/library).")
 def _treechildren(t: Expr) -> Expr:
     return _need_tree(t, "TreeChildren").args[1]
 
 
-@fn("TreeLeafQ", area=AREA, status="added", notes="True for a leaf Tree[data, None]; False for anything else")
+@fn("TreeLeafQ", area=AREA, status="added", notes="True for a leaf Tree[data, None]; False for anything else"
+                                                  ". Check: exact (exact input gives exact results), reference "
+                                                  "(differential cases in tests/library).")
 def _treeleafq(t: Expr) -> Boolean:
     return is_tree(t) and kind(t) == "none"
 
@@ -297,7 +306,8 @@ def _elem(rec, which, fname):
 
 @fn("TreeLevel", area=AREA, status="added",
     notes="TreeLevel[tree, levelspec] subtrees on the levels (children before parents); levelspec -> \"Data\" | "
-          "\"Subtree\" | \"Position\" | \"Level\" ...; \"Leaves\", \"NonLeaves\"; TreeTraversalOrder option")
+          "\"Subtree\" | \"Position\" | \"Level\" ...; \"Leaves\", \"NonLeaves\"; TreeTraversalOrder option"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treelevel(*args: Expr) -> ListOf[Expr]:
     pos, opts = _with_opts(args, "TreeLevel", 1, 2)
     if len(pos) == 1:
@@ -338,25 +348,30 @@ def _dmatch(patt):
 
 
 @fn("TreeCases", area=AREA, status="added",
-    notes="TreeCases[tree, pattern, levelspec, n] subtrees whose data match (default levels {0, Infinity})")
+    notes="TreeCases[tree, pattern, levelspec, n] subtrees whose data match (default levels {0, Infinity})"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treecases(*args: Expr) -> ListOf[Expr]:
     return L(*(r[3] for r in _matching("TreeCases", args, _dmatch(args[1]) if len(args) > 1 else None)))
 
 
-@fn("TreeCount", area=AREA, status="added", notes="TreeCount[tree, pattern, levelspec] number of matching subtrees")
+@fn("TreeCount", area=AREA, status="added", notes="TreeCount[tree, pattern, levelspec] number of matching subtrees"
+                                                  ". Check: exact (exact input gives exact results), reference "
+                                                  "(differential cases in tests/library).")
 def _treecount(*args: Expr) -> Integer:
     return len(_matching("TreeCount", args, _dmatch(args[1]) if len(args) > 1 else None, 3))
 
 
 @fn("TreePosition", area=AREA, status="added",
     notes="TreePosition[tree, pattern, levelspec, n] positions (children before parents; {} is the root; "
-          "association children are addressed by Key[k])")
+          "association children are addressed by Key[k])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treeposition(*args: Expr) -> ListOf[Expr]:
     return L(*(L(*r[0]) for r in _matching("TreePosition", args, _dmatch(args[1]) if len(args) > 1 else None)))
 
 
 @fn("TreeSelect", area=AREA, status="added",
-    notes="TreeSelect[tree, crit], [tree, crit, n], [tree, crit, levelspec, n] subtrees with crit[subtree] True")
+    notes="TreeSelect[tree, crit], [tree, crit, n], [tree, crit, levelspec, n] subtrees with crit[subtree] True"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treeselect(*args: Expr) -> ListOf[Expr]:
     pos, opts = _with_opts(args, "TreeSelect", 2, 4)
     if len(pos) == 3:
@@ -369,26 +384,33 @@ for _n in ("TreeCases", "TreeCount", "TreePosition", "TreeSelect", "TreeLevel"):
     KL.operator_form(_n, 1, "first")
 
 
-@fn("TreeLeaves", area=AREA, status="added", notes="the leaves (level -1) in depth-first order")
+@fn("TreeLeaves", area=AREA, status="added", notes="the leaves (level -1) in depth-first order"
+                                                   ". Check: exact (exact input gives exact results), reference "
+                                                   "(differential cases in tests/library).")
 def _treeleaves(t: Expr) -> ListOf[Expr]:
     t = _need_tree(t, "TreeLeaves")
     return L(*(r[3] for r in nodes(t) if kind(r[3]) == "none"))
 
 
-@fn("TreeLeafCount", area=AREA, status="added", notes="number of leaves; Tree[d, {}] has 0")
+@fn("TreeLeafCount", area=AREA, status="added", notes="number of leaves; Tree[d, {}] has 0"
+                                                      ". Check: exact (exact input gives exact results), reference "
+                                                      "(differential cases in tests/library).")
 def _treeleafcount(t: Expr) -> Expr:
     t = _need_tree(t, "TreeLeafCount")
     return sum(1 for r in nodes(t) if kind(r[3]) == "none")
 
 
-@fn("TreeSize", area=AREA, status="added", notes="number of subtrees (nodes)")
+@fn("TreeSize", area=AREA, status="added", notes="number of subtrees (nodes)"
+                                                 ". Check: exact (exact input gives exact results), reference "
+                                                 "(differential cases in tests/library).")
 def _treesize(t: Expr) -> Integer:
     return len(nodes(_need_tree(t, "TreeSize")))
 
 
 @fn("TreeDepth", area=AREA, status="added",
     notes="maximum level (empty child lists add a level; a leaf has depth 0); TreeDepth[tree, patt] maximum "
-          "level of a subtree whose data matches patt")
+          "level of a subtree whose data matches patt"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treedepth(t: Expr, patt: Expr = None) -> Expr:
     t = _need_tree(t, "TreeDepth")
     if patt is None:
@@ -443,7 +465,8 @@ def _map_tree(f, t, ls, which, order, fname):
 @fn("TreeMap", area=AREA, status="added",
     notes="TreeMap[f, tree, levelspec -> elem] applies f to the data (or \"Subtree\", \"Position\", \"Level\", "
           "\"NegativeLevel\", \"LevelPair\", \"Children\", \"ChildrenData\", or a list of these as arguments) of "
-          "the subtrees on the levels (default All); the result becomes the new data")
+          "the subtrees on the levels (default All); the result becomes the new data"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treemap(*args: Expr) -> Expr:
     pos, opts = _with_opts(args, "TreeMap", 1, 3)
     if len(pos) == 1:
@@ -497,7 +520,8 @@ def _fold(fs, t, h):
 
 @fn("TreeFold", area=AREA, status="added",
     notes="TreeFold[f, tree] folds bottom-up: f[data, {results of children}] (leaves give their data); "
-          "TreeFold[{f, g}, tree] applies g to leaf data; TreeFold[f, tree, h] uses h[subtree] instead of the data")
+          "TreeFold[{f, g}, tree] applies g to leaf data; TreeFold[f, tree, h] uses h[subtree] instead of the data"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treefold(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
@@ -582,7 +606,8 @@ def _update(t, pos, g, fname):
 
 @fn("TreeExtract", area=AREA, status="added",
     notes="TreeExtract[tree, pos | {pos1, ...}, h] subtrees at positions (integer parts, negative parts, "
-          "\"key\"/Key[k]); h is applied to each")
+          "\"key\"/Key[k]); h is applied to each"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treeextract(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
@@ -602,7 +627,8 @@ KL.operator_form("TreeExtract", 1, "first")
 
 
 @fn("TreeDelete", area=AREA, status="added",
-    notes="TreeDelete[tree, pos | {pos1, ...}] removes subtrees (deleting the only child leaves Tree[d, {}])")
+    notes="TreeDelete[tree, pos | {pos1, ...}] removes subtrees (deleting the only child leaves Tree[d, {}])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treedelete(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
@@ -633,7 +659,8 @@ KL.operator_form("TreeDelete", 1, "first")
 
 @fn("TreeInsert", area=AREA, status="added",
     notes="TreeInsert[tree, child, pos | {pos1, ...}] inserts child (non-trees become leaves) so that it is at "
-          "position pos (negative indices count from the end, like Insert); list children only")
+          "position pos (negative indices count from the end, like Insert); list children only"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treeinsert(*args: Expr) -> Expr:
     if len(args) == 2:
         raise Unevaluated()
@@ -667,7 +694,8 @@ KL.operator_form("TreeInsert", 2, "first")
 
 @fn("TreeReplacePart", area=AREA, status="added",
     notes="TreeReplacePart[tree, pos -> new | {pos1 -> new1, ...} | {pos1, pos2} -> new] replaces subtrees "
-          "(non-trees become leaves); explicit positions only (no patterns)")
+          "(non-trees become leaves); explicit positions only (no patterns)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treereplacepart(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
@@ -692,7 +720,8 @@ KL.operator_form("TreeReplacePart", 1, "first")
 
 @fn("TreeMapAt", area=AREA, status="added",
     notes="TreeMapAt[f, tree, pos | {pos1, ...}] applies f to the data at the positions (repeatedly for "
-          "repeated positions)")
+          "repeated positions)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treemapat(*args: Expr) -> Expr:
     if len(args) == 2:
         raise Unevaluated()
@@ -715,7 +744,8 @@ def _rules_leafdata(d):
 
 @fn("TreeRules", area=AREA, status="added",
     notes="TreeRules[tree]: data -> {rules of children} (or an association); leaves give their data (data -> None "
-          "when the data itself looks like such a rule)")
+          "when the data itself looks like such a rule)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treerules(t: Expr) -> Expr:
     t = _need_tree(t, "TreeRules")
 
@@ -743,14 +773,16 @@ def rules_tree(r):
 
 
 @fn("RulesTree", area=AREA, status="added",
-    notes="RulesTree[data -> {rules}] / [data -> <|k -> rule|>] / [data -> None]; other expressions are leaves")
+    notes="RulesTree[data -> {rules}] / [data -> <|k -> rule|>] / [data -> None]; other expressions are leaves"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rulestree(r: Expr, *opts: Option) -> Expr:
     out = rules_tree(r)
     return Expr("Tree", *out.args, *opts) if opts else out
 
 
 @fn("RootTree", area=AREA, status="added",
-    notes="RootTree[tree] = Tree[data, {}] (leaves unchanged); RootTree[tree, n] keeps levels 0..n (n >= 0)")
+    notes="RootTree[tree] = Tree[data, {}] (leaves unchanged); RootTree[tree, n] keeps levels 0..n (n >= 0)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _roottree(t: Expr, n: Expr = None) -> Expr:
     t = _need_tree(t, "RootTree")
     if n is None:
@@ -784,7 +816,8 @@ def _unlabeledtree(t: Expr, *opts: Option) -> Expr:
 @fn("NestTree", area=AREA, status="added",
     notes="NestTree[f, tree | expr, n, h] grows every leaf Tree[x, None] with children f[x] (list, association, "
           "None or {} ; other results r give {r}) for n levels (default 1, Infinity allowed); h maps the data of "
-          "the leaves including the new ones")
+          "the leaves including the new ones"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nesttree(f: Fn, t: Expr, n: Expr = 1, h: Fn = None, *opts: Option) -> Expr:
     if is_sym(n, "Infinity"):
         n = None
@@ -870,7 +903,8 @@ def _struct_name(s, fname):
 
 @fn("ExpressionTree", area=AREA, status="added",
     notes="ExpressionTree[expr, struct] with struct \"Heads\" (default), \"Subexpressions\", \"Atoms\", Null, "
-          "None, \"List\", \"Association\", \"Rules\"; Heads -> True and the XML/JSON/held forms raise")
+          "None, \"List\", \"Association\", \"Rules\"; Heads -> True and the XML/JSON/held forms raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _expressiontree(*args: Expr) -> Expr:
     pos, opts = split_options(args, {"Heads"} | _OPTSET, "ExpressionTree")
     if not 1 <= len(pos) <= 2:
@@ -914,7 +948,8 @@ def _tree_expr(t, struct, fname):
 
 @fn("TreeExpression", area=AREA, status="added",
     notes="TreeExpression[tree, struct] with struct \"Heads\" (default: data[children...]), \"HeadTrees\", "
-          "\"List\", \"Association\", \"Rules\"; other structures raise")
+          "\"List\", \"Association\", \"Rules\"; other structures raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treeexpression(*args: Expr) -> Expr:
     pos, opts = split_options(args, {"Heads"}, "TreeExpression")
     if not 1 <= len(pos) <= 2:
@@ -980,7 +1015,8 @@ def _treegraph(*args: Expr) -> Expr:
 @fn("GraphTree", area=AREA, status="added",
     notes="GraphTree[g, root] converts a tree graph (TreeGraphQ) into a Tree rooted at root (default: the "
           "vertex with the largest out-component, i.e. the source of a directed tree, else the first vertex); "
-          "siblings follow VertexList order; GraphTree[g, root, h] with h[v] = {data, sortkey}")
+          "siblings follow VertexList order; GraphTree[g, root, h] with h[v] = {data, sortkey}"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _graphtree(*args: Expr) -> Expr:
     G = _wg()
     pos, opts = split_options(args, _OPTSET, "GraphTree")
@@ -1272,7 +1308,8 @@ import sympy as sp  # noqa: E402
     notes="TreeGame[{player, action1, ...}] (end nodes {payoff1, ...}; actions annotated action -> label | prob | "
           "{label, prob}; information sets player -> ilabel) or TreeGame[Tree[<|\"Player\" -> p|>, {...}]] with "
           "\"Payoffs\", \"Label\", \"Probability\", \"InformationSet\" keys: validated (consistent payoff counts, "
-          "complete probability distributions) and kept as the inert game object TreeGame[spec]")
+          "complete probability distributions) and kept as the inert game object TreeGame[spec]"
+          ". Check: reference (differential cases in tests/library).")
 def _treegame(spec: Expr, *rest: Expr) -> Expr:
     if rest:
         raise TreeError("TreeGame: options and extra arguments are not supported")
@@ -1308,7 +1345,8 @@ def _strategy_table(strat, fname):
           "...|> or <|node -> {pr, ...}, ...|> (nodes are child-index paths, {} the root); actions with "
           "probabilities in the game use them unless the strategy overrides them; TreeGamePayoff[tgame, strat, "
           "\"RandomExpectation\"] averages unspecified nodes uniformly; \"Perfect\", \"PerfectExpectation\" and "
-          "\"Random\" raise; an incomplete strategy without an adversary type raises")
+          "\"Random\" raise; an incomplete strategy without an adversary type raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _treegamepayoff(game: Expr, strat: Assoc, adv: Expr = None) -> Expr:
     fname = "TreeGamePayoff"
     root = _game_root(game, fname)
