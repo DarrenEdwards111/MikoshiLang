@@ -1164,3 +1164,316 @@ def _datehistogram(data: ListOf[Expr], *rest: Expr | Option) -> Expr:
 
 def unwrap_legend(g):
     return g.args[0] if isinstance(g, Expr) and g.head == "Legended" else g
+
+
+# ───────────────────────────── smooth (kernel density) histograms ─────────────────────────────
+
+SQ2PI = math.sqrt(2 * math.pi)
+
+
+def _sd(xs):
+    np = _np()
+    return float(np.std(np.asarray(xs, dtype=float), ddof=1)) if len(xs) > 1 else 0.0
+
+
+def bandwidth(xs, spec, fname, dim=1):
+    """Gaussian kernel bandwidth: Automatic/"Silverman" 0.9 min(sd, IQR/1.34) n^(-1/5) (1-D) or sd n^(-1/6)
+    per coordinate (2-D, Scott's rule), "Scott" 1.06 sd n^(-1/5), a number h, or {"Standardized", h} (h sd)."""
+    xs = [float(x) for x in xs]
+    n = len(xs)
+    sd = _sd(xs)
+    if spec is None or is_sym(spec, "Automatic") or spec in ("Silverman", "Scott"):
+        if n < 2:
+            raise ValueError(f"{fname}: an automatic bandwidth needs at least two data points")
+        if dim == 2:
+            h = sd * n ** (-1 / 6)
+        elif spec == "Scott":
+            h = 1.06 * sd * n ** (-0.2)
+        else:
+            iqr = _quantile_lin(xs, 0.75) - _quantile_lin(xs, 0.25)
+            a = min(sd, iqr / 1.34) if iqr > 0 else sd
+            h = 0.9 * a * n ** (-0.2)
+        if not h > 0:
+            raise ValueError(f"{fname}: the data has no spread; give an explicit bandwidth")
+        return h
+    if isinstance(spec, str):
+        raise NotImplementedError(f"{fname}: the bandwidth method {spec!r} is not supported (Silverman, Scott, a "
+                                  "number or {\"Standardized\", h})")
+    if K.is_list(spec) and len(spec.args) == 2 and spec.args[0] == "Standardized":
+        return float(pos_number(spec.args[1], fname, "the standardized bandwidth")) * sd
+    if K.is_list(spec) and len(spec.args) == 2 and isinstance(spec.args[1], str):
+        if spec.args[1] != "Gaussian":
+            raise NotImplementedError(f"{fname}: the kernel {spec.args[1]!r} is not supported (only \"Gaussian\")")
+        return bandwidth(xs, spec.args[0], fname, dim)
+    return float(pos_number(spec, fname, "the bandwidth"))
+
+
+def _phi(z):
+    np = _np()
+    from math import erf
+    return 0.5 * (1 + np.vectorize(erf)(z / math.sqrt(2)))
+
+
+def kde_fun(xs, h, dfun, fname):
+    """Vectorised f(t) for the Gaussian kernel estimate of the data."""
+    np = _np()
+    X = np.asarray([float(x) for x in xs])
+    n = len(X)
+    if dfun is None or is_sym(dfun, "Automatic"):
+        dfun = "PDF"
+    if dfun not in ("PDF", "Intensity", "CDF", "SF", "HF", "CHF"):
+        if isinstance(dfun, str):
+            raise ValueError(f"{fname}: unknown distribution function {dfun!r}")
+        raise NotImplementedError(f"{fname}: the distribution function {K_input(dfun)} is not supported")
+
+    def pdf(t):
+        t = np.asarray(t, dtype=float)
+        z = (t[..., None] - X) / h
+        return np.exp(-z * z / 2).sum(axis=-1) / (n * h * SQ2PI)
+
+    def cdf(t):
+        t = np.asarray(t, dtype=float)
+        return _phi((t[..., None] - X) / h).mean(axis=-1)
+
+    def f(t):
+        with np.errstate(all="ignore"):
+            if dfun == "PDF":
+                return pdf(t)
+            if dfun == "Intensity":
+                return n * pdf(t)
+            if dfun == "CDF":
+                return cdf(t)
+            sf = 1 - cdf(t)
+            if dfun == "SF":
+                return sf
+            if dfun == "HF":
+                return np.where(sf > 1e-300, pdf(t) / sf, np.nan)
+            return np.where(sf > 1e-300, -np.log(sf), np.nan)
+    return f
+
+
+_SMOOTH_DEFAULTS = {"PlotStyle": AUTO, "PlotRange": AUTO, "PlotLegends": NONE, "Filling": NONE, "PlotPoints": AUTO,
+                    "MaxRecursion": AUTO, "PlotTheme": AUTO, "PerformanceGoal": AUTO, "Method": AUTO,
+                    "ColorFunction": AUTO, "ColorFunctionScaling": True, "Mesh": NONE, "MeshStyle": AUTO,
+                    "PlotHighlighting": AUTO, "ScalingFunctions": NONE, "FillingStyle": AUTO}
+
+
+def _smooth_range(sets, hs):
+    lo = min(min(float(v) for v in vs) - 3 * h for vs, h in zip(sets, hs))
+    hi = max(max(float(v) for v in vs) + 3 * h for vs, h in zip(sets, hs))
+    return lo, hi
+
+
+def smooth_curves(fname, sets, bw, dfun):
+    hs = [bandwidth(vs, bw, fname) for vs in sets]
+    a, b = _smooth_range(sets, hs)
+    curves = []
+    for vs, h in zip(sets, hs):
+        f = kde_fun(vs, h, dfun, fname)
+        curves.append(P2.sample_1d(f, a, b, n=60, maxrec=4))
+    return curves, (a, b), hs
+
+
+_SMOOTH_NOTE = (" Gaussian kernel estimate with bandwidth bw: Automatic/\"Silverman\" (0.9 min(sd, IQR/1.34) "
+                "n^(-1/5), Silverman's rule; IQR from linearly interpolated quartiles), \"Scott\" (1.06 sd n^(-1/5)), "
+                "a number h, {\"Standardized\", h} (h sd) or {bw, \"Gaussian\"}; other kernels and methods raise "
+                "NotImplementedError. Distribution functions dfun: \"PDF\" (default), \"Intensity\" (n PDF), \"CDF\", "
+                "\"SF\", \"HF\" (PDF/SF), \"CHF\" (-Log[SF]), all computed exactly from the kernel sum. The curve is "
+                "sampled adaptively over [min - 3 h, max + 3 h].")
+
+
+@fn("SmoothHistogram", area=AREA, status="added",
+    notes="SmoothHistogram[data], [data, bw], [data, bw, dfun] and lists of datasets: Graphics[{{style, Line[...]}, "
+          "...}] with one curve per dataset (default colours as Plot)." + _SMOOTH_NOTE + " Options: PlotStyle, "
+          "PlotRange, PlotLegends and Graphics options; others raise NotImplementedError. Symbolic data stays "
+          "unevaluated. Check: reference (curve points equal the kernel sum computed independently in tests; the "
+          "PDF integrates to 1).")
+def _smoothhistogram(data: ListOf[Real] | ListOf[ListOf[Real]], *rest: Expr | Option) -> Expr:
+    fname = "SmoothHistogram"
+    pos, opts = split_args((data,) + rest, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _SMOOTH_DEFAULTS)
+    _unsupported(o, fname, ("PlotStyle", "PlotLegends"))
+    sets = [vs for vs, _ in datasets_1d(pos[0], fname)]
+    curves, (a, b), _ = smooth_curves(fname, sets, pos[1] if len(pos) > 1 else None, pos[2] if len(pos) > 2 else None)
+    styles = P2.style_list(o["PlotStyle"], len(curves), fname)
+    content, ys = [], []
+    for cs, st in zip(curves, styles):
+        for c in cs:
+            ys += [p[1] for p in c]
+        if st is not None and cs:
+            content.append(L(st, Expr("Line", L(*[pts(c) for c in cs]))))
+    yr = P2.data_range(ys)
+    r = _range_2d(o, fname, (a, b), (min(0.0, yr[0]), yr[1]))
+    g = finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("PlotRange", range_expr(r))])
+    return P2.legend_wrap(g, o["PlotLegends"], styles, None, fname)
+
+
+@fn("SmoothDateHistogram", area=AREA, status="added",
+    notes="SmoothDateHistogram[dates], [dates, bw], [dates, bw, dfun]: SmoothHistogram of the AbsoluteTime values "
+          "of the dates (seconds since 1 Jan 1900; DateObject, date lists, strings or numbers) with date ticks; "
+          "a numeric bandwidth is in seconds." + _SMOOTH_NOTE + " Options as SmoothHistogram. Check: reference "
+          "(curve equals the kernel sum over AbsoluteTime values in tests).")
+def _smoothdatehistogram(data: ListOf[Expr], *rest: Expr | Option) -> Expr:
+    fname = "SmoothDateHistogram"
+    pos, opts = split_args((data,) + rest, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _SMOOTH_DEFAULTS)
+    _unsupported(o, fname, ("PlotStyle", "PlotLegends"))
+    ts = date_values(pos[0], fname)
+    curves, (a, b), _ = smooth_curves(fname, [ts], pos[1] if len(pos) > 1 else None,
+                                      pos[2] if len(pos) > 2 else None)
+    styles = P2.style_list(o["PlotStyle"], 1, fname)
+    ys = [p[1] for c in curves[0] for p in c]
+    content = [L(styles[0], Expr("Line", L(*[pts(c) for c in curves[0]])))] if styles[0] is not None else []
+    yr = P2.data_range(ys)
+    r = _range_2d(o, fname, (a, b), (0.0, yr[1]))
+    return finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True),
+                                                ("Ticks", L(P2.date_ticks(a, b), AUTO)), ("PlotRange", range_expr(r))])
+
+
+@fn("PairedSmoothHistogram", area=AREA, status="added",
+    notes="PairedSmoothHistogram[data1, data2], [data1, data2, bw], [data1, data2, bw, dfun]: back-to-back kernel "
+          "density estimates with the values along the vertical axis: data1 to the left (points {-f1(y), y}) and "
+          "data2 to the right ({f2(y), y}), each drawn as a filled Polygon closed along the axis plus its Line; "
+          "each side has its own automatic bandwidth." + _SMOOTH_NOTE + " Options: PlotStyle, PlotRange and "
+          "Graphics options. Check: reference (curve points equal the kernel sums in tests).")
+def _pairedsmoothhistogram(d1: ListOf[Real], d2: ListOf[Real], *rest: Expr | Option) -> Expr:
+    fname = "PairedSmoothHistogram"
+    pos, opts = split_args((d1, d2) + rest, fname, 2, 4)
+    o, gopts = split_options(fname, opts, _SMOOTH_DEFAULTS)
+    _unsupported(o, fname, ("PlotStyle",))
+    s1, s2 = values_of(pos[0], fname), values_of(pos[1], fname)
+    curves, (a, b), _ = smooth_curves(fname, [s1, s2], pos[2] if len(pos) > 2 else None,
+                                      pos[3] if len(pos) > 3 else None)
+    styles = P2.style_list(o["PlotStyle"], 2, fname)
+    content, xm = [], 0.0
+    for side, cs, st in ((-1, curves[0], styles[0]), (1, curves[1], styles[1])):
+        lines = [[(side * y, x) for x, y in c] for c in cs]
+        for ln in lines:
+            xm = max(xm, max(abs(p[0]) for p in ln))
+        if st is None:
+            continue
+        polys = [Expr("Polygon", pts(ln + [(0.0, ln[-1][1]), (0.0, ln[0][1])])) for ln in lines]
+        content.append(L(Expr("Directive", P2.style_color(st), Expr("Opacity", 0.3), Expr("EdgeForm")), *polys))
+        content.append(L(st, Expr("Line", L(*[pts(ln) for ln in lines]))))
+    r = _range_2d(o, fname, (-(xm or 1.0), xm or 1.0), (a, b))
+    return finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("PlotRange", range_expr(r))])
+
+
+def kde2_fun(pairs, hx, hy, dfun, fname):
+    np = _np()
+    X = np.asarray([float(p[0]) for p in pairs])
+    Y = np.asarray([float(p[1]) for p in pairs])
+    n = len(X)
+    if dfun is None or is_sym(dfun, "Automatic"):
+        dfun = "PDF"
+    if dfun not in ("PDF", "Intensity", "CDF", "SF"):
+        if dfun in ("HF", "CHF"):
+            raise NotImplementedError(f"{fname}: the distribution function {dfun!r} is not supported in 2-D")
+        raise ValueError(f"{fname}: unknown distribution function {K_input(dfun)}")
+
+    def f(u, v):
+        u = np.asarray(u, dtype=float)[..., None]
+        v = np.asarray(v, dtype=float)[..., None]
+        zx, zy = (u - X) / hx, (v - Y) / hy
+        if dfun in ("PDF", "Intensity"):
+            d = np.exp(-(zx * zx + zy * zy) / 2).sum(axis=-1) / (n * hx * hy * 2 * math.pi)
+            return d * n if dfun == "Intensity" else d
+        if dfun == "CDF":
+            return (_phi(zx) * _phi(zy)).mean(axis=-1)
+        return ((1 - _phi(zx)) * (1 - _phi(zy))).mean(axis=-1)
+    return f
+
+
+def _bw2(pairs, bw, fname):
+    if K.is_list(bw) and len(bw.args) == 2 and bw.args[0] != "Standardized" and not isinstance(bw.args[1], str):
+        return (bandwidth([p[0] for p in pairs], bw.args[0], fname, 2),
+                bandwidth([p[1] for p in pairs], bw.args[1], fname, 2))
+    return (bandwidth([p[0] for p in pairs], bw, fname, 2), bandwidth([p[1] for p in pairs], bw, fname, 2))
+
+
+_SMOOTH2_NOTE = (" Product Gaussian kernel estimate with bandwidths per coordinate: Automatic sd n^(-1/6) (Scott's "
+                 "rule in 2-D), a number h, {hx, hy} or {\"Standardized\", h}; dfun \"PDF\" (default), \"Intensity\", "
+                 "\"CDF\" and \"SF\" (2-D, exact kernel sums); \"HF\"/\"CHF\" raise NotImplementedError. The grid "
+                 "covers [min - 3 h, max + 3 h] in each coordinate.")
+
+
+def _smooth2_grid(pairs, bw, dfun, fname, n):
+    hx, hy = _bw2(pairs, bw, fname)
+    f = kde2_fun(pairs, hx, hy, dfun, fname)
+    xs = [float(p[0]) for p in pairs]
+    ys = [float(p[1]) for p in pairs]
+    a, b, c, d = min(xs) - 3 * hx, max(xs) + 3 * hx, min(ys) - 3 * hy, max(ys) + 3 * hy
+    Pm, T, _, _ = P2.grid_mesh(a, b, c, d, n, n)
+    V = f(Pm[:, 0], Pm[:, 1])
+    return Pm, T, V, (a, b), (c, d)
+
+
+@fn("SmoothDensityHistogram", area=AREA, status="added",
+    notes="SmoothDensityHistogram[{{x1, y1}, ...}], [data, bw], [data, bw, dfun]: a density plot (as DensityPlot: "
+          "GraphicsComplex of a 41 x 41 grid with VertexColors ColorFunction((f - fmin)/(fmax - fmin))) of the "
+          "kernel estimate." + _SMOOTH2_NOTE + " Options: ColorFunction, ColorFunctionScaling, PlotRange and "
+          "Graphics options. Check: reference (vertex values equal the kernel sum computed independently in "
+          "tests).")
+def _smoothdensityhistogram(data: MatrixOf[Real], *rest: Expr | Option) -> Expr:
+    fname = "SmoothDensityHistogram"
+    pos, opts = split_args((data,) + rest, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _SMOOTH_DEFAULTS)
+    _unsupported(o, fname, ("ColorFunction", "ColorFunctionScaling"))
+    pairs = values_2d(pos[0], fname)
+    return smooth_density_graphics(fname, pairs, pos[1] if len(pos) > 1 else None, pos[2] if len(pos) > 2 else None,
+                                   o, gopts)
+
+
+def smooth_density_graphics(fname, pairs, bw, dfun, o, gopts):
+    Pm, T, V, xr, yr = _smooth2_grid(pairs, bw, dfun, fname, 41)
+    cf = color_function(o.get("ColorFunction", AUTO), fname, lambda t: blend(DENSITY_GRADIENT, t))
+    g = P2.density_complex(Pm, V, T, cf, float(V.min()), float(V.max()), o.get("ColorFunctionScaling", True)
+                           is not False)
+    r = _range_2d(o, fname, xr, yr)
+    return finish_graphics(L(g), gopts, [("AspectRatio", 1), ("Frame", True), ("PlotRange", range_expr(r)),
+                                         ("PlotRangePadding", 0)])
+
+
+@fn("SmoothHistogram3D", area=AREA, status="added",
+    notes="SmoothHistogram3D[{{x1, y1}, ...}], [data, bw], [data, bw, dfun]: Graphics3D[{style, GraphicsComplex["
+          "{{x, y, f(x, y)}, ...}, {EdgeForm[], Polygon[quads]}]}] over a 41 x 41 grid (layout as Plot3D)."
+          + _SMOOTH2_NOTE + " Options: PlotStyle, PlotRange and Graphics3D options. Check: reference (vertex heights "
+          "equal the kernel sum in tests; the PDF integrates to about 1).")
+def _smoothhistogram3d(data: MatrixOf[Real], *rest: Expr | Option) -> Expr:
+    fname = "SmoothHistogram3D"
+    pos, opts = split_args((data,) + rest, fname, 1, 3)
+    o, gopts = split_options(fname, opts, _SMOOTH_DEFAULTS, dim=3)
+    _unsupported(o, fname, ("PlotStyle",))
+    pairs = values_2d(pos[0], fname)
+    np = _np()
+    Pm, T, V, xr, yr = _smooth2_grid(pairs, pos[1] if len(pos) > 1 else None, pos[2] if len(pos) > 2 else None,
+                                     fname, 41)
+    P3 = np.column_stack([Pm, V])
+    gc = P2.surface_complex(P3, P2.grid_faces(41, 41))
+    st = P2.surface_styles(o["PlotStyle"], 1, fname)[0]
+    content = [L(st, gc)] if st is not None and gc is not None else []
+    r = P2.resolve_plot_range(o["PlotRange"], fname, [xr, yr, (0.0, float(V.max()))], dims=3)
+    return finish_graphics(L(*content), gopts, [("Axes", True), ("BoxRatios", L(1, 1, 0.4)),
+                                                ("PlotRange", range_expr(r))], dim=3)
+
+
+@fn("PairwiseSmoothDensityHistogram", area=AREA, status="added",
+    notes="PairwiseSmoothDensityHistogram[{{y11, ..., y1n}, ...}]: GraphicsGrid of n x n panels; panel {i, j} "
+          "(i != j) is the SmoothDensityHistogram of the points {y_kj, y_ki}, the diagonal panel i the "
+          "SmoothHistogram of column i (automatic bandwidths)." + _SMOOTH2_NOTE + " Options: ColorFunction, "
+          "ColorFunctionScaling and GraphicsGrid options. Check: reference (panels equal SmoothDensityHistogram of "
+          "the column pairs in tests).")
+def _pairwisesmoothdensityhistogram(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "PairwiseSmoothDensityHistogram"
+    pos, opts_ = split_args((data,) + opts, fname, 1, 1)
+
+    def panel(pairs, o):
+        return smooth_density_graphics(fname, pairs, None, None, o, [])
+
+    def diag(vals, o):
+        curves, (a, b), _ = smooth_curves(fname, [vals], None, None)
+        ys = [p[1] for c in curves[0] for p in c]
+        return Expr("Graphics", L(L(default_color(0), Expr("Line", L(*[pts(c) for c in curves[0]])))),
+                    Expr("Rule", Symbol("Frame"), True), Expr("Rule", Symbol("AspectRatio"), 1),
+                    Expr("Rule", Symbol("PlotRange"), range_expr([(a, b), (0.0, max(ys))])))
+    return pairwise_grid(fname, pos[0], opts_, panel, diag)
