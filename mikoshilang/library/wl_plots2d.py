@@ -2436,6 +2436,11 @@ def bands(P, V, T, levels):
 def iso_lines(P, V, T, level):
     np = _np()
     segs = []
+    # values exactly at the level (e.g. x > y on a grid through the diagonal) are nudged off it so that the
+    # contour through grid points is still found (the vertex moves by about 1e-12 of the value scale)
+    fin = V[np.isfinite(V)]
+    eps = 1e-12 * max(1.0, float(np.abs(fin).max()) if fin.size else 1.0)
+    V = np.where(V == level, level + eps, V)
     for t in T:
         vs = V[t]
         if not np.isfinite(vs).all():
@@ -2759,9 +2764,9 @@ def field_data(data, fname, dr):
         xr = (float(P[:, 0].min()), float(P[:, 0].max()))
         yr = (float(P[:, 1].min()), float(P[:, 1].max()))
         return P, V, np.array(T, dtype=int), xr, yr
-    cells = matrix_cells(data, fname, allow_colors=False)
-    if len({len(r) for r in cells}) != 1:
+    if all(K.is_list(r) for r in rows) and len({len(r.args) for r in rows}) != 1:
         raise ValueError(f"{fname}: the array must be rectangular")
+    cells = matrix_cells(data, fname, allow_colors=False)
     ny, nx = len(cells), len(cells[0])
     if nx < 2 or ny < 2:
         raise ValueError(f"{fname}: the array must be at least 2 x 2")
@@ -3499,9 +3504,17 @@ def _numberline_spec(spec, var, fname):
         if var is None:
             raise ValueError(f"{fname}: a predicate needs the variable as the second argument")
         return _set_pieces(_sympy_set(spec, var, fname), fname)
-    if isinstance(spec, str):
+    if isinstance(spec, str) or (var is not None and isinstance(spec, Expr) and _mentions(spec, var.name)):
         raise TypeError(f"{fname}: {K_input(spec)} is not a number, interval or predicate")
     raise Unevaluated()
+
+
+def _mentions(e, name):
+    if isinstance(e, Symbol):
+        return e.name == name
+    if isinstance(e, Expr):
+        return (not isinstance(e.head, str) and _mentions(e.head, name)) or any(_mentions(a, name) for a in e.args)
+    return False
 
 
 _NUMBERLINE_DEFAULTS = {"PlotStyle": AUTO, "PlotLegends": NONE, "Spacings": AUTO, "PlotTheme": AUTO,
