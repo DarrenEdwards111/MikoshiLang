@@ -1148,6 +1148,13 @@ class ARMA(Proc):
             raise Unevaluated()
         return r
 
+    def stationary_part(self):
+        import copy
+        sub = copy.copy(self)
+        sub.diff = [sp.Integer(1)]
+        sub.__dict__.pop("_g", None)
+        return sub
+
     def invertible(self):
         r = stable([-c for c in self.theta])
         if r is None:
@@ -1930,7 +1937,7 @@ class Transformed(Proc):
                                       "processes are not supported")
         x, c = self.comps[0]
         y = Symbol("x\u0303")
-        e = _subst(self.expr, {Expr(x, self.tv): y})
+        e = _subst(self.expr, {Expr(x.name, self.tv): y, Expr(x, self.tv): y})
         e = _subst(e, {self.tv: R(t)})
         if _contains(e, x):
             raise NotImplementedError("SliceDistribution: the transformation must use the component only as "
@@ -1943,10 +1950,13 @@ class Transformed(Proc):
             vals.append(c.path(rng, times))
         out = []
         for k, tt in enumerate(times):
-            reps = {Expr(x, self.tv): R(sp.Float(vals[i][k]) if isinstance(vals[i][k], float) else vals[i][k])
-                    for i, (x, c) in enumerate(self.comps)}
+            reps = {}
+            for i, (x, c) in enumerate(self.comps):
+                v = R(sp.Float(vals[i][k]) if isinstance(vals[i][k], float) else vals[i][k])
+                reps[Expr(x.name, self.tv)] = v
+                reps[Expr(x, self.tv)] = v
             e = _subst(self.expr, reps)
-            e = _subst(e, {self.tv: tt})
+            e = _subst(e, {self.tv: R(sp.Float(tt)) if isinstance(tt, float) else tt})
             v = _ev(Expr("N", e))
             out.append(v)
         return out
@@ -2137,6 +2147,9 @@ def _moment_impl(which):
             v = pr.var(t)
         else:
             v = sp.sqrt(pr.var(t))
+        if isinstance(v, sp.Basic):         # times are real and >= t0, so polar lifts are spurious
+            v = v.replace(lambda e: isinstance(e, sp.Function) and type(e).__name__ == "polar_lift",
+                          lambda e: e.args[0])
         return _out(sp.simplify(v) if not _inexact(v) else v, x)
     return impl
 
@@ -2378,3 +2391,780 @@ for _name, _kind in (("CovarianceFunction", "cov"), ("CorrelationFunction", "cor
              "NotImplementedError; symbolic lags stay unevaluated where no closed form exists. "
              "Check: exact; reference (Wolfram documentation identities, statsmodels acf/acovf/pacf_yw values) "
              "in tests.")(_cf_function(_name, _kind))
+
+
+# ─────────────────────────── stationarity, invertibility ───────────────────────────
+
+@fn("WeakStationarity", area=AREA, status="added",
+    notes="WeakStationarity[proc]: True if proc is weakly stationary, else False. Time series processes: every zero "
+          "of the AR polynomial lies outside the unit circle (decided exactly by the Schur-Cohn/Levinson step-down "
+          "test for exact coefficients), integrated processes are not; ARCH/GARCH: Sum alpha + Sum beta < 1; "
+          "named processes by their definition (OrnsteinUhlenbeckProcess without x0, BernoulliProcess, "
+          "WhiteNoiseProcess with finite variance, FractionalGaussianNoiseProcess are; Wiener, Poisson, ... are not). "
+          "Symbolic coefficients stay unevaluated (Wolfram gives inequality conditions). Markov, queueing and SDE "
+          "processes raise NotImplementedError. Check: exact; reference (Wolfram documentation, numpy roots) in "
+          "tests.")
+def _weakstat(proc: Expr) -> Boolean:
+    pr = proc_of(proc, "WeakStationarity")
+    if isinstance(pr, (Markov, Queue, Ito, Transformed, Renewal)):
+        raise NotImplementedError(f"WeakStationarity: not supported for {pr.name}")
+    return bool(pr.stationary())
+
+
+def _need_arma(proc, fname):
+    pr = proc_of(proc, fname)
+    if not isinstance(pr, ARMA):
+        raise TypeError(f"{fname}: {pr.name} is not a time series (ARMA-type) process")
+    return pr
+
+
+@fn("TimeSeriesInvertibility", area=AREA, status="added",
+    notes="TimeSeriesInvertibility[tproc]: True if every zero of the MA polynomial 1 + Sum b_j z^j (times the "
+          "seasonal MA polynomial) lies outside the unit circle (exact Schur-Cohn test), else False; pure AR "
+          "processes are invertible. Symbolic coefficients stay unevaluated; non time series processes raise "
+          "TypeError. Check: exact; reference (Wolfram documentation, numpy roots) in tests.")
+def _tsinv(proc: Expr) -> Boolean:
+    return bool(_need_arma(proc, "TimeSeriesInvertibility").invertible())
+
+
+@fn("ToInvertibleTimeSeries", area=AREA, status="added",
+    notes="ToInvertibleTimeSeries[tproc] for MAProcess, ARMAProcess, ARIMAProcess and FARIMAProcess: reflects the "
+          "zeros of the MA polynomial inside the unit circle to 1/Conjugate[z] and rescales the noise variance by "
+          "Product |z|^-2, which preserves the mean and covariance function; exact (radicals) for exact "
+          "coefficients, machine numbers otherwise. Zeros on the unit circle raise ValueError; seasonal processes "
+          "and MA polynomials without radical zeros raise NotImplementedError; symbolic coefficients stay "
+          "unevaluated. Check: self-check (the autocovariances at lags 0..q of the result equal the original ones, "
+          "else ArithmeticError); reference (Wolfram documentation) in tests.")
+def _toinv(proc: Expr) -> Expr:
+    fname = "ToInvertibleTimeSeries"
+    pr = _need_arma(proc, fname)
+    if pr.name in ("SARMAProcess", "SARIMAProcess"):
+        raise NotImplementedError(f"{fname}: seasonal processes are not supported")
+    th = pr.theta
+    if not all(_num(c) for c in th + [pr.v]):
+        raise Unevaluated()
+    if not th or pr.invertible():
+        return proc
+    inexact = _inexact(*th, pr.v)
+    z = sp.Symbol("z")
+    poly = sp.Poly(sum(c * z ** (j + 1) for j, c in enumerate(th)) + 1, z)
+    if inexact:
+        import numpy as np
+        rts = [complex(r) for r in np.roots([complex(_f(c)) for c in poly.all_coeffs()])]
+        scale = 1.0
+        new = []
+        for r in rts:
+            if abs(abs(r) - 1) < 1e-12:
+                raise ValueError(f"{fname}: a zero lies on the unit circle; no invertible representation exists")
+            if abs(r) < 1:
+                scale /= abs(r) ** 2
+                r = 1 / r.conjugate()
+            new.append(r)
+        coeffs = [1.0 + 0j]
+        for r in new:
+            coeffs = [a - b / r for a, b in zip(coeffs + [0], [0] + coeffs)]
+        nth = [sp.Float(c.real) for c in coeffs[1:]]
+        nv = sp.Float(_f(pr.v) * scale)
+    else:
+        rmap = sp.roots(poly)
+        if sum(rmap.values()) != poly.degree():
+            raise NotImplementedError(f"{fname}: the zeros of the MA polynomial cannot be found in radicals")
+        expr, scale = sp.Integer(1), sp.Integer(1)
+        for r, mult in rmap.items():
+            a = sp.Abs(r)
+            if sp.simplify(a - 1) == 0:
+                raise ValueError(f"{fname}: a zero lies on the unit circle; no invertible representation exists")
+            if (a < 1) is sp.true or bool(a < 1):
+                scale *= a ** (-2 * mult)
+                r = 1 / sp.conjugate(r)
+            expr *= (1 - z / r) ** mult
+        cs = sp.Poly(sp.expand(expr), z).all_coeffs()[::-1]
+        nth = [sp.nsimplify(sp.simplify(c)) if sp.simplify(c).is_rational else sp.simplify(c) for c in cs[1:]]
+        nv = sp.simplify(pr.v * scale)
+    # self-check: same autocovariances
+    q = len(th)
+    full_old = [sp.Integer(1)] + list(th)
+    full_new = [sp.Integer(1)] + list(nth)
+    for k in range(q + 1):
+        g0 = pr.v * sum(full_old[j] * full_old[j + k] for j in range(q + 1 - k))
+        g1 = nv * sum(full_new[j] * full_new[j + k] for j in range(q + 1 - k))
+        if (abs(_f(g0) - _f(g1)) > 1e-8 * max(1.0, abs(_f(g0)))) if inexact else sp.simplify(g0 - g1) != 0:
+            raise ArithmeticError(f"{fname}: result failed verification")
+    a = list(proc.args)
+    # positions: MA list and v are the last list before v (and v is last) in every supported form
+    a[-1] = R(nv)
+    a[-2] = R(nth)
+    return Expr(proc.head, *a)
+
+
+# ─────────────────────────── stationary distributions ───────────────────────────
+
+@fn("StationaryDistribution", area=AREA, status="added",
+    notes="StationaryDistribution[proc]: the limiting (stationary) distribution. OrnsteinUhlenbeckProcess (with or "
+          "without x0): NormalDistribution[mu, sigma/Sqrt[2 theta]]; CoxIngersollRossProcess: GammaDistribution[2 "
+          "theta mu/sigma^2, sigma^2/(2 theta)]; TelegraphProcess: 2 x - 1 with x ~ BernoulliDistribution[1/2]; "
+          "Bernoulli, white noise, fractional Gaussian noise and weakly stationary ARMA-type processes: their slice; "
+          "finite Markov processes: p0 times the Cesaro limit of the transition matrix, as "
+          "EmpiricalDistribution[probabilities -> Range[n]] (exact linear algebra); M/M/c/k queues: the stationary "
+          "system size (GeometricDistribution[1 - rho] for M/M/1, EmpiricalDistribution for finite capacity). "
+          "Processes without a stationary distribution raise ValueError; others NotImplementedError. "
+          "Check: exact; self-check (pi.m == pi for Markov chains, else ArithmeticError); reference in tests.")
+def _statdist(proc: Expr) -> Expr:
+    fname = "StationaryDistribution"
+    pr = proc_of(proc, fname)
+    if isinstance(pr, OU):
+        m, s, th = pr.p[:3]
+        return _dist("NormalDistribution", m, s / sp.sqrt(2 * th))
+    if isinstance(pr, CIR):
+        m, s, th, x0 = pr.p
+        return _dist("GammaDistribution", 2 * th * m / s ** 2, s ** 2 / (2 * th))
+    if isinstance(pr, Telegraph):
+        x = Symbol("x")
+        return Expr("TransformedDistribution", Expr("Plus", -1, Expr("Times", 2, x)),
+                    Expr("Distributed", x, _dist("BernoulliDistribution", sp.Rational(1, 2))))
+    if isinstance(pr, (Bernoulli, WhiteNoise, FGN)):
+        return pr.slice(sp.Integer(1))
+    if isinstance(pr, ARMA):
+        if pr.stationary() is False:
+            raise ValueError(f"{fname}: {pr.name} is not weakly stationary")
+        return pr.slice(sp.Integer(1))
+    if isinstance(pr, Markov):
+        for v in pr.p:
+            if not _num(v):
+                raise Unevaluated()
+        d = pr.stationary_dist()
+        pi = sp.Matrix([[S(w) for w in d.args[0].args[0].args]])
+        _, rec, _ = pr.classes()
+        if len(rec) == 1:
+            chk = pi * pr.m - pi if pr.dtime else pi * pr.q
+            if any((abs(_f(c)) > 1e-9) if _inexact(c) else sp.simplify(c) != 0 for c in chk):
+                raise ArithmeticError(f"{fname}: result failed verification")
+        return d
+    if isinstance(pr, Queue):
+        return pr.stationary_dist(fname)
+    if isinstance(pr, GARCH):
+        raise NotImplementedError(f"{fname}: the stationary distribution of {pr.name} has no closed form")
+    if isinstance(pr, (Ito, Transformed, Renewal)):
+        raise NotImplementedError(f"{fname}: not supported for {pr.name}")
+    raise ValueError(f"{fname}: {pr.name} has no stationary distribution")
+
+
+# ─────────────────────────── Markov process properties ───────────────────────────
+
+_MPP = ["InitialProbabilities", "TransitionMatrix", "TransitionRateMatrix", "TransitionRateVector",
+        "HoldingTimeMean", "HoldingTimeVariance", "CommunicatingClasses", "RecurrentClasses", "TransientClasses",
+        "AbsorbingClasses", "PeriodicClasses", "Periods", "Irreducible", "Aperiodic", "Primitive",
+        "LimitTransitionMatrix", "ReachabilityProbability", "Reversible", "TransientVisitMean"]
+
+
+def _markov_prop(pr, prop, fname):
+    n = pr.n
+    if prop == "InitialProbabilities":
+        return R(list(pr.p0))
+    if prop == "TransitionMatrix":
+        return R(pr.m.tolist())
+    if prop in ("TransitionRateMatrix", "TransitionRateVector"):
+        if pr.dtime:
+            return Expr("Missing", "NotApplicable")
+        return R(pr.q.tolist()) if prop == "TransitionRateMatrix" else R(list(pr.mu))
+    if prop in ("HoldingTimeMean", "HoldingTimeVariance"):
+        out = []
+        for i in range(n):
+            stay = pr.m[i, i] if pr.dtime else sp.Integer(0)
+            rate = sp.Integer(1) if pr.dtime else pr.mu[i]
+            if (sp.simplify(stay - 1) == 0) or rate == 0:
+                out.append(INF)
+                continue
+            if pr.dtime:
+                v = 1 / (1 - stay) if prop == "HoldingTimeMean" else stay / (1 - stay) ** 2
+            else:
+                v = 1 / rate if prop == "HoldingTimeMean" else 1 / rate ** 2
+            out.append(R(sp.simplify(v)))
+        return L(*out)
+    cls, rec, reach = pr.classes()
+    one = lambda c: L(*(i + 1 for i in sorted(c)))  # noqa: E731
+    order = lambda cs: sorted(cs, key=min)  # noqa: E731
+    if prop == "CommunicatingClasses":
+        return L(*(one(c) for c in order(cls)))
+    if prop == "RecurrentClasses":
+        return L(*(one(c) for c in order(rec)))
+    if prop == "TransientClasses":
+        return L(*(one(c) for c in order([c for c in cls if c not in rec])))
+    if prop == "AbsorbingClasses":
+        return L(*(one(c) for c in order([c for c in rec if len(c) == 1])))
+    per = [(c, pr.period(c)) for c in order(cls)]
+    if prop == "PeriodicClasses":
+        return L(*(one(c) for c, p in per if p > 1 and c in rec))
+    if prop == "Periods":
+        return L(*(p for c, p in per if p > 1 and c in rec))
+    if prop == "Irreducible":
+        return len(cls) == 1
+    if prop == "Aperiodic":
+        return all(p == 1 for c, p in per if c in rec)
+    if prop == "Primitive":
+        return len(cls) == 1 and per[0][1] == 1
+    if prop == "LimitTransitionMatrix":
+        return R(pr.limit_matrix().tolist())
+    if prop == "ReachabilityProbability":
+        # probability of ever reaching each state from the initial distribution
+        out = []
+        for j in range(n):
+            h = _hit_prob(pr, j)
+            out.append(sp.simplify(sum(pr.p0[i] * h[i] for i in range(n))))
+        return R(out)
+    if prop == "Reversible":
+        if len(rec) != 1 or len(cls) != 1:
+            return False
+        pi = pr.class_stationary(rec[0])
+        g = pr.graph_matrix()
+        for i in range(n):
+            for j in range(n):
+                d = pi[i] * g[i, j] - pi[j] * g[j, i]
+                if (abs(_f(d)) > 1e-12) if _inexact(d) else sp.simplify(d) != 0:
+                    return False
+        return True
+    if prop == "TransientVisitMean":
+        recset = {i for c in rec for i in c}
+        tr = [i for i in range(n) if i not in recset]
+        if not tr:
+            return L()
+        Q = sp.Matrix(len(tr), len(tr), lambda a, b: pr.m[tr[a], tr[b]])
+        N = (sp.eye(len(tr)) - Q).inv()
+        a0 = sp.Matrix([[pr.p0[i] for i in tr]])
+        v = a0 * N
+        return R([sp.simplify(x) for x in v])
+    raise ValueError(f"{fname}: unknown property {prop!r}")
+
+
+def _hit_prob(pr, j):
+    """h[i] = probability of ever visiting state j starting from i (time 0 counts)"""
+    n = pr.n
+    _, _, reach = pr.classes()
+    can = [reach[i][j] for i in range(n)]
+    unk = [i for i in range(n) if i != j and can[i]]
+    h = [sp.Integer(0)] * n
+    h[j] = sp.Integer(1)
+    if unk:
+        A = sp.eye(len(unk)) - sp.Matrix(len(unk), len(unk), lambda a, b: pr.m[unk[a], unk[b]])
+        b = sp.Matrix([pr.m[i, j] for i in unk])
+        sol = A.solve(b)
+        for a, i in enumerate(unk):
+            h[i] = sp.simplify(sol[a])
+    return h
+
+
+@fn("MarkovProcessProperties", area=AREA, status="added",
+    notes="MarkovProcessProperties[mproc, prop] for DiscreteMarkovProcess and ContinuousMarkovProcess with numeric "
+          "matrices: \"InitialProbabilities\", \"TransitionMatrix\" (embedded chain for continuous time), "
+          "\"TransitionRateMatrix\", \"TransitionRateVector\", \"HoldingTimeMean\", \"HoldingTimeVariance\" (Infinity "
+          "for absorbing states), \"CommunicatingClasses\", \"RecurrentClasses\", \"TransientClasses\", "
+          "\"AbsorbingClasses\", \"PeriodicClasses\", \"Periods\", \"Irreducible\", \"Aperiodic\", \"Primitive\", "
+          "\"LimitTransitionMatrix\" (Cesaro limit), \"ReachabilityProbability\", \"Reversible\", "
+          "\"TransientVisitMean\"; MarkovProcessProperties[mproc, \"Properties\"] lists them and "
+          "MarkovProcessProperties[mproc] gives an association of the structural properties (Wolfram shows a "
+          "summary table). Classes are listed by their smallest state. Unknown properties raise ValueError; "
+          "\"SummaryTable\" and \"Description\" raise NotImplementedError. Check: exact; reference (Wolfram "
+          "documentation examples) in tests.")
+def _mpp(proc: Expr, prop: String = None, extra: String = None) -> Expr:
+    fname = "MarkovProcessProperties"
+    pr = proc_of(proc, fname)
+    if not isinstance(pr, Markov):
+        raise TypeError(f"{fname}: {pr.name} is not a finite Markov process")
+    for v in pr.p:
+        if not _num(v):
+            raise Unevaluated()
+    if extra is not None:
+        raise NotImplementedError(f"{fname}: property descriptions are not supported")
+    if prop is None:
+        return Expr("Association", *(rule(k, _markov_prop(pr, k, fname)) for k in
+                                     ("CommunicatingClasses", "RecurrentClasses", "TransientClasses",
+                                      "AbsorbingClasses", "PeriodicClasses", "Periods", "Irreducible", "Aperiodic",
+                                      "Primitive")))
+    if prop == "Properties":
+        return L(*_MPP)
+    if prop == "SummaryTable":
+        raise NotImplementedError(f"{fname}: \"SummaryTable\" is not supported")
+    if not isinstance(prop, str):
+        raise TypeError(f"{fname}: the property must be a string")
+    return _markov_prop(pr, prop, fname)
+
+
+# ─────────────────────────── first passage times ───────────────────────────
+
+def _fpt_parts(d, fname):
+    if len(d.args) != 2:
+        raise ValueError(f"{fname}: FirstPassageTimeDistribution expects [mproc, f]")
+    pr = proc_of(d.args[0], fname)
+    if not isinstance(pr, Markov):
+        raise TypeError(f"{fname}: FirstPassageTimeDistribution needs a finite Markov process")
+    for v in pr.p:
+        if not _num(v):
+            raise Unevaluated()
+    f = d.args[1]
+    tgt = [f] if not is_list(f) else list(f.args)
+    if not tgt or not all(isinstance(s, int) and not isinstance(s, bool) and 1 <= s <= pr.n for s in tgt):
+        raise ValueError(f"{fname}: the final states must be states 1..{pr.n}")
+    tset = {s - 1 for s in tgt}
+    if any(pr.p0[i] != 0 for i in tset):
+        raise NotImplementedError(f"{fname}: the initial distribution must not charge the final states")
+    _, _, reach = pr.classes()
+    start = [i for i in range(pr.n) if pr.p0[i] != 0]
+    # states reachable from the start without entering the targets
+    R_ = set(start)
+    frontier = list(start)
+    g = pr.graph_matrix()
+    while frontier:
+        i = frontier.pop()
+        for j in range(pr.n):
+            if j not in tset and j not in R_ and i != j and g[i, j] != 0:
+                R_.add(j)
+                frontier.append(j)
+    idx = sorted(R_)
+    if pr.dtime:
+        T = sp.Matrix(len(idx), len(idx), lambda a, b: pr.m[idx[a], idx[b]])
+    else:
+        T = sp.Matrix(len(idx), len(idx), lambda a, b: pr.q[idx[a], idx[b]])
+    alpha = sp.Matrix([[pr.p0[i] for i in idx]])
+    M = sp.eye(len(idx)) - T if pr.dtime else -T
+    if M.det() == 0:
+        raise NotImplementedError(f"{fname}: the final states are not reached with probability 1")
+    return pr, T, alpha, M
+
+
+def _fpt_impl(which):
+    def impl(d: Expr, *rest: Expr) -> Expr:
+        pr, T, alpha, M = _fpt_parts(d, which)
+        one = sp.ones(T.rows, 1)
+        N = M.inv()
+        if which == "Mean":
+            v = (alpha * N * one)[0]
+        elif which in ("Variance", "StandardDeviation"):
+            m1 = (alpha * N * one)[0]
+            m2 = (alpha * (sp.eye(T.rows) + T) * N * N * one)[0] if pr.dtime else 2 * (alpha * N * N * one)[0]
+            v = m2 - m1 ** 2
+            if which == "StandardDeviation":
+                v = sp.sqrt(v)
+        else:
+            if len(rest) != 1:
+                raise ValueError(f"{which}: expected {which}[dist, x]")
+            x = _p(rest[0], which, "x")
+            if not _num(x):
+                if pr.dtime or not (isinstance(x, sp.Symbol) and len(x.free_symbols) == 1):
+                    raise Unevaluated()
+                E = (T * x).exp()
+                v = (alpha * E * (-T) * one)[0] if which == "PDF" else 1 - (alpha * E * one)[0]
+                return _out(sp.Piecewise((sp.simplify(v), x >= 0), (0, True)), d, *rest)
+            if pr.dtime:
+                if not x.is_Integer:
+                    return sp.Integer(0) if which == "PDF" else _fpt_impl("CDF")(d, R(sp.floor(x)))
+                k = int(x)
+                if k < 1:
+                    return sp.Integer(0)
+                if which == "PDF":
+                    t0 = (sp.eye(T.rows) - T) * one
+                    v = (alpha * T ** (k - 1) * t0)[0]
+                else:
+                    v = 1 - (alpha * T ** k * one)[0]
+            else:
+                if x < 0:
+                    return sp.Integer(0)
+                E = (T * x).exp()
+                v = (alpha * E * (-T) * one)[0] if which == "PDF" else 1 - (alpha * E * one)[0]
+        return _out(sp.simplify(v) if not _inexact(v) else v, d, *rest)
+    return impl
+
+
+@fn("FirstPassageTimeDistribution", area=AREA, status="added",
+    notes="FirstPassageTimeDistribution[mproc, f]: the (phase-type) distribution of the first time a finite Markov "
+          "process enters the state f or one of the states f = {f1, ...}; inert, with Mean, Variance, "
+          "StandardDeviation, PDF and CDF in closed form (fundamental-matrix formulas, exact); initial "
+          "probability on f, or f not reached with probability 1, raise NotImplementedError. "
+          "Check: exact; reference (Wolfram documentation mean first passage times, hand-computed values) in tests.")
+def _fptd(proc: Expr, f: Integer | ListOf[Integer]) -> Expr:
+    _fpt_parts(Expr("FirstPassageTimeDistribution", proc, f), "FirstPassageTimeDistribution")
+    raise Unevaluated()
+
+
+def _fpt_first(args):
+    return bool(args) and isinstance(args[0], Expr) and args[0].head == "FirstPassageTimeDistribution"
+
+
+for _w in ("Mean", "Variance", "StandardDeviation", "PDF", "CDF"):
+    W.extend(_w, _fpt_impl(_w), _fpt_first, f"{_w}[FirstPassageTimeDistribution[...]] (phase-type formulas)")
+
+
+# ─────────────────────────── queue properties ───────────────────────────
+
+_QP = ["ArrivalRate", "ServiceRate", "ArrivalDistribution", "ServiceDistribution", "ServiceChannels",
+       "SystemCapacity", "InitialState", "StationarySystem", "UtilizationFactor", "Throughput", "MeanSystemSize",
+       "MeanQueueSize", "MeanSystemTime", "MeanQueueTime"]
+
+
+def _queue_prop(q, prop, fname):
+    if prop == "ArrivalRate":
+        return R(q.lam) if q.lam is not None else _ev(Expr("Power", Expr("Mean", q.adist), -1))
+    if prop == "ServiceRate":
+        return R(q.mu) if q.mu is not None else _ev(Expr("Power", Expr("Mean", q.sdist), -1))
+    if prop == "ArrivalDistribution":
+        return _dist("ExponentialDistribution", q.lam) if q.lam is not None else q.adist
+    if prop == "ServiceDistribution":
+        return _dist("ExponentialDistribution", q.mu) if q.mu is not None else q.sdist
+    if prop == "ServiceChannels":
+        return q.c
+    if prop == "SystemCapacity":
+        return q.k
+    if prop == "InitialState":
+        return q.x0
+    lam = S(_queue_prop(q, "ArrivalRate", fname))
+    mu = S(_queue_prop(q, "ServiceRate", fname))
+    if prop == "StationarySystem":
+        if q.finite:
+            return True
+        r = lam / (q.c * mu)
+        if not _num(r):
+            raise Unevaluated()
+        return bool(r < 1)
+    if prop not in _QP:
+        if prop in ("QueueNotation", "QueueDiagram", "SummaryTable", "NetworkType", "NodeCount", "SelectedNode",
+                    "DataSource"):
+            raise NotImplementedError(f"{fname}: the property {prop!r} is not supported")
+        raise ValueError(f"{fname}: unknown property {prop!r}")
+    if q.markovian():
+        m = q.measures(fname)
+    elif q.adist is None and q.c == 1 and not q.finite:
+        # M/G/1: Pollaczek-Khinchine
+        sd = W.dist_of(q.sdist, fname)
+        es, es2 = sd.mean(), W.raw_moment(sd, 2)
+        rho = q.lam * es
+        if _num(rho) and not rho < 1:
+            m = None
+        else:
+            Lq = q.lam ** 2 * es2 / (2 * (1 - rho))
+            Wq = Lq / q.lam
+            m = {"MeanQueueSize": Lq, "MeanQueueTime": Wq, "MeanSystemTime": Wq + es,
+                 "MeanSystemSize": q.lam * (Wq + es), "Throughput": q.lam, "UtilizationFactor": rho}
+            m = {k: sp.simplify(v) for k, v in m.items()}
+    else:
+        raise NotImplementedError(f"{fname}: stationary measures are only supported for M/M/c/k and M/G/1 queues")
+    if m is None:
+        raise ValueError(f"{fname}: the queue does not reach a steady state, so {prop!r} is not available")
+    return R(m[prop])
+
+
+@fn("QueueProperties", area=AREA, status="added",
+    notes="QueueProperties[qproc, prop] for QueueingProcess: \"ArrivalRate\", \"ServiceRate\", \"ArrivalDistribution\", "
+          "\"ServiceDistribution\", \"ServiceChannels\", \"SystemCapacity\", \"InitialState\", \"StationarySystem\" and "
+          "the steady-state measures \"UtilizationFactor\" (mean busy servers / c), \"Throughput\", "
+          "\"MeanSystemSize\", \"MeanQueueSize\", \"MeanSystemTime\", \"MeanQueueTime\" (exact M/M/c/k formulas, "
+          "Pollaczek-Khinchine for M/G/1); QueueProperties[qproc] gives an association (Wolfram shows a table); "
+          "QueueProperties[qproc, \"Properties\"] the list. Non-stationary queues raise ValueError for the "
+          "steady-state measures; other queue types, QueueingNetworkProcess, data input and diagram/notation "
+          "properties raise NotImplementedError. Check: exact; reference (Little's law L = lambda W, textbook "
+          "M/M/1 and M/M/c values) in tests.")
+def _qprops(q: Expr, prop: String = None, extra: String = None) -> Expr:
+    fname = "QueueProperties"
+    if not (isinstance(q, Expr) and q.head == "QueueingProcess"):
+        if isinstance(q, Expr) and q.head == "QueueingNetworkProcess":
+            raise NotImplementedError(f"{fname}: queueing networks are not supported")
+        if isinstance(q, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: {q} is not a queueing process")
+    pr = proc_of(q, fname)
+    if extra is not None:
+        raise NotImplementedError(f"{fname}: property descriptions are not supported")
+    if prop is None:
+        out = []
+        for k in _QP:
+            try:
+                out.append(rule(k, _queue_prop(pr, k, fname)))
+            except (ValueError, NotImplementedError):
+                out.append(rule(k, Expr("Missing", "NotAvailable")))
+        return Expr("Association", *out)
+    if prop == "Properties":
+        return L(*_QP)
+    if not isinstance(prop, str):
+        raise TypeError(f"{fname}: the property must be a string")
+    return _queue_prop(pr, prop, fname)
+
+
+# ─────────────────────────── simulation ───────────────────────────
+
+_MAX_POINTS = 10 ** 6
+
+
+def _sim_times(pr, spec, fname):
+    """(times as SymPy values, uses_jumps, (tmin, tmax))"""
+    if not is_list(spec) or not 1 <= len(spec.args) <= 3:
+        raise ValueError(f"{fname}: the time specification must be {{tmax}}, {{tmin, tmax}} or {{tmin, tmax, dt}}")
+    vals = [_p(v, fname, "time") for v in spec.args]
+    if not all(_num(v) for v in vals):
+        raise Unevaluated()
+    if not all(v.is_real for v in vals):
+        raise ValueError(f"{fname}: times must be real")
+    if len(vals) == 1:
+        tmin = pr.t0 if not pr.dtime else (pr.t0 if pr.t0 is not None else sp.Integer(0))
+        tmax = vals[0]
+    else:
+        tmin, tmax = vals[0], vals[1]
+    if tmax < tmin:
+        raise ValueError(f"{fname}: tmax must be at least tmin")
+    pr.check_time(tmin, fname)
+    pr.check_time(tmax, fname)
+    if pr.dtime:
+        if len(vals) == 3:
+            dt = vals[2]
+            if not (dt.is_Integer and dt > 0):
+                raise ValueError(f"{fname}: discrete-time processes need a positive integer step, not {dt}")
+        else:
+            dt = sp.Integer(1)
+        n = int((tmax - tmin) // dt) + 1
+        if n > _MAX_POINTS:
+            raise NotImplementedError(f"{fname}: more than {_MAX_POINTS} time steps are not supported")
+        return [tmin + k * dt for k in range(n)], False, (tmin, tmax)
+    if len(vals) < 3:
+        if pr.jump:
+            return None, True, (tmin, tmax)
+        raise ValueError(f"{fname}: {pr.name} is a continuous-time process; give {{tmin, tmax, dt}}")
+    dt = vals[2]
+    if not dt > 0:
+        raise ValueError(f"{fname}: the time step must be positive")
+    n = int(sp.floor((tmax - tmin) / dt + sp.Rational(1, 10 ** 9))) + 1
+    if n > _MAX_POINTS:
+        raise NotImplementedError(f"{fname}: more than {_MAX_POINTS} time steps are not supported")
+    return [tmin + k * dt for k in range(n)], False, (tmin, tmax)
+
+
+def _val_out(v):
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        return sp.Float(v)
+    import numpy as np
+    if isinstance(v, np.integer):
+        return int(v)
+    if isinstance(v, np.floating):
+        return sp.Float(float(v))
+    return v
+
+
+def _one_path(pr, rng, times, jumps, rng_ab, fname):
+    if jumps:
+        t0, t1 = rng_ab
+        ev = pr.jumps(rng, _f(t0), _f(t1))
+        inexact = _inexact(t0, t1)
+        out = []
+        for k, (t, v) in enumerate(ev):
+            tt = (t0 if k == 0 else sp.Float(t))
+            out.append((R(tt), R(_val_out(v)) if not isinstance(_val_out(v), Expr) else v))
+        if not inexact or True:
+            last_v = out[-1][1]
+            if len(ev) == 1 or ev[-1][0] < _f(t1):
+                out.append((R(t1), last_v))
+        return out
+    ft = [int(t) if pr.dtime else _f(t) for t in times]
+    vals = pr.path(rng, ft)
+    res = []
+    for t, v in zip(times, vals):
+        vv = _val_out(v)
+        res.append((R(t), vv if isinstance(vv, Expr) else R(vv)))
+    return res
+
+
+@fn("RandomFunction", area=AREA, status="added",
+    notes="RandomFunction[proc, {tmax}], RandomFunction[proc, {tmin, tmax}] (jump processes: exact event times), "
+          "RandomFunction[proc, {tmin, tmax, dt}] and RandomFunction[proc, spec, n] simulate paths of a random "
+          "process and return TemporalData[{path, ...}] (paths of {t, x} pairs; jump-process paths carry "
+          "ResamplingMethod -> {\"Interpolation\", InterpolationOrder -> 0}). Simulation uses the exact transition "
+          "law (Gaussian increments, exact Cholesky/Durbin-Levinson sampling for fractional and ARMA processes, "
+          "noncentral chi-square for CIR, exponential holding times for Markov chains and M/M/c queues, event "
+          "simulation for general queues and renewal processes) except Ito/Stratonovich processes, which use "
+          "Euler-Maruyama on the grid dt. Reproducible with SeedRandom (the random stream differs from Wolfram's). "
+          "Discrete-time processes reject non-integer steps; continuous processes without jumps require dt. "
+          "Symbolic parameters stay unevaluated; WorkingPrecision other than Automatic and Method raise "
+          "NotImplementedError. Check: statistical (sample means and variances of many paths against Mean and "
+          "Variance of the slice) in tests.")
+def _randomfunction(proc: Expr, spec: ListOf[Real] = None, n: Integer = None, *opts: Expr) -> Expr:
+    fname = "RandomFunction"
+    from .wl_processes_ts import make_td
+    for o in opts:
+        if isinstance(o, Expr) and o.head in ("Rule", "RuleDelayed") and isinstance(o.args[0], Symbol):
+            if o.args[0].name == "WorkingPrecision" and o.args[1] != Symbol("Automatic"):
+                raise NotImplementedError(f"{fname}: WorkingPrecision is not supported")
+            if o.args[0].name == "Method":
+                raise NotImplementedError(f"{fname}: the Method option is not supported")
+            continue
+        raise ValueError(f"{fname}: unexpected argument {o}")
+    if isinstance(n, Expr) and n.head in ("Rule", "RuleDelayed"):
+        return _randomfunction(proc, spec, None, n, *opts)
+    pr = proc_of(proc, fname)
+    if spec is None:
+        raise ValueError(f"{fname}: a time specification {{tmin, tmax}} or {{tmin, tmax, dt}} is required")
+    if n is None:
+        count = 1
+    else:
+        if isinstance(n, Symbol):
+            raise Unevaluated()
+        if not isinstance(n, int) or isinstance(n, bool):
+            raise TypeError(f"{fname}: the number of paths must be a positive integer")
+        if n < 1:
+            raise ValueError(f"{fname}: the number of paths must be positive")
+        count = n
+    if not pr.numeric():
+        raise Unevaluated()
+    times, jumps, ab = _sim_times(pr, spec, fname)
+    if times is not None and len(times) * count > _MAX_POINTS:
+        raise NotImplementedError(f"{fname}: more than {_MAX_POINTS} simulated values are not supported")
+    rng = _np_rng()
+    paths = [_one_path(pr, rng, times, jumps, ab, fname) for _ in range(count)]
+    o = {}
+    if pr.jump and not pr.dtime:
+        o["ResamplingMethod"] = L("Interpolation", rule(Symbol("InterpolationOrder"), 0))
+    return make_td(paths, o)
+
+
+# ─────────────────────────── forecasting ───────────────────────────
+
+def _series_data(data, fname):
+    """list of paths [(t, x) sympy pairs] from a list, list of pairs, TimeSeries or TemporalData"""
+    from . import wl_processes_ts as T
+    if is_list(data):
+        if not data.args:
+            raise ValueError(f"{fname}: the data must not be empty")
+        if all(is_list(p) and len(p.args) == 2 for p in data.args):
+            path = [(_p(p.args[0], fname, "time"), _p(p.args[1], fname, "value")) for p in data.args]
+        else:
+            path = [(sp.Integer(i), _p(x, fname, "value")) for i, x in enumerate(data.args)]
+        paths = [path]
+    elif isinstance(data, Expr) and data.head == "TemporalData":
+        paths = [[(sp.sympify(S(t)), sp.sympify(S(v))) for t, v in p] for p in T.td_paths(data)[0]]
+    elif isinstance(data, Expr) and data.head in ("TimeSeries", "EventSeries"):
+        ser = T.series_of(data, fname)
+        paths = [[(sp.sympify(S(t)), sp.sympify(S(v))) for t, v in ser[0]]]
+    elif isinstance(data, Symbol):
+        raise Unevaluated()
+    else:
+        raise TypeError(f"{fname}: the data must be a list of values, a list of {{t, x}} pairs, a TimeSeries or "
+                        "TemporalData")
+    for p in paths:
+        for t, x in p:
+            if not (_num(t) and _num(x)):
+                raise Unevaluated()
+            if not (t.is_real and x.is_real):
+                raise ValueError(f"{fname}: data must be real")
+    return paths
+
+
+def _steps(spec, fname):
+    if spec is None:
+        return [1], True
+    if isinstance(spec, int) and not isinstance(spec, bool):
+        if spec < 1:
+            raise ValueError(f"{fname}: the step must be a positive integer")
+        return [spec], True
+    if is_list(spec):
+        a = spec.args
+        if len(a) == 1 and is_list(a[0]):
+            ks = list(a[0].args)
+        elif len(a) == 1:
+            ks = list(range(1, a[0] + 1)) if isinstance(a[0], int) else None
+        elif len(a) == 2 and all(isinstance(x, int) for x in a):
+            ks = list(range(a[0], a[1] + 1))
+        else:
+            ks = None
+        if ks is None or not ks or not all(isinstance(k, int) and not isinstance(k, bool) and k >= 1 for k in ks):
+            raise ValueError(f"{fname}: steps must be positive integers given as k, {{kmax}}, {{kmin, kmax}} or "
+                             "{{{k1, k2, ...}}}")
+        return ks, False
+    if isinstance(spec, Symbol):
+        raise Unevaluated()
+    raise TypeError(f"{fname}: invalid forecast specification {spec}")
+
+
+def _arma_predict(pr, xs, ks, exact):
+    """E[x_{n-1+k} | x_0..x_{n-1}] for a weakly stationary (or pure AR) ARMA pr"""
+    n = len(xs)
+    p = len(pr.phi)
+    pure_ar = not pr.theta and pr.frac is None
+    if pure_ar and n >= p:
+        hist = list(xs)
+        out = {}
+        for k in range(1, max(ks) + 1):
+            nxt = pr.c + sum(pr.phi[i] * hist[-1 - i] for i in range(p))
+            hist.append(sp.nsimplify(nxt) if exact else sp.Float(_f(nxt)))
+            out[k] = hist[-1]
+        return [out[k] for k in ks]
+    if pr.stationary() is not True:
+        raise NotImplementedError("TimeSeriesForecast: forecasting non-stationary ARMA processes with an MA part "
+                                  "is not supported")
+    mu = pr.mean(sp.Integer(0))
+    K = max(ks)
+    if exact and n <= 40:
+        g = [pr.acvf(h) for h in range(n + K)]
+        G = sp.Matrix(n, n, lambda i, j: g[abs(i - j)])
+        w = G.LUsolve(sp.Matrix([x - mu for x in xs]))
+        return [sp.simplify(mu + sum(g[n - 1 + k - i] * w[i] for i in range(n))) for k in ks]
+    import numpy as np
+    g = np.array([_f(pr.acvf(h)) for h in range(n + K)])
+    idx = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
+    w = np.linalg.solve(g[idx], np.array([_f(x - mu) for x in xs]))
+    m = _f(mu)
+    return [sp.Float(m + float(sum(g[n - 1 + k - i] * w[i] for i in range(n)))) for k in ks]
+
+
+@fn("TimeSeriesForecast", area=AREA, status="added",
+    notes="TimeSeriesForecast[tproc, data, spec] for ARProcess, MAProcess, ARMAProcess, ARIMAProcess, SARMAProcess, "
+          "SARIMAProcess, ARCHProcess and GARCHProcess with numeric parameters: the conditional expectation "
+          "E[x[m + k] | x[0] = x0, ..., x[m] = xm]. Weakly stationary processes use the exact Gaussian (covariance) "
+          "predictor (exact arithmetic for exact data of length <= 40, machine numbers otherwise); pure AR processes "
+          "with at least p observations use the AR recursion; (S)ARIMA processes difference the data, forecast the "
+          "stationary part and integrate; (G)ARCH forecasts are 0. spec: k (default 1, gives the value), {kmax}, "
+          "{kmin, kmax} or {{k1, ...}} (give TemporalData with the forecasts at times m + k). Data: a list of "
+          "values (times 0, 1, ...), {t, x} pairs with unit spacing, a TimeSeries or TemporalData (first path). "
+          "Mean squared errors (MetaInformation), TimeSeriesModel input and the Method option raise "
+          "NotImplementedError. Check: exact; reference (the AR recursion, hand-computed MA(1) predictor) in tests.")
+def _tsforecast(proc: Expr, data: Expr, spec: Expr = None, *opts: Expr) -> Expr:
+    fname = "TimeSeriesForecast"
+    from .wl_processes_ts import make_td
+    if opts:
+        raise NotImplementedError(f"{fname}: options are not supported")
+    if isinstance(proc, Expr) and proc.head == "TimeSeriesModel":
+        raise NotImplementedError(f"{fname}: TimeSeriesModel input is not supported")
+    pr = proc_of(proc, fname)
+    if not isinstance(pr, (ARMA, GARCH)):
+        raise TypeError(f"{fname}: {pr.name} is not a time series process")
+    ks, scalar = _steps(spec, fname)
+    path = _series_data(data, fname)[0]
+    ts = [t for t, _ in path]
+    for a, b in zip(ts, ts[1:]):
+        if sp.simplify(b - a - 1) != 0:
+            raise NotImplementedError(f"{fname}: data must be regularly spaced with time step 1")
+    if not pr.numeric():
+        raise Unevaluated()
+    xs = [x for _, x in path]
+    exact = not _inexact(*xs, *pr.flat())
+    if isinstance(pr, GARCH):
+        preds = [sp.Integer(0) if exact else sp.Float(0)] * len(ks)
+    else:
+        dpoly = pr.diff
+        if len(dpoly) > 1:
+            d = len(dpoly) - 1
+            if len(xs) <= d:
+                raise ValueError(f"{fname}: need more than {d} observations to difference the data")
+            ws = [sum(dpoly[j] * xs[i - j] for j in range(d + 1)) for i in range(d, len(xs))]
+            sub = pr.stationary_part()
+            K = max(ks)
+            wf = _arma_predict(sub, ws, list(range(1, K + 1)), exact)
+            hist = list(xs)
+            for k in range(K):
+                # (sum_j dpoly[j] B^j) x = w  =>  x_t = (w_t - sum_{j>=1} dpoly[j] x_{t-j}) / dpoly[0]
+                hist.append((wf[k] - sum(dpoly[j] * hist[-j] for j in range(1, d + 1))) / dpoly[0])
+            preds = [sp.simplify(hist[len(xs) - 1 + k]) if exact else sp.Float(_f(hist[len(xs) - 1 + k]))
+                     for k in ks]
+        else:
+            preds = _arma_predict(pr, xs, ks, exact)
+    last = ts[-1]
+    if scalar:
+        return R(preds[0])
+    return make_td([[(R(last + k), R(v)) for k, v in zip(ks, preds)]])
