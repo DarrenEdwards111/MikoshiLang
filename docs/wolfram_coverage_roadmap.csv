@@ -236,14 +236,14 @@ $VoiceStyles,Machine Learning & LLMs,infeasible,,ML models / LLM services,1,Spee
 $WolframDocumentsDirectory,External Interfaces & Connections,missing,3,,0,DirectoriesAndDirectoryOperations
 $WolframID,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,SystemInformation CloudExecutionMetadata HTTPRequestsAndResponses
 $WolframUUID,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,SystemInformation CloudExecutionMetadata
-AASTriangle,Visualization & Graphics,missing,3,,0,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
+AASTriangle,Visualization & Graphics,implemented,3,,0,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
 APIFunction,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,3,ExternalOperations AutomatedReports InterpretingStrings WebOperations
 ARCHProcess,Higher Mathematical Computation,missing,2,,0,ScientificModels TimeSeriesProcesses
 ARIMAProcess,Higher Mathematical Computation,missing,2,,0,TimeSeriesProcesses CreatingAndImportingSignals
 ARMAProcess,Higher Mathematical Computation,missing,2,,0,ProbabilityAndStatistics RandomProcesses TimeSeries ScientificModels
 ARProcess,Higher Mathematical Computation,missing,2,,0,MarkovProcesses TimeSeriesProcesses
 ARPublish,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
-ASATriangle,Visualization & Graphics,missing,3,,0,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
+ASATriangle,Visualization & Graphics,implemented,3,,0,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
 AbelianGroup,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
 Abort,Core Language & Structure,implemented,1,,0,RobustnessAndErrorHandling LoopingConstructs FlowControl
 AbortKernels,Core Language & Structure,missing,2,,0,ParallelComputing ParallelComputationSetupAndConfiguration
@@ -298,8 +298,8 @@ AdjustTimeSeriesForecast,Higher Mathematical Computation,missing,2,,0,TimeSeries
 AdjustmentBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookStructure
 AdjustmentBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 AdministrativeDivisionData,"Options, system variables & unclassified",infeasible,,curated data,0,
-AffineHalfSpace,Geometry,missing,2,,0,GeometricSpecialRegions
-AffineSpace,Geometry,missing,2,,0,GeometricSpecialRegions
+AffineHalfSpace,Geometry,implemented,2,,0,GeometricSpecialRegions
+AffineSpace,Geometry,implemented,2,,0,GeometricSpecialRegions
 AffineStateSpaceModel,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems NonlinearControlSystems
 AffineTransform,Visualization & Graphics,missing,3,,0,SymbolicGraphicsLanguage GeometricTransforms GraphicsTransformations ComputationalGeometry
 After,"Options, system variables & unclassified",implemented,3,,0,
@@ -362,11 +362,11 @@ AnchoredSearch,"Options, system variables & unclassified",implemented,3,,0,
 And,Core Language & Structure,implemented,1,,10,LanguageOverview ProceduralProgramming Syntax DiscreteMathematics
 AndersonDarlingTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests RandomVariables
 AngerJ,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
-AngleBisector,Geometry,missing,2,,0,PlaneGeometry SyntheticGeometry AnglesAndPolarCoordinates
+AngleBisector,Geometry,implemented,2,,0,PlaneGeometry SyntheticGeometry AnglesAndPolarCoordinates
 AngleBracket,Core Language & Structure,missing,2,,0,WolframLanguageSyntaxCharacters SymbolicNotationalForms
 AnglePath,Higher Mathematical Computation,implemented,1,,5,IteratedMapsAndFractals ComputationalSystemsAndDiscovery AnglesAndPolarCoordinates
 AnglePath3D,Higher Mathematical Computation,implemented,2,,1,IteratedMapsAndFractals ComputationalSystemsAndDiscovery AnglesAndPolarCoordinates
-AngleVector,Core Language & Structure,missing,2,,0,OperationsOnVectors AnglesAndPolarCoordinates TrigonometricFunctions
+AngleVector,Core Language & Structure,implemented,2,,0,OperationsOnVectors AnglesAndPolarCoordinates TrigonometricFunctions
 AngularGauge,Data Manipulation & Analysis,missing,2,,1,DataVisualization ChartingAndInformationVisualization DynamicVisualization Gauges
 Animate,Visualization & Graphics,infeasible,,front end / notebooks,0,ChartingAndInformationVisualization DynamicVisualization PresentationsWithTheWolframSystem InteractiveManipulation
 AnimatedImage,Images,infeasible,,front end / notebooks,0,CreatingAndImportingImages
@@ -386,7 +386,7 @@ AnnotationRules,Machine Learning & LLMs,implemented,3,,0,AudioAnalysis AudioRepr
 AnnotationValue,Graphs & Networks,implemented,2,,1,SpeechComputation GraphConstructionAndRepresentation MeshRegions GraphAnnotations
 Annuity,Financial Data & Computation,infeasible,,curated data,0,Finance ActuarialComputation
 AnnuityDue,Financial Data & Computation,infeasible,,curated data,0,Finance
-Annulus,Visualization & Graphics,missing,3,,0,GeometricSpecialRegions GraphicsObjects
+Annulus,Visualization & Graphics,implemented,3,,0,GeometricSpecialRegions GraphicsObjects
 AnomalyDetection,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,MachineLearning LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis UnsupervisedMachineLearning
 AnomalyDetector,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,SupervisedMachineLearning
 AnomalyDetectorFunction,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,UnsupervisedMachineLearning
@@ -467,7 +467,7 @@ ArrayRules,Data Manipulation & Analysis,implemented,2,,0,MatricesAndLinearAlgebr
 ArraySimplify,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays
 ArraySymbol,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays
 Arrays,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays SymbolicTensors
-Arrow,Visualization & Graphics,missing,2,,1,SymbolicGraphicsLanguage MapsAndCartography OperationsOnVectors CombiningGraphics
+Arrow,Visualization & Graphics,implemented,2,,1,SymbolicGraphicsLanguage MapsAndCartography OperationsOnVectors CombiningGraphics
 Arrowheads,Visualization & Graphics,implemented,3,,0,GraphicsObjects GraphicsDirectives
 Ask,User Interface Construction,infeasible,,front end / notebooks,0,CreatingFormsAndApps SettingUpUserInteractions
 AskAppend,User Interface Construction,infeasible,,front end / notebooks,0,CreatingFormsAndApps SettingUpUserInteractions
@@ -595,7 +595,7 @@ AudioTrackApply,Sound & Video,infeasible,,audio / video,0,VideoEditing
 AudioTrackSelection,Sound & Video,infeasible,,audio / video,0,VideoProcessing
 AudioTrim,Sound & Video,infeasible,,audio / video,0,SpeechComputation AudioProcessing AudioEditing
 AudioType,Machine Learning & LLMs,infeasible,,audio / video,0,AudioRepresentation
-AugmentedPolyhedron,Visualization & Graphics,missing,3,,0,Polyhedra
+AugmentedPolyhedron,Visualization & Graphics,implemented,3,,0,Polyhedra
 AugmentedSymmetricPolynomial,Data Manipulation & Analysis,missing,2,,0,StatisticalMomentsAndGeneratingFunctions
 Authentication,External Interfaces & Connections,missing,2,,1,LLMFunctions FileOperations WebOperations AccessingExternalServicesAndAPIs
 AuthenticationDialog,User Interface Construction,infeasible,,front end / notebooks,0,WebOperations URLManipulation CloudPermissionsControl SettingUpUserInteractions
@@ -626,16 +626,16 @@ Axis,"Options, system variables & unclassified",implemented,2,,1,
 AxisLabel,Visualization & Graphics,implemented,3,,0,GraphicsObjects
 AxisObject,Visualization & Graphics,implemented,3,,0,GraphicsObjects
 AxisStyle,Visualization & Graphics,implemented,3,,0,GraphicsObjects
-BSplineBasis,Data Manipulation & Analysis,missing,2,,0,Splines
-BSplineCurve,Data Manipulation & Analysis,missing,2,,0,GraphicsObjects Splines
-BSplineFunction,Data Manipulation & Analysis,missing,2,,0,CurveFittingAndApproximateFunctions Splines
-BSplineSurface,Data Manipulation & Analysis,missing,2,,0,GraphicsObjects Splines
+BSplineBasis,Data Manipulation & Analysis,implemented,2,,0,Splines
+BSplineCurve,Data Manipulation & Analysis,implemented,2,,0,GraphicsObjects Splines
+BSplineFunction,Data Manipulation & Analysis,implemented,2,,0,CurveFittingAndApproximateFunctions Splines
+BSplineSurface,Data Manipulation & Analysis,implemented,2,,0,GraphicsObjects Splines
 BabyMonsterGroupB,Higher Mathematical Computation,implemented,2,,0,NamedGroups
 Back,Visualization & Graphics,implemented,3,,0,3DGraphicsOptions
 Background,Notebook Documents & Presentation,implemented,1,,3,AutomatedReports GraphicsOptionsAndStyling RasterImageFormats NotebookFormattingAndStyling
 Backslash,"Options, system variables & unclassified",missing,3,,0,
 Backward,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
-Ball,Geometry,missing,2,,0,GeometricComputation PlaneGeometry SolidGeometry GeometricSpecialRegions
+Ball,Geometry,implemented,2,,0,GeometricComputation PlaneGeometry SolidGeometry GeometricSpecialRegions
 Band,Symbolic & Numeric Computation,implemented,2,,0,Tensors ConstructingMatrices
 BandpassFilter,Data Manipulation & Analysis,implemented,2,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters SignalFilteringAndFilterDesign
 BandstopFilter,Data Manipulation & Analysis,implemented,2,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters SignalFilteringAndFilterDesign
@@ -685,7 +685,7 @@ BernoulliB,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions
 BernoulliDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions UrnModelDistributions DiscreteUnivariateDistributions BoundedDomainDistributions
 BernoulliGraphDistribution,Graphs & Networks,implemented,2,,0,SocialNetworks RandomGraphs DerivedDistributions
 BernoulliProcess,Higher Mathematical Computation,missing,2,,0,ParametricRandomProcesses
-BernsteinBasis,Data Manipulation & Analysis,missing,2,,0,Splines
+BernsteinBasis,Data Manipulation & Analysis,implemented,2,,0,Splines
 BesagL,Data Manipulation & Analysis,missing,2,,0,DescriptiveStatistics SpatialPointCollections
 BesselFilterModel,Sound & Video,infeasible,,audio / video,0,SignalFilteringAndFilterDesign
 BesselI,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions ContinuedFractionsAndRationalApproximations BesselRelatedFunctions
@@ -703,9 +703,9 @@ BetaRegularized,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInS
 Between,Core Language & Structure,implemented,1,,0,KnowledgeRepresentationAndAccess TestingExpressions Inequalities
 BetweennessCentrality,Graphs & Networks,implemented,2,,0,GraphsAndNetworks GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
 BeveledPolyhedron,Visualization & Graphics,missing,3,,0,Polyhedra
-BezierCurve,Data Manipulation & Analysis,missing,2,,0,GraphicsObjects Splines
-BezierFunction,Data Manipulation & Analysis,missing,2,,0,CurveFittingAndApproximateFunctions Splines
-BezierSurface,Data Manipulation & Analysis,missing,2,,0,Splines
+BezierCurve,Data Manipulation & Analysis,implemented,2,,0,GraphicsObjects Splines
+BezierFunction,Data Manipulation & Analysis,implemented,2,,0,CurveFittingAndApproximateFunctions Splines
+BezierSurface,Data Manipulation & Analysis,implemented,2,,0,Splines
 BilateralFilter,Images,missing,3,,0,ImageProcessing ImageFilteringAndNeighborhoodProcessing ImageRestoration 3DImages
 BilateralHypergeometricPFQ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions HypergeometricFunctions
 BilateralLaplaceTransform,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms SignalTransforms
@@ -908,7 +908,7 @@ CanonicalGraph,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements
 CanonicalName,Core Language & Structure,infeasible,,depends on Entity framework / natural-language understanding (already infeasible),0,KnowledgeRepresentationAndAccess WDFWolframDataFramework
 CanonicalWarpingCorrespondence,Strings & Text,missing,2,,0,SequenceAlignmentAndComparison
 CanonicalWarpingDistance,Symbolic & Numeric Computation,missing,2,,0,DistanceAndSimilarityMeasures
-CanonicalizePolygon,Visualization & Graphics,missing,3,,0,Polygons
+CanonicalizePolygon,Visualization & Graphics,implemented,3,,0,Polygons
 CanonicalizePolyhedron,Visualization & Graphics,missing,3,,0,Polyhedra
 CanonicalizeRegion,Geometry,missing,2,,0,GeometricComputation
 CantorMesh,Higher Mathematical Computation,missing,2,,0,IteratedMapsAndFractals MeshRegions
@@ -918,7 +918,7 @@ Cap,"Options, system variables & unclassified",missing,3,,0,
 CapForm,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
 CapitalDifferentialD,"Options, system variables & unclassified",missing,3,,0,
 Capitalize,Core Language & Structure,implemented,1,,0,WorkingWithTemplates StringOperations TextConstruction
-CapsuleShape,Geometry,missing,2,,0,GeometricSpecialRegions
+CapsuleShape,Geometry,implemented,2,,0,GeometricSpecialRegions
 CaptureRunning,"Options, system variables & unclassified",missing,3,,0,
 CaputoD,"Options, system variables & unclassified",implemented,3,,0,
 CarlemanLinearize,Engineering Data & Computation,infeasible,,curated data,0,NonlinearControlSystems
@@ -1063,22 +1063,22 @@ Chop,Symbolic & Numeric Computation,implemented,2,,0,BasicImageManipulation Nume
 ChromaticPolynomial,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements ComputationOnGraphs
 ChromaticityPlot,Images,missing,2,,1,DataVisualization ColorProcessing ComputationalPhotography
 ChromaticityPlot3D,Data Manipulation & Analysis,missing,2,,1,DataVisualization ColorProcessing
-Circle,Visualization & Graphics,missing,1,,12,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
+Circle,Visualization & Graphics,implemented,1,,12,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
 CircleDot,"Options, system variables & unclassified",missing,3,,0,
 CircleMinus,"Options, system variables & unclassified",missing,3,,0,
 CirclePlus,Notebook Documents & Presentation,missing,3,,0,MathematicalTypesetting WolframLanguageSyntaxCharacters DefiningCustomNotation SymbolicNotationalForms
-CirclePoints,Core Language & Structure,missing,2,,0,OperationsOnVectors GraphicsObjects AnglesAndPolarCoordinates TrigonometricFunctions
-CircleThrough,Geometry,missing,2,,0,PlaneGeometry GeometricSpecialRegions SyntheticGeometry
+CirclePoints,Core Language & Structure,implemented,2,,0,OperationsOnVectors GraphicsObjects AnglesAndPolarCoordinates TrigonometricFunctions
+CircleThrough,Geometry,implemented,2,,0,PlaneGeometry GeometricSpecialRegions SyntheticGeometry
 CircleTimes,"Options, system variables & unclassified",missing,3,,0,
 CirculantGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
-CircularArcThrough,"Options, system variables & unclassified",missing,3,,0,
+CircularArcThrough,"Options, system variables & unclassified",implemented,3,,0,
 CircularOrthogonalMatrixDistribution,Symbolic & Numeric Computation,implemented,2,,0,MatrixDistributions
 CircularQuaternionMatrixDistribution,Symbolic & Numeric Computation,implemented,2,,0,MatrixDistributions
 CircularRealMatrixDistribution,Symbolic & Numeric Computation,implemented,2,,0,MatrixDistributions RandomVariables
 CircularSymplecticMatrixDistribution,Symbolic & Numeric Computation,implemented,2,,0,MatrixDistributions
 CircularUnitaryMatrixDistribution,Symbolic & Numeric Computation,implemented,2,,0,MatrixDistributions
-CircumscribedBall,Geometry,missing,2,,0,GeometricSpecialRegions
-Circumsphere,Geometry,missing,2,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects
+CircumscribedBall,Geometry,implemented,2,,0,GeometricSpecialRegions
+Circumsphere,Geometry,implemented,2,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects
 CityData,Geographic Data & Computation,infeasible,,curated data,0,GeographicData SocioeconomicAndDemographicData EntityTypes
 ClassPriors,"Options, system variables & unclassified",infeasible,,ML models / LLM services,0,
 ClassifierFunction,Core Language & Structure,infeasible,,ML models / LLM services,1,ScientificModels SupervisedMachineLearning BuiltInClassifiers NonparametricStatisticalDistributions
@@ -1146,7 +1146,7 @@ CoefficientList,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgeb
 CoefficientRules,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra
 CoifletWavelet,Data Manipulation & Analysis,implemented,2,,0,Wavelets
 Collect,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation PolynomialAlgebra AlgebraicTransformations
-CollinearPoints,Geometry,missing,2,,0,PlaneGeometry SolidGeometry GeometricPropertiesAndMeasures
+CollinearPoints,Geometry,implemented,2,,0,PlaneGeometry SolidGeometry GeometricPropertiesAndMeasures
 Colon,"Options, system variables & unclassified",missing,3,,0,
 ColorBalance,Images,missing,3,,0,ImageRestoration ColorProcessing ComputationalPhotography
 ColorCombine,Images,missing,3,,0,ColorProcessing ImageRepresentation
@@ -1263,7 +1263,7 @@ ConcaveHullMesh,Geometry,missing,2,,0,MeshRegions
 Condition,Core Language & Structure,implemented,1,,4,LanguageOverview RulesAndPatterns Syntax RobustnessAndErrorHandling
 ConditionalExpression,Core Language & Structure,implemented,1,,0,Conditionals
 Conditioned,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics RandomVariables
-Cone,Visualization & Graphics,missing,1,,2,SymbolicGraphicsLanguage SolidGeometry GeometricSpecialRegions GraphicsObjects
+Cone,Visualization & Graphics,implemented,1,,2,SymbolicGraphicsLanguage SolidGeometry GeometricSpecialRegions GraphicsObjects
 ConfidenceLevel,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
 ConfidenceRange,"Options, system variables & unclassified",missing,3,,0,
 ConfidenceTransform,Symbolic & Numeric Computation,missing,2,,0,SurvivalAnalysis
@@ -1278,7 +1278,7 @@ ConformImages,Images,missing,2,,1,ImageRepresentation
 ConformationMethod,Sound & Video,infeasible,,audio / video,0,VideoProcessing VideoCreation VideoEditing
 Congruent,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,SymbolicNotationalForms RelationalOperatorsAndCharacters
 ConicGradientFilling,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
-ConicHullRegion,Visualization & Graphics,missing,3,,0,GeometricSpecialRegions GraphicsObjects
+ConicHullRegion,Visualization & Graphics,implemented,3,,0,GeometricSpecialRegions GraphicsObjects
 ConicOptimization,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays MatrixBasedMinimization ConvexOptimization
 Conjugate,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions NumericalEvaluationAndPrecision GPUComputing FunctionsOfComplexVariables
 ConjugateTranspose,Core Language & Structure,implemented,2,,0,GPUComputing MatrixOperations ComplexNumbers
@@ -1360,8 +1360,8 @@ ConversionRules,"Options, system variables & unclassified",implemented,3,,0,
 ConvexHullMesh,Geometry,missing,2,,0,GeometricComputation MeshRegions 3DPrinting
 ConvexHullRegion,Geometry,missing,2,,0,DerivedRegions
 ConvexOptimization,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays ConvexOptimization
-ConvexPolygonQ,Visualization & Graphics,missing,3,,0,Polygons
-ConvexPolyhedronQ,Visualization & Graphics,missing,3,,0,Polyhedra
+ConvexPolygonQ,Visualization & Graphics,implemented,3,,0,Polygons
+ConvexPolyhedronQ,Visualization & Graphics,implemented,3,,0,Polyhedra
 ConvexRegionQ,Geometry,missing,2,,0,GeometricPropertiesAndMeasures
 ConvolutionLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,MachineLearning NeuralNetworks ComputerVision NeuralNetworkConstruction
 Convolve,Symbolic & Numeric Computation,implemented,2,,0,Calculus IntegralTransforms GeneralizedFunctions FourierAnalysis
@@ -1377,7 +1377,7 @@ CoordinateChartData,Symbolic & Numeric Computation,infeasible,,curated data,0,Ca
 CoordinateTransform,Symbolic & Numeric Computation,implemented,2,,0,VectorAnalysis AnglesAndPolarCoordinates
 CoordinateTransformData,Symbolic & Numeric Computation,infeasible,,curated data,0,VectorAnalysis
 CoordinatesToolOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
-CoplanarPoints,Geometry,missing,2,,0,SolidGeometry GeometricPropertiesAndMeasures
+CoplanarPoints,Geometry,implemented,2,,0,SolidGeometry GeometricPropertiesAndMeasures
 CoprimeQ,Symbolic & Numeric Computation,implemented,2,,0,TestingExpressions IntegerFunctions NumberTheoreticFunctions PrimeNumbers
 Coproduct,"Options, system variables & unclassified",missing,3,,0,
 CopulaDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions RandomVariables DerivedDistributions
@@ -1459,16 +1459,16 @@ CriticalitySuccessImportance,Engineering Data & Computation,infeasible,,curated 
 Cross,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra OperationsOnVectors SymbolicArrays
 CrossEntropyLossLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 CrossMatrix,Images,implemented,3,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters ConstructingMatrices StructureMatricesAndConvolutionKernels
-CrossingCount,Visualization & Graphics,missing,3,,0,Polygons
+CrossingCount,Visualization & Graphics,implemented,3,,0,Polygons
 CrossingDetect,Images,missing,3,,0,ImageProcessing 3DImages FeatureDetection SignalAnalysis
-CrossingPolygon,Visualization & Graphics,missing,3,,0,GeometricComputation Polygons
+CrossingPolygon,Visualization & Graphics,implemented,3,,0,GeometricComputation Polygons
 Csc,Sound & Video,implemented,3,,0,TrigonometricFunctions
 CscDegrees,Sound & Video,infeasible,,audio / video,0,TrigonometricFunctions
 Csch,Symbolic & Numeric Computation,implemented,2,,0,HyperbolicFunctions
-Cube,Geometry,missing,1,,4,SolidGeometry GeometricSpecialRegions Polyhedra
+Cube,Geometry,implemented,1,,4,SolidGeometry GeometricSpecialRegions Polyhedra
 CubeRoot,Symbolic & Numeric Computation,implemented,2,,0,GPUComputing ElementaryFunctions
 Cubics,Symbolic & Numeric Computation,implemented,2,,0,PolynomialEquations
-Cuboid,Visualization & Graphics,missing,3,,0,SymbolicGraphicsLanguage SolidGeometry GeometricSpecialRegions GraphicsObjects
+Cuboid,Visualization & Graphics,implemented,3,,0,SymbolicGraphicsLanguage SolidGeometry GeometricSpecialRegions GraphicsObjects
 Cumulant,Data Manipulation & Analysis,implemented,2,,0,DateAndTime DescriptiveStatistics SymbolicArrays RandomVariables
 CumulantGeneratingFunction,Data Manipulation & Analysis,implemented,2,,0,SummationTransforms StatisticalMomentsAndGeneratingFunctions StatisticalDistributionFunctions
 CumulativeFeatureImpactPlot,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,UnsupervisedMachineLearning DateAndTimeVisualization
@@ -1484,7 +1484,7 @@ CurrentScreenImage,Core Language & Structure,infeasible,,front end / notebooks,1
 CurrentValue,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,ExternalOperations NotebookFormattingAndStyling LowLevelNotebookProgramming ControlObjects
 CurryApplied,Core Language & Structure,implemented,1,,1,FunctionalProgramming FunctionCompositionAndOperatorForms
 CurvatureFlowFilter,Images,missing,3,,0,ImageFilteringAndNeighborhoodProcessing ImageRestoration ImageComputationForMicroscopy
-CurveClosed,"Options, system variables & unclassified",missing,3,,0,
+CurveClosed,"Options, system variables & unclassified",implemented,3,,0,
 Cyan,Visualization & Graphics,implemented,3,,0,Colors
 CycleGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
 CycleIndexPolynomial,Higher Mathematical Computation,implemented,2,,0,GroupTheory
@@ -1492,7 +1492,7 @@ Cycles,Symbolic & Numeric Computation,implemented,2,,0,Permutations
 Cyclic,"Options, system variables & unclassified",implemented,3,,0,
 CyclicGroup,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
 Cyclotomic,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra
-Cylinder,Geometry,missing,1,,2,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
+Cylinder,Geometry,implemented,1,,2,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
 CylindricalDecomposition,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra TheoremProving ComputationalGeometry PolynomialSystems
 CylindricalDecompositionFunction,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra PolynomialSystems
 D,Symbolic & Numeric Computation,implemented,2,,0,Calculus OperationsOnVectors GeneralizedFunctions SymbolicArrays
@@ -1732,7 +1732,7 @@ DigitCount,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions
 DigitQ,Core Language & Structure,implemented,1,,0,TestingExpressions CharacterOperations
 DigitSum,Higher Mathematical Computation,implemented,2,,0,NumberDigits AdditiveNumberTheory
 DigitalSignature,Higher Mathematical Computation,implemented,2,,0,Cryptography CryptographicNumberTheory
-DihedralAngle,Geometry,missing,2,,0,GeometricPropertiesAndMeasures AnglesAndPolarCoordinates
+DihedralAngle,Geometry,implemented,2,,0,GeometricPropertiesAndMeasures AnglesAndPolarCoordinates
 DihedralGroup,Higher Mathematical Computation,implemented,2,,0,GroupTheory NamedGroups
 Dilation,Images,missing,3,,0,ImageProcessing MathematicalMorphology 3DImages
 DimensionReduce,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,UnsupervisedMachineLearning
@@ -1798,9 +1798,9 @@ DiscretizeRegion,Geometry,missing,2,,0,GeometricComputation MeshRegions
 Discriminant,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra FiniteFields PolynomialSystems
 DisjointQ,Symbolic & Numeric Computation,implemented,2,,0,DiscreteMathematics TestingExpressions OperationsOnSets
 Disjunction,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation GraphProgramming
-Disk,Visualization & Graphics,missing,1,,6,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
+Disk,Visualization & Graphics,implemented,1,,6,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
 DiskMatrix,Images,implemented,3,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters ConstructingMatrices StructureMatricesAndConvolutionKernels
-DiskSegment,Geometry,missing,2,,0,GeometricSpecialRegions
+DiskSegment,Geometry,implemented,2,,0,GeometricSpecialRegions
 Dispatch,Core Language & Structure,implemented,2,,0,TuningAndDebugging TimeMeasurementAndOptimization
 DispersionEstimatorFunction,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
 DisplayAllSteps,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
@@ -1837,7 +1837,7 @@ DocumentGeneratorInformation,"Options, system variables & unclassified",infeasib
 DocumentGenerators,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
 DocumentNotebook,Core Language & Structure,infeasible,,front end / notebooks,0,DocumentGeneration TextConstruction
 DocumentWeightingRules,"Options, system variables & unclassified",implemented,3,,0,
-Dodecahedron,Geometry,missing,1,,3,GeometricComputation SolidGeometry GeometricSpecialRegions Polyhedra
+Dodecahedron,Geometry,implemented,1,,3,GeometricComputation SolidGeometry GeometricSpecialRegions Polyhedra
 DominantColors,Images,missing,1,,3,ColorProcessing Colors ComputationalPhotography ImageRepresentation
 DominatorTreeGraph,Graphs & Networks,implemented,2,,0,GraphModifications
 DominatorVertexList,Graphs & Networks,implemented,2,,0,GraphModifications
@@ -1880,7 +1880,7 @@ DropShadowing,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
 DropoutLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 Dt,Symbolic & Numeric Computation,implemented,2,,0,Calculus
 DualPlanarGraph,Graphs & Networks,implemented,2,,0,GraphModifications
-DualPolyhedron,Visualization & Graphics,missing,3,,0,GeometricComputation Polyhedra
+DualPolyhedron,Visualization & Graphics,implemented,3,,0,GeometricComputation Polyhedra
 DualSystemsModel,Engineering Data & Computation,infeasible,,curated data,0,AnalysisOfStateSpaceModels
 DumpSave,Core Language & Structure,implemented,2,,1,PackageDevelopment TuningAndDebugging Files WolframLanguageExpressionsInFiles
 DuplicateFreeQ,Core Language & Structure,implemented,1,,0,TestingExpressions OperationsOnSets
@@ -1955,7 +1955,7 @@ Elementwise,Data Manipulation & Analysis,implemented,2,,0,ListManipulation Handl
 ElementwiseLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 ElidedForms,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 Eliminate,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra PolynomialSystems
-Ellipsoid,Geometry,missing,2,,0,GeometricSpecialRegions 3DPrinting GraphicsObjects
+Ellipsoid,Geometry,implemented,2,,0,GeometricSpecialRegions 3DPrinting GraphicsObjects
 EllipticE,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions EllipticIntegrals
 EllipticExp,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 EllipticExpPrime,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
@@ -1976,7 +1976,7 @@ EmbeddingLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,Ne
 EmitSound,Core Language & Structure,infeasible,,audio / video,2,DynamicVisualization SoundAndSonification DynamicInteractivityLanguage BasicInputAndOutputInPrograms
 EmpiricalDistribution,Core Language & Structure,implemented,2,,0,Statistics ProbabilityWithQuantities RandomVariables SurvivalAnalysis
 EmptyGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements GraphPredicates
-EmptyRegion,Geometry,missing,2,,0,GeometricSpecialRegions
+EmptyRegion,Geometry,implemented,2,,0,GeometricSpecialRegions
 EmptySpaceF,Symbolic & Numeric Computation,missing,2,,0,DescriptiveStatistics SpatialStatistics SpatialPointProcesses SpatialPointCollections
 Enabled,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects UserInterfaceStructuringAndLayout ControlsOptions DialogBoxes
 Enclose,Core Language & Structure,implemented,1,,2,LanguageOverview PackageDevelopment ScopingConstructs RobustnessAndErrorHandling
@@ -2231,9 +2231,9 @@ FileSystemTree,"Options, system variables & unclassified",missing,3,,0,
 FileTemplate,External Interfaces & Connections,implemented,2,,1,WorkingWithTemplates FileOperations ExternalLanguageInterfaces TextConstruction
 FileTemplateApply,Core Language & Structure,implemented,1,,0,StringManipulation WorkingWithTemplates
 FileType,External Interfaces & Connections,missing,3,,0,FileOperations
-FilledCurve,Visualization & Graphics,missing,2,,1,SymbolicGraphicsLanguage CombiningGraphics GraphicsObjects
-FilledPolarCurve,"Options, system variables & unclassified",missing,3,,0,
-FilledTorus,Geometry,missing,2,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects
+FilledCurve,Visualization & Graphics,implemented,2,,1,SymbolicGraphicsLanguage CombiningGraphics GraphicsObjects
+FilledPolarCurve,"Options, system variables & unclassified",implemented,3,,0,
+FilledTorus,Geometry,implemented,2,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects
 Filling,Visualization & Graphics,implemented,1,,2,DataVisualization FunctionVisualization GraphicsOptionsAndStyling PlottingOptions
 FillingStyle,Visualization & Graphics,implemented,3,,0,PlottingOptions Colors
 FillingTransform,Images,missing,3,,0,SegmentationAnalysis MathematicalMorphology
@@ -2497,7 +2497,7 @@ FullForm,Core Language & Structure,implemented,1,,4,Expressions SpecialCharacter
 FullGraphics,Visualization & Graphics,missing,3,,0,GraphicsAnnotationAndAppearance GraphicsObjects
 FullInformationOutputRegulator,Engineering Data & Computation,infeasible,,curated data,0,NonlinearControlSystems
 FullMoon,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData
-FullRegion,Geometry,missing,2,,0,GeometricSpecialRegions
+FullRegion,Geometry,implemented,2,,0,GeometricSpecialRegions
 FullSimplify,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FormulaManipulation MathematicalData LogicAndBooleanAlgebra
 Function,Core Language & Structure,implemented,1,,42,LanguageOverview FunctionalProgramming ComputationWithStructuredDatasets Syntax
 FunctionAnalytic,Symbolic & Numeric Computation,implemented,2,,0,FunctionProperties
@@ -2675,17 +2675,17 @@ GeodesyData,Geographic Data & Computation,infeasible,,curated data,0,Geodesy Ear
 GeogravityModelData,Symbolic & Numeric Computation,infeasible,,curated data,0,GeographicData EarthSciencesDataAndComputation SpatialEstimation
 GeologicalPeriodData,"Options, system variables & unclassified",infeasible,,curated data,0,
 GeomagneticModelData,Symbolic & Numeric Computation,infeasible,,curated data,0,GeographicData EarthSciencesDataAndComputation SpatialEstimation
-GeometricAssertion,Visualization & Graphics,missing,3,,0,PlaneGeometry SyntheticGeometry
+GeometricAssertion,Visualization & Graphics,implemented,3,,0,PlaneGeometry SyntheticGeometry
 GeometricBrownianMotionProcess,Higher Mathematical Computation,missing,2,,0,ParametricRandomProcesses StochasticDifferentialEquationProcesses
 GeometricDistribution,Symbolic & Numeric Computation,implemented,2,,0,DistributionsUsedInReliabilityAnalysis DistributionsUsedInActuarialScience UrnModelDistributions DiscreteUnivariateDistributions
 GeometricMean,Data Manipulation & Analysis,implemented,2,,0,GPUComputing DescriptiveStatistics
 GeometricMeanFilter,Images,missing,3,,0,ImageFilteringAndNeighborhoodProcessing ImageRestoration
 GeometricOptimization,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays ConvexOptimization
-GeometricScene,Geometry,missing,2,,0,GeometricComputation PlaneGeometry GeometricSolvers SyntheticGeometry
+GeometricScene,Geometry,implemented,2,,0,GeometricComputation PlaneGeometry GeometricSolvers SyntheticGeometry
 GeometricSolveValues,Visualization & Graphics,missing,3,,0,SyntheticGeometry
-GeometricStep,Visualization & Graphics,missing,3,,0,PlaneGeometry SyntheticGeometry
-GeometricStylingRules,"Options, system variables & unclassified",missing,3,,0,
-GeometricTest,Visualization & Graphics,missing,3,,0,PlaneGeometry SyntheticGeometry
+GeometricStep,Visualization & Graphics,implemented,3,,0,PlaneGeometry SyntheticGeometry
+GeometricStylingRules,"Options, system variables & unclassified",implemented,3,,0,
+GeometricTest,Visualization & Graphics,implemented,3,,0,PlaneGeometry SyntheticGeometry
 GeometricTransformation,Geometry,missing,2,,0,DerivedRegions GeometricTransforms GraphicsTransformations
 GestureHandler,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects CustomInterfaceConstruction LowLevelInterfaceControl
 Get,Core Language & Structure,implemented,1,,2,ExternalOperations Syntax StandaloneWolframLanguageKernels PersistentStorage
@@ -2806,10 +2806,10 @@ HTTPRequestData,Geographic Data & Computation,infeasible,,curated data,0,Creatin
 HTTPResponse,External Interfaces & Connections,missing,3,,0,WebOperations NetworkProgramming CloudFunctionsAndDeployment CreatingAnInstantAPI
 HaarWavelet,Data Manipulation & Analysis,implemented,2,,0,Wavelets
 HadamardMatrix,Symbolic & Numeric Computation,implemented,2,,0,StructuredArrays SummationTransforms
-HalfLine,Geometry,missing,2,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions SyntheticGeometry
+HalfLine,Geometry,implemented,2,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions SyntheticGeometry
 HalfNormalDistribution,Data Manipulation & Analysis,implemented,2,,0,DistributionsUsedInActuarialScience NormalRelatedDistributions
-HalfPlane,Geometry,missing,2,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions GraphicsObjects
-HalfSpace,Geometry,missing,2,,0,GeometricSpecialRegions
+HalfPlane,Geometry,implemented,2,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions GraphicsObjects
+HalfSpace,Geometry,implemented,2,,0,GeometricSpecialRegions
 HalftoneShading,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
 Haloing,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
 HamiltonianGraphQ,Graphs & Networks,implemented,2,,0,TheoremProving GraphsAndNetworks GraphPropertiesAndMeasurements GraphPredicates
@@ -2875,7 +2875,7 @@ HeunGPrime,Symbolic & Numeric Computation,implemented,2,,0,HeunAndRelatedFunctio
 HeunT,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions HeunAndRelatedFunctions
 HeunTPrime,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics HeunAndRelatedFunctions
 HexadecimalCharacter,Core Language & Structure,implemented,1,,0,StringPatterns
-Hexahedron,Geometry,missing,2,,0,GeometricComputation SolidGeometry GeometricSpecialRegions GraphicsObjects
+Hexahedron,Geometry,implemented,2,,0,GeometricComputation SolidGeometry GeometricSpecialRegions GraphicsObjects
 HiddenItems,"Options, system variables & unclassified",implemented,3,,0,
 HiddenMarkovProcess,Higher Mathematical Computation,missing,2,,0,ScientificModels MarkovProcesses
 HighlightGraph,Graphs & Networks,implemented,2,,0,GraphsAndNetworks GraphVisualization SocialNetworks GraphStylingAndLabeling
@@ -2943,7 +2943,7 @@ HypergeometricPFQRegularized,Symbolic & Numeric Computation,implemented,2,,0,Hyp
 HypergeometricU,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions HypergeometricFunctions
 Hyperlink,Visualization & Graphics,infeasible,,front end / notebooks,2,ChartingAndInformationVisualization GraphVisualization NotebookFormattingAndStyling DocumentGeneration
 HyperlinkAction,User Interface Construction,infeasible,,front end / notebooks,0,ControlsOptions
-Hyperplane,Geometry,missing,2,,0,GeometricSpecialRegions
+Hyperplane,Geometry,implemented,2,,0,GeometricSpecialRegions
 Hyphenation,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,FontOptions TextLayoutOptions
 HypoexponentialDistribution,Engineering Data & Computation,implemented,3,,0,Reliability QueueingProcesses DistributionsUsedInReliabilityAnalysis ExponentialRelatedDistributions
 HypothesisTestData,Data Manipulation & Analysis,infeasible,,curated data,0,HypothesisTests
@@ -2952,7 +2952,7 @@ IPAddress,External Interfaces & Connections,missing,3,,0,NetworkProgramming
 IconData,Visualization & Graphics,infeasible,,curated data,0,ChartingAndInformationVisualization WeatherData
 IconRules,User Interface Construction,infeasible,,front end / notebooks,1,CreatingFormsAndApps SettingUpUserInteractions ManagingContentInTheCloud
 Iconize,Notebook Documents & Presentation,infeasible,,front end / notebooks,1,LayoutAndTables GeneralizedInput DefiningCustomNotation WolframSystemSessionHistory
-Icosahedron,Geometry,missing,2,,1,GeometricComputation SolidGeometry GeometricSpecialRegions Polyhedra
+Icosahedron,Geometry,implemented,2,,1,GeometricComputation SolidGeometry GeometricSpecialRegions Polyhedra
 Identity,Core Language & Structure,implemented,1,,0,FunctionalProgramming FunctionCompositionAndOperatorForms
 IdentityMatrix,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra GeometricTransforms LinearAndNonlinearFilters StructuredArrays
 If,Core Language & Structure,implemented,1,,11,LanguageOverview ProceduralProgramming Conditionals
@@ -3115,10 +3115,10 @@ InertEvaluate,"Options, system variables & unclassified",missing,3,,0,
 InertExpression,"Options, system variables & unclassified",missing,3,,0,
 InexactNumberQ,Symbolic & Numeric Computation,implemented,2,,0,RepresentationOfNumbers
 InfiniteFuture,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
-InfiniteLine,Geometry,missing,2,,0,GeometricComputation PlaneGeometry SolidGeometry GeometricSpecialRegions
-InfiniteLineThrough,"Options, system variables & unclassified",missing,3,,0,
+InfiniteLine,Geometry,implemented,2,,0,GeometricComputation PlaneGeometry SolidGeometry GeometricSpecialRegions
+InfiniteLineThrough,"Options, system variables & unclassified",implemented,3,,0,
 InfinitePast,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
-InfinitePlane,Geometry,missing,2,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions GraphicsObjects
+InfinitePlane,Geometry,implemented,2,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions GraphicsObjects
 Infinity,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants
 Infix,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,DefiningCustomNotation SymbolicNotationalForms
 InflationAdjust,Financial Data & Computation,infeasible,,curated data,0,SocioeconomicAndDemographicData Units FinancialAndEconomicData Finance
@@ -3137,7 +3137,7 @@ InitializationObjects,System Operation & Setup,missing,3,,0,PersistentStorage Se
 InitializationValue,System Operation & Setup,missing,3,,0,PersistentStorage WolframSystemSetup SessionCustomization SettingPersistentValues
 Initialize,System Operation & Setup,missing,3,,0,SettingPersistentValues InitializationAndProvisioning
 Inner,Core Language & Structure,implemented,1,,0,Tensors ApplyingFunctionsToLists
-InnerPolygon,Visualization & Graphics,missing,3,,0,PlaneGeometry Polygons
+InnerPolygon,Visualization & Graphics,implemented,3,,0,PlaneGeometry Polygons
 InnerPolyhedron,Visualization & Graphics,missing,3,,0,SolidGeometry Polyhedra
 Inpaint,Images,missing,3,,0,ImageProcessing ImageRestoration ComputationalPhotography ImageComputationForMicroscopy
 Input,Core Language & Structure,missing,1,,0,ProceduralProgramming CustomInterfaceConstruction StandaloneWolframLanguageKernels FlowControl
@@ -3155,14 +3155,14 @@ InputPorts,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,Neural
 InputStream,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
 InputString,User Interface Construction,missing,3,,0,CustomInterfaceConstruction BasicInputAndOutputInPrograms DialogBoxes
 InputStringPacket,"Options, system variables & unclassified",infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,
-InscribedBall,Geometry,missing,2,,0,GeometricSpecialRegions
+InscribedBall,Geometry,implemented,2,,0,GeometricSpecialRegions
 Insert,Core Language & Structure,implemented,1,,0,ComputationWithStructuredDatasets ElementsOfLists PartsOfExpressions FunctionCompositionAndOperatorForms
 InsertColumns,Data Manipulation & Analysis,implemented,2,,0,TabularCleaning
 InsertLinebreaks,Core Language & Structure,implemented,1,,0,TextAnalysis StringOperations
 InsertResults,"Options, system variables & unclassified",missing,3,,0,
 InsertionFunction,Strings & Text,implemented,2,,0,XMLTemplates
 Inset,Visualization & Graphics,implemented,2,,1,DataVisualization GraphicsOptionsAndStyling SymbolicGraphicsLanguage DocumentGeneration
-Insphere,Geometry,missing,2,,0,GeometricSpecialRegions
+Insphere,Geometry,implemented,2,,0,GeometricSpecialRegions
 Install,External Interfaces & Connections,infeasible,,WSTP / MathLink protocol (Wolfram-proprietary kernel link),0,ExternalOperations CallingExternalPrograms ExternalLanguageInterfaces WSTPAPI
 InstallService,External Interfaces & Connections,infeasible,,Wolfram Cloud / external services,0,WebOperations CallingExternalPrograms
 Integer,Core Language & Structure,implemented,1,,5,WDFWolframDataFramework ExpressionStructure Patterns RepresentationOfNumbers
@@ -3301,7 +3301,7 @@ Join,Core Language & Structure,implemented,1,,16,ListManipulation HandlingArrays
 JoinAcross,Core Language & Structure,implemented,1,,1,Associations ComputationWithStructuredDatasets DatabaseLikeOperationsOnDatasets TabularTransformation
 JoinForm,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
 Joined,Visualization & Graphics,implemented,1,,2,GraphicsOptionsAndStyling ChartLayoutAndStyling PlottingOptions
-JoinedCurve,Visualization & Graphics,missing,3,,0,CombiningGraphics GraphicsObjects
+JoinedCurve,Visualization & Graphics,implemented,3,,0,CombiningGraphics GraphicsObjects
 JordanDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 JordanMatrix,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 JordanModelDecomposition,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems AnalysisOfStateSpaceModels
@@ -3549,7 +3549,7 @@ Likelihood,Symbolic & Numeric Computation,missing,2,,0,StatisticalDistributionFu
 Limit,Symbolic & Numeric Computation,implemented,2,,0,Calculus SymbolicArrays SeriesExpansions Asymptotics
 LimitsPositioning,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathTypesettingOptionsAndTweaking
 LindleyDistribution,Symbolic & Numeric Computation,implemented,2,,0,ExponentialRelatedDistributions
-Line,Visualization & Graphics,missing,1,,2,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
+Line,Visualization & Graphics,implemented,1,,2,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
 LineBreakChart,Financial Data & Computation,infeasible,,curated data,0,FinancialVisualization
 LineGraph,Graphs & Networks,implemented,2,,0,GraphModifications
 LineIndent,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,MathematicalTypesetting TextStyling MathTypesettingOptionsAndTweaking TextLayoutOptions
@@ -4107,7 +4107,7 @@ NegativeMultinomialDistribution,Symbolic & Numeric Computation,implemented,2,,0,
 NegativeRationals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 NegativeReals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 NegativeSemidefiniteMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
-NegativelyOrientedPoints,Geometry,missing,2,,0,PlaneGeometry GeometricPropertiesAndMeasures
+NegativelyOrientedPoints,Geometry,implemented,2,,0,PlaneGeometry GeometricPropertiesAndMeasures
 NeighborhoodData,"Options, system variables & unclassified",infeasible,,curated data,0,
 NeighborhoodGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation ComputationOnGraphs GraphModifications
 Nest,Core Language & Structure,implemented,1,,4,LanguageOverview FunctionalProgramming ProceduralProgramming IteratedMapsAndFractals
@@ -4356,7 +4356,7 @@ ObservabilityMatrix,Engineering Data & Computation,infeasible,,curated data,0,Co
 ObservableDecomposition,Engineering Data & Computation,infeasible,,curated data,0,NonlinearControlSystems AnalysisOfStateSpaceModels
 ObservableModelQ,Engineering Data & Computation,infeasible,,curated data,0,NonlinearControlSystems AnalysisOfStateSpaceModels
 OceanData,"Options, system variables & unclassified",infeasible,,curated data,0,
-Octahedron,Geometry,missing,2,,1,SolidGeometry GeometricSpecialRegions Polyhedra
+Octahedron,Geometry,implemented,2,,1,SolidGeometry GeometricSpecialRegions Polyhedra
 OddQ,Core Language & Structure,implemented,1,,2,TestingExpressions IntegerFunctions
 Off,Core Language & Structure,implemented,2,,0,TuningAndDebugging WolframSystemSessions Messages SessionCustomization
 Offset,Visualization & Graphics,implemented,3,,0,SymbolicGraphicsLanguage GraphicsCoordinates
@@ -4403,7 +4403,7 @@ OrthogonalMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicat
 Orthogonalize,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra Calculus OperationsOnVectors DifferentialEquations
 Out,Core Language & Structure,implemented,1,,10,Syntax WolframSystemSessions StandaloneWolframLanguageKernels ManagingComputationsInNotebooks
 Outer,Core Language & Structure,implemented,1,,0,ListManipulation Tensors ConstructingLists ApplyingFunctionsToLists
-OuterPolygon,Visualization & Graphics,missing,3,,0,PlaneGeometry Polygons
+OuterPolygon,Visualization & Graphics,implemented,3,,0,PlaneGeometry Polygons
 OuterPolyhedron,Visualization & Graphics,missing,3,,0,SolidGeometry Polyhedra
 OutputControllabilityMatrix,Engineering Data & Computation,infeasible,,curated data,0,AnalysisOfStateSpaceModels
 OutputControllableModelQ,Engineering Data & Computation,infeasible,,curated data,0,AnalysisOfStateSpaceModels
@@ -4507,10 +4507,10 @@ ParallelSubmit,Core Language & Structure,missing,2,,0,ParallelComputing Concurre
 ParallelSum,Core Language & Structure,missing,2,,0,ParallelComputing DataParallelism
 ParallelTable,Core Language & Structure,missing,2,,0,ParallelComputing DataParallelism RaspberryPi ManagingRemoteAndParallelKernels
 ParallelTry,Core Language & Structure,missing,2,,0,ParallelComputing RaspberryPi ManagingRemoteAndParallelKernels
-Parallelepiped,Visualization & Graphics,missing,3,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
+Parallelepiped,Visualization & Graphics,implemented,3,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
 Parallelization,Core Language & Structure,missing,2,,0,ParallelComputing
 Parallelize,Core Language & Structure,missing,2,,0,ParallelComputing TuningAndDebugging DataParallelism ManagingRemoteAndParallelKernels
-Parallelogram,Visualization & Graphics,missing,1,,5,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
+Parallelogram,Visualization & Graphics,implemented,1,,5,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
 ParameterEstimator,"Options, system variables & unclassified",missing,3,,0,
 ParameterMixtureDistribution,Core Language & Structure,implemented,2,,0,DistributionsUsedInReliabilityAnalysis DerivedDistributions
 ParametricConvexOptimization,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays ConvexOptimization
@@ -4607,7 +4607,7 @@ PermutationSupport,Symbolic & Numeric Computation,implemented,2,,0,Permutations
 Permutations,Core Language & Structure,implemented,1,,2,DiscreteMathematics ConstructingLists RearrangingAndRestructuringLists Incrementals
 Permute,Symbolic & Numeric Computation,implemented,2,,0,Permutations
 PeronaMalikFilter,Images,missing,3,,0,ImageFilteringAndNeighborhoodProcessing ImageRestoration
-PerpendicularBisector,Visualization & Graphics,missing,3,,0,PlaneGeometry SyntheticGeometry
+PerpendicularBisector,Visualization & Graphics,implemented,3,,0,PlaneGeometry SyntheticGeometry
 PersistenceLocation,System Operation & Setup,implemented,3,,0,PersistentStorage SettingPersistentValues
 PersistenceTime,"Options, system variables & unclassified",implemented,3,,0,
 PersistentObject,System Operation & Setup,infeasible,,Wolfram Cloud / external services,0,PersistentStorage SettingPersistentValues
@@ -4641,7 +4641,7 @@ Placeholder,Notebook Documents & Presentation,infeasible,,front end / notebooks,
 PlaceholderLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
 PlaceholderReplace,"Options, system variables & unclassified",missing,3,,0,
 Plain,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,FormatMenu FontOptions
-PlanarAngle,Geometry,missing,2,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry AnglesAndPolarCoordinates
+PlanarAngle,Geometry,implemented,2,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry AnglesAndPolarCoordinates
 PlanarFaceList,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
 PlanarGraph,Graphs & Networks,implemented,2,,1,GraphConstructionAndRepresentation
 PlanarGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements GraphPredicates
@@ -4678,7 +4678,7 @@ PlusMinus,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,
 Pochhammer,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions GammaFunctionsAndRelatedFunctions
 PodStates,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,WolframAlphaIntegration
 PodWidth,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,WolframAlphaIntegration
-Point,Visualization & Graphics,missing,1,,5,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
+Point,Visualization & Graphics,implemented,1,,5,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
 PointCountDistribution,Symbolic & Numeric Computation,missing,2,,0,SpatialPointProcesses SpatialPointCollections
 PointDensity,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics DescriptiveStatistics SpatialStatistics SpatialPointProcesses
 PointDensityFunction,Symbolic & Numeric Computation,missing,2,,0,SpatialPointCollections
@@ -4700,7 +4700,7 @@ PoissonProcess,Higher Mathematical Computation,missing,2,,0,ProbabilityAndStatis
 PoissonWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 PolarAxes,Visualization & Graphics,implemented,3,,0,ChartLabelingLegendingAndAnnotation ChartLayoutAndStyling
 PolarAxesOrigin,Visualization & Graphics,implemented,3,,0,ChartLayoutAndStyling
-PolarCurve,"Options, system variables & unclassified",missing,3,,0,
+PolarCurve,"Options, system variables & unclassified",implemented,3,,0,
 PolarDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDecompositions
 PolarGridLines,Visualization & Graphics,implemented,3,,0,ChartLayoutAndStyling
 PolarPlot,Visualization & Graphics,implemented,3,,0,FunctionVisualization AnglesAndPolarCoordinates
@@ -4710,17 +4710,17 @@ PoleZeroPlot,Engineering Data & Computation,infeasible,,curated data,0,Classical
 PolyGamma,Symbolic & Numeric Computation,implemented,2,,0,DiscreteCalculus SpecialFunctions RecurrenceAndSumFunctions GammaFunctionsAndRelatedFunctions
 PolyLog,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions ScientificModels SpecialFunctions RecurrenceAndSumFunctions
 PolyaAeppliDistribution,Symbolic & Numeric Computation,implemented,2,,0,DiscreteUnivariateDistributions
-Polygon,Visualization & Graphics,missing,1,,3,SymbolicGraphicsLanguage GeometricComputation PlaneGeometry SolidGeometry
-PolygonAngle,Geometry,missing,2,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry AnglesAndPolarCoordinates
-PolygonCoordinates,Visualization & Graphics,missing,3,,0,PlaneGeometry Polygons
-PolygonDecomposition,Visualization & Graphics,missing,3,,0,GeometricComputation Polygons
+Polygon,Visualization & Graphics,implemented,1,,3,SymbolicGraphicsLanguage GeometricComputation PlaneGeometry SolidGeometry
+PolygonAngle,Geometry,implemented,2,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry AnglesAndPolarCoordinates
+PolygonCoordinates,Visualization & Graphics,implemented,3,,0,PlaneGeometry Polygons
+PolygonDecomposition,Visualization & Graphics,implemented,3,,0,GeometricComputation Polygons
 PolygonalNumber,Symbolic & Numeric Computation,implemented,2,,0,IntegerFunctions CombinatorialFunctions
-Polyhedron,Geometry,missing,2,,0,GeometricComputation PlaneGeometry SolidGeometry Polyhedra
-PolyhedronAngle,Geometry,missing,2,,0,GeometricPropertiesAndMeasures AnglesAndPolarCoordinates
-PolyhedronCoordinates,Visualization & Graphics,missing,3,,0,SolidGeometry Polyhedra
+Polyhedron,Geometry,implemented,2,,0,GeometricComputation PlaneGeometry SolidGeometry Polyhedra
+PolyhedronAngle,Geometry,implemented,2,,0,GeometricPropertiesAndMeasures AnglesAndPolarCoordinates
+PolyhedronCoordinates,Visualization & Graphics,implemented,3,,0,SolidGeometry Polyhedra
 PolyhedronData,Visualization & Graphics,infeasible,,curated data,1,MathematicalData GeometricComputation 3DPrinting GraphicsObjects
 PolyhedronDecomposition,Visualization & Graphics,missing,3,,0,Polyhedra
-PolyhedronGenus,Visualization & Graphics,missing,3,,0,Polyhedra
+PolyhedronGenus,Visualization & Graphics,implemented,3,,0,Polyhedra
 PolynomialExpressionQ,Core Language & Structure,implemented,1,,0,TestingExpressions FunctionProperties
 PolynomialExtendedGCD,Symbolic & Numeric Computation,implemented,2,,0,FiniteFields PolynomialDivision
 PolynomialGCD,Higher Mathematical Computation,implemented,2,,0,PolynomialAlgebra TheoremProving FiniteFields PolynomialDivision
@@ -4753,7 +4753,7 @@ PositiveIntegers,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndD
 PositiveRationals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 PositiveReals,Symbolic & Numeric Computation,implemented,2,,0,AssumptionsAndDomains
 PositiveSemidefiniteMatrixQ,Symbolic & Numeric Computation,implemented,2,,0,MatrixPredicates
-PositivelyOrientedPoints,Geometry,missing,2,,0,PlaneGeometry SolidGeometry GeometricPropertiesAndMeasures
+PositivelyOrientedPoints,Geometry,implemented,2,,0,PlaneGeometry SolidGeometry GeometricPropertiesAndMeasures
 PossibleZeroQ,Core Language & Structure,implemented,1,,0,FormulaManipulation TheoremProving TestingExpressions
 Postfix,Core Language & Structure,implemented,1,,11,Syntax SymbolicNotationalForms
 Power,Symbolic & Numeric Computation,implemented,1,,19,Syntax MathematicalFunctions MatricesAndLinearAlgebra ImageProcessing
@@ -4809,7 +4809,7 @@ PrintableASCIIQ,Core Language & Structure,implemented,1,,0,CharacterOperations T
 PrintingStyleEnvironment,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 Printout3D,Geometry,infeasible,,Wolfram Cloud / external services,2,GeometricComputation 3DPrinting
 Printout3DPreviewer,Geometry,infeasible,,Wolfram Cloud / external services,0,3DPrinting
-Prism,Visualization & Graphics,missing,3,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
+Prism,Visualization & Graphics,implemented,3,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
 PrivateCellOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 PrivateFontOptions,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,FontOptions
 PrivateKey,Higher Mathematical Computation,implemented,2,,0,Cryptography Blockchain CryptographicNumberTheory
@@ -4853,7 +4853,7 @@ PunctuationCharacter,Core Language & Structure,implemented,1,,0,StringPatterns
 Purple,Visualization & Graphics,implemented,1,,2,Colors
 Put,Core Language & Structure,implemented,1,,3,ExternalOperations Syntax StandaloneWolframLanguageKernels PersistentStorage
 PutAppend,Core Language & Structure,implemented,2,,0,Syntax CloudFunctionsAndDeployment Files WolframLanguageExpressionsInFiles
-Pyramid,Visualization & Graphics,missing,3,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
+Pyramid,Visualization & Graphics,implemented,3,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
 QBinomial,Higher Mathematical Computation,implemented,2,,0,QFunctions
 QFactorial,Higher Mathematical Computation,implemented,2,,0,DiscreteCalculus SpecialFunctions QFunctions
 QGamma,Higher Mathematical Computation,implemented,2,,0,QFunctions
@@ -4929,10 +4929,10 @@ RandomImage,Core Language & Structure,missing,2,,0,SystematicTestingAndVerificat
 RandomInstance,Geometry,missing,2,,0,GeometricComputation PlaneGeometry GeometricSolvers SyntheticGeometry
 RandomInteger,Core Language & Structure,implemented,1,,12,Statistics MathematicalFunctions GPUComputing ConstructingLists
 RandomPermutation,Core Language & Structure,implemented,2,,0,RandomNumberGeneration Permutations
-RandomPoint,Visualization & Graphics,missing,3,,0,GeometricPropertiesAndMeasures RandomNumberGeneration Polygons Polyhedra
+RandomPoint,Visualization & Graphics,implemented,3,,0,GeometricPropertiesAndMeasures RandomNumberGeneration Polygons Polyhedra
 RandomPointConfiguration,Symbolic & Numeric Computation,missing,2,,0,ProbabilityAndStatistics SpatialStatistics SpatialPointProcesses SpatialPointCollections
-RandomPolygon,Visualization & Graphics,missing,3,,0,GeometricComputation Polygons
-RandomPolyhedron,Visualization & Graphics,missing,3,,0,Polyhedra
+RandomPolygon,Visualization & Graphics,implemented,3,,0,GeometricComputation Polygons
+RandomPolyhedron,Visualization & Graphics,implemented,3,,0,Polyhedra
 RandomPrime,Higher Mathematical Computation,implemented,2,,0,MathematicalFunctions RandomNumberGeneration CryptographicNumberTheory PrimeNumbers
 RandomReal,Core Language & Structure,implemented,1,,9,Statistics MathematicalFunctions GPUComputing GPUProgramming
 RandomSample,Core Language & Structure,implemented,1,,3,DiscreteMathematics RearrangingAndRestructuringLists RandomNumberGeneration Permutations
@@ -4999,7 +4999,7 @@ ReconstructionMesh,Geometry,missing,2,,0,MeshRegions
 Record,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
 RecordLists,External Interfaces & Connections,missing,3,,0,LowLevelFileOperations
 RecordSeparators,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
-Rectangle,Visualization & Graphics,missing,3,,0,SymbolicGraphicsLanguage PlaneGeometry GeometricSpecialRegions GraphicsObjects
+Rectangle,Visualization & Graphics,implemented,3,,0,SymbolicGraphicsLanguage PlaneGeometry GeometricSpecialRegions GraphicsObjects
 RectangleChart,Data Manipulation & Analysis,missing,2,,0,ChartingAndInformationVisualization DateAndTimeVisualization
 RectangleChart3D,Data Manipulation & Analysis,missing,2,,0,ChartingAndInformationVisualization DateAndTimeVisualization
 RectangularRepeatingElement,Strings & Text,implemented,2,,0,InterpretingStrings
@@ -5061,7 +5061,7 @@ RegionWithin,Visualization & Graphics,missing,3,,0,GeometricPropertiesAndMeasure
 RegisterExceptionType,Core Language & Structure,implemented,1,,0,RobustnessAndErrorHandling FlowControl PackageBulletproofing
 RegisterExternalEvaluator,External Interfaces & Connections,missing,3,,0,DatabaseConnectivity CallingExternalPrograms ExternalLanguageInterfaces WorkingWithRelationalDatabases
 RegularExpression,Core Language & Structure,implemented,1,,1,NaturalLanguageProcessing ScientificDataAnalysis StringPatterns ProgrammableLinguisticInterface
-RegularPolygon,Visualization & Graphics,missing,1,,8,PlaneGeometry GeometricSpecialRegions SyntheticGeometry GraphicsObjects
+RegularPolygon,Visualization & Graphics,implemented,1,,8,PlaneGeometry GeometricSpecialRegions SyntheticGeometry GraphicsObjects
 Regularization,"Options, system variables & unclassified",implemented,3,,0,
 RegularlySampledQ,Higher Mathematical Computation,missing,2,,0,TimeSeries EventSeries
 RelationGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
@@ -5166,7 +5166,7 @@ ReverseGraph,Graphs & Networks,implemented,2,,0,GraphModifications
 ReverseSort,Core Language & Structure,implemented,1,,0,RearrangingAndRestructuringLists
 ReverseSortBy,Core Language & Structure,implemented,1,,0,RearrangingAndRestructuringLists TabularTransformation
 ReverseUpEquilibrium,"Options, system variables & unclassified",missing,3,,0,
-RevolutionAxis,"Options, system variables & unclassified",missing,3,,0,
+RevolutionAxis,"Options, system variables & unclassified",implemented,3,,0,
 RevolutionPlot3D,Visualization & Graphics,missing,3,,0,FunctionVisualization 3DPrinting
 RiccatiSolve,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving ControlSystems
 RiceDistribution,Symbolic & Numeric Computation,implemented,2,,0,DistributionsInCommunicationSystems
@@ -5224,7 +5224,7 @@ RotationAction,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyli
 RotationMatrix,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra GeometricTransforms StructuredArrays ConstructingMatrices
 RotationTransform,Geometry,missing,2,,0,DerivedRegions GeometricTransforms GraphicsTransformations ComputationalGeometry
 Round,Symbolic & Numeric Computation,implemented,1,,5,MathematicalFunctions GPUComputing NumericalFunctions
-RoundingRadius,"Options, system variables & unclassified",missing,2,,1,
+RoundingRadius,"Options, system variables & unclassified",implemented,2,,1,
 Row,Notebook Documents & Presentation,implemented,1,,2,ListManipulation DataVisualization AutomatedReports NotebookFormattingAndStyling
 RowAlignments,"Options, system variables & unclassified",implemented,3,,0,
 RowBox,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming LowLevelNotebookStructure
@@ -5249,8 +5249,8 @@ RuntimeOptions,"Options, system variables & unclassified",missing,3,,0,
 RussellRaoDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimilarityMeasures
 SARIMAProcess,Higher Mathematical Computation,missing,2,,0,RandomProcesses ScientificModels TimeSeriesProcesses CreatingAndImportingSignals
 SARMAProcess,Higher Mathematical Computation,missing,2,,0,TimeSeriesProcesses
-SASTriangle,Geometry,missing,2,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions GraphicsObjects
-SSSTriangle,Visualization & Graphics,missing,3,,0,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
+SASTriangle,Geometry,implemented,2,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions GraphicsObjects
+SSSTriangle,Visualization & Graphics,implemented,3,,0,PlaneGeometry GeometricSpecialRegions GraphicsObjects Polygons
 SameAs,Core Language & Structure,implemented,1,,0,TestingExpressions
 SameQ,Core Language & Structure,implemented,1,,1,Expressions Syntax TestingExpressions Conditionals
 SameTest,Core Language & Structure,implemented,2,,0,SystematicTestingAndVerification MatrixPredicates
@@ -5451,9 +5451,9 @@ SignificanceLevel,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 SimilarityRules,Strings & Text,implemented,2,,0,BiomolecularSequences
 SimpleGraph,Graphs & Networks,implemented,2,,0,GraphModifications
 SimpleGraphQ,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements GraphPredicates
-SimplePolygonQ,Visualization & Graphics,missing,3,,0,Polygons
-SimplePolyhedronQ,Visualization & Graphics,missing,3,,0,Polyhedra
-Simplex,Visualization & Graphics,missing,3,,0,GeometricComputation SolidGeometry GeometricSpecialRegions GraphicsObjects
+SimplePolygonQ,Visualization & Graphics,implemented,3,,0,Polygons
+SimplePolyhedronQ,Visualization & Graphics,implemented,3,,0,Polyhedra
+Simplex,Visualization & Graphics,implemented,3,,0,GeometricComputation SolidGeometry GeometricSpecialRegions GraphicsObjects
 Simplify,Symbolic & Numeric Computation,implemented,2,,0,FormulaManipulation AlgebraicTransformations AssumptionsAndDomains ManipulatingEquations
 SimplifyMesh,Geometry,missing,2,,0,MeshRegions
 Sin,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions GPUComputing FunctionsForSeparableCoordinateSystems ElementaryFunctions
@@ -5520,7 +5520,7 @@ SokalSneathDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,Distanc
 SolarEclipse,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData AstronomicalVisualizationGallery PeopleAndHistory
 SolarSystemFeatureData,"Options, system variables & unclassified",infeasible,,curated data,0,
 SolarTime,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData
-SolidAngle,Geometry,missing,2,,0,GeometricPropertiesAndMeasures AnglesAndPolarCoordinates
+SolidAngle,Geometry,implemented,2,,0,GeometricPropertiesAndMeasures AnglesAndPolarCoordinates
 SolidBoundaryLoadValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
 SolidData,Geometry,infeasible,,curated data,0,GeometricComputation
 SolidDisplacementCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
@@ -5584,18 +5584,18 @@ SpeechSynthesize,Machine Learning & LLMs,infeasible,,audio / video,4,LLMFunction
 SpellingCorrection,"Options, system variables & unclassified",infeasible,,curated data,0,
 SpellingCorrectionList,Strings & Text,infeasible,,curated data,0,ProcessingTextualData LinguisticData TextNormalization
 SpellingOptions,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LocaleAndInternationalization
-Sphere,Geometry,missing,1,,5,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
+Sphere,Geometry,implemented,1,,5,SymbolicGraphicsLanguage PlaneGeometry SolidGeometry GeometricSpecialRegions
 SpherePoints,Symbolic & Numeric Computation,missing,2,,0,Optimization SolidGeometry
-SphericalAngle,"Options, system variables & unclassified",missing,3,,0,
+SphericalAngle,"Options, system variables & unclassified",implemented,3,,0,
 SphericalBesselJ,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInOptics FunctionsUsedInQuantumMechanics SpecialFunctions
 SphericalBesselY,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems BesselRelatedFunctions
-SphericalDistance,"Options, system variables & unclassified",missing,3,,0,
+SphericalDistance,"Options, system variables & unclassified",implemented,3,,0,
 SphericalHankelH1,Symbolic & Numeric Computation,implemented,2,,0,BesselRelatedFunctions
 SphericalHankelH2,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInOptics BesselRelatedFunctions
 SphericalHarmonicY,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInOptics FunctionsUsedInQuantumMechanics SpecialFunctions
 SphericalPlot3D,Data Manipulation & Analysis,missing,2,,0,FunctionVisualization DateAndTimeVisualization AnglesAndPolarCoordinates
 SphericalRegion,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling GraphicsCoordinates GraphicsShapeAndSize 3DGraphicsOptions
-SphericalShell,Geometry,missing,2,,0,GeometricSpecialRegions
+SphericalShell,Geometry,implemented,2,,0,GeometricSpecialRegions
 SpheroidalEigenvalue,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInQuantumMechanics SpecialFunctions SpheroidalAndRelatedFunctions
 SpheroidalJoiningFactor,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelatedFunctions
 SpheroidalPS,Symbolic & Numeric Computation,implemented,2,,0,FunctionsForSeparableCoordinateSystems FunctionsUsedInOptics FunctionsUsedInQuantumMechanics SpecialFunctions
@@ -5609,10 +5609,10 @@ SpheroidalS2,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelate
 SpheroidalS2Prime,Symbolic & Numeric Computation,implemented,2,,0,SpheroidalAndRelatedFunctions
 Splice,Core Language & Structure,implemented,1,,2,ListManipulation RearrangingAndRestructuringLists
 SplicedDistribution,Financial Data & Computation,implemented,3,,0,ActuarialComputation DistributionsUsedInActuarialScience DerivedDistributions
-SplineClosed,Data Manipulation & Analysis,missing,2,,0,Splines
-SplineDegree,Data Manipulation & Analysis,missing,2,,0,Splines
-SplineKnots,Data Manipulation & Analysis,missing,2,,0,Splines
-SplineWeights,Data Manipulation & Analysis,missing,2,,0,Splines
+SplineClosed,Data Manipulation & Analysis,implemented,2,,0,Splines
+SplineDegree,Data Manipulation & Analysis,implemented,2,,0,Splines
+SplineKnots,Data Manipulation & Analysis,implemented,2,,0,Splines
+SplineWeights,Data Manipulation & Analysis,implemented,2,,0,Splines
 Split,Core Language & Structure,implemented,1,,2,ListManipulation RearrangingAndRestructuringLists DiscreteAndIntegerData
 SplitBy,Core Language & Structure,implemented,1,,0,FunctionalProgramming RearrangingAndRestructuringLists
 SpokenString,Core Language & Structure,infeasible,,curated data,0,SoundAndSonification MathematicalTypesetting Accessibility ConvertingBetweenExpressionsAndStrings
@@ -5643,7 +5643,7 @@ StackComplete,Core Language & Structure,implemented,2,,0,SymbolicExecutionHistor
 StackInhibit,Core Language & Structure,implemented,2,,0,SymbolicExecutionHistory
 StackedDateListPlot,Data Manipulation & Analysis,missing,2,,0,DataVisualization DateAndTime TimeSeries FinancialVisualization
 StackedListPlot,Data Manipulation & Analysis,missing,2,,1,DataVisualization DateAndTimeVisualization
-StadiumShape,Geometry,missing,2,,0,GeometricSpecialRegions
+StadiumShape,Geometry,implemented,2,,0,GeometricSpecialRegions
 StandardAtmosphereData,Geographic Data & Computation,infeasible,,curated data,0,WeatherData EarthSciencesDataAndComputation
 StandardBlue,Visualization & Graphics,implemented,3,,0,Colors
 StandardBrown,Visualization & Graphics,implemented,3,,0,Colors
@@ -6006,7 +6006,7 @@ TestID,Core Language & Structure,implemented,2,,0,SystematicTestingAndVerificati
 TestObject,Core Language & Structure,implemented,2,,0,SystematicTestingAndVerification
 TestReport,Core Language & Structure,implemented,2,,1,TuningAndDebugging SystematicTestingAndVerification
 TestReportObject,Core Language & Structure,implemented,2,,0,SystematicTestingAndVerification
-Tetrahedron,Visualization & Graphics,missing,1,,4,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
+Tetrahedron,Visualization & Graphics,implemented,1,,4,SolidGeometry GeometricSpecialRegions GraphicsObjects Polyhedra
 Text,User Interface Construction,implemented,2,,1,SymbolicGraphicsLanguage MapsAndCartography LayoutAndTables MathematicalTypesetting
 TextAlignment,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,TextStyling Stylesheets TextLayoutOptions
 TextCases,Machine Learning & LLMs,infeasible,,ML models / LLM services,5,MachineLearning NaturalLanguageProcessing ProcessingTextualData TextAnalysis
@@ -6143,7 +6143,7 @@ ToonShading,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
 Top,"Options, system variables & unclassified",implemented,3,,0,
 TopHatTransform,Images,missing,3,,0,MathematicalMorphology 3DImages
 TopologicalSort,Graphs & Networks,implemented,2,,0,GraphPathsCyclesAndFlows
-Torus,Geometry,missing,2,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects
+Torus,Geometry,implemented,2,,0,SolidGeometry GeometricSpecialRegions GraphicsObjects
 TorusGraph,Graphs & Networks,implemented,2,,1,GraphConstructionAndRepresentation
 Total,Core Language & Structure,implemented,1,,8,ListManipulation ComputationWithStructuredDatasets MathematicalFunctions MatricesAndLinearAlgebra
 TotalLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
@@ -6261,10 +6261,10 @@ TreeSelect,"Options, system variables & unclassified",implemented,3,,0,
 TreeSize,"Options, system variables & unclassified",implemented,3,,0,
 TreeTraversalOrder,"Options, system variables & unclassified",implemented,3,,0,
 TrendStyle,Financial Data & Computation,infeasible,,curated data,0,FinancialVisualization
-Triangle,Visualization & Graphics,missing,3,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions SyntheticGeometry
-TriangleCenter,Geometry,missing,2,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry
-TriangleConstruct,Geometry,missing,2,,0,PlaneGeometry SyntheticGeometry AnglesAndPolarCoordinates
-TriangleMeasurement,Visualization & Graphics,missing,3,,0,PlaneGeometry SyntheticGeometry
+Triangle,Visualization & Graphics,implemented,3,,0,PlaneGeometry SolidGeometry GeometricSpecialRegions SyntheticGeometry
+TriangleCenter,Geometry,implemented,2,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry
+TriangleConstruct,Geometry,implemented,2,,0,PlaneGeometry SyntheticGeometry AnglesAndPolarCoordinates
+TriangleMeasurement,Visualization & Graphics,implemented,3,,0,PlaneGeometry SyntheticGeometry
 TriangleWave,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IntegralTransforms NumericalFunctions FourierAnalysis
 TriangularDistribution,Symbolic & Numeric Computation,implemented,2,,0,BoundedDomainDistributions
 TriangulateMesh,Geometry,missing,2,,0,MeshRegions
@@ -6282,10 +6282,10 @@ True,Symbolic & Numeric Computation,implemented,1,,13,BooleanComputation LogicAn
 TrueQ,Core Language & Structure,implemented,1,,0,TestingExpressions
 TruncateSum,Higher Mathematical Computation,implemented,2,,0,DiscreteCalculus
 TruncatedDistribution,Core Language & Structure,implemented,2,,0,ProbabilityWithQuantities RandomVariables DistributionsUsedInReliabilityAnalysis DerivedDistributions
-TruncatedPolyhedron,Visualization & Graphics,missing,3,,0,Polyhedra
+TruncatedPolyhedron,Visualization & Graphics,implemented,3,,0,Polyhedra
 TsallisQExponentialDistribution,Symbolic & Numeric Computation,implemented,2,,0,ExponentialRelatedDistributions
 TsallisQGaussianDistribution,Data Manipulation & Analysis,implemented,2,,0,NormalRelatedDistributions
-Tube,Visualization & Graphics,missing,3,,0,SymbolicGraphicsLanguage SolidGeometry GeometricSpecialRegions GraphicsObjects
+Tube,Visualization & Graphics,implemented,3,,0,SymbolicGraphicsLanguage SolidGeometry GeometricSpecialRegions GraphicsObjects
 Tuesday,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,0,DateAndTime
 TukeyLambdaDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions
 TukeyWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
@@ -6341,7 +6341,7 @@ UnequalTo,Core Language & Structure,implemented,1,,0,TestingExpressions
 Unevaluated,Core Language & Structure,implemented,1,,0,EvaluationControl
 UniformDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions DistributionsUsedInActuarialScience DistributionsInCommunicationSystems BoundedDomainDistributions
 UniformGraphDistribution,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation RandomGraphs
-UniformPolyhedron,Geometry,missing,2,,1,SolidGeometry GeometricSpecialRegions Polyhedra
+UniformPolyhedron,Geometry,implemented,2,,1,SolidGeometry GeometricSpecialRegions Polyhedra
 UniformSumDistribution,Symbolic & Numeric Computation,implemented,2,,0,BoundedDomainDistributions
 UnilateralConvolve,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms
 UnilateralDiscreteConvolve,Higher Mathematical Computation,implemented,2,,0,SummationTransforms
@@ -6651,8 +6651,8 @@ WilksWTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 WindDirectionData,Symbolic & Numeric Computation,infeasible,,curated data,0,WeatherData EarthSciencesDataAndComputation SpatialEstimation
 WindSpeedData,Symbolic & Numeric Computation,infeasible,,curated data,0,WeatherData EarthSciencesDataAndComputation SpatialEstimation
 WindVectorData,Geographic Data & Computation,infeasible,,curated data,0,WeatherData
-WindingCount,Visualization & Graphics,missing,3,,0,Polygons
-WindingPolygon,Visualization & Graphics,missing,3,,0,Polygons
+WindingCount,Visualization & Graphics,implemented,3,,0,Polygons
+WindingPolygon,Visualization & Graphics,implemented,3,,0,Polygons
 WindowClickSelect,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,WindowProperties
 WindowElements,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,WindowProperties Stylesheets
 WindowFrame,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,WindowProperties Stylesheets StandAloneInterfaces
