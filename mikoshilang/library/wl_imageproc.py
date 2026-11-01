@@ -26,6 +26,7 @@ from .core import fn, Unevaluated, L, R, S
 from . import wl_images as WI
 from .wl_images import parse_image, image_expr, opts_split, int_arg, real_arg, pad_array, quantize, MAXV, \
     IMAGE_HEADS, _short, _is_sym
+from .wl_graphics_color import is_real_value
 
 AREA = "image processing (W28)"
 TRUE, FALSE = Symbol("True"), Symbol("False")
@@ -2343,3 +2344,751 @@ def _pruning(x: Expr, *rest: NonNegInteger | ListOf[NonNegInteger] | Real | Opti
         front = dilate(front.astype(float), offs, 0.0).astype(bool) & fg & ~cur & ~add
         add |= front
     return binary_like(d, cur | add)
+
+
+# ───────────────────────────── linear (Gaussian derivative) filters ─────────────────────────────
+
+def _gk(fname, r, sigma, n, method="Bessel", std=True):
+    """1-D discrete Gaussian (derivative) kernel of GaussianMatrix: radius r, standard deviation sigma, order n."""
+    import mpmath
+    from .wl_signal import _kernel_1d
+    with mpmath.workdps(30):
+        v = _kernel_1d(fname, "Gaussian", int(r), sp.Float(sigma, 25), int(n), std, method, False, 30)
+    return np.array([float(t) for t in v])
+
+
+_PAD_MODES = {"Fixed": "edge", "Periodic": "wrap", "Reflected": "reflect", "Reversed": "symmetric"}
+
+
+def _padding_opt(o, fname, default="Fixed"):
+    p = o.get("Padding", default)
+    if _is_sym(p, "None"):
+        return None
+    if isinstance(p, str) and p in _PAD_MODES:
+        return p
+    if is_real_like(p):
+        return real_arg(p, fname, "Padding")
+    raise NotImplementedError(f"{fname}: Padding {_short(p)} is not supported (\"Fixed\", \"Periodic\", "
+                              "\"Reflected\", \"Reversed\", a number or None)")
+
+
+def correlate_axis(a, k, ax, pad):
+    """Correlate a along axis ax with the 1-D kernel k (centre at len(k)//2): out[i] = Σ_j k[j] a[i + j - r]."""
+    r = len(k) // 2
+    if r == 0:
+        return a * k[0]
+    widths = [(0, 0)] * a.ndim
+    widths[ax] = (r, r)
+    if pad is None:
+        P = a
+    elif isinstance(pad, str):
+        mode = _PAD_MODES[pad]
+        if mode in ("reflect",) and a.shape[ax] <= r:
+            P = a
+            for _ in range(r):           # repeated reflection for short axes
+                P = np.pad(P, [(1, 1) if i == ax else (0, 0) for i in range(a.ndim)], mode="symmetric")
+            P = np.take(P, range(0, P.shape[ax]), axis=ax)
+        else:
+            P = np.pad(a, widths, mode=mode)
+    else:
+        P = np.pad(a, widths, mode="constant", constant_values=pad)
+    n = P.shape[ax] - 2 * r
+    if n <= 0:
+        return np.zeros(tuple(0 if i == ax else s for i, s in enumerate(a.shape)))
+    out = np.zeros(tuple(n if i == ax else s for i, s in enumerate(P.shape)))
+    for j, kj in enumerate(k):
+        if kj != 0:
+            out = out + kj * np.take(P, range(j, j + n), axis=ax)
+    return out
+
+
+def separable(a, kernels, pad, axes=None):
+    """Apply one 1-D kernel per spatial axis (kernels[i] for axis i)."""
+    axes = range(len(kernels)) if axes is None else axes
+    for ax, k in zip(axes, kernels):
+        a = correlate_axis(a, k, ax, pad)
+    return a
+
+
+def _gauss_spec(spec, fname, nd):
+    """r | {r, σ} | {{r1, ...}, {σ1, ...}} | {r1, ...} (per dimension) -> (radii, sigmas)."""
+    if K.is_list(spec) and spec.args and all(K.is_list(t) for t in spec.args):
+        rs = list(spec.args[0].args)
+        ss = list(spec.args[1].args) if len(spec.args) > 1 else None
+    elif K.is_list(spec) and len(spec.args) == 2 and nd != 2 and False:
+        rs, ss = None, None
+    elif K.is_list(spec):
+        if len(spec.args) != 2:
+            raise ValueError(f"{fname}: give r, {{r, σ}} or {{{{r1, ...}}, {{σ1, ...}}}}")
+        rs, ss = [spec.args[0]], [spec.args[1]]
+    else:
+        rs, ss = [spec], None
+    for v in rs + (ss or []):
+        if isinstance(v, Symbol) or (isinstance(v, Expr) and not is_real_value(v)):
+            raise Unevaluated()
+    radii = []
+    for v in rs:
+        rv = real_arg(v, fname, "radius")
+        if rv < 0:
+            raise ValueError(f"{fname}: the radius must be non-negative")
+        if rv != int(rv):
+            raise NotImplementedError(f"{fname}: non-integer radii are not supported")
+        radii.append(int(rv))
+    sig = [None] * len(radii) if ss is None else [real_arg(v, fname, "standard deviation") for v in ss]
+    if len(sig) == 1 and len(radii) > 1:
+        sig = sig * len(radii)
+    if len(radii) == 1:
+        radii, sig = radii * nd, sig * nd
+    if len(radii) != nd or len(sig) != nd:
+        raise ValueError(f"{fname}: give one radius per dimension of the data ({nd})")
+    sig = [s if s is not None else r / 2 for r, s in zip(radii, sig)]
+    for s in sig:
+        if not s > 0:
+            raise ValueError(f"{fname}: the standard deviation must be positive")
+    return radii, sig
+
+
+def _method_opt(o, fname, key="Method"):
+    m = o.get(key, "Bessel")
+    if _is_sym(m, "Automatic"):
+        return "Bessel"
+    if m in ("Bessel", "Gaussian"):
+        return m
+    raise NotImplementedError(f"{fname}: Method {_short(m)} is not supported (\"Bessel\" or \"Gaussian\")")
+
+
+def _std_opt(o, fname):
+    return _truthy(o.get("Standardized", True), fname, "Standardized")
+
+
+def _lin_input(x, fname, symbolic_ok=False):
+    d = data_arg(x, fname, exact_ok=False)
+    if d.is_image:
+        a = d.img.color()
+        alpha = d.img.a[..., -1:] if d.img.alpha else None
+        return d, a, alpha
+    return d, d.a[..., None], None
+
+
+def _lin_out(d, res, alpha, real=True):
+    """Assemble a linear-filter result: arrays as machine reals, images of a real type (alpha kept, cropped)."""
+    if d.is_image:
+        if alpha is not None:
+            sl = tuple(slice((alpha.shape[i] - res.shape[i]) // 2, (alpha.shape[i] - res.shape[i]) // 2 + res.shape[i])
+                       for i in range(res.ndim - 1))
+            res = np.concatenate([res, alpha[sl]], axis=-1)
+        return image_out(d.img, res, typ=real_type(d.img) if real else smooth_type(d.img))
+    return array_out(res[..., 0])
+
+
+def _gauss_filter_arr(a, nd, radii, sig, ns, method, std, pad, fname):
+    ks = [_gk(fname, r, s, n, method, std) for r, s, n in zip(radii, sig, ns)]
+    return separable(a, ks, pad)
+
+
+@fn("GaussianFilter", area=AREA, status="added",
+    notes="GaussianFilter[data, r] correlates data with the separable GaussianMatrix kernel of radius r and "
+          "σ = r/2 (Method -> \"Bessel\" (default) or \"Gaussian\", Standardized -> True), GaussianFilter[data, {r, "
+          "σ}] uses σ, {{r1, ...}, {σ1, ...}} one radius per dimension; GaussianFilter[data, r, {n1, ...}] (or n for "
+          "a list) applies the ni-th derivative kernels (standardized so a ramp of slope 1 gives 1), as documented. "
+          "Padding -> \"Fixed\" (default), \"Periodic\", \"Reflected\", \"Reversed\", a constant, or None (the "
+          "result shrinks by r at each side). Arrays give machine reals; images keep their type (Bit gives Real32; "
+          "derivatives give a real type), multichannel images per channel. Non-integer radii and symbolic data raise "
+          "or stay unevaluated. Check: reference (Wolfram documentation examples) in tests.")
+def _gaussianfilter(x: Expr, spec: NonNegInteger | ListOf[Expr], *rest: NonNegInteger | ListOf[NonNegInteger] | Option) -> Expr:
+    fname = "GaussianFilter"
+    pos, o = opts_split(rest, {"Method", "Padding", "Standardized", "WorkingPrecision"}, fname)
+    if len(pos) > 1:
+        raise TypeError(f"{fname}: expected GaussianFilter[data, r, {{n1, ...}}, options]")
+    d, a, alpha = _lin_input(x, fname)
+    nd = a.ndim - 1
+    radii, sig = _gauss_spec(spec, fname, nd)
+    ns = [0] * nd
+    if pos:
+        nv = pos[0]
+        nl = list(nv.args) if K.is_list(nv) else [nv]
+        if len(nl) == 1 and nd > 1 and not K.is_list(nv):
+            raise ValueError(f"{fname}: give one derivative order per dimension, {{n1, ..., n{nd}}}")
+        if len(nl) != nd:
+            raise ValueError(f"{fname}: give one derivative order per dimension ({nd})")
+        ns = [int_arg(v, fname, "derivative order", 0) for v in nl]
+    method = _method_opt(o, fname)
+    std = _std_opt(o, fname)
+    if std and nd > 1 and any(n > 0 and n % 2 == 0 for n in ns):
+        raise NotImplementedError(f"{fname}: standardized even-order derivatives in more than one dimension are not "
+                                  "supported")
+    pad = _padding_opt(o, fname)
+    res = _gauss_filter_arr(a, nd, radii, sig, ns, method, std, pad, fname)
+    return _lin_out(d, res, alpha, real=any(ns))
+
+
+def log_kernel(fname, radii, sig, method):
+    """Laplacian-of-Gaussian kernel: Σ_i (second-derivative kernel along i) ⊗ (normalised Gaussians elsewhere), with
+    the unstandardized kernels scaled by the 1-D standardization factor and shifted to sum 0 (this reproduces the
+    documented examples)."""
+    nd = len(radii)
+    tot = None
+    for i in range(nd):
+        g2u = _gk(fname, radii[i], sig[i], 2, method, False)
+        xs = np.arange(-radii[i], radii[i] + 1, dtype=float)
+        w = xs ** 2 / 2
+        Nn = len(xs)
+        scale = 1.0 / ((w * g2u).sum() - g2u.sum() * w.sum() / Nn) if Nn > 1 else 0.0
+        term = np.array(1.0)
+        for j in range(nd):
+            if j == i:
+                f = scale * g2u
+            else:
+                f = _gk(fname, radii[j], sig[j], 0, method, False)
+                f = f / f.sum()
+            term = np.multiply.outer(term, f)
+        tot = term if tot is None else tot + term
+    return tot - tot.mean()
+
+
+def correlate_nd(a, k, pad):
+    """Correlate the leading k.ndim axes of a with the (odd-sized) kernel k."""
+    nd = k.ndim
+    rad = [s // 2 for s in k.shape]
+    if pad is None:
+        P = a
+    else:
+        widths = [(r, r) for r in rad] + [(0, 0)] * (a.ndim - nd)
+        if isinstance(pad, str):
+            P = np.pad(a, widths, mode=_PAD_MODES[pad])
+        else:
+            P = np.pad(a, widths, mode="constant", constant_values=pad)
+    outshape = tuple(P.shape[i] - 2 * rad[i] for i in range(nd)) + a.shape[nd:]
+    if min(outshape[:nd]) <= 0:
+        return np.zeros(tuple(max(0, s) for s in outshape))
+    out = np.zeros(outshape)
+    for idx in np.ndindex(k.shape):
+        if k[idx] != 0:
+            sl = tuple(slice(idx[i], idx[i] + outshape[i]) for i in range(nd))
+            out = out + k[idx] * P[sl]
+    return out
+
+
+@fn("LaplacianGaussianFilter", area=AREA, status="added",
+    notes="LaplacianGaussianFilter[data, r] (σ = r/2) and [data, {r, σ}] correlate data with the Laplacian of the "
+          "discrete Gaussian: the sum over the dimensions of the second-derivative GaussianMatrix kernel along one "
+          "axis times the normalised Gaussian along the others, scaled by the 1-D standardization factor and shifted "
+          "to sum 0 (Standardized -> True; this reproduces the documented 1D and 2D examples). Method -> \"Bessel\" "
+          "(default) or \"Gaussian\"; Padding as for GaussianFilter; images give a real type. Standardized -> False "
+          "raises NotImplementedError. Check: reference (Wolfram documentation examples) in tests.")
+def _loGfilter(x: Expr, spec: NonNegInteger | ListOf[Expr], *opts: Option) -> Expr:
+    fname = "LaplacianGaussianFilter"
+    pos, o = opts_split(opts, {"Method", "Padding", "Standardized", "WorkingPrecision"}, fname)
+    if pos:
+        raise TypeError(f"{fname}: expected LaplacianGaussianFilter[data, r, options]")
+    d, a, alpha = _lin_input(x, fname)
+    nd = a.ndim - 1
+    radii, sig = _gauss_spec(spec, fname, nd)
+    if not _std_opt(o, fname):
+        raise NotImplementedError(f"{fname}: Standardized -> False is not supported")
+    k = log_kernel(fname, radii, sig, _method_opt(o, fname))
+    res = correlate_nd(a, k, _padding_opt(o, fname))
+    return _lin_out(d, res, alpha)
+
+
+def _deriv_kernel_opt(o, fname):
+    m = o.get("Method", Symbol("Automatic"))
+    sub = {}
+    if K.is_list(m) or (isinstance(m, Expr) and m.head == "Rule"):
+        items = m.args if K.is_list(m) else [m]
+        for it in items:
+            if not (isinstance(it, Expr) and it.head in ("Rule", "RuleDelayed") and isinstance(it.args[0], str)):
+                raise ValueError(f"{fname}: Method suboptions must be rules")
+            sub[it.args[0]] = it.args[1]
+    elif not _is_sym(m, "Automatic"):
+        raise NotImplementedError(f"{fname}: Method {_short(m)} is not supported")
+    dk = sub.pop("DerivativeKernel", "Bessel")
+    if _is_sym(dk, "Automatic"):
+        dk = "Bessel"
+    if dk not in ("Bessel", "Gaussian", "Sobel"):
+        raise NotImplementedError(f"{fname}: DerivativeKernel {_short(dk)} is not supported (\"Bessel\", "
+                                  "\"Gaussian\" or \"Sobel\")")
+    return dk, sub
+
+
+def gradient_components(a, radii, sig, dk, pad, fname):
+    """First derivatives along every spatial axis (array coordinates), per channel: list of arrays."""
+    nd = len(radii)
+    out = []
+    for i in range(nd):
+        ks = []
+        for j in range(nd):
+            if dk == "Sobel":
+                r = radii[j]
+                b = np.array([math.comb(2 * r, t) for t in range(2 * r + 1)], dtype=float)
+                if j == i:
+                    b1 = np.array([math.comb(2 * r - 1, t) for t in range(2 * r)], dtype=float) if r > 0 else \
+                        np.array([0.0])
+                    k = (np.concatenate([[0.0], b1]) - np.concatenate([b1, [0.0]])) if r > 0 else np.array([0.0])
+                    xs = np.arange(-r, r + 1)
+                    k = k / (xs * k).sum() if r > 0 else k
+                else:
+                    k = b / b.sum()
+            else:
+                k = _gk(fname, radii[j], sig[j], 1 if j == i else 0, dk, True)
+            ks.append(k)
+        out.append(separable(a, ks, pad))
+    return out
+
+
+def _grad_spec(spec, fname, nd):
+    return _gauss_spec(spec, fname, nd)
+
+
+@fn("GradientFilter", area=AREA, status="added",
+    notes="GradientFilter[data, r] gives the gradient magnitude, the Euclidean norm of the first derivatives along "
+          "every dimension computed with standardized Gaussian derivative kernels of radius r and σ = r/2 "
+          "(GradientFilter[data, {r, σ}] uses σ); multichannel images give the square root of the largest "
+          "eigenvalue of J^T J (single channel), as documented. Method -> {\"DerivativeKernel\" -> \"Bessel\" "
+          "(default), \"Gaussian\" or \"Sobel\"}; \"NonMaxSuppression\" -> True and other kernels raise "
+          "NotImplementedError. Padding as for GaussianFilter; images give a real type. Check: reference (Wolfram "
+          "documentation 1D examples; hand-computed central differences) in tests.")
+def _gradientfilter(x: Expr, spec: NonNegInteger | ListOf[Expr], *opts: Option) -> Expr:
+    fname = "GradientFilter"
+    pos, o = opts_split(opts, {"Method", "Padding", "WorkingPrecision"}, fname)
+    if pos:
+        raise TypeError(f"{fname}: expected GradientFilter[data, r, options]")
+    dk, sub = _deriv_kernel_opt(o, fname)
+    nms = sub.pop("NonMaxSuppression", False)
+    if not (nms is False or _is_sym(nms, "False")):
+        raise NotImplementedError(f"{fname}: \"NonMaxSuppression\" -> True is not supported")
+    if sub:
+        raise NotImplementedError(f"{fname}: Method suboption {next(iter(sub))!r} is not supported")
+    d, a, alpha = _lin_input(x, fname)
+    nd = a.ndim - 1
+    radii, sig = _grad_spec(spec, fname, nd)
+    g = gradient_components(a, radii, sig, dk, _padding_opt(o, fname), fname)
+    G = np.stack(g, axis=-1)                        # (..., c, nd)
+    if G.shape[-2] == 1:
+        mag = np.sqrt((G[..., 0, :] ** 2).sum(-1))
+    else:
+        M = np.einsum("...ci,...cj->...ij", G, G)
+        mag = np.sqrt(np.clip(np.linalg.eigvalsh(M)[..., -1], 0, None))
+    return _lin_out(d, mag[..., None], None)
+
+
+@fn("GradientOrientationFilter", area=AREA, status="added",
+    notes="GradientOrientationFilter[data, r] gives the orientation of the gradient (standardized Gaussian derivative "
+          "kernels of radius r, σ = r/2; {r, σ} gives σ) in array coordinates: in 1D {0} where the derivative is "
+          "nonzero, in 2D the angle θ in (-π/2, π/2] with {Cos[θ], Sin[θ]} parallel to {∂/∂row, ∂/∂column}; "
+          "undefined orientations (zero gradient) give -π/2 (\"UndefinedOrientationValue\" sets another value), as "
+          "documented. Arrays give an array of 1-element lists; images a single-channel real image. Multichannel "
+          "images use the eigenvector of J^T J with the largest eigenvalue. 3D and higher data raise "
+          "NotImplementedError. Check: reference (Wolfram documentation 1D example) in tests.")
+def _gradorientfilter(x: Expr, spec: NonNegInteger | ListOf[Expr], *opts: Option) -> Expr:
+    fname = "GradientOrientationFilter"
+    pos, o = opts_split(opts, {"Method", "Padding", "WorkingPrecision"}, fname)
+    if pos:
+        raise TypeError(f"{fname}: expected GradientOrientationFilter[data, r, options]")
+    dk, sub = _deriv_kernel_opt(o, fname)
+    und = sub.pop("UndefinedOrientationValue", None)
+    if sub:
+        raise NotImplementedError(f"{fname}: Method suboption {next(iter(sub))!r} is not supported")
+    undv = -math.pi / 2 if und is None else real_arg(und, fname, "UndefinedOrientationValue")
+    d, a, alpha = _lin_input(x, fname)
+    nd = a.ndim - 1
+    if nd > 2:
+        raise NotImplementedError(f"{fname}: only 1D and 2D data are supported")
+    radii, sig = _grad_spec(spec, fname, nd)
+    g = gradient_components(a, radii, sig, dk, _padding_opt(o, fname), fname)
+    G = np.stack(g, axis=-1)                         # (..., c, nd)
+    eps = 1e-12
+    if nd == 1:
+        nz = np.abs(G[..., 0]).max(-1) > eps
+        th = np.where(nz, 0.0, undv)
+    else:
+        if G.shape[-2] == 1:
+            v = G[..., 0, :]
+        else:
+            M = np.einsum("...ci,...cj->...ij", G, G)
+            w, V = np.linalg.eigh(M)
+            v = V[..., :, -1] * np.sqrt(np.clip(w[..., -1:], 0, None))
+        nz = np.sqrt((v ** 2).sum(-1)) > eps
+        th = np.arctan2(v[..., 1], v[..., 0])
+        th = np.where(th > math.pi / 2 + 1e-15, th - math.pi, th)
+        th = np.where(th <= -math.pi / 2 + 1e-15, th + math.pi, th)
+        th = np.where(nz, th, undv)
+    if d.is_image:
+        return image_out(d.img, th[..., None], typ=real_type(d.img), cs="Automatic")
+    return array_out(th[..., None])
+
+
+# ───────────────────────────── edge-preserving filters ─────────────────────────────
+
+@fn("BilateralFilter", area=AREA, status="added",
+    notes="BilateralFilter[data, σ, μ] replaces every element by the average of its neighbours within radius "
+          "Round[5σ/2] (smaller neighbourhoods at the boundaries) weighted by the sampled Gaussian "
+          "e^(-|offset|²/2σ²) times e^(-|value difference|²/2μ²), as documented (multichannel images use the "
+          "Euclidean distance between pixel vectors). MaxIterations -> n repeats the filter n times (default 1). "
+          "Arrays give machine reals, images a real type. Check: reference (Wolfram documentation example) in "
+          "tests.")
+def _bilateralfilter(x: Expr, s: Real, mu: Real, *opts: Option) -> Expr:
+    fname = "BilateralFilter"
+    pos, o = opts_split(opts, {"MaxIterations", "WorkingPrecision"}, fname)
+    if pos:
+        raise TypeError(f"{fname}: expected BilateralFilter[data, σ, μ, options]")
+    for v in (s, mu):
+        if isinstance(v, Symbol) or (isinstance(v, Expr) and not is_real_value(v)):
+            raise Unevaluated()
+    sv, mv = real_arg(s, fname, "σ"), real_arg(mu, fname, "μ")
+    if not (sv > 0 and mv > 0):
+        raise ValueError(f"{fname}: σ and μ must be positive")
+    its = int_arg(o.get("MaxIterations", 1), fname, "MaxIterations", 1)
+    d, a, alpha = _lin_input(x, fname)
+    nd = a.ndim - 1
+    r = int(math.floor(2.5 * sv + 0.5))
+    import itertools
+    offs = [k for k in itertools.product(range(-r, r + 1), repeat=nd) if True]
+    for _ in range(its):
+        num = np.zeros(a.shape)
+        den = np.zeros(a.shape[:-1])
+        for k in offs:
+            sh = _shift(a, k + (0,), np.nan)
+            valid = ~np.isnan(sh[..., 0])
+            ws = math.exp(-sum(t * t for t in k) / (2 * sv * sv))
+            diff2 = np.nansum((sh - a) ** 2, axis=-1)
+            w = np.where(valid, ws * np.exp(-diff2 / (2 * mv * mv)), 0.0)
+            num += w[..., None] * np.nan_to_num(sh)
+            den += w
+        a = num / den[..., None]
+    return _lin_out(d, a, alpha)
+
+
+def _box_mean(a, r):
+    """Mean over the (2r+1)^d window with smaller neighbourhoods at the boundaries (leading len(r) axes)."""
+    s, c = a, np.ones(a.shape[:len(r)])
+    for ax, rr in enumerate(r):
+        if rr == 0:
+            continue
+        s = _box_sum_axis(s, rr, ax)
+        c = _box_sum_axis(c, rr, ax)
+    return s / c.reshape(c.shape + (1,) * (a.ndim - len(r)))
+
+
+def _box_sum_axis(a, r, ax):
+    n = a.shape[ax]
+    cs = np.cumsum(np.pad(a, [(1, 0) if i == ax else (0, 0) for i in range(a.ndim)]), axis=ax)
+    hi = np.minimum(np.arange(n) + r + 1, n)
+    lo = np.maximum(np.arange(n) - r, 0)
+    return np.take(cs, hi, axis=ax) - np.take(cs, lo, axis=ax)
+
+
+@fn("GuidedFilter", area=AREA, status="added",
+    notes="GuidedFilter[data, guide, r, ϵ] is the guided filter of He, Sun and Tang: in every (2r+1)^d window "
+          "(smaller at the boundaries, as documented) the data is fitted by a + b guide with b = cov(guide, data) / "
+          "(var(guide) + ϵ) (vector guides: (Σ + ϵ I)^-1 cov), and the output is mean(a) + mean(b) guide; "
+          "GuidedFilter[data, r, ϵ] uses data as its own guide (per channel). Multichannel data are filtered per "
+          "channel; MaxIterations -> n repeats the filter. Arrays give machine reals, images a real type. Check: "
+          "reference (closed-form cases: constant data, ϵ → 0 identity with self-guidance, ϵ → ∞ box mean) in tests.")
+def _guidedfilter(x: Expr, *rest: Expr | NonNegInteger | Real | Option) -> Expr:
+    fname = "GuidedFilter"
+    pos, o = opts_split(rest, {"MaxIterations"}, fname)
+    if len(pos) == 2:
+        guide, r, eps = None, pos[0], pos[1]
+    elif len(pos) == 3:
+        guide, r, eps = pos
+    else:
+        raise TypeError(f"{fname}: expected GuidedFilter[data, guide, r, ϵ] or GuidedFilter[data, r, ϵ]")
+    if isinstance(eps, Symbol) or (isinstance(eps, Expr) and not is_real_value(eps)):
+        raise Unevaluated()
+    ev = real_arg(eps, fname, "ϵ")
+    if ev < 0:
+        raise ValueError(f"{fname}: ϵ must be non-negative")
+    d, a, alpha = _lin_input(x, fname)
+    nd = a.ndim - 1
+    rad = radii_arg(r, fname, nd)
+    its = int_arg(o.get("MaxIterations", 1), fname, "MaxIterations", 1)
+    if guide is not None:
+        dg, g, _ga = _lin_input(guide, fname)
+        if g.shape[:-1] != a.shape[:-1]:
+            raise ValueError(f"{fname}: the data and the guide must have the same dimensions")
+    for _ in range(its):
+        if guide is None:
+            mI = _box_mean(a, rad)
+            var = _box_mean(a * a, rad) - mI * mI
+            A = var / (var + ev) if ev > 0 else np.where(var > 1e-15, 1.0, 0.0)
+            B = mI - A * mI
+            a = _box_mean(A, rad) * a + _box_mean(B, rad)
+            continue
+        out = np.empty(a.shape)
+        mI = _box_mean(g, rad)                                         # (..., cg)
+        cg = g.shape[-1]
+        S = _box_mean(np.einsum("...i,...j->...ij", g, g).reshape(g.shape[:-1] + (cg * cg,)), rad)
+        S = S.reshape(g.shape[:-1] + (cg, cg)) - np.einsum("...i,...j->...ij", mI, mI)
+        Sreg = S + ev * np.eye(cg)
+        for c in range(a.shape[-1]):
+            p = a[..., c:c + 1]
+            mp = _box_mean(p, rad)
+            cov = _box_mean(g * p, rad) - mI * mp                        # (..., cg)
+            try:
+                A = np.linalg.solve(Sreg, cov[..., None])[..., 0]
+            except np.linalg.LinAlgError:
+                raise ValueError(f"{fname}: singular guide covariance; use a positive ϵ") from None
+            B = mp[..., 0] - (A * mI).sum(-1)
+            out[..., c] = (_box_mean(A, rad) * g).sum(-1) + _box_mean(B[..., None], rad)[..., 0]
+        a = out
+    return _lin_out(d, a, alpha)
+
+
+# ───────────────────────────── zero crossings ─────────────────────────────
+
+def _crossing(x, rest, fname, zeros):
+    pos, o = opts_split(rest, {"CornerNeighbors"}, fname)
+    if len(pos) > 1:
+        raise TypeError(f"{fname}: expected {fname}[data, delta, options]")
+    delta = 0.0
+    if pos:
+        if isinstance(pos[0], Symbol):
+            raise Unevaluated()
+        delta = real_arg(pos[0], fname, "delta")
+        if delta < 0:
+            raise ValueError(f"{fname}: delta must be non-negative")
+    cn = o.get("CornerNeighbors", TRUE)
+    d = data_arg(x, fname, exact_ok=False)
+    v = intensity(d.img) if d.is_image else d.a
+    if d.is_image and d.img.type in MAXV:
+        v = v                       # unsigned types never cross zero
+    v = np.where(np.abs(v) < delta, 0.0, v) if delta > 0 else v
+    pos_, neg, zer = v > 0, v < 0, v == 0
+    if _is_sym(cn, "None"):
+        nd = v.ndim
+        import itertools
+        corners = list(itertools.product((0, 1), repeat=nd))
+        shape = tuple(s - 1 for s in v.shape)
+        if min(shape) <= 0:
+            raise ValueError(f"{fname}: the dual grid needs at least 2 elements in every dimension")
+
+        def blk(m, c):
+            return m[tuple(slice(ci, ci + s) for ci, s in zip(c, shape))]
+        anyp = np.zeros(shape, bool)
+        anyn = np.zeros(shape, bool)
+        anyz = np.zeros(shape, bool)
+        for c in corners:
+            anyp |= blk(pos_, c)
+            anyn |= blk(neg, c)
+            anyz |= blk(zer, c)
+        res = (anyp & anyn) | (anyz if zeros else False)
+    else:
+        corner = _truthy(cn, fname, "CornerNeighbors")
+        nb = np.zeros(v.shape, bool)
+        for k in neighbour_offsets(v.ndim, corner, center=False):
+            nb |= _shift(neg, k, False)
+        res = (pos_ & nb) | (zer if zeros else False)
+    if d.is_image:
+        return image_expr(WI.Img(np.asarray(res, dtype=float)[..., None], "Bit", "Automatic", d.img.d3))
+    return int_nest(res.astype(int))
+
+
+@fn("CrossingDetect", area=AREA, status="added",
+    notes="CrossingDetect[data] marks the positive elements with at least one negative neighbour (CornerNeighbors "
+          "-> True (default): 8 / 26 neighbours, False: 4 / 6); CrossingDetect[data, delta] first treats values "
+          "with |x| < delta as 0; CornerNeighbors -> None works on the dual grid (one element per 2^d block, marked "
+          "when the block has both signs), as documented. Images use the mean intensity and give a \"Bit\" image "
+          "(unsigned types never cross zero); arrays give 0/1 arrays (the documented SparseArray output is given "
+          "as a normal array). Check: reference (Wolfram documentation examples) in tests.")
+def _crossingdetect(x: Expr, *rest: Real | Option) -> Expr:
+    return _crossing(x, rest, "CrossingDetect", False)
+
+
+@fn("ContourDetect", area=AREA, status="added",
+    notes="ContourDetect[data] marks the zero elements and the positive elements with a negative neighbour "
+          "(CornerNeighbors -> True (default) or False); ContourDetect[data, delta] treats |x| < delta as 0; "
+          "CornerNeighbors -> None works on the dual grid (a 2^d block is marked when it contains a zero or both "
+          "signs), as documented. Images use the mean intensity and give a \"Bit\" image; arrays give 0/1 arrays "
+          "(the documented SparseArray output is given as a normal array). Check: reference (Wolfram documentation "
+          "examples) in tests.")
+def _contourdetect(x: Expr, *rest: Real | Option) -> Expr:
+    return _crossing(x, rest, "ContourDetect", True)
+
+
+# ───────────────────────────── option symbols ─────────────────────────────
+
+from .core import record as _record  # noqa: E402
+
+for _n, _note in [
+        ("CornerNeighbors", "option of MorphologicalComponents, MaxDetect, FillingTransform, ComponentMeasurements, "
+                            "CrossingDetect, ... choosing 8 / 26 (True) or 4 / 6 (False) neighbours; an inert option "
+                            "name. Check: reference (used by the W28 heads in tests)."),
+        ("MaxFeatures", "option of ImageKeypoints, ImageCorners, ImageLines, ... limiting the number of features; an "
+                        "inert option name (the feature detectors of W28 are not implemented). Check: reference "
+                        "(inert symbol) in tests."),
+        ("MaxFeatureDisplacement", "option of ImageFeatureTrack and ImageDisplacements limiting feature motion; an "
+                                   "inert option name. Check: reference (inert symbol) in tests."),
+        ("KeypointStrength", "option of ImageKeypoints giving the minimum keypoint strength; an inert option name. "
+                             "Check: reference (inert symbol) in tests.")]:
+    _record(_n, AREA, "added", _note)
+
+
+# ───────────────────────────── MorphologicalTransform, RegionBinarize ─────────────────────────────
+
+_TRANSLATE = {"Top": (1, 0), "Bottom": (-1, 0), "Left": (0, 1), "Right": (0, -1), "TopLeft": (1, 1),
+              "TopRight": (1, -1), "BottomLeft": (-1, 1), "BottomRight": (-1, -1)}
+_NAMED_MT = ("Max", "Min", "Commonest", "Life", "Clean", "Fill", "Remove") + tuple(_TRANSLATE)
+
+
+def _nb_stack(b, padv):
+    """(3, 3, h, w) stack of the 3x3 neighbourhoods of the boolean matrix b."""
+    P = np.pad(b, 1, mode="constant", constant_values=padv)
+    h, w = b.shape
+    return np.array([[P[i:i + h, j:j + w] for j in range(3)] for i in range(3)])
+
+
+def _mt_step(b, f, padv, fname, cache):
+    N = _nb_stack(b, padv)
+    if isinstance(f, str):
+        cnt = N.sum((0, 1))
+        four = N[0, 1].astype(int) + N[1, 0] + N[1, 2] + N[2, 1]
+        if f == "Max":
+            return cnt > 0
+        if f == "Min":
+            return cnt == 9
+        if f == "Commonest":
+            return cnt >= 5
+        if f == "Life":
+            nb = cnt - b
+            return (nb == 3) | (b & (nb == 2))
+        if f == "Clean":
+            return b & ((cnt - b) > 0)
+        if f == "Fill":
+            return b | (four == 4)
+        if f == "Remove":
+            return b & ~(four == 4)
+        di, dj = _TRANSLATE[f]
+        return N[1 + di, 1 + dj]
+    # general function of the 3x3 neighbourhood: evaluate once per distinct pattern
+    codes = np.zeros(b.shape, dtype=int)
+    for i in range(3):
+        for j in range(3):
+            codes = codes * 2 + N[i, j]
+    out = np.zeros(b.shape, dtype=bool)
+    for c in np.unique(codes):
+        if (id(f), c) not in cache:
+            bits = [(int(c) >> (8 - t)) & 1 for t in range(9)]
+            m = L(*[L(*bits[3 * i:3 * i + 3]) for i in range(3)])
+            r = _ev(K.call(f, m))
+            if r is True or _is_sym(r, "True") or r == 1:
+                cache[(id(f), c)] = True
+            elif r is False or _is_sym(r, "False") or r == 0:
+                cache[(id(f), c)] = False
+            else:
+                raise ValueError(f"{fname}: the function must give 0 or 1 (or True/False), not {_short(r)}")
+        out[codes == c] = cache[(id(f), c)]
+    return out
+
+
+@fn("MorphologicalTransform", area=AREA, status="added",
+    notes="MorphologicalTransform[image, f] applies f to the 3 × 3 binary neighbourhood matrix of every pixel "
+          "(0/1 or True/False results; f is evaluated once per distinct neighbourhood), "
+          "MorphologicalTransform[image, {f1, f2, ...}] applies the fi in turn and MorphologicalTransform[image, "
+          "spec, n] iterates n times (Infinity: until nothing changes), as documented. Named specifications: \"Max\" "
+          "(3 × 3 dilation), \"Min\" (erosion), \"Commonest\" (majority of the 9 pixels), \"Life\" (Game of Life "
+          "B3/S23), \"Clean\" (clear isolated foreground pixels), \"Fill\" (set pixels whose 4 direct neighbours "
+          "are white), \"Remove\" (clear pixels whose 4 direct neighbours are white) and the one-pixel translations "
+          "\"Top\", \"Bottom\", \"Left\", \"Right\", \"TopLeft\", \"TopRight\", \"BottomLeft\", \"BottomRight\". "
+          "Rule numbers and the other named transforms (EndPoints, Bridge, Break, Flip, ...) raise "
+          "NotImplementedError. Padding -> 0 (default) or 1. Images (foreground > 0) give a \"Bit\" image, matrices "
+          "a 0/1 matrix. Check: reference (hand-worked neighbourhoods; Game of Life blinker) in tests.")
+def _morphtransform(x: Expr, spec: Fn | String | ListOf[Expr], *rest: NonNegInteger | Option) -> Expr:
+    fname = "MorphologicalTransform"
+    pos, o = opts_split(rest, {"Padding"}, fname)
+    if len(pos) > 1:
+        raise TypeError(f"{fname}: expected MorphologicalTransform[image, f, n, options]")
+    specs = list(spec.args) if K.is_list(spec) else [spec]
+    for s in specs:
+        if isinstance(s, str):
+            if s not in _NAMED_MT:
+                raise NotImplementedError(f"{fname}: the transformation {s!r} is not supported")
+        elif K.is_int(s):
+            raise NotImplementedError(f"{fname}: rule numbers are not supported")
+        elif isinstance(s, Symbol) and s.name[:1].islower():
+            raise Unevaluated()
+    n = None
+    if pos:
+        if _is_sym(pos[0], "Infinity") or (isinstance(pos[0], Expr) and pos[0].head == "DirectedInfinity"):
+            n = -1
+        else:
+            n = int_arg(pos[0], fname, "n", 0)
+    padv = _pad01(o, fname, 0)
+    d = data_arg(x, fname, allow3d=False)
+    b = _fg_mask(d, 0.0, fname)
+    if b.ndim != 2:
+        raise NotImplementedError(f"{fname}: only 2D images and matrices are supported")
+    cache = {}
+    steps = 1 if n is None else n
+    k = 0
+    while steps < 0 or k < steps:
+        new = b
+        for s in specs:
+            new = _mt_step(new, s, padv, fname, cache)
+        k += 1
+        if np.array_equal(new, b):
+            b = new
+            break
+        b = new
+        if k > 100000:
+            raise ValueError(f"{fname}: no convergence after 100000 iterations")
+    return binary_like(d, b)
+
+
+@fn("RegionBinarize", area=AREA, status="added",
+    notes="RegionBinarize[image, marker, d] gives the \"Bit\" image of the marker foreground together with the "
+          "connected regions (8-connected, the default connectivity of the W28 component functions) of pixels whose "
+          "Euclidean distance to the mean pixel value of the marker region is at most d and that touch the marker "
+          "(Method -> \"MeanEuclidean\", the default); MaxIterations -> n repeats this with the result as the new "
+          "marker, as documented. The marker is a binary image or matrix of the image's dimensions or a list of "
+          "{x, y} positions in the standard image coordinate system. A background marker and the \"Mahalanobis\" "
+          "method raise NotImplementedError. Check: reference (hand-worked region growing) in tests.")
+def _regionbinarize(x: Expr, marker: Expr, dist: Real, *rest: Expr | Option) -> Expr:
+    fname = "RegionBinarize"
+    pos, o = opts_split(rest, {"MaxIterations", "Method"}, fname)
+    if pos:
+        raise NotImplementedError(f"{fname}: background markers are not supported")
+    m = o.get("Method", "MeanEuclidean")
+    if not (m == "MeanEuclidean" or _is_sym(m, "Automatic")):
+        raise NotImplementedError(f"{fname}: Method {_short(m)} is not supported (\"MeanEuclidean\")")
+    if isinstance(dist, Symbol):
+        raise Unevaluated()
+    dv = real_arg(dist, fname, "d")
+    if dv < 0:
+        raise ValueError(f"{fname}: the distance d must be non-negative")
+    its = int_arg(o.get("MaxIterations", 1), fname, "MaxIterations", 1)
+    d = data_arg(x, fname)
+    if not d.is_image:
+        raise TypeError(f"{fname}: expected an image")
+    vals = d.img.color()
+    shape = vals.shape[:-1]
+    if K.is_list(marker) and marker.args and all(K.is_list(p) and len(p.args) == len(shape) and
+                                                 all(is_real_value(t) for t in p.args) for p in marker.args):
+        mk = np.zeros(shape, dtype=bool)
+        for p in marker.args:
+            xy = [real_arg(t, fname, "position") for t in p.args]
+            if len(shape) == 2:
+                i, j = int(math.floor(shape[0] - xy[1])), int(math.floor(xy[0]))
+                idx = (i, j)
+            else:
+                idx = (int(math.floor(shape[0] - xy[2])), int(math.floor(shape[1] - xy[1])), int(math.floor(xy[0])))
+            if not all(0 <= t < s for t, s in zip(idx, shape)):
+                raise ValueError(f"{fname}: marker position {_short(p)} is outside the image")
+            mk[idx] = True
+    else:
+        dm = data_arg(marker, fname, exact_ok=False)
+        mk = (intensity(dm.img) if dm.is_image else dm.a) > 0
+        if mk.shape != shape:
+            raise ValueError(f"{fname}: the marker must have the dimensions of the image")
+    if not mk.any():
+        raise ValueError(f"{fname}: the marker is empty")
+    for _ in range(its):
+        mean = vals[mk].mean(0)
+        ok = np.sqrt(((vals - mean) ** 2).sum(-1)) <= dv + 1e-12
+        lab = label(ok | mk, True)
+        keep = np.unique(lab[mk])
+        new = np.isin(lab, keep[keep > 0]) & (ok | mk)
+        if np.array_equal(new, mk):
+            break
+        mk = new
+    return binary_image(d.img, mk)

@@ -1835,7 +1835,6 @@
   "GaussianBeamWaist",
   "GaussianChannel",
   "GaussianCurvature",
-  "GaussianFilter",
   "GaussianPlume",
   "GaussianProcess",
   "GaussianQuadrature",
