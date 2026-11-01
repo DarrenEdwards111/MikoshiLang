@@ -2870,7 +2870,12 @@ def _pf_parts(head):
     return specs, head.args[1].args[0]
 
 
+_PREV_PF_HOOK = KL.COMPOUND_HEAD_HOOKS.get("ParametricFunction")   # e.g. ParametricConvexOptimization's
+
+
 def _pf_hook(head, args, ev_):
+    if not (len(head.args) == 2 and _head_is(head.args[1], "Hold")) and _PREV_PF_HOOK is not None:
+        return _PREV_PF_HOOK(head, args, ev_)
     specs, call = _pf_parts(head)
     if len(args) == 1 and args[0] == "Parameters":
         return L(*(p for p, _, _ in specs))

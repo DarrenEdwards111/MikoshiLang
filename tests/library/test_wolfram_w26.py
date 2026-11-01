@@ -596,6 +596,8 @@ CASES += [
      Raises(ValueError)),
     ("ParametricFunction[{a}, Hold[NDSolveValue[{y'[t] == a y[t], y[0] == 1}, y, {t, 0, 1}]]][\"Parameters\"]",
      "{a}"),
+    # the ParametricFunction hook chains to ParametricConvexOptimization's ParametricFunction form (W08)
+    ("x /. ParametricConvexOptimization[(x - a)^2, {x >= 0}, {x}, {a}][3]", Near(3, 1e-6)),
 ]
 
 # SciPy-backed heads (solve_ivp, LAPACK eigen/linear solves): filtered out when SciPy is absent (minimal CI job)
