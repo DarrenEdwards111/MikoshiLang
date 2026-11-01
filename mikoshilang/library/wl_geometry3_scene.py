@@ -572,7 +572,7 @@ def _candidates(S):
         def cyc(X, q=q):
             M_ = np.array([[x @ x, x[0], x[1], 1.0] for x in (S.pt(X, p) for p in q)])
             return float(np.linalg.det(M_))
-        c.append((Expr("GeometricAssertion", L(*q), "Concyclic"), cyc, 4))
+        c.append((Expr("GeometricAssertion", Expr("Polygon", L(*q)), "Cyclic"), cyc, 4))
     return c
 
 
@@ -585,7 +585,7 @@ def _norm_expr(e):
           "objects: the scene with added conclusions that hold on 4 independent random instances (as in "
           "RandomInstance) and are not among the hypotheses. Candidate catalogue: collinear triples, parallel and "
           "perpendicular point-pair lines (parallel only for lines without a common point), equal distances, midpoints, right angles PlanarAngle[{a, b, c}] == "
-          "90 Degree and concyclic quadruples (GeometricAssertion[{...}, \"Concyclic\"]); a candidate holds when "
+          "90 Degree and concyclic quadruples (GeometricAssertion[Polygon[{...}], \"Cyclic\"]); a candidate holds when "
           "its residual is below 1e-7 relative to the scene size on every instance and is not degenerate "
           "(distinct points). Conclusions implied by others are not removed, so the list can be longer than "
           "Wolfram's. patt (default _) filters with MatchQ; n caps the number. Method -> {\"RandomInstance\", "
