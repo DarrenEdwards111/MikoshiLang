@@ -96,3 +96,11 @@ def test_via_probe_and_pickling():
 
 def test_via_raises_cases_are_not_probed():
     check((Via("Gamma", "N[Gamma[1, 2, 3, 4, 5]]"), Raises()))
+
+
+def test_via_probe_does_not_change_the_session():
+    from _harness import ev
+    check((Via("StringLength", 'cbkvp = StringLength["abc"]; cbkvp'), "3"))
+    assert ev("cbkvp") == 3
+    check((Via("StringLength", 'cbkvp2 = {StringLength["ab"]}; cbkvp2'), "{2}"))
+    assert ev("cbkvp2") == ev("{2}")

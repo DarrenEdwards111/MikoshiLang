@@ -19,7 +19,7 @@ import urllib.parse
 
 import pytest
 
-from _harness import Pred, check, ids
+from _harness import Pred, Via, check, ids
 from mikoshilang.expr import Expr
 
 T = tempfile.mkdtemp(prefix="cbkio")
@@ -150,25 +150,28 @@ FILES = [
     (f'FileSystemMap[StringLength, {q(P("d1"))}]', '<|"n.txt" -> ' + str(len(P("d1", "n.txt"))) + "|>"),
     (f'FileSystemMap[FileBaseName, {q(P("d1"))}]', '<|"n.txt" -> "n"|>'),
     (f'FileSystemMap[FileExtension, {q(P("d1"))}]', '<|"n.txt" -> "txt"|>'),
-    (f'cbkseen = {{}}; FileSystemScan[AppendTo[cbkseen, #] &, {q(P("d1"))}]; cbkseen',
+    (Via("FileSystemScan", f'cbkseen = {{}}; FileSystemScan[AppendTo[cbkseen, #] &, {q(P("d1"))}]; cbkseen'),
      "{" + q(P("d1", "n.txt")) + "}"),
     (f'FileSystemScan[Identity, {q(P("d1"))}]', "Null"),
-    (f'cbkn = 0; FileSystemScan[cbkn++ &, {q(T)}]; cbkn > 0', True),
+    (Via("FileSystemScan", f'cbkn = 0; FileSystemScan[cbkn++ &, {q(T)}]; cbkn > 0'), True),
     # directories (each case restores the working directory)
     (f'SetDirectory[{q(T)}]; cbkd = Directory[]; ResetDirectory[]; cbkd', q(os.path.realpath(T))),
     (f'SetDirectory[{q(P("d1"))}]; cbkd = Directory[]; ResetDirectory[]; cbkd', q(os.path.realpath(P("d1")))),
     (f'SetDirectory[{q(T)}]; cbkd = FileExistsQ["a.txt"]; ResetDirectory[]; cbkd', True),
     ("Directory[]", Pred(lambda v: v == os.getcwd(), "the process working directory")),
     ("Directory[] === Directory[]", True),
+    (Via("ResetDirectory", f'SetDirectory[{q(T)}]; cbkd = ResetDirectory[]; cbkd === Directory[]'), True),
+    (Via("ResetDirectory", f'SetDirectory[{q(T)}]; SetDirectory[{q(P("d1"))}]; ResetDirectory[]; cbkd = Directory[]; '
+                           'ResetDirectory[]; cbkd'), q(os.path.realpath(T))),
     ('StringQ[Directory[]]', True),
-    (f'SetDirectory[{q(T)}]; ResetDirectory[]', Pred(lambda v: v == os.getcwd(), "the previous directory")),
+    (Via("ResetDirectory", f'SetDirectory[{q(T)}]; ResetDirectory[]'), Pred(lambda v: v == os.getcwd(), "the previous directory")),
     (f'SetDirectory[{q(T)}]; SetDirectory[{q(P("d1"))}]; ResetDirectory[]; cbkd = Directory[]; ResetDirectory[]; cbkd',
      q(os.path.realpath(T))),
-    (f'cbkd0 = Length[DirectoryStack[]]; SetDirectory[{q(T)}]; cbkd = Length[DirectoryStack[]] - cbkd0; '
-     'ResetDirectory[]; cbkd', "1"),
-    (f'cbkd0 = Length[DirectoryStack[]]; SetDirectory[{q(T)}]; SetDirectory[{q(T)}]; '
-     'cbkd = Length[DirectoryStack[]] - cbkd0; ResetDirectory[]; ResetDirectory[]; cbkd', "2"),
-    ("Head[DirectoryStack[]]", "List"),
+    (Via("DirectoryStack", f'cbkd0 = Length[DirectoryStack[]]; SetDirectory[{q(T)}]; cbkd = Length[DirectoryStack[]] - cbkd0; '
+     'ResetDirectory[]; cbkd'), "1"),
+    (Via("DirectoryStack", f'cbkd0 = Length[DirectoryStack[]]; SetDirectory[{q(T)}]; SetDirectory[{q(T)}]; '
+     'cbkd = Length[DirectoryStack[]] - cbkd0; ResetDirectory[]; ResetDirectory[]; cbkd'), "2"),
+    (Via("DirectoryStack", "Head[DirectoryStack[]]"), "List"),
 ]
 
 STREAMS = [
@@ -178,28 +181,35 @@ STREAMS = [
     (f'ReadString[{q(A)}]', q(open(A).read())),
     (f'ReadString[{q(P("nums.txt"))}]', '"1 2 3\\n"'),
     (f'ReadString[{q(P("d1", "n.txt"))}]', '"abc"'),
-    (f'cbks = OpenRead[{q(A)}]; ReadLine[cbks]', '"hello"'),
+    (Via("OpenRead", f'cbks = OpenRead[{q(A)}]; ReadLine[cbks]'), '"hello"'),
     ("ReadLine[cbks]", '"world"'),
     ("ReadLine[cbks]", "EndOfFile"),
     ("Close[cbks]", q(A)),
-    (f'cbks = OpenRead[{q(P("nums.txt"))}]; Read[cbks, Number]', "1"),
+    (Via("OpenRead", f'cbks = OpenRead[{q(P("nums.txt"))}]; Read[cbks, Number]'), "1"),
     ("Read[cbks, Number]", "2"),
     ("Read[cbks, {Number}]", "{3}"),
     ("Close[cbks]", q(P("nums.txt"))),
-    (f'cbks = OpenRead[{q(A)}]; Skip[cbks, Character, 2]; StreamPosition[cbks]', "2"),
+    (Via("OpenRead", f'cbks = OpenRead[{q(A)}]; Skip[cbks, Character, 2]; StreamPosition[cbks]'), "2"),
     ("SetStreamPosition[cbks, 6]; Read[cbks, Word]", '"world"'),
     ("StreamPosition[cbks]", "11"),
     ("SetStreamPosition[cbks, 0]", "0"),
     ("Skip[cbks, Word]; Read[cbks, Word]", '"world"'),
     ("Close[cbks]", q(A)),
-    (f'cbkw = OpenWrite[{q(P("w.txt"))}]; WriteString[cbkw, "ab"]; WriteLine[cbkw, "cd"]; Close[cbkw]',
-     _file_text(P("w.txt"), "abcd\n")),
-    (f'cbkw = OpenAppend[{q(P("w.txt"))}]; WriteString[cbkw, "z"]; Close[cbkw]', _file_text(P("w.txt"), "abcd\nz")),
-    (f'cbkw = OpenWrite[{q(P("w2.txt"))}]; WriteLine[cbkw, "x"]; WriteLine[cbkw, "y"]; Close[cbkw]',
-     _file_text(P("w2.txt"), "x\ny\n")),
-    (f'cbkw = OpenAppend[{q(P("w2.txt"))}]; WriteLine[cbkw, "z"]; Close[cbkw]', _file_text(P("w2.txt"), "x\ny\nz\n")),
-    (f'cbkw = OpenAppend[{q(P("w3.txt"))}]; WriteString[cbkw, "new"]; Close[cbkw]', _file_text(P("w3.txt"), "new")),
-    (f'cbkw = OpenWrite[{q(P("w4.txt"))}]; Close[cbkw]', _file_text(P("w4.txt"), "")),
+    # each write case starts from a known file state, so the expectation depends on the stream actually opened
+    (Via("OpenWrite", f'If[FileExistsQ[{q(P("w.txt"))}], DeleteFile[{q(P("w.txt"))}]]; cbkw = OpenWrite[{q(P("w.txt"))}]; WriteString[cbkw, "ab"]; '
+                      f'WriteLine[cbkw, "cd"]; Close[cbkw]; ReadString[{q(P("w.txt"))}]'), '"abcd\\n"'),
+    (Via("OpenAppend", f'WriteString[{q(P("w.txt"))}, "abcd\\n"]; Close[{q(P("w.txt"))}]; '
+                       f'cbkw = OpenAppend[{q(P("w.txt"))}]; WriteString[cbkw, "z"]; Close[cbkw]; '
+                       f'ReadString[{q(P("w.txt"))}]'), '"abcd\\nz"'),
+    (Via("OpenWrite", f'If[FileExistsQ[{q(P("w2.txt"))}], DeleteFile[{q(P("w2.txt"))}]]; cbkw = OpenWrite[{q(P("w2.txt"))}]; WriteLine[cbkw, "x"]; '
+                      f'WriteLine[cbkw, "y"]; Close[cbkw]; ReadString[{q(P("w2.txt"))}]'), '"x\\ny\\n"'),
+    (Via("OpenAppend", f'WriteString[{q(P("w2.txt"))}, "x\\ny\\n"]; Close[{q(P("w2.txt"))}]; '
+                       f'cbkw = OpenAppend[{q(P("w2.txt"))}]; WriteLine[cbkw, "z"]; Close[cbkw]; '
+                       f'ReadString[{q(P("w2.txt"))}]'), '"x\\ny\\nz\\n"'),
+    (Via("OpenAppend", f'If[FileExistsQ[{q(P("w3.txt"))}], DeleteFile[{q(P("w3.txt"))}]]; cbkw = OpenAppend[{q(P("w3.txt"))}]; '
+                       f'WriteString[cbkw, "new"]; Close[cbkw]; ReadString[{q(P("w3.txt"))}]'), '"new"'),
+    (Via("OpenWrite", f'If[FileExistsQ[{q(P("w4.txt"))}], DeleteFile[{q(P("w4.txt"))}]]; cbkw = OpenWrite[{q(P("w4.txt"))}]; Close[cbkw]; '
+                      f'FileExistsQ[{q(P("w4.txt"))}]'), True),
     (f'WriteString[{q(P("ws.txt"))}, "p", "q"]; Close[{q(P("ws.txt"))}]', _file_text(P("ws.txt"), "pq")),
     (f'WriteLine[{q(P("wl.txt"))}, "line"]; Close[{q(P("wl.txt"))}]', _file_text(P("wl.txt"), "line\n")),
     (f'Write[{q(P("e.m"))}, x^2]; Close[{q(P("e.m"))}]', _file_text(P("e.m"), "x^2\n")),
@@ -217,21 +227,21 @@ STREAMS = [
     (f'BinaryReadList[{q(P("bin"))}]', "{1, 2, 255}"),
     (f'BinaryReadList[{q(P("bin2"))}]', "{65}"),
     (f'BinaryReadList[{q(P("bin3"))}, "UnsignedInteger16"]', "{258}"),
-    (f'cbkb = OpenRead[{q(P("bin"))}, BinaryFormat -> True]; BinaryRead[cbkb]', "1"),
+    (Via("OpenRead", f'cbkb = OpenRead[{q(P("bin"))}, BinaryFormat -> True]; BinaryRead[cbkb]'), "1"),
     ("BinaryRead[cbkb]", "2"),
     ("BinaryRead[cbkb]; Close[cbkb]", q(P("bin"))),
-    (f'Normal[ReadByteArray[{q(P("bin"))}]]', "{1, 2, 255}"),
-    (f'Normal[ReadByteArray[{q(P("bin2"))}]]', "{65}"),
-    (f'Normal[ReadByteArray[{q(P("d1", "n.txt"))}]]', "{97, 98, 99}"),
-    ('ReadList[StringToStream["1 2 3"], Number]', "{1, 2, 3}"),
-    ('ReadLine[StringToStream["ab\\ncd"]]', '"ab"'),
-    ('ReadList[StringToStream["x y"], Word]', '{"x", "y"}'),
+    (Via("ReadByteArray", f'Normal[ReadByteArray[{q(P("bin"))}]]'), "{1, 2, 255}"),
+    (Via("ReadByteArray", f'Normal[ReadByteArray[{q(P("bin2"))}]]'), "{65}"),
+    (Via("ReadByteArray", f'Normal[ReadByteArray[{q(P("d1", "n.txt"))}]]'), "{97, 98, 99}"),
+    (Via("StringToStream", 'ReadList[StringToStream["1 2 3"], Number]'), "{1, 2, 3}"),
+    (Via("StringToStream", 'ReadLine[StringToStream["ab\\ncd"]]'), '"ab"'),
+    (Via("StringToStream", 'ReadList[StringToStream["x y"], Word]'), '{"x", "y"}'),
     ('Find[StringToStream["a\\nbcd\\nb"], "c"]', '"bcd"'),
     (f'Find[{q(A)}, "or"]', '"world"'),
     (f'Find[{q(A)}, "zz"]', "EndOfFile"),
-    (f'cbks = OpenRead[{q(A)}]; cbkin = MemberQ[Streams[], cbks]; Close[cbks]; cbkin', True),
-    ('MemberQ[Streams[], OutputStream["stdout", 1]]', True),
-    ('Head[Streams[]]', "List"),
+    (Via("OpenRead", f'cbks = OpenRead[{q(A)}]; cbkin = MemberQ[Streams[], cbks]; Close[cbks]; cbkin'), True),
+    (Via("Streams", 'MemberQ[Streams[], OutputStream["stdout", 1]]'), True),
+    (Via("Streams", 'Head[Streams[]]'), "List"),
 ]
 
 URL = [
@@ -312,9 +322,9 @@ SYSTEM = [
     ("Parallelize[Map[#^2 &, {1, 2}]]", "{1, 4}"),
     ("Parallelize[Table[i, {i, 3}]]", "{1, 2, 3}"),
     ("Parallelize[Total[{1, 2, 3}]]", "6"),
-    ("WaitAll[ParallelSubmit[1 + 2]]", "3"),
-    ("WaitAll[{ParallelSubmit[1], ParallelSubmit[2]}]", "{1, 2}"),
-    ("WaitAll[ParallelSubmit[x^2]]", "x^2"),
+    (Via("ParallelSubmit", "WaitAll[ParallelSubmit[1 + 2]]"), "3"),
+    (Via("ParallelSubmit", "WaitAll[{ParallelSubmit[1], ParallelSubmit[2]}]"), "{1, 2}"),
+    (Via("ParallelSubmit", "WaitAll[ParallelSubmit[x^2]]"), "x^2"),
     ("CriticalSection[{cbklk}, 5]", "5"),
     ("CriticalSection[{cbklk}, 1 + 1]", "2"),
     ("CriticalSection[{cbklk, cbklk2}, x]", "x"),
@@ -325,7 +335,7 @@ SYSTEM = [
     ("LocalEvaluate[x + x]", "2 x"),
     ("LocalEvaluate[{1, 2}]", "{1, 2}"),
     ("TaskWait[SessionSubmit[cbkz = 9]]; cbkz", "9"),
-    ("Head[SessionSubmit[1]]", "TaskObject"),
+    (Via("SessionSubmit", "Head[SessionSubmit[1]]"), "TaskObject"),
 ]
 
 COMPILE = [
@@ -340,7 +350,29 @@ COMPILE = [
     ("IfCompiled[x, 1 + 1]", "2"),
 ]
 
-CASES = FILES + STREAMS + URL + SYSTEM + COMPILE
+
+
+def _near_date(y, mo, d, h, mi, tol_min=30):
+    import datetime as dt
+    want = dt.datetime(y, mo, d, h, mi)
+
+    def f(v):
+        if not (isinstance(v, Expr) and v.head == "DateObject"):
+            return False
+        a = [float(x) for x in v.args[0].args]
+        got = dt.datetime(int(a[0]), int(a[1]), int(a[2]), int(a[3]), int(a[4])) + dt.timedelta(seconds=a[5])
+        return abs((got - want).total_seconds()) <= tol_min * 60
+    return Pred(f, f"a DateObject within {tol_min} min of {want:%Y-%m-%d %H:%M} UTC")
+
+
+# New moons from Meeus, Astronomical Algorithms (ch. 49): lunation 0 is 2000-01-06 18:14 UTC
+DATES = [
+    ("FromLunationNumber[0]", _near_date(2000, 1, 6, 18, 14)),
+    ("FromLunationNumber[1]", _near_date(2000, 2, 5, 13, 3)),
+    ("FromLunationNumber[12]", _near_date(2000, 12, 25, 17, 22)),
+]
+
+CASES = FILES + STREAMS + URL + SYSTEM + COMPILE + DATES
 
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
