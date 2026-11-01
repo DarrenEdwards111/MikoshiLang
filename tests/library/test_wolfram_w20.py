@@ -762,9 +762,446 @@ OTHER_CASES = [
     ("ImageVectorscopePlot[Image[{{0, 1}}], MaxPlotPoints -> -1]", Raises(ValueError)),
 ]
 
-CASES = HIST_CASES + CHART_CASES + SMOOTH_CASES + GAUGE_CASES + STAT_CASES + FIN_CASES + OTHER_CASES
-#@@MORE@@
+try:
+    import scipy.spatial  # noqa: F401
+    HAVE_SCIPY = True
+except ImportError:
+    HAVE_SCIPY = False
+
+
+def scipy_or_raise(pred):
+    return pred if HAVE_SCIPY else Raises(NotImplementedError)
+
+
+def lookup(table):
+    """Field of list data: the vector at the nearest data point."""
+    def f(*p):
+        return table[min(table, key=lambda k: sum((a - b) ** 2 for a, b in zip(k, p)))]
+    return f
+
+
+def vertex_set(g):
+    return sorted(tuple(round(c, 9) for c in q) for gc in prims(g, "GraphicsComplex") for q in
+                  [P(x) for x in gc.args[0].args])
+
+
+def vertex_set_is(want):
+    return Pred(lambda g: vertex_set(g) == sorted(tuple(round(float(c), 9) for c in q) for q in want),
+                f"vertices {want}")
+
+
+def curves_are(*fs, tol=1e-9):
+    def g_(g):
+        ls = prims(g, "Line")
+        if len(ls) < len(fs):
+            return False
+        for ln, f in zip(ls, fs):
+            if not all(abs(y - f(x)) <= tol for x, y in line_points(ln)):
+                return False
+        return True
+    return Pred(g_, "curves")
+
+
+S2, S3 = math.sqrt(2), math.sqrt(3)
+
+
+def F16(i, j, k):
+    """The data {{{1, 2}, {3, 4}}, {{5, 6}, {7, 8}}} with f_kji at {i, j, k} (linear)."""
+    return 1 + (i - 1) + 2 * (j - 1) + 4 * (k - 1)
+
+
+CUBE = "{{{1, 2}, {3, 4}}, {{5, 6}, {7, 8}}}"
+VEC3 = "{{{{1,0,0},{1,0,0}},{{0,1,0},{0,1,0}}},{{{0,0,1},{0,0,1}},{{1,1,1},{1,1,1}}}}"
+VEC3_TABLE = {(1, 1, 1): (1, 0, 0), (2, 1, 1): (1, 0, 0), (1, 2, 1): (0, 1, 0), (2, 2, 1): (0, 1, 0),
+              (1, 1, 2): (0, 0, 1), (2, 1, 2): (0, 0, 1), (1, 2, 2): (1, 1, 1), (2, 2, 2): (1, 1, 1)}
+CONST3 = "{{{{1,0,0},{1,0,0}},{{1,0,0},{1,0,0}}},{{{1,0,0},{1,0,0}},{{1,0,0},{1,0,0}}}}"
+GRID3x3 = "{{{1, 0}, {1, 0}, {1, 0}}, {{1, 0}, {1, 0}, {1, 0}}, {{1, 0}, {1, 0}, {1, 0}}}"
+
+FIELD_CASES = [
+    # ── StreamPlot: streamlines are integral curves, so first integrals of the field stay constant along them:
+    # {-y, x} (rotation) keeps x^2 + y^2; {x, -y} keeps x y; a constant field gives straight lines
+    ("StreamPlot[{-y, x}, {x, -1, 1}, {y, -1, 1}]", streams_keep(lambda x, y: x * x + y * y, 1e-4, 3)),
+    ("StreamPlot[{x, -y}, {x, 0.1, 1}, {y, 0.1, 1}, StreamPoints -> 4]", streams_keep(lambda x, y: x * y, 1e-4)),
+    ("StreamPlot[{1, 0}, {x, 0, 1}, {y, 0, 1}, StreamPoints -> 3]", streams_along((1, 0), 3)),
+    ("StreamPlot[{w20a y, x}, {x, -1, 1}, {y, -1, 1}]", unevaluated("StreamPlot")),
+    ("StreamPlot[{-y, x}, {x, 1, -1}, {y, -1, 1}]", Raises(ValueError)),
+    ('StreamPlot["a", {x, 0, 1}, {y, 0, 1}]', Raises(TypeError)),
+    ("StreamPlot[{-y, x}, {x, -1, 1}, {y, -1, 1}, Mesh -> 3]", Raises(NotImplementedError)),
+    ("StreamDensityPlot[{-y, x}, {x, -1, 1}, {y, -1, 1}, StreamPoints -> 4]",
+     streams_keep(lambda x, y: x * x + y * y, 1e-4)),
+    # the background is |v| = sqrt(x^2 + y^2): the darkest (lowest) vertex colour is at the origin
+    ("StreamDensityPlot[{-y, x}, {x, -1, 1}, {y, -1, 1}, StreamPoints -> 2, PlotPoints -> 3, MaxRecursion -> 0]",
+     Pred(lambda g: complex_data(g)[0][complex_data(g)[1].index(min(complex_data(g)[1]))] == (0.0, 0.0),
+          "minimum |v| at the origin")),
+    ("StreamDensityPlot[{{1, 0}, x}, {x, 0, 1}, {y, 0, 1}, StreamPoints -> 2]", streams_along((1, 0))),
+    ("StreamDensityPlot[{w20a, x}, {x, 0, 1}, {y, 0, 1}]", unevaluated("StreamDensityPlot")),
+    ("StreamDensityPlot[{1, 0}, {x, 0, 0}, {y, 0, 1}]", Raises(ValueError)),
+    ("StreamDensityPlot[{1, 0}, {x, 0, 1}, {y, 0, 1}, Mesh -> 3]", Raises(NotImplementedError)),
+    ("VectorDensityPlot[{1, x}, {x, 0, 1}, {y, 0, 1}, VectorPoints -> 2]",
+     arrows_follow(lambda x, y: (1, x), count=4)),
+    ("VectorDensityPlot[{{y, -x}, 1}, {x, -1, 1}, {y, -1, 1}, VectorPoints -> 3]",
+     arrows_follow(lambda x, y: (y, -x), count=8)),          # the centre vector is zero and omitted
+    ("VectorDensityPlot[{1, x}, {x, 0, 1}, {y, 0, 1}, VectorPoints -> 2]", has("GraphicsComplex", 1)),
+    ("VectorDensityPlot[{w20a, x}, {x, 0, 1}, {y, 0, 1}]", unevaluated("VectorDensityPlot")),
+    ("VectorDensityPlot[{1, x}, {x, 0, 1}, {y, 0, 1}, VectorPoints -> 0]", Raises(ValueError)),
+    ("VectorDensityPlot[{1, x}, {x, 0, 1}, {y, 0, 1}, VectorPoints -> Fine]", Raises(NotImplementedError)),
+    ("VectorPlot3D[{x, y, z}, {x, -1, 1}, {y, -1, 1}, {z, -1, 1}, VectorPoints -> 2]",
+     arrows_follow(lambda x, y, z: (x, y, z), count=8)),
+    ("VectorPlot3D[{1, 2, 3}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, VectorPoints -> 3]",
+     arrows_follow(lambda x, y, z: (1, 2, 3), count=27)),
+    ("VectorPlot3D[{-y, x, 1}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, VectorPoints -> 2]",
+     arrows_follow(lambda x, y, z: (-y, x, 1), count=8)),
+    ("VectorPlot3D[{w20a, y, z}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", unevaluated("VectorPlot3D")),
+    ("VectorPlot3D[{x, y}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", Raises(ValueError)),
+    ("VectorPlot3D[{x, y, z}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, Mesh -> 1]", Raises(NotImplementedError)),
+    ("StreamPlot3D[{1, 0, 0}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, StreamPoints -> 2]", streams_along((1, 0, 0), 4)),
+    ("StreamPlot3D[{-y, x, 0}, {x, -1, 1}, {y, -1, 1}, {z, 0, 1}, StreamPoints -> 2]",
+     streams_keep(lambda x, y, z: x * x + y * y, 1e-4)),
+    ("StreamPlot3D[{-y, x, 0}, {x, -1, 1}, {y, -1, 1}, {z, 0, 1}, StreamPoints -> 2]",
+     streams_keep(lambda x, y, z: z, 1e-12)),
+    ("StreamPlot3D[{w20a, 0, 0}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", unevaluated("StreamPlot3D")),
+    ("StreamPlot3D[{1, 0, 0}, {x, 0, 1}, {y, 0, 1}, {z, 1, 0}]", Raises(ValueError)),
+    ("StreamPlot3D[{1, 0, 0}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, StreamPoints -> Fine]", Raises(NotImplementedError)),
+    # ── list vector data: v_ij at {j, i} (ListDensityPlot convention); the zero vector is omitted
+    ("ListVectorPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}]",
+     arrows_follow(lookup({(1, 1): (1, 0), (2, 1): (0, 1), (1, 2): (1, 1), (2, 2): (0, 0)}), count=3)),
+    ("ListVectorPlot[{{{0, 0}, {1, 0}}, {{1, 1}, {0, 2}}, {{0, 1}, {1, 1}}}]",
+     arrows_follow(lookup({(0, 0): (1, 0), (1, 1): (0, 2), (0, 1): (1, 1)}), count=3)),
+    ("ListVectorPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}, DataRange -> {{0, 10}, {0, 1}}]",
+     arrows_follow(lookup({(0, 0): (1, 0), (10, 0): (0, 1), (0, 1): (1, 1), (10, 1): (0, 0)}), count=3)),
+    ("ListVectorPlot[w20x]", unevaluated("ListVectorPlot")),
+    ('ListVectorPlot["a"]', Raises(TypeError)),
+    ("ListVectorPlot[{{{1, 0}}}]", Raises(ValueError)),
+    ("ListVectorPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}, Mesh -> 2]", Raises(NotImplementedError)),
+    ("ListVectorPlot3D[" + VEC3 + "]", arrows_follow(lookup(VEC3_TABLE), count=8)),
+    ("ListVectorPlot3D[{{{0, 0, 0}, {1, 0, 0}}, {{1, 1, 1}, {0, 0, 2}}, {{2, 0, 1}, {1, 1, 1}}}]",
+     arrows_follow(lookup({(0, 0, 0): (1, 0, 0), (1, 1, 1): (0, 0, 2), (2, 0, 1): (1, 1, 1)}), count=3)),
+    ("ListVectorPlot3D[" + VEC3 + ", DataRange -> {{0, 1}, {0, 1}, {0, 1}}]",
+     arrows_follow(lookup({tuple(c - 1 for c in k): v for k, v in VEC3_TABLE.items()}), count=8)),
+    ("ListVectorPlot3D[w20x]", unevaluated("ListVectorPlot3D")),
+    ("ListVectorPlot3D[{{{{1, 0}}}}]", Raises(ValueError)),
+    ("ListVectorPlot3D[" + VEC3 + ", Mesh -> 2]", Raises(NotImplementedError)),
+    # density backgrounds interpolate |v| between the data points: vertices are the data points
+    ("ListVectorDensityPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}]", vertex_set_is([(1, 1), (2, 1), (1, 2), (2, 2)])),
+    ("ListVectorDensityPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}]",
+     arrows_follow(lookup({(1, 1): (1, 0), (2, 1): (0, 1), (1, 2): (1, 1), (2, 2): (0, 0)}), count=3)),
+    ("ListVectorDensityPlot[{{{0, 0}, {1, 0}}, {{1, 0}, {0, 2}}, {{0, 1}, {1, 1}}}]",
+     scipy_or_raise(vertex_set_is([(0, 0), (1, 0), (0, 1)]))),
+    ("ListVectorDensityPlot[w20x]", unevaluated("ListVectorDensityPlot")),
+    ("ListVectorDensityPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}, DataRange -> {{1, 0}, {0, 1}}]", Raises(ValueError)),
+    ("ListVectorDensityPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}, Mesh -> 2]", Raises(NotImplementedError)),
+    ("ListStreamPlot[" + GRID3x3 + ", StreamPoints -> 3]", streams_along((1, 0), 3)),
+    # bilinear interpolation of the rotation field sampled on a grid stays a rotation field (linear data)
+    ("ListStreamPlot[Table[{-w20y/2, w20x/2}, {w20y, -2, 2}, {w20x, -2, 2}], DataRange -> {{-1, 1}, {-1, 1}}, "
+     "StreamPoints -> 4]", streams_keep(lambda x, y: x * x + y * y, 1e-4)),
+    ("ListStreamPlot[{{{0, 0}, {1, 0}}, {{1, 0}, {1, 0}}, {{0, 1}, {1, 0}}, {{1, 1}, {1, 0}}}, StreamPoints -> 3]",
+     scipy_or_raise(streams_along((1, 0)))),
+    ("ListStreamPlot[w20x]", unevaluated("ListStreamPlot")),
+    ("ListStreamPlot[" + GRID3x3 + ", StreamPoints -> 1]", Raises(ValueError)),
+    ("ListStreamPlot[" + GRID3x3 + ", Mesh -> 2]", Raises(NotImplementedError)),
+    ("ListStreamDensityPlot[" + GRID3x3 + ", StreamPoints -> 3]", streams_along((1, 0), 3)),
+    ("ListStreamDensityPlot[" + GRID3x3 + ", StreamPoints -> 3]",
+     vertex_set_is([(i, j) for i in (1, 2, 3) for j in (1, 2, 3)])),
+    ("ListStreamDensityPlot[w20x]", unevaluated("ListStreamDensityPlot")),
+    ("ListStreamDensityPlot[{{{1, 0}}}]", Raises(ValueError)),
+    ("ListStreamDensityPlot[" + GRID3x3 + ", Mesh -> 2]", Raises(NotImplementedError)),
+    ("ListStreamPlot3D[" + CONST3 + ", StreamPoints -> 2]", streams_along((1, 0, 0), 4)),
+    ("ListStreamPlot3D[" + CONST3 + ", StreamPoints -> 3, DataRange -> {{0, 1}, {0, 1}, {0, 1}}]",
+     streams_along((1, 0, 0), 4)),
+    ("ListStreamPlot3D[w20x]", unevaluated("ListStreamPlot3D")),
+    ("ListStreamPlot3D[" + CONST3 + ", StreamPoints -> 0]", Raises(ValueError)),
+    ("ListStreamPlot3D[" + CONST3 + ", Mesh -> 2]", Raises(NotImplementedError)),
+    # ── displacement: p + s v(p) with the largest displacement 10% of the diagonal (s = 0.1 diag / max|v|)
+    ("VectorDisplacementPlot[{x, 0}, {x, 0, 1}, {y, 0, 1}, PlotPoints -> 2, MaxRecursion -> 0]",
+     vertex_set_is([(0, 0), (1 + 0.1 * S2, 0), (0, 1), (1 + 0.1 * S2, 1)])),
+    ("VectorDisplacementPlot[{0, 1}, {x, 0, 2}, {y, 0, 1}, PlotPoints -> 2, MaxRecursion -> 0]",
+     vertex_set_is([(0, 0.1 * math.sqrt(5)), (2, 0.1 * math.sqrt(5)), (0, 1 + 0.1 * math.sqrt(5)),
+                    (2, 1 + 0.1 * math.sqrt(5))])),
+    ("VectorDisplacementPlot[{x, 0}, Element[{x, y}, Rectangle[{0, 0}, {1, 1}]], PlotPoints -> 2, MaxRecursion -> 0]",
+     vertex_set_is([(0, 0), (1 + 0.1 * S2, 0), (0, 1), (1 + 0.1 * S2, 1)])),
+    ("VectorDisplacementPlot[{w20a, 0}, {x, 0, 1}, {y, 0, 1}]", unevaluated("VectorDisplacementPlot")),
+    ("VectorDisplacementPlot[{x, 0}, {x, 0, 1}, {y, 1, 1}]", Raises(ValueError)),
+    ("VectorDisplacementPlot[{x, 0}, Element[{x, y}, Disk[]]]", Raises(NotImplementedError)),
+    ('VectorDisplacementPlot["a", {x, 0, 1}, {y, 0, 1}]', Raises(TypeError)),
+    ("VectorDisplacementPlot3D[{x, 0, 0}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, PlotPoints -> 2]",
+     Pred(lambda g: set(vertex_set(g)) == {(round(x, 9), y, z) for x in (0, 1 + 0.1 * S3) for y in (0, 1)
+                                          for z in (0, 1)}, "cube corners displaced")),
+    ("VectorDisplacementPlot3D[{0, 0, 1}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, PlotPoints -> 2]",
+     Pred(lambda g: {q[2] for q in vertex_set(g)} == {round(0.1 * S3, 9), round(1 + 0.1 * S3, 9)}, "lifted")),
+    ("VectorDisplacementPlot3D[{x, 0, 0}, Element[{x, y, z}, Cuboid[{0, 0, 0}, {1, 1, 1}]], PlotPoints -> 2]",
+     Pred(lambda g: len(prims(g, "GraphicsComplex")) == 1, "cuboid region")),
+    ("VectorDisplacementPlot3D[{w20a, 0, 0}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]",
+     unevaluated("VectorDisplacementPlot3D")),
+    ("VectorDisplacementPlot3D[{x, 0, 0}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, PlotPoints -> 1]", Raises(ValueError)),
+    ("VectorDisplacementPlot3D[{x, 0, 0}, Element[{x, y, z}, Ball[]]]", Raises(NotImplementedError)),
+    ("ListVectorDisplacementPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}]",
+     vertex_set_is([(1 + 0.1 * S2 / S2, 1), (2, 1 + 0.1 * S2 / S2), (1 + 0.1, 2 + 0.1), (2, 2)])),
+    ("ListVectorDisplacementPlot[{{{0, 0}, {1, 0}}, {{1, 0}, {1, 0}}, {{0, 1}, {1, 0}}}]",
+     scipy_or_raise(vertex_set_is([(0.1 * S2, 0), (1 + 0.1 * S2, 0), (0.1 * S2, 1)]))),
+    ("ListVectorDisplacementPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}]", has("Polygon", 1)),
+    ("ListVectorDisplacementPlot[w20x]", unevaluated("ListVectorDisplacementPlot")),
+    ("ListVectorDisplacementPlot[{{{1, 0}, {0, 1}, {1, 1}}, {{1, 1}, {0, 0}}}]", Raises(ValueError)),
+    ("ListVectorDisplacementPlot[{{{1, 0}, {0, 1}}, {{1, 1}, {0, 0}}}, Mesh -> 1]", Raises(NotImplementedError)),
+    ("ListVectorDisplacementPlot3D[" + VEC3 + "]",
+     vertex_set_is([tuple(c + 0.1 * S3 / math.sqrt(sum(t * t for t in (1, 1, 1))) * vc for c, vc in zip(k, v))
+                    for k, v in VEC3_TABLE.items()])),
+    ("ListVectorDisplacementPlot3D[" + VEC3 + "]", Pred(lambda g: len(prims(g, "Polygon")[0].args[0].args) == 6,
+                                                       "six boundary faces")),
+    ("ListVectorDisplacementPlot3D[w20x]", unevaluated("ListVectorDisplacementPlot3D")),
+    ("ListVectorDisplacementPlot3D[{{{{1, 0, 0}}}}]", Raises(ValueError)),
+    ("ListVectorDisplacementPlot3D[" + VEC3 + ", Mesh -> 1]", Raises(NotImplementedError)),
+]
+
+SLICE_CASES = [
+    # slice planes (Wolfram SliceDensityPlot3D reference, "Details": "CenterPlanes", "BackPlanes", stacked planes)
+    ('SliceDensityPlot3D[x + y + z, "CenterPlanes", {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, PlotPoints -> 2, '
+     'MaxRecursion -> 0]',
+     Pred(lambda g: len(prims(g, "GraphicsComplex")) == 3 and
+          all(min(abs(c - 0.5) for c in q) < 1e-12 for q in vertex_set(g)), "three centre planes")),
+    ('SliceDensityPlot3D[x, "BackPlanes", {x, 0, 1}, {y, 0, 2}, {z, 0, 3}, PlotPoints -> 2, MaxRecursion -> 0]',
+     Pred(lambda g: [sorted({P(x)[i] for x in gc.args[0].args}) for gc, i in
+                     zip(prims(g, "GraphicsComplex"), (0, 1, 2))] == [[0.0], [2.0], [0.0]], "back planes")),
+    ('SliceDensityPlot3D[x, {"ZStackedPlanes", 3}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, PlotPoints -> 2, '
+     'MaxRecursion -> 0]',
+     Pred(lambda g: sorted({P(x)[2] for gc in prims(g, "GraphicsComplex") for x in gc.args[0].args}) ==
+          [0.25, 0.5, 0.75], "z = 1/4, 1/2, 3/4")),
+    ("SliceDensityPlot3D[x + w20a, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", unevaluated("SliceDensityPlot3D")),
+    ('SliceDensityPlot3D[x, {"XStackedPlanes", {2}}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]', Raises(ValueError)),
+    ('SliceDensityPlot3D[x, "CenterSphere", {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]', Raises(NotImplementedError)),
+    # contour lines on the plane z = 1/2 at the level x = 1/2 are the segment x = 1/2, z = 1/2
+    ("SliceContourPlot3D[x, z == 0.5, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, Contours -> {0.5}, PlotPoints -> 3, "
+     "MaxRecursion -> 0]", lines_where(lambda x, y, z: abs(x - 0.5) < 1e-9 and abs(z - 0.5) < 1e-9)),
+    ("SliceContourPlot3D[x + y, x == 0, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, Contours -> {0.25, 0.75}, PlotPoints -> 3, "
+     "MaxRecursion -> 0]", lines_where(lambda x, y, z: x == 0 and min(abs(y - 0.25), abs(y - 0.75)) < 1e-9)),
+    ("SliceContourPlot3D[x, z == 0.5, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, Contours -> {0.5}, PlotPoints -> 3, "
+     "MaxRecursion -> 0]", polygons_where(lambda x, y, z: abs(z - 0.5) < 1e-12)),
+    ("SliceContourPlot3D[x + w20a, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", unevaluated("SliceContourPlot3D")),
+    ("SliceContourPlot3D[x, z == 5, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", Raises(ValueError)),
+    ("SliceContourPlot3D[x, x y z == 1, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", Raises(NotImplementedError)),
+    ('SliceVectorPlot3D[{1, 0, 0}, {"XStackedPlanes", {0.5}}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, VectorPoints -> 2]',
+     arrows_follow(lambda x, y, z: (1, 0, 0), count=4)),
+    ("SliceVectorPlot3D[{x, y, z}, {x, 0.1, 1}, {y, 0.1, 1}, {z, 0.1, 1}, VectorPoints -> 2]",
+     arrows_follow(lambda x, y, z: (x, y, z), count=12)),
+    ('SliceVectorPlot3D[{-y, x, 1}, "BackPlanes", {x, 0, 1}, {y, 0, 1}, {z, 0, 1}, VectorPoints -> 2]',
+     arrows_follow(lambda x, y, z: (-y, x, 1), count=12)),
+    ("SliceVectorPlot3D[{w20a, 0, 0}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", unevaluated("SliceVectorPlot3D")),
+    ("SliceVectorPlot3D[{1, 0}, {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]", Raises(ValueError)),
+    ('SliceVectorPlot3D[{1, 0, 0}, "CenterCutBox", {x, 0, 1}, {y, 0, 1}, {z, 0, 1}]', Raises(NotImplementedError)),
+    # list slices: f_kji at {i, j, k}; the data is linear so trilinear interpolation is exact
+    ('ListSliceDensityPlot3D[' + CUBE + ', "BackPlanes", PlotPoints -> 2]',
+     Pred(lambda g: len(prims(g, "GraphicsComplex")) == 3, "three planes")),
+    ('ListSliceDensityPlot3D[' + CUBE + ', {"XStackedPlanes", {1.5}}, PlotPoints -> 2]',
+     Pred(lambda g: {q[0] for q in vertex_set(g)} == {1.5}, "plane x = 1.5")),
+    ('ListSliceDensityPlot3D[' + CUBE + ', PlotPoints -> 2, DataRange -> {{0, 1}, {0, 1}, {0, 1}}]',
+     Pred(lambda g: all(min(abs(c - 0.5) for c in q) < 1e-12 for q in vertex_set(g)), "centre planes")),
+    ("ListSliceDensityPlot3D[w20x]", unevaluated("ListSliceDensityPlot3D")),
+    ('ListSliceDensityPlot3D[{{{1}}}]', Raises(ValueError)),
+    ('ListSliceDensityPlot3D[' + CUBE + ', "CenterSphere"]', Raises(NotImplementedError)),
+    ("ListSliceContourPlot3D[" + CUBE + ", PlotPoints -> 3, Contours -> {4.5}]",
+     lines_where(lambda x, y, z: abs(F16(x, y, z) - 4.5) < 1e-9)),
+    ('ListSliceContourPlot3D[' + CUBE + ', {"ZStackedPlanes", {1.5}}, PlotPoints -> 3, Contours -> {4, 5}]',
+     lines_where(lambda x, y, z: z == 1.5 and min(abs(F16(x, y, z) - 4), abs(F16(x, y, z) - 5)) < 1e-9)),
+    ("ListSliceContourPlot3D[" + CUBE + ", PlotPoints -> 3, Contours -> {4.5}]",
+     polygons_where(lambda x, y, z: min(abs(c - 1.5) for c in (x, y, z)) < 1e-12)),
+    ("ListSliceContourPlot3D[w20x]", unevaluated("ListSliceContourPlot3D")),
+    ("ListSliceContourPlot3D[" + CUBE + ", PlotPoints -> 1]", Raises(ValueError)),
+    ("ListSliceContourPlot3D[" + CUBE + ", Mesh -> 2]", Raises(NotImplementedError)),
+    ("ListSliceVectorPlot3D[" + CONST3 + ", VectorPoints -> 2]", arrows_follow(lambda x, y, z: (1, 0, 0), count=12)),
+    # trilinear interpolation of the corner data VEC3 on the plane z = 1
+    ("ListSliceVectorPlot3D[" + VEC3 + ', {"ZStackedPlanes", {1}}, VectorPoints -> 2]',
+     arrows_follow(lambda x, y, z: (2 - y, y - 1, 0), scaled=False, count=4)),
+    ("ListSliceVectorPlot3D[" + CONST3 + ', "BackPlanes", VectorPoints -> 3]',
+     arrows_follow(lambda x, y, z: (1, 0, 0), count=27)),
+    ("ListSliceVectorPlot3D[w20x]", unevaluated("ListSliceVectorPlot3D")),
+    ("ListSliceVectorPlot3D[" + CONST3 + ", VectorPoints -> 0]", Raises(ValueError)),
+    ("ListSliceVectorPlot3D[" + CONST3 + ', "CenterCutSphere"]', Raises(NotImplementedError)),
+    # line integral convolution of white noise: a constant field {1, 0} averages the noise along rows over
+    # 2 L + 1 pixels (clipped at the border) - the documented LIC construction with a box kernel
+    ("LineIntegralConvolutionPlot[{1, 0}, {x, 0, 1}, {y, 0, 1}, RasterSize -> 6, LineIntegralConvolutionScale -> 2]",
+     lic_is_running_mean(6, 2)),
+    ("LineIntegralConvolutionPlot[{3, 0}, {x, 0, 2}, {y, 0, 1}, RasterSize -> 5, LineIntegralConvolutionScale -> 1]",
+     lic_is_running_mean(5, 1)),
+    ("LineIntegralConvolutionPlot[{1, 0}, {x, 0, 1}, {y, 0, 1}, RasterSize -> 4, LineIntegralConvolutionScale -> 1]",
+     Pred(lambda g: opt(g, "PlotRange") == ev("{{0., 1.}, {0., 1.}}"), "plot range")),
+    ("LineIntegralConvolutionPlot[{w20a, 0}, {x, 0, 1}, {y, 0, 1}]", unevaluated("LineIntegralConvolutionPlot")),
+    ("LineIntegralConvolutionPlot[{1, 0}, {x, 0, 1}, {y, 0, 1}, RasterSize -> 2]", Raises(ValueError)),
+    ("LineIntegralConvolutionPlot[{{1, 0}, Image[{{0, 1}}]}, {x, 0, 1}, {y, 0, 1}]", Raises(NotImplementedError)),
+    ("ListLineIntegralConvolutionPlot[{{{1, 0}, {1, 0}}, {{1, 0}, {1, 0}}}, RasterSize -> 6, "
+     "LineIntegralConvolutionScale -> 2]", lic_is_running_mean(6, 2)),
+    ("ListLineIntegralConvolutionPlot[" + GRID3x3 + ", RasterSize -> 4, LineIntegralConvolutionScale -> 3]",
+     lic_is_running_mean(4, 3)),
+    ("ListLineIntegralConvolutionPlot[" + GRID3x3 + ", RasterSize -> 4, LineIntegralConvolutionScale -> 3]",
+     has("Raster", 1)),
+    ("ListLineIntegralConvolutionPlot[w20x]", unevaluated("ListLineIntegralConvolutionPlot")),
+    ("ListLineIntegralConvolutionPlot[{{{1, 0}}}]", Raises(ValueError)),
+    ("ListLineIntegralConvolutionPlot[" + GRID3x3 + ", Mesh -> 1]", Raises(NotImplementedError)),
+]
+
+COMPLEX_CASES = [
+    # ComplexPlot colours: a cyclic colour function of Arg[f] (Wolfram ComplexPlot reference)
+    ("ComplexPlot[z, {z, -1 - I, 1 + I}, PlotPoints -> 2, MaxRecursion -> 0]", vertices_hue(lambda w: w)),
+    ("ComplexPlot[z^2 + 1, {z, 2}, PlotPoints -> 5, MaxRecursion -> 0]", vertices_hue(lambda w: w * w + 1)),
+    ("ComplexPlot[1/(z + 0.1), {z, 1}, PlotPoints -> 4, MaxRecursion -> 0]", vertices_hue(lambda w: 1 / (w + 0.1))),
+    ("ComplexPlot[w20a z, {z, 1}]", unevaluated("ComplexPlot")),
+    ("ComplexPlot[z, {z, 1, 1 + I}]", Raises(ValueError)),
+    ('ComplexPlot[z, {z, "a", 1}]', Raises(TypeError)),
+    ("ComplexPlot[z, {z, 1}, ColorFunction -> Hue]", Raises(NotImplementedError)),
+    ("ComplexPlot3D[z^2, {z, 1}, PlotPoints -> 3, MaxRecursion -> 0]",
+     vertices(lambda x, y, z: abs(z - abs(complex(x, y) ** 2)) < 1e-12)),
+    ("ComplexPlot3D[Exp[z], {z, -1 - I, 1 + I}, PlotPoints -> 3, MaxRecursion -> 0]",
+     vertices(lambda x, y, z: abs(z - math.exp(x)) < 1e-12)),
+    ("ComplexPlot3D[z, {z, 1}, PlotPoints -> 2, MaxRecursion -> 0]", vertices_hue(lambda w: w)),
+    ("ComplexPlot3D[w20a z, {z, 1}]", unevaluated("ComplexPlot3D")),
+    ("ComplexPlot3D[z, {z, -1}]", Raises(ValueError)),
+    ("ComplexPlot3D[z, {z, 1}, Mesh -> 3]", Raises(NotImplementedError)),
+    # ComplexContourPlot: contours of a real-valued function of z = x + I y (Wolfram reference, Details)
+    ("ComplexContourPlot[Abs[z], {z, 2}, Contours -> {1}, PlotPoints -> 41, MaxRecursion -> 0]",
+     lines_where(lambda x, y: abs(math.hypot(x, y) - 1) < 0.01)),
+    ("ComplexContourPlot[Re[z] == 0.5, {z, 1}, PlotPoints -> 5, MaxRecursion -> 0]",
+     lines_where(lambda x, y: abs(x - 0.5) < 1e-9)),      # values on grid lines are nudged by ~1e-12 (W16)
+    ("ComplexContourPlot[{Re[z] == 0.25, Im[z] == -0.5}, {z, 1}, PlotPoints -> 5, MaxRecursion -> 0]",
+     lines_where(lambda x, y: abs(x - 0.25) < 1e-9 or abs(y + 0.5) < 1e-9)),
+    ("ComplexContourPlot[Re[z], {z, 1}, Contours -> {0}, PlotPoints -> 5, MaxRecursion -> 0]",
+     polygons_where(lambda x, y: -1 <= x <= 1)),
+    ("ComplexContourPlot[w20a Re[z], {z, 1}]", unevaluated("ComplexContourPlot")),
+    ("ComplexContourPlot[Re[z], {z, 0}]", Raises(ValueError)),
+    ("ComplexContourPlot[Re[z], {z, 1}, Mesh -> 2]", Raises(NotImplementedError)),
+    ("ComplexRegionPlot[Abs[z] < 1, {z, 2}, PlotPoints -> 21, MaxRecursion -> 0]",
+     polygons_where(lambda x, y: math.hypot(x, y) <= 1 + 1e-9)),
+    ("ComplexRegionPlot[Re[z] > 0, {z, 1}, PlotPoints -> 5, MaxRecursion -> 0]",
+     polygons_where(lambda x, y: x >= -1e-12)),
+    ("ComplexRegionPlot[Im[z] < 0 && Re[z] < 0, {z, 1}, PlotPoints -> 5, MaxRecursion -> 0]",
+     polygons_where(lambda x, y: x <= 1e-12 and y <= 1e-12)),
+    ("ComplexRegionPlot[Abs[z] < w20a, {z, 1}]", unevaluated("ComplexRegionPlot")),
+    ("ComplexRegionPlot[Abs[z] < 1, {z, 1, 1}]", Raises(ValueError)),
+    ("ComplexRegionPlot[Abs[z] == 1, {z, 1}]", Raises(NotImplementedError, match="^ComplexRegionPlot: ")),
+    ("ComplexVectorPlot[z, {z, 1}, VectorPoints -> 2]", arrows_follow(lambda x, y: (x, y), count=4)),
+    ("ComplexVectorPlot[z^2, {z, 1}, VectorPoints -> 3]",
+     arrows_follow(lambda x, y: ((complex(x, y) ** 2).real, (complex(x, y) ** 2).imag), count=8)),
+    ("ComplexVectorPlot[Conjugate[z], {z, -1 - I, 1 + I}, VectorPoints -> 2]",
+     arrows_follow(lambda x, y: (x, -y), count=4)),
+    ("ComplexVectorPlot[w20a z, {z, 1}]", unevaluated("ComplexVectorPlot")),
+    ("ComplexVectorPlot[z, {z, 1}, VectorPoints -> 0]", Raises(ValueError)),
+    ("ComplexVectorPlot[z, {z, 1}, StreamPoints -> 3]", Raises(NotImplementedError)),
+    ("ComplexStreamPlot[I z, {z, 1}, StreamPoints -> 3]", streams_keep(lambda x, y: x * x + y * y, 1e-4)),
+    ("ComplexStreamPlot[1, {z, 1}, StreamPoints -> 3]", streams_along((1, 0), 3)),
+    ("ComplexStreamPlot[Conjugate[z], {z, 0.1 + 0.1 I, 1 + I}, StreamPoints -> 3]",
+     streams_keep(lambda x, y: x * y, 1e-4)),
+    ("ComplexStreamPlot[w20a z, {z, 1}]", unevaluated("ComplexStreamPlot")),
+    ("ComplexStreamPlot[z, {z, 1}, StreamPoints -> 1]", Raises(ValueError)),
+    ("ComplexStreamPlot[z, {z, 1}, VectorPoints -> 3]", Raises(NotImplementedError)),
+    ("ComplexListPlot[{1 + I, 2, -I}]", points_are([(1, 1), (2, 0), (0, -1)])),
+    ("ComplexListPlot[{{1 + I}, {2 I, 3}}]", points_are([(1, 1), (0, 2), (3, 0)])),
+    ("ComplexListPlot[{Exp[I Pi/2]}]", points_are([(0, 1)], 1e-12)),
+    ("ComplexListPlot[{1, w20a}]", unevaluated("ComplexListPlot")),
+    ('ComplexListPlot[{1, "a"}]', Raises(TypeError)),
+    ("ComplexListPlot[{1, 2}, Joined -> 3]", Raises(ValueError)),
+    ("ReImPlot[Exp[I x], {x, 0, 1}]", curves_are(math.cos, math.sin, tol=1e-12)),
+    ("ReImPlot[x^2, {x, -1, 1}]", curves_are(lambda x: x * x, tol=1e-12)),
+    ("ReImPlot[{x, I x}, {x, 0, 1}]", Pred(lambda g: len(prims(g, "Line")) >= 2, "curves")),
+    ("ReImPlot[w20a x, {x, 0, 1}]", unevaluated("ReImPlot")),
+    ("ReImPlot[x, {x, 1, 0}]", Raises(ValueError, match="^ReImPlot: ")),
+    ("ReImPlot[x, {x, 0, 1}, Mesh -> 2]", Raises(NotImplementedError)),
+    # AbsArgPlot: the curve |f| coloured by Arg[f] (Wolfram AbsArgPlot reference)
+    ("AbsArgPlot[Exp[I x], {x, 0, 1}, PlotPoints -> 3, MaxRecursion -> 0]",
+     Pred(lambda g: [q for ln in prims(g, "Line") for q in line_points(ln)] == [(0.0, 1.0), (0.5, 1.0), (1.0, 1.0)],
+          "|f| = 1")),
+    ("AbsArgPlot[Exp[I x], {x, 0, 1}, PlotPoints -> 3, MaxRecursion -> 0]",
+     Pred(lambda g: near([c for col in prims(g, "Line")[0].args[1].args[1].args for c in tup(col)],
+                         [c for t in (0.0, 0.5, 1.0) for c in hue(complex(math.cos(t), math.sin(t)))]),
+          "hues of Arg")),
+    ("AbsArgPlot[x - 1, {x, 0, 3}, PlotPoints -> 4, MaxRecursion -> 0]",
+     Pred(lambda g: [q for ln in prims(g, "Line") for q in line_points(ln)] == [(0.0, 1.0), (1.0, 0.0), (2.0, 1.0),
+                                                                                (3.0, 2.0)], "|x - 1|")),
+    ("AbsArgPlot[w20a x, {x, 0, 1}]", unevaluated("AbsArgPlot")),
+    ("AbsArgPlot[x, {x, 0, 0}]", Raises(ValueError)),
+    ("AbsArgPlot[{x, x^2}, {x, 0, 1}]", Raises(NotImplementedError)),
+    ("ComplexArrayPlot[{{1, I}, {0, -1}}]",
+     Pred(lambda g: raster(g) == [[(0, 0, 0), (0, 1, 1)], [(1, 0, 0), (0.5, 1, 0)]], "row 1 on top, hues")),
+    ("ComplexArrayPlot[{{-I, 1 + I}}]", Pred(lambda g: raster(g) == [[hue(-1j), hue(1 + 1j)]], "hues")),
+    ("ComplexArrayPlot[{{1, 2}, {3, 4}}]", Pred(lambda g: opt(g, "PlotRange") == ev("{{0., 2.}, {0., 2.}}"),
+                                                "2 x 2 cells")),
+    ("ComplexArrayPlot[{{1, w20a}}]", unevaluated("ComplexArrayPlot")),
+    ("ComplexArrayPlot[{{1, 2}, {3}}]", Raises(ValueError)),
+    ('ComplexArrayPlot[{{"a"}}]', Raises(TypeError)),
+    ("ComplexArrayPlot[{{1}}, ColorFunction -> Hue]", Raises(NotImplementedError)),
+    # RevolutionPlot3D[fz, {t, ...}] = the curve {t, 0, fz} rotated about z (Wolfram reference, Details)
+    ("RevolutionPlot3D[t^2, {t, 0, 1}, PlotPoints -> 5, MaxRecursion -> 0]",
+     vertices(lambda x, y, z: abs(z - (x * x + y * y)) < 1e-12)),
+    ("RevolutionPlot3D[{Cos[t], Sin[t]}, {t, -Pi/2, Pi/2}, {w20th, 0, Pi}, PlotPoints -> 5, MaxRecursion -> 0]",
+     vertices(lambda x, y, z: abs(x * x + y * y + z * z - 1) < 1e-12 and y >= -1e-12)),
+    ("RevolutionPlot3D[{1, 1, t}, {t, 0, 1}, PlotPoints -> 5, MaxRecursion -> 0]",
+     vertices(lambda x, y, z: abs(x * x + y * y - 2) < 1e-12)),
+    ("RevolutionPlot3D[{{t}, {2 t}}, {t, 0, 1}, PlotPoints -> 3, MaxRecursion -> 0]",
+     Pred(lambda g: len(prims(g, "GraphicsComplex")) == 2, "two surfaces")),
+    ("RevolutionPlot3D[w20a t, {t, 0, 1}]", unevaluated("RevolutionPlot3D")),
+    ("RevolutionPlot3D[t, {t, 1, 0}]", Raises(ValueError, match="^RevolutionPlot3D: ")),
+    ("RevolutionPlot3D[t, {t, 0, 1}, RevolutionAxis -> {1, 0, 0}]", Raises(NotImplementedError)),
+]
+
+CASES = (HIST_CASES + CHART_CASES + SMOOTH_CASES + GAUGE_CASES + STAT_CASES + FIN_CASES + OTHER_CASES + FIELD_CASES
+         + SLICE_CASES + COMPLEX_CASES)
 
 @pytest.mark.parametrize("case", CASES, ids=ids(CASES))
 def test_wolfram_w20(case):
     check(case)
+
+
+# ───────────── Check: methods (self-checks raise ArithmeticError; cross-checks discard wrong compiled code) ─────────────
+
+def test_w20_streamline_tangency_self_check_raises():
+    import numpy as np
+    from mikoshilang.library.wl_plots3d_fields import check_tangent
+
+    def F(x, y):
+        x = np.asarray(x, dtype=float)
+        return np.stack([np.ones_like(x), np.zeros_like(x)], axis=-1)
+    check_tangent([[(0.0, 0.0), (0.1, 0.0)]], F, "StreamPlot")            # tangent: accepted
+    with pytest.raises(ArithmeticError, match="^StreamPlot: "):
+        check_tangent([[(0.0, 0.0), (0.0, 0.1)]], F, "StreamPlot")        # perpendicular to the field
+
+
+def test_w20_wordcloud_overlap_self_check_raises(monkeypatch):
+    from mikoshilang.library import wl_plots3d_charts as C
+    monkeypatch.setattr(C, "wordcloud_layout", lambda words, fmax=40.0: [(s, 40.0, 0.0, 0.0, 10.0, 10.0)
+                                                                        for s, _ in words])
+    with pytest.raises(ArithmeticError, match="^WordCloud: "):
+        ev('WordCloud[{"a", "b"}]')
+
+
+def test_w20_complex_cross_check_discards_wrong_compiled_code():
+    import numpy as np
+    from mikoshilang.library.wl_plots3d_fields import ComplexFunction
+    from mikoshilang.parser import parse
+    cf = ComplexFunction(parse("w20z^2"), Symbol("w20z"), "ComplexPlot")
+    assert cf.fast is not None
+    cf.fast = lambda w: np.asarray(w) * 0 + 7          # a wrong compiled function
+    cf.cross_check([0.3 + 0.2j])
+    assert cf.fast is None                              # discarded: the kernel evaluates every point
+    assert abs(complex(cf(np.array([1 + 1j]))[0]) - 2j) < 1e-12
+
+
+def test_w20_every_batch_symbol_is_registered_and_none_skipped():
+    from mikoshilang.library import wl_plots3d_charts as C, wl_plots3d_fields as F
+    from mikoshilang.library.core import REGISTRY
+    heads = ["WordCloud", "Histogram", "BoxWhiskerChart", "AngularGauge", "BarChart3D", "BubbleChart",
+             "SmoothHistogram", "VerticalGauge", "BubbleChart3D", "BulletGauge", "ClockGauge", "ComplexStreamPlot",
+             "ComplexVectorPlot", "DateHistogram", "DensityHistogram", "DistributionChart",
+             "GaugeFaceElementFunction", "GaugeFaceStyle", "GaugeFrameElementFunction", "GaugeFrameSize",
+             "GaugeFrameStyle", "GaugeLabels", "GaugeMarkers", "GaugeStyle", "Histogram3D", "HorizontalGauge",
+             "KagiChart", "LineIntegralConvolutionPlot", "ListLineIntegralConvolutionPlot", "ListSliceContourPlot3D",
+             "ListSliceDensityPlot3D", "ListSliceVectorPlot3D", "ListStreamDensityPlot", "ListStreamPlot",
+             "ListStreamPlot3D", "ListVectorDensityPlot", "ListVectorDisplacementPlot",
+             "ListVectorDisplacementPlot3D", "ListVectorPlot", "ListVectorPlot3D", "PairedBarChart",
+             "PairedHistogram", "PairedSmoothHistogram", "PairwiseDensityHistogram",
+             "PairwiseSmoothDensityHistogram", "RectangleChart", "RectangleChart3D", "SectorChart",
+             "SliceVectorPlot3D", "SmoothDateHistogram", "SmoothDensityHistogram", "SmoothHistogram3D",
+             "StreamDensityPlot", "StreamPlot", "StreamPlot3D", "ThermometerGauge", "VectorDensityPlot",
+             "VectorDisplacementPlot", "VectorDisplacementPlot3D", "VectorPlot3D", "AbsArgPlot", "BubbleHistogram",
+             "CandlestickChart", "CategoricalHistogram", "ComplexArrayPlot", "ComplexContourPlot", "ComplexListPlot",
+             "ComplexPlot", "ComplexPlot3D", "ComplexRegionPlot", "ImageHistogram", "ImageVectorscopePlot",
+             "PieChart3D", "ReImPlot", "RenkoChart", "RevolutionPlot3D", "SectorChart3D", "SliceContourPlot3D",
+             "SliceDensityPlot3D", "TradingChart"]
+    assert len(heads) == 80
+    assert not [h for h in heads if h not in REGISTRY]
+    assert C.SKIPPED == {} and F.SKIPPED == {}

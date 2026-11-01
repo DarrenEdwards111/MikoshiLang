@@ -1611,7 +1611,7 @@ def _complexcontourplot(f: Held, spec: Held, *opts: Held | Option) -> Expr:
 @fn("ComplexRegionPlot", area=AREA, status="added", hold=True,
     notes="ComplexRegionPlot[pred, {z, zmin, zmax}] and [pred, {z, n}] (HoldAll): exactly RegionPlot[pred /. z -> "
           "x + I y, {x, Re zmin, Re zmax}, {y, Im zmin, Im zmax}, opts] with RegionPlot's options and layout. "
-          "Check: inherits RegionPlot's checks; reference (polygon vertices satisfy pred in tests).")
+          "Check: delegated (to RegionPlot) and reference (polygon vertices satisfy pred in tests).")
 def _complexregionplot(pred: Held, spec: Held, *opts: Held | Option) -> Expr:
     return _xy_form(pred, spec, opts, "ComplexRegionPlot", "RegionPlot")
 
@@ -1698,7 +1698,7 @@ def _complexlistplot(data: ListOf[Expr], *opts: Option) -> Expr:
 @fn("ReImPlot", area=AREA, status="added", hold=True,
     notes="ReImPlot[f, {x, xmin, xmax}] and [{f1, f2, ...}, ...] (HoldAll): exactly Plot[{Re[f], Im[f]}, {x, xmin, "
           "xmax}, opts] (Re[f1], Im[f1], Re[f2], ... for lists), with Plot's sampling, options and layout. Check: "
-          "inherits Plot's checks; reference (curve values equal Re/Im of f in tests).")
+          "delegated (to Plot) and reference (curve values equal Re/Im of f in tests).")
 def _reimplot(f: Held, spec: Held, *opts: Held | Option) -> Expr:
     fname = "ReImPlot"
     pos, o_ = hold_args((f, spec) + opts)
@@ -1802,7 +1802,7 @@ _THETA = Symbol("plot$w20$theta")
           "{theta, thetamin, thetamax} (default 0 to 2 Pi, counterclockwise from the x axis): exactly "
           "ParametricPlot3D[{fx Cos[theta] - fy Sin[theta], fx Sin[theta] + fy Cos[theta], fz}, {t, ...}, {theta, "
           "...}, opts] with ParametricPlot3D's sampling, options and layout. RevolutionAxis other than the z axis "
-          "raises NotImplementedError. Check: inherits ParametricPlot3D's checks; reference (vertices lie at "
+          "raises NotImplementedError. Check: delegated (to ParametricPlot3D) and reference (vertices lie at "
           "radius t and height fz in tests).")
 def _revolutionplot3d(f: Held, st: Held, *rest: Held | Option) -> Expr:
     fname = "RevolutionPlot3D"

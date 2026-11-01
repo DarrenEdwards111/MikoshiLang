@@ -3111,3 +3111,7 @@ def _pairedbarchart(d1: ListOf[Real], d2: ListOf[Real], *opts: Option) -> Expr:
     g = finish_graphics(L(*content), gopts, [("AspectRatio", GOLDEN), ("Axes", True), ("Ticks", L(AUTO, ticks)),
                                              ("PlotRange", range_expr(r))])
     return _legend(g, o, styles, fname)
+
+
+# Every symbol of the batch is implemented (some partially; see the notes of each head).
+SKIPPED: dict = {}
