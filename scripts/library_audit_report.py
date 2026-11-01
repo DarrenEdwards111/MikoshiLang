@@ -18,7 +18,7 @@ MODULES = ["test_elementary", "test_special", "test_numbertheory", "test_combina
            "test_logic_graphs", "test_numerics_transforms", "test_plots_ml", "test_kernelheads", "test_wolfram_fixes",
            "test_wolfram_batch1", "test_wolfram_batch2", "test_wolfram_batch3", "test_wolfram_batch4", "test_wolfram_batch5", "test_wolfram_batch6", "test_wolfram_w01", "test_wolfram_w02", "test_wolfram_w03", "test_wolfram_w04",
            "test_wolfram_w05", "test_wolfram_w06", "test_wolfram_w08", "test_wolfram_w07", "test_wolfram_w10", "test_wolfram_w09", "test_wolfram_w11", "test_wolfram_w13", "test_wolfram_w12",
-           "test_wolfram_w14", "test_wolfram_interop", "test_wolfram_w17", "test_wolfram_w23", "test_wolfram_w24", "test_wolfram_w15", "test_wolfram_w19", "test_wolfram_w16", "test_wolfram_w21", "test_wolfram_w28", "test_wolfram_w22", "test_wolfram_w18"]
+           "test_wolfram_w14", "test_wolfram_interop", "test_wolfram_w17", "test_wolfram_w23", "test_wolfram_w24", "test_wolfram_w15", "test_wolfram_w19", "test_wolfram_w16", "test_wolfram_w21", "test_wolfram_w28", "test_wolfram_w22", "test_wolfram_w18", "test_wolfram_w20"]
 IDENT = re.compile(r"(?<![A-Za-z0-9\"$])(\$?[A-Z][A-Za-z0-9]*)")
 
 used = collections.Counter()

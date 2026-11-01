@@ -2136,7 +2136,6 @@
   "IlluminationLevel",
   "ImageDifferencing",
   "ImageFeatureTrack",
-  "ImageHistogram",
   "ImageKeypoints",
   "ImageTranspose",
   "ImmersedBoundaryMethod",
