@@ -3606,7 +3606,6 @@ SKIPPED = {
     "DownValuesFunction": "compiled-code (FunctionCompile) construct",
     "RuntimeAttributes": "Compile option (compiler not part of this batch)",
     "RuntimeOptions": "Compile option (compiler not part of this batch)",
-    "EvaluationObject": "parallel-kernel evaluation objects (ParallelSubmit)",
     "InitializationObject": "persistence framework (PersistenceLocation) not available",
     "InitializationObjects": "persistence framework (PersistenceLocation) not available",
     "InitializationValue": "persistence framework (PersistenceLocation) not available",

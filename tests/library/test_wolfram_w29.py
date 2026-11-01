@@ -605,11 +605,11 @@ KERNELS = [
 # ------------------------------------------------------------------------- parallel commands (doc: same results)
 PARALLEL = [
     ('ParallelEvaluate[1 + 1]', '{2, 2}'),
-    ('ParallelEvaluate[$KernelID, First[Kernels[]]] == First[Kernels[]]["KernelID"]', 'True'),
-    ('Length[ParallelEvaluate[$ProcessID, Kernels[]]]', '2'),
-    ('ParallelEvaluate[1 + 1, Kernels[], Hold]', '{Hold[2], Hold[2]}'),                           # doc: h argument
+    ('ParallelEvaluate[0]; ParallelEvaluate[$KernelID, First[Kernels[]]] == First[Kernels[]]["KernelID"]', 'True'),
+    ('ParallelEvaluate[0]; Length[ParallelEvaluate[$ProcessID, Kernels[]]]', '2'),
+    ('ParallelEvaluate[0]; ParallelEvaluate[1 + 1, Kernels[], Hold]', '{Hold[2], Hold[2]}'),                           # doc: h argument
     ('w29f[x_] := x^2; ParallelEvaluate[w29f[3]]', '{9, 9}'),                                     # auto-distributed
-    ('w29g[x_] := x + 1; ParallelEvaluate[w29g[1], Kernels[], Hold, DistributedContexts -> None]',
+    ('ParallelEvaluate[0]; w29g[x_] := x + 1; ParallelEvaluate[w29g[1], Kernels[], Hold, DistributedContexts -> None]',
      '{Hold[w29g[1]], Hold[w29g[1]]}'),                                                      # not distributed
     ('ParallelEvaluate[1, w29x]', Pred(lambda v: _is_head(v, "ParallelEvaluate"), "symbolic: unevaluated")),
     ('ParallelEvaluate[Exit[]]', Raises(RuntimeError)),

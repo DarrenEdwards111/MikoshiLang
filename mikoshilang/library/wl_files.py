@@ -2589,7 +2589,7 @@ def _readstring(x: Expr, *rest: Expr | Option) -> String | Expr:
     s, opened = _input(x, "ReadString", binary=True)
     try:
         r = _reader(s, "ReadString")
-        if is_sym(term, "EndOfBuffer") and hasattr(s.raw, "available"):
+        if is_sym(term, "EndOfBuffer") and hasattr(getattr(s, "raw", None), "available"):
             return s.raw.available(r.rest_text, EOF)     # pipes (W29 processes): only the data available now
         if r.peekc() is None:
             return EOF
