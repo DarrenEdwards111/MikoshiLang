@@ -263,6 +263,13 @@ CASES = [
     ("FindShortestCurve[3, {0, 0}, {1, 1}]", Raises(T)),
     ("FindShortestCurve[Rectangle[], {0, 0}, {5, 5}]", Raises(V)),
     ("ShortestCurveDistance[Circle[], {1, 0}, {0, 1}]", "Pi/2"),
+    # Wolfram doc examples (ShortestCurveDistance / FindShortestCurve reference pages)
+    ("ShortestCurveDistance[Line[{{1, 0}, {2, 1}, {3, 0}, {4, 1}}], {1, 0}, {3, 0}]", "2 Sqrt[2]"),
+    ("ShortestCurveDistance[Disk[], {0, 1}, {x06x, x06y}]", "Sqrt[x06x^2 + (-1 + x06y)^2]"),
+    ("ShortestCurveDistance[Ball[], {-0.2, 0.1, 0.3}, {-0.8, 0.19, -0.01}]", Num(0.681322, 1e-6)),
+    ("FindShortestCurve[BoundaryMeshRegion[{{0, 0}, {3, 0}, {3, 3}, {0, 3}, {1, 1}, {2, 1}, {2, 2}, {1, 2}}, "
+     "Line[{1, 2, 3, 4, 1}], Line[{5, 6, 7, 8, 5}]], {3, 3}, {1.5, 1}]",
+     Pred(lambda g: g.head == "Line" and _fl(g.args[0]) == [3.0, 3.0, 2.0, 1.0, 1.5, 1.0], "Line[{{3., 3.}, {2., 1.}, {1.5, 1.}}]")),
     ("ShortestCurveDistance[Rectangle[{0, 0}, {2, 1}], {0, 0}, {2, 1}]", "Sqrt[5]"),
     ("ShortestCurveDistance[Sphere[], {1, 0, 0}, {0, 0, 1}]", "Pi/2"),
     ("ShortestCurveDistance[Disk[], {x06x, 0}, {0, 1}]", "Sqrt[1 + x06x^2]"),          # doc: symbolic end point
