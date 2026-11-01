@@ -68,8 +68,12 @@ a list, an association, a rule or `True`/`False` where the type excludes it.
   report instead of raising. Its result is final and is not evaluated again under the session's mode.
 * Held arguments (`Held`, or a user function with `HoldAll`/`HoldFirst`/`HoldRest`) are not checked. Their
   result is.
-* Kernel built-ins such as `Plus` and `Map` are not covered. Only library heads and declared user functions
-  are.
+* **Kernel built-ins** (`Plus`, `Times`, `Power`, `Greater`, `Range`, `Nest`, `StringJoin`, `Det`, ...) have
+  hand-written signatures in `mikoshilang/kernel_types.py`, checked in evaluator step 8. They are deliberately
+  lenient: `Plus` takes `Number | ListOf[Expr] | Assoc` (symbols and other non-concrete expressions always pass),
+  so `Plus["a", 1]`, `Nest[f, x, -1]`, `StringLength[3]`, `Det[{1, 2}]` and `Not["a"]` are mismatches while
+  every symbolic call is clean. Held kernel heads (`Block`, `Set`, ...) show `{Held...} -> Expr`.
+  `TypeSignature[Plus]` shows the signature.
 
 ## Cost
 
