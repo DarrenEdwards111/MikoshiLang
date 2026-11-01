@@ -80,6 +80,12 @@ BIN = "{{1, 0}, {2, 0}, {3, 1}, {4, 0}, {5, 1}, {6, 1}}"
 GAM = "{{1, 2.1}, {2, 1.3}, {3, 0.9}, {4, 0.7}, {5, 0.6}}"
 EXPD = "{{0, 1.}, {1, 2.7}, {2, 7.4}, {3, 20.1}, {4, 54.6}}"
 
+CMP = ("{{{0.79, 0.56}, {0.71, 0.48}}, {{0.48, 0.033}, {0.66, -0.18}, {0.71, -0.021}}, "
+       "{{-0.88, 0.12}, {-0.90, 0.092}}}")                     # WL doc ClusteringMeasurements example
+CT5 = "{0.1, 2.2, 3.4, 5.6, 8.9}"                              # WL doc ClusteringTree scope data
+AGG = 'Method -> "Agglomerate"'
+CDF = "ClusterDissimilarityFunction"
+
 CASES = [
     # ── BiweightLocation (WL doc examples) ──
     (f"BiweightLocation[{BASIC}]", approx(6.10018)),
@@ -908,6 +914,95 @@ CASES = [
     ("ProbitModelFit[{{1, 2}, {2, 0}, {3, 1}}, w18x, w18x]", Raises(ValueError)),
     ('ProbitModelFit["x", w18x, w18x]', Raises(TypeError)),
     ("ProbitModelFit[{{1, 0}, {2, 1}, {3, 1}}, w18x, w18x, NominalVariables -> w18x]", Raises(NotImplementedError)),
+    # ── FindClusters (WL doc data; "Agglomerate" = single linkage; references scipy fcluster(maxclust)) ──
+    (f"FindClusters[{{1, 2, 10, 12, 3, 1, 13, 25}}, 3, {AGG}]", "{{1, 2, 3, 1}, {10, 12, 13}, {25}}"),   # WL doc
+    (f"FindClusters[{{1 -> w18a, 2 -> w18b, 10 -> w18c, 12 -> w18d, 3 -> w18e, 1 -> w18f, 13 -> w18g, 25 -> w18h}}, 3, "
+     f"{AGG}]", "{{w18a, w18b, w18e, w18f}, {w18c, w18d, w18g}, {w18h}}"),   # WL doc
+    (f'FindClusters[<|"a" -> 1, "b" -> 2, "c" -> 10, "d" -> 12, "e" -> 3, "f" -> 1, "g" -> 13, "h" -> 25|>, 3, {AGG}]',
+     '{{"a", "b", "e", "f"}, {"c", "d", "g"}, {"h"}}'),
+    (f"FindClusters[{{1, 2, 10, 12, 3, 1, 13, 25}}, 4, {AGG}]", "{{1, 2, 3, 1}, {10}, {12, 13}, {25}}"),  # single linkage
+    # scipy linkage(ward / average / complete) + fcluster(3, maxclust): [1 1 2 1 3]
+    ('FindClusters[{{2.5, 3.1}, {5.9, 3.4}, {10, 15}, {2.2, 1.5}, {100, 7.5}}, 3, Method -> {"Agglomerate", '
+     '"Linkage" -> "Ward"}, DistanceFunction -> EuclideanDistance]',
+     "{{{2.5, 3.1}, {5.9, 3.4}, {2.2, 1.5}}, {{10, 15}}, {{100, 7.5}}}"),
+    (f'FindClusters[{{"GGTTT", "GGGGT", "GTTTT", "VVBBS", "VVVBB", "VVVVB", "LLAFF", "LLLAA", "LLLLL"}}, 3, {AGG}, '
+     f'DistanceFunction -> HammingDistance]',
+     '{{"GGTTT", "GGGGT", "GTTTT"}, {"VVBBS", "VVVBB", "VVVVB"}, {"LLAFF", "LLLAA", "LLLLL"}}'),   # WL doc data
+    (f"FindClusters[{{1, 2, 3}}, UpTo[5], {AGG}]", "{{1}, {2}, {3}}"),
+    (f"FindClusters[{{1, 2, 10, 11}}, 2, {AGG}, DistanceFunction -> (Abs[#1 - #2] &)]", "{{1, 2}, {10, 11}}"),
+    (f"FindClusters[{{1, w18a, 3}}, 2, {AGG}]", f"FindClusters[{{1, w18a, 3}}, 2, {AGG}]"),
+    ("FindClusters[{1, 2, 3}, 2]", Raises(NotImplementedError)),
+    ('FindClusters[{1, 2, 3}, 2, Method -> "KMeans"]', Raises(NotImplementedError)),
+    (f"FindClusters[{{1, 2, 3}}, {AGG}]", Raises(NotImplementedError)),
+    (f"FindClusters[{{1, 2, 3}}, 5, {AGG}]", Raises(ValueError)),
+    ('FindClusters[{1, 2, 3}, 2, Method -> "w18Foo"]', Raises(ValueError)),
+    (f"FindClusters[{{1, 2, 3}}, 0, {AGG}]", Raises(TypeError)),
+    (f"FindClusters[3, 2, {AGG}]", Raises(TypeError)),
+    # Check: ClusteringComponents labels induce the same partition
+    (f"GatherBy[Transpose[{{{{1, 2, 10, 12, 3, 1, 13, 25}}, ClusteringComponents[{{1, 2, 10, 12, 3, 1, 13, 25}}, 3, "
+     f"{AGG}]}}], Last][[All, All, 1]] == FindClusters[{{1, 2, 10, 12, 3, 1, 13, 25}}, 3, {AGG}]", "True"),
+    # ── ClusteringComponents (WL doc examples) ──
+    (f"ClusteringComponents[{{{{1, 2}}, 3, {{10, 11}}, {{12, {{13}}}}, 14}}, 2, {AGG}]", "{{1, 1}, 1, {2, 2}, {2, {2}}, 2}"),
+    (f"ClusteringComponents[{{{{1, 2}}, {{3, 4}}, {{10, 11}}, {{12, 13}}}}, 2, 2, {AGG}]", "{{1, 1}, {1, 1}, {2, 2}, {2, 2}}"),
+    (f"ClusteringComponents[{{{{1, 2}}, {{3, 4}}, {{10, 11}}, {{12, 13}}}}, 2, 1, {AGG}]", "{1, 1, 2, 2}"),
+    (f"ClusteringComponents[{{1, 2, 3, 7, 8}}, 2, {AGG}]", "{1, 1, 1, 2, 2}"),
+    (f"ClusteringComponents[w18d, 2, {AGG}]", f"ClusteringComponents[w18d, 2, {AGG}]"),
+    ("ClusteringComponents[{1, 2, 3}, 2]", Raises(NotImplementedError)),
+    (f"ClusteringComponents[{{1, 2, 3}}, 4, {AGG}]", Raises(ValueError)),
+    (f"ClusteringComponents[{{1, 2, 3}}, 2, -1, {AGG}]", Raises(TypeError)),
+    # ── ClusteringTree (merge heights: scipy linkage(single) [1, 3] on {1, 2, 5}; ward on CT5) ──
+    (f'ClusteringTree[{{1, 2, 5}}, {CDF} -> "Single"]',
+     "Graph[{1, 2, 3, 4, 5}, {DirectedEdge[1, 2], DirectedEdge[2, 3], DirectedEdge[2, 4], DirectedEdge[1, 5]}, "
+     "VertexWeight -> {1 -> 3., 2 -> 1., 3 -> 0, 4 -> 0, 5 -> 0}, VertexLabels -> {3 -> 1, 4 -> 2, 5 -> 5}]"),
+    (f'ClusteringTree[{{1, 2, 5}}, 1.3, {CDF} -> "Single"]',   # WL doc: leaves {1, 2} and {5}
+     "Graph[{1, 2, 3}, {DirectedEdge[1, 2], DirectedEdge[1, 3]}, VertexWeight -> {1 -> 3., 2 -> 0, 3 -> 0}, "
+     "VertexLabels -> {2 -> {1, 2}, 3 -> {5}}]"),
+    # scipy linkage(ward) heights [1.2, 3.11769145, 3.3, 8.28818436]
+    (f'Sort[Select[Values[AnnotationValue[ClusteringTree[{CT5}, {CDF} -> "Ward"], VertexWeight]], Positive]]',
+     approx_list([1.2, 3.11769145, 3.3, 8.28818436])),
+    # scipy linkage(average) [1.2, 2.7, 3.3, 5.35]; complete [1.2, 3.3, 3.3, 8.8]; weighted [1.2, 2.7, 3.3, 5.8]
+    (f'Sort[Select[Values[AnnotationValue[ClusteringTree[{CT5}, {CDF} -> "Average"], VertexWeight]], Positive]]',
+     approx_list([1.2, 2.7, 3.3, 5.35])),
+    (f'Sort[Select[Values[AnnotationValue[ClusteringTree[{CT5}, {CDF} -> "Complete"], VertexWeight]], Positive]]',
+     approx_list([1.2, 3.3, 3.3, 8.8])),
+    (f'Sort[Select[Values[AnnotationValue[ClusteringTree[{CT5}, {CDF} -> "WeightedAverage"], VertexWeight]], Positive]]',
+     approx_list([1.2, 2.7, 3.3, 5.8])),
+    (f'TreeGraphQ[ClusteringTree[{CT5}, {CDF} -> "Centroid"]]', "True"),   # Check: the result is a tree
+    (f'ClusteringTree[w18d, {CDF} -> "Single"]', f'ClusteringTree[w18d, {CDF} -> "Single"]'),
+    ("ClusteringTree[{1, 2, 5}]", Raises(NotImplementedError)),
+    (f'ClusteringTree[{{1, 2, 5}}, {CDF} -> "w18Foo"]', Raises(ValueError)),
+    (f'ClusteringTree[{{1, 2, 5}}, -1, {CDF} -> "Single"]', Raises(ValueError)),
+    (f'ClusteringTree[5, {CDF} -> "Single"]', Raises(TypeError)),
+    # ── ClusteringMeasurements (WL doc "Summary": CH 128.42, Dunn 1.79653, RSquared 0.888558,
+    #    Silhouette 0.775515, StandardDeviation 0.123269; sklearn calinski_harabasz_score 128.41977007) ──
+    (f'ClusteringMeasurements[{CMP}, "CalinskiHarabasz"]', approx(128.41977007099686)),
+    (f'ClusteringMeasurements[{CMP}, "Dunn"]', approx(1.79653, 1e-5)),
+    (f'ClusteringMeasurements[{CMP}, "RSquared"]', approx(0.888558, 1e-5)),
+    (f'ClusteringMeasurements[{CMP}, "Silhouette"]', approx(0.7755149377118608)),
+    (f'ClusteringMeasurements[{CMP}, "StandardDeviation"]', approx(0.123269, 1e-5)),
+    # sklearn silhouette_samples
+    (f'ClusteringMeasurements[{CMP}, "SilhouetteScoreList"]',
+     approx_list([0.82587415, 0.79622196, 0.53763841, 0.68472976, 0.62948308, 0.97720216, 0.97745504])),
+    (f'ClusteringMeasurements[{CMP}, "SilhouetteScore"]',
+     approx_list([(0.82587415 + 0.79622196) / 2, (0.53763841 + 0.68472976 + 0.62948308) / 3, (0.97720216 + 0.97745504) / 2])),
+    ('ClusteringMeasurements[{{0.79, 0.56}, {0.71, 0.48}, {0.48, 0.033}, {0.66, -0.18}, {0.71, -0.021}, {-0.88, 0.12}, '
+     '{-0.9, 0.092}} -> {1, 1, 2, 2, 2, 3, 3}, "Dunn"]', approx(1.79653, 1e-5)),     # WL doc data format
+    ('ClusteringMeasurements[<|1 -> {{0.79, 0.56}, {0.71, 0.48}}, 2 -> {{0.48, 0.033}, {0.66, -0.18}, {0.71, -0.021}}, '
+     '3 -> {{-0.88, 0.12}, {-0.9, 0.092}}|>, "Silhouette"]', approx(0.7755149377118608)),
+    ('ClusteringMeasurements[{{"king", "kingdom", "kingly"}, {"dutchess", "duchy"}}, "Dunn", '
+     'DistanceFunction -> EditDistance]', approx(1.25)),     # WL doc
+    # Purity 5/6 by hand; sklearn rand_score([0,0,0,1,1,2],[0,0,1,1,1,2]) = 0.73333333
+    ('ClusteringMeasurements[{{1, 2, 3}, {4, 5}, {6}}, {{1, 2}, {3, 4, 5}, {6}}, {"Purity", "Rand"}]',
+     approx_list([5 / 6, 0.7333333333333333])),
+    # Check: Silhouette is the mean of SilhouetteScoreList
+    (f'ClusteringMeasurements[{CMP}, "Silhouette"] - Mean[Flatten[ClusteringMeasurements[{CMP}, "SilhouetteScoreList"]]]',
+     approx(0.0)),
+    (f'ClusteringMeasurements[w18c, "Dunn"]', f'ClusteringMeasurements[w18c, "Dunn"]'),
+    (f'ClusteringMeasurements[{CMP}, "DaviesBouldin"]', Raises(NotImplementedError)),
+    (f'ClusteringMeasurements[{CMP}, "w18Foo"]', Raises(ValueError)),
+    (f'ClusteringMeasurements[{CMP}, "Purity"]', Raises(ValueError)),
+    ('ClusteringMeasurements[{{1, 1}, {1, 1}}, "Dunn"]', Raises(ArithmeticError)),
+    ('ClusteringMeasurements[5, "Dunn"]', Raises(TypeError)),
 ]
 
 

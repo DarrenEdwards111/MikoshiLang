@@ -803,3 +803,561 @@ def _fm_dispatch(a, args, ev_):
 
 
 KL.COMPOUND_HEAD_HOOKS["FittedModel"] = _fm_apply
+
+
+# ─────────────────────────── clustering ───────────────────────────
+
+_LINKAGES = ("Single", "Complete", "Average", "WeightedAverage", "Centroid", "Median", "Ward")
+
+
+def _dist_fn(spec, fname, elems):
+    """Python distance for the DistanceFunction setting (Automatic -> SquaredEuclidean / Euclidean / EditDistance)"""
+    nm = SM.str_or_sym(spec) if isinstance(spec, (str, Symbol)) else None
+    strings = all(isinstance(e, str) for e in elems)
+    if nm is None and spec is not None and not isinstance(spec, (str, Symbol)):
+        def gen(a, b, f=spec):
+            v = ev(Expr(f, a[1], b[1]))
+            sv = S(v)
+            if not (isinstance(sv, sp.Basic) and sv.is_number and sv.is_real):
+                raise ValueError(f"{fname}: the distance function returned the non-real value {v}")
+            return float(sv)
+        return gen
+    if strings:
+        if nm in (None, "Automatic", "EditDistance"):
+            return lambda a, b: float(_edit(a[1], b[1]))
+        if nm == "HammingDistance":
+            def ham(a, b):
+                if len(a[1]) != len(b[1]):
+                    raise ValueError(f"{fname}: HammingDistance needs strings of equal length")
+                return float(sum(x != y for x, y in zip(a[1], b[1])))
+            return ham
+        raise ValueError(f"{fname}: the distance {nm} does not apply to strings")
+    simple = {
+        "EuclideanDistance": lambda u, v: float(np.sqrt(np.sum((u - v) ** 2))),
+        "SquaredEuclideanDistance": lambda u, v: float(np.sum((u - v) ** 2)),
+        "ManhattanDistance": lambda u, v: float(np.sum(np.abs(u - v))),
+        "ChessboardDistance": lambda u, v: float(np.max(np.abs(u - v))),
+        "CanberraDistance": lambda u, v: float(np.sum(np.where(np.abs(u) + np.abs(v) > 0,
+                                                               np.abs(u - v) / np.where(np.abs(u) + np.abs(v) > 0,
+                                                                                        np.abs(u) + np.abs(v), 1), 0))),
+        "BrayCurtisDistance": lambda u, v: float(np.sum(np.abs(u - v)) / np.sum(np.abs(u + v))),
+        "CosineDistance": lambda u, v: float(1 - u @ v / (np.linalg.norm(u) * np.linalg.norm(v))),
+        "HammingDistance": lambda u, v: float(np.sum(u != v)),
+    }
+    if nm is None or nm == "Automatic":
+        nm = "SquaredEuclideanDistance" if fname in ("FindClusters", "ClusteringComponents") else "EuclideanDistance"
+    if nm not in simple:
+        raise ValueError(f"{fname}: unknown DistanceFunction {nm}")
+    g = simple[nm]
+    return lambda a, b: g(a[0], b[0])
+
+
+def _edit(a, b):
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _elements(xs, fname):
+    """[(numpy vector or None, python value)] for the clustering elements"""
+    out_ = []
+    for e in xs:
+        if isinstance(e, str):
+            out_.append((None, e))
+        elif is_list(e) and e.args and all(not is_list(c) for c in e.args):
+            try:
+                out_.append((np.array([SM.fl(SM._num(c, fname)) for c in e.args]), e))
+            except TypeError:
+                raise NotImplementedError(f"{fname}: only numbers, numeric vectors and strings can be clustered")
+        elif isinstance(e, Symbol) and e.name not in ("True", "False"):
+            raise Unevaluated()
+        elif isinstance(e, (bool,)) or (isinstance(e, Symbol)):
+            raise NotImplementedError(f"{fname}: Boolean data is not supported")
+        else:
+            v = S(e)
+            if not (isinstance(v, sp.Basic) and v.is_number):
+                if isinstance(v, sp.Basic) and v.free_symbols:
+                    raise Unevaluated()
+                raise NotImplementedError(f"{fname}: only numbers, numeric vectors and strings can be clustered")
+            if not v.is_real:
+                raise NotImplementedError(f"{fname}: complex data is not supported")
+            out_.append((np.array([float(v)]), e))
+    if out_ and any(o[0] is not None for o in out_):
+        if any(o[0] is None for o in out_) or len({o[0].shape for o in out_}) != 1:
+            raise ValueError(f"{fname}: the elements must all be numbers, vectors of one length, or strings")
+    return out_
+
+
+def _dmatrix(elems, dist):
+    n = len(elems)
+    D = np.zeros((n, n))
+    for i in range(n):
+        for j in range(i + 1, n):
+            D[i, j] = D[j, i] = dist(elems[i], elems[j])
+    return D
+
+
+def _agglomerate(D, linkage, fname):
+    """Lance-Williams agglomeration (SciPy's convention: the update formulas act on D itself).
+    Returns merges [(a, b, height, size)] with cluster ids as in scipy (leaves 0..n-1, new n, n+1, ...)."""
+    n = D.shape[0]
+    if linkage not in _LINKAGES:
+        raise ValueError(f"{fname}: unknown ClusterDissimilarityFunction {linkage!r}")
+    active = {i: [i] for i in range(n)}
+    d = {(i, j): D[i, j] for i in range(n) for j in range(i + 1, n)}
+    merges = []
+    nxt = n
+    while len(active) > 1:
+        (a, b), h = min(d.items(), key=lambda kv: (kv[1], kv[0]))
+        na, nb = len(active[a]), len(active[b])
+        new = {}
+        for c in active:
+            if c in (a, b):
+                continue
+            dac = d[(min(a, c), max(a, c))]
+            dbc = d[(min(b, c), max(b, c))]
+            nc = len(active[c])
+            if linkage == "Single":
+                v = min(dac, dbc)
+            elif linkage == "Complete":
+                v = max(dac, dbc)
+            elif linkage == "Average":
+                v = (na * dac + nb * dbc) / (na + nb)
+            elif linkage == "WeightedAverage":
+                v = (dac + dbc) / 2
+            elif linkage == "Centroid":
+                v = math.sqrt(max(0.0, (na * dac ** 2 + nb * dbc ** 2) / (na + nb) - na * nb * h ** 2 / (na + nb) ** 2))
+            elif linkage == "Median":
+                v = math.sqrt(max(0.0, dac ** 2 / 2 + dbc ** 2 / 2 - h ** 2 / 4))
+            else:
+                t = na + nb + nc
+                v = math.sqrt(max(0.0, ((na + nc) * dac ** 2 + (nb + nc) * dbc ** 2 - nc * h ** 2) / t))
+            new[c] = v
+        members = active.pop(a) + active.pop(b)
+        d = {k: v for k, v in d.items() if a not in k and b not in k}
+        for c, v in new.items():
+            d[(min(c, nxt), max(c, nxt))] = v
+        active[nxt] = sorted(members)
+        merges.append((a, b, h, len(members)))
+        nxt += 1
+    return merges
+
+
+def _cut(merges, n, k):
+    """partition (lists of leaf indices) after n - k merges"""
+    groups = {i: [i] for i in range(n)}
+    nxt = n
+    for a, b, _, _ in merges[:n - k]:
+        groups[nxt] = sorted(groups.pop(a) + groups.pop(b))
+        nxt += 1
+    return sorted(groups.values(), key=lambda g: g[0])
+
+
+def _method_linkage(o, fname, need_method=True):
+    m = o.get("Method", "Automatic")
+    link = None
+    if is_list(m) and m.args and isinstance(m.args[0], str):
+        for r in m.args[1:]:
+            if SM._is_rule(r) and r.args[0] == "Linkage":
+                link = SM.str_or_sym(r.args[1])
+            else:
+                raise ValueError(f"{fname}: unknown Method suboption {r}")
+        m = m.args[0]
+    m = SM.str_or_sym(m)
+    cdf = o.get("ClusterDissimilarityFunction")
+    if cdf is not None and SM.str_or_sym(cdf) != "Automatic":
+        if not isinstance(cdf, (str, Symbol)):
+            raise NotImplementedError(f"{fname}: custom ClusterDissimilarityFunction settings are not supported")
+        link = SM.str_or_sym(cdf)
+    if need_method:
+        if m == "Automatic":
+            raise NotImplementedError(f"{fname}: automatic method selection is not supported (its criterion is "
+                                      f"undocumented); give Method -> \"Agglomerate\"")
+        if m in ("KMeans", "KMedoids", "DBSCAN", "GaussianMixture", "JarvisPatrick", "MeanShift", "Spectral",
+                 "SpanningTree", "NeighborhoodContraction", "Optimal", "Optimum", "KMedians"):
+            raise NotImplementedError(f"{fname}: Method \"{m}\" is not supported (randomised or undocumented)")
+        if m != "Agglomerate":
+            raise ValueError(f"{fname}: unknown Method {m!r}")
+    if link is not None and link not in _LINKAGES:
+        raise ValueError(f"{fname}: unknown linkage {link!r}")
+    return link or "Single"
+
+
+def _cluster_input(x, fname):
+    """(elements, labels) for list / rules / association / data -> labels"""
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if SM._is_rule(x) and is_list(x.args[0]):
+        data, labs = x.args
+        if not is_list(labs) or len(labs.args) != len(data.args):
+            raise ValueError(f"{fname}: data -> labels needs one label per element")
+        return list(data.args), list(labs.args)
+    if isinstance(x, Expr) and x.head == "Association":
+        return [r.args[1] for r in x.args], [r.args[0] for r in x.args]
+    if not is_list(x) or not x.args:
+        raise TypeError(f"{fname}: the data must be a non-empty list")
+    if all(SM._is_rule(r) for r in x.args):
+        return [r.args[0] for r in x.args], [r.args[1] for r in x.args]
+    return list(x.args), list(x.args)
+
+
+def _n_arg(nn, n, fname):
+    upto = False
+    if isinstance(nn, Expr) and nn.head == "UpTo" and len(nn.args) == 1:
+        nn, upto = nn.args[0], True
+    if isinstance(nn, Symbol) or (isinstance(nn, Expr) and not isinstance(S(nn), sp.Integer)):
+        if isinstance(nn, Symbol) and nn.name == "Automatic":
+            raise NotImplementedError(f"{fname}: automatic choice of the number of clusters is not supported")
+        if isinstance(nn, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the number of clusters must be a positive integer")
+    if not isinstance(nn, int) or isinstance(nn, bool) or nn < 1:
+        raise TypeError(f"{fname}: the number of clusters must be a positive integer")
+    if nn > n:
+        if upto:
+            return n
+        raise ValueError(f"{fname}: cannot find {nn} clusters in {n} elements")
+    return nn
+
+
+_CL_OPTS = ("Method", "DistanceFunction", "ClusterDissimilarityFunction", "CriterionFunction", "Weights",
+            "PerformanceGoal", "RandomSeeding", "FeatureExtractor", "FeatureNames", "FeatureTypes")
+
+
+def _cl_common(o, fname):
+    for k in ("CriterionFunction", "Weights", "FeatureExtractor", "FeatureNames", "FeatureTypes"):
+        if k in o and SM.str_or_sym(o[k]) not in ("Automatic", "Identity", "None"):
+            raise NotImplementedError(f"{fname}: the {k} option is not supported")
+
+
+def _partition(elems, nclust, o, fname):
+    link = _method_linkage(o, fname)
+    D = _dmatrix(elems, _dist_fn(o.get("DistanceFunction"), fname, [e[1] for e in elems]))
+    merges = _agglomerate(D, link, fname)
+    return _cut(merges, len(elems), nclust)
+
+
+@fn("FindClusters", area=AREA, status="added",
+    notes="FindClusters[{e1, ...}, n, Method -> \"Agglomerate\"] partitions numbers, numeric vectors or strings into "
+          "n clusters by agglomerative clustering (WL's \"Agglomerate\" is single linkage; Method -> {\"Agglomerate\", "
+          "\"Linkage\" -> l} or ClusterDissimilarityFunction -> l choose \"Single\", \"Complete\", \"Average\", "
+          "\"WeightedAverage\", \"Centroid\", \"Median\" or \"Ward\"); DistanceFunction defaults to "
+          "SquaredEuclideanDistance (numbers, vectors) or EditDistance (strings), named distances or any function "
+          "f[a, b]. Forms {e1 -> v1, ...}, <|k1 -> e1, ...|> (keys returned) and {e1, ...} -> {v1, ...}; clusters "
+          "are listed in order of their first element, elements in input order; ties merge the lowest-index pair "
+          "first; UpTo[n] allowed. The automatic method and automatic number of clusters (undocumented criteria) "
+          "and randomised methods (\"KMeans\", ...) raise NotImplementedError. Check: partitions and merge heights "
+          "match scipy.cluster.hierarchy.linkage / fcluster(maxclust) (reference), and the WL doc example "
+          "{1, 2, 10, 12, 3, 1, 13, 25} with 3 clusters.")
+def _find_clusters(x: ListOf[Expr] | Rule | Expr, nn: PosInteger | Expr = None, *rest: Option) -> ListOf[ListOf[Expr]]:
+    name = "FindClusters"
+    rest = list(rest)
+    if nn is not None and SM._is_rule(nn) and isinstance(nn.args[0], Symbol):
+        rest.insert(0, nn)
+        nn = None
+    _, o = opts(rest, _CL_OPTS, name)
+    _cl_common(o, name)
+    data, labs = _cluster_input(x, name)
+    elems = _elements(data, name)
+    if nn is None:
+        _method_linkage(o, name)
+        raise NotImplementedError(f"{name}: automatic choice of the number of clusters is not supported; give n")
+    k = _n_arg(nn, len(elems), name)
+    parts = _partition(elems, k, o, name)
+    return L(*(L(*(labs[i] for i in g)) for g in parts))
+
+
+def _cc_struct(x, level, depth=1):
+    """leaves to cluster: (paths, values); level None -> atomic entries"""
+    if is_list(x) and (level is None or depth <= level):
+        if level is not None and depth == level:
+            return [((i,), c) for i, c in enumerate(x.args)]
+        res = []
+        for i, c in enumerate(x.args):
+            if is_list(c):
+                res += [((i,) + p, v) for p, v in _cc_struct(c, level, depth + 1)]
+            else:
+                res.append(((i,), c))
+        return res
+    return [((), x)]
+
+
+def _cc_rebuild(x, labels, path=()):
+    if path in labels:
+        return labels[path]
+    return L(*(_cc_rebuild(c, labels, path + (i,)) for i, c in enumerate(x.args)))
+
+
+@fn("ClusteringComponents", area=AREA, status="added",
+    notes="ClusteringComponents[array, n, level, Method -> \"Agglomerate\"] replaces each element (each atomic "
+          "entry by default, the parts at the given level otherwise, e.g. the rows of a matrix with level 1) by the "
+          "index of its cluster from FindClusters's agglomerative partition; clusters are numbered by first "
+          "appearance, ragged arrays keep their shape; UpTo[n], DistanceFunction and linkage settings as in "
+          "FindClusters. The automatic method, automatic number of clusters and images raise NotImplementedError. "
+          "Check: the labels induce exactly the FindClusters partition (tested), and WL doc examples "
+          "{{1, 2}, {3, 4}, {10, 11}, {12, 13}} with 2 clusters at levels 1 and 2.")
+def _clustering_components(x: ListOf[Expr] | MatrixOf[Real], nn: PosInteger | Expr = None, level: PosInteger = None,
+                           *rest: Option) -> ListOf[PosInteger] | MatrixOf[PosInteger]:
+    name = "ClusteringComponents"
+    rest = list(rest)
+    for _ in range(2):
+        if level is not None and SM._is_rule(level):
+            rest.insert(0, level)
+            level = None
+        if nn is not None and SM._is_rule(nn) and level is None:
+            rest.insert(0, nn)
+            nn = None
+    _, o = opts(rest, _CL_OPTS, name)
+    _cl_common(o, name)
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if not is_list(x) or not x.args:
+        if isinstance(x, Expr) and x.head in ("Image", "Image3D"):
+            raise NotImplementedError(f"{name}: images are not supported")
+        raise TypeError(f"{name}: the data must be a non-empty list")
+    if level is not None and (not isinstance(level, int) or isinstance(level, bool) or level < 1):
+        raise TypeError(f"{name}: the level must be a positive integer")
+    leaves = _cc_struct(x, level)
+    elems = _elements([v for _, v in leaves], name)
+    if nn is None:
+        _method_linkage(o, name)
+        raise NotImplementedError(f"{name}: automatic choice of the number of clusters is not supported; give n")
+    k = _n_arg(nn, len(elems), name)
+    parts = _partition(elems, k, o, name)
+    lab = {}
+    for c, g in enumerate(parts, 1):
+        for i in g:
+            lab[leaves[i][0]] = c
+    if () in lab:
+        return lab[()]
+    return _cc_rebuild(x, lab)
+
+
+@fn("ClusteringTree", area=AREA, status="added",
+    notes="ClusteringTree[{e1, ...}, ClusterDissimilarityFunction -> l] gives the agglomerative hierarchy as a "
+          "Graph tree: vertices 1, 2, ... in preorder (root 1; the child holding the lower-index element first), "
+          "edges parent -> child, VertexWeight -> the merge dissimilarity (0 at leaves) and VertexLabels -> the "
+          "leaf elements; ClusteringTree[data, d] first merges all clusters at dissimilarity < d, and those "
+          "clusters (lists) become the leaves. Linkages and distances (default EuclideanDistance / EditDistance) as "
+          "in FindClusters; data -> labels and <|...|> label the leaves. The Automatic linkage (undocumented), "
+          "custom linkage functions and images raise NotImplementedError. Check: merge heights match "
+          "scipy.cluster.hierarchy.linkage (reference), and the root weight equals the largest merge height "
+          "(self-check by construction).")
+def _clustering_tree(x: ListOf[Expr] | Rule | Expr, d: Real = None, *rest: Option) -> Expr:
+    name = "ClusteringTree"
+    rest = list(rest)
+    if d is not None and SM._is_rule(d) and isinstance(d.args[0], Symbol):
+        rest.insert(0, d)
+        d = None
+    _, o = opts(rest, _CL_OPTS + ("GraphLayout", "VertexSize", "VertexShape", "VertexLabels", "EdgeStyle",
+                                  "ImageSize", "VertexStyle", "PlotTheme"), name)
+    _cl_common(o, name)
+    cdf = o.get("ClusterDissimilarityFunction")
+    if cdf is None or SM.str_or_sym(cdf) == "Automatic":
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise NotImplementedError(f"{name}: the Automatic linkage is undocumented; give ClusterDissimilarityFunction")
+    link = _method_linkage(o, name, need_method=False)
+    data, labs = _cluster_input(x, name)
+    elems = _elements(data, name)
+    thr = None
+    if d is not None:
+        thr = SM.fl(SM._num(d, name, "threshold"))
+        if thr < 0:
+            raise ValueError(f"{name}: the threshold must be non-negative")
+    n = len(elems)
+    D = _dmatrix(elems, _dist_fn(o.get("DistanceFunction"), name, [e[1] for e in elems]))
+    merges = _agglomerate(D, link, name) if n > 1 else []
+    children, height, members = {}, {}, {i: [i] for i in range(n)}
+    for t, (a, b, h, _) in enumerate(merges):
+        c = n + t
+        children[c], height[c] = (a, b), h
+        members[c] = sorted(members[a] + members[b])
+    root = n + len(merges) - 1 if merges else 0
+
+    def collapsed(c):
+        return c in children and thr is not None and height[c] < thr
+
+    verts, edges, weights, labels = [], [], [], []
+
+    def walk(c, parent):
+        vid = len(verts) + 1
+        verts.append(vid)
+        if parent is not None:
+            edges.append(Expr("DirectedEdge", parent, vid))
+        if c in children and not collapsed(c):
+            weights.append(rule(vid, float(height[c])))
+            for ch in sorted(children[c], key=lambda q: members[q][0]):
+                walk(ch, vid)
+        else:
+            weights.append(rule(vid, 0))
+            lab = L(*(labs[i] for i in members[c])) if thr is not None else labs[members[c][0]]
+            labels.append(rule(vid, lab))
+    walk(root, None)
+    return Expr("Graph", L(*verts), L(*edges), rule(Symbol("VertexWeight"), L(*weights)),
+                rule(Symbol("VertexLabels"), L(*labels)))
+
+
+# ClusteringMeasurements
+
+_CM_INTERNAL = ("CalinskiHarabasz", "Dunn", "RSquared", "Silhouette", "StandardDeviation", "SilhouetteScore",
+                "SilhouetteScoreList")
+_CM_EXTERNAL = ("Purity", "Rand")
+_CM_UNSUPPORTED = ("DaviesBouldin", "DaviesBouldinScore", "RSquaredScore", "StandardDeviationScore", "PurityScore",
+                   "RandScore", "Summary")
+
+
+def _cm_clusters(x, fname):
+    """list of clusters (lists of elements) and the cluster keys"""
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if isinstance(x, Expr) and x.head == "Association":
+        return [list(r.args[1].args) for r in x.args if is_list(r.args[1])], [r.args[0] for r in x.args]
+    if SM._is_rule(x) and is_list(x.args[0]):
+        data, labs = x.args
+        if not is_list(labs):
+            raise NotImplementedError(f"{fname}: classifier functions are not supported")
+        if len(labs.args) != len(data.args):
+            raise ValueError(f"{fname}: data -> labels needs one label per element")
+        keys = []
+        for lb in labs.args:
+            if lb not in keys:
+                keys.append(lb)
+        return [[e for e, lb in zip(data.args, labs.args) if lb == k] for k in keys], keys
+    if is_list(x) and x.args and all(SM._is_rule(r) for r in x.args):
+        return _cm_clusters(Expr("Rule", L(*(r.args[0] for r in x.args)), L(*(r.args[1] for r in x.args))), fname)
+    if is_list(x) and x.args and all(is_list(c) and c.args for c in x.args):
+        return [list(c.args) for c in x.args], list(range(1, len(x.args) + 1))
+    raise TypeError(f"{fname}: expected a list of clusters, an association of clusters or data -> assignments")
+
+
+def _cm_prop(prop, X, lab, k, D, gt, fname):
+    n = len(lab)
+    idx = [np.where(lab == a)[0] for a in range(k)]
+    if prop in _CM_EXTERNAL:
+        if gt is None:
+            raise ValueError(f"{fname}: \"{prop}\" needs ground-truth clusters")
+        if prop == "Purity":
+            return float(sum(max(np.sum(gt[i] == g) for g in set(gt[i])) for i in idx) / n)
+        agree = sum((lab[i] == lab[j]) == (gt[i] == gt[j]) for i in range(n) for j in range(i + 1, n))
+        return float(agree / (n * (n - 1) / 2))
+    if prop in ("Silhouette", "SilhouetteScore", "SilhouetteScoreList"):
+        if k < 2:
+            raise ValueError(f"{fname}: the silhouette needs at least two clusters")
+        s = np.zeros(n)
+        for i in range(n):
+            own = idx[lab[i]]
+            if len(own) == 1:
+                continue
+            a = D[i, own].sum() / (len(own) - 1)
+            b = min(D[i, idx[c]].mean() for c in range(k) if c != lab[i])
+            s[i] = (b - a) / max(a, b) if max(a, b) > 0 else 0.0
+        if prop == "Silhouette":
+            return float(s.mean())
+        if prop == "SilhouetteScore":
+            return _L([s[i].mean() for i in idx])
+        return L(*(L(*(float(s[j]) for j in i)) for i in idx))
+    if prop == "Dunn":
+        if k < 2:
+            raise ValueError(f"{fname}: the Dunn index needs at least two clusters")
+        sep = min(D[np.ix_(idx[a], idx[b])].min() for a in range(k) for b in range(a + 1, k))
+        diam = max(D[np.ix_(i, i)].max() for i in idx)
+        if diam == 0:
+            raise ArithmeticError(f"{fname}: every cluster has zero diameter; the Dunn index is infinite")
+        return float(sep / diam)
+    if X is None:
+        raise NotImplementedError(f"{fname}: \"{prop}\" needs numeric vectors (it uses cluster centroids)")
+    cent = np.array([X[i].mean(axis=0) for i in idx])
+    g = X.mean(axis=0)
+    W = float(sum(((X[i] - cent[a]) ** 2).sum() for a, i in enumerate(idx)))
+    if prop == "CalinskiHarabasz":
+        if k < 2 or n <= k:
+            raise ValueError(f"{fname}: CalinskiHarabasz needs 1 < k < n")
+        B = float(sum(len(i) * ((cent[a] - g) ** 2).sum() for a, i in enumerate(idx)))
+        if W == 0:
+            raise ArithmeticError(f"{fname}: zero within-cluster dispersion")
+        return B / (k - 1) / (W / (n - k))
+    if prop == "StandardDeviation":
+        if n <= k:
+            raise ValueError(f"{fname}: StandardDeviation needs more examples than clusters")
+        return math.sqrt(W / (n - k))
+    # RSquared: 1 - (sum of distances to the cluster centroids) / (sum of distances to the dataset centroid)
+    within = float(sum(np.linalg.norm(X[i] - cent[a], axis=1).sum() for a, i in enumerate(idx)))
+    total = float(np.linalg.norm(X - g, axis=1).sum())
+    if total == 0:
+        raise ArithmeticError(f"{fname}: all examples coincide")
+    return 1 - within / total
+
+
+@fn("ClusteringMeasurements", area=AREA, status="added",
+    notes="ClusteringMeasurements[clusters, \"prop\"] (clusters as {{e11, ...}, ...}, <|k1 -> {...}, ...|>, "
+          "{e1 -> c1, ...} or {e1, ...} -> {c1, ...}) gives \"CalinskiHarabasz\", \"Dunn\", \"RSquared\" (1 - "
+          "Sum[|e - centroid|] / Sum[|e - dataset centroid|], unsquared distances, as WL), \"Silhouette\", "
+          "\"SilhouetteScore\" (per cluster), \"SilhouetteScoreList\" (per example; singletons score 0), "
+          "\"StandardDeviation\" (Sqrt[within SS/(n - k)]); with ground truth ClusteringMeasurements[clusters, "
+          "truth, \"prop\"]: \"Purity\" and \"Rand\"; {props} lists; \"Properties\". DistanceFunction defaults to "
+          "EuclideanDistance (EditDistance for strings). \"DaviesBouldin\" (WL's dispersion definition could not "
+          "be reproduced from the doc example), \"Summary\", the other per-cluster scores, classifier functions and "
+          "FeatureExtractor raise NotImplementedError. Check: WL doc example values (CalinskiHarabasz 128.42, Dunn "
+          "1.79653, RSquared 0.888558, Silhouette 0.775515, StandardDeviation 0.123269) and sklearn.metrics "
+          "(calinski_harabasz_score, silhouette_score / silhouette_samples).")
+def _clustering_measurements(x: ListOf[ListOf[Expr]] | Rule | Expr, b: Expr | String | ListOf[String] = None,
+                             c: String | ListOf[String] = None, *rest: Option) -> Real | ListOf[Real] | Expr:
+    name = "ClusteringMeasurements"
+    rest = list(rest)
+    for _ in range(2):
+        if c is not None and SM._is_rule(c) and isinstance(c.args[0], Symbol):
+            rest.insert(0, c)
+            c = None
+        if b is not None and SM._is_rule(b) and isinstance(b.args[0], Symbol) and c is None:
+            rest.insert(0, b)
+            b = None
+    _, o = opts(rest, ("DistanceFunction", "FeatureExtractor"), name)
+    if "FeatureExtractor" in o and SM.str_or_sym(o["FeatureExtractor"]) not in ("Identity", "Automatic"):
+        raise NotImplementedError(f"{name}: FeatureExtractor is not supported")
+    truth = None
+    if c is not None:
+        truth, prop = b, c
+    else:
+        prop = b
+    if prop is None:
+        raise TypeError(f"{name}: a property is required")
+    if isinstance(prop, Symbol) or isinstance(x, Symbol) or isinstance(truth, Symbol):
+        raise Unevaluated()
+    props = list(prop.args) if is_list(prop) else [prop]
+    if not all(isinstance(q, str) for q in props):
+        raise TypeError(f"{name}: properties must be strings")
+    for q in props:
+        if q in _CM_UNSUPPORTED:
+            raise NotImplementedError(f"{name}: the property \"{q}\" is not supported")
+        if q not in _CM_INTERNAL + _CM_EXTERNAL + ("Properties",):
+            raise ValueError(f"{name}: unknown property \"{q}\"")
+    clusters, _ = _cm_clusters(x, name)
+    flat = [e for cl in clusters for e in cl]
+    lab = np.array([a for a, cl in enumerate(clusters) for _ in cl])
+    k, n = len(clusters), len(flat)
+    elems = _elements(flat, name)
+    X = np.array([e[0] for e in elems]) if elems[0][0] is not None else None
+    D = _dmatrix(elems, _dist_fn(o.get("DistanceFunction"), "ClusteringMeasurements", flat))
+    gt = None
+    if truth is not None:
+        tcl, _ = _cm_clusters(truth, name)
+        where = {}
+        for a, cl in enumerate(tcl):
+            for e in cl:
+                where.setdefault(e, a)
+        if sorted(map(str, flat)) != sorted(str(e) for cl in tcl for e in cl):
+            raise ValueError(f"{name}: the ground truth must contain the same examples")
+        gt = np.array([where[e] for e in flat])
+
+    def one(q):
+        if q == "Properties":
+            return L(*(_CM_INTERNAL + _CM_EXTERNAL if gt is not None else _CM_INTERNAL))
+        return _cm_prop(q, X, lab, k, D, gt, name)
+    if is_list(prop):
+        return L(*(one(q) for q in props))
+    return one(prop)
