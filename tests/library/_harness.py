@@ -12,6 +12,20 @@ Each area module defines ``CASES``: a list of ``(source, expected)`` tuples
 * ``Raises``   -- the call must raise a clear error;
 * ``Pred``     -- a predicate on the result (used for structural checks such
                   as figures, random draws or sign-ambiguous decompositions).
+
+Cases are grouped by head (``head_of``):
+
+* ``F[...]``         -- the outermost head ``F``;
+* a bare symbol or ``$``-variable (``"Pi"``, ``"$MachinePrecision"``) -- that
+                        symbol; the case is a value check (``str`` / number) or
+                        a type check (``Pred``);
+* ``Via("G", src)``  -- a wrapper case such as ``ToString[G[...]]`` or
+                        ``N[G[...]]`` that counts towards the inner head ``G``.
+                        It counts only if the expected value depends on ``G``'s
+                        own output: ``check`` re-evaluates ``src`` with ``G``
+                        replaced by an inert probe head and fails the case if the
+                        expectation still holds;
+* anything else (``x = 3`` setup lines) -- no head.
 """
 import numbers
 import re
@@ -26,6 +40,8 @@ from mikoshilang.math_ops import to_sympy
 from mikoshilang.parser import parse
 
 HEAD = re.compile(r"\s*([A-Za-z][A-Za-z0-9]*)\[")
+SYMBOL = re.compile(r"\s*(\$?[A-Za-z][A-Za-z0-9]*)\s*$")
+PROBE = "ViaProbe"
 
 
 def ev(src):
@@ -48,8 +64,31 @@ class Pred:
         return self.what
 
 
+class Via(str):
+    """Source of a wrapper case counted towards the inner head ``inner`` (see the module docstring)."""
+
+    def __new__(cls, inner, src):
+        if not re.search(r"(?<![A-Za-z0-9$])" + re.escape(inner) + r"\[", src):
+            raise ValueError(f"Via: {inner}[...] does not occur in {src!r}")
+        if HEAD.match(src) and HEAD.match(src).group(1) == inner:
+            raise ValueError(f"Via: {src!r} already has head {inner}; use a plain case")
+        s = str.__new__(cls, src)
+        s.inner = inner
+        return s
+
+    def __getnewargs__(self):
+        return (self.inner, str(self))
+
+    def probe(self):
+        """``src`` with every ``inner[`` replaced by the inert ``ViaProbe[``."""
+        return re.sub(r"(?<![A-Za-z0-9$])" + re.escape(self.inner) + r"\[", PROBE + "[", str(self))
+
+
 def head_of(case):
-    m = HEAD.match(case[0])
+    src = case[0]
+    if isinstance(src, Via):
+        return src.inner
+    m = HEAD.match(src) or SYMBOL.match(src)
     return m.group(1) if m else None
 
 
@@ -112,7 +151,18 @@ def close(got, want, tol):
 
 
 def check(case):
-    src, want = case[0], case[1]
+    _check(case[0], case)
+    if isinstance(case[0], Via) and not isinstance(case[1], Raises):
+        try:
+            _check(case[0].probe(), case)
+        except Exception:
+            return
+        raise AssertionError(f"{case[0]}: the expected value does not depend on {case[0].inner}'s own output "
+                             f"(it also holds with {case[0].inner} replaced by {PROBE})")
+
+
+def _check(src, case):
+    want = case[1]
     tol = case[2] if len(case) > 2 else 1e-10
     if isinstance(want, Raises):
         with pytest.raises(want.exc, match=want.match):
