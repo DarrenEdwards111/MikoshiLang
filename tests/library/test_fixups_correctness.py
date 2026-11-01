@@ -10,6 +10,7 @@ Expected values follow the Wolfram Language semantics (reference.wolfram.com: Ex
 Plus "Flat, Orderless", FindRoot "MaxIterations"); structural checks use ``===`` so that the exact canonical form,
 not only mathematical equality, is tested.  Placeholder symbols are prefixed ``fz`` and defined only inside Block.
 """
+import importlib.util
 import math
 
 import pytest
@@ -69,6 +70,12 @@ CANONICAL = [
 ]
 
 NI = Raises(NotImplementedError)
+HAVE_SCIPY = importlib.util.find_spec("scipy") is not None
+
+
+def SCI(src, want):
+    """A case that needs SciPy: on a minimal install it must give the clear 'requires SciPy' error."""
+    return (src, want) if HAVE_SCIPY else (src, Raises(NotImplementedError, "SciPy"))
 
 
 def Near(want, tol):
@@ -109,9 +116,9 @@ OPTIONS = [
     ("NSolve[x^2 == 2, x, WorkingPrecision -> 20] // Length", "2"),
     ("NRoots[x^2 - 2 == 0, x, Method -> \"JenkinsTraub\"]", NI),
     ("NMinimize[x^2 - x, x, Integers]", Raises(NotImplementedError, "NMinimize: the domain Integers")),
-    ("NMinimize[x^2 - x, x, Reals]", "{-0.25, {x -> 0.5}}"),
+    SCI("NMinimize[x^2 - x, x, Reals]", "{-0.25, {x -> 0.5}}"),
     ("NMaximize[x - x^2, x, Method -> \"NelderMead\"]", Raises(NotImplementedError, "NMaximize: the option Method")),
-    ("NMinimize[x^2 - x, x, WorkingPrecision -> MachinePrecision]", "{-0.25, {x -> 0.5}}"),
+    SCI("NMinimize[x^2 - x, x, WorkingPrecision -> MachinePrecision]", "{-0.25, {x -> 0.5}}"),
     ("FindMinimum[x^2 - x, {x, 1}, MaxIterations -> 1]", Raises(ValueError, "FindMinimum")),
     ("LinearOptimization[x, {x >= 1}, x, Tolerance -> 0.1]", Raises(NotImplementedError, "Tolerance -> 0.1")),
     ("LinearOptimization[x, {x >= 1}, x, Method -> \"Simplex\"]", NI),
@@ -126,8 +133,8 @@ OPTIONS = [
     ("Interpolation[{1, 2, 3, 4}, PeriodicInterpolation -> False][2]", 2.0),
     ("ListInterpolation[{1, 2, 3, 4}, Method -> \"Spline\"]", NI),
     # NDSolve implements Method, AccuracyGoal and PrecisionGoal since W26; an unknown method still raises
-    ("NDSolveValue[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, Method -> \"ExplicitRungeKutta\"][1]", Near(math.e, 1e-8)),
-    ("NDSolveValue[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, PrecisionGoal -> 12][1]", Near(math.e, 1e-9)),
+    SCI("NDSolveValue[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, Method -> \"ExplicitRungeKutta\"][1]", Near(math.e, 1e-8)),
+    SCI("NDSolveValue[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, PrecisionGoal -> 12][1]", Near(math.e, 1e-9)),
     ("NDSolve[{y'[x] == y[x], y[0] == 1}, y, {x, 0, 1}, Method -> \"Nope\"]", NI),
     ("NSum[1/n^2, {n, 1, Infinity}, VerifyConvergence -> 3]", Raises(ValueError)),
 ]
