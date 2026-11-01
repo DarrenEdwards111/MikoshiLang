@@ -5,8 +5,8 @@ MaternPointProcess are inert expressions validated by their constructors.  Obser
 Cuboid, Disk (circle or axis-aligned ellipse) and Ball in any dimension, with exact measures.
 RandomPointConfiguration simulates (reproducibly with SeedRandom) and returns an inert ``SpatialPointData`` object
 with a few properties; PointCountDistribution, RipleyK, BesagL, PairCorrelationG, NearestNeighborG, EmptySpaceF
-and SpatialJ give exact closed forms where they are known for the process.  Estimates from point data need
-Wolfram's boundary-correction defaults and are not supported (NotImplementedError).
+and SpatialJ give exact closed forms where they are known for the process.  Estimates from point data (with
+SpatialBoundaryCorrection) and PointStatisticFunction are provided by wl_spatial2_stats (batch X08).
 
 Every function returns a correct result, raises a clear error, or stays unevaluated for symbolic input (see
 CONVENTIONS.md).
@@ -686,9 +686,11 @@ def _register_stat(name):
     impl = _stat(name, which)
 
     @fn(name, area=AREA, status="added",
-        notes=note + ". The radius may be a list. Other processes (Matern, binomial, inhomogeneous, Gibbs ...), "
-                     "point-data estimates, {proc, reg} forms and PointStatisticFunction (no radius) raise "
-                     "NotImplementedError; negative radii raise ValueError. Check: exact; reference (closed forms; "
+        notes=note + ". The radius may be a list. Point data ({pts, reg}, {p1, ...} or SpatialPointData) give "
+                     "boundary-corrected estimates (SpatialBoundaryCorrection; without a radius a "
+                     "PointStatisticFunction), see wl_spatial2_stats (X08). Other processes (Matern, binomial, "
+                     "inhomogeneous, Gibbs ...) and {proc, reg} forms raise NotImplementedError; negative radii raise "
+                     "ValueError. Check: exact; reference (closed forms; "
                      "Wolfram documentation) in tests.")
     def _s(proc: Expr, r: Real | ListOf[Real] | Var | Option = None, *opts: Option) -> Expr:
         if isinstance(r, Expr) and r.head in ("Rule", "RuleDelayed"):

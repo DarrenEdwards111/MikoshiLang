@@ -222,6 +222,10 @@ EST = [
     ("EstimatedPointProcess[{{{0.1, 0.1}, {0.5, 0.5}}, Rectangle[]}, PoissonPointProcess[m, 2], "
      "PointProcessEstimator -> \"FindClusters\"]", Raises(NotImplementedError)),
     ("PointProcessEstimator", "PointProcessEstimator"),
+    ("FindPointProcessParameters[{{{0.1, 0.1}, {0.5, 0.5}}, Rectangle[{0, 0}, {2, 1}]}, PoissonPointProcess[m, 2], "
+     "PointProcessEstimator -> \"MaximumLikelihood\"]", "{m -> 1}"),             # n/|W| = 2/2
+    ("FindPointProcessParameters[{{{0.1, 0.1}, {0.5, 0.5}}, Rectangle[]}, PoissonPointProcess[m, 2], "
+     "PointProcessEstimator -> \"Foo\"]", Raises(ValueError)),
     ("SpatialRandomnessTest[{{{0.1, 0.1}, {0.5, 0.5}, {0.7, 0.2}}, Rectangle[]}, \"Foo\"]", Raises(ValueError)),
     ("SpatialRandomnessTest[{{{0.1, 0.1}, {0.5, 0.5}, {0.7, 0.2}}, Rectangle[]}, \"HypothesisTestData\"]",
      Raises(NotImplementedError)),
@@ -373,6 +377,11 @@ VARIO = [
     ("x08k1 = SpatialEstimate[{{0}, {1}} -> {1., 3.}, VariogramFunction -> VariogramModel[\"Linear\", {1}]]; "
      "x08k1[0.5, {\"Value\", \"StandardDeviation\"}]", nums([2.0, math.sqrt(0.5)], 1e-9)),
     ("SpatialEstimatorFunction[3]", Raises(TypeError, "SpatialEstimatorFunction: ")),
+    ("SpatialEstimatorFunction[<|\"Locations\" -> {{0}, {1}}, \"Values\" -> {1, 3}, \"VariogramModel\" -> "
+     "VariogramModel[\"Linear\", {1}], \"SpatialTrendFunction\" -> Automatic|>][0.25]", near(1.5, 1e-9)),
+    ("SpatialEstimatorFunction[<|\"Locations\" -> {{0}, {1}}, \"Values\" -> {1, 3}, \"VariogramModel\" -> "
+     "VariogramModel[\"Linear\", {1}], \"SpatialTrendFunction\" -> Automatic|>][\"Properties\"]",
+     "{\"Value\", \"Around\", \"StandardDeviation\", \"Variance\"}"),
     ("SpatialEstimatorFunction[<|\"Locations\" -> {{0}}|>]", Raises(ValueError, "SpatialEstimatorFunction: ")),
     ("x08k1 = SpatialEstimate[{{0}, {1}} -> {1., 3.}, VariogramFunction -> VariogramModel[\"Linear\", {1}]]; "
      "Head[x08k1]", "SpatialEstimatorFunction"),
