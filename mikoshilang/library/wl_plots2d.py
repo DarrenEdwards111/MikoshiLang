@@ -2371,7 +2371,31 @@ def clip_poly(poly, lo=None, hi=None):
         poly = clip(poly, lambda p: p[-1] >= lo, cross_at(lo))
     if hi is not None and poly:
         poly = clip(poly, lambda p: p[-1] <= hi, cross_at(hi))
-    return poly
+    # drop repeated vertices (a value exactly at the level) and degenerate (zero-area) results
+    out = []
+    for p in poly:
+        if not out or any(abs(a - b) > 1e-12 for a, b in zip(p[:-1], out[-1][:-1])):
+            out.append(p)
+    if len(out) > 1 and all(abs(a - b) <= 1e-12 for a, b in zip(out[0][:-1], out[-1][:-1])):
+        out.pop()
+    if len(out) < 3 or _poly_area(out) <= 1e-14:
+        return []
+    return out
+
+
+def _poly_area(poly):
+    """Area of a planar polygon of points (x, y[, z], v) (the norm of the vector area in 3-D)."""
+    k = len(poly[0]) - 1
+    if k == 2:
+        return abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                       for i in range(len(poly)))) / 2
+    ax = ay = az = 0.0
+    for i in range(len(poly)):
+        p, q = poly[i], poly[(i + 1) % len(poly)]
+        ax += p[1] * q[2] - p[2] * q[1]
+        ay += p[2] * q[0] - p[0] * q[2]
+        az += p[0] * q[1] - p[1] * q[0]
+    return math.sqrt(ax * ax + ay * ay + az * az) / 2
 
 
 def iso_segment(tri, level):
@@ -5213,3 +5237,18 @@ def _surfacedensityplot3d(f: Held, reg: Held, *opts: Held | Option) -> Expr:
     cf = color_function(o["ColorFunction"], fname, lambda t: blend(DENSITY_GRADIENT, t))
     g = density_complex(P, V, np.array(tris, dtype=int), cf, vlo, vhi, o["ColorFunctionScaling"] is not False)
     return _graphics3d([g], gopts, bounds3(P))
+
+
+# ───────────────────────────── not provided ─────────────────────────────
+
+SKIPPED = {
+    "ChromaticityPlot": "needs the CIE 1931/1964 colour-matching tables and Wolfram's undocumented rendering of "
+                        "colour spaces (gamut, spectral locus labelling); not reproducible offline",
+    "ChromaticityPlot3D": "as ChromaticityPlot: CIE colour-matching data and undocumented 3-D colour-space rendering",
+    "BioSequencePlot": "needs BioSequence objects (not implemented) and an undocumented sequence-track layout",
+    "SingularValuePlot": "needs a control-systems frequency response (TransferFunctionModel evaluates inertly; "
+                         "no state-space/transfer-function numerics to take singular values of)",
+    "ListSurfacePlot3D": "Wolfram's surface reconstruction from unordered 3-D points is undocumented; any "
+                         "reconstruction would give a different surface",
+    "ImageWaveformPlot": "needs the Image type from batch W21 (not merged into this branch)",
+}
