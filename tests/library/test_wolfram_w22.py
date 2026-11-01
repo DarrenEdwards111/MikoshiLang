@@ -937,21 +937,8 @@ CHECKS = [
     ("MomentOfInertia[Cuboid[], {0,0,0}, {0,0,1}] - MomentOfInertia[Cuboid[], {1/2,1/2,1/2}, {0,0,1}]", "1/2"),
 ]
 
-# --- documented skips: these heads raise a clear NotImplementedError ----------------------------------------------
-SKIPS = [
-    ("ConcaveHullMesh[{{0,0},{1,0},{0,1}}]", Raises(N, "not implemented")),
-    ("FindMeshDefects[%TRI%]", Raises(N, "not implemented")),
-    ("GradientFittedMesh[{{0,0},{1,0},{0,1}}]", Raises(N, "not implemented")),
-    ("MeshCellQuality[%TRI%]", Raises(N, "not implemented")),
-    ("ReconstructionMesh[{{0,0},{1,0},{0,1}}]", Raises(N, "not implemented")),
-    ("Remesh[%TRI%]", Raises(N, "not implemented")),
-    ("RepairMesh[%TRI%]", Raises(N, "not implemented")),
-    ("SimplifyMesh[%TRI%]", Raises(N, "not implemented")),
-    ("SmoothMesh[%TRI%]", Raises(N, "not implemented")),
-    ("SubdivisionRegion[%TRI%]", Raises(N, "not implemented")),
-    ("RegionFit[{{0,0},{1,0},{0,1}}, \"Line\"]", Raises(N, "not implemented")),
-    ("TriangulateMesh[%TRI%]", Raises(N, "not implemented")),
-]
+# --- the 12 mesh heads W22 reserved as errors are implemented (and tested) in batch X06 -------------------------
+SKIPS = []
 
 _SUBS = {"%SQ%": SQ, "%TRI%": TRI, "%TETB%": TETB, "%TET%": TET, "%HOLED%": HOLED, "%BTRI%": BTRI, "%HP%": HP,
          "%PTS%": PTS}

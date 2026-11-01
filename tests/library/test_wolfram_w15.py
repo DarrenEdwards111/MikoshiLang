@@ -558,7 +558,7 @@ def test_w15_every_batch_symbol_registered():
     assert len(set(names)) == 163
     missing = [n for n in names if n not in STATUS]
     assert not missing, missing
-    assert "HighlightRegion" not in STATUS            # skipped: needs the region batches (W19/W22)
+    # HighlightRegion (skipped in W15: needs the region batches) is implemented in batch X06
 
 
 def test_w15_python_api_resolve_options():
