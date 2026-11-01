@@ -32,7 +32,7 @@ import sympy as sp
 
 from ..expr import Expr, Symbol
 from .. import kernel as K
-from .core import fn, record, Unevaluated, REGISTRY, L, S, is_numeric_value
+from .core import fn, Unevaluated, L, S, is_numeric_value
 from .wl_common import ev, apply, is_list, is_rule
 from . import wl_graphs as GR
 from . import wl_graphics_core as G
@@ -435,7 +435,6 @@ def sugiyama(n, arcs, roots=()):
 
     Returns (coords dict v -> (x, layer), routed arcs [(u, v, [dummy points])]).  ``roots`` are forced onto
     layer 0."""
-    np = _np()
     arcs = [(u, v) for u, v in arcs if u != v]
     succ = {v: [] for v in range(n)}
     for u, v in arcs:
@@ -845,7 +844,6 @@ def _layered(gr, lay, fname):
         arcs = []
         for i, j, _ in gr.edges:
             arcs.append((i, j) if dist[i] <= dist[j] else (j, i))
-        src = list(range(len(arcs)))
     same = [k for k, (i, j) in enumerate(arcs) if i == j or (not directed and dist[i] == dist[j])]
     use = [a for k, a in enumerate(arcs) if k not in same]
     try:
@@ -1058,7 +1056,6 @@ def draw_graph(gr, X, routes, gopts, fname, dim=2, vertex_colors=None, vertex_ra
         frac = _real(vs, fname, "VertexSize", lo=0)
     r = frac / 2 * dmin
     radii = vertex_radii or [r] * n
-    directed_edges = [d for _, _, d in gr.edges]
     v_style = _per_item(gopts.get("VertexStyle"), lambda k, x: K.tag(x) == K.tag(gr.vertices[k]), n, fname,
                         "VertexStyle", lambda x: _style_of(x, fname, "VertexStyle"))
     m = len(gr.edges)
@@ -1313,7 +1310,7 @@ def _layeredgraphplot(g: Expr, *rest: Expr | Option) -> Expr:
 
 
 def _layer_planes(X, layers_spec, style_spec, fname):
-    np = _np()
+    styles = _layer_styles(style_spec, fname)
     if layers_spec is None or sym(layers_spec, "None", "Automatic"):
         return []
     zs = sorted({round(float(z), 9) for z in X[:, 2]}, reverse=True)
@@ -1325,8 +1322,18 @@ def _layer_planes(X, layers_spec, style_spec, fname):
     for m in want:
         if m > len(zs):
             raise ValueError(f"{fname}: GraphLayers asks for layer {m}, but the plot has {len(zs)} layers")
+    lo, hi = X[:, :2].min(0) - 0.5, X[:, :2].max(0) + 0.5
+    out = []
+    for k, m in enumerate(want):
+        z = zs[m - 1]
+        sq = L(pt((lo[0], lo[1], z)), pt((hi[0], lo[1], z)), pt((hi[0], hi[1], z)), pt((lo[0], hi[1], z)))
+        out.append(L(styles[k % len(styles)], Expr("EdgeForm", L()), Expr("Polygon", sq)))
+    return out
+
+
+def _layer_styles(style_spec, fname):
     if style_spec is None or sym(style_spec, "Automatic"):
-        styles = [L(Expr("Opacity", 0.2), rgb((0.6, 0.6, 0.8)))]
+        styles = [Expr("Directive", Expr("Opacity", 0.2), rgb((0.6, 0.6, 0.8)))]
     elif isinstance(style_spec, str):
         raise NotImplementedError(f"{fname}: named colour schemes in GraphLayerStyle are not supported")
     elif is_list(style_spec):
@@ -1335,13 +1342,7 @@ def _layer_planes(X, layers_spec, style_spec, fname):
             raise ValueError(f"{fname}: GraphLayerStyle must not be an empty list")
     else:
         styles = [_style_of(style_spec, fname, "GraphLayerStyle")]
-    lo, hi = X[:, :2].min(0) - 0.5, X[:, :2].max(0) + 0.5
-    out = []
-    for k, m in enumerate(want):
-        z = zs[m - 1]
-        sq = L(pt((lo[0], lo[1], z)), pt((hi[0], lo[1], z)), pt((hi[0], hi[1], z)), pt((lo[0], hi[1], z)))
-        out.append(L(styles[k % len(styles)], Expr("EdgeForm", L()), Expr("Polygon", sq)))
-    return out
+    return styles
 
 
 @fn("LayeredGraphPlot3D", area=AREA, status="added",
@@ -1440,7 +1441,14 @@ def _graph_with_layout(args, fname, layout_of):
     user = opts.pop("GraphLayout", None)
     layout = layout_of(user, where, root)
     rules = [Expr("Rule", Symbol(k), v) for k, v in opts.items()]
-    out = ev(Expr("Graph", *pos, *rules, Expr("Rule", Symbol("GraphLayout"), layout)))
+    if len(pos) == 1 and isinstance(pos[0], Symbol):
+        raise Unevaluated()
+    if not all(is_list(p) or isinstance(p, Expr) and p.head == "Graph" for p in pos):
+        raise TypeError(f"{fname}: expected a graph, an edge list, or a vertex list and an edge list")
+    try:
+        out = ev(Expr("Graph", *pos, *rules, Expr("Rule", Symbol("GraphLayout"), layout)))
+    except GR.GraphError as exc:
+        raise ValueError(f"{fname}: {exc}") from None
     if not (isinstance(out, Expr) and out.head == "Graph"):
         if isinstance(pos[0], Symbol):
             raise Unevaluated()
@@ -1456,6 +1464,9 @@ def _user_method(user, fname, allowed):
         return None, []
     items = list(user.args) if is_list(user) else [user]
     name = items.pop(0) if items and isinstance(items[0], str) else None
+    if any(not is_rule(r) for r in items):
+        raise ValueError(f"{fname}: GraphLayout must be a method name or {{name, sub-option rules}}, not "
+                         f"{K_input(user)}")
     if name is not None and name not in allowed:
         raise NotImplementedError(f"{fname}: GraphLayout {name!r} is not supported here")
     return name, items
@@ -2240,7 +2251,7 @@ _option_symbol("EdgeValueSizes", "EdgeValueSizes: option of GraphValuePlot (and 
                "{smin, smax} or s, thicknesses as fractions of the plot width (Thickness). Inert as an expression. "
                "Check: reference (tests read the Thickness directives).")
 _option_symbol("EscapeRadius", "EscapeRadius: option of MandelbrotSetPlot: iteration stops once |z_n| > r; r must "
-               "be a real number greater than 2 (default 2). Inert as an expression. Check: reference (tests "
+               "be a real number >= 2 (default 2). Inert as an expression. Check: reference (tests "
                "compare escape counts at two radii).")
 
 
