@@ -652,8 +652,13 @@ def _ndopts(rest, fname):
     notes="NDSolve[{odes, ics}, y, {x, xmin, xmax}] (also y[x], and systems {y, z}) for initial-value problems "
           "of any order that can be solved for the highest derivatives -> {{y -> InterpolatingFunction[...]}} "
           "(or {{y[x] -> InterpolatingFunction[...][x]}}); SciPy DOP853 (Radau fallback for stiff problems), "
-          "rtol 1e-10; the initial point may be inside the range; machine precision only; boundary-value "
-          "problems, DAEs, PDEs and delay equations raise")
+          "rtol 1e-10, MaxStepFraction 1/10; the initial point may be inside the range; machine precision only; "
+          "WhenEvent actions and the AccuracyGoal / PrecisionGoal / MaxStepSize / MaxStepFraction / "
+          "StartingStepSize / MaxSteps / StepMonitor / EvaluationMonitor options (W26). Linear boundary-value "
+          "problems (1-D, or 2-D on rectangles) with DirichletCondition, NeumannValue, PeriodicBoundaryCondition "
+          "or end-point equations are solved by Chebyshev collocation (W26, wl_pde); nonlinear BVPs, DAEs, "
+          "time-dependent PDEs and delay equations raise. Check: self-check (BVP grid refinement raises "
+          "ArithmeticError when unconverged) and reference values in tests.")
 def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Expr]:
     pos, opts = _ndopts(rest, "NDSolve")
     us, out, xv = _ndsolve(eqs, unknowns, rng, dict(opts, ranges=pos), "NDSolve")
@@ -669,7 +674,8 @@ def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Exp
 
 @fn("NDSolveValue", area=AREA, status="added",
     notes="NDSolveValue[{odes, ics}, y, {x, xmin, xmax}] -> InterpolatingFunction (y[x] -> ifun[x], {y, z} -> "
-          "list); same solver and limits as NDSolve")
+          "list); same solvers and limits as NDSolve. Check: self-check (BVP grid refinement raises ArithmeticError when "
+          "unconverged) and reference values in tests.")
 def _ndsolvevalue(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> Expr:
     pos, opts = _ndopts(rest, "NDSolveValue")
     us, out, xv = _ndsolve(eqs, unknowns, rng, dict(opts, ranges=pos), "NDSolveValue")
