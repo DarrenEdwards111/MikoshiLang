@@ -841,6 +841,7 @@ def _coord_array(bounds, rest, f, inputs):
         raise ValueError(f"{f}: too many arguments")
     steps = _steps(rest[0], n, bounds, f) if rest else [sp.Integer(1)] * n
     offs = _offsets(rest[1], steps, f) if len(rest) == 2 else [sp.Integer(0)] * n
+    concrete_check(list(steps) + list(offs))
     axes = []
     for (lo, hi), s, o in zip(bounds, steps, offs):
         if num(hi) < num(lo):

@@ -382,6 +382,8 @@ def _scaling_transform(s: Real | ListOf[Real], *rest: ListOf[Real]) -> Expr:
             raise ValueError(f"{f}: expected ScalingTransform[{{s1, ...}}] or ScalingTransform[{{s1, ...}}, p]")
         p = vec(rest[0], f, "centre", dim=len(d)) if rest else None
         return tf_expr(_with_centre(sp.diag(*d), p), s, *rest)
+    if not rest and isinstance(s, Symbol):
+        raise Unevaluated()
     k = scal(s, f, "scale factor")
     if not rest or len(rest) > 2:
         raise ValueError(f"{f}: expected ScalingTransform[s, v] or ScalingTransform[s, v, p]")

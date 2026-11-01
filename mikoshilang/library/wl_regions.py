@@ -2553,8 +2553,8 @@ class BoolR(Region):
 
 
 def _apply_bool(fexpr, vals, f):
-    from .. import evaluate as E
-    r = E.evaluate(Expr(K.as_head(fexpr), *[bool(v) for v in vals]), 1)
+    from ..evaluate import evaluate as _ev
+    r = _ev(Expr(K.as_head(fexpr), *[bool(v) for v in vals]), 1)
     if r is True or r is False:
         return r
     raise ValueError(f"{f}: the Boolean function did not give True or False")
@@ -2700,8 +2700,8 @@ class FnImageR(Region):
     def member(self, p):
         if not self.inverse:
             self.need("membership (non-invertible maps)")
-        from .. import evaluate as E
-        y = E.evaluate(Expr(K.as_head(self.fexpr), out(p)), 1)
+        from ..evaluate import evaluate as _ev
+        y = _ev(Expr(K.as_head(self.fexpr), out(p)), 1)
         if not K.is_list(y) or len(y.args) != self.base.edim:
             raise ValueError(f"{self.f}: the map must give points of dimension {self.base.edim}")
         q = [sx(c, self.f, "image coordinate") for c in y.args]
@@ -5097,7 +5097,7 @@ def _canon_degenerate(x, f):
             return Expr("Point", out(P[0] if len(P) == 1 else P, x))
         cl = [c for c in cl if len(c) > 1]
         return Expr("Line", out(cl[0] if len(cl) == 1 else cl, x))
-    if h in ("Triangle", "Simplex") and a and K.is_list(a[0]) and not _is_coord_list(a[0].args[0]) is False:
+    if h in ("Triangle", "Simplex") and a and K.is_list(a[0]) and a[0].args and K.is_list(a[0].args[0]):
         P = pts(a[0], f)
         concrete(P)
         k = affine_rank(P)
