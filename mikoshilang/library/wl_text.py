@@ -3080,7 +3080,8 @@ KL.COMPOUND_HEAD_HOOKS["DiffObject"] = _diffobj_hook
 record("DiffObject", AREA, "added",
        "DiffObject[1, type | {type, n}, <|\"Changes\" -> hunks, ...|>] (as made by Diff3 or Wolfram's Diff) is "
        "inert; obj[\"Changes\"], [\"Conflicts\"], [\"Deletions\"], [\"Insertions\"], [\"SummaryString\"]; other "
-       "versions stay unevaluated")
+       "versions stay unevaluated"
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _failure(tag, msg, params):

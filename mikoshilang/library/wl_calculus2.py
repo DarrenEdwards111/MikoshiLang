@@ -3204,10 +3204,12 @@ KL.COMPOUND_HEAD_HOOKS["DifferenceRoot"] = _droot_hook
 KL.COMPOUND_HEAD_HOOKS["DifferentialRoot"] = _diffroot_hook
 record("DifferenceRoot", AREA, "added",
        "DifferenceRoot[Function[{y, n}, {rec, ics}]][k]: the solution of a linear recurrence with initial values; "
-       "evaluated exactly at integers (iterating the recurrence), unevaluated otherwise")
+       "evaluated exactly at integers (iterating the recurrence), unevaluated otherwise"
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 record("DifferentialRoot", AREA, "added",
        "DifferentialRoot[Function[{y, x}, {ode, ics}]][x]: the solution of an ODE with initial conditions; exact at "
-       "the initial point, numerical (mpmath Taylor ODE solver) at inexact arguments, unevaluated otherwise")
+       "the initial point, numerical (mpmath Taylor ODE solver) at inexact arguments, unevaluated otherwise"
+       ". Check: reference (differential cases in tests/library).")
 
 
 def _guess_recurrence(vals, n0, max_order=4, max_deg=4, spare=8):
