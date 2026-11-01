@@ -204,7 +204,7 @@ def _codec(enc, fname):
 @fn("StringToByteArray", area=AREA, status="added",
     notes="bytes of a string in UTF-8 (default) or a named $CharacterEncodings encoding; a character the "
           "encoding cannot represent raises")
-def _str2ba(s: String, enc: Expr = None) -> Expr:
+def _str2ba(s: String, enc: String = None) -> Expr:
     s = _str(s, "StringToByteArray")
     c = _codec(enc, "StringToByteArray")
     try:
@@ -215,7 +215,7 @@ def _str2ba(s: String, enc: Expr = None) -> Expr:
 
 @fn("ByteArrayToString", area=AREA, status="added",
     notes="decodes a ByteArray (or {}) as UTF-8 (default) or a named encoding; invalid data raises")
-def _ba2str(b: Expr, enc: Expr = None) -> Expr:
+def _ba2str(b: Expr, enc: String = None) -> String:
     data = _bytes_of(b, "ByteArrayToString")
     c = _codec(enc, "ByteArrayToString")
     try:
@@ -300,7 +300,7 @@ def _a85_encode(b):
 @fn("BaseEncode", area=AREA, status="added",
     notes="\"Base64\" (RFC 4648, padded; default), \"Base16\" (upper-case hex) and "
           "\"Base85ASCII\" (Ascii85 with the z shortcut, no padding) encodings of a ByteArray")
-def _baseencode(b: Expr, enc: Expr = "Base64") -> Expr:
+def _baseencode(b: Expr, enc: String = "Base64") -> String:
     data = _bytes_of(b, "BaseEncode")
     if enc == "Base64":
         return base64.b64encode(data).decode("ascii")
@@ -314,7 +314,7 @@ def _baseencode(b: Expr, enc: Expr = "Base64") -> Expr:
 @fn("BaseDecode", area=AREA, status="added",
     notes="inverse of BaseEncode, giving a ByteArray; characters outside the alphabet are dropped; Base64 input "
           "must be padded to a multiple of 4 (otherwise an error)")
-def _basedecode(s: String, enc: Expr = "Base64") -> Expr:
+def _basedecode(s: String, enc: String = "Base64") -> Expr:
     s = _str(s, "BaseDecode")
     try:
         if enc == "Base64":
@@ -566,7 +566,7 @@ def _expression_hash(x):
           "of the expression (Wolfram documents its value as implementation-dependent). Formats Integer, "
           "DecimalString, HexString, HexStringLittleEndian, Base36String, Base64Encoding, ByteArray. MD2 and "
           "the BLAKE2 parallel/XOF variants raise.")
-def _hash(x: Expr, t: Expr = "Expression", fmt: Expr = "Integer") -> Expr:
+def _hash(x: Expr, t: String = "Expression", fmt: String = "Integer") -> Expr:
     if t == "Expression":
         return _hash_format(_expression_hash(x), 64, fmt, "Hash")
     f, bits = _hash_function(t, "Hash")
@@ -617,7 +617,7 @@ _HASH_FORMATS = {"Integer", "DecimalString", "HexString", "HexStringLittleEndian
 @fn("FileHash", area=AREA, status="added",
     notes="hash of the raw bytes of a file (default MD5, format Integer); FileHash[{file, range}, ...] with "
           "n, -n, {n}, {m, n}, 0 or All byte ranges; the legacy FileHash[file, type, range, format] is accepted")
-def _filehash(f: Expr, t: Expr = "MD5", *rest: Expr) -> Expr:
+def _filehash(f: Expr, t: String = "MD5", *rest: Expr) -> Expr:
     rng = Symbol("All")
     if is_list(f) and len(f.args) == 2:
         f, rng = f.args
@@ -953,7 +953,7 @@ for _cp in range(0xC0, 0x180):
           "gives a list; types without a reproducible table (LongName, TeXName), "
           "and characters outside the table, raise. Greek epsilon/phi forms are omitted (Wolfram's naming of the "
           "lunate/curly variants differs from Unicode's)")
-def _charname(c: Expr, typ: Expr = None) -> Expr:
+def _charname(c: String | Integer, typ: String = None) -> Expr:
     if isinstance(c, int) and not isinstance(c, bool):
         if not 0 <= c <= 0x10FFFF:
             raise ValueError("CharacterName: character code out of range")
@@ -990,7 +990,7 @@ def _charname(c: Expr, typ: Expr = None) -> Expr:
 
 @fn("CharacterNormalize", area=AREA, status="added",
     notes="Unicode normalization forms NFC, NFD, NFKC, NFKD; threads over lists of strings")
-def _charnormalize(s: Expr, form: Expr) -> Expr:
+def _charnormalize(s: Expr, form: String) -> Expr:
     if form not in ("NFC", "NFD", "NFKC", "NFKD"):
         raise ValueError(f"CharacterNormalize: unknown normalization form {form!r}")
     return _thread_strings(s, lambda t: unicodedata.normalize(form, _str(t, "CharacterNormalize")))
@@ -1064,7 +1064,7 @@ def _syntaxq(s: String, form: Expr = None) -> Boolean:
 @fn("SyntaxLength", area=AREA, status="added",
     notes="length of the longest prefix that is syntactically valid so far (the position of the first syntax "
           "error); StringLength + 1 when the whole string is valid but incomplete")
-def _syntaxlength(s: String) -> Expr:
+def _syntaxlength(s: String) -> NonNegInteger:
     s = _str(s, "SyntaxLength")
     st = _syntax_state(s)
     if st == "ok":
@@ -1607,7 +1607,7 @@ def _deep_same(u, v, same, depth):
     notes="{transient, repeat} with the shortest transient after which a minimal block repeats at least n "
           "complete times (an incomplete final repeat allowed); {list, {}} if none; strings give strings; "
           "SameTest")
-def _findtransient(x: Expr, n: Expr, *rest: Expr) -> ListOf[Expr]:
+def _findtransient(x: Expr, n: PosInteger, *rest: Expr) -> ListOf[Expr]:
     args, o = _opts(rest, {"SameTest"}, "FindTransientRepeat")
     if args:
         raise ValueError("FindTransientRepeat called with too many arguments")
@@ -3438,7 +3438,7 @@ def _format_q(data, fmt, fname):
     notes="heuristic import format of a string: magic numbers for binary formats (PNG, GIF, JPEG, PDF, ZIP, "
           "GZIP, TIFF, WAV, WXF, ...), else JSON, XML, HTML, SVG, TSV, CSV, Table (numeric columns) or Text; "
           "\"Binary\" for unrecognised binary data")
-def _stringformat(s: Expr) -> Expr:
+def _stringformat(s: String) -> Expr:
     if not isinstance(s, str):
         if isinstance(s, Symbol):
             raise Unevaluated()
@@ -3569,7 +3569,7 @@ def _snippet_text(text, n):
 @fn("Snippet", area=AREA, status="added",
     notes="Snippet[doc] / Snippet[doc, n]: the first n lines (default 1) of a ContentObject's text or of a "
           "File, long lines wrapped at 80 characters; a string is its own snippet")
-def _snippet(x: Expr, n: Expr = 1) -> Expr:
+def _snippet(x: Expr, n: PosInteger = 1) -> Expr:
     n = _int(n, "Snippet", "line count", 1)
     if isinstance(x, str):
         return x

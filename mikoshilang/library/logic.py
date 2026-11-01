@@ -1,6 +1,8 @@
 """Boolean logic.  Connectives evaluate when all arguments are True/False and
 otherwise stay unevaluated (Wolfram behaviour); legacy Iff/Xnor coerced
 symbols with Python bool(), so Iff[x, y] returned True."""
+
+from __future__ import annotations
 import itertools
 
 import sympy as sp
@@ -19,7 +21,7 @@ def _bools(args):
 
 def _conn(name, f, notes, min_args=2, status="fixed"):
     @fn(name, area=AREA, status=status, notes=notes)
-    def impl(*args):
+    def impl(*args: Boolean) -> Boolean:
         if len(args) < min_args:
             raise ValueError(f"{name} needs at least {min_args} arguments")
         return f(_bools(args))
@@ -82,7 +84,7 @@ def _vars(v):
 
 @fn("TruthTable", area=AREA, status="verified",
     notes="rows {v1, ..., vn, value} over all assignments, variables in alphabetical order (MikoshiLang)")
-def _tt(e):
+def _tt(e: Expr) -> ListOf[Expr]:
     v = _bexpr(e, "TruthTable")
     xs = _vars(v)
     if len(xs) > 16:
@@ -93,7 +95,7 @@ def _tt(e):
 
 
 @fn("AllSAT", area=AREA, status="verified", notes="all satisfying assignments as rule lists (MikoshiLang)")
-def _allsat(e):
+def _allsat(e: Expr) -> ListOf[Expr]:
     v = _bexpr(e, "AllSAT")
     xs = _vars(v)
     if len(xs) > 20:
@@ -108,7 +110,7 @@ def _allsat(e):
 @fn("SATSolve", area=AREA, status="fixed",
     notes="one satisfying assignment {x -> True, ...} (all variables, alphabetical) or False; legacy omitted "
           "variables SymPy did not need and could return {True -> True} for tautologies")
-def _sat(e):
+def _sat(e: Expr) -> Expr:
     v = _bexpr(e, "SATSolve")
     xs = _vars(v)
     model = sp.satisfiable(v)
@@ -119,17 +121,17 @@ def _sat(e):
 
 
 @fn("CNF", area=AREA, status="verified", notes="conjunctive normal form (SymPy to_cnf; Wolfram BooleanConvert[e, \"CNF\"])")
-def _cnf(e):
+def _cnf(e: Expr) -> Expr:
     return _from_bool(sp.to_cnf(_bexpr(e, "CNF")))
 
 
 @fn("DNF", area=AREA, status="verified", notes="disjunctive normal form (SymPy to_dnf)")
-def _dnf(e):
+def _dnf(e: Expr) -> Expr:
     return _from_bool(sp.to_dnf(_bexpr(e, "DNF")))
 
 
 @fn("BooleanMinimize", area=AREA, status="verified", notes="minimal DNF (SymPy simplify_logic, Quine-McCluskey)")
-def _bmin(e):
+def _bmin(e: Expr) -> Expr:
     v = _bexpr(e, "BooleanMinimize")
     if not sp.satisfiable(v):
         return False
