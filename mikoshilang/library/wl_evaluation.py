@@ -755,15 +755,26 @@ _CONTINUES = {"PLUS", "MINUS", "TIMES", "DIVIDE", "POWER", "SET", "SETDELAYED", 
               "RIGHTCOMPOSITION", "SPAN"}
 
 
+class StopSource(Exception):
+    """Raised by an expression to end the reading of the current file (X01: PackageInitialize[ctx, None],
+    which evaluates the rest of its file itself); value is the result Get returns."""
+    def __init__(self, value=None):
+        super().__init__("StopSource")
+        self.value = NULL if value is None else value
+
+
 def run_source(text):
     """Parse and evaluate text one top-level expression at a time (as Get does); the last result."""
     from ..parser import parse
     result = NULL
-    for chunk in split_statements(text):
-        e = parse(chunk)
-        if e is None:
-            continue
-        result = E.evaluate(e)
+    try:
+        for chunk in split_statements(text):
+            e = parse(chunk)
+            if e is None:
+                continue
+            result = E.evaluate(e)
+    except StopSource as stop:
+        return stop.value
     return result
 
 
