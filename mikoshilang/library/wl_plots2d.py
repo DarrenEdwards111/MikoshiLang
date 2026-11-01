@@ -2394,18 +2394,18 @@ def bands(P, V, T, levels):
         vs = V[t]
         if not np.isfinite(vs).all():
             continue
-        tri = [(P[k][0], P[k][1], V[k]) for k in t]
+        tri = [tuple(P[k]) + (V[k],) for k in t]
         lo_v, hi_v = float(vs.min()), float(vs.max())
         for k in range(len(edges) - 1):
             lo, hi = edges[k], edges[k + 1]
             if hi_v < lo or lo_v > hi:
                 continue
             if lo <= lo_v and hi_v <= hi:
-                out[k].append([(p[0], p[1]) for p in tri])
+                out[k].append([tuple(p[:-1]) for p in tri])
             else:
                 c = clip_poly(tri, None if lo == -math.inf else lo, None if hi == math.inf else hi)
                 if len(c) >= 3:
-                    out[k].append([(p[0], p[1]) for p in c])
+                    out[k].append([tuple(p[:-1]) for p in c])
     return out
 
 
@@ -2417,7 +2417,7 @@ def iso_lines(P, V, T, level):
         if not np.isfinite(vs).all():
             continue
         if vs.min() < level < vs.max():
-            s = iso_segment([(P[k][0], P[k][1], V[k]) for k in t], level)
+            s = iso_segment([tuple(P[k]) + (V[k],) for k in t], level)
             if s:
                 segs.append(s)
     return chain_segments(segs)
@@ -3981,3 +3981,1235 @@ def _plotgrid(grid: MatrixOf[Expr] | ListOf[Expr], *opts: Option) -> Expr:
     defaults = [("AspectRatio", fl(nr) / nc), ("PlotRange", range_expr([(0.0, float(nc)), (0.0, float(nr))])),
                 ("PlotRangePadding", 0)]
     return finish_graphics(L(*content), gopts, defaults)
+
+
+# ═════════════════════════════ 3-D plots ═════════════════════════════
+
+WHITE_SURFACE = Expr("Directive", Expr("RGBColor", 1, 1, 1))
+
+_PLOT3D_DEFAULTS = {"PlotRange": AUTO, "PlotPoints": AUTO, "MaxRecursion": AUTO, "PlotStyle": AUTO,
+                    "PlotLegends": NONE, "Mesh": AUTO, "MeshStyle": AUTO, "MeshFunctions": AUTO,
+                    "MeshShading": NONE, "ColorFunction": AUTO, "ColorFunctionScaling": True,
+                    "RegionFunction": AUTO, "PlotTheme": AUTO, "PerformanceGoal": AUTO, "Exclusions": AUTO,
+                    "ExclusionsStyle": NONE, "WorkingPrecision": Symbol("MachinePrecision"),
+                    "EvaluationMonitor": NONE, "Method": AUTO, "ClippingStyle": AUTO, "BoundaryStyle": NONE,
+                    "NormalsFunction": AUTO, "TextureCoordinateFunction": AUTO, "TextureCoordinateScaling": AUTO,
+                    "ScalingFunctions": NONE, "PlotHighlighting": AUTO, "DataRange": AUTO,
+                    "InterpolationOrder": AUTO, "MaxPlotPoints": AUTO, "Filling": NONE, "FillingStyle": AUTO,
+                    "Contours": AUTO, "ContourStyle": AUTO, "Joined": AUTO, "PlotMarkers": NONE,
+                    "ExtentSize": AUTO, "ExtentMarkers": NONE, "ExtentElementFunction": AUTO,
+                    "OpacityFunction": AUTO, "OpacityFunctionScaling": True, "ColorRules": AUTO,
+                    "LabelingFunction": AUTO, "PlotLabels": NONE, "ContourShading": AUTO, "Lighting": AUTO,
+                    "PlotRangePadding": AUTO}
+
+
+def _check3d(o, fname, allowed):
+    for n, v in o.items():
+        if n in allowed or n == "PlotRange":
+            continue
+        if is_sym(v, "Automatic", "None", "Infinity") or (n == "WorkingPrecision" and is_sym(v, "MachinePrecision")) \
+                or (n == "PlotTheme" and v == "Default") or (n == "PerformanceGoal" and v in ("Quality", "Speed")) \
+                or (n in ("ColorFunctionScaling", "OpacityFunctionScaling") and v is True) \
+                or (n == "Joined" and v is False):
+            continue
+        raise NotImplementedError(f"{fname}: the option {n} -> {K_input(v)} is not supported")
+
+
+def _opts3d(fname, o_, allowed):
+    o, gopts = split_options(fname, o_, _PLOT3D_DEFAULTS, dim=3)
+    _check3d(o, fname, allowed)
+    return o, gopts
+
+
+def surface_styles(spec, n, fname, single_white=False):
+    """Surface directives: PlotStyle, else Wolfram's default colours (white for a single implicit surface)."""
+    if single_white and (spec is None or is_sym(spec, "Automatic")):
+        return [WHITE_SURFACE] * n
+    out = []
+    user = None if spec is None or is_sym(spec, "Automatic") else (list(spec.args) if K.is_list(spec) else [spec])
+    for i in range(n):
+        u = user[i % len(user)] if user else None
+        if u is None or is_sym(u, "Automatic"):
+            out.append(Expr("Directive", default_color(i)))
+        elif is_sym(u, "None"):
+            out.append(None)
+        else:
+            G.directive_like(u, fname, "PlotStyle")
+            extra = list(u.args) if isinstance(u, Expr) and u.head == "Directive" else [u]
+            out.append(Expr("Directive", *extra))
+    return out
+
+
+def surface_complex(P, faces):
+    """GraphicsComplex[points, {EdgeForm[], Polygon[faces]}] (1-based indices); faces with NaN vertices dropped."""
+    np = _np()
+    ok = np.isfinite(P).all(axis=1)
+    fs = [f for f in faces if all(ok[k] for k in f)]
+    if not fs:
+        return None
+    used = sorted({k for f in fs for k in f})
+    remap = {k: i + 1 for i, k in enumerate(used)}
+    return Expr("GraphicsComplex", pts([tuple(P[k]) for k in used]),
+                L(Expr("EdgeForm"), Expr("Polygon", L(*[L(*[remap[k] for k in f]) for f in fs]))))
+
+
+def grid_faces(nu, nv):
+    """Quads of an nu x nv parameter grid (vertex k = j * nu + i)."""
+    return [(j * nu + i, j * nu + i + 1, (j + 1) * nu + i + 1, (j + 1) * nu + i)
+            for j in range(nv - 1) for i in range(nu - 1)]
+
+
+def bounds3(P):
+    np = _np()
+    fin = P[np.isfinite(P).all(axis=1)]
+    if not fin.size:
+        return [(0.0, 1.0)] * 3
+    return [data_range(list(fin[:, k])) for k in range(3)]
+
+
+def three_iterators(pos, fname, k0=1):
+    its = []
+    for i, sp_ in enumerate(pos):
+        its.append(iterator(sp_, fname, k0 + i + 1))
+    names = [v.name for v, _, _ in its]
+    if len(set(names)) != len(names):
+        raise ValueError(f"{fname}: the iterator variables must differ")
+    return its
+
+
+def _surface_n(o, fname, default):
+    n = _int_opt(o["PlotPoints"], default, fname, "PlotPoints", 2)
+    rec = _int_opt(o["MaxRecursion"], 1, fname, "MaxRecursion", 0)
+    return min((n - 1) * (2 ** min(rec, 2)) + 1, 201)
+
+
+def _graphics3d(content, gopts, ranges, box=None, extra=()):
+    defaults = [("Axes", True), ("BoxRatios", box if box is not None else Symbol("Automatic")),
+                ("PlotRange", range_expr(ranges))] + list(extra)
+    return finish_graphics(L(*content), gopts, defaults, dim=3)
+
+
+# ───────────────────────────── list 3-D plots ─────────────────────────────
+
+def _data3(d, fname):
+    """{{x, y, z}, ...} -> [(x, y, z)|None]; array {{z11, ...}, ...} -> heights at {j, i}."""
+    d, _, _ = _unwrap(d, fname)
+    if not K.is_list(d) or not d.args:
+        if isinstance(d, (Symbol, Expr)) and not K.is_list(d):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the data must be a non-empty list")
+    return d
+
+
+def _is_triples(d):
+    return all(_is_pair(r, 3) or is_missing(r) for r in d.args) and any(_is_pair(r, 3) for r in d.args)
+
+
+def _triples(d, fname):
+    out = []
+    for r in d.args:
+        if is_missing(r):
+            out.append(None)
+            continue
+        cs = [scalar(c, fname) for c in r.args]
+        out.append(None if None in cs else tuple(cs))
+    return out
+
+
+def _height_array(d, fname, dr):
+    cells = matrix_cells(d, fname, allow_colors=False)
+    ny, nx = len(cells), len(cells[0])
+    if dr is None or is_sym(dr, "Automatic", "All"):
+        a, b, c, e = 1.0, float(nx), 1.0, float(ny)
+    elif K.is_list(dr) and len(dr.args) == 2 and all(K.is_list(q) and len(q.args) == 2 for q in dr.args):
+        (a, b), (c, e) = [[real_arg(v, fname, "DataRange") for v in q.args] for q in dr.args]
+    else:
+        raise ValueError(f"{fname}: DataRange must be Automatic or {{{{xmin, xmax}}, {{ymin, ymax}}}}")
+    xs = [a + (b - a) * i / (nx - 1) if nx > 1 else a for i in range(nx)]
+    ys = [c + (e - c) * j / (ny - 1) if ny > 1 else c for j in range(ny)]
+    return cells, xs, ys
+
+
+def datasets3(data, fname):
+    """Data -> list of ('triples', [...]) or ('array', cells, xs, ys) per dataset."""
+    d = _data3(data, fname)
+    if _is_triples(d):
+        return [d]
+    if all(K.is_list(r) and r.args and all(not K.is_list(c) for c in r.args) for r in d.args):
+        return [d]                                  # a height array
+    if all(K.is_list(_unwrap(r, fname)[0]) for r in d.args):
+        return [_unwrap(r, fname)[0] for r in d.args]
+    raise ValueError(f"{fname}: the data must be {{x, y, z}} triples, a height array, or a list of datasets")
+
+
+_LIST3D_NOTE = ("Data: {{x1, y1, z1}, ...} (an n x 3 list is always read as triples, as documented), height arrays "
+                "{{z11, z12, ...}, ...} (z_ij at {j, i}, or DataRange {{xmin, xmax}, {ymin, ymax}}), and lists of "
+                "datasets; missing/non-numeric entries are skipped; symbolic entries leave the call unevaluated.")
+
+
+@fn("ListPlot3D", area=AREA, status="added",
+    notes="ListPlot3D[data] and ListPlot3D[{data1, ...}]: a surface through the points; arrays use the grid "
+          "triangulation (two triangles per cell), {x, y, z} triples a Delaunay triangulation of {x, y} (needs "
+          "scipy). Output Graphics3D[{style, GraphicsComplex[points, {EdgeForm[], Polygon[...]}]} ...] with "
+          "BoxRatios {1, 1, 0.4}, Axes -> True and the data ranges as PlotRange. Default surface colours are "
+          "Wolfram's default plot colours; mesh lines (Mesh -> Automatic) are not drawn. " + _LIST3D_NOTE +
+          " Options: PlotStyle, DataRange, PlotRange and Graphics3D options; others raise NotImplementedError. "
+          "Check: reference (vertices equal the data in tests).")
+def _listplot3d(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "ListPlot3D"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = _opts3d(fname, o_, ("PlotStyle", "DataRange", "InterpolationOrder", "Mesh"))
+    if not (is_sym(o["InterpolationOrder"], "Automatic", "None") or o["InterpolationOrder"] == 1):
+        raise NotImplementedError(f"{fname}: InterpolationOrder -> {K_input(o['InterpolationOrder'])} is not "
+                                  "supported")
+    if not is_sym(o["Mesh"], "Automatic", "None"):
+        raise NotImplementedError(f"{fname}: Mesh -> {K_input(o['Mesh'])} is not supported")
+    np = _np()
+    sets = datasets3(pos[0], fname)
+    styles = surface_styles(o["PlotStyle"], len(sets), fname)
+    content, allP = [], []
+    for ds, st in zip(sets, styles):
+        if _is_triples(ds):
+            tr = [t for t in _triples(ds, fname) if t is not None]
+            if len(tr) < 3:
+                raise ValueError(f"{fname}: at least 3 points {{x, y, z}} are needed")
+            P = np.array(tr, dtype=float)
+            try:
+                from scipy.spatial import Delaunay
+            except ImportError:
+                raise NotImplementedError(f"{fname}: irregular {{x, y, z}} data needs scipy (pip install scipy)")
+            try:
+                faces = [tuple(int(k) for k in t) for t in Delaunay(P[:, :2]).simplices]
+            except Exception as exc:
+                raise ValueError(f"{fname}: the points cannot be triangulated ({exc.__class__.__name__})")
+        else:
+            cells, xs, ys = _height_array(ds, fname, o["DataRange"])
+            ny, nx = len(cells), len(cells[0])
+            if nx < 2 or ny < 2:
+                raise ValueError(f"{fname}: a height array must be at least 2 x 2")
+            P = np.array([(xs[i], ys[j], math.nan if cells[j][i] is None else cells[j][i])
+                          for j in range(ny) for i in range(nx)], dtype=float)
+            faces = []
+            for (a, b, c, d) in grid_faces(nx, ny):
+                faces += [(a, b, c), (a, c, d)]
+        allP.append(P)
+        if st is None:
+            continue
+        gc = surface_complex(P, faces)
+        if gc is not None:
+            content.append(L(st, gc))
+    rng = bounds3(np.vstack(allP))
+    prange = resolve_plot_range(o["PlotRange"], fname, rng, dims=3)
+    return _graphics3d(content, gopts, prange, L(1, 1, 0.4))
+
+
+def _points3d(sets, fname, dr):
+    """Datasets -> list of lists of curves (each a list of (x, y, z)), triples kept in order; arrays row-wise."""
+    out = []
+    for ds in sets:
+        if _is_triples(ds):
+            out.append([[t for t in _triples(ds, fname)]])
+        else:
+            cells, xs, ys = _height_array(ds, fname, dr)
+            out.append([[None if cells[j][i] is None else (xs[i], ys[j], cells[j][i]) for i in range(len(xs))]
+                        for j in range(len(ys))])
+    return out
+
+
+@fn("ListPointPlot3D", area=AREA, status="added",
+    notes="ListPointPlot3D[data] and ListPointPlot3D[{data1, ...}]: Graphics3D[{{style, Point[{...}]}, ...}] with "
+          "Wolfram's default colours and PointSize per dataset, BoxRatios {1, 1, 0.4}, Axes -> True. Filling -> "
+          "Bottom/Axis draws stems to the bottom of the plot range / z = 0. " + _LIST3D_NOTE + " Options: "
+          "PlotStyle, Filling, DataRange, PlotRange and Graphics3D options. Check: reference (points equal the "
+          "data in tests).")
+def _listpointplot3d(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "ListPointPlot3D"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = _opts3d(fname, o_, ("PlotStyle", "DataRange", "Filling", "FillingStyle"))
+    sets = datasets3(pos[0], fname)
+    curves = _points3d(sets, fname, o["DataRange"])
+    return _points3d_graphics(fname, curves, o, gopts, joined=False)
+
+
+def _points3d_graphics(fname, curves, o, gopts, joined):
+    np = _np()
+    allp = [p for cv in curves for ln in cv for p in ln if p is not None]
+    if not allp:
+        raise ValueError(f"{fname}: there are no numeric points to plot")
+    rng = bounds3(np.array(allp, dtype=float))
+    prange = resolve_plot_range(o["PlotRange"], fname, rng, dims=3)
+    styles = style_list(o["PlotStyle"], len(curves), fname, "line" if joined else "point")
+    content = []
+    fill = o.get("Filling", NONE)
+    if not is_sym(fill, "None"):
+        if is_sym(fill, "Bottom"):
+            z0 = prange[2][0]
+        elif is_sym(fill, "Axis"):
+            z0 = 0.0
+        elif num(fill) is not None:
+            z0 = num(fill)
+        else:
+            raise NotImplementedError(f"{fname}: Filling -> {K_input(fill)} is not supported (Bottom, Axis, z)")
+        fs = o.get("FillingStyle", AUTO)
+        for cv, st in zip(curves, styles):
+            if st is None:
+                continue
+            col = style_color(st)
+            fst = Expr("Directive", Expr("Opacity", 0.5), col) if is_sym(fs, "Automatic") else fs
+            segs = [Expr("Line", pts([(p[0], p[1], z0), p])) for ln in cv for p in ln if p is not None]
+            content.append(L(fst, *segs))
+    for cv, st in zip(curves, styles):
+        if st is None:
+            continue
+        if joined:
+            lines = [r for ln in cv for r in runs(ln) if len(r) >= 2]
+            content.append(L(st, *[Expr("Line", pts(r)) for r in lines]))
+        else:
+            content.append(L(st, Expr("Point", pts([p for ln in cv for p in ln if p is not None]))))
+    return _graphics3d(content, gopts, prange, L(1, 1, 0.4))
+
+
+@fn("ListLinePlot3D", area=AREA, status="added",
+    notes="ListLinePlot3D[{{x1, y1, z1}, ...}] (a curve through the points in order), ListLinePlot3D[{{z11, ...}, "
+          "...}] (each row a curve in the x direction at y = i, as documented) and lists of datasets: "
+          "Graphics3D[{{style, Line[...]}, ...}] (missing values break lines), BoxRatios {1, 1, 0.4}. "
+          + _LIST3D_NOTE + " Options: PlotStyle, DataRange, Filling (Bottom/Axis/z stems), PlotRange and "
+          "Graphics3D options. Check: reference (line vertices equal the data in tests).")
+def _listlineplot3d(data: MatrixOf[Real], *opts: Option) -> Expr:
+    fname = "ListLinePlot3D"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = _opts3d(fname, o_, ("PlotStyle", "DataRange", "Filling", "FillingStyle"))
+    sets = datasets3(pos[0], fname)
+    curves = _points3d(sets, fname, o["DataRange"])
+    if len(sets) == 1 and not _is_triples(sets[0]):
+        curves = [[ln] for ln in curves[0]]              # each row its own (coloured) curve
+    return _points3d_graphics(fname, curves, o, gopts, joined=True)
+
+
+@fn("ArrayPlot3D", area=AREA, status="added",
+    notes="ArrayPlot3D[array] (a rank-3 array): a cube for each element a_ijk, with i increasing from top to "
+          "bottom, j from back to front and k from left to right (as documented): Cuboid[{k - 1, nj - j, ni - i}, "
+          "{k, nj - j + 1, ni - i + 1}] coloured GrayLevel[1 - a/max|a|] (1 black); zeros, missing values and "
+          "False are not drawn, True is black; colour elements are used directly. ColorRules {v -> colour, ...} "
+          "and ColorFunction (applied to the scaled value) are supported. Output Graphics3D[{EdgeForm[...], "
+          "{colour, Cuboid[...]}, ...}, Boxed -> False, Axes -> False, BoxRatios -> Automatic]. Check: reference "
+          "(cube positions and grey levels in tests).")
+def _arrayplot3d(a: Expr, *opts: Option) -> Expr:
+    fname = "ArrayPlot3D"
+    pos, o_ = _list_args((a,) + opts, fname)
+    o, gopts = _opts3d(fname, o_, ("ColorRules", "ColorFunction", "ColorFunctionScaling", "PlotRange"))
+    arr = pos[0]
+    if isinstance(arr, Expr) and arr.head == "SparseArray":
+        arr = ev(Expr("Normal", arr))
+    if not K.is_list(arr):
+        if isinstance(arr, (Symbol, Expr)):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the argument must be a rank-3 array")
+    if not arr.args or not all(K.is_list(s) and all(K.is_list(r) for r in s.args) for s in arr.args):
+        raise ValueError(f"{fname}: the argument must be a rank-3 array (a list of matrices)")
+    slices = []
+    for s in arr.args:
+        rows = []
+        for r in s.args:
+            row = []
+            for c in r.args:
+                if c is True:
+                    row.append(1.0)
+                elif c is False or is_missing(c):
+                    row.append(None)
+                elif parse_color(c) is not None:
+                    row.append(_rgba(c)[:3])
+                else:
+                    row.append(scalar(c, fname, "array element"))
+            rows.append(row)
+        slices.append(rows)
+    ni = len(slices)
+    nj = max(len(s) for s in slices)
+    nk = max((len(r) for s in slices for r in s), default=0)
+    vals = [abs(v) for s in slices for r in s for v in r if isinstance(v, float)]
+    vmax = max(vals) if vals else 1.0
+    vmax = vmax if vmax > 0 else 1.0
+    rules = _color_rules(o["ColorRules"], fname) if not is_sym(o["ColorRules"], "Automatic") else []
+    cf = None if is_sym(o["ColorFunction"], "Automatic") else color_function(o["ColorFunction"], fname, None)
+    groups = {}
+    for i, s in enumerate(slices, 1):
+        for j, r in enumerate(s, 1):
+            for k, v in enumerate(r, 1):
+                if v is None:
+                    continue
+                col = None
+                for key, c in rules:
+                    if isinstance(v, float) and key == v:
+                        col = c
+                        break
+                if col is None:
+                    if isinstance(v, tuple):
+                        col = v
+                    elif v == 0:
+                        continue
+                    elif cf is not None:
+                        col = cf(abs(v) / vmax if o["ColorFunctionScaling"] is not False else v)
+                    else:
+                        g = 1 - abs(v) / vmax
+                        col = (g, g, g)
+                key = tuple(round(c, 6) for c in col)
+                groups.setdefault(key, []).append(Expr("Cuboid", pt(k - 1, nj - j, ni - i), pt(k, nj - j + 1, ni - i + 1)))
+    content = [Expr("EdgeForm", Expr("GrayLevel", 0.5))] + [L(rgb(c), *cs) for c, cs in groups.items()]
+    defaults = [("Axes", False), ("Boxed", False), ("BoxRatios", Symbol("Automatic")),
+                ("PlotRange", range_expr([(0.0, float(nk)), (0.0, float(nj)), (0.0, float(ni))]))]
+    return finish_graphics(L(*content), gopts, defaults, dim=3)
+
+
+K.BUILTIN_ATTRIBUTES["DiscretePlot3D"] = {"HoldAll", "Protected"}
+
+
+@fn("DiscretePlot3D", area=AREA, status="added", hold=True,
+    notes="DiscretePlot3D[f, {i, imin, imax[, di]}, {j, jmin, jmax[, dj]}] (also {i, {i1, ...}}) and lists of "
+          "functions (HoldAll): points {i, j, f(i, j)} with f evaluated exactly by the kernel at each pair; "
+          "Filling -> Automatic (default) draws stems to z = 0 in FillingStyle Opacity[0.5] (Filling -> None, "
+          "Bottom, Axis or a number); BoxRatios {1, 1, 0.4}. Wolfram's default ExtentSize plates are not drawn "
+          "(ExtentSize other than None/Automatic raises NotImplementedError). Values with free symbols leave the "
+          "call unevaluated; non-real values are omitted. Check: reference (points equal the kernel values in "
+          "tests).")
+def _discreteplot3d(f: Held, si: Held, sj: Held, *opts: Held | Option) -> Expr:
+    fname = "DiscretePlot3D"
+    pos, o_ = hold_args((f, si, sj) + opts)
+    if len(pos) != 3:
+        raise ValueError(f"{fname}: expected {fname}[f, {{i, imin, imax}}, {{j, jmin, jmax}}, options]")
+    f, si, sj = pos
+    vi, vals_i, raw_i = discrete_values(si, fname)
+    vj, vals_j, raw_j = discrete_values(sj, fname)
+    if vi.name == vj.name:
+        raise ValueError(f"{fname}: the two iterator variables must differ")
+    if len(vals_i) * len(vals_j) > 100000:
+        raise ValueError(f"{fname}: at most 100000 points are plotted")
+    o, gopts = _opts3d(fname, o_, ("PlotStyle", "Filling", "FillingStyle", "ExtentSize"))
+    if not is_sym(o["ExtentSize"], "Automatic", "None"):
+        raise NotImplementedError(f"{fname}: ExtentSize -> {K_input(o['ExtentSize'])} is not supported")
+    held, _ = _curves_of(f, vi)
+    d1, d2 = Symbol("plot$w16$i"), Symbol("plot$w16$j")
+    curves = []
+    for h in held:
+        hh = K.substitute(h, {vi.name: d1, vj.name: d2})
+        ptsl = []
+        for x, rx in zip(vals_i, raw_i):
+            for y, ry in zip(vals_j, raw_j):
+                r = ev(K.substitute(hh, {d1.name: rx, d2.name: ry}))
+                v = num(r)
+                if v is None:
+                    if isinstance(r, Symbol) and not is_missing(r) or (isinstance(r, Expr) and _has_user_symbol(r)):
+                        raise Unevaluated()
+                    continue
+                ptsl.append((x, y, v))
+        curves.append([ptsl])
+    o = dict(o)
+    if is_sym(o["Filling"], "Automatic") or "Filling" not in {opt_name(r) for r in o_}:
+        o["Filling"] = Symbol("Axis")
+    return _points3d_graphics(fname, curves, o, gopts, joined=False)
+
+
+# ───────────────────────────── parametric and spherical surfaces ─────────────────────────────
+
+def curve_sample_3d(fs, a, b, n=75, maxrec=6):
+    """Adaptive samples of a vector curve: n equal steps, then segments bisected where the turning angle exceeds
+    10 degrees (up to maxrec times)."""
+    np = _np()
+    ts = list(np.linspace(a, b, n))
+
+    def ev_pts(tt):
+        arr = np.array(tt, dtype=float)
+        return np.column_stack([f(arr) for f in fs])
+    for _ in range(maxrec):
+        P = ev_pts(ts)
+        new = []
+        for k in range(1, len(ts) - 1):
+            u, w = P[k] - P[k - 1], P[k + 1] - P[k]
+            nu, nw = np.linalg.norm(u), np.linalg.norm(w)
+            if not (np.isfinite(nu) and np.isfinite(nw)) or nu == 0 or nw == 0:
+                continue
+            if np.dot(u, w) / (nu * nw) < math.cos(math.radians(10)):
+                new += [(ts[k - 1] + ts[k]) / 2, (ts[k] + ts[k + 1]) / 2]
+        if not new:
+            break
+        ts = sorted(set(ts) | set(new))
+        if len(ts) > 20000:
+            break
+    P = ev_pts(ts)
+    return [None if not np.isfinite(p).all() else tuple(float(c) for c in p) for p in P]
+
+
+def _vector_funcs(f, fname, k=3):
+    """Held f -> list of component lists: {fx, fy, fz} is one, {{...}, {...}} several."""
+    fs, _ = _curves_of(f, None)
+    if len(fs) == k and not any(K.is_list(c) for c in fs):
+        return [fs]
+    out = []
+    for c in fs:
+        if not (K.is_list(c) and len(c.args) == k):
+            raise ValueError(f"{fname}: each function must be a list of {k} coordinates")
+        out.append(list(c.args))
+    return out
+
+
+def _compile_all(exprs, vars_, fname, probe):
+    comps = []
+    for e in exprs:
+        c = Compiled(e, vars_, fname)
+        symbolic_check(c, vars_, fname)
+        c.cross_check(probe)
+        comps.append(c)
+    return comps
+
+
+def param_surface(comps, a, b, c, d, n):
+    np = _np()
+    us = np.linspace(a, b, n)
+    vs = np.linspace(c, d, n)
+    U, V = np.meshgrid(us, vs)
+    P = np.column_stack([cp(U.ravel(), V.ravel()) for cp in comps])
+    return P, grid_faces(n, n)
+
+
+@fn("ParametricPlot3D", area=AREA, status="added", hold=True,
+    notes="ParametricPlot3D[{fx, fy, fz}, {u, umin, umax}] (space curve: Line through adaptive samples, 75 "
+          "initial points bisected where the turning angle exceeds 10 degrees, MaxRecursion 6) and "
+          "ParametricPlot3D[{fx, fy, fz}, {u, ...}, {v, ...}] (surface: GraphicsComplex of a 41 x 41 parameter "
+          "grid by default, quads; PlotPoints/MaxRecursion as DensityPlot), with lists of curves/surfaces "
+          "(HoldAll). Non-real points leave gaps. BoxRatios -> Automatic, Axes -> True. Default colours: "
+          "Wolfram's plot colours; mesh lines are not drawn. Free parameters leave the call unevaluated. Options: "
+          "PlotStyle, PlotPoints, MaxRecursion, PlotRange and Graphics3D options. Check: numeric cross-check "
+          "and reference (sample points lie on the exact curve/surface in tests).")
+def _parametricplot3d(f: Held, su: Held, *rest: Held | Option) -> Expr:
+    fname = "ParametricPlot3D"
+    pos, o_ = hold_args((f, su) + rest)
+    if len(pos) not in (2, 3):
+        raise ValueError(f"{fname}: expected {fname}[{{fx, fy, fz}}, {{u, umin, umax}}(, {{v, vmin, vmax}})]")
+    o, gopts = _opts3d(fname, o_, ("PlotStyle", "PlotPoints", "MaxRecursion", "Mesh"))
+    if not is_sym(o["Mesh"], "Automatic", "None"):
+        raise NotImplementedError(f"{fname}: Mesh -> {K_input(o['Mesh'])} is not supported")
+    funcs = _vector_funcs(pos[0], fname)
+    its = three_iterators(pos[1:], fname)
+    vars_ = [v for v, _, _ in its]
+    probe = [tuple(lo + (hi - lo) * t for (_, lo, hi), t in zip(its, ts)) for ts in ((0.31, 0.67), (0.77, 0.21))]
+    content, allP = [], []
+    np = _np()
+    if len(its) == 1:
+        (u, a, b), = its
+        styles = style_list(o["PlotStyle"], len(funcs), fname)
+        rec = _int_opt(o["MaxRecursion"], 6, fname, "MaxRecursion", 0)
+        n = _int_opt(o["PlotPoints"], 75, fname, "PlotPoints", 2)
+        for comp3, st in zip(funcs, styles):
+            comps = _compile_all(comp3, vars_, fname, probe)
+            samp = curve_sample_3d(comps, a, b, n, min(rec, 10))
+            allP += [p for p in samp if p is not None]
+            if st is not None:
+                content.append(L(st, *[Expr("Line", pts(r)) for r in runs(samp) if len(r) >= 2]))
+        if not allP:
+            raise ValueError(f"{fname}: the curve has no real points in the range")
+        rng = bounds3(np.array(allP))
+    else:
+        (u, a, b), (v, c, d) = its
+        n = _surface_n(o, fname, 21)
+        styles = surface_styles(o["PlotStyle"], len(funcs), fname)
+        Ps = []
+        for comp3, st in zip(funcs, styles):
+            comps = _compile_all(comp3, vars_, fname, probe)
+            P, faces = param_surface(comps, a, b, c, d, n)
+            Ps.append(P)
+            gc = surface_complex(P, faces)
+            if st is not None and gc is not None:
+                content.append(L(st, gc))
+        rng = bounds3(np.vstack(Ps))
+    prange = resolve_plot_range(o["PlotRange"], fname, rng, dims=3)
+    return _graphics3d(content, gopts, prange)
+
+
+K.BUILTIN_ATTRIBUTES["ParametricPlot3D"] = {"HoldAll", "Protected"}
+K.BUILTIN_ATTRIBUTES["SphericalPlot3D"] = {"HoldAll", "Protected"}
+
+
+@fn("SphericalPlot3D", area=AREA, status="added", hold=True,
+    notes="SphericalPlot3D[r, {theta, tmin, tmax}, {phi, pmin, pmax}], SphericalPlot3D[r, theta, phi] (theta in "
+          "[0, Pi], phi in [0, 2 Pi]) and lists of radii (HoldAll): the surface {r sin(theta) cos(phi), r "
+          "sin(theta) sin(phi), r cos(theta)} (theta the polar angle from the z axis, as documented) on a 41 x 41 "
+          "grid by default; non-real or negative-undefined values leave holes (negative r is plotted through the "
+          "origin, as Wolfram does). One surface is white (the documented default White&), several use Wolfram's "
+          "plot colours. BoxRatios -> Automatic. Options: PlotStyle, PlotPoints, MaxRecursion, PlotRange and "
+          "Graphics3D options. Check: numeric cross-check and reference (vertex norms equal r in tests).")
+def _sphericalplot3d(r: Held, st: Held, sp_: Held, *opts: Held | Option) -> Expr:
+    fname = "SphericalPlot3D"
+    pos, o_ = hold_args((r, st, sp_) + opts)
+    if len(pos) != 3:
+        raise ValueError(f"{fname}: expected {fname}[r, {{theta, tmin, tmax}}, {{phi, pmin, pmax}}]")
+    o, gopts = _opts3d(fname, o_, ("PlotStyle", "PlotPoints", "MaxRecursion", "Mesh"))
+    if not is_sym(o["Mesh"], "Automatic", "None"):
+        raise NotImplementedError(f"{fname}: Mesh -> {K_input(o['Mesh'])} is not supported")
+    specs = []
+    for k, (s, rng_) in enumerate(((pos[1], (0.0, math.pi)), (pos[2], (0.0, 2 * math.pi)))):
+        if isinstance(s, Symbol):
+            specs.append((s, rng_[0], rng_[1]))
+        else:
+            specs.append(iterator(s, fname, k + 2))
+    (t, a, b), (p, c, d) = specs
+    if t.name == p.name:
+        raise ValueError(f"{fname}: the two angle variables must differ")
+    rs, _ = _curves_of(pos[0], t)
+    n = _surface_n(o, fname, 21)
+    styles = surface_styles(o["PlotStyle"], len(rs), fname, single_white=len(rs) == 1)
+    probe = [(a + (b - a) * 0.31, c + (d - c) * 0.67), (a + (b - a) * 0.77, c + (d - c) * 0.21)]
+    np = _np()
+    content, Ps = [], []
+    for rr, sty in zip(rs, styles):
+        comp = _compile_all([rr], [t, p], fname, probe)[0]
+        ts = np.linspace(a, b, n)
+        ps = np.linspace(c, d, n)
+        TT, PP = np.meshgrid(ts, ps)
+        R = comp(TT.ravel(), PP.ravel())
+        P = np.column_stack([R * np.sin(TT.ravel()) * np.cos(PP.ravel()), R * np.sin(TT.ravel()) * np.sin(PP.ravel()),
+                             R * np.cos(TT.ravel())])
+        Ps.append(P)
+        gc = surface_complex(P, grid_faces(n, n))
+        if sty is not None and gc is not None:
+            content.append(L(sty, gc))
+    prange = resolve_plot_range(o["PlotRange"], fname, bounds3(np.vstack(Ps)), dims=3)
+    return _graphics3d(content, gopts, prange)
+
+
+# ───────────────────────────── implicit surfaces: marching tetrahedra ─────────────────────────────
+
+_TETS = ((0, 1, 2, 6), (0, 2, 3, 6), (0, 3, 7, 6), (0, 7, 4, 6), (0, 4, 5, 6), (0, 5, 1, 6))
+_CORNERS = ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1))
+
+
+def grid3(ranges, ns):
+    np = _np()
+    axes = [np.linspace(lo, hi, n) for (lo, hi), n in zip(ranges, ns)]
+    Z, Y, X = np.meshgrid(axes[2], axes[1], axes[0], indexing="ij")
+    return axes, X, Y, Z
+
+
+def iso_surface(axes, F, level):
+    """Triangles of {F = level} by marching tetrahedra on the grid (F indexed [k, j, i] for z, y, x); returns
+    (points array, triangles as index triples) with shared vertices."""
+    np = _np()
+    nz, ny, nx = F.shape
+    G = F - level
+    fin = np.isfinite(G)
+    corner_vals = []
+    corner_ok = []
+    for (di, dj, dk) in _CORNERS:
+        corner_vals.append(G[dk:nz - 1 + dk, dj:ny - 1 + dj, di:nx - 1 + di])
+        corner_ok.append(fin[dk:nz - 1 + dk, dj:ny - 1 + dj, di:nx - 1 + di])
+    C = np.stack(corner_vals, axis=-1)
+    OK = np.stack(corner_ok, axis=-1).all(axis=-1)
+    pos_ = (C > 0)
+    anyp = pos_.any(axis=-1)
+    allp = pos_.all(axis=-1)
+    cells = np.argwhere(OK & anyp & ~allp)
+    verts, index, tris = [], {}, []
+
+    def gid(k, j, i):
+        return (k * ny + j) * nx + i
+
+    by_pos = {}
+
+    def vertex(ga, gb, pa, pb, va, vb):
+        key = (ga, gb) if ga < gb else (gb, ga)
+        if key not in index:
+            t = va / (va - vb)
+            q = tuple(float(pa[m] + t * (pb[m] - pa[m])) for m in range(3))
+            pk = tuple(round(c, 10) for c in q)
+            if pk not in by_pos:                 # a level value exactly at a grid point is shared by many edges
+                by_pos[pk] = len(verts)
+                verts.append(q)
+            index[key] = by_pos[pk]
+        return index[key]
+    for k, j, i in cells:
+        cv = C[k, j, i]
+        cp = [(axes[0][i + di], axes[1][j + dj], axes[2][k + dk]) for (di, dj, dk) in _CORNERS]
+        cg = [gid(k + dk, j + dj, i + di) for (di, dj, dk) in _CORNERS]
+        for tet in _TETS:
+            ins = [m for m in tet if cv[m] > 0]
+            out = [m for m in tet if cv[m] <= 0]
+            if not ins or not out:
+                continue
+
+            def e(m1, m2):
+                return vertex(cg[m1], cg[m2], cp[m1], cp[m2], cv[m1], cv[m2])
+            if len(ins) == 1:
+                a_ = ins[0]
+                tris.append((e(a_, out[0]), e(a_, out[1]), e(a_, out[2])))
+            elif len(ins) == 3:
+                a_ = out[0]
+                tris.append((e(a_, ins[0]), e(a_, ins[1]), e(a_, ins[2])))
+            else:
+                p0, p1, p2, p3 = e(ins[0], out[0]), e(ins[0], out[1]), e(ins[1], out[1]), e(ins[1], out[0])
+                tris.append((p0, p1, p2))
+                tris.append((p0, p2, p3))
+    P = np.array(verts, dtype=float).reshape(-1, 3)
+    return P, [t for t in tris if len(set(t)) == 3]
+
+
+def _complex_from(P, tris):
+    if not tris:
+        return None
+    return Expr("GraphicsComplex", pts([tuple(p) for p in P]),
+                L(Expr("EdgeForm"), Expr("Polygon", L(*[L(*[k + 1 for k in t]) for t in tris]))))
+
+
+def _volume_n(o, fname, default):
+    n = _int_opt(o["PlotPoints"], default, fname, "PlotPoints", 2)
+    rec = _int_opt(o["MaxRecursion"], 0, fname, "MaxRecursion", 0)
+    return min((n - 1) * (2 ** min(rec, 1)) + 1, 81)
+
+
+def _contour_levels3(spec, lo, hi, fname):
+    """Contours for 3-D: Automatic is 3 equally spaced levels (as documented for ListContourPlot3D)."""
+    if spec is None or is_sym(spec, "Automatic"):
+        return [lo + (hi - lo) * k / 4 for k in (1, 2, 3)] if hi > lo else []
+    return contour_levels(spec, lo, hi, fname)
+
+
+def _contour3d_graphics(fname, axes, F, levels, o, gopts, ranges):
+    styles = o["ContourStyle"]
+    content = []
+    for k, c in enumerate(levels):
+        if is_sym(styles, "Automatic"):
+            st = WHITE_SURFACE
+        elif is_sym(styles, "None"):
+            st = None
+        elif K.is_list(styles) and styles.args:
+            st = styles.args[k % len(styles.args)]
+            st = None if is_sym(st, "None") else st
+        else:
+            G.directive_like(styles, fname, "ContourStyle")
+            st = styles
+        if st is None:
+            continue
+        P, tris = iso_surface(axes, F, c)
+        gc = _complex_from(P, tris)
+        if gc is not None:
+            content.append(L(st, gc))
+    return _graphics3d(content, gopts, ranges, L(1, 1, 1))
+
+
+K.BUILTIN_ATTRIBUTES["ContourPlot3D"] = {"HoldAll", "Protected"}
+
+
+@fn("ContourPlot3D", area=AREA, status="added", hold=True,
+    notes="ContourPlot3D[f == g, {x, ...}, {y, ...}, {z, ...}] (the surface f - g = 0) and ContourPlot3D[f, ...] "
+          "(level surfaces at Contours: Automatic = 3 levels equally spaced between the sampled min and max, n, or "
+          "{c1, ...}), lists of equations (HoldAll): triangles from marching tetrahedra (6 per grid cell, linear "
+          "interpolation along edges) on a grid of (PlotPoints - 1) 2^min(MaxRecursion, 1) + 1 points per side "
+          "(default PlotPoints 25, MaxRecursion 0: 25), shared vertices in a GraphicsComplex; surfaces white (ContourStyle default White, as "
+          "documented), BoxRatios {1, 1, 1}. Vertices lie on the interpolated surface, so accuracy is limited "
+          "by the grid. Mesh lines are not drawn. Free parameters leave the call unevaluated. Check: numeric "
+          "cross-check and reference (every vertex has |f - c| small relative to the grid spacing in tests).")
+def _contourplot3d(f: Held, sx: Held, sy: Held, sz: Held, *opts: Held | Option) -> Expr:
+    fname = "ContourPlot3D"
+    pos, o_ = hold_args((f, sx, sy, sz) + opts)
+    if len(pos) != 4:
+        raise ValueError(f"{fname}: expected {fname}[f, {{x, ...}}, {{y, ...}}, {{z, ...}}]")
+    o, gopts = _opts3d(fname, o_, ("PlotPoints", "MaxRecursion", "Contours", "ContourStyle", "Mesh"))
+    if not is_sym(o["Mesh"], "Automatic", "None"):
+        raise NotImplementedError(f"{fname}: Mesh -> {K_input(o['Mesh'])} is not supported")
+    its = three_iterators(pos[1:], fname)
+    vars_ = [v for v, _, _ in its]
+    ranges = [(lo, hi) for _, lo, hi in its]
+    fs, _ = _curves_of(pos[0], vars_[0])
+    n = _volume_n(o, fname, 25)
+    axes, X, Y, Z = grid3(ranges, (n, n, n))
+    probe = [tuple(lo + (hi - lo) * t for (lo, hi), t in zip(ranges, ts)) for ts in ((0.31, 0.67, 0.43),
+                                                                                       (0.77, 0.21, 0.58))]
+    content = []
+    np = _np()
+    eqs = [e for e in fs if isinstance(e, Expr) and e.head == "Equal"]
+    if eqs and len(eqs) != len(fs):
+        raise ValueError(f"{fname}: give either equations or functions, not a mixture")
+    if eqs:
+        st_spec = o["ContourStyle"]
+        for k, e in enumerate(eqs):
+            if len(e.args) != 2:
+                raise ValueError(f"{fname}: equations must have the form lhs == rhs")
+            comp = _compile_all([Expr("Plus", e.args[0], Expr("Times", -1, e.args[1]))], vars_, fname, probe)[0]
+            F = comp(X, Y, Z)
+            P, tris = iso_surface(axes, F, 0.0)
+            st = WHITE_SURFACE if is_sym(st_spec, "Automatic") and len(eqs) == 1 else (
+                Expr("Directive", default_color(k)) if is_sym(st_spec, "Automatic") else
+                (st_spec.args[k % len(st_spec.args)] if K.is_list(st_spec) and st_spec.args else st_spec))
+            if is_sym(st, "None"):
+                continue
+            gc = _complex_from(P, tris)
+            if gc is not None:
+                content.append(L(st, gc))
+        return _graphics3d(content, gopts, ranges, L(1, 1, 1))
+    if len(fs) != 1:
+        raise NotImplementedError(f"{fname}: several functions are not supported; use equations")
+    comp = _compile_all(fs, vars_, fname, probe)[0]
+    F = comp(X, Y, Z)
+    fin = F[np.isfinite(F)]
+    lo, hi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    levels = _contour_levels3(o["Contours"], lo, hi, fname)
+    return _contour3d_graphics(fname, axes, F, levels, o, gopts, ranges)
+
+
+def volume_data(data, fname, dr):
+    """3-D array a[[k, j, i]] (value at {i, j, k}, or DataRange) -> (axes, F[k, j, i], ranges)."""
+    np = _np()
+    data, _, _ = _unwrap(data, fname)
+    if not K.is_list(data) or not data.args:
+        if isinstance(data, (Symbol, Expr)) and not K.is_list(data):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the data must be a non-empty rank-3 array")
+    if all(_is_pair(r, 4) for r in data.args):
+        raise NotImplementedError(f"{fname}: irregular {{x, y, z, f}} data is not supported; use an array")
+    if not all(K.is_list(s) and s.args and all(K.is_list(r) for r in s.args) for s in data.args):
+        raise ValueError(f"{fname}: the data must be a rank-3 array")
+    F = []
+    for s in data.args:
+        sl = []
+        for r in s.args:
+            sl.append([math.nan if (v := scalar(c, fname, "array element")) is None else v for c in r.args])
+        F.append(sl)
+    shapes = {(len(s), len(r)) for s in F for r in s}
+    if len({len(s) for s in F}) != 1 or len({len(r) for s in F for r in s}) != 1:
+        raise ValueError(f"{fname}: the array must be rectangular")
+    F = np.array(F, dtype=float)
+    nz, ny, nx = F.shape
+    if min(nz, ny, nx) < 2:
+        raise ValueError(f"{fname}: the array must be at least 2 x 2 x 2")
+    del shapes
+    if dr is None or is_sym(dr, "Automatic", "All"):
+        ranges = [(1.0, float(nx)), (1.0, float(ny)), (1.0, float(nz))]
+    elif K.is_list(dr) and len(dr.args) == 3 and all(K.is_list(q) and len(q.args) == 2 for q in dr.args):
+        ranges = [tuple(real_arg(v, fname, "DataRange") for v in q.args) for q in dr.args]
+    else:
+        raise ValueError(f"{fname}: DataRange must be Automatic or {{{{xmin, xmax}}, {{ymin, ymax}}, {{zmin, zmax}}}}")
+    axes = [np.linspace(lo, hi, m) for (lo, hi), m in zip(ranges, (nx, ny, nz))]
+    return axes, F, ranges
+
+
+@fn("ListContourPlot3D", area=AREA, status="added",
+    notes="ListContourPlot3D[array] (farr[[i, j, k]] at {k, j, i}, as documented, or DataRange): level surfaces "
+          "by marching tetrahedra on the data grid; Contours Automatic = 3 levels equally spaced in value (as "
+          "documented), n or {c1, ...}; white surfaces (ContourStyle), BoxRatios {1, 1, 1}. Irregular {x, y, z, "
+          "f} data raises NotImplementedError. Check: reference (vertices interpolate to the level in tests).")
+def _listcontourplot3d(data: Expr, *opts: Option) -> Expr:
+    fname = "ListContourPlot3D"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = _opts3d(fname, o_, ("Contours", "ContourStyle", "DataRange", "Mesh"))
+    if not is_sym(o["Mesh"], "Automatic", "None"):
+        raise NotImplementedError(f"{fname}: Mesh -> {K_input(o['Mesh'])} is not supported")
+    axes, F, ranges = volume_data(pos[0], fname, o["DataRange"])
+    np = _np()
+    fin = F[np.isfinite(F)]
+    lo, hi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    levels = _contour_levels3(o["Contours"], lo, hi, fname)
+    return _contour3d_graphics(fname, axes, F, levels, o, gopts, ranges)
+
+
+K.BUILTIN_ATTRIBUTES["RegionPlot3D"] = {"HoldAll", "Protected"}
+
+
+def _face_caps(axes, F):
+    """Polygons of {F >= 0} on the 6 faces of the grid box (clipped per triangle)."""
+    np = _np()
+    nz, ny, nx = F.shape
+    polys = []
+    faces = [(F[0, :, :], lambda a, b: (a, b, axes[2][0]), axes[0], axes[1]),
+             (F[-1, :, :], lambda a, b: (a, b, axes[2][-1]), axes[0], axes[1]),
+             (F[:, 0, :], lambda a, b: (a, axes[1][0], b), axes[0], axes[2]),
+             (F[:, -1, :], lambda a, b: (a, axes[1][-1], b), axes[0], axes[2]),
+             (F[:, :, 0], lambda a, b: (axes[0][0], a, b), axes[1], axes[2]),
+             (F[:, :, -1], lambda a, b: (axes[0][-1], a, b), axes[1], axes[2])]
+    for Vf, emb, ua, va in faces:
+        nv, nu = Vf.shape
+        if np.isfinite(Vf).all() and (Vf >= 0).all():
+            polys.append([emb(ua[0], va[0]), emb(ua[-1], va[0]), emb(ua[-1], va[-1]), emb(ua[0], va[-1])])
+            continue
+        for j in range(nv - 1):
+            for i in range(nu - 1):
+                q = [(i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)]
+                vals = [Vf[b, a] for a, b in q]
+                if not all(math.isfinite(v) for v in vals) or max(vals) < 0:
+                    continue
+                if min(vals) >= 0:
+                    polys.append([emb(ua[a], va[b]) for a, b in q])
+                    continue
+                for tri in ((q[0], q[1], q[2]), (q[0], q[2], q[3])):
+                    c = clip_poly([emb(ua[a], va[b]) + (Vf[b, a],) for a, b in tri], 0.0, None)
+                    if len(c) >= 3:
+                        polys.append([tuple(p[:3]) for p in c])
+    return polys
+
+
+@fn("RegionPlot3D", area=AREA, status="added", hold=True,
+    notes="RegionPlot3D[pred, {x, ...}, {y, ...}, {z, ...}] and lists of predicates (HoldAll): the boundary of "
+          "the region where pred is True: the surface g = 0 of the level function g (min/max of lhs - rhs for "
+          "inequalities combined with And/Or/Not, as RegionPlot; other Boolean predicates use 2 Boole[pred] - 1) "
+          "by marching tetrahedra, plus the parts of the bounding-box faces inside the region, on a grid of "
+          "(PlotPoints - 1) 2^min(MaxRecursion, 1) + 1 points per side (default PlotPoints 31, MaxRecursion 0: "
+          "31); surface colours are Wolfram's default plot colours, BoxRatios {1, 1, 1}, PlotRange the iterator ranges (Full). "
+          "Equations raise NotImplementedError; free parameters leave the call unevaluated. Check: numeric "
+          "cross-check and reference (surface vertices satisfy g = 0 approximately, cap vertices satisfy pred).")
+def _regionplot3d(pred: Held, sx: Held, sy: Held, sz: Held, *opts: Held | Option) -> Expr:
+    fname = "RegionPlot3D"
+    pos, o_ = hold_args((pred, sx, sy, sz) + opts)
+    if len(pos) != 4:
+        raise ValueError(f"{fname}: expected {fname}[pred, {{x, ...}}, {{y, ...}}, {{z, ...}}]")
+    o, gopts = _opts3d(fname, o_, ("PlotPoints", "MaxRecursion", "PlotStyle", "Mesh", "PlotLegends"))
+    if not is_sym(o["Mesh"], "Automatic", "None"):
+        raise NotImplementedError(f"{fname}: Mesh -> {K_input(o['Mesh'])} is not supported")
+    if not is_sym(o["PlotLegends"], "None"):
+        raise NotImplementedError(f"{fname}: PlotLegends is not supported")
+    its = three_iterators(pos[1:], fname)
+    vars_ = [v for v, _, _ in its]
+    ranges = [(lo, hi) for _, lo, hi in its]
+    preds, _ = _curves_of(pos[0], vars_[0])
+    n = _volume_n(o, fname, 31)
+    axes, X, Y, Z = grid3(ranges, (n, n, n))
+    probe = [tuple(lo + (hi - lo) * t for (lo, hi), t in zip(ranges, ts)) for ts in ((0.31, 0.67, 0.43),
+                                                                                       (0.77, 0.21, 0.58))]
+    styles = surface_styles(o["PlotStyle"], len(preds), fname)
+    content = []
+    for pr, st in zip(preds, styles):
+        if isinstance(pr, Expr) and pr.head == "Equal":
+            raise NotImplementedError(f"{fname}: equations have no volume; use ContourPlot3D")
+        g = _level_function(pr, fname)
+        if g is None:
+            g = Expr("Plus", Expr("Times", 2, Expr("Boole", pr)), -1)
+        comp = _compile_all([g], vars_, fname, probe)[0]
+        F = comp(X, Y, Z)
+        if st is None:
+            continue
+        P, tris = iso_surface(axes, F, 0.0)
+        grp = [st]
+        gc = _complex_from(P, tris)
+        if gc is not None:
+            grp.append(gc)
+        caps = _face_caps(axes, F)
+        if caps:
+            grp.append(L(Expr("EdgeForm"), multi_polygon(caps)))
+        content.append(L(*grp))
+    return _graphics3d(content, gopts, ranges, L(1, 1, 1))
+
+
+# ───────────────────────────── volumetric density ─────────────────────────────
+
+def _opacity_function(spec, fname):
+    """OpacityFunction -> f(t) in [0, 1]. Automatic: 0.15 + 0.35 t (an approximation; Wolfram's is undocumented),
+    None: 1, a number: constant, a pure function: applied by the kernel."""
+    if spec is None or is_sym(spec, "Automatic"):
+        return lambda t: 0.15 + 0.35 * t
+    if is_sym(spec, "None"):
+        return lambda t: 1.0
+    v = num(spec)
+    if v is not None:
+        if not 0 <= v <= 1:
+            raise ValueError(f"{fname}: a constant OpacityFunction must be between 0 and 1")
+        return lambda t: v
+    if isinstance(spec, str):
+        raise NotImplementedError(f"{fname}: the named opacity function {spec!r} is not supported")
+    if isinstance(spec, Symbol) or (isinstance(spec, Expr) and spec.head == "Function"):
+        def f(t):
+            r = num(ev(Expr(spec, float(t))))
+            if r is None:
+                raise ValueError(f"{fname}: OpacityFunction must give numbers")
+            return min(1.0, max(0.0, r))
+        return f
+    raise ValueError(f"{fname}: OpacityFunction must be Automatic, None, a number or a function")
+
+
+def density_raster3d(F, ranges, o, fname):
+    np = _np()
+    fin = F[np.isfinite(F)]
+    lo, hi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    pr = o["PlotRange"]
+    if not is_sym(pr, "Automatic", "All", "Full"):
+        if K.is_list(pr) and len(pr.args) == 2 and all(num(v) is not None for v in pr.args):
+            lo, hi = num(pr.args[0]), num(pr.args[1])
+        elif K.is_list(pr) and len(pr.args) == 4 and K.is_list(pr.args[3]):
+            lo, hi = [real_arg(v, fname, "PlotRange") for v in pr.args[3].args]
+        elif not (K.is_list(pr) and len(pr.args) == 3):
+            raise ValueError(f"{fname}: PlotRange {K_input(pr)} is not valid here")
+    span = hi - lo if hi > lo else 1.0
+    cf = color_function(o["ColorFunction"], fname, lambda t: blend(DENSITY_GRADIENT, t))
+    of = _opacity_function(o["OpacityFunction"], fname)
+    scale_c = o["ColorFunctionScaling"] is not False
+    scale_o = o["OpacityFunctionScaling"] is not False
+    nz, ny, nx = F.shape
+    data = []
+    for k in range(nz):
+        sl = []
+        for j in range(ny):
+            row = []
+            for i in range(nx):
+                v = F[k, j, i]
+                if not math.isfinite(v):
+                    row.append(L(1.0, 1.0, 1.0, 0.0))
+                    continue
+                t = min(1.0, max(0.0, (v - lo) / span))
+                r, g, b = cf(t if scale_c else float(v))
+                row.append(L(round(float(r), 6), round(float(g), 6), round(float(b), 6),
+                             round(float(of(t if scale_o else float(v))), 6)))
+            sl.append(L(*row))
+        data.append(L(*sl))
+    rect = L(L(*[fl(r[0]) for r in ranges]), L(*[fl(r[1]) for r in ranges]))
+    return Expr("Raster3D", L(*data), rect)
+
+
+K.BUILTIN_ATTRIBUTES["DensityPlot3D"] = {"HoldAll", "Protected"}
+
+_DENSITY3D_NOTE = ("Output Graphics3D[Raster3D[RGBA cells, {{xmin, ymin, zmin}, {xmax, ymax, zmax}}]] (cells "
+                   "indexed [[z, y, x]]); colour ColorFunction(scaled value) (default gradient as DensityPlot) and "
+                   "opacity OpacityFunction(scaled value) (Automatic 0.15 + 0.35 t, an approximation of Wolfram's "
+                   "undocumented default; None opaque; a number or pure function). PlotRange {fmin, fmax} sets the "
+                   "value scale. BoxRatios {1, 1, 1}.")
+
+
+@fn("DensityPlot3D", area=AREA, status="added", hold=True,
+    notes="DensityPlot3D[f, {x, ...}, {y, ...}, {z, ...}] (HoldAll): f sampled at the centres of a cubic grid "
+          "of cells (default 25 per side; PlotPoints n gives n cells per side, at most 60). " + _DENSITY3D_NOTE +
+          " The region form {x, y, z} in reg raises NotImplementedError. Free parameters leave the call "
+          "unevaluated. Check: numeric cross-check and reference (cell colours ordered by f in tests).")
+def _densityplot3d(f: Held, sx: Held, sy: Held, sz: Held, *opts: Held | Option) -> Expr:
+    fname = "DensityPlot3D"
+    pos, o_ = hold_args((f, sx, sy, sz) + opts)
+    if len(pos) != 4:
+        raise ValueError(f"{fname}: expected {fname}[f, {{x, ...}}, {{y, ...}}, {{z, ...}}]")
+    o, gopts = _opts3d(fname, o_, ("PlotPoints", "ColorFunction", "ColorFunctionScaling", "OpacityFunction",
+                                   "OpacityFunctionScaling"))
+    its = three_iterators(pos[1:], fname)
+    vars_ = [v for v, _, _ in its]
+    ranges = [(lo, hi) for _, lo, hi in its]
+    n = min(_int_opt(o["PlotPoints"], 25, fname, "PlotPoints", 2), 60)
+    np = _np()
+    axes = [lo + (hi - lo) * (np.arange(n) + 0.5) / n for lo, hi in ranges]
+    Zc, Yc, Xc = np.meshgrid(axes[2], axes[1], axes[0], indexing="ij")
+    probe = [tuple(lo + (hi - lo) * t for (lo, hi), t in zip(ranges, ts)) for ts in ((0.31, 0.67, 0.43),
+                                                                                       (0.77, 0.21, 0.58))]
+    comp = _compile_all([pos[0]], vars_, fname, probe)[0]
+    F = comp(Xc, Yc, Zc)
+    return _graphics3d([density_raster3d(F, ranges, o, fname)], gopts, ranges, L(1, 1, 1))
+
+
+@fn("ListDensityPlot3D", area=AREA, status="added",
+    notes="ListDensityPlot3D[array] (array[[k, j, i]] is the value at x = i, y = j, z = k, as in the documented "
+          "Table[f, {z, ...}, {y, ...}, {x, ...}] examples; DataRange {{xmin, xmax}, {ymin, ymax}, {zmin, zmax}}): "
+          "one cell per value. " + _DENSITY3D_NOTE + " Irregular {x, y, z, f} data raises NotImplementedError. "
+          "Check: reference (cell colours ordered by the data in tests).")
+def _listdensityplot3d(data: Expr, *opts: Option) -> Expr:
+    fname = "ListDensityPlot3D"
+    pos, o_ = _list_args((data,) + opts, fname)
+    o, gopts = _opts3d(fname, o_, ("DataRange", "ColorFunction", "ColorFunctionScaling", "OpacityFunction",
+                                   "OpacityFunctionScaling"))
+    axes, F, ranges = volume_data(pos[0], fname, o["DataRange"])
+    return _graphics3d([density_raster3d(F, ranges, o, fname)], gopts, ranges, L(1, 1, 1))
+
+
+# ───────────────────────────── functions on surfaces ─────────────────────────────
+
+def _vec(x, fname, what):
+    if not (K.is_list(x) and len(x.args) == 3):
+        raise ValueError(f"{fname}: {what} must be a 3-D point")
+    return [real_arg(ev(c), fname, what) for c in x.args]
+
+
+def region_mesh(reg, fname, n=41):
+    """Boundary surface of a basic 3-D region -> (points array, triangles). Sphere/Ball, Cylinder, Cone and
+    Cuboid are supported."""
+    np = _np()
+    h = reg.head if isinstance(reg, Expr) else None
+    args = list(reg.args) if isinstance(reg, Expr) else []
+    parts = []                                   # (P, quads) pieces
+
+    def frame(p1, p2):
+        p1, p2 = np.array(p1, float), np.array(p2, float)
+        ax = p2 - p1
+        L_ = np.linalg.norm(ax)
+        if L_ == 0:
+            raise ValueError(f"{fname}: the axis end points must differ")
+        w = ax / L_
+        tmp = np.array([1.0, 0, 0]) if abs(w[0]) < 0.9 else np.array([0, 1.0, 0])
+        u = np.cross(w, tmp)
+        u /= np.linalg.norm(u)
+        v = np.cross(w, u)
+        return p1, ax, u, v
+
+    def disc(c, u, v, r):
+        rs = np.linspace(0, r, n // 2 + 1)
+        ph = np.linspace(0, 2 * math.pi, n)
+        R, PH = np.meshgrid(rs, ph)
+        P = c + np.outer(R.ravel() * np.cos(PH.ravel()), u) + np.outer(R.ravel() * np.sin(PH.ravel()), v)
+        return P, grid_faces(len(rs), len(ph))
+    if h in ("Sphere", "Ball"):
+        c = _vec(args[0], fname, "the centre") if args else [0.0, 0.0, 0.0]
+        r = real_arg(ev(args[1]), fname, "the radius") if len(args) > 1 else 1.0
+        if K.is_list(args[0] if args else None) and args and K.is_list(args[0].args[0]):
+            raise NotImplementedError(f"{fname}: several spheres are not supported")
+        th = np.linspace(0, math.pi, n)
+        ph = np.linspace(0, 2 * math.pi, n)
+        TH, PH = np.meshgrid(th, ph)
+        P = np.column_stack([c[0] + r * np.sin(TH.ravel()) * np.cos(PH.ravel()),
+                             c[1] + r * np.sin(TH.ravel()) * np.sin(PH.ravel()), c[2] + r * np.cos(TH.ravel())])
+        parts.append((P, grid_faces(n, n)))
+    elif h in ("Cylinder", "Cone"):
+        if args:
+            ends = args[0]
+            if not (K.is_list(ends) and len(ends.args) == 2):
+                raise ValueError(f"{fname}: {h} needs {{{{x1, y1, z1}}, {{x2, y2, z2}}}}")
+            p1, p2 = _vec(ends.args[0], fname, "an axis end"), _vec(ends.args[1], fname, "an axis end")
+        else:
+            p1, p2 = ([0.0, 0.0, -1.0], [0.0, 0.0, 1.0])
+        r = real_arg(ev(args[1]), fname, "the radius") if len(args) > 1 else 1.0
+        o_, ax, u, v = frame(p1, p2)
+        hs = np.linspace(0, 1, n)
+        ph = np.linspace(0, 2 * math.pi, n)
+        H, PH = np.meshgrid(hs, ph)
+        rr = r * (1 - H.ravel()) if h == "Cone" else r * np.ones(H.size)
+        P = o_ + np.outer(H.ravel(), ax) + np.outer(rr * np.cos(PH.ravel()), u) + np.outer(rr * np.sin(PH.ravel()), v)
+        parts.append((P, grid_faces(n, n)))
+        parts.append(disc(o_, u, v, r))
+        if h == "Cylinder":
+            parts.append(disc(o_ + ax, u, v, r))
+    elif h in ("Cuboid", "Cube") and h == "Cuboid":
+        lo = _vec(args[0], fname, "a corner") if args else [0.0, 0.0, 0.0]
+        hi = _vec(args[1], fname, "a corner") if len(args) > 1 else [lo[0] + 1, lo[1] + 1, lo[2] + 1]
+        m = max(2, n // 2)
+        s = np.linspace(0, 1, m)
+        A, B = np.meshgrid(s, s)
+        a_, b_ = A.ravel(), B.ravel()
+        for axis in range(3):
+            o1, o2 = [k for k in range(3) if k != axis]
+            for side in (lo[axis], hi[axis]):
+                P = np.zeros((a_.size, 3))
+                P[:, axis] = side
+                P[:, o1] = lo[o1] + a_ * (hi[o1] - lo[o1])
+                P[:, o2] = lo[o2] + b_ * (hi[o2] - lo[o2])
+                parts.append((P, grid_faces(m, m)))
+    else:
+        if isinstance(reg, (Symbol, Expr)) and not (isinstance(reg, Expr) and isinstance(reg.head, str) and
+                                                    reg.head[:1].isupper() and reg.head in G.__dict__.get("_X", ())):
+            if isinstance(reg, Expr) and reg.head in ("ImplicitRegion", "ParametricRegion", "MeshRegion",
+                                                      "BoundaryMeshRegion", "Ellipsoid", "Polyhedron",
+                                                      "Tetrahedron", "Hexahedron", "Prism", "Pyramid",
+                                                      "CapsuleShape", "Torus", "Cube", "Simplex", "Triangle",
+                                                      "Polygon", "Parallelepiped", "Region"):
+                raise NotImplementedError(f"{fname}: the region {reg.head} is not supported (Sphere, Ball, "
+                                          "Cylinder, Cone, Cuboid)")
+            if isinstance(reg, Symbol):
+                raise Unevaluated()
+        raise NotImplementedError(f"{fname}: the region {K_input(reg)} is not supported (Sphere, Ball, Cylinder, "
+                                  "Cone, Cuboid)")
+    allP, tris, off = [], [], 0
+    for P, quads in parts:
+        allP.append(P)
+        for a, b, c, d in quads:
+            tris += [(a + off, b + off, c + off), (a + off, c + off, d + off)]
+        off += len(P)
+    return np.vstack(allP), tris
+
+
+def _surface_function(f, p, fname):
+    """(held f, p) with p a symbol (vector) or {x, y, z} -> Compiled function of 3 coordinates."""
+    if isinstance(p, Symbol):
+        ds = [Symbol(f"plot$w16$p{k}") for k in range(3)]
+        g = K.substitute(f, {p.name: L(*ds)})
+        vars_ = ds
+    elif K.is_list(p) and len(p.args) == 3 and all(isinstance(v, Symbol) for v in p.args):
+        g, vars_ = f, list(p.args)
+    else:
+        raise ValueError(f"{fname}: the point must be a symbol or {{x, y, z}}, not {K_input(p)}")
+    probe = [(0.31, -0.67, 0.43), (-0.77, 0.21, 0.58)]
+    return _compile_all([g], vars_, fname, probe)[0]
+
+
+def _surface_args(pos, fname):
+    if len(pos) != 2:
+        raise ValueError(f"{fname}: expected {fname}[f, p \u2208 reg]")
+    el = pos[1]
+    if not (isinstance(el, Expr) and el.head == "Element" and len(el.args) == 2):
+        raise ValueError(f"{fname}: the second argument must be p \u2208 reg")
+    reg = ev(el.args[1])
+    return pos[0], el.args[0], reg
+
+
+K.BUILTIN_ATTRIBUTES["SurfaceContourPlot3D"] = {"HoldAll", "Protected"}
+K.BUILTIN_ATTRIBUTES["SurfaceDensityPlot3D"] = {"HoldAll", "Protected"}
+
+_SURF_NOTE = ("The surface is the boundary of reg: Sphere/Ball[c, r], Cylinder[{p1, p2}, r] (side and end discs), "
+              "Cone[{p1, p2}, r] (side and base) and Cuboid[lo, hi] (six faces) are meshed (41 points per "
+              "parameter direction); other regions raise NotImplementedError. p may be a symbol (f uses it as a "
+              "vector, e.g. Norm[p]) or {x, y, z}. BoxRatios -> Automatic, Axes -> True.")
+
+
+@fn("SurfaceContourPlot3D", area=AREA, status="added", hold=True,
+    notes="SurfaceContourPlot3D[f, p \u2208 reg] (HoldAll): coloured bands of f between contour levels (Contours: "
+          "Automatic nice levels inside the range of f on the surface, n or {c1, ...}; band colours from "
+          "ColorFunction(scaled mid value), default gradient as DensityPlot) and the contour curves (ContourStyle, "
+          "default Opacity[0.5] black) by linear interpolation on the surface triangles. " + _SURF_NOTE +
+          " Check: reference (contour vertices lie on the surface with f = level in tests).")
+def _surfacecontourplot3d(f: Held, reg: Held, *opts: Held | Option) -> Expr:
+    fname = "SurfaceContourPlot3D"
+    pos, o_ = hold_args((f, reg) + opts)
+    o, gopts = _opts3d(fname, o_, ("Contours", "ContourStyle", "ColorFunction", "ContourShading"))
+    f, p, reg = _surface_args(pos, fname)
+    P, tris = region_mesh(reg, fname)
+    comp = _surface_function(f, p, fname)
+    symbolic_check(comp, comp.dummies, fname)
+    np = _np()
+    V = comp(P[:, 0], P[:, 1], P[:, 2])
+    fin = V[np.isfinite(V)]
+    vlo, vhi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    levels = contour_levels(o["Contours"], vlo, vhi, fname)
+    T = np.array(tris, dtype=int)
+    cf = color_function(o["ColorFunction"], fname, lambda t: blend(DENSITY_GRADIENT, t))
+    content = []
+    shading = o["ContourShading"]
+    if not is_sym(shading, "None") and shading is not False:
+        bs = bands(P, V, T, levels)
+        nb = len(bs)
+        for k, polys in enumerate(bs):
+            if not polys:
+                continue
+            if K.is_list(shading) and shading.args:
+                col = shading.args[k % len(shading.args)]
+                if is_sym(col, "None"):
+                    continue
+            elif is_sym(shading, "Automatic") or shading is True:
+                lo = vlo if k == 0 else levels[k - 1]
+                hi = vhi if k == nb - 1 else levels[k]
+                col = rgb(cf(((lo + hi) / 2 - vlo) / (vhi - vlo) if vhi > vlo else 0.5))
+            else:
+                raise NotImplementedError(f"{fname}: ContourShading -> {K_input(shading)} is not supported")
+            content.append(L(Expr("EdgeForm"), col, multi_polygon(polys)))
+    for k, c in enumerate(levels):
+        st = _contour_style(o["ContourStyle"], k, fname)
+        if st is None:
+            continue
+        lines = iso_lines(P, V, T, c)
+        if lines:
+            content.append(L(st, Expr("Line", L(*[pts(ln) for ln in lines]))))
+    return _graphics3d(content, gopts, bounds3(P))
+
+
+@fn("SurfaceDensityPlot3D", area=AREA, status="added", hold=True,
+    notes="SurfaceDensityPlot3D[f, p \u2208 reg] (HoldAll): the surface as GraphicsComplex[points, {EdgeForm[], "
+          "Polygon[triangles]}, VertexColors -> ColorFunction((f - fmin)/(fmax - fmin))] (default gradient as "
+          "DensityPlot; ColorFunctionScaling -> False passes f unscaled), colours interpolated across triangles. "
+          + _SURF_NOTE + " Check: reference (vertex colours ordered by f in tests).")
+def _surfacedensityplot3d(f: Held, reg: Held, *opts: Held | Option) -> Expr:
+    fname = "SurfaceDensityPlot3D"
+    pos, o_ = hold_args((f, reg) + opts)
+    o, gopts = _opts3d(fname, o_, ("ColorFunction", "ColorFunctionScaling"))
+    f, p, reg = _surface_args(pos, fname)
+    P, tris = region_mesh(reg, fname)
+    comp = _surface_function(f, p, fname)
+    symbolic_check(comp, comp.dummies, fname)
+    np = _np()
+    V = comp(P[:, 0], P[:, 1], P[:, 2])
+    fin = V[np.isfinite(V)]
+    vlo, vhi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    cf = color_function(o["ColorFunction"], fname, lambda t: blend(DENSITY_GRADIENT, t))
+    g = density_complex(P, V, np.array(tris, dtype=int), cf, vlo, vhi, o["ColorFunctionScaling"] is not False)
+    return _graphics3d([g], gopts, bounds3(P))
