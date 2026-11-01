@@ -580,7 +580,8 @@ def _off(*args: Expr) -> Expr:
 
 @fn("On", area=AREA, status="added",
     notes="On[s::t, ...] and On[\"group\"] switch messages back on; On[Assert] enables assertions.  On[s] for symbol "
-          "tracing is not supported (the evaluator has no per-symbol trace printing) and raises")
+          "tracing is not supported (the evaluator has no per-symbol trace printing) and raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _on(*args: Expr) -> Expr:
     keys, syms = _switch_targets(args, "On")
     if not args:
@@ -599,7 +600,8 @@ def _on(*args: Expr) -> Expr:
 @fn("Quiet", area=AREA, status="added",
     notes="Quiet[expr] / Quiet[expr, moff] / Quiet[expr, moff, mon] (HoldAll): messages in moff are not printed, "
           "those in mon are; the innermost Quiet specification for a message wins; Check outside is unaffected. "
-          "A raised MikoshiLang error is not a message and still propagates")
+          "A raised MikoshiLang error is not a message and still propagates"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _quiet(expr: Expr, *specs: Expr) -> Expr:
     if len(specs) > 2:
         raise ValueError("Quiet called with more than 3 arguments; 1, 2 or 3 arguments are expected")
@@ -612,7 +614,8 @@ def _quiet(expr: Expr, *specs: Expr) -> Expr:
 @fn("Check", area=AREA, status="added",
     notes="Check[expr, failexpr] / Check[expr, failexpr, msgs] (HoldAll): returns failexpr if expr generated a "
           "matching message that is not switched off and not quieted inside the Check; a raised MikoshiLang error "
-          "counts as the message f::evalerr")
+          "counts as the message f::evalerr"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _check(expr: Expr, failexpr: Expr, *spec: Expr) -> Expr:
     if len(spec) > 1:
         raise ValueError("Check called with more than 3 arguments; 2 or 3 arguments are expected")
@@ -734,7 +737,8 @@ def echo(value, label=None, f=None):
 
 @fn("Echo", area=AREA, status="added",
     notes="Echo[expr] prints >> expr and returns expr; Echo[expr, label] prints >> label  expr; Echo[expr, label, f] "
-          "prints f[expr]; output is suppressed inside QuietEcho")
+          "prints f[expr]; output is suppressed inside QuietEcho"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _echo(x: Expr, label: Expr = None, f: Expr = None) -> Expr:
     return echo(x, label, f)
 
@@ -767,7 +771,8 @@ def _echo_label(*label: Expr) -> Expr:
 
 @fn("EchoFunction", area=AREA, status="added",
     notes="operator form: EchoFunction[f][expr] prints >> f[expr], EchoFunction[label, f][expr] prints >> label  "
-          "f[expr]; both return expr; EchoFunction[][expr] is Echo[expr]")
+          "f[expr]; both return expr; EchoFunction[][expr] is Echo[expr]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _echo_function(*args: Expr) -> Expr:
     raise Unevaluated()
 
@@ -783,7 +788,8 @@ def _labels(spec):
 @fn("EchoEvaluation", area=AREA, status="added",
     notes="EchoEvaluation[expr] (HoldFirst) prints << expr before and >> result after evaluating (nested calls use "
           "<<<< / >>>>); EchoEvaluation[expr, l1 -> l2], EchoEvaluation[expr, labels, f] and "
-          "EchoEvaluation[expr, labels, g -> f] as documented; returns the result")
+          "EchoEvaluation[expr, labels, g -> f] as documented; returns the result"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _echo_evaluation(expr: Expr, labels: Expr = None, f: Fn = None) -> Expr:
     labels = None if labels is None else ev(labels)
     f = None if f is None else ev(f)
@@ -808,7 +814,8 @@ def _echo_evaluation(expr: Expr, labels: Expr = None, f: Fn = None) -> Expr:
 
 @fn("QuietEcho", area=AREA, status="added",
     notes="QuietEcho[expr] (HoldFirst) evaluates expr without Echo, EchoLabel, EchoFunction, EchoEvaluation or "
-          "EchoTiming printing anything; messages and Print are not affected")
+          "EchoTiming printing anything; messages and Print are not affected"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _quiet_echo(expr: Expr) -> Expr:
     tok = _QUIET_ECHO.set(True)
     try:
@@ -819,7 +826,8 @@ def _quiet_echo(expr: Expr) -> Expr:
 
 @fn("Monitor", area=AREA, status="added",
     notes="Monitor[expr, mon] (HoldAll) evaluates and returns expr; the monitor display is a notebook feature, so in "
-          "MikoshiLang's text interface nothing is shown (as in a Wolfram text-based session)")
+          "MikoshiLang's text interface nothing is shown (as in a Wolfram text-based session)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _monitor(expr: Expr, *rest: Expr) -> Expr:
     if len(rest) > 2:
         raise ValueError("Monitor called with more than 3 arguments; 1, 2 or 3 arguments are expected")
@@ -977,7 +985,8 @@ def _failure_hook(head, args, ev_):
 @fn("Failure", area=AREA, status="added",
     notes="Failure[\"tag\", assoc] is inert; failure[\"prop\"] gives assoc values and the derived properties "
           "\"Message\" (template applied to \"MessageParameters\"), \"MessageTemplate\", \"MessageName\", "
-          "\"HeldMessageTemplate\", \"Tag\" and \"Properties\" (sorted); failure[{p1, p2}] gives a list")
+          "\"HeldMessageTemplate\", \"Tag\" and \"Properties\" (sorted); failure[{p1, p2}] gives a list"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _failure(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
@@ -990,7 +999,8 @@ def _failure(*args: Expr) -> Expr:
 
 @fn("Success", area=AREA, status="added",
     notes="Success[\"tag\", assoc] is inert; success[\"prop\"] gives assoc values, \"Message\", \"Tag\" and "
-          "\"Properties\" (the association keys in order)")
+          "\"Properties\" (the association keys in order)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _success(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
@@ -1015,7 +1025,8 @@ def confirm_failure_q(x):
 
 
 @fn("FailureQ", area=AREA, status="added",
-    notes="FailureQ[expr] is True for Failure[...], $Failed and $Aborted, False otherwise")
+    notes="FailureQ[expr] is True for Failure[...], $Failed and $Aborted, False otherwise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _failure_q(x: Expr) -> Boolean:
     return failure_q(x)
 
@@ -1045,7 +1056,8 @@ def _failsafe_hook(head, args, ev_):
 @fn("Failsafe", area=AREA, status="added",
     notes="operator form: Failsafe[f][x1, ...] gives f[x1, ...] unless some xi is a failure (Failure, Missing, "
           "$Failed, $Canceled, $Aborted), then the first such xi; Failsafe[f, test][...] gives "
-          "Failure[\"FailsafeFailed\", ...] when test[x1, ...] is not True; Failsafe[f, test, failf] gives failf[...]")
+          "Failure[\"FailsafeFailed\", ...] when test[x1, ...] is not True; Failsafe[f, test, failf] gives failf[...]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _failsafe(*args: Expr) -> Expr:
     if not 1 <= len(args) <= 3:
         raise ValueError(f"Failsafe called with {len(args)} arguments; 1, 2 or 3 arguments are expected")
@@ -1231,7 +1243,8 @@ def _confirm_quiet(*args: Expr) -> Expr:
     notes="Enclose[expr] (HoldAll) evaluates expr; an untagged confirmation lexically inside throws its Failure to "
           "it (untagged confirmations are rewritten with a private tag, inner untagged Enclose blocks keep their "
           "own); Enclose[expr, f] gives f[failure] (f a string: failure[f]); Enclose[expr, f, form] catches only "
-          "confirmations whose tag matches form, dynamically")
+          "confirmations whose tag matches form, dynamically"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _enclose(expr: Expr, *rest: Expr) -> Expr:
     if len(rest) > 2:
         raise ValueError(f"Enclose called with {len(rest) + 1} arguments; 1, 2 or 3 arguments are expected")
@@ -1485,7 +1498,8 @@ KL.COMPOUND_HEAD_HOOKS["Exception"] = _exception_hook
           "\"ExceptionValidated\" -> True, \"ExceptionAPIVersion\" -> \"1\"|>] with tag expansion through registered "
           "parent types; spec may be a tag, a list of tags, an Exception, a Failure carrying \"ExceptionTagList\" or "
           "an association; malformed input issues Exception::untagged / Exception::invargs and stays unevaluated; "
-          "exc[\"prop\"] gives the documented properties")
+          "exc[\"prop\"] gives the documented properties"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _exception(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
@@ -1500,7 +1514,8 @@ def _exception(*args: Expr) -> Expr:
 
 @fn("ExceptionQ", area=AREA, status="added",
     notes="ExceptionQ[expr] is True for a validated Exception object; ExceptionQ[expr, tag | {tags}] also requires "
-          "one of the tags in its (expanded) tag list")
+          "one of the tags in its (expanded) tag list"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _exception_q(x: Expr, *tagspec: Expr) -> Boolean:
     if len(tagspec) > 1:
         raise ValueError("ExceptionQ called with more than 2 arguments; 1 or 2 arguments are expected")
@@ -1574,7 +1589,8 @@ def catch_exceptions(expr, spec):
     notes="CatchExceptions[expr, spec] (HoldFirst) returns expr's value, or for a thrown exception matching spec "
           "(All, tag, {tags}, tag -> handler, {tagspec -> handler, ...}; first matching clause; subtypes match "
           "their parents) handler[exceptionData] or, without a handler, the exception's Failure; other exceptions "
-          "propagate. The operator form CatchExceptions[spec][expr] holds expr")
+          "propagate. The operator form CatchExceptions[spec][expr] holds expr"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _catch_exceptions(*args: Expr) -> Expr:
     if len(args) == 1:
         raise Unevaluated()
@@ -1608,7 +1624,8 @@ _hold_operator("CatchExceptions")
     notes="RegisterExceptionType[sym] / [sym, parent | {parents}] (HoldFirst) registers the symbol sym as an "
           "exception type in this session and returns Success[\"RegisteredExceptionType\", <|\"ExceptionType\" -> sym, "
           "\"ParentExceptionTypes\" -> {...}, \"OwnerContext\" -> \"Global`\"|>]; registering twice issues "
-          "RegisterExceptionType::regd and returns $Failed")
+          "RegisterExceptionType::regd and returns $Failed"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _register_exception_type(sym: Expr, *parents: Expr) -> Expr:
     if len(parents) > 1:
         raise ValueError("RegisterExceptionType called with more than 2 arguments; 1 or 2 arguments are expected")
@@ -1751,7 +1768,8 @@ def _option(args, names, fname):
 @fn("CheckAbort", area=AREA, status="added",
     notes="CheckAbort[expr, failexpr] (HoldAll) returns failexpr if an abort occurs in expr; option PropagateAborts: "
           "Automatic (default: absorb Abort[], propagate constraint aborts after failexpr), True (propagate all), "
-          "False (absorb all)")
+          "False (absorb all)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _check_abort(*args: Expr) -> Expr:
     args, opts = _option(args, {"PropagateAborts"}, "CheckAbort")
     if len(args) != 2:
@@ -1967,7 +1985,8 @@ def _bytes(b, fname):
 @fn("TimeConstrained", area=AREA, status="added",
     notes="TimeConstrained[expr, t] / TimeConstrained[expr, t, failexpr] (HoldAll) evaluates expr, aborting it after "
           "t seconds of real time and returning $Aborted (or failexpr, evaluated only then); t may be Infinity or a "
-          "Quantity in seconds; AbortProtect postpones the abort")
+          "Quantity in seconds; AbortProtect postpones the abort"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _time_constrained(expr: Expr, t: Expr, *fail: Expr) -> Expr:
     if len(fail) > 1:
         raise ValueError("TimeConstrained called with more than 3 arguments; 2 or 3 arguments are expected")
@@ -1987,7 +2006,8 @@ def _time_constrained(expr: Expr, t: Expr, *fail: Expr) -> Expr:
 @fn("MemoryConstrained", area=AREA, status="added",
     notes="MemoryConstrained[expr, b] / MemoryConstrained[expr, b, failexpr] (HoldAll) evaluates expr, aborting it "
           "when the additional Python heap memory it allocates (tracemalloc) exceeds b bytes, and returns $Aborted "
-          "(or failexpr); b may be Infinity or a byte Quantity")
+          "(or failexpr); b may be Infinity or a byte Quantity"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _memory_constrained(expr: Expr, b: Expr, *fail: Expr) -> Expr:
     if len(fail) > 1:
         raise ValueError("MemoryConstrained called with more than 3 arguments; 2 or 3 arguments are expected")
@@ -2027,7 +2047,8 @@ def _timed(expr, clock):
 
 @fn("Timing", area=AREA, status="added",
     notes="Timing[expr] (HoldAll) gives {CPU seconds used by this process while evaluating expr, result} "
-          "(time.process_time); time spent in Pause is not counted")
+          "(time.process_time); time spent in Pause is not counted"
+          ". Check: reference (differential cases in tests/library).")
 def _timing(expr: Expr) -> ListOf[Expr]:
     t, v = _timed(expr, time.process_time)
     return L(t, v)
@@ -2035,7 +2056,8 @@ def _timing(expr: Expr) -> ListOf[Expr]:
 
 @fn("AbsoluteTiming", area=AREA, status="added",
     notes="AbsoluteTiming[expr] (HoldAll) gives {real seconds elapsed while evaluating expr, result} "
-          "(time.perf_counter)")
+          "(time.perf_counter)"
+          ". Check: reference (differential cases in tests/library).")
 def _absolute_timing(expr: Expr) -> ListOf[Expr]:
     t, v = _timed(expr, time.perf_counter)
     return L(t, v)
@@ -2082,7 +2104,8 @@ def _repeated_timing(expr: Expr, *t: Expr) -> ListOf[Expr]:
 @fn("EchoTiming", area=AREA, status="added",
     notes="EchoTiming[expr] / EchoTiming[expr, label] (HoldFirst) evaluates expr, prints >> [label  ]seconds and "
           "returns the result; Method -> AbsoluteTiming (default), Timing, RepeatedTiming or a holding function "
-          "returning {timing, result}")
+          "returning {timing, result}"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _echo_timing(expr: Expr, *rest: Expr) -> Expr:
     rest, opts = _option(rest, {"Method"}, "EchoTiming")
     if len(rest) > 1:
@@ -2176,7 +2199,8 @@ def _bytecount(e, seen=None):
 @fn("ByteCount", area=AREA, status="added",
     notes="ByteCount[expr] gives the bytes MikoshiLang uses to store expr (Python object sizes, every part counted "
           "separately, no sharing); symbols (including True, False, Null) are shared and count 0. Values differ "
-          "from Wolfram's own memory layout, as the documentation allows between systems")
+          "from Wolfram's own memory layout, as the documentation allows between systems"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _byte_count(e: Expr) -> Expr:
     return _bytecount(e)
 
@@ -2206,7 +2230,8 @@ def _memory_in_use(*fe: Expr) -> Expr:
 
 @fn("MaxMemoryUsed", area=AREA, status="added",
     notes="MaxMemoryUsed[] gives the peak resident memory (bytes) of the process (getrusage); MaxMemoryUsed[expr] "
-          "(HoldAll) gives the peak additional Python heap bytes (tracemalloc) used while evaluating expr")
+          "(HoldAll) gives the peak additional Python heap bytes (tracemalloc) used while evaluating expr"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _max_memory_used(*args: Expr) -> Expr:
     if len(args) > 1:
         raise ValueError("MaxMemoryUsed called with more than 1 argument")
@@ -2256,7 +2281,8 @@ _hold_all("MaxMemoryUsed")
 @fn("ClearSystemCache", area=AREA, status="added",
     notes="ClearSystemCache[] clears MikoshiLang's internal caches (SymPy's cache and the evaluator memo table); "
           "ClearSystemCache[\"Symbolic\"] / [\"Numeric\"] clear the symbolic (SymPy) / numeric (mpmath) caches; "
-          "returns Null")
+          "returns Null"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _clear_system_cache(*kind: Expr) -> Expr:
     if len(kind) > 1:
         raise ValueError("ClearSystemCache called with more than 1 argument")
@@ -2585,7 +2611,8 @@ KL.COMPOUND_HEAD_HOOKS["TestObject"] = _test_object_hook
     notes="TestObject[<|...|>] is the inert test result (from TestCreate / TestEvaluate / VerificationTest); "
           "test[\"prop\"] for \"Outcome\" (Success, Failure, MessagesFailure, NotEvaluated), \"FailureType\", "
           "\"Input\", \"ExpectedOutput\", \"ActualOutput\", \"ActualMessages\", \"TestID\", \"TestKey\", "
-          "\"TestCreate\", \"Created\", timings, ...; test[{p1, ...}] gives an association; \"Properties\"")
+          "\"TestCreate\", \"Created\", timings, ...; test[{p1, ...}] gives an association; \"Properties\""
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _test_object(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
@@ -2597,7 +2624,8 @@ def _test_object(*args: Expr) -> Expr:
 @fn("TestCreate", area=AREA, status="added",
     notes="TestCreate[input] / [input, expected] / [input, expected, messages] (HoldAllComplete) creates an "
           "unevaluated TestObject; options MemoryConstraint, MetaInformation, SameTest, TestID (Automatic = hash "
-          "of the test), TimeConstraint")
+          "of the test), TimeConstraint"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _test_create(*args: Expr) -> Expr:
     return _test_args(args, "TestCreate")
 
@@ -2622,7 +2650,8 @@ def _test_from_assoc(a):
 @fn("TestEvaluate", area=AREA, status="added",
     notes="TestEvaluate[test] runs a TestObject (messages are recorded, not printed) and gives the evaluated "
           "TestObject with \"ActualOutput\", \"ActualMessages\", timings and the \"Outcome\" / \"FailureType\"; "
-          "TestEvaluate[<|\"Input\" :> ..., \"ExpectedOutput\" -> ..., ...|>] builds the test from an association")
+          "TestEvaluate[<|\"Input\" :> ..., \"ExpectedOutput\" -> ..., ...|>] builds the test from an association"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _test_evaluate(x: Expr) -> Expr:
     if is_assoc(x):
         x = _test_from_assoc(x)
@@ -2633,7 +2662,8 @@ def _test_evaluate(x: Expr) -> Expr:
 
 @fn("VerificationTest", area=AREA, status="added",
     notes="VerificationTest[input, expected, messages, opts] (HoldAllComplete) = TestEvaluate[TestCreate[...]]: "
-          "evaluates the test immediately without printing messages and gives the evaluated TestObject")
+          "evaluates the test immediately without printing messages and gives the evaluated TestObject"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _verification_test(*args: Expr) -> Expr:
     obj = evaluate_test(_test_args(args, "VerificationTest"))[0]
     coll = _REPORT_COLLECT.get()
@@ -2767,7 +2797,8 @@ KL.COMPOUND_HEAD_HOOKS["TestReportObject"] = _report_hook
 @fn("TestReportObject", area=AREA, status="added",
     notes="TestReportObject[<|...|>] is the inert result of TestReport; report[\"prop\"] for \"Results\", "
           "\"ResultsByOutcome\", \"ResultsByTestID\", \"ResultsByTestFileName\", \"ResultsDataset\", "
-          "\"ReportSucceeded\", \"RuntimeFailures\", \"Title\", timings, \"TestsSucceededCount\", the key lists ...")
+          "\"ReportSucceeded\", \"RuntimeFailures\", \"Title\", timings, \"TestsSucceededCount\", the key lists ..."
+          " Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _test_report_object(*args: Expr) -> Expr:
     if _has_pattern(*args):
         raise Unevaluated()
@@ -2890,7 +2921,8 @@ def _report_file(path, handlers, evalf, defaults):
           "TestReportObject; TestReport[{reports}] merges reports; TestReport[\"file.wl\"] evaluates a plain-text "
           "test file with $TestFileName set (notebooks raise). Options HandlerFunctions (events ReportStarted, "
           "TestCreated, TestEvaluated, RuntimeFailure, FileStarted, FileCompleted, ReportCompleted, UnhandledEvent), "
-          "HandlerFunctionsKeys, TestEvaluationFunction, SameTest, TimeConstraint, MemoryConstraint")
+          "HandlerFunctionsKeys, TestEvaluationFunction, SameTest, TimeConstraint, MemoryConstraint"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _test_report(*args: Expr) -> Expr:
     names = {"HandlerFunctions", "HandlerFunctionsKeys", "TestEvaluationFunction", "SameTest", "TimeConstraint",
              "MemoryConstraint", "ProgressReporting"}
