@@ -2396,7 +2396,7 @@ def _fileformatq(f: String | Expr, fmt: String) -> Boolean:
 
 @fn("FileConvert", area=AREA, status="added",
     notes="FileConvert[\"src\" -> \"fmt\"] converts a file to the format, writing src with the format's "
-          "extension; FileConvert[\"src\" -> \"dest\"] infers the format from dest; returns the new file name. Check: self-check by construction (Import then Export); tests re-import the converted file.")
+          "extension; FileConvert[\"src\" -> \"dest\"] infers the format from dest; returns the new file name. Check: exact by construction (Import then Export); reference: tests re-import the converted file.")
 def _fileconvert(spec: Rule, *opts: Option) -> String:
     if not _is_rule(spec):
         raise TypeError("FileConvert: FileConvert[source -> format] or FileConvert[source -> destination] "
