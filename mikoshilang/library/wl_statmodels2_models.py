@@ -1278,3 +1278,401 @@ def _report_apply(head, args, ev_):
 
 
 KL.COMPOUND_HEAD_HOOKS["ModelFitReport"] = _report_apply
+
+
+# ─────────────────────────── KernelModelFit ───────────────────────────
+
+_KERNELS = ("Gaussian", "Cauchy", "Constant", "Linear")
+KMF_OPTS = ("DistanceFunction", "IncludeConstantBasis", "WorkingPrecision", "ConfidenceLevel", "LinearOffsetFunction",
+            "NominalVariables", "VarianceEstimatorFunction", "Weights")
+
+
+def kernel_centres(xs, bw, fname):
+    """(centres, scale d) for 1-D data: Automatic = Max[2, Min[10, Floor[n/2]]] equally spaced centres with d the
+    spacing; h = centres h apart from the minimum; {{m, h}} = m equally spaced centres with scale h"""
+    lo, hi = float(min(xs)), float(max(xs))
+    if hi <= lo:
+        raise ValueError(f"{fname}: the data must contain at least two distinct x values")
+    if is_list(bw) and len(bw.args) == 1:
+        bw = bw.args[0]
+    if _sym(bw, "Automatic"):
+        m = max(2, min(10, len(xs) // 2))
+        return list(np.linspace(lo, hi, m)), (hi - lo) / (m - 1)
+    if is_list(bw) and len(bw.args) == 2 and _int(bw.args[0]) and _is_num(bw.args[1]):
+        m, h = bw.args[0], float(S(bw.args[1]))
+        if m < 1 or h <= 0:
+            raise ValueError(f"{fname}: {{n, bw}} needs n >= 1 and bw > 0")
+        return (list(np.linspace(lo, hi, m)) if m > 1 else [(lo + hi) / 2]), h
+    if _is_num(bw):
+        h = float(S(bw))
+        if h <= 0:
+            raise ValueError(f"{fname}: the bandwidth must be positive")
+        m = int(math.floor((hi - lo) / h + 1e-9)) + 1
+        if m > 1000:
+            raise ValueError(f"{fname}: the bandwidth gives more than 1000 kernel functions")
+        return [lo + i * h for i in range(m)], h
+    raise TypeError(f"{fname}: invalid bandwidth {bw}")
+
+
+def kernel_basis(kern, x, c, d, fname):
+    r = Expr("Times", Expr("Abs", Expr("Plus", x, -c)), 1.0 / d)
+    if _sym(kern, "Automatic") or kern == "Gaussian":
+        return Expr("Exp", Expr("Times", -2.0 / d ** 2, Expr("Power", Expr("Plus", x, -c), 2)))
+    if kern == "Cauchy":
+        return Expr("Power", Expr("Plus", 1, r), -2)
+    if kern == "Constant":
+        return Expr("Piecewise", L(L(1, Expr("LessEqual", Expr("Abs", Expr("Plus", x, -c)), 2.0 * d))), 0)
+    if kern == "Linear":
+        return Expr("HeavisideLambda", Expr("Times", r, 0.5))
+    if isinstance(kern, str):
+        raise ValueError(f'{fname}: unknown kernel "{kern}" ({", ".join(_KERNELS)} or a function)')
+    return Expr(kern, r)
+
+
+@fn("KernelModelFit", area=AREA, status="added",
+    notes="KernelModelFit[data, bw, f] fits Sum[c_i f[Abs[x - x_i]/d]] (plus a constant, IncludeConstantBasis -> "
+          "True) by least squares and returns a LinearModelFit FittedModel in the variable x (machine precision). "
+          "Kernels: \"Gaussian\" Exp[-2 r^2] (Automatic, a stated choice), \"Cauchy\" 1/(1 + r)^2, \"Constant\" "
+          "UnitBox[r/4], \"Linear\" HeavisideLambda[r/2] (the documented forms) or a function f. Bandwidth: "
+          "Automatic = Max[2, Min[10, Floor[n/2]]] equally spaced centres from Min to Max x with d their spacing "
+          "(a stated choice -- Wolfram's automatic rule is undocumented), h = centres h apart starting at Min x "
+          "with d = h, {{m, h}} = m equally spaced centres with d = h. Data: {y1, ...}, {{x, y}, ...}, {x -> y, "
+          "...}, {xs} -> {ys}. Multivariate data, DistanceFunction other than Automatic/EuclideanDistance, "
+          "LinearOffsetFunction, NominalVariables and VarianceEstimatorFunction raise NotImplementedError; a "
+          "rank-deficient basis (kernels covering no data) ValueError. Check: coefficients compared with "
+          "numpy.linalg.lstsq on the same basis (tests).")
+def _kernel_model_fit(data: Expr, bw: Expr | Real | ListOf[Expr] = None, kern: String | Expr = None,
+                      *rest: Option) -> Expr:
+    name = "KernelModelFit"
+    rest = list(rest)
+    if kern is not None and SM._is_rule(kern):
+        rest.insert(0, kern)
+        kern = None
+    if bw is not None and SM._is_rule(bw):
+        rest.insert(0, bw)
+        bw = None
+    _, o = SM.opts(rest, KMF_OPTS, name)
+    for k in ("LinearOffsetFunction", "NominalVariables", "VarianceEstimatorFunction"):
+        if k in o and not _sym(o[k], "None", "Automatic"):
+            raise NotImplementedError(f"{name}: the {k} option is not supported")
+    if "DistanceFunction" in o and not _sym(o["DistanceFunction"], "Automatic", "EuclideanDistance"):
+        raise NotImplementedError(f"{name}: only the Euclidean distance is supported")
+    wp = o.get("WorkingPrecision", Symbol("Automatic"))
+    if not _sym(wp, "Automatic", "MachinePrecision"):
+        raise NotImplementedError(f"{name}: WorkingPrecision other than MachinePrecision is not supported")
+    X, y = fit_data(data, name)
+    if len(X[0]) != 1:
+        raise NotImplementedError(f"{name}: only one-dimensional data is supported")
+    xs = [float(r[0]) for r in X]
+    cs, d = kernel_centres(xs, Symbol("Automatic") if bw is None else bw, name)
+    x = Symbol("x")
+    basis = [kernel_basis(Symbol("Automatic") if kern is None else kern, x, float(c), d, name) for c in cs]
+    fdata = L(*(L(float(a), float(b)) for a, b in zip(xs, y)))
+    optr = [rule(Symbol(k), v) for k, v in o.items() if k in ("IncludeConstantBasis", "ConfidenceLevel", "Weights")]
+    return ev(Expr("LinearModelFit", fdata, L(*basis), x, *optr))
+
+
+# ─────────────────────────── LocalModelFit (LOESS) ───────────────────────────
+
+LMF_OPTS = ("ComputeUncertainty", "DistanceFunction", "FitDegree", "InterpolationPoints")
+
+
+def _local_monomials(deg, nv):
+    return [e for e in _monomials(deg, nv)]
+
+
+def loess_at(Xa, ya, q, bw, deg, fname):
+    """local polynomial value at q: tricube weights, degree deg (Cleveland 1979)"""
+    n, p = Xa.shape
+    d = np.sqrt(np.sum((Xa - q) ** 2, axis=1))
+    if bw[0] == "Scaled":
+        f = bw[1]
+        k = int(math.floor(f * n + 1e-10))
+        k = min(max(k, 1), n)
+        h = float(np.sort(d)[k - 1]) if f <= 1 else float(np.max(d)) * f ** (1.0 / p)
+    else:
+        h = bw[1]
+    if h <= 0:
+        raise ValueError(f"{fname}: the bandwidth around {list(q)} contains a single distinct point")
+    u = d / h
+    w = np.where(u < 1, (1 - u ** 3) ** 3, 0.0)
+    mons = _local_monomials(deg, p)
+    A = np.column_stack([np.prod((Xa - q) ** np.array(e), axis=1) for e in mons])
+    sw = np.sqrt(w)
+    Aw = A * sw[:, None]
+    if np.linalg.matrix_rank(Aw) < A.shape[1]:
+        raise ValueError(f"{fname}: too few points with positive weight near {[float(v) for v in q]} for a degree-"
+                         f"{deg} local fit (increase the bandwidth)")
+    beta = np.linalg.lstsq(Aw, ya * sw, rcond=None)[0]
+    return float(beta[0])
+
+
+def _bw_spec(bw, fname):
+    if bw is None or _sym(bw, "Automatic"):
+        return ("Scaled", 0.75)
+    if isinstance(bw, Expr) and bw.head == "Scaled" and len(bw.args) == 1 and _is_num(bw.args[0]):
+        f = float(S(bw.args[0]))
+        if f <= 0:
+            raise ValueError(f"{fname}: Scaled[f] needs f > 0")
+        return ("Scaled", f)
+    if _is_num(bw):
+        h = float(S(bw))
+        if h <= 0:
+            raise ValueError(f"{fname}: the bandwidth must be positive")
+        return ("Abs", h)
+    raise TypeError(f"{fname}: the bandwidth must be a positive number or Scaled[f]")
+
+
+@fn("LocalModelFit", area=AREA, status="added",
+    notes="LocalModelFit[data, bw] is LOESS (Cleveland 1979): at each point the polynomial of degree FitDegree "
+          "(default 1) is fitted by weighted least squares with tricube weights (1 - (d/h)^3)^3, d the Euclidean "
+          "distance and h the distance to the Floor[f n]-th nearest point for Scaled[f] (f > 1: the largest "
+          "distance times f^(1/p)) or the absolute bandwidth; Automatic = Scaled[3/4] (the classic span default, "
+          "a stated choice). Returns FittedModel[<|\"Type\" -> \"Local\", ...|>]: fm[x] or fm[x, y] evaluates the "
+          "local fit exactly at numeric points (no interpolation grid), and \"Function\", \"Data\", \"Response\", "
+          "\"PredictedResponse\", \"FitResiduals\", {\"BestFit\", vars} (numeric vars) are available. Data forms as "
+          "ModelFit. InterpolationPoints other than Automatic/None, uncertainty properties (\"MeanPredictions\", "
+          "\"BestFitAround\", bands) and non-Euclidean DistanceFunction raise NotImplementedError. Check: values "
+          "compared with statsmodels lowess (frac = f, it = 0, delta = 0) on the same data (tests).")
+def _local_model_fit(data: Expr, bw: Real | Expr = None, *rest: Option) -> Expr:
+    name = "LocalModelFit"
+    rest = list(rest)
+    if bw is not None and SM._is_rule(bw):
+        rest.insert(0, bw)
+        bw = None
+    _, o = SM.opts(rest, LMF_OPTS, name)
+    if "DistanceFunction" in o and not _sym(o["DistanceFunction"], "Automatic", "EuclideanDistance"):
+        raise NotImplementedError(f"{name}: only the Euclidean distance is supported")
+    ip = o.get("InterpolationPoints", Symbol("Automatic"))
+    if not _sym(ip, "Automatic", "None"):
+        raise NotImplementedError(f"{name}: InterpolationPoints -> {ip} is not supported (the fit is evaluated "
+                                  "exactly at every point)")
+    cu = o.get("ComputeUncertainty", True)
+    if cu not in (True, False):
+        raise ValueError(f"{name}: ComputeUncertainty must be True or False")
+    deg = o.get("FitDegree", 1)
+    if not (_int(deg) and 0 <= deg <= 3):
+        raise ValueError(f"{name}: FitDegree must be an integer between 0 and 3")
+    X, y = fit_data(data, name)
+    b = _bw_spec(bw, name)
+    a = FIT._assoc(Type="Local", Data=_canon(X, y), Bandwidth=Expr("Scaled", b[1]) if b[0] == "Scaled" else b[1],
+                   FitDegree=deg, InputSize=len(X[0]))
+    return Expr("FittedModel", a)
+
+
+def _local_state(a):
+    X, y = fit_data(FIT._get(a, "Data"), "LocalModelFit")
+    bw = _bw_spec(FIT._get(a, "Bandwidth"), "LocalModelFit")
+    return np.array([[float(v) for v in r] for r in X]), np.array([float(v) for v in y]), bw, FIT._get(a, "FitDegree")
+
+
+def local_predict(a, Q):
+    Xa, ya, bw, deg = _local_state(a)
+    return np.array([loess_at(Xa, ya, np.asarray(q, dtype=float), bw, deg, "LocalModelFit") for q in Q])
+
+
+_LOCAL_PROPS = ("BestFit", "Function", "Data", "Response", "PredictedResponse", "FitResiduals", "Properties")
+
+
+def _local_property(a, prop, rest=()):
+    Xa, ya, bw, deg = _local_state(a)
+    if prop == "Properties":
+        return L(*_LOCAL_PROPS)
+    if prop == "Data":
+        return FIT._get(a, "Data")
+    if prop == "Response":
+        return L(*(r.args[-1] for r in FIT._get(a, "Data").args))
+    if prop in ("PredictedResponse", "FitResiduals"):
+        pr = local_predict(a, Xa)
+        return FIT._L(pr if prop == "PredictedResponse" else ya - pr)
+    if prop == "Function":
+        nv = Xa.shape[1]
+        return Expr("Function", Expr(Expr("FittedModel", a), *(Expr("Slot", i + 1) for i in range(nv))))
+    if prop == "BestFit":
+        if not rest:
+            raise ValueError('LocalModelFit: use {"BestFit", vars} with numeric vars (a local fit has no closed '
+                             'form)')
+        return _local_call(a, list(rest))
+    raise NotImplementedError(f'LocalModelFit: the property "{prop}" is not supported')
+
+
+def _local_call(a, args):
+    nv = int(FIT._get(a, "InputSize"))
+    if len(args) == 1 and is_list(args[0]) and nv > 1:
+        args = list(args[0].args)
+    if len(args) != nv:
+        raise ValueError(f"FittedModel: expected {nv} argument(s)")
+    if not all(_is_num(v) for v in args):
+        return UNH
+    return float(local_predict(a, [[float(S(v)) for v in args]])[0])
+
+
+_prev_fm_hook = KL.COMPOUND_HEAD_HOOKS.get("FittedModel")
+
+
+def _fm_hook(head, args, ev_):
+    a = FIT._model_assoc("FittedModel", head)
+    if a is not None and _assoc_get(a, "Type") == "Local":
+        if len(args) == 1 and isinstance(args[0], str):
+            return _local_property(a, args[0])
+        if len(args) == 1 and is_list(args[0]) and args[0].args and isinstance(args[0].args[0], str):
+            p = args[0].args
+            if p[0] in ("BestFit",) and len(p) > 1:
+                return _local_property(a, p[0], p[1:])
+            return L(*(_local_property(a, q) for q in p))
+        return _local_call(a, list(args))
+    return _prev_fm_hook(head, args, ev_) if _prev_fm_hook is not None else UNH
+
+
+KL.COMPOUND_HEAD_HOOKS["FittedModel"] = _fm_hook
+
+
+# ─────────────────────────── fit plots ───────────────────────────
+
+def plot_fitter(spec, X, y, fname):
+    """predict(Xa) for a PlotFit setting fitted to X (rows), y"""
+    Xa = np.array([[float(v) for v in r] for r in X])
+    if spec is None or _sym(spec, "Automatic") or spec == "Local":
+        a = FIT._assoc(Type="Local", Data=_canon(X, y), Bandwidth=Expr("Scaled", 0.75), FitDegree=1,
+                       InputSize=len(X[0]))
+        return lambda Q: local_predict(a, Q)
+    if spec == "Kernel":
+        fm = _kernel_model_fit(_canon(X, y))
+        best = FIT._get(fm.args[0], "BestFit")
+        e = S(best)
+        f = sp.lambdify([sp.Symbol("x")], e.subs({s: sp.Symbol(str(s)) for s in e.free_symbols}), "numpy")
+        return lambda Q: np.broadcast_to(np.asarray(f(np.asarray(Q, dtype=float)[:, 0]), dtype=float), (len(Q),))
+    if isinstance(spec, Expr) and spec.head == "FittedModel":
+        def pr(Q):
+            out = []
+            for q in np.asarray(Q, dtype=float):
+                v = ev(Expr(spec, *(float(t) for t in q)))
+                out.append(float(S(v)))
+            return np.array(out)
+        return pr
+    if isinstance(spec, str) or (isinstance(spec, Expr) and (spec.head in MODEL_HEADS or is_list(spec))):
+        r = model_fit(_canon(X, y), spec, fname, {})
+        return r["best"].predict
+    if spec == "Logistic":
+        raise NotImplementedError(f'{fname}: PlotFit -> "Logistic" is not supported')
+    raise ValueError(f"{fname}: invalid PlotFit setting {spec}")
+
+
+def _elements(el, fname):
+    if el is None or _sym(el, "Automatic"):
+        return {"BestFit"}
+    items = list(el.args) if is_list(el) else [el]
+    out = set()
+    for q in items:
+        if q in ("BestFit", "Residuals"):
+            out.add(q)
+        elif isinstance(q, str) or (isinstance(q, Expr) and q.head in ("Rule",)) or isinstance(q, Symbol):
+            raise NotImplementedError(f"{fname}: PlotFitElements -> {q} is not supported (\"BestFit\", "
+                                      "\"Residuals\")")
+        else:
+            raise ValueError(f"{fname}: invalid PlotFitElements entry {q}")
+    return out
+
+
+def plot_fit_hook(fname, dss, spec, elements, styles, prange):
+    """PlotFit content for ListPlot / ListLinePlot / ListFitPlot: per dataset a Line through 101 points of the
+    fitted curve over the data's x range (and residual segments)"""
+    els = _elements(elements, fname)
+    out = []
+    for ds, st in zip(dss, styles):
+        pts = [p for p in ds.points if p is not None]
+        if len(pts) < 2:
+            continue
+        X = [[sp.Float(p[0])] for p in pts]
+        y = [sp.Float(p[1]) for p in pts]
+        pred = plot_fitter(spec, X, y, fname)
+        xs = np.linspace(min(p[0] for p in pts), max(p[0] for p in pts), 101)
+        ys = pred(xs[:, None])
+        prims = []
+        if "BestFit" in els:
+            prims.append(Expr("Line", L(*(L(float(a), float(b)) for a, b in zip(xs, ys) if np.isfinite(b)))))
+        if "Residuals" in els:
+            fy = pred(np.array([[p[0]] for p in pts]))
+            prims += [Expr("Line", L(L(float(p[0]), float(p[1])), L(float(p[0]), float(v)))) for p, v in zip(pts, fy)]
+        if prims:
+            out.append(L(st, *prims) if st is not None else L(*prims))
+    return out
+
+
+from . import wl_plots2d as P2  # noqa: E402
+
+P2.PLOT_FIT_HOOK = plot_fit_hook
+
+
+@fn("PlotFit", area=AREA, status="added",
+    notes="PlotFit -> fit is an option of ListPlot, ListLinePlot and ListFitPlot (not ListPlot3D): it adds the "
+          "fitted curve over each dataset's x range (a Line through 101 points, in the dataset's style). Settings: "
+          "Automatic or \"Local\" (LocalModelFit, Scaled[3/4], degree 1 -- a stated choice for Automatic), "
+          "\"Kernel\" (KernelModelFit defaults), \"Linear\", \"Quadratic\", \"Cubic\", \"Exponential\", \"Log\", "
+          "\"Power\", a model specification or family (fitted with ModelFit) or a FittedModel; \"Logistic\" and "
+          "other models raise NotImplementedError. PlotFitElements: Automatic / \"BestFit\" and \"Residuals\" "
+          "(vertical residual segments); bands raise NotImplementedError. Inert as an expression. Check: plotted "
+          "curve values equal the fitted model at the sample points (tests).")
+def _plot_fit(*args: Expr) -> Expr:
+    raise Unevaluated()
+
+
+@fn("ListFitPlot", area=AREA, status="added",
+    notes="ListFitPlot[data] is ListPlot[data, PlotFit -> Automatic]: the points of each dataset and the fitted "
+          "curve (LOESS by default; any PlotFit setting and PlotFitElements -> \"Residuals\"). Data forms and "
+          "Graphics options as ListPlot. Confidence bands, Tabular data and labels raise NotImplementedError. "
+          "Check: the curve vertices equal LocalModelFit / ModelFit values at the same x (tests).")
+def _list_fit_plot(data: Expr, *opts: Option) -> Expr:
+    pos, o = P2._list_args((data,) + opts, "ListFitPlot")
+    return P2.list_plot("ListFitPlot", pos[0], o, defaults_extra={"PlotFit": Symbol("Automatic")})
+
+
+def _xyz(data, fname):
+    if isinstance(data, Symbol):
+        raise Unevaluated()
+    if not SM.is_matrix(data):
+        raise TypeError(f"{fname}: the data must be a matrix of heights or a list of {{x, y, z}} triples")
+    rows = SM.mat(data, fname)
+    if len(rows[0]) == 3:
+        return [[float(a) for a in r] for r in rows]
+    return [[float(j + 1), float(i + 1), float(v)] for i, r in enumerate(rows) for j, v in enumerate(r)]
+
+
+@fn("ListFitPlot3D", area=AREA, status="added",
+    notes="ListFitPlot3D[{{f11, ...}, ...}] (heights at {j, i}) or ListFitPlot3D[{{x, y, z}, ...}] gives "
+          "Graphics3D with the data points and the fitted surface over the data's x-y bounding box as a 16 x 16 "
+          "grid of Polygon quads (and PlotFitElements -> \"Residuals\" segments). PlotFit as ListFitPlot "
+          "(Automatic = two-dimensional LOESS, Scaled[3/4], degree 1); a matrix with exactly three columns is read "
+          "as triples. Graphics3D options pass through; confidence surfaces and other elements raise "
+          "NotImplementedError. Check: surface vertices equal the fitted model values (tests).")
+def _list_fit_plot3d(data: Expr, *opts: Option) -> Expr:
+    fname = "ListFitPlot3D"
+    o, gopts = P2.split_options(fname, list(opts), {"PlotFit": Symbol("Automatic"),
+                                                     "PlotFitElements": Symbol("Automatic"),
+                                                     "PlotStyle": Symbol("Automatic")}, dim=3)
+    if not _sym(o["PlotStyle"], "Automatic"):
+        raise NotImplementedError(f"{fname}: PlotStyle is not supported")
+    pts = _xyz(data, fname)
+    els = _elements(o["PlotFitElements"], fname)
+    X = [[sp.Float(p[0]), sp.Float(p[1])] for p in pts]
+    y = [sp.Float(p[2]) for p in pts]
+    pred = plot_fitter(o["PlotFit"], X, y, fname)
+    xs = np.linspace(min(p[0] for p in pts), max(p[0] for p in pts), 17)
+    ys = np.linspace(min(p[1] for p in pts), max(p[1] for p in pts), 17)
+    G = np.array([[a, b] for b in ys for a in xs])
+    Z = pred(G).reshape(len(ys), len(xs))
+    polys = []
+    for i in range(len(ys) - 1):
+        for j in range(len(xs) - 1):
+            q = [(xs[j], ys[i], Z[i, j]), (xs[j + 1], ys[i], Z[i, j + 1]), (xs[j + 1], ys[i + 1], Z[i + 1, j + 1]),
+                 (xs[j], ys[i + 1], Z[i + 1, j])]
+            polys.append(Expr("Polygon", L(*(L(*(float(c) for c in v)) for v in q))))
+    content = [L(Expr("RGBColor", 0.24, 0.6, 0.8), Expr("PointSize", 0.01),
+                 Expr("Point", L(*(L(*p) for p in pts))))]
+    if "BestFit" in els:
+        content.append(L(Expr("EdgeForm", ), Expr("Opacity", 0.6), *polys))
+    if "Residuals" in els:
+        fz = pred(np.array([[p[0], p[1]] for p in pts]))
+        content.append(L(Expr("GrayLevel", 0.3), *(Expr("Line", L(L(*p), L(p[0], p[1], float(v))))
+                                                   for p, v in zip(pts, fz))))
+    return P2.finish_graphics(L(*content), gopts, [("Axes", True), ("BoxRatios", L(1, 1, 0.4))], dim=3)
