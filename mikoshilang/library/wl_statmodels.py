@@ -2165,20 +2165,25 @@ fn("KuiperTest", area=AREA, status="added",
 
 _DFT = {"AndersonDarling": "AndersonDarlingTest", "CramerVonMises": "CramerVonMisesTest",
         "KolmogorovSmirnov": "KolmogorovSmirnovTest", "Kuiper": "KuiperTest", "WatsonUSquare": "WatsonUSquareTest",
-        "ShapiroWilk": "ShapiroWilkTest", "JarqueBeraALM": "JarqueBeraALMTest"}
+        "ShapiroWilk": "ShapiroWilkTest", "JarqueBeraALM": "JarqueBeraALMTest",
+        # X02 (wl_statmodels2)
+        "PearsonChiSquare": "PearsonChiSquareTest", "MardiaCombined": "MardiaCombinedTest",
+        "MardiaKurtosis": "MardiaKurtosisTest", "MardiaSkewness": "MardiaSkewnessTest",
+        "BaringhausHenze": "BaringhausHenzeTest"}
+_NORMALITY = ("ShapiroWilk", "JarqueBeraALM", "MardiaCombined", "MardiaKurtosis", "MardiaSkewness", "BaringhausHenze")
 
 
-_DFT_ALL = tuple(_DFT) + ("PearsonChiSquare", "MardiaCombined", "MardiaKurtosis", "MardiaSkewness",
-                          "BaringhausHenze")
+_DFT_ALL = tuple(_DFT)
 
 
 @fn("DistributionFitTest", area=AREA, status="added",
     notes="DistributionFitTest[data, dist, spec] with spec \"test\", {\"test1\", ...} or {prop, test} (or {prop, "
           "{tests}}), test one of \"AndersonDarling\", \"CramerVonMises\", \"KolmogorovSmirnov\", \"Kuiper\", "
-          "\"WatsonUSquare\" (fully specified dist) or \"ShapiroWilk\", \"JarqueBeraALM\" (normality; dist Automatic "
-          "or NormalDistribution[]); identical to the corresponding *Test function. Automatic test selection "
-          "(DistributionFitTest[data], [data, dist], All, a property without a test), estimated distributions, the "
-          "Pearson chi-square and multivariate tests raise NotImplementedError; unknown tests ValueError. Check: "
+          "\"WatsonUSquare\", \"PearsonChiSquare\" (fully specified dist) or \"ShapiroWilk\", \"JarqueBeraALM\", "
+          "\"MardiaSkewness\", \"MardiaKurtosis\", \"MardiaCombined\", \"BaringhausHenze\" (normality; dist "
+          "Automatic or NormalDistribution[]); identical to the corresponding *Test function. Automatic test "
+          "selection (DistributionFitTest[data], [data, dist], All, a property without a test) and estimated "
+          "distributions raise NotImplementedError; unknown tests ValueError. Check: "
           "delegated to the named test functions (identical results checked in tests).")
 def _dft(x: ListOf[Real], d: Expr = None, *rest: String | ListOf[String] | Option) -> Real | Expr:
     name = "DistributionFitTest"
@@ -2192,7 +2197,7 @@ def _dft(x: ListOf[Real], d: Expr = None, *rest: String | ListOf[String] | Optio
     for test in chosen:
         if test not in _DFT:
             raise NotImplementedError(f"{name}: the {test} test is not supported")
-        if test in ("ShapiroWilk", "JarqueBeraALM"):
+        if test in _NORMALITY:
             if d is not None and not (isinstance(d, Symbol) and d.name == "Automatic") and \
                     not (isinstance(d, Expr) and d.head == "NormalDistribution" and not d.args):
                 raise NotImplementedError(f"{name}: the {test} test only tests normality (use Automatic)")
