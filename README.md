@@ -96,7 +96,7 @@ note is executable: `python scripts/verify_library.py`. Guide: [docs/verificatio
 
 ```wolfram
 Verify[FactorInteger[2^64 + 1]]   (* Certified[{{274177, 1}, {67280421310721, 1}}, <|... primality proofs ...|>] *)
-Verify[Solve[x^2 == 2, x]]        (* Certified[..., <|"Method" -> "Substitution of every solution", ..., "Completeness" -> "not checked"|>] *)
+Verify[Solve[x^2 == 2, x]]        (* Certified[..., <|"Method" -> "Substitution of every solution; root counting", ..., "Completeness" -> "complete: 2 distinct complex root(s) ..."|>] *)
 Verify[Integrate[Sin[x]^2, x]]    (* Checked[x/2 - Cos[x] Sin[x]/2, <|"Method" -> "Differentiation", ...|>] *)
 ```
 

@@ -22,7 +22,7 @@ computation itself (bad arguments, a function's own self-check) propagate unchan
 |---|---|---|
 | `Integrate[f, x]` | `D[result, x] - f` is zero (simplification, then sampling at 6 points, 40 digits) | Checked |
 | `Integrate[f, {x, a, b}]` | `mpmath.quad` at 30 digits | Checked |
-| `Solve`, `NSolve` | every solution substituted into every equation. Completeness is **not** checked | Certified when every residual expands to 0 |
+| `Solve`, `NSolve` | every solution substituted into every equation. **Completeness** by root counting when the count is known: one univariate polynomial equation with rational coefficients (`Solve[p == q, x]`, or `Solve[..., x, Reals]` with a Sturm count); the distinct solutions must match the distinct roots of the square-free part. Otherwise completeness is "not checked" | Certified when every residual expands to 0 |
 | `DSolve[eq, y[x], x]` | the solution substituted into the equation | Checked |
 | `D[f, x]` | `mpmath.diff` at sample points | Checked |
 | `Limit[f, x -> a]` | values at `a ± 10^-k` (finite limits) | Checked |
