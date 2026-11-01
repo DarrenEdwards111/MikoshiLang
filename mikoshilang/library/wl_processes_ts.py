@@ -274,6 +274,13 @@ def _esq(x: Expr) -> Boolean:
     return isinstance(x, Expr) and x.head == "EventSeries" and _canonical(x)
 
 
+@fn("TimeSeriesQ", area=AREA, status="added",
+    notes="TimeSeriesQ[x]: True if x is a (valid, constructed) TimeSeries object, False otherwise (EventSeries, "
+          "TemporalData, lists ...). Check: exact; reference (Wolfram documentation) in tests.")
+def _tsq(x: Expr) -> Boolean:
+    return isinstance(x, Expr) and x.head == "TimeSeries" and _canonical(x)
+
+
 # ─────────────────────────── TemporalData (ensembles) ───────────────────────────
 
 def make_td(paths, opts=None):
