@@ -582,7 +582,8 @@ def _mixed_bases(mr, fname):
 
 
 @fn("MixedRadix", **ADDED, notes="MixedRadix[{b1, ..., bn}] mixed-radix base for IntegerDigits, FromDigits, "
-    "IntegerLength and IntegerReverse; the leading digit is unbounded")
+    "IntegerLength and IntegerReverse; the leading digit is unbounded"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mixedradix(bs: Expr) -> Expr:
     if is_list(bs):
         for b in bs.args:

@@ -531,7 +531,8 @@ def _message(name: Expr, *args: Expr) -> Expr:
 
 @fn("MessageName", area=AREA, status="added",
     notes="s::t (parsed as MessageName[s, \"t\"], HoldFirst) evaluates to the message text assigned with "
-          "s::t = \"text\" or to MikoshiLang's built-in text; otherwise it stays unevaluated")
+          "s::t = \"text\" or to MikoshiLang's built-in text; otherwise it stays unevaluated"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _message_name(s: Expr, t: Expr, *lang: Expr) -> Expr:
     if isinstance(s, Symbol) and isinstance(t, str) and not lang:
         txt = BUILTIN_MESSAGES.get((s.name, t))
@@ -632,7 +633,8 @@ def _check(expr: Expr, failexpr: Expr, *spec: Expr) -> Expr:
 
 @fn("Messages", area=AREA, status="added",
     notes="Messages[s] gives {HoldPattern[s::t] :> text, ...} for the messages assigned to s (sorted by tag); "
-          "messages switched off are given as HoldPattern[s::t] :> $Off[text]")
+          "messages switched off are given as HoldPattern[s::t] :> $Off[text]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _messages(s: Expr) -> ListOf[Expr]:
     if not isinstance(s, Symbol):
         raise ValueError(f"Messages: {input_text(s)} is not a symbol")

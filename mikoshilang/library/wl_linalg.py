@@ -1342,7 +1342,8 @@ def _sparsearray(spec: Expr, *rest: Expr) -> Expr:
 
 @fn("MatrixForm", area=AREA, status="added",
     notes="display wrapper: MatrixForm[expr] stays as MatrixForm[expr] and does not affect evaluation of expr "
-          "(as in Wolfram, it is not a matrix); the text REPL prints it as an aligned grid (matrix_form_text)")
+          "(as in Wolfram, it is not a matrix); the text REPL prints it as an aligned grid (matrix_form_text)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _matrixform(x: Expr, *opts: Option) -> Expr:
     raise Unevaluated()
 

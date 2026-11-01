@@ -1057,13 +1057,15 @@ def _r_short(e, c):
 
 
 @fn("Skeleton", area=AREA, status="added",
-    notes="Skeleton[k] inert: k omitted elements, shown as <<k>> (what Short inserts)")
+    notes="Skeleton[k] inert: k omitted elements, shown as <<k>> (what Short inserts)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _skeleton(k: Expr) -> Expr:
     raise Unevaluated()
 
 
 @fn("StringSkeleton", area=AREA, status="added",
-    notes="StringSkeleton[k] inert: k omitted characters of a string, shown as an ellipsis")
+    notes="StringSkeleton[k] inert: k omitted characters of a string, shown as an ellipsis"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _stringskeleton(k: Expr) -> Expr:
     raise Unevaluated()
 
@@ -1943,7 +1945,8 @@ def _r_stringform(e, c):
 # ── DisableFormatting, OutputForm, StandardForm, TraditionalForm, TeXForm, CForm, FortranForm, MathMLForm ──
 
 @fn("DisableFormatting", area=AREA, status="added",
-    notes="DisableFormatting[expr] gives expr as soon as it is evaluated (it only matters inside held expressions)")
+    notes="DisableFormatting[expr] gives expr as soon as it is evaluated (it only matters inside held expressions)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _disableformatting(x: Expr) -> Expr:
     return x
 
@@ -1964,15 +1967,19 @@ def _one_arg_form(name, renderer, notes):
 
 
 _one_arg_form("OutputForm", lambda x: output_text(x),
-              "OutputForm[expr] inert: shows expr in linear OutputForm text (strings without quotes)")
+              "OutputForm[expr] inert: shows expr in linear OutputForm text (strings without quotes)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _one_arg_form("StandardForm", lambda x: output_text(x),
-              "StandardForm[expr] inert: shows expr in standard (linear) text")
+              "StandardForm[expr] inert: shows expr in standard (linear) text"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _one_arg_form("TraditionalForm", lambda x: traditional_text(x),
               "TraditionalForm[expr] inert: shows expr in traditional mathematical notation (f(x), sin(x), e^x, "
-              "\u03c0, i, polynomials in decreasing degree)")
+              "\u03c0, i, polynomials in decreasing degree)"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _one_arg_form("TeXForm", lambda x: tex_text(x),
               "TeXForm[expr] inert: shows the LaTeX of expr (TraditionalForm conventions: \\frac, \\sqrt, \\sin (x), "
-              "x^2+1); ToString[TeXForm[expr]] gives the TeX string")
+              "x^2+1); ToString[TeXForm[expr]] gives the TeX string"
+              ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _one_arg_form("CForm", lambda x: c_text(x),
               "CForm[expr] inert: C source for expr (Power(x,2), Sin(x), rationals as decimals, 1.5e10)")
 _one_arg_form("FortranForm", lambda x: fortran_text(x),

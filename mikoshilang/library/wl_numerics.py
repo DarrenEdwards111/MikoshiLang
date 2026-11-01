@@ -215,7 +215,8 @@ def _setprecision(x: Expr, p: Expr) -> Expr:
 
 @fn("SetAccuracy", area=AREA, status="added",
     notes="SetAccuracy[expr, a]: each number gets precision a + Log10[Abs[x]] (an arbitrary-precision zero keeps "
-          "accuracy a)")
+          "accuracy a)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _setaccuracy(x: Expr, a: Expr) -> Expr:
     from ..evaluate import evaluate
     t = _target(a, "SetAccuracy")

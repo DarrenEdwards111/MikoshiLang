@@ -485,7 +485,9 @@ def _champernowne_impl(*args):
 
 _champernowne_numeric = special("ChampernowneNumber", 1, _champernowne, None, check=_champernowne_check,
                                 notes="ChampernowneNumber[b] = 0.123456789101112... in base b (stays symbolic; N "
-                                      "gives any precision); ChampernowneNumber[] is base 10")
+                                      "gives any precision); ChampernowneNumber[] is base 10"
+                                      ". Check: exact (exact input gives exact results), reference (differential "
+                                      "cases in tests/library).")
 _register("ChampernowneNumber", 0, _champernowne_impl, "ChampernowneNumber[] = ChampernowneNumber[10]")
 
 
@@ -982,7 +984,8 @@ def _inert(name, notes, nargs=(0, 12)):
 
 
 _inert("GeneralizedPower", "GeneralizedPower[f, x, k] represents Fold[f, Table[x, k]] (inert, as in the reference; "
-       "typeset as a power)")
+       "typeset as a power)"
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 for _c, _rule in (("CombinatorS", "S x y z -> x z (y z)"), ("CombinatorK", "K x y -> x"), ("CombinatorI", "I x -> x"),
                   ("CombinatorB", "B x y z -> x (y z)"), ("CombinatorC", "C x y z -> x z y"),
                   ("CombinatorW", "W x y -> x y y"), ("CombinatorY", "Y f -> f (Y f)")):
@@ -2466,8 +2469,37 @@ def _foxh_reduce(expr: Expr, x: Expr, *opts: Option) -> Expr:
 fn("MeijerGReduce", area=AREA, status=STATUS,
    notes="MeijerGReduce[expr, x] -> c x^p Inactive[MeijerG][...] (SymPy's Meijer-G rewriting of elementary and "
          "special functions; Activate recovers expr, e.g. Sin[x] = Sqrt[Pi] MeijerG[{{}, {}}, {{1/2}, {0}}, x^2/4]); "
-         "expressions with no single-G representation stay unevaluated; Assumptions are accepted and ignored")(
+         "expressions with no single-G representation stay unevaluated; Assumptions are accepted and ignored"
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")(
     _meijerg_reduce)
 fn("FoxHReduce", area=AREA, status=STATUS,
    notes="FoxHReduce[expr, x] -> c x^p Inactive[FoxH][...] with unit scale factors (from the MeijerGReduce "
-         "representation); Activate recovers expr; unsupported expressions stay unevaluated")(_foxh_reduce)
+         "representation); Activate recovers expr; unsupported expressions stay unevaluated"
+         ". Check: exact (exact input gives exact results), reference (differential cases in "
+         "tests/library).")(_foxh_reduce)
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "CombinatorB", "CombinatorC", "CombinatorI", "CombinatorK", "CombinatorS", "CombinatorW", "CombinatorY")
+# heads last recorded in kernelheads.py
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "Apart", "Cancel", "List", "Plus", "Power", "StringJoin", "Times", "Together")
+_add_check("reference (differential cases in tests/library).",
+          "Equal", "Negative", "NonNegative", "NumberQ", "OddQ", "Positive")
+# heads last recorded in wl_lists.py
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "Key", "Missing", "Span", "Splice", "UpTo")
+_add_check("reference (differential cases in tests/library).",
+          "EqualTo", "GreaterEqualThan", "GreaterThan", "LessEqualThan", "LessThan", "SameAs", "UnequalTo")
+# heads last recorded in wl_special_elliptic.py
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "AiryBiZero")
+_add_check("reference (differential cases in tests/library).",
+          "HeunCPrime", "HeunGPrime", "InverseJacobiDC", "InverseJacobiDS", "InverseJacobiND", "MathieuCPrime",
+          "MathieuSPrime")
+# heads last recorded in wl_linalg_optim.py
+_add_check("reference (differential cases in tests/library).",
+          "ConvexOptimization")

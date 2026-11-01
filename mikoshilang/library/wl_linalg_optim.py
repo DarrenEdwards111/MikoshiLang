@@ -1477,7 +1477,8 @@ def _smith(m, rest, fname):
     notes="{u, r, v} with u.m.v == r, u and v unimodular and r the Smith normal form (diagonal, non-negative, "
           "each entry dividing the next) for integer matrices; rational matrices are handled by clearing "
           "denominators (as Wolfram); the transformation matrices are not unique and can differ from Wolfram's; "
-          "inexact, Gaussian-integer and symbolic matrices raise" + _DENSE_NOTE)
+          "inexact, Gaussian-integer and symbolic matrices raise" + _DENSE_NOTE +
+          ". Check: reference (differential cases in tests/library).")
 def _smithdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     U, D, V = _smith(m, rest, "SmithDecomposition")
     return L(_mout(U), _mout(D), _mout(V))
@@ -1931,7 +1932,8 @@ def _drazininverse(m: MatrixOf[Expr], *rest: Expr) -> Expr:
 @fn("PolarDecomposition", **ADDED,
     notes="{u, p} with m == u.p, u with orthonormal columns (or rows) and p = MatrixPower[ConjugateTranspose[m]"
           ".m, 1/2] positive semidefinite, via the SVD for machine matrices; exact and arbitrary-precision matrices "
-          "raise (use N[m])" + _DENSE_NOTE)
+          "raise (use N[m])" + _DENSE_NOTE +
+          ". Check: reference (differential cases in tests/library).")
 def _polardecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "PolarDecomposition", square=False)
     if args:
@@ -3659,7 +3661,8 @@ for _nm, _what in [("ConvexOptimization", "convex objective and constraints"),
 fn("GeometricOptimization", **ADDED,
    notes="GeometricOptimization[f, cons, vars] for a posynomial objective with posynomial <= monomial and monomial "
          "== monomial constraints in positive variables: solved as the convex problem in u = Log[x] (SciPy SLSQP); "
-         "matrix forms are not supported" + _FAMILY_NOTE)(_family("GeometricOptimization", "geometric"))
+         "matrix forms are not supported" + _FAMILY_NOTE +
+         ". Check: reference (differential cases in tests/library).")(_family("GeometricOptimization", "geometric"))
 
 
 # ── parametric and robust convex optimisation ──

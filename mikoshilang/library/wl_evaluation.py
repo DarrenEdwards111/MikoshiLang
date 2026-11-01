@@ -1491,13 +1491,16 @@ _values_fn("OwnValues", _own_values, "OwnValues[x]: {HoldPattern[x] :> value} fo
            "OwnValues[x] = {...} sets it")
 _values_fn("DownValues", lambda n: _downs(n, False),
            "DownValues[f]: the rules HoldPattern[f[...]] :> rhs in the order they are tried (pattern-free "
-           "definitions first, then by specificity); DownValues[f] = {...} replaces them")
+           "definitions first, then by specificity); DownValues[f] = {...} replaces them"
+           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _values_fn("SubValues", lambda n: _downs(n, True),
-           "SubValues[f]: rules for f[...][...] (HoldPattern[lhs] :> rhs); SubValues[f] = {...} replaces them")
+           "SubValues[f]: rules for f[...][...] (HoldPattern[lhs] :> rhs); SubValues[f] = {...} replaces them"
+           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 _values_fn("UpValues", _ups, "UpValues[f]: rules attached to f by UpSet/TagSet (HoldPattern[lhs] :> rhs); "
            "UpValues[f] = {...} replaces them")
 _values_fn("DefaultValues", _default_values,
-           "DefaultValues[f]: {HoldPattern[Default[f, ...]] :> value, ...} set by Default[f, ...] = value")
+           "DefaultValues[f]: {HoldPattern[Default[f, ...]] :> value, ...} set by Default[f, ...] = value"
+           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _rules_of(v, fname):
@@ -2327,14 +2330,16 @@ KL = _il.import_module("mikoshilang.kernel_lists")
 
 @held("Defer", attrs={"HoldAll"},
       notes="Defer[expr] keeps expr unevaluated and prints as expr itself (InputForm/ToString show the contents); "
-            "evaluating the printed form later evaluates it")
+            "evaluating the printed form later evaluates it"
+            ". Check: reference (differential cases in tests/library).")
 def _h_defer(a, ev_, expr):
     return expr
 
 
 @held("HoldCompleteForm", attrs={"HoldAllComplete"},
       notes="HoldCompleteForm[expr] keeps expr completely unevaluated (no Sequence splicing, no upvalues, "
-            "Unevaluated kept) and prints as expr without the wrapper")
+            "Unevaluated kept) and prints as expr without the wrapper"
+            ". Check: reference (differential cases in tests/library).")
 def _h_holdcompleteform(a, ev_, expr):
     return expr
 

@@ -59,7 +59,9 @@ for _n, _note in [
 
 # ─────────────────────────── inert operators and simple objects ───────────────────────────
 
-@fn("Wedge", **ADDED, notes="x \\[Wedge] y: an operator with no built-in meaning (stays unevaluated)")
+@fn("Wedge", **ADDED, notes="x \\[Wedge] y: an operator with no built-in meaning (stays unevaluated)"
+                            ". Check: exact (exact input gives exact results), reference (differential cases in "
+                            "tests/library).")
 def _wedge(*args: Expr) -> Expr:
     raise Unevaluated()
 
@@ -2523,7 +2525,8 @@ KL.COMPOUND_HEAD_HOOKS["IncrementalObject"] = _incobject_apply
 
 @fn("NextValue", **ADDED,
     notes="NextValue[obj] gives the next value of an incremental object (Failure[\"IncrementalObjectTerminated\", "
-          "...] when exhausted) or of a running incremental function instance (as ds[\"Next\"])")
+          "...] when exhausted) or of a running incremental function instance (as ds[\"Next\"])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nextvalue(obj: Expr) -> Expr:
     g = _inc_obj(obj)
     if g is not None:
