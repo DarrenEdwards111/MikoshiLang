@@ -2432,7 +2432,6 @@
   "LaplacePlane",
   "LaplaceSSmoothing",
   "LaplacianEigenmaps",
-  "LaplacianFilter",
   "LapseRateMoist",
   "LargeEddySimulation",
   "LarsonMillerParameter",

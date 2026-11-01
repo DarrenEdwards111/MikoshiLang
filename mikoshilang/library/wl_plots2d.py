@@ -5268,11 +5268,7 @@ def _surfacedensityplot3d(f: Held, reg: Held, *opts: Held | Option) -> Expr:
 # ───────────────────────────── not provided ─────────────────────────────
 
 SKIPPED = {
-    "ChromaticityPlot": "needs the CIE 1931/1964 colour-matching tables and Wolfram's undocumented rendering of "
-                        "colour spaces (gamut, spectral locus labelling); not reproducible offline",
-    "ChromaticityPlot3D": "as ChromaticityPlot: CIE colour-matching data and undocumented 3-D colour-space rendering",
     "BioSequencePlot": "needs BioSequence objects (not implemented) and an undocumented sequence-track layout",
     "ListSurfacePlot3D": "Wolfram's surface reconstruction from unordered 3-D points is undocumented; any "
                          "reconstruction would give a different surface",
-    "ImageWaveformPlot": "needs the Image type from batch W21 (not merged into this branch)",
 }
