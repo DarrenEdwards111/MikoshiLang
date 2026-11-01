@@ -1044,6 +1044,17 @@ def _categoricalhistogram(data: ListOf[Expr], *rest: Expr | Option) -> Expr:
 _DATE_UNITS = ("Year", "Quarter", "Month", "Week", "Day", "Hour", "Minute", "Second")
 
 
+def _abs_time(x, fname):
+    """Absolute time of a date (errors renamed to fname)."""
+    try:
+        return P2.abs_time(x, fname)
+    except (TypeError, ValueError) as exc:
+        msg = str(exc)
+        if not msg.startswith(fname + ":"):
+            msg = f"{fname}: " + msg.split(": ", 1)[-1]
+        raise type(exc)(msg) from None
+
+
 def date_values(d, fname):
     d, _, _ = P2._unwrap(d, fname)
     if isinstance(d, Expr) and d.head in ("TimeSeries", "EventSeries", "TemporalData", "WeightedData"):
@@ -1056,7 +1067,7 @@ def date_values(d, fname):
     for x in d.args:
         if is_missing(x):
             continue
-        out.append(P2.abs_time(x, fname))
+        out.append(_abs_time(x, fname))
     if not out:
         raise ValueError(f"{fname}: the data has no dates")
     return out
@@ -2548,7 +2559,7 @@ def dated_values(data, fname, k=1, what="date-price pairs {date, p}"):
         if not K.is_list(e):
             raise ValueError(f"{fname}: {K_input(e)} is not one of {what}")
         if k > 1 and len(e.args) >= 4 and not any(K.is_list(a) for a in e.args):
-            vals, date = e.args, None
+            vals, date = e, None
         elif len(e.args) == 2:
             date, vals = e.args
             if k > 1 and not K.is_list(vals):
@@ -2556,7 +2567,7 @@ def dated_values(data, fname, k=1, what="date-price pairs {date, p}"):
             if k == 1 and K.is_list(vals):
                 raise ValueError(f"{fname}: {K_input(e)} is not one of {what}")
             if date is not None:
-                P2.abs_time(date, fname)            # validates the date
+                _abs_time(date, fname)            # validates the date
         else:
             raise ValueError(f"{fname}: {K_input(e)} is not one of {what}")
         if k == 1:
