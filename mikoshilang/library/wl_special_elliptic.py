@@ -1086,9 +1086,11 @@ def _wsz(name, which, exact0, notes):
 
 _wsz("WeierstrassSigma", "sigma", sp.Integer(0),
      "Weierstrass sigma(u; g2, g3) = (2 w1/Pi) Exp[eta1 u^2/(2 w1)] theta1(v)/theta1'(0), v = Pi u/(2 w1) "
-     "(DLMF 23.6.9)")
+     "(DLMF 23.6.9)"
+     ". Check: reference (differential cases in tests/library).")
 _wsz("WeierstrassZeta", "zeta", sp.zoo,
-     "Weierstrass zeta(u; g2, g3) = eta1 u/w1 + (Pi/(2 w1)) theta1'(v)/theta1(v) (logarithmic derivative of sigma)")
+     "Weierstrass zeta(u; g2, g3) = eta1 u/w1 + (Pi/(2 w1)) theta1'(v)/theta1(v) (logarithmic derivative of sigma)"
+     ". Check: reference (differential cases in tests/library).")
 
 
 # EllipticExp / EllipticLog: the curve y^2 = x^3 + a x^2 + b x is x = P(u) - a/3, y = P'(u)/2 with
@@ -2761,3 +2763,15 @@ def _ci_conditions(conds, cand, X, Cs, to_sympy):
           ". Check: reference (differential cases in tests/library).")
 def _complete_integral_3(pde: Expr, u: Expr, xs: Expr) -> Expr:
     return _complete_integral(pde, u, xs)
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "MathieuS")
+_add_check("reference (differential cases in tests/library).",
+          "AiryAiZero", "HeunB", "HeunC", "HeunG", "KelvinKei", "KelvinKer", "LameEigenvalueA", "LameEigenvalueB",
+          "MathieuC", "MathieuCharacteristicA", "MathieuCharacteristicB", "NevilleThetaC", "NevilleThetaD",
+          "NevilleThetaN", "NevilleThetaS", "SpheroidalPS", "SpheroidalPSPrime", "SpheroidalQS", "SpheroidalQSPrime",
+          "SpheroidalS1", "SpheroidalS1Prime", "SpheroidalS2")

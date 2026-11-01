@@ -250,8 +250,12 @@ def _svd(m, fname):
 
 SVDN = ("Wolfram {u, s, v} with m = u.s.ConjugateTranspose[v] and singular values in decreasing order "
         "(legacy did not order them); machine matrices give the full SVD")
-fn("SingularValueDecomposition", area=AREA, status="fixed", notes=SVDN)(lambda m: _svd(m, "SingularValueDecomposition"))
-fn("SVD", area=AREA, status="fixed", notes="MikoshiLang alias of SingularValueDecomposition; " + SVDN)(
+fn("SingularValueDecomposition", area=AREA, status="fixed", notes=SVDN +
+                                                                  ". Check: exact (exact input gives exact results), "
+                                                                  "reference (differential cases in tests/library).")(lambda m: _svd(m, "SingularValueDecomposition"))
+fn("SVD", area=AREA, status="fixed", notes="MikoshiLang alias of SingularValueDecomposition; " + SVDN +
+                                           ". Check: exact (exact input gives exact results), reference "
+                                           "(differential cases in tests/library).")(
     lambda m: _svd(m, "SVD"))
 
 
@@ -372,9 +376,14 @@ def _cross(fname, notes):
     return impl
 
 
-_cross("Cross", "3D cross product, exact; Cross[{x, y}] = {-y, x}; non-3D vectors raise")
-_cross("CrossProduct", "alias of Cross (exact)")
-_cross("Cross3D", "alias of Cross; legacy converted to floats and returned an Error expression for bad input")
+_cross("Cross", "3D cross product, exact; Cross[{x, y}] = {-y, x}; non-3D vectors raise"
+                ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
+_cross("CrossProduct", "alias of Cross (exact)"
+                       ". Check: exact (exact input gives exact results), reference (differential cases in "
+                       "tests/library).")
+_cross("Cross3D", "alias of Cross; legacy converted to floats and returned an Error expression for bad input"
+                  ". Check: exact (exact input gives exact results), reference (differential cases in "
+                  "tests/library).")
 
 
 @fn("ScalarTripleProduct", area=AREA, status="fixed", notes="a.(b x c), exact (legacy converted to floats)"
@@ -478,13 +487,24 @@ def _mfunc(fname, f, scipy_name, notes):
     return impl
 
 
-_mfunc("MatrixExp", sp.exp, "expm", "exact via the Jordan form (SymPy); machine matrices via SciPy expm")
+_mfunc("MatrixExp", sp.exp, "expm", "exact via the Jordan form (SymPy); machine matrices via SciPy expm"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 _mfunc("MatrixLog", sp.log, "logm",
-       "principal logarithm; legacy discarded the imaginary part (MatrixLog[{{-1, 0}, {0, 1}}] was wrong)")
-_mfunc("MatrixSqrt", sp.sqrt, "sqrtm", "principal square root; legacy discarded the imaginary part")
-_mfunc("MatrixSin", sp.sin, "sinm", "exact (legacy summed a truncated Taylor series)")
-_mfunc("MatrixCos", sp.cos, "cosm", "exact (legacy summed a truncated Taylor series)")
-_mfunc("MatrixTan", sp.tan, "tanm", "exact (legacy summed a truncated Taylor series)")
+       "principal logarithm; legacy discarded the imaginary part (MatrixLog[{{-1, 0}, {0, 1}}] was wrong)"
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
+_mfunc("MatrixSqrt", sp.sqrt, "sqrtm", "principal square root; legacy discarded the imaginary part"
+                                       ". Check: exact (exact input gives exact results), reference (differential "
+                                       "cases in tests/library).")
+_mfunc("MatrixSin", sp.sin, "sinm", "exact (legacy summed a truncated Taylor series)"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
+_mfunc("MatrixCos", sp.cos, "cosm", "exact (legacy summed a truncated Taylor series)"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
+_mfunc("MatrixTan", sp.tan, "tanm", "exact (legacy summed a truncated Taylor series)"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 
 
 def _rank(m, fname):
@@ -642,3 +662,10 @@ def _tlist(x):
     if not all(is_list(r) for r in rows) or len({len(r.args) for r in rows}) != 1:
         raise ValueError("TransposeList: argument must be a rectangular list of lists")
     return L(*(L(*c) for c in zip(*(r.args for r in rows))))
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("reference (differential cases in tests/library).",
+          "DiagonalMatrixQ", "HermitianQ", "LowerTriangularMatrixQ", "SymmetricMatrixQ", "UpperTriangularMatrixQ")
