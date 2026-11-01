@@ -266,15 +266,15 @@ AcceptanceThreshold,"Options, system variables & unclassified",infeasible,,ML mo
 AccountingForm,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers
 Accumulate,Core Language & Structure,implemented,1,,1,DataTransformsAndSmoothing DiscreteCalculus TimeSeries GPUComputing
 Accuracy,Symbolic & Numeric Computation,implemented,1,,2,NumericalEvaluationAndPrecision RepresentationOfNumbers PrecisionAndAccuracyControl
-AccuracyGoal,Symbolic & Numeric Computation,missing,2,,0,NumericalEvaluationAndPrecision PrecisionAndAccuracyControl DifferentialEquations
-AcousticAbsorbingValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
-AcousticImpedanceValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
-AcousticNormalVelocityValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
-AcousticPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
-AcousticPressureCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
-AcousticRadiationValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
-AcousticSoundHardValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
-AcousticSoundSoftCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling AcousticPDEModels
+AccuracyGoal,Symbolic & Numeric Computation,implemented,2,,0,NumericalEvaluationAndPrecision PrecisionAndAccuracyControl DifferentialEquations
+AcousticAbsorbingValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling AcousticPDEModels
+AcousticImpedanceValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling AcousticPDEModels
+AcousticNormalVelocityValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling AcousticPDEModels
+AcousticPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling AcousticPDEModels
+AcousticPressureCondition,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling AcousticPDEModels
+AcousticRadiationValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling AcousticPDEModels
+AcousticSoundHardValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling AcousticPDEModels
+AcousticSoundSoftCondition,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling AcousticPDEModels
 ActionMenu,User Interface Construction,infeasible,,front end / notebooks,0,ControlObjects CustomInterfaceConstruction Toolbars StandAloneInterfaces
 Activate,Core Language & Structure,implemented,1,,0,TuningAndDebugging EvaluationControl
 ActivateResult,"Options, system variables & unclassified",implemented,3,,0,
@@ -1295,7 +1295,7 @@ ConnectedMoleculeQ,Scientific and Medical Data & Computation,infeasible,,curated
 ConnectionSettings,"Options, system variables & unclassified",missing,3,,0,
 ConnesWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 ConoverTest,Data Manipulation & Analysis,implemented,2,,0,HypothesisTests
-ConservativeConvectionPDETerm,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+ConservativeConvectionPDETerm,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 Constant,Core Language & Structure,implemented,1,,0,Attributes
 ConstantArray,Core Language & Structure,implemented,1,,0,OperationsOnVectors ConstructingLists ConstructingMatrices StructureMatricesAndConvolutionKernels
 ConstantImage,Images,implemented,3,,0,CreatingAndImportingImages
@@ -1354,7 +1354,7 @@ ControllerMethod,Visualization & Graphics,infeasible,,front end / notebooks,0,Ga
 ControllerPath,Visualization & Graphics,infeasible,,front end / notebooks,0,GamepadAndDeviceInterface OptionsAndStylingForInteractiveManipulation
 ControllerState,Visualization & Graphics,infeasible,,front end / notebooks,0,ExternalOperations DynamicVisualization ControlObjects CustomInterfaceConstruction
 ControlsRendering,User Interface Construction,infeasible,,front end / notebooks,0,ControlsOptions
-ConvectionPDETerm,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+ConvectionPDETerm,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 Convergents,Higher Mathematical Computation,implemented,2,,0,AlgebraicNumbers NumberRecognition ContinuedFractionsAndRationalApproximations
 ConversionRules,"Options, system variables & unclassified",implemented,3,,0,
 ConvexHullMesh,Geometry,implemented,2,,0,GeometricComputation MeshRegions 3DPrinting
@@ -1669,7 +1669,7 @@ Depth,Core Language & Structure,implemented,1,,0,Expressions ExpressionStructure
 DepthFirstScan,Graphs & Networks,implemented,2,,0,ComputationOnGraphs GraphProgramming
 Derivative,Symbolic & Numeric Computation,implemented,2,,0,Calculus SpecialFunctions DifferentialEquations DifferentialOperators
 DerivativeFilter,Data Manipulation & Analysis,missing,2,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters SignalFilteringAndFilterDesign
-DerivativePDETerm,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+DerivativePDETerm,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 DerivedKey,Higher Mathematical Computation,implemented,2,,0,Cryptography
 DescriptorStateSpace,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems Modeling
 DesignMatrix,Data Manipulation & Analysis,implemented,2,,0,StatisticalModelAnalysis
@@ -1723,7 +1723,7 @@ DifferentialD,"Options, system variables & unclassified",implemented,3,,0,
 DifferentialRoot,Symbolic & Numeric Computation,implemented,2,,0,Calculus SpecialFunctions DifferentialEquations DifferentialOperators
 DifferentialRootReduce,Symbolic & Numeric Computation,implemented,2,,0,TheoremProving AlgebraicTransformations DifferentialOperators
 DifferentiatorFilter,Data Manipulation & Analysis,implemented,2,,0,ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters SignalFilteringAndFilterDesign
-DiffusionPDETerm,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+DiffusionPDETerm,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 DiggleGatesPointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialPointProcesses
 DiggleGrattonPointProcess,Symbolic & Numeric Computation,missing,2,,0,SpatialPointProcesses
 DigitBlock,Notebook Documents & Presentation,implemented,3,,0,MathTypesettingOptionsAndTweaking
@@ -1757,7 +1757,7 @@ DirectoryQ,External Interfaces & Connections,implemented,3,,0,FileOperations Ope
 DirectoryStack,External Interfaces & Connections,implemented,3,,0,DirectoriesAndDirectoryOperations
 DirichletBeta,Symbolic & Numeric Computation,implemented,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
 DirichletCharacter,Higher Mathematical Computation,implemented,2,,0,NumberTheory MultiplicativeNumberTheory AnalyticNumberTheory
-DirichletCondition,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers DifferentialEquations PDEModeling PDEModelingAndAnalysis
+DirichletCondition,Symbolic & Numeric Computation,implemented,2,,0,GeometricSolvers DifferentialEquations PDEModeling PDEModelingAndAnalysis
 DirichletConvolve,Higher Mathematical Computation,implemented,2,,0,SummationTransforms MultiplicativeNumberTheory AnalyticNumberTheory AdditiveNumberTheory
 DirichletDistribution,Symbolic & Numeric Computation,implemented,2,,0,ParametricStatisticalDistributions
 DirichletEta,Symbolic & Numeric Computation,implemented,2,,0,AnalyticNumberTheory ZetaFunctionsAndPolylogarithms
@@ -1943,12 +1943,12 @@ EigenvalueDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatrixDe
 Eigenvalues,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixOperations SparseArrays MatrixDecompositions
 EigenvectorCentrality,Graphs & Networks,implemented,2,,0,GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
 Eigenvectors,Core Language & Structure,implemented,2,,0,MatrixOperations MatrixDecompositions GraphProgramming
-ElectricCurrentDensityValue,Symbolic & Numeric Computation,missing,2,,0,ElectromagneticPDEModels
-ElectricCurrentPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
-ElectricFluxDensityValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
-ElectricPotentialCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
-ElectricSymmetryValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
-ElectrostaticPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
+ElectricCurrentDensityValue,Symbolic & Numeric Computation,implemented,2,,0,ElectromagneticPDEModels
+ElectricCurrentPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
+ElectricFluxDensityValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
+ElectricPotentialCondition,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
+ElectricSymmetryValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
+ElectrostaticPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
 Element,Symbolic & Numeric Computation,implemented,2,,0,Syntax FormulaManipulation NumberTheory TheoremProving
 ElementData,Core Language & Structure,infeasible,,curated data,0,EntityTypes
 Elementwise,Data Manipulation & Analysis,implemented,2,,0,ListManipulation HandlingArraysOfData TabularTransformation
@@ -2025,7 +2025,7 @@ EqualTo,Core Language & Structure,implemented,1,,0,TestingExpressions
 Equilibrium,"Options, system variables & unclassified",implemented,3,,0,
 EquirippleFilterKernel,Sound & Video,infeasible,,audio / video,0,SignalFilteringAndFilterDesign
 Equivalent,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation LogicAndBooleanAlgebra
-EquivalentStrain,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
+EquivalentStrain,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
 Erf,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions ScientificModels FunctionsUsedInStatistics SpecialFunctions
 Erfc,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics SpecialFunctions ErrorAndExponentialIntegralFunctions
 Erfi,Symbolic & Numeric Computation,implemented,2,,0,ErrorAndExponentialIntegralFunctions
@@ -2059,7 +2059,7 @@ EvaluationCell,Notebook Documents & Presentation,infeasible,,front end / noteboo
 EvaluationData,Core Language & Structure,infeasible,,curated data,0,TuningAndDebugging CloudFunctionsAndDeployment
 EvaluationElements,"Options, system variables & unclassified",missing,3,,0,
 EvaluationEnvironment,System Operation & Setup,missing,3,,0,InitializationAndProvisioning
-EvaluationMonitor,Symbolic & Numeric Computation,missing,2,,0,TuningAndDebugging NumericalEvaluationAndPrecision DifferentialEquations
+EvaluationMonitor,Symbolic & Numeric Computation,implemented,2,,0,TuningAndDebugging NumericalEvaluationAndPrecision DifferentialEquations
 EvaluationNotebook,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,LowLevelNotebookProgramming ProgrammaticNotebookAndInterfaceCustomization
 EvaluationObject,Core Language & Structure,missing,2,,0,Concurrency
 EvaluationPrivileges,"Options, system variables & unclassified",infeasible,,Wolfram Cloud / external services,0,
@@ -2371,9 +2371,9 @@ FlightData,"Social, Cultural & Linguistic Data",infeasible,,curated data,0,Trans
 FlipView,Data Manipulation & Analysis,infeasible,,front end / notebooks,0,DynamicVisualization DocumentGeneration ViewersAndAnnotation AnnotatingAndCombiningGraphics
 Floor,Symbolic & Numeric Computation,implemented,1,,1,MathematicalFunctions GPUComputing Conditionals FunctionsUsedInStatistics
 FlowPolynomial,Graphs & Networks,implemented,2,,0,ComputationOnGraphs
-FluidFlowPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling FluidDynamicsPDEModels
-FluidViscosity,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
-FluidViscousStress,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+FluidFlowPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling FluidDynamicsPDEModels
+FluidViscosity,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
+FluidViscousStress,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 Fold,Core Language & Structure,implemented,1,,4,FunctionalProgramming MathematicalAndCountingOperationsOnLists FunctionalIteration LoopingConstructs
 FoldList,Core Language & Structure,implemented,1,,18,LanguageOverview ListManipulation FunctionalProgramming ApplyingFunctionsToLists
 FoldPair,Core Language & Structure,implemented,1,,0,FunctionalProgramming FunctionalIteration
@@ -2843,19 +2843,19 @@ HeaderLines,"Options, system variables & unclassified",implemented,3,,0,
 HeaderSize,"Options, system variables & unclassified",implemented,3,,0,
 HeaderStyle,"Options, system variables & unclassified",implemented,3,,0,
 Heads,Core Language & Structure,implemented,1,,0,PartsOfExpressions
-HeatFluxValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
-HeatInsulationValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
-HeatOutflowValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
-HeatRadiationValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
-HeatSymmetryValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
-HeatTemperatureCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
-HeatTransferPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
-HeatTransferValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling HeatTransferPDEModels
+HeatFluxValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling HeatTransferPDEModels
+HeatInsulationValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling HeatTransferPDEModels
+HeatOutflowValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling HeatTransferPDEModels
+HeatRadiationValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling HeatTransferPDEModels
+HeatSymmetryValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling HeatTransferPDEModels
+HeatTemperatureCondition,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling HeatTransferPDEModels
+HeatTransferPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling HeatTransferPDEModels
+HeatTransferValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling HeatTransferPDEModels
 HeavisideLambda,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms GeneralizedFunctions
 HeavisidePi,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms GeneralizedFunctions
 HeavisideTheta,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions IntegralTransforms GeneralizedFunctions FourierAnalysis
 HeldGroupHe,Higher Mathematical Computation,implemented,2,,0,NamedGroups
-HelmholtzPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+HelmholtzPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 Here,Geographic Data & Computation,infeasible,,curated data,3,MapsAndCartography LocationsPathsAndRouting Geodesy
 HermiteDecomposition,Data Manipulation & Analysis,implemented,2,,0,DiscreteAndIntegerData MatrixDecompositions
 HermiteH,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions FunctionsUsedInQuantumMechanics SpecialFunctions
@@ -3434,7 +3434,7 @@ LaplaceTransform,Symbolic & Numeric Computation,implemented,2,,0,Calculus Signal
 Laplacian,Symbolic & Numeric Computation,implemented,2,,0,Calculus SymbolicArrays DifferentialEquations PDEModelingAndAnalysis
 LaplacianFilter,Data Manipulation & Analysis,missing,2,,0,DataTransformsAndSmoothing ImageFilteringAndNeighborhoodProcessing LinearAndNonlinearFilters SignalFilteringAndFilterDesign
 LaplacianGaussianFilter,Machine Learning & LLMs,implemented,3,,0,ImageFilteringAndNeighborhoodProcessing FeatureDetection
-LaplacianPDETerm,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+LaplacianPDETerm,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 Large,Visualization & Graphics,implemented,3,,0,GraphicsOptionsAndStyling NotebookFormattingAndStyling MathematicalTypesetting GraphicsShapeAndSize
 Larger,Notebook Documents & Presentation,infeasible,,front end / notebooks,0,NotebookFormattingAndStyling TextStyling FontOptions
 Last,Core Language & Structure,implemented,1,,4,ListManipulation GPUComputing ElementsOfLists PartsOfExpressions
@@ -3713,13 +3713,13 @@ MIMETypeToFormatList,Data Manipulation & Analysis,implemented,2,,0,ImportingAndE
 MachineNumberQ,Core Language & Structure,implemented,1,,0,TestingExpressions RepresentationOfNumbers PrecisionAndAccuracyControl AtomicElementsOfExpressions
 MachinePrecision,Symbolic & Numeric Computation,implemented,2,,0,PrecisionAndAccuracyControl
 Magenta,Visualization & Graphics,implemented,3,,0,Colors
-MagneticFieldIntensity,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
-MagneticFluxDensity,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
-MagneticFluxDensityValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
-MagneticPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
-MagneticPotentialCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
-MagneticSymmetryValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
-MagnetostaticPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling ElectromagneticPDEModels
+MagneticFieldIntensity,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
+MagneticFluxDensity,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
+MagneticFluxDensityValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
+MagneticPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
+MagneticPotentialCondition,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
+MagneticSymmetryValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
+MagnetostaticPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling ElectromagneticPDEModels
 Magnification,Notebook Documents & Presentation,implemented,3,,0,Accessibility ImageRepresentation WindowProperties ProgrammaticNotebookAndInterfaceCustomization
 Magnify,Visualization & Graphics,infeasible,,front end / notebooks,0,GraphicsShapeAndSize GraphicsTransformations
 MailAddressValidation,"Options, system variables & unclassified",missing,3,,0,
@@ -3766,13 +3766,13 @@ MardiaSkewnessTest,Data Manipulation & Analysis,missing,2,,0,HypothesisTests
 MarginalDistribution,Core Language & Structure,implemented,2,,0,DerivedDistributions
 MarkovProcessProperties,Higher Mathematical Computation,implemented,2,,0,MarkovProcesses
 Masking,Images,implemented,3,,0,ImageFilteringAndNeighborhoodProcessing
-MassConcentrationCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
-MassFluxValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
-MassImpermeableBoundaryValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
-MassOutflowValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
-MassSymmetryValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
-MassTransferValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
-MassTransportPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling MassTransportPDEModels
+MassConcentrationCondition,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling MassTransportPDEModels
+MassFluxValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling MassTransportPDEModels
+MassImpermeableBoundaryValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling MassTransportPDEModels
+MassOutflowValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling MassTransportPDEModels
+MassSymmetryValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling MassTransportPDEModels
+MassTransferValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling MassTransportPDEModels
+MassTransportPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling MassTransportPDEModels
 MatchLocalNames,"Options, system variables & unclassified",implemented,3,,0,
 MatchQ,Core Language & Structure,implemented,1,,3,RulesAndPatterns TestingExpressions Patterns PatternMatchingFunctions
 MatchingDissimilarity,Symbolic & Numeric Computation,implemented,2,,0,BooleanComputation LogicAndBooleanAlgebra DiscreteAndIntegerData DistanceAndSimilarityMeasures
@@ -3823,7 +3823,7 @@ MaxFeatureDisplacement,"Options, system variables & unclassified",implemented,3,
 MaxFeatures,"Options, system variables & unclassified",implemented,3,,0,
 MaxFilter,Images,implemented,3,,0,ImageFilteringAndNeighborhoodProcessing ImageRestoration LinearAndNonlinearFilters
 MaxItems,User Interface Construction,infeasible,,front end / notebooks,1,QuestionsAndAssessment
-MaxIterations,"Options, system variables & unclassified",missing,3,,0,
+MaxIterations,"Options, system variables & unclassified",implemented,3,,0,
 MaxLimit,Symbolic & Numeric Computation,implemented,2,,0,Calculus SymbolicArrays Asymptotics
 MaxMemoryUsed,Core Language & Structure,implemented,2,,0,MemoryMeasurementAndOptimization WolframSystemSessionInformation
 MaxMixtureKernels,Core Language & Structure,implemented,2,,0,NonparametricStatisticalDistributions
@@ -3832,9 +3832,9 @@ MaxPlotPoints,Visualization & Graphics,implemented,3,,0,PlottingOptions
 MaxRecursion,Visualization & Graphics,implemented,3,,0,PlottingOptions
 MaxRoots,"Options, system variables & unclassified",implemented,3,,0,
 MaxStableDistribution,Symbolic & Numeric Computation,implemented,2,,0,RandomVariables DistributionsUsedInReliabilityAnalysis ExtremeValueDistributions
-MaxStepFraction,"Options, system variables & unclassified",missing,3,,0,
-MaxStepSize,"Options, system variables & unclassified",missing,3,,0,
-MaxSteps,"Options, system variables & unclassified",missing,3,,0,
+MaxStepFraction,"Options, system variables & unclassified",implemented,3,,0,
+MaxStepSize,"Options, system variables & unclassified",implemented,3,,0,
+MaxSteps,"Options, system variables & unclassified",implemented,3,,0,
 MaxTrainingRounds,"Options, system variables & unclassified",infeasible,,ML models / LLM services,0,
 MaxValue,Symbolic & Numeric Computation,implemented,2,,0,Optimization DiscreteCalculus GeometricSolvers SymbolicArrays
 MaxWordGap,"Options, system variables & unclassified",implemented,3,,0,
@@ -4063,8 +4063,8 @@ NBodySimulationData,Scientific and Medical Data & Computation,infeasible,,curate
 NCache,Visualization & Graphics,missing,3,,0,GraphicsOptionsAndStyling
 NCaputoD,"Options, system variables & unclassified",implemented,3,,0,
 NContourIntegrate,Visualization & Graphics,implemented,3,,0,FunctionsOfComplexVariables
-NDEigensystem,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers DifferentialEquations PDEModelingAndAnalysis DifferentialOperators
-NDEigenvalues,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers DifferentialEquations PDEModelingAndAnalysis DifferentialOperators
+NDEigensystem,Symbolic & Numeric Computation,implemented,2,,0,GeometricSolvers DifferentialEquations PDEModelingAndAnalysis DifferentialOperators
+NDEigenvalues,Symbolic & Numeric Computation,implemented,2,,0,GeometricSolvers DifferentialEquations PDEModelingAndAnalysis DifferentialOperators
 NDSolve,Symbolic & Numeric Computation,implemented,2,,0,NumericalEvaluationAndPrecision EquationSolving Calculus GeometricComputation
 NDSolveValue,Symbolic & Numeric Computation,implemented,2,,0,GeometricSolvers SymbolicArrays DifferentialEquations PDEModelingAndAnalysis
 NExpectation,Symbolic & Numeric Computation,implemented,2,,0,ProbabilityAndStatistics SocialNetworks GeometricSolvers ProbabilityWithQuantities
@@ -4159,8 +4159,8 @@ NetUnfold,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralN
 NetworkPacketCapture,External Interfaces & Connections,infeasible,,ML models / LLM services,0,WebOperations NetworkProgramming InternetAndWebRelatedData EventSeries
 NetworkPacketRecording,External Interfaces & Connections,infeasible,,ML models / LLM services,0,NetworkProgramming
 NetworkPacketTrace,External Interfaces & Connections,infeasible,,ML models / LLM services,0,TuningAndDebugging NetworkProgramming InternetAndWebRelatedData
-NeumannBoundaryUnitNormal,Symbolic & Numeric Computation,missing,2,,0,PDEModelingAndAnalysis
-NeumannValue,Symbolic & Numeric Computation,missing,2,,0,GeometricSolvers DifferentialEquations PDEModeling PDEModelingAndAnalysis
+NeumannBoundaryUnitNormal,Symbolic & Numeric Computation,implemented,2,,0,PDEModelingAndAnalysis
+NeumannValue,Symbolic & Numeric Computation,implemented,2,,0,GeometricSolvers DifferentialEquations PDEModeling PDEModelingAndAnalysis
 NevilleThetaC,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 NevilleThetaD,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
 NevilleThetaN,Symbolic & Numeric Computation,implemented,2,,0,EllipticFunctions
@@ -4514,9 +4514,9 @@ Parallelogram,Visualization & Graphics,implemented,1,,5,PlaneGeometry GeometricS
 ParameterEstimator,"Options, system variables & unclassified",implemented,3,,0,
 ParameterMixtureDistribution,Core Language & Structure,implemented,2,,0,DistributionsUsedInReliabilityAnalysis DerivedDistributions
 ParametricConvexOptimization,Symbolic & Numeric Computation,implemented,2,,0,Optimization SymbolicArrays ConvexOptimization
-ParametricFunction,Engineering Data & Computation,missing,3,,0,SystemModelAnalyticsDesign DifferentialEquations SystemModelSimulation
-ParametricNDSolve,Symbolic & Numeric Computation,missing,2,,0,EquationSolving DifferentialEquations SystemsModeling
-ParametricNDSolveValue,Symbolic & Numeric Computation,missing,2,,0,SymbolicArrays DifferentialEquations PDEModelingAndAnalysis
+ParametricFunction,Engineering Data & Computation,implemented,3,,0,SystemModelAnalyticsDesign DifferentialEquations SystemModelSimulation
+ParametricNDSolve,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving DifferentialEquations SystemsModeling
+ParametricNDSolveValue,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays DifferentialEquations PDEModelingAndAnalysis
 ParametricPlot,Data Manipulation & Analysis,implemented,2,,0,FunctionVisualization SystemModelAnalyticsDesign DateAndTimeVisualization
 ParametricPlot3D,Data Manipulation & Analysis,implemented,2,,0,FunctionVisualization 3DPrinting DateAndTimeVisualization
 ParametricRampLayer,Machine Learning & LLMs,infeasible,,ML models / LLM services,0,NeuralNetworkLayers
@@ -4578,7 +4578,7 @@ PerfectNumber,Higher Mathematical Computation,implemented,2,,0,NumberTheory Mult
 PerfectNumberQ,Higher Mathematical Computation,implemented,2,,0,MultiplicativeNumberTheory
 PerformanceGoal,Core Language & Structure,implemented,2,,1,TuningAndDebugging TimeMeasurementAndOptimization ClusterAnalysis SupervisedMachineLearning
 Perimeter,Visualization & Graphics,implemented,3,,0,PlaneGeometry GeometricPropertiesAndMeasures SyntheticGeometry Polygons
-PeriodicBoundaryCondition,Symbolic & Numeric Computation,missing,2,,0,DifferentialEquations PDEModeling PDEModelingAndAnalysis AcousticPDEModels
+PeriodicBoundaryCondition,Symbolic & Numeric Computation,implemented,2,,0,DifferentialEquations PDEModeling PDEModelingAndAnalysis AcousticPDEModels
 PeriodicModel,Data Manipulation & Analysis,missing,2,,0,StatisticalModelAnalysis
 PeriodicTablePlot,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
 Periodogram,Machine Learning & LLMs,missing,3,,0,SpeechComputation AudioProcessing SignalProcessing VideoAnalysis
@@ -4694,7 +4694,7 @@ PointStatisticFunction,Symbolic & Numeric Computation,missing,2,,0,SpatialPointC
 PointValuePlot,Data Manipulation & Analysis,missing,2,,0,GeoVisualization DateAndTimeVisualization HighDimensionalVisualization SpatialPointCollections
 PoissonConsulDistribution,Symbolic & Numeric Computation,implemented,2,,0,DiscreteUnivariateDistributions
 PoissonDistribution,Symbolic & Numeric Computation,implemented,2,,0,MathematicalFunctions ActuarialComputation RandomNumberGeneration FunctionsUsedInStatistics
-PoissonPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+PoissonPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 PoissonPointProcess,Symbolic & Numeric Computation,implemented,2,,0,ProbabilityAndStatistics SpatialStatistics SpatialPointProcesses SpatialPointCollections
 PoissonProcess,Higher Mathematical Computation,implemented,2,,0,ProbabilityAndStatistics RandomProcesses ParametricRandomProcesses MarkovProcesses
 PoissonWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
@@ -4774,7 +4774,7 @@ PrecedesEqual,"Options, system variables & unclassified",implemented,3,,0,
 PrecedesSlantEqual,"Options, system variables & unclassified",implemented,3,,0,
 PrecedesTilde,"Options, system variables & unclassified",implemented,3,,0,
 Precision,Symbolic & Numeric Computation,implemented,2,,0,NumericalEvaluationAndPrecision RepresentationOfNumbers PrecisionAndAccuracyControl AtomicElementsOfExpressions
-PrecisionGoal,Symbolic & Numeric Computation,missing,2,,0,NumericalEvaluationAndPrecision PrecisionAndAccuracyControl DifferentialEquations
+PrecisionGoal,Symbolic & Numeric Computation,implemented,2,,0,NumericalEvaluationAndPrecision PrecisionAndAccuracyControl DifferentialEquations
 Predict,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,MachineLearning TabularProcessing LifeSciencesAndMedicineDataAndComputation ScientificDataAnalysis
 PredictorFunction,Core Language & Structure,infeasible,,ML models / LLM services,0,ScientificModels SupervisedMachineLearning NonparametricStatisticalDistributions
 PredictorMeasurements,Data Manipulation & Analysis,infeasible,,ML models / LLM services,0,SupervisedMachineLearning
@@ -4975,7 +4975,7 @@ ReImPlot,Visualization & Graphics,implemented,3,,0,FunctionVisualization Functio
 ReImStyle,Visualization & Graphics,implemented,3,,0,ComplexVisualization
 ReactionBalance,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
 ReactionBalancedQ,Scientific and Medical Data & Computation,infeasible,,curated data,0,MolecularStructureAndComputation
-ReactionPDETerm,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+ReactionPDETerm,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 Read,Core Language & Structure,implemented,1,,0,ExternalOperations UsingConnectedDevices FileOperations NetworkProgramming
 ReadByteArray,External Interfaces & Connections,implemented,3,,0,ExternalOperations ImportingAndExporting FileOperations NetworkProgramming
 ReadLine,External Interfaces & Connections,implemented,3,,0,Files LowLevelFileOperations DirectControlOfExternalProcesses
@@ -5285,7 +5285,7 @@ ScalingMatrix,Symbolic & Numeric Computation,implemented,2,,0,GeometricTransform
 ScalingTransform,Geometry,implemented,2,,0,GeometricTransforms
 Scan,Core Language & Structure,implemented,1,,0,ListManipulation FunctionalProgramming ApplyingFunctionsToLists LoopingConstructs
 ScheduledTask,Data Manipulation & Analysis,infeasible,,Wolfram Cloud / external services,0,AutomatedReports DateAndTime UsingConnectedDevices BackgroundAndScheduledTasks
-SchrodingerPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+SchrodingerPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 SchurDecomposition,Symbolic & Numeric Computation,implemented,2,,0,MatricesAndLinearAlgebra MatrixDecompositions
 ScientificForm,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers
 ScientificNotationThreshold,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers
@@ -5521,13 +5521,13 @@ SolarEclipse,Time-Related Computation,infeasible,,curated data,0,AstronomicalCom
 SolarSystemFeatureData,"Options, system variables & unclassified",infeasible,,curated data,0,
 SolarTime,Time-Related Computation,infeasible,,curated data,0,AstronomicalComputationAndData
 SolidAngle,Geometry,implemented,2,,0,GeometricPropertiesAndMeasures AnglesAndPolarCoordinates
-SolidBoundaryLoadValue,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
+SolidBoundaryLoadValue,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
 SolidData,Geometry,infeasible,,curated data,0,GeometricComputation
-SolidDisplacementCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
-SolidFixedCondition,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
-SolidMechanicsPDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
-SolidMechanicsStrain,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
-SolidMechanicsStress,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
+SolidDisplacementCondition,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
+SolidFixedCondition,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
+SolidMechanicsPDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
+SolidMechanicsStrain,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
+SolidMechanicsStress,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
 SolidRegionQ,Geometry,implemented,2,,0,GeometricPropertiesAndMeasures 3DPrinting
 Solve,Symbolic & Numeric Computation,implemented,2,,0,EquationSolving PolynomialAlgebra GeometricComputation PlaneGeometry
 SolveAlways,Higher Mathematical Computation,implemented,2,,0,PolynomialSystems
@@ -5540,7 +5540,7 @@ Sound,Sound & Video,infeasible,,audio / video,4,WDFWolframDataFramework SoundAnd
 SoundNote,Sound & Video,infeasible,,audio / video,12,SoundAndSonification ComputationalMusic
 SoundVolume,"Options, system variables & unclassified",infeasible,,audio / video,0,
 SourceLink,System Operation & Setup,infeasible,,Wolfram Cloud / external services,0,SharingAndEmbeddingContent ManagingContentInTheCloud
-SourcePDETerm,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+SourcePDETerm,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 Sow,Core Language & Structure,implemented,1,,5,LanguageOverview TuningAndDebugging ConstructingLists PartsOfExpressions
 SowVideo,Sound & Video,infeasible,,audio / video,0,VideoCreation
 SpaceCurveData,Geometry,infeasible,,curated data,0,GeometricComputation
@@ -5672,7 +5672,7 @@ StartOfLine,Core Language & Structure,implemented,1,,1,StringPatterns
 StartOfString,Core Language & Structure,implemented,1,,1,StringPatterns
 StartProcess,External Interfaces & Connections,missing,3,,0,BackgroundAndScheduledTasks CallingExternalPrograms ExternalLanguageInterfaces DirectControlOfExternalProcesses
 StartWebSession,Core Language & Structure,missing,2,,0,TuningAndDebugging WebOperations WebBrowserAutomation HTTPRequestsAndResponses
-StartingStepSize,"Options, system variables & unclassified",missing,3,,0,
+StartingStepSize,"Options, system variables & unclassified",implemented,3,,0,
 StateFeedbackGains,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems SystemsModeling DelayControlSystems DescriptorControlSystems
 StateOutputEstimator,Engineering Data & Computation,infeasible,,curated data,0,DesignUsingStateSpaceModels
 StateResponse,Engineering Data & Computation,infeasible,,curated data,0,ControlSystems DelayControlSystems DescriptorControlSystems NonlinearControlSystems
@@ -5685,7 +5685,7 @@ StationaryWaveletPacketTransform,Data Manipulation & Analysis,missing,2,,0,Wavel
 StationaryWaveletTransform,Data Manipulation & Analysis,missing,2,,0,Wavelets SignalTransforms
 StatusArea,Visualization & Graphics,infeasible,,front end / notebooks,0,DataVisualization FunctionVisualization ChartingAndInformationVisualization DynamicVisualization
 StatusCentrality,Graphs & Networks,missing,2,,0,GraphPropertiesAndMeasurements SocialNetworks GraphMeasures
-StepMonitor,Symbolic & Numeric Computation,missing,2,,0,TuningAndDebugging NumericalEvaluationAndPrecision DifferentialEquations
+StepMonitor,Symbolic & Numeric Computation,implemented,2,,0,TuningAndDebugging NumericalEvaluationAndPrecision DifferentialEquations
 StereochemistryElements,Scientific and Medical Data & Computation,infeasible,,curated data,0,PhysicsAndChemistryDataAndComputation MolecularStructureAndComputation
 StieltjesGamma,Symbolic & Numeric Computation,implemented,2,,0,MathematicalConstants ZetaFunctionsAndPolylogarithms
 StippleShading,Visualization & Graphics,implemented,3,,0,GraphicsDirectives
@@ -6134,7 +6134,7 @@ TogglerBar,User Interface Construction,infeasible,,front end / notebooks,0,Contr
 TogglerBox,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 TogglerBoxOptions,"Options, system variables & unclassified",infeasible,,front end / notebooks,0,
 TokenWords,External Interfaces & Connections,implemented,3,,0,LowLevelFileOperations
-Tolerance,Symbolic & Numeric Computation,missing,2,,0,QuestionsAndAssessment MatrixPredicates
+Tolerance,Symbolic & Numeric Computation,implemented,2,,0,QuestionsAndAssessment MatrixPredicates
 Tomorrow,Knowledge Representation & Natural Language,infeasible,,curated data / natural-language understanding,1,DateAndTime
 Tooltip,Visualization & Graphics,infeasible,,front end / notebooks,3,DataVisualization FunctionVisualization ChartingAndInformationVisualization DynamicVisualization
 TooltipDelay,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
@@ -6450,7 +6450,7 @@ Vectors,Symbolic & Numeric Computation,implemented,2,,0,SymbolicArrays SymbolicT
 Vee,"Options, system variables & unclassified",implemented,3,,0,
 Verbatim,Core Language & Structure,implemented,1,,0,Patterns
 VerificationTest,Core Language & Structure,implemented,2,,1,SystematicTestingAndVerification
-VerifyConvergence,"Options, system variables & unclassified",missing,3,,0,
+VerifyConvergence,"Options, system variables & unclassified",implemented,3,,0,
 VerifyDerivedKey,Higher Mathematical Computation,implemented,2,,0,Cryptography
 VerifyDigitalSignature,Higher Mathematical Computation,implemented,2,,0,Cryptography
 VerifyFileSignature,Higher Mathematical Computation,implemented,2,,0,Cryptography
@@ -6556,7 +6556,7 @@ VoigtDistribution,Data Manipulation & Analysis,implemented,2,,0,NormalRelatedDis
 VolcanoData,"Options, system variables & unclassified",infeasible,,curated data,0,
 Volume,Geometry,implemented,2,,0,Calculus SolidGeometry GeometricPropertiesAndMeasures 3DPrinting
 VonMisesDistribution,Symbolic & Numeric Computation,implemented,2,,0,BoundedDomainDistributions
-VonMisesStress,Symbolic & Numeric Computation,missing,2,,0,PDEModeling SolidMechanicsPDEModels
+VonMisesStress,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling SolidMechanicsPDEModels
 VoronoiMesh,Geometry,implemented,2,,0,GeometricComputation MeshRegions SpatialPointCollections
 WaitAll,Core Language & Structure,missing,2,,0,ParallelComputing Concurrency
 WaitNext,Core Language & Structure,missing,2,,0,ParallelComputing Concurrency
@@ -6568,7 +6568,7 @@ WarpingDistance,Symbolic & Numeric Computation,implemented,2,,0,DistanceAndSimil
 WatershedComponents,Images,missing,3,,0,ImageProcessing SegmentationAnalysis ClusterAnalysis VideoAnalysis
 WatsonUSquareTest,Data Manipulation & Analysis,implemented,2,,0,HypothesisTests
 WattsStrogatzGraphDistribution,Graphs & Networks,implemented,2,,0,SocialNetworks RandomGraphs
-WavePDEComponent,Symbolic & Numeric Computation,missing,2,,0,PDEModeling
+WavePDEComponent,Symbolic & Numeric Computation,implemented,2,,0,PDEModeling
 WaveletBestBasis,Data Manipulation & Analysis,missing,2,,0,Wavelets
 WaveletFilterCoefficients,Data Manipulation & Analysis,implemented,2,,0,Wavelets
 WaveletImagePlot,Data Manipulation & Analysis,missing,2,,0,Wavelets
@@ -6627,7 +6627,7 @@ Weights,Data Manipulation & Analysis,implemented,2,,0,StatisticalModelAnalysis C
 WelchWindow,Sound & Video,infeasible,,audio / video,0,WindowFunctions
 WeylAlgebra,"Options, system variables & unclassified",implemented,3,,0,
 WheelGraph,Graphs & Networks,implemented,2,,0,GraphConstructionAndRepresentation
-WhenEvent,Symbolic & Numeric Computation,missing,2,,0,DifferentialEquations EventSeries SystemsModeling DifferentialEquationsWithEvents
+WhenEvent,Symbolic & Numeric Computation,implemented,2,,0,DifferentialEquations EventSeries SystemsModeling DifferentialEquationsWithEvents
 Which,Core Language & Structure,implemented,1,,0,ProceduralProgramming Conditionals
 While,Core Language & Structure,implemented,1,,0,LanguageOverview ProceduralProgramming LoopingConstructs
 White,Visualization & Graphics,implemented,1,,3,Colors
@@ -6689,7 +6689,7 @@ WordSeparators,External Interfaces & Connections,implemented,3,,0,LowLevelFileOp
 WordSpacings,"Options, system variables & unclassified",implemented,3,,0,
 WordStem,Machine Learning & LLMs,implemented,3,,0,NaturalLanguageProcessing TextAnalysis TextNormalization
 WordTranslation,Machine Learning & LLMs,infeasible,,curated data,5,LinguisticData CulturalData LocaleAndInternationalization TextNormalization
-WorkingPrecision,Symbolic & Numeric Computation,missing,2,,0,TimeMeasurementAndOptimization Wavelets NeuralNetworkConstruction PrecisionAndAccuracyControl
+WorkingPrecision,Symbolic & Numeric Computation,implemented,2,,0,TimeMeasurementAndOptimization Wavelets NeuralNetworkConstruction PrecisionAndAccuracyControl
 WrapAround,"Options, system variables & unclassified",implemented,3,,0,
 Write,Core Language & Structure,implemented,2,,0,ExternalOperations ImportingAndExporting UsingConnectedDevices NetworkProgramming
 WriteLine,External Interfaces & Connections,implemented,3,,0,Files LowLevelFileOperations DirectControlOfExternalProcesses
