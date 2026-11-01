@@ -63,6 +63,8 @@ _TOKEN_SPEC = [
     ("NOTATION",  '|'.join(re.escape(k) for k in sorted(_NOTATION.input_map(), key=len, reverse=True))),
     ("LANGLE",    r'\\\[LeftAngleBracket\]|\u2329'),
     ("RANGLE",    r'\\\[RightAngleBracket\]|\u232a'),
+    ("LDBAR",     r'\\\[LeftDoubleBracketingBar\]|\uf605'),
+    ("RDBAR",     r'\\\[RightDoubleBracketingBar\]|\uf606'),
     ("RULE",      r'->'),
     ("REPLACEREPEATED", r'//\.'),
     ("APPLYTO",   r'//=(?!=)'),
@@ -132,7 +134,7 @@ _NOTATION_INPUT = _NOTATION.input_map()
 _TOKEN_RE = re.compile('|'.join(f'(?P<{name}>{pattern})' for name, pattern in _TOKEN_SPEC), re.DOTALL)
 
 _STATEMENT_END = ("INTEGER", "FLOAT", "BIGNUM", "SCINUM", "STRING", "SYMBOL", "RPAREN", "RSQUARE", "RBRACE", "RASSOC",
-                  "RANGLE",
+                  "RANGLE", "RDBAR",
                   "FUNCTION", "SLOT", "SLOTSEQ", "SLOTNAME", "INCREMENT", "DECREMENT", "BLANK", "BLANKS",
                   "BLANKNS", "BLANKOPT", "REPEATED", "REPEATEDNULL", "OUT", "GET", "UNSET", "PUT", "PUTAPPEND")
 
@@ -224,9 +226,9 @@ def tokenize(text: str) -> ListType[Token]:
             continue
         if kind in ("WS", "COMMENT"):
             continue
-        if kind in ("LPAREN", "LSQUARE", "LBRACE", "LASSOC", "LANGLE"):
+        if kind in ("LPAREN", "LSQUARE", "LBRACE", "LASSOC", "LANGLE", "LDBAR"):
             level += 1
-        elif kind in ("RPAREN", "RSQUARE", "RBRACE", "RASSOC", "RANGLE"):
+        elif kind in ("RPAREN", "RSQUARE", "RBRACE", "RASSOC", "RANGLE", "RDBAR"):
             level -= 1
         if kind == "NOTATION":
             value = _NOTATION_INPUT[value]
@@ -632,7 +634,7 @@ class Parser:
         if tok is None:
             return False
         return tok.type in ("SYMBOL", "LPAREN", "LBRACE", "LASSOC", "INTEGER", "FLOAT", "SLOT", "SLOTSEQ",
-                            "SLOTNAME", "LANGLE", "NOTATIONPREFIX")
+                            "SLOTNAME", "LANGLE", "LDBAR", "NOTATIONPREFIX")
 
     def parse_unary(self) -> Any:
         if self.at("MINUS"):
@@ -890,9 +892,9 @@ class Parser:
         if isinstance(expr, Expr) and expr.head == "SquareIntersection":
             depth = 0
             for tok in self.tokens[start:self.pos]:
-                if tok.type in ("LPAREN", "LSQUARE", "LBRACE", "LASSOC", "LANGLE"):
+                if tok.type in ("LPAREN", "LSQUARE", "LBRACE", "LASSOC", "LANGLE", "LDBAR"):
                     depth += 1
-                elif tok.type in ("RPAREN", "RSQUARE", "RBRACE", "RASSOC", "RANGLE"):
+                elif tok.type in ("RPAREN", "RSQUARE", "RBRACE", "RASSOC", "RANGLE", "RDBAR"):
                     depth -= 1
                 elif tok.type == "SPAN" and depth == 0:
                     raise ParseError("SquareIntersection and Span (;;) have the same precedence; use parentheses")
@@ -916,7 +918,8 @@ class Parser:
         return self._notation(530, self._parse_prefix_d)
 
     def _parse_prefix_d(self) -> Any:
-        """DifferentialD and CapitalDifferentialD prefix operators (prefix, precedence 550, right-grouping)."""
+        """Prefix notation operators: DifferentialD, CapitalDifferentialD (550), Del (550) and Square (540), all
+        right-grouping; no binary operator lies between 540 and 550, so they share this level."""
         if self.at("NOTATIONPREFIX"):
             head = self.advance().value
             return Expr(head, self._parse_prefix_d())
@@ -1015,6 +1018,12 @@ class Parser:
             args = self._parse_arglist("RANGLE")
             self.expect("RANGLE")
             return Expr("AngleBracket", *args)
+
+        if tok.type == "LDBAR":                      # \[LeftDoubleBracketingBar] x, ... \[RightDoubleBracketingBar]
+            self.advance()
+            args = self._parse_arglist("RDBAR")
+            self.expect("RDBAR")
+            return Expr("DoubleBracketingBar", *args)
 
         raise ParseError(f"Unexpected token: {tok}")
 

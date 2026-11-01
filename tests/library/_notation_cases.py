@@ -92,7 +92,7 @@ def build(tag, ref):
         shown = lname if _is_private(ch) else ch
         cases.append((f"{name}[{a}, 1 + 1]", f"{name}[{a}, 2]"))
         cases.append((f"Attributes[{name}]", "{}"))
-        if name == "MinusPlus":
+        if name in ("MinusPlus", "PlusMinus"):         # one argument prints as the prefix form
             cases.append((f"ToString[{name}[]]", text_is(f"{name}[]")))
         elif affix == "Prefix":
             cases.append((f"ToString[{name}[{a}, {b}]]", text_is(f"{name}[{a}, {b}]")))

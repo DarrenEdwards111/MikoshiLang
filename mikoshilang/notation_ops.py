@@ -213,6 +213,15 @@ OPS = {
     "UpTeeArrow": ("\u21a5", 580, "nary", None, "W32"),
     "UpperLeftArrow": ("\u2196", 270, "nary", '\\nwarrow', "W32"),
     "UpperRightArrow": ("\u2197", 270, "nary", '\\nearrow', "W32"),
+    # Operators added in the correctness fix-up pass (FIX1): left out of the W31/W32 plan.
+    "Precedes": ("\u227a", 290, "nary", '\\prec', "FIX1"),
+    "Congruent": ("\u2261", 290, "nary", '\\equiv', "FIX1"),
+    "RightArrow": ("\u2192", 270, "nary", '\\rightarrow', "FIX1"),
+    "LeftRightArrow": ("\u2194", 270, "nary", '\\leftrightarrow', "FIX1"),
+    "UpArrow": ("\u2191", 580, "nary", '\\uparrow', "FIX1"),
+    "PlusMinus": ("\u00b1", 310, "left", '\\pm', "FIX1"),
+    "Del": ("\u2207", 550, "prefix", None, "FIX1"),
+    "Square": ("\uf520", 540, "prefix", None, "FIX1"),
 }
 
 # Extra input characters: standard Unicode forms accepted on input (Wolfram's documentation pages show them).
@@ -223,6 +232,10 @@ PRINT_CHAR = {"DifferentialD": "\u2146", "CapitalDifferentialD": "\u2145"}
 
 # Matchfix AngleBracket[x, ...]: \\[LeftAngleBracket] x, ... \\[RightAngleBracket].
 LEFT_ANGLE, RIGHT_ANGLE = "\u2329", "\u232a"
+
+# Matchfix DoubleBracketingBar[x, ...]: \\[LeftDoubleBracketingBar] x, ... \\[RightDoubleBracketingBar] (Wolfram's
+# private-use characters U+F605 / U+F606).
+LEFT_DBAR, RIGHT_DBAR = "\uf605", "\uf606"
 
 
 def is_private(ch):
