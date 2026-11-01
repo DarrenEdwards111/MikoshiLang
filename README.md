@@ -79,7 +79,7 @@ code-string evaluation raise `NotImplementedError`: there is no `eval`/`exec`.
 ## Verification
 
 `Verify[expr]` checks a result independently and labels it `Certified` (an exact certificate was checked),
-`Checked` (symbolic or numerical evidence) or `Unchecked`; a failed check raises. Each reviewed head's `Check:`
+`Checked` (symbolic or numerical evidence) or `Unchecked`, and a failed check gives `Failed[value, info]`. Each reviewed head's `Check:`
 note is executable: `python scripts/verify_library.py`. Guide: [docs/verification.md](docs/verification.md).
 
 ```wolfram

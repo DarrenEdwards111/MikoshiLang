@@ -2413,7 +2413,7 @@ FortranForm,Symbolic & Numeric Computation,implemented,2,,0,DisplayOfNumbers
 Forward,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
 ForwardBackward,User Interface Construction,infeasible,,front end / notebooks,0,OptionsAndStylingForInteractiveManipulation
 ForwardCloudCredentials,Core Language & Structure,infeasible,,Wolfram Cloud / external services,0,RemoteBatchJobs
-Fourier,Sound & Video,implemented,3,,0,DataTransformsAndSmoothing ComputerVision ImageFilteringAndNeighborhoodProcessing SignalProcessing
+Fourier,Symbolic & Numeric Computation,implemented,1,,0,DataTransformsAndSmoothing ComputerVision ImageFilteringAndNeighborhoodProcessing SignalProcessing
 FourierCoefficient,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms FourierAnalysis
 FourierCosCoefficient,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms FourierAnalysis
 FourierCosSeries,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms FourierAnalysis
@@ -3217,7 +3217,7 @@ InverseDistanceTransform,Images,implemented,3,,0,MathematicalMorphology
 InverseEllipticNomeQ,Symbolic & Numeric Computation,implemented,2,,0,SpecialFunctions QFunctions EllipticIntegrals EllipticFunctions
 InverseErf,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics SpecialFunctions ErrorAndExponentialIntegralFunctions InverseFunctions
 InverseErfc,Symbolic & Numeric Computation,implemented,2,,0,FunctionsUsedInStatistics ErrorAndExponentialIntegralFunctions InverseFunctions
-InverseFourier,Sound & Video,implemented,3,,0,DataTransformsAndSmoothing GPUComputing FourierAnalysis SummationTransforms
+InverseFourier,Symbolic & Numeric Computation,implemented,1,,0,DataTransformsAndSmoothing GPUComputing FourierAnalysis SummationTransforms
 InverseFourierCosTransform,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms FourierAnalysis
 InverseFourierSequenceTransform,Symbolic & Numeric Computation,implemented,2,,0,FourierAnalysis SummationTransforms
 InverseFourierSinTransform,Data Manipulation & Analysis,implemented,2,,0,IntegralTransforms FourierAnalysis

@@ -16,7 +16,7 @@ def p(src):
     return Session().evaluate(src)
 
 
-# Seeded wrong results: each checker must raise ArithmeticError("Verify: ...") ----------------------------
+# Seeded wrong results: each checker must reject them (VerificationFailure; Verify returns Failed[...]) -------
 
 @pytest.mark.parametrize("head, args, wrong", [
     ("Integrate", ["Sin[x]^2", "x"], "x/2 + Sin[x] Cos[x]/2"),            # sign error
@@ -40,8 +40,22 @@ def p(src):
 ])
 def test_seeded_wrong_results_are_caught(head, args, wrong):
     a = [p(s) for s in args]
-    with pytest.raises(ArithmeticError, match=rf"^Verify: {head} result failed verification"):
+    with pytest.raises(V.VerificationFailure, match=rf"^Verify: {head} result failed verification"):
         V.CHECKERS[head](a, p(wrong))
+
+
+def test_verify_returns_failed_for_a_wrong_result():
+    from mikoshilang.library import core
+    impls = core.REGISTRY["GCD"].impls
+    saved = impls[0]
+    impls[0] = (lambda *a: 3,) + tuple(saved[1:])               # a seeded bug in GCD
+    try:
+        out = p("Verify[GCD[12, 18]]")
+    finally:
+        impls[0] = saved
+    assert out.head == "Failed" and out.args[0] == 3
+    assert "Head -> GCD" in str(out).replace('"', "") and "Reason" in str(out)
+    assert p("Verify[GCD[12, 18]]").head == "Certified"
 
 
 def test_right_results_pass_the_same_checkers():
@@ -95,17 +109,28 @@ def test_harness_runs_stated_checks_for_named_heads():
     assert res["VerifyDerivedKey"].checks["reference"][0] >= 3
     assert res["Gamma"].checks["mpmath"][0] >= 4                     # mpmath table
     assert res["FactorInteger"].checks["identity"] == (1, 0)          # identity table
-    assert res["Verify"].checks["self-check"] == (1, 0)              # ArithmeticError path present
+    assert res["Verify"].checks["self-check"] == (1, 0)              # verification step present and an example ran
     assert all(r.status == "pass" for r in res.values()), {k: r.failures for k, r in res.items()}
 
 
-def test_harness_reports_failures():
+def test_harness_reports_failures(monkeypatch):
     r = H.Result("X", ["delegated"], "delegated (no.such.module_fn)")
     H._run_delegated(r, [], None)
     assert r.status == "fail" and "not importable" in r.failures[0]
     r = H.Result("Y", ["self-check"], "self-check")
     H._run_selfcheck(r, [], None)                                    # no implementation: no verification step
     assert r.status == "fail"
+    harness = H._harness(TESTS)
+    r = H.Result("Verify", ["self-check"], "self-check")
+    monkeypatch.setattr(H, "_ALL_CASES", {})                         # no nesting examples to fall back on
+    H._run_selfcheck(r, [("Verify[GCD[4, 6]]", harness.Raises())], harness)
+    assert r.status == "fail" and "no real example" in r.failures[0]       # error cases do not count
+    r = H.Result("Verify", ["self-check"], "self-check")
+    H._run_selfcheck(r, [("Verify[GCD[4, 6]]", "Certified[3, <||>]")], harness)
+    assert r.status == "fail" and "no example ran cleanly" in r.failures[0]  # a wrong example fails
+    r = H.Result("Verify", ["self-check"], "self-check")
+    H._run_selfcheck(r, [("Verify[GCD[4, 6]][[1]]", "2")], harness)
+    assert r.status == "pass"
     assert H.Result("Z", [], "").status == "no check stated"
 
 
@@ -118,9 +143,11 @@ def test_markdown_report():
 def test_selfcheck_finds_verification_steps_in_helpers_and_distribution_classes():
     import mikoshilang  # noqa: F401
     # WaveletFilterCoefficients verifies in a helper; TracyWidomDistribution in the class its table entry names
+    cases = H.load_cases(TESTS)
+    harness = H._harness(TESTS)
     for head in ("WaveletFilterCoefficients", "TracyWidomDistribution"):
         r = H.Result(head, ["self-check"], "self-check")
-        H._run_selfcheck(r, [], None)
+        H._run_selfcheck(r, cases.get(head, []), harness)       # also runs one real example
         assert r.status == "pass", (head, r.failures)
     assert not any("raise ArithmeticError" in s for s in H._impl_sources("GCD"))
 
@@ -134,6 +161,11 @@ def test_delegated_prose_is_not_a_module_path():
     assert r.status == "fail"
 
 
+def test_selfcheck_uses_an_example_that_nests_the_head():
+    res = H.run(TESTS, "stated", ["KirchhoffGraph"])
+    assert res["KirchhoffGraph"].status == "pass", res["KirchhoffGraph"].failures
+
+
 def test_modules_that_need_fixtures_are_left_out(tmp_path):
     plain = tmp_path / "test_plain.py"
     plain.write_text("@pytest.mark.parametrize('case', CASES)\ndef test_plain(case):\n    check(case)\n")
@@ -143,3 +175,10 @@ def test_modules_that_need_fixtures_are_left_out(tmp_path):
     autouse.write_text("@pytest.fixture(autouse=True)\ndef iso():\n    yield\n")
     assert not H._needs_fixtures(plain)
     assert H._needs_fixtures(fixture_arg) and H._needs_fixtures(autouse)
+
+
+def test_selfcheck_with_examples_only_in_left_out_modules_is_not_exercised():
+    # SetDirectory's real examples live in test_wolfram_w27, which needs pytest fixtures and is left out
+    res = H.run(TESTS, "stated", ["SetDirectory", "SetFileDate", "URLResponseTime"])
+    for name in ("SetDirectory", "SetFileDate", "URLResponseTime"):
+        assert res[name].status == "not exercised", (name, res[name].failures)
