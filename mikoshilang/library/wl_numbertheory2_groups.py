@@ -620,3 +620,7 @@ _add_check("exact (exact input gives exact results), reference (differential cas
           "Conjunction", "Disjunction")
 _add_check("reference (differential cases in tests/library).",
           "Exists")
+# notes set in statistics.py
+_add_check("reference (differential cases in tests/library).",
+          "BinomialDistribution", "ChiSquaredDistribution", "ExponentialDistribution", "FDistribution",
+          "PoissonDistribution", "TDistribution", "UniformDistribution")
