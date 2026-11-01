@@ -803,16 +803,17 @@ class RandomWalk(Proc):
     dtime = True
 
     def parse(self, a, fname):
-        if len(a) != 1:
-            raise ValueError(f"{fname}: RandomWalkProcess expects [p] or [{{p, q}}]")
-        if is_list(a[0]):
-            if len(a[0].args) != 2:
-                raise ValueError(f"{fname}: RandomWalkProcess[{{p, q}}] needs two probabilities")
-            p, q = (_p(v, fname) for v in a[0].args)
+        if len(a) not in (1, 2):
+            raise ValueError(f"{fname}: RandomWalkProcess expects [p] or [p, q]")
+        if any(is_list(v) for v in a):
+            raise TypeError(f"{fname}: the step probabilities must be scalars")
+        if len(a) == 2:
+            p, q = (_p(v, fname) for v in a)
             _prob(p, fname, "p")
             _prob(q, fname, "q")
+            _cond(Expr("LessEqual", Expr("Plus", R(p), R(q)), 1))
             if _num(p) and _num(q) and p + q > 1:
-                raise ValueError(f"{fname}: p + q must not exceed 1")
+                _bad(f"{fname}: p + q must not exceed 1")
             self.p, self.lazy = [p, q], True
         else:
             p = _p(a[0], fname, "p")
@@ -832,7 +833,7 @@ class RandomWalk(Proc):
 
     def slice(self, t):
         if self.lazy:
-            raise NotImplementedError("SliceDistribution: the slice of a lazy RandomWalkProcess[{p, q}] is not "
+            raise NotImplementedError("SliceDistribution: the slice of a RandomWalkProcess[p, q] is not "
                                       "available in closed form")
         if _num(t) and t == 0:
             raise NotImplementedError("SliceDistribution: the slice at time 0 is a point mass, which is not "
@@ -2030,8 +2031,8 @@ _CTOR_NOTES = {
                                    "inverting the integrated intensity",
     "BernoulliProcess": "BernoulliProcess[p] (discrete time); slice BernoulliDistribution[p], i.i.d.",
     "BinomialProcess": "BinomialProcess[p] (discrete time, counts of successes); slice BinomialDistribution[t, p]",
-    "RandomWalkProcess": "RandomWalkProcess[p] (steps +1 with probability p, -1 otherwise) and RandomWalkProcess[{p, "
-                         "q}] (+1 with p, -1 with q, 0 otherwise); slice 2 x - t with x ~ BinomialDistribution[t, p]",
+    "RandomWalkProcess": "RandomWalkProcess[p] (steps +1 with probability p, -1 otherwise) and RandomWalkProcess[p, "
+                         "q] (+1 with p, -1 with q, 0 otherwise); slice 2 x - t with x ~ BinomialDistribution[t, p]",
     "WhiteNoiseProcess": "WhiteNoiseProcess[] (standard normal), WhiteNoiseProcess[sigma] and WhiteNoiseProcess[dist]; "
                          "i.i.d. slices dist",
     "FractionalBrownianMotionProcess": "FractionalBrownianMotionProcess[mu, sigma, h] (and [h] = [0, 1, h]); slice "
@@ -3168,3 +3169,380 @@ def _tsforecast(proc: Expr, data: Expr, spec: Expr = None, *opts: Expr) -> Expr:
     if scalar:
         return R(preds[0])
     return make_td([[(R(last + k), R(v)) for k, v in zip(ks, preds)]])
+
+
+# ─────────────────────────── parameter conditions ───────────────────────────
+
+from .. import kernel as _KK  # noqa: E402
+
+for _h in ("ProcessParameterQ", "ProcessParameterAssumptions"):
+    _KK.BUILTIN_ATTRIBUTES[_h] = {"HoldAll", "Protected"}
+
+def _held_proc(proc):
+    """evaluate the arguments of a held process expression without running its constructor"""
+    if isinstance(proc, Expr) and isinstance(proc.head, str) and proc.head in CLASSES:
+        return Expr(proc.head, *(_ev(a) for a in proc.args))
+    if isinstance(proc, Expr) and isinstance(proc.head, Expr) and is_proc(proc.head):
+        return proc
+    return _ev(proc)
+
+
+def _lax_parse(proc, fname):
+    """parse with validators recording conditions instead of raising; returns (proc or None, conditions)"""
+    proc = _held_proc(proc)
+    if not is_proc(proc):
+        if isinstance(proc, Expr) and is_proc(proc.head):
+            raise TypeError(f"{fname}: {proc} is a process slice; use DistributionParameterAssumptions")
+        if isinstance(proc, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: {proc} is not a random process")
+    _CONDS.clear()
+    _LAX[0] = True
+    try:
+        try:
+            pr = CLASSES[proc.head](proc, fname)
+        except ValueError:
+            return None, None
+        return pr, list(_CONDS)
+    finally:
+        _LAX[0] = False
+        _CONDS.clear()
+
+
+@fn("ProcessParameterAssumptions", area=AREA, status="added", hold=True,
+    notes="ProcessParameterAssumptions[proc]: the conjunction of the conditions the constructor of proc places on "
+          "its parameters (positivity of rates, volatilities and noise variances, 0 <= p <= 1, reality of drifts "
+          "...), evaluated: True or False for numeric parameters, a logical expression otherwise. Structural "
+          "conditions that are checked directly (matrix shapes and row sums, integer orders, list forms) give False "
+          "when violated and are not listed. Slices proc[t] raise TypeError (Wolfram's Possible Issues). "
+          "Check: exact; reference (Wolfram documentation examples) in tests.")
+def _ppa(proc: Held) -> Expr:
+    fname = "ProcessParameterAssumptions"
+    try:
+        pr, conds = _lax_parse(proc, fname)
+    except Unevaluated:
+        raise
+    except NotImplementedError:
+        raise
+    if pr is None:
+        return False
+    if not conds:
+        return True
+    return _ev(Expr("And", *conds))
+
+
+@fn("ProcessParameterQ", area=AREA, status="added", hold=True,
+    notes="ProcessParameterQ[proc]: True if proc is a random process whose numeric parameters meet the parameter "
+          "assumptions (symbolic parameters are assumed valid, as in Wolfram), False if a parameter is invalid or "
+          "proc is not a random process. Check: exact; reference (Wolfram documentation examples) in tests.")
+def _ppq(proc: Held) -> Boolean:
+    fname = "ProcessParameterQ"
+    proc = _held_proc(proc)
+    if not is_proc(proc):
+        return False
+    try:
+        pr, conds = _lax_parse(proc, fname)
+    except (TypeError, Unevaluated):
+        return False
+    if pr is None:
+        return False
+    return not any(_ev(c) is False for c in conds)
+
+
+# ─────────────────────────── estimation ───────────────────────────
+
+def _est_opts(opts, fname):
+    est = "Automatic"
+    for o in opts:
+        if not (isinstance(o, Expr) and o.head in ("Rule", "RuleDelayed") and isinstance(o.args[0], Symbol)):
+            raise ValueError(f"{fname}: unexpected argument {o}")
+        k, v = o.args[0].name, o.args[1]
+        if k == "ProcessEstimator":
+            if isinstance(v, Symbol) and v.name == "Automatic":
+                est = "Automatic"
+            elif isinstance(v, str):
+                est = v
+            else:
+                raise NotImplementedError(f"{fname}: ProcessEstimator -> {v} is not supported")
+        elif k in ("AccuracyGoal", "PrecisionGoal", "WorkingPrecision"):
+            if not (isinstance(v, Symbol) and v.name == "Automatic"):
+                raise NotImplementedError(f"{fname}: {k} is not supported")
+        else:
+            raise ValueError(f"{fname}: unknown option {k}")
+    return est
+
+
+def _with_origin(path):
+    """prepend (0, 0) for processes that start at 0 when the data starts later"""
+    if path and _num(path[0][0]) and path[0][0] > 0:
+        return [(sp.Integer(0), sp.Integer(0))] + path
+    return path
+
+
+def _increments(paths):
+    out = []
+    for p in paths:
+        for (t0, x0), (t1, x1) in zip(p, p[1:]):
+            dt = t1 - t0
+            if not dt > 0:
+                raise ValueError("FindProcessParameters: times must be increasing")
+            out.append((dt, x1 - x0))
+    if not out:
+        raise ValueError("FindProcessParameters: at least two observations are needed")
+    return out
+
+
+def _fix(v, exact):
+    v = sp.simplify(v) if exact else sp.Float(_f(v))
+    return v
+
+
+def _param_slot(a, fname):
+    """Symbol -> ('free', symbol); number -> ('fixed', sympy value)"""
+    if isinstance(a, Symbol):
+        return ("free", a)
+    v = _p(a, fname)
+    if not _num(v):
+        raise NotImplementedError(f"{fname}: parameters must be symbols or numbers")
+    return ("fixed", v)
+
+
+def _yule_walker(xs, p, centered):
+    n = len(xs)
+    m = sum(xs) / n if centered else sp.Integer(0)
+    d = [x - m for x in xs]
+    g = [sum(d[i + h] * d[i] for i in range(n - h)) / n for h in range(p + 1)]
+    if g[0] == 0:
+        raise ValueError("FindProcessParameters: the data are constant")
+    phi, v = [], g[0]
+    for k in range(1, p + 1):
+        num = g[k] - sum(phi[j] * g[k - 1 - j] for j in range(k - 1))
+        a = num / v
+        phi = [phi[j] - a * phi[k - 2 - j] for j in range(k - 1)] + [a]
+        v = v * (1 - a ** 2)
+    c = m * (1 - sum(phi))
+    return c, phi, v
+
+
+def _ar_ols(xs, p, with_c, exact):
+    n = len(xs)
+    if n - p < p + (1 if with_c else 0) + 1:
+        raise ValueError("FindProcessParameters: too few observations for the AR order")
+    rows = [([sp.Integer(1)] if with_c else []) + [xs[t - i] for i in range(1, p + 1)] for t in range(p, n)]
+    y = [xs[t] for t in range(p, n)]
+    if exact:
+        X, Y = sp.Matrix(rows), sp.Matrix(y)
+        A = X.T * X
+        if A.det() == 0:
+            raise ValueError("FindProcessParameters: the regression is singular (degenerate data)")
+        beta = list(A.LUsolve(X.T * Y))
+        res = Y - X * sp.Matrix(beta)
+        rss = (res.T * res)[0]
+    else:
+        import numpy as np
+        X = np.array([[_f(v) for v in r] for r in rows])
+        Y = np.array([_f(v) for v in y])
+        beta, *_ = np.linalg.lstsq(X, Y, rcond=None)
+        rss = float(((Y - X @ beta) ** 2).sum())
+        beta = [sp.Float(float(b)) for b in beta]
+        rss = sp.Float(rss)
+    c = beta[0] if with_c else sp.Integer(0)
+    phi = beta[1:] if with_c else beta
+    return c, phi, rss / (n - p)
+
+
+def _estimate(data, proc, opts, fname, template_ok):
+    est = _est_opts(opts, fname)
+    if not (isinstance(proc, Expr) and isinstance(proc.head, str) and proc.head in CLASSES):
+        if isinstance(proc, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{fname}: {proc} is not a random process")
+    h = proc.head
+    paths = _series_data(data, fname)
+    exact = not any(_inexact(t, x) for p in paths for t, x in p)
+    args = list(proc.args)
+    sols = {}
+
+    def need(est_ok):
+        if est not in est_ok:
+            raise NotImplementedError(f"{fname}: ProcessEstimator -> {est!r} is not supported for {h} (supported: "
+                                      + ", ".join(repr(e) for e in est_ok) + ")")
+
+    if h in ("WienerProcess", "PoissonProcess", "BinomialProcess", "GeometricBrownianMotionProcess"):
+        need(("Automatic", "MaximumLikelihood"))
+    if h == "WienerProcess" or h == "GeometricBrownianMotionProcess":
+        if h == "WienerProcess":
+            if len(args) != 2:
+                raise ValueError(f"{fname}: expected WienerProcess[mu, sigma]")
+            ps = [_with_origin(p) for p in paths]
+        else:
+            if len(args) != 3:
+                raise ValueError(f"{fname}: expected GeometricBrownianMotionProcess[mu, sigma, x0]")
+            x0s = _param_slot(args[2], fname)
+            if any(x <= 0 for p in paths for _, x in p):
+                raise ValueError(f"{fname}: geometric Brownian motion data must be positive")
+            if x0s[0] == "free":
+                if any(p[0][0] != 0 for p in paths):
+                    raise NotImplementedError(f"{fname}: estimating x0 needs data starting at time 0")
+                firsts = {p[0][1] for p in paths}
+                sols[x0s[1]] = paths[0][0][1] if len(firsts) == 1 else sum(p[0][1] for p in paths) / len(paths)
+                x0v = None
+            else:
+                x0v = x0s[1]
+            ps = []
+            for p in paths:
+                q = [(t, sp.log(x)) for t, x in p]
+                if p[0][0] > 0 and x0v is not None:
+                    q = [(sp.Integer(0), sp.log(x0v))] + q
+                ps.append(q)
+            exact = False
+        inc = _increments(ps)
+        ms, ss = _param_slot(args[0], fname), _param_slot(args[1], fname)
+        T = sum(dt for dt, _ in inc)
+        if ms[0] == "free":
+            m = sum(dx for _, dx in inc) / T
+        else:
+            m = ms[1] if h == "WienerProcess" else None
+        if h == "GeometricBrownianMotionProcess" and ms[0] == "fixed":
+            raise NotImplementedError(f"{fname}: a fixed drift for geometric Brownian motion is not supported")
+        if ss[0] == "free":
+            s2 = sum((dx - m * dt) ** 2 / dt for dt, dx in inc) / len(inc)
+            if s2 == 0:
+                raise ValueError(f"{fname}: the data have no variability")
+            s = sp.sqrt(s2)
+        else:
+            s = ss[1]
+        if h == "GeometricBrownianMotionProcess":
+            m = m + s ** 2 / 2
+        if ms[0] == "free":
+            sols[ms[1]] = _fix(m, exact)
+        if ss[0] == "free":
+            sols[ss[1]] = _fix(s, exact)
+    elif h in ("PoissonProcess", "BinomialProcess"):
+        if len(args) != 1:
+            raise ValueError(f"{fname}: expected {h}[p]")
+        sl = _param_slot(args[0], fname)
+        inc = _increments([_with_origin(p) for p in paths])
+        for dt, dx in inc:
+            if not (dx.is_Integer and dx >= 0) and not (not exact and float(dx).is_integer() and dx >= 0):
+                raise ValueError(f"{fname}: {h} data must be non-decreasing integer counts")
+            if h == "BinomialProcess" and dx > dt:
+                raise ValueError(f"{fname}: BinomialProcess counts can grow by at most 1 per step")
+        if sl[0] == "free":
+            sols[sl[1]] = _fix(sum(dx for _, dx in inc) / sum(dt for dt, _ in inc), exact)
+    elif h == "BernoulliProcess":
+        need(("Automatic", "MaximumLikelihood", "MethodOfMoments"))
+        if len(args) != 1:
+            raise ValueError(f"{fname}: expected BernoulliProcess[p]")
+        sl = _param_slot(args[0], fname)
+        xs = [x for p in paths for _, x in p]
+        if not all(x in (0, 1) for x in xs):
+            raise ValueError(f"{fname}: BernoulliProcess data must be 0 or 1")
+        if sl[0] == "free":
+            sols[sl[1]] = _fix(sp.Add(*xs) / len(xs), exact)
+    elif h == "RandomWalkProcess":
+        need(("Automatic", "MaximumLikelihood", "MethodOfMoments"))
+        if len(args) != 1:
+            raise NotImplementedError(f"{fname}: only RandomWalkProcess[p] is supported")
+        sl = _param_slot(args[0], fname)
+        inc = _increments([_with_origin(p) for p in paths])
+        steps = 0
+        ups = 0
+        for dt, dx in inc:
+            if dt != 1 or dx not in (1, -1):
+                raise ValueError(f"{fname}: RandomWalkProcess data must move by +1 or -1 at each unit time step")
+            steps += 1
+            ups += dx == 1
+        if sl[0] == "free":
+            sols[sl[1]] = _fix(sp.Integer(ups) / steps, exact)
+    elif h == "ARProcess":
+        if len(paths) != 1:
+            raise NotImplementedError(f"{fname}: AR estimation from several paths is not supported")
+        xs = [x for _, x in paths[0]]
+        if len(args) == 1 and isinstance(args[0], int) and not isinstance(args[0], bool):
+            if not template_ok:
+                raise NotImplementedError(f"{fname}: the template ARProcess[p] needs symbolic parameters; use "
+                                          "ARProcess[{a1, ..., ap}, v] or EstimatedProcess")
+            p_ = args[0]
+            names = [Symbol(f"a{i}") for i in range(1, p_ + 1)]
+            cs, vs = None, ("free", Symbol("v"))
+        else:
+            if len(args) == 3:
+                cs, al, vv = _param_slot(args[0], fname), args[1], args[2]
+            elif len(args) == 2:
+                cs, al, vv = None, args[0], args[1]
+            else:
+                raise ValueError(f"{fname}: expected ARProcess[{{a1, ...}}, v] or ARProcess[c, {{a1, ...}}, v]")
+            if not is_list(al) or not al.args or not all(isinstance(a, Symbol) for a in al.args):
+                raise NotImplementedError(f"{fname}: all AR coefficients must be symbols")
+            names = list(al.args)
+            vs = _param_slot(vv, fname)
+            if vs[0] != "free" or (cs is not None and cs[0] != "free"):
+                raise NotImplementedError(f"{fname}: fixed AR constants or noise variances are not supported")
+            p_ = len(names)
+        if p_ < 1 or len(xs) <= 2 * p_ + 1:
+            raise ValueError(f"{fname}: too few observations for an AR({p_}) model")
+        with_c = cs is not None
+        if est == "YuleWalker":
+            c, phi, v = _yule_walker(xs, p_, with_c)
+        elif est == "MaximumConditionalLikelihood":
+            c, phi, v = _ar_ols(xs, p_, with_c, exact)
+        else:
+            raise NotImplementedError(f"{fname}: for ARProcess give ProcessEstimator -> \"YuleWalker\" or "
+                                      "\"MaximumConditionalLikelihood\" (the Automatic and maximum likelihood "
+                                      "estimators are not supported)")
+        if with_c:
+            sols[cs[1]] = _fix(c, exact)
+        for nm, a in zip(names, phi):
+            sols[nm] = _fix(a, exact)
+        sols[vs[1]] = _fix(v, exact)
+        if len(args) == 1:
+            return sols, Expr("ARProcess", L(*names), vs[1])
+    else:
+        raise NotImplementedError(f"{fname}: estimation for {h} is not supported (supported: WienerProcess, "
+                                  "GeometricBrownianMotionProcess, PoissonProcess, BernoulliProcess, BinomialProcess, "
+                                  "RandomWalkProcess, ARProcess)")
+    if not sols:
+        raise ValueError(f"{fname}: {proc} has no free (symbolic) parameters to estimate")
+    return sols, proc
+
+
+def _sols_rules(sols):
+    return L(*(rule(k, R(v)) for k, v in sols.items()))
+
+
+@fn("FindProcessParameters", area=AREA, status="added",
+    notes="FindProcessParameters[data, proc] gives {param -> estimate, ...} for the symbolic parameters of proc. "
+          "Supported: WienerProcess (Gaussian-increment MLE: mu = (x_end - 0)/elapsed time, sigma^2 = mean of "
+          "(dx - mu dt)^2/dt; the process starts at 0 at time 0), GeometricBrownianMotionProcess (Wiener MLE of log "
+          "x, mu = drift + sigma^2/2, machine numbers), PoissonProcess and BinomialProcess (count/elapsed time), "
+          "BernoulliProcess (sample mean), RandomWalkProcess[p] (fraction of up steps) and ARProcess with "
+          "ProcessEstimator -> \"YuleWalker\" (biased 1/n autocovariances, Durbin-Levinson, as statsmodels "
+          "yule_walker method=\"mle\") or \"MaximumConditionalLikelihood\" (least squares on lagged values, noise "
+          "variance RSS/(n - p) as statsmodels AutoReg). Numeric parameters stay fixed (Wiener, GBM x0). Exact "
+          "data give exact estimates (except GBM). Data: a list of values (times 0, 1, ...), {t, x} pairs, "
+          "TimeSeries or TemporalData (several paths are pooled). Other processes, Automatic for ARProcess and "
+          "other estimators raise NotImplementedError. Check: exact; reference (closed-form MLEs, statsmodels "
+          "yule_walker / AutoReg) in tests.")
+def _fpp(data: Expr, proc: Expr, *opts: Expr) -> ListOf[Rule]:
+    sols, _ = _estimate(data, proc, opts, "FindProcessParameters", False)
+    return _sols_rules(sols)
+
+
+@fn("EstimatedProcess", area=AREA, status="added",
+    notes="EstimatedProcess[data, proc]: proc with its symbolic parameters replaced by the estimates of "
+          "FindProcessParameters (same processes, estimators and options); the template ARProcess[p] is accepted "
+          "(fitted as ARProcess[{a1, ..., ap}, v] without constant). Check: exact; reference (equals "
+          "proc /. FindProcessParameters[data, proc]) in tests.")
+def _estproc(data: Expr, proc: Expr, *opts: Expr) -> Expr:
+    sols, proc2 = _estimate(data, proc, opts, "EstimatedProcess", True)
+    reps = {k: R(v) for k, v in sols.items()}
+    return _ev(_subst(proc2, reps))
+
+
+from .wl_graphics_color import inert_option as _inert_option  # noqa: E402
+
+_inert_option("ProcessEstimator", "ProcessEstimator: option of FindProcessParameters and EstimatedProcess; "
+              "Automatic, \"MaximumLikelihood\", \"MethodOfMoments\" (where they coincide with the closed forms), "
+              "\"YuleWalker\" and \"MaximumConditionalLikelihood\" (ARProcess) are supported. Check: exact; "
+              "reference in tests.", AREA)
