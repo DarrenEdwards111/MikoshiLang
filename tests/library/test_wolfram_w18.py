@@ -840,6 +840,7 @@ CASES = [
     (f"LinearModelFit[{LMD}, w18x, w18x][\"ParameterTable\"]", Raises(NotImplementedError)),
     (f"LinearModelFit[{LMD}, w18x, w18x][\"w18Foo\"]", Raises(ValueError)),
     ("FittedModel[3]", Raises(TypeError)),
+    ('FittedModel["x"]', Raises(TypeError)),
     ('FittedModel[<|"a" -> 1|>]["BestFit"]', Raises(ValueError)),
     # Check: the exact covariance matrix equals EstimatedVariance Inverse[X'X]
     (f"LinearModelFit[{LMD}, w18x, w18x][\"CovarianceMatrix\"] == 48/59 Inverse[Transpose[DesignMatrix[{LMD}, "
@@ -1049,6 +1050,8 @@ CASES = [
     ('SurvivalModelFit[{1, 2}]["HallWellnerBands"]', Raises(NotImplementedError)),
     ('SurvivalModelFit[{1, 2}]["w18Foo"]', Raises(ValueError)),
     ("SurvivalModel[3]", Raises(TypeError)),
+    ('SurvivalModel["x"]', Raises(TypeError)),
+    ('SurvivalModel[<|"a" -> 1|>]["Nope"]', Raises(ValueError)),
     ('Head[SurvivalModelFit[{1, 2}]]', "SurvivalModel"),
     ('SurvivalModelFit[{1, 2}]["CHF"][1.5]', approx(0.6931471805599453)),
     ('SurvivalModelFit[{1, 2}]["CHF"]["a"]', Raises(TypeError)),
@@ -1099,6 +1102,8 @@ CASES = [
     (f'{COX1}["ParameterTable"]', Raises(NotImplementedError)),
     (f'{COX1}["w18Foo"]', Raises(ValueError)),
     ("CoxModel[3]", Raises(TypeError)),
+    ('CoxModel["x"]', Raises(TypeError)),
+    ('CoxModel[<|"a" -> 1|>]["Nope"]', Raises(ValueError)),
     (f"Head[{COX1}]", "CoxModel"),
 ]
 

@@ -1148,7 +1148,7 @@ def _clustering_components(x: ListOf[Expr] | MatrixOf[Real], nn: PosInteger | Ex
           "in FindClusters; data -> labels and <|...|> label the leaves. The Automatic linkage (undocumented), "
           "custom linkage functions and images raise NotImplementedError. Check: merge heights match "
           "scipy.cluster.hierarchy.linkage (reference), and the root weight equals the largest merge height "
-          "(self-check by construction).")
+          "(by construction).")
 def _clustering_tree(x: ListOf[Expr] | Rule | Expr, d: Real = None, *rest: Option) -> Expr:
     name = "ClusteringTree"
     rest = list(rest)

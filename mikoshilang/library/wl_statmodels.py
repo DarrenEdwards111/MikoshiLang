@@ -3113,7 +3113,7 @@ def _missing_fallback(*args: Expr) -> Expr:
           "(the nearest known value before / after, falling back to the other direction); TransformMissing[data, "
           "{spec1, spec2, ...}] gives one spec per column. Tabular, Dataset, TimeSeries and associations raise "
           "NotImplementedError; a column with no known values ValueError; unknown specs ValueError. Check: the "
-          "known values are unchanged and the result has no Missing elements (self-check in code).")
+          "known values are unchanged and the result has no Missing elements (asserted in code).")
 def _transform_missing(x: ListOf[Expr] | MatrixOf[Expr], spec: String | ListOf[Expr] = None) -> ListOf[Expr]:
     name = "TransformMissing"
     if isinstance(x, Symbol):
