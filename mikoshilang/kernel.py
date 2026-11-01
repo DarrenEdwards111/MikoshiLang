@@ -1518,6 +1518,13 @@ def _with(spec, body, ev):
 # ─────────────────────────── functions ───────────────────────────
 
 
+def _untyped(p):
+    """Typed[x, type] parameters (compiler annotations, W30) are plain parameters when evaluated."""
+    if isinstance(p, Expr) and p.head == "Typed" and len(p.args) == 2 and isinstance(p.args[0], Symbol):
+        return p.args[0]
+    return p
+
+
 def apply_function(f, args, ev):
     fa = f.args
     if len(fa) == 1:
@@ -1526,6 +1533,7 @@ def apply_function(f, args, ev):
         raise NotImplementedError("Function[params, body, attributes] is not supported")
     if len(fa) == 2:
         params = fa[0]
+        params = _untyped(params) if not is_list(params) else Expr("List", *map(_untyped, params.args))
         if isinstance(params, Symbol):
             names = [params.name]
         elif is_list(params) and all(isinstance(p, Symbol) for p in params.args):
