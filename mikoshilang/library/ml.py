@@ -43,7 +43,8 @@ def _s(name):
 
 @fn("KMeans", area=AREA, status="verified",
     notes="KMeans[data, k, maxIter=100] -> {labels -> ..., centers -> ...} (scikit-learn, random_state=42, "
-          "n_init=10); k must not exceed the number of points")
+          "n_init=10); k must not exceed the number of points"
+          ". Check: reference (differential cases in tests/library).")
 def _kmeans(data, k, maxit=100):
     X = _matrix(data, "KMeans")
     k = pos_int(k, "KMeans", "k")
@@ -57,7 +58,8 @@ def _kmeans(data, k, maxit=100):
 
 @fn("PCA", area=AREA, status="verified",
     notes="PCA[data, n=2] -> {transformed -> ..., explainedVariance -> ratios} (scikit-learn; component signs "
-          "are arbitrary)")
+          "are arbitrary)"
+          ". Check: reference (differential cases in tests/library).")
 def _pca(data, n=2):
     X = _matrix(data, "PCA")
     n = pos_int(n, "PCA", "number of components")
@@ -71,7 +73,8 @@ def _pca(data, n=2):
 
 @fn("LogisticRegressionTrain", area=AREA, status="verified",
     notes="-> {coefficients, intercept, accuracy (training set)}; scikit-learn LogisticRegression (L2, C=1); "
-          "binary labels only")
+          "binary labels only"
+          ". Check: reference (differential cases in tests/library).")
 def _logreg(X, y):
     Xs = _matrix(X, "LogisticRegressionTrain")
     ys = _labels(y, len(Xs), "LogisticRegressionTrain")
@@ -85,7 +88,8 @@ def _logreg(X, y):
 
 
 @fn("DecisionTreeTrain", area=AREA, status="verified",
-    notes="-> {accuracy (training set), depth}; scikit-learn DecisionTreeClassifier(max_depth, random_state=42)")
+    notes="-> {accuracy (training set), depth}; scikit-learn DecisionTreeClassifier(max_depth, random_state=42)"
+          ". Check: reference (differential cases in tests/library).")
 def _tree(X, y, depth=5):
     Xs = _matrix(X, "DecisionTreeTrain")
     ys = _labels(y, len(Xs), "DecisionTreeTrain")

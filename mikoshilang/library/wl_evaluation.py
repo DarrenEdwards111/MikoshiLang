@@ -795,7 +795,8 @@ def _get_file(path):
     notes="Get[\"file\"] (<<file) reads a file of Wolfram Language input and evaluates each expression in turn, "
           "returning the last result (a relative file name is also searched for in PACKAGE_PATH and "
           "$MIKOSHILANG_PATH); Get[\"ctx`\"] loads ctx.wl, ctx.m, ctx/init.m or ctx/Kernel/init.m from the "
-          "working directory, PACKAGE_PATH or $MIKOSHILANG_PATH. A file that cannot be opened raises Get::noopen")
+          "working directory, PACKAGE_PATH or $MIKOSHILANG_PATH. A file that cannot be opened raises Get::noopen"
+          ". Check: reference (differential cases in tests/library).")
 def _get(name, *opts):
     if opts:
         raise NotImplementedError("Get: options are not supported")
@@ -1747,7 +1748,8 @@ def _select_opts(rules, keys):
 @fn("Options", area=AREA, status="added",
     notes="Options[f] gives the default option rules of a user symbol (set by Options[f] = {...} or "
           "SetOptions); Options[f, name] or Options[f, {names}] selects; Options[expr] gives the options at the end "
-          "of expr (f[x, a -> 1] gives {a -> 1}). Built-in option lists are not catalogued and raise")
+          "of expr (f[x, a -> 1] gives {a -> 1}). Built-in option lists are not catalogued and raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _options(x, *names_):
     if len(names_) > 1:
         raise ValueError("Options: 1 or 2 arguments expected")

@@ -81,7 +81,8 @@ def _vertex(g, v, fname):
 
 @fn("ShortestPath", area=AREA, status="fixed",
     notes="vertex list of a shortest (weighted) path, {} when unreachable (Wolfram FindShortestPath); unknown "
-          "vertices raise")
+          "vertices raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _sp(g, s, t):
     gr = G(g, "ShortestPath")
     _vertex(gr, s, "ShortestPath")
@@ -97,7 +98,8 @@ def _sp(g, s, t):
 
 
 @fn("PathLength", area=AREA, status="fixed",
-    notes="(weighted) shortest-path distance, Infinity when unreachable; unknown vertices raise")
+    notes="(weighted) shortest-path distance, Infinity when unreachable; unknown vertices raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _pl(g, s, t):
     gr = G(g, "PathLength")
     _vertex(gr, s, "PathLength")
@@ -106,7 +108,9 @@ def _pl(g, s, t):
     return R(d.get(gr.key(t), sp.oo))
 
 
-@fn("Dijkstra", area=AREA, status="fixed", notes="{v -> distance} for every reachable vertex, in vertex order")
+@fn("Dijkstra", area=AREA, status="fixed", notes="{v -> distance} for every reachable vertex, in vertex order"
+                                                 ". Check: exact (exact input gives exact results), reference "
+                                                 "(differential cases in tests/library).")
 def _dij(g, s):
     gr = G(g, "Dijkstra")
     _vertex(gr, s, "Dijkstra")
@@ -142,13 +146,15 @@ def _cc(g):
     return L(*(L(*(gr.byk[k] for k in c)) for c in _components(gr)))
 
 
-@fn("ConnectedQ", area=AREA, status="verified", notes="True when the graph is connected")
+@fn("ConnectedQ", area=AREA, status="verified", notes="True when the graph is connected"
+                                                      ". Check: reference (differential cases in tests/library).")
 def _connq(g):
     gr = G(g, "ConnectedQ")
     return len(_components(gr)) <= 1
 
 
-@fn("BipartiteQ", area=AREA, status="verified", notes="2-colourability test (BFS)")
+@fn("BipartiteQ", area=AREA, status="verified", notes="2-colourability test (BFS)"
+                                                      ". Check: reference (differential cases in tests/library).")
 def _bip(g):
     gr = G(g, "BipartiteQ")
     color = {}
@@ -208,7 +214,8 @@ def _deg(g, v):
 
 @fn("ChromaticNumber", area=AREA, status="fixed",
     notes="exact chromatic number by backtracking (legacy used a greedy colouring, an upper bound only); "
-          "graphs with more than 40 vertices raise")
+          "graphs with more than 40 vertices raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _chrom(g):
     gr = G(g, "ChromaticNumber")
     ks = sorted((gr.key(v) for v in gr.vertices), key=lambda k: -len(gr.adj[k]))
@@ -243,7 +250,8 @@ def _chrom(g):
 
 @fn("ClusteringCoefficient", area=AREA, status="fixed",
     notes="ClusteringCoefficient[g] = mean local clustering (vertices of degree < 2 count 0, as Wolfram "
-          "MeanClusteringCoefficient), [g, v] local coefficient; exact rationals (legacy floats)")
+          "MeanClusteringCoefficient), [g, v] local coefficient; exact rationals (legacy floats)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _clust(g, v=None):
     gr = G(g, "ClusteringCoefficient")
 
@@ -298,7 +306,8 @@ def _betw(g):
 
 @fn("PageRank", area=AREA, status="fixed",
     notes="{v -> rank} PageRank with damping 0.85 treating each edge as two directed links (power iteration to "
-          "1e-12, matches NetworkX); legacy required NetworkX")
+          "1e-12, matches NetworkX); legacy required NetworkX"
+          ". Check: reference (differential cases in tests/library).")
 def _pagerank(g, alpha=0.85):
     gr = G(g, "PageRank")
     a = float(number(alpha, "PageRank", "damping"))
@@ -339,19 +348,22 @@ def _kruskal(gr):
 
 
 @fn("MinimumSpanningTree", area=AREA, status="fixed",
-    notes="edges of a minimum spanning forest (Kruskal, weights {u, v, w} supported); legacy needed NetworkX")
+    notes="edges of a minimum spanning forest (Kruskal, weights {u, v, w} supported); legacy needed NetworkX"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mst(g):
     return _kruskal(G(g, "MinimumSpanningTree"))
 
 
-@fn("SpanningTree", area=AREA, status="fixed", notes="edges of a spanning forest (Kruskal)")
+@fn("SpanningTree", area=AREA, status="fixed", notes="edges of a spanning forest (Kruskal)"
+                                                     ". Check: reference (differential cases in tests/library).")
 def _st(g):
     return _kruskal(G(g, "SpanningTree"))
 
 
 @fn("MaximalMatching", area=AREA, status="verified",
     notes="a maximum-cardinality matching (NetworkX max_weight_matching with unit weights), edges sorted; "
-          "requires NetworkX")
+          "requires NetworkX"
+          ". Check: reference (differential cases in tests/library).")
 def _match(g):
     gr = G(g, "MaximalMatching")
     try:

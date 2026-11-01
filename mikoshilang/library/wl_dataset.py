@@ -415,7 +415,8 @@ def run_query(ops, ctx, data):
           "\"Drop\", \"Encapsulate\", \"Replace\", {act, f}), MissingBehavior (Automatic: Total/Mean/... skip "
           "Missing, too-short data gives Missing[\"Indeterminate\"], Apply[Times] with Missing gives "
           "Missing[\"Indeterminate\"]; None) and PartBehavior (Automatic: absent parts give Missing[\"PartAbsent\", "
-          "i] / Missing[\"KeyAbsent\", k]; None: they fail)")
+          "i] / Missing[\"KeyAbsent\", k]; None: they fail)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _query(*args: Expr) -> Expr:
     ops, ctx = split_query(args)       # validates the options
     raise Unevaluated()
@@ -446,7 +447,8 @@ _DS_OPTS = {"DatasetTheme", "MaxItems", "HiddenItems", "ItemDisplayFunction", "I
     notes="Dataset[data] and Dataset[data, opts] (display options such as DatasetTheme, MaxItems are kept): an inert "
           "wrapper of nested lists/associations; ds[ops...] = Query[ops...] on the data (structured results stay "
           "Datasets), Normal, Length, Part (ds[[...]] gives a Dataset for structured parts), Keys, Values; Dataset "
-          "of a Tabular gives its rows; type and schema inference (TypeSystem) is not reproduced")
+          "of a Tabular gives its rows; type and schema inference (TypeSystem) is not reproduced"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dataset(*args: Expr) -> Expr:
     if not args:
         raise ValueError("Dataset: expected Dataset[data]")
@@ -645,7 +647,8 @@ def _ref_assoc(spec):
     notes="DatabaseReference[File[path]], DatabaseReference[\"path\"], DatabaseReference[URL[url]] / \"backend://"
           "user:pass@host:port/name\" and DatabaseReference[<|\"Backend\" -> ..., \"Name\" -> ..., ...|>] give the "
           "canonical DatabaseReference[<|...|>]; ref[prop] for Backend, Name, Host, Port, Username, Password and "
-          "\"Connected\"; only SQLite databases can actually be opened (Python sqlite3)")
+          "\"Connected\"; only SQLite databases can actually be opened (Python sqlite3)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _databasereference(spec: Expr) -> Expr:
     if parse_ref(Expr("DatabaseReference", spec)) is not None:
         canon = _ref_assoc(spec)
@@ -804,7 +807,8 @@ def _parse_rdb(x):
           "\"ForeignKeys\", \"UniquenessConstraints\", \"Indexes\"|>|>, ref]; option IncludeRelatedTables (follow "
           "foreign keys); rdb[\"Tables\"], rdb[\"Connection\"], rdb[table, prop], rdb[table, \"PrimaryKey\", prop], "
           "rdb[table, col, \"NativeTypeString\" | \"Nullable\" | All]; Tabular[rdb -> table] and Tabular[<|"
-          "\"RelationalDatabase\" -> rdb, \"Query\" -> table|>] load a table into memory")
+          "\"RelationalDatabase\" -> rdb, \"Query\" -> table|>] load a table into memory"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _relationaldatabase(*args: Expr) -> Expr:
     if _parse_rdb(Expr("RelationalDatabase", *args)) is not None:
         raise Unevaluated()
@@ -962,7 +966,8 @@ wrap_registry("Tabular", _tabular_db_pre)
     notes="DataConnectionObject[<|\"ConnectionName\" -> ..., \"Location\" -> ..., ...|>] (and a second "
           "association, Authentication option): an inert, validated reference; obj[\"ConnectionName\"], "
           "obj[\"Location\"], obj[\"Redownload\"] (default False), obj[\"Properties\"] and other keys; retrieving "
-          "remote data (Import) is not available")
+          "remote data (Import) is not available"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dataconnectionobject(*args: Expr) -> Expr:
     args = list(args)
     while args and is_rule(args[-1]) and is_sym(args[-1].args[0], "Authentication"):

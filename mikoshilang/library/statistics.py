@@ -104,7 +104,8 @@ def _inert(name, nargs, notes):
     return impl
 
 
-_inert("NormalDistribution", (0, 2), "inert distribution object NormalDistribution[mu, sigma] (NormalDistribution[] = [0, 1])")
+_inert("NormalDistribution", (0, 2), "inert distribution object NormalDistribution[mu, sigma] (NormalDistribution[] = [0, 1])"
+                                     ". Check: reference (differential cases in tests/library).")
 _inert("ExponentialDistribution", (1,), "inert distribution object (rate lambda)")
 _inert("PoissonDistribution", (1,), "inert distribution object (mean mu)")
 _inert("BinomialDistribution", (2,), "inert distribution object [n, p]")
@@ -419,7 +420,8 @@ def _floats(v):
 
 
 @fn("PearsonCorrelation", area=AREA, status="fixed",
-    notes="{r -> exact Pearson r, p -> two-sided p-value (SciPy)} (MikoshiLang)")
+    notes="{r -> exact Pearson r, p -> two-sided p-value (SciPy)} (MikoshiLang)"
+          ". Check: reference (differential cases in tests/library).")
 def _pearsonr(x, y):
     a, b, items = _pair(x, y, "PearsonCorrelation")
     r = _out(_pearson(a, b, "PearsonCorrelation"), items)
@@ -443,7 +445,8 @@ def _ranks(v):
 
 
 @fn("SpearmanCorrelation", area=AREA, status="fixed",
-    notes="{rho -> exact Spearman rho (average ranks for ties), p -> p-value (SciPy)} (MikoshiLang)")
+    notes="{rho -> exact Spearman rho (average ranks for ties), p -> p-value (SciPy)} (MikoshiLang)"
+          ". Check: reference (differential cases in tests/library).")
 def _spearman(x, y):
     a, b, items = _pair(x, y, "SpearmanCorrelation")
     rho = _out(_pearson(_ranks(a), _ranks(b), "SpearmanCorrelation"), items)
@@ -451,7 +454,9 @@ def _spearman(x, y):
     return L(rule(Symbol("rho"), rho), rule(Symbol("p"), float(st.spearmanr(_floats(a), _floats(b))[1])))
 
 
-@fn("KendallCorrelation", area=AREA, status="verified", notes="{tau -> Kendall tau-b, p -> p-value} (SciPy)")
+@fn("KendallCorrelation", area=AREA, status="verified", notes="{tau -> Kendall tau-b, p -> p-value} (SciPy)"
+                                                              ". Check: reference (differential cases in "
+                                                              "tests/library).")
 def _kendall(x, y):
     a, b, _ = _pair(x, y, "KendallCorrelation")
     st = _scipy("KendallCorrelation")
@@ -475,7 +480,9 @@ def _hmean(x):
     return _out(len(v) / sp.Add(*(1 / t for t in v)), items)
 
 
-@fn("MAD", area=AREA, status="fixed", notes="median absolute deviation Median[Abs[x - Median[x]]] (Wolfram MedianDeviation), " + EXACT)
+@fn("MAD", area=AREA, status="fixed", notes="median absolute deviation Median[Abs[x - Median[x]]] (Wolfram MedianDeviation), " + EXACT +
+                                            ". Check: exact (exact input gives exact results), reference "
+                                            "(differential cases in tests/library).")
 def _mad(x):
     v, items = _data(x, "MAD")
     m = _median(v)
@@ -507,7 +514,8 @@ def _qparams(p, fname):
 @fn("Quantile", area=AREA, status="fixed",
     notes="Wolfram definition s[[Ceiling[n q]]] (q = 0 gives the minimum), lists of q and the 4-parameter form "
           "Quantile[list, q, {{a, b}, {c, d}}]; legacy used NumPy's linear interpolation (a different estimator) "
-          "returning floats")
+          "returning floats"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _quantile_fn(x, q, params=None):
     v, items = _data(x, "Quantile")
     pr = _qparams(params, "Quantile")
@@ -521,7 +529,8 @@ def _quantile_fn(x, q, params=None):
 
 @fn("Percentile", area=AREA, status="fixed",
     notes="Percentile[list, p] with p in [0, 100] using linear interpolation between order statistics "
-          "(NumPy/Excel convention, = Quantile[list, p/100, {{1, -1}, {0, 1}}]); now exact for exact data")
+          "(NumPy/Excel convention, = Quantile[list, p/100, {{1, -1}, {0, 1}}]); now exact for exact data"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _percentile(x, p):
     v, items = _data(x, "Percentile")
     pp = number(p, "Percentile", "percentage")
@@ -532,7 +541,8 @@ def _percentile(x, p):
 
 @fn("IQR", area=AREA, status="fixed",
     notes="Wolfram InterquartileRange: Q3 - Q1 with Quantile parameters {{1/2, 0}, {0, 1}}; legacy used NumPy's "
-          "linear percentiles (a different estimator)")
+          "linear percentiles (a different estimator)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _iqr(x):
     v, items = _data(x, "IQR")
     pr = ((sp.Rational(1, 2), 0), (0, 1))
@@ -541,7 +551,8 @@ def _iqr(x):
 
 @fn("Mode", area=AREA, status="fixed",
     notes="the unique most frequent value (MikoshiLang); multimodal data now raises (legacy returned the first "
-          "mode silently) - use Commonest")
+          "mode silently) - use Commonest"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mode(x):
     items = list_arg(x, "Mode", min_len=1)
     c = _commonest(items)
@@ -567,7 +578,8 @@ def _commonest(items):
 
 @fn("Commonest", area=AREA, status="promoted",
     notes="Commonest[list]: the most frequent elements in order of first appearance; Commonest[list, n]: the n "
-          "most frequent, by decreasing frequency (ties by first appearance)")
+          "most frequent, by decreasing frequency (ties by first appearance)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _commonest_fn(x, n=None):
     from ..kernel import same
     items = list_arg(x, "Commonest", min_len=1)
@@ -588,7 +600,8 @@ def _commonest_fn(x, n=None):
 
 
 @fn("TrimmedMean", area=AREA, status="fixed",
-    notes="mean after dropping Floor[f n] values from each end (0 <= f < 1/2), " + EXACT)
+    notes="mean after dropping Floor[f n] values from each end (0 <= f < 1/2), " + EXACT +
+          ". Check: reference (differential cases in tests/library).")
 def _tmean(x, f):
     v, items = _data(x, "TrimmedMean")
     ff = number(f, "TrimmedMean", "fraction")
@@ -599,7 +612,9 @@ def _tmean(x, f):
     return _out(_mean(s), items)
 
 
-@fn("CoefficientOfVariation", area=AREA, status="fixed", notes="StandardDeviation/Mean, " + EXACT)
+@fn("CoefficientOfVariation", area=AREA, status="fixed", notes="StandardDeviation/Mean, " + EXACT +
+                                                               ". Check: exact (exact input gives exact results), "
+                                                               "reference (differential cases in tests/library).")
 def _cv(x):
     v, items = _data(x, "CoefficientOfVariation", 2)
     m = _mean(v)
@@ -608,13 +623,17 @@ def _cv(x):
     return _out(sp.sqrt(_var(v)) / m, items)
 
 
-@fn("StandardError", area=AREA, status="fixed", notes="StandardDeviation/Sqrt[n] (standard error of the mean), " + EXACT)
+@fn("StandardError", area=AREA, status="fixed", notes="StandardDeviation/Sqrt[n] (standard error of the mean), " + EXACT +
+                                                      ". Check: exact (exact input gives exact results), reference "
+                                                      "(differential cases in tests/library).")
 def _sem(x):
     v, items = _data(x, "StandardError", 2)
     return _out(sp.sqrt(_var(v) / len(v)), items)
 
 
-@fn("ZScore", area=AREA, status="fixed", notes="(x - mu)/sigma, exact; sigma <= 0 raises (legacy rounded floats)")
+@fn("ZScore", area=AREA, status="fixed", notes="(x - mu)/sigma, exact; sigma <= 0 raises (legacy rounded floats)"
+                                               ". Check: exact (exact input gives exact results), reference "
+                                               "(differential cases in tests/library).")
 def _zscore(x, mu, sigma):
     s = number(sigma, "ZScore", "sigma")
     if not s > 0:
@@ -622,7 +641,9 @@ def _zscore(x, mu, sigma):
     return numeric_out((number(x, "ZScore") - number(mu, "ZScore")) / s, x, mu, sigma)
 
 
-@fn("ZScoreNormalize", area=AREA, status="fixed", notes="(x - Mean)/StandardDeviation (Wolfram Standardize), " + EXACT)
+@fn("ZScoreNormalize", area=AREA, status="fixed", notes="(x - Mean)/StandardDeviation (Wolfram Standardize), " + EXACT +
+                                                        ". Check: exact (exact input gives exact results), reference "
+                                                        "(differential cases in tests/library).")
 def _znorm(x):
     v, items = _data(x, "ZScoreNormalize", 2)
     m, s = _mean(v), sp.sqrt(_var(v))
@@ -641,13 +662,18 @@ def _cohen(x, y, fname):
     return _out((_mean(a) - _mean(b)) / sp.sqrt(pooled), ia + ib)
 
 
-fn("CohensD", area=AREA, status="fixed", notes="(mean1 - mean2)/pooled SD, " + EXACT)(lambda x, y: _cohen(x, y, "CohensD"))
-fn("EffectSize", area=AREA, status="fixed", notes="alias of CohensD, " + EXACT)(lambda x, y: _cohen(x, y, "EffectSize"))
+fn("CohensD", area=AREA, status="fixed", notes="(mean1 - mean2)/pooled SD, " + EXACT +
+                                               ". Check: exact (exact input gives exact results), reference "
+                                               "(differential cases in tests/library).")(lambda x, y: _cohen(x, y, "CohensD"))
+fn("EffectSize", area=AREA, status="fixed", notes="alias of CohensD, " + EXACT +
+                                                  ". Check: exact (exact input gives exact results), reference "
+                                                  "(differential cases in tests/library).")(lambda x, y: _cohen(x, y, "EffectSize"))
 
 
 @fn("ConfidenceInterval", area=AREA, status="fixed",
     notes="t-based interval for the mean at the given level; legacy silently used 0.95 when the level was not a "
-          "machine number (e.g. 9/10); now any level in (0, 1) and no rounding")
+          "machine number (e.g. 9/10); now any level in (0, 1) and no rounding"
+          ". Check: reference (differential cases in tests/library).")
 def _ci(x, level):
     v, items = _data(x, "ConfidenceInterval", 2)
     c = number(level, "ConfidenceInterval", "confidence level")
@@ -667,7 +693,8 @@ def _rules(**kw):
 @fn("TTest", area=AREA, status="fixed",
     notes="Wolfram TTest[data] and TTest[data, mu0] return the two-sided one-sample p-value; TTest[{x, y}] the "
           "Welch two-sample p-value; legacy returned rounded rule lists and TTest[x, y] used the pooled-variance "
-          "test (now raises with a pointer to TTest[{x, y}])")
+          "test (now raises with a pointer to TTest[{x, y}])"
+          ". Check: reference (differential cases in tests/library).")
 def _ttest(x, mu0=None):
     st = _scipy("TTest")
     items = list_arg(x, "TTest", "data", min_len=2)
@@ -683,7 +710,8 @@ def _ttest(x, mu0=None):
 
 
 @fn("ChiSquaredTest", area=AREA, status="fixed",
-    notes="{chi2 -> statistic, p_value -> p} for observed vs expected counts (SciPy chisquare), unrounded")
+    notes="{chi2 -> statistic, p_value -> p} for observed vs expected counts (SciPy chisquare), unrounded"
+          ". Check: reference (differential cases in tests/library).")
 def _chi2(o, e):
     st = _scipy("ChiSquaredTest")
     a, _ = _data(o, "ChiSquaredTest")
@@ -702,14 +730,16 @@ def _two(fname, x, y):
     return _floats(a), _floats(b)
 
 
-@fn("MannWhitneyU", area=AREA, status="fixed", notes="{U -> statistic, p_value -> two-sided p} (SciPy), unrounded")
+@fn("MannWhitneyU", area=AREA, status="fixed", notes="{U -> statistic, p_value -> two-sided p} (SciPy), unrounded"
+                                                     ". Check: reference (differential cases in tests/library).")
 def _mwu(x, y):
     st = _scipy("MannWhitneyU")
     r = st.mannwhitneyu(*_two("MannWhitneyU", x, y), alternative="two-sided")
     return _rules(U=r[0], p_value=r[1])
 
 
-@fn("WilcoxonTest", area=AREA, status="fixed", notes="paired signed-rank test {W -> statistic, p_value -> p} (SciPy), unrounded")
+@fn("WilcoxonTest", area=AREA, status="fixed", notes="paired signed-rank test {W -> statistic, p_value -> p} (SciPy), unrounded"
+                                                     ". Check: reference (differential cases in tests/library).")
 def _wilcoxon(x, y):
     st = _scipy("WilcoxonTest")
     a, b = _two("WilcoxonTest", x, y)
@@ -719,7 +749,8 @@ def _wilcoxon(x, y):
     return _rules(W=r[0], p_value=r[1])
 
 
-@fn("ShapiroWilk", area=AREA, status="fixed", notes="{W -> statistic, p_value -> p} (SciPy), unrounded; n >= 3")
+@fn("ShapiroWilk", area=AREA, status="fixed", notes="{W -> statistic, p_value -> p} (SciPy), unrounded; n >= 3"
+                                                    ". Check: reference (differential cases in tests/library).")
 def _shapiro(x):
     st = _scipy("ShapiroWilk")
     v, _ = _data(x, "ShapiroWilk", 3)
@@ -730,7 +761,8 @@ def _shapiro(x):
 @fn("AndersonDarling", area=AREA, status="fixed",
     notes="{statistic, criticalValues, significanceLevels} for normality with estimated mean and sd (Stephens "
           "critical values with the 1 + 0.75/n + 2.25/n^2 correction, identical to SciPy anderson); computed directly, no SciPy needed (legacy relied "
-          "on an API SciPy is removing)")
+          "on an API SciPy is removing)"
+          ". Check: reference (differential cases in tests/library).")
 def _anderson(x):
     import math as _m
     v, _ = _data(x, "AndersonDarling", 3)
@@ -750,7 +782,8 @@ def _anderson(x):
              rule(Symbol("significanceLevels"), L(15.0, 10.0, 5.0, 2.5, 1.0)))
 
 
-@fn("ANOVA", area=AREA, status="fixed", notes="one-way ANOVA {F, p_value} for 2 or more groups (SciPy), unrounded")
+@fn("ANOVA", area=AREA, status="fixed", notes="one-way ANOVA {F, p_value} for 2 or more groups (SciPy), unrounded"
+                                              ". Check: reference (differential cases in tests/library).")
 def _anova(*groups):
     st = _scipy("ANOVA")
     if len(groups) < 2:
@@ -759,7 +792,8 @@ def _anova(*groups):
     return _rules(F=r[0], p_value=r[1])
 
 
-@fn("KruskalWallis", area=AREA, status="fixed", notes="{H, p_value} for 2 or more groups (SciPy), unrounded")
+@fn("KruskalWallis", area=AREA, status="fixed", notes="{H, p_value} for 2 or more groups (SciPy), unrounded"
+                                                      ". Check: reference (differential cases in tests/library).")
 def _kruskal(*groups):
     st = _scipy("KruskalWallis")
     if len(groups) < 2:
@@ -769,7 +803,8 @@ def _kruskal(*groups):
 
 
 @fn("LinearRegression", area=AREA, status="fixed",
-    notes="{slope, intercept, r_squared} exact least squares plus p_value and std_error of the slope (t-test, as scipy.stats.linregress; no SciPy needed); legacy rounded")
+    notes="{slope, intercept, r_squared} exact least squares plus p_value and std_error of the slope (t-test, as scipy.stats.linregress; no SciPy needed); legacy rounded"
+          ". Check: reference (differential cases in tests/library).")
 def _linreg(x, y):
     a, b, items = _pair(x, y, "LinearRegression")
     va = _var(a)
@@ -799,7 +834,8 @@ def _linreg(x, y):
 
 @fn("RandomSample", area=AREA, status="fixed",
     notes="Wolfram RandomSample[list] / [list, n]: a random sample without replacement; legacy drew numbers from a "
-          "distribution (now RandomVariate) and fell back to N(0, 1) for unknown input")
+          "distribution (now RandomVariate) and fell back to N(0, 1) for unknown input"
+          ". Check: reference (differential cases in tests/library).")
 def _rsample(x, n=None):
     if _is_dist(x):
         raise ValueError("RandomSample samples elements of a list; use RandomVariate[dist, n] for distributions")
@@ -843,7 +879,8 @@ def _rvariate(d, n=None):
     return one() if k is None else L(*(one() for _ in range(k)))
 
 
-@fn("SeedRandom", area=AREA, status="promoted", notes="SeedRandom[n] seeds RandomSample/RandomVariate")
+@fn("SeedRandom", area=AREA, status="promoted", notes="SeedRandom[n] seeds RandomSample/RandomVariate"
+                                                      ". Check: reference (differential cases in tests/library).")
 def _seed(n=None):
     if isinstance(n, str):
         _RNG.seed(n)                      # string seeds are deterministic, as in Wolfram

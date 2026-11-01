@@ -614,7 +614,8 @@ def _tabular(*args):
     return t.expr()
 
 
-@fn("TabularQ", **ADDED, notes="TabularQ[x]: True for a valid Tabular object")
+@fn("TabularQ", **ADDED, notes="TabularQ[x]: True for a valid Tabular object"
+                               ". Check: reference (differential cases in tests/library).")
 def _tabularq(x: Expr) -> Boolean:
     try:
         return is_tabular(x)
@@ -643,7 +644,8 @@ def col_expr(vals, t):
     notes="TabularColumn[{v...}] (type inferred), TabularColumn[{...}, etype], TabularColumn[{...}, etype, "
           "<|\"ConversionMethod\" -> \"Round\" | \"Floor\" | \"Ceiling\" | \"Truncate\"|>]; types Integer8-64, "
           "UnsignedInteger8-64, Real32/64, ComplexReal32/64, MachineInteger, MachineReal, String, Boolean, "
-          "InertExpression; col[\"ElementType\"], col[\"Length\"], Normal, Length, Part, Total, Mean, Min, Max")
+          "InertExpression; col[\"ElementType\"], col[\"Length\"], Normal, Length, Part, Total, Mean, Min, Max"
+          ". Check: reference (differential cases in tests/library).")
 def _tabularcolumn(vals: Expr, etype: Expr = None, method: Expr = None) -> Expr:
     if etype is None and parse_column(Expr("TabularColumn", vals)) is not None:
         vs, t = parse_column(Expr("TabularColumn", vals))
@@ -692,7 +694,8 @@ def _type_matches(t, sel):
 
 @fn("TabularColumnQ", **ADDED,
     notes="TabularColumnQ[col] and TabularColumnQ[col, tsel] (type pattern such as \"Integer*\" or a class: "
-          "Numbers, Reals, Integers, MachineIntegers, FloatingPoint, Lists, Strings, ...)")
+          "Numbers, Reals, Integers, MachineIntegers, FloatingPoint, Lists, Strings, ...)"
+          ". Check: reference (differential cases in tests/library).")
 def _tabularcolumnq(x: Expr, sel: Expr = None) -> Boolean:
     c = parse_column(x) if isinstance(x, Expr) and x.head == "TabularColumn" else None
     if c is None:
@@ -723,7 +726,8 @@ def _tabularrow(data: Expr, keys: Expr = None) -> Expr:
     raise ValueError("TabularRow: the data must be an association or a list")
 
 
-@fn("TabularRowQ", **ADDED, notes="TabularRowQ[x]: True for a valid TabularRow object")
+@fn("TabularRowQ", **ADDED, notes="TabularRowQ[x]: True for a valid TabularRow object"
+                                  ". Check: reference (differential cases in tests/library).")
 def _tabularrowq(x: Expr) -> Boolean:
     return parse_row(x) is not None
 
@@ -1018,7 +1022,8 @@ def _key_selected(k, t, sel):
 @fn("ColumnKeys", **ADDED,
     notes="ColumnKeys[data] (None for anonymous columns), ColumnKeys[data, spatt] (string pattern, * wildcards) and "
           "ColumnKeys[data, crit] (crit receives <|\"ColumnKey\" -> k, \"ElementType\" -> t|>) for Tabular, "
-          "TabularRow, Dataset and lists of associations")
+          "TabularRow, Dataset and lists of associations"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _columnkeys(data, sel=None):
     keys, types = _data_keys(data, "ColumnKeys")
     if keys is None:
@@ -1030,7 +1035,8 @@ def _columnkeys(data, sel=None):
 
 @fn("ColumnKeyExistsQ", **ADDED,
     notes="ColumnKeyExistsQ[data, key] for Tabular, Dataset and lists of associations; ColumnKeyExistsQ[key] is "
-          "the operator form")
+          "the operator form"
+          ". Check: reference (differential cases in tests/library).")
 def _columnkeyexistsq(*a: Expr) -> Boolean:
     if len(a) == 1:
         raise Unevaluated()
@@ -1056,7 +1062,8 @@ _opcall("ColumnKeyExistsQ", (1,))
 @fn("ColumnTypes", **ADDED,
     notes="ColumnTypes[tab] (an association for named columns, a list otherwise) and ColumnTypes[tab, tsel] with "
           "a type pattern (\"Real*\") or a class (Numbers, Reals, Integers, FloatingPoint, Strings, Lists, ...); "
-          "also TabularRow")
+          "also TabularRow"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _columntypes(data, sel=None):
     keys, types = _data_keys(data, "ColumnTypes")
     idx = [j for j, t in enumerate(types) if sel is None or _type_matches(t, sel)]
@@ -1644,7 +1651,8 @@ def _totabular(data: Expr, form: Expr = "Rows", spec: Expr = None) -> Expr:
 @fn("FromTabular", **ADDED,
     notes="FromTabular[tab, \"Rows\"] (list of associations, or lists for anonymous columns), \"Columns\" "
           "(association of TabularColumn objects, or a list), \"Matrix\" (list of rows of values), \"Dataset\"; "
-          "TimeSeries/EventSeries/TemporalData forms are not supported")
+          "TimeSeries/EventSeries/TemporalData forms are not supported"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fromtabular(tab: Expr, form: Expr = "Rows", spec: Expr = None) -> Expr:
     t = parse_tab(tab) if isinstance(tab, Expr) and tab.head == "Tabular" else None
     if t is None:
@@ -1713,7 +1721,8 @@ _SCHEMA_GLOBAL = ["Columns", "ColumnKeys", "ColumnTypes", "KeyColumns", "Backend
           "TabularSchema[schema, <|...|>] modify ColumnKeys, KeyColumns, ColumnTypes or \"ElementType\" -> col -> "
           "type; schema[\"prop\"] (Columns, ColumnKeys, ColumnTypes, KeyColumns, Backend, ColumnProperties, "
           "Properties) and schema[col, \"ElementType\" | \"Nullable\" | \"Properties\"]; ColumnKeys/ColumnTypes "
-          "accept schemas; Tabular[data, schema] applies one")
+          "accept schemas; Tabular[data, schema] applies one"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tabularschema(x: Expr, *mods: Expr) -> Expr:
     if isinstance(x, Expr) and x.head == "Tabular":
         t = parse_tab(x)
@@ -2160,7 +2169,8 @@ def _join_args(a, fname, default_how):
     notes="JoinAcross[a, b, keyspec] and JoinAcross[a, b, keyspec, \"Inner\" | \"Left\" | \"Right\" | \"Outer\"] "
           "for lists of associations, Datasets and Tabular objects (results in the same form); keyspec key, "
           "{k1, ...}, ka -> kb, {ka -> kb, ...} or a function; prefixes p -> obj give ExtendedKey[p, k] keys; "
-          "absent values are Missing[\"Unmatched\"]; KeyCollisionFunction -> Left (default), Right, None or f")
+          "absent values are Missing[\"Unmatched\"]; KeyCollisionFunction -> Left (default), Right, None or f"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _joinacross(*a: Expr) -> Expr:
     x, y, spec, how, kcf = _join_args(a, "JoinAcross", "Inner")
     return join_across(x, y, spec, how, kcf, "JoinAcross")

@@ -64,7 +64,8 @@ def _member_t(x, items, test):
 
 @fn("Union", area=AREA, status="promoted",
     notes="variadic, including Union[list]; sorted in canonical order with SameQ duplicates removed; "
-          "SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9})")
+          "SameTest -> f (legacy 2-argument form sorted by string, so Union[{10, 9}, {}] gave {10, 9})"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _union(*args):
     pos, test = _set_args(args, "Union")
     if not pos:
@@ -126,7 +127,8 @@ def _subsetq(a, b):
 
 @fn("DeleteDuplicates", area=AREA, status="fixed",
     notes="SameQ comparison keeping first occurrences (legacy compared string forms, so the string \"x\" and "
-          "the symbol x were treated as duplicates); DeleteDuplicates[list, test]")
+          "the symbol x were treated as duplicates); DeleteDuplicates[list, test]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _deldup(a, test=None):
     if test is not None:
         from .wl_common import dedup
@@ -213,7 +215,8 @@ def _rotr(a, n=1):
 
 
 @fn("Accumulate", area=AREA, status="fixed",
-    notes="exact running totals (legacy converted to floats and rounded to 10 digits); works on symbols")
+    notes="exact running totals (legacy converted to floats and rounded to 10 digits); works on symbols"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _accumulate(a):
     items = list_arg(a, "Accumulate")
     out, tot = [], sp.Integer(0)
@@ -238,7 +241,8 @@ def _differences(a, n=1):
     notes="legacy ignored the function and grouped equal values; now GroupBy[list, f] -> <|k -> {...}|> keyed by "
           "f[elem] in order of first appearance; GroupBy[list, f -> g] maps g over each group's elements, "
           "GroupBy[list, spec, red] applies red to each group, GroupBy[list, {f1, f2}] nests; associations group "
-          "their values")
+          "their values"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _groupby(a, f, red=None):
     from .wl_common import items_of, apply, classes
     from ..kernel_lists import make_assoc
@@ -290,7 +294,8 @@ def _groupby(a, f, red=None):
 
 @fn("Tally", area=AREA, status="promoted",
     notes="{{elem, count}, ...} in order of first appearance (SameQ); Tally[list, test] uses the first "
-          "representative of each class")
+          "representative of each class"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tally(a, test=None):
     items = list_arg(a, "Tally")
     if test is not None:

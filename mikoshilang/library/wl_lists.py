@@ -839,7 +839,9 @@ def _depth(x: Expr, *rest: Expr) -> Expr:
 
 @fn("Dimensions", **ADDED, notes="dimensions of a full array whose levels all have the head of expr (Dimensions[f[a, b]] = {2}, "
                                  "Dimensions[{f[a], f[b]}] = {2}); "
-                                 "Dimensions[expr, n] at most n levels")
+                                 "Dimensions[expr, n] at most n levels"
+                                 ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                 "tests/library).")
 def _dimensions(x, n=None):
     if not isinstance(x, Expr) or KL.atomq(x) and not KL.is_assoc(x):
         return L()
@@ -1126,7 +1128,9 @@ def _sort_key_list(vals, fname):
 
 @fn("SortBy", **ADDED, notes="sorts by canonical order of f[e] (ties by the canonical order of e); "
                              "SortBy[list, {f1, f2, ...}] lexicographic; SortBy[list, f, p] uses ordering p; "
-                             "associations are sorted by value")
+                             "associations are sorted by value"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")
 def _sortby(x, f, p=None):
     fs = list(f.args) if is_list(f) else [f]
     if is_assoc(x):
@@ -1279,7 +1283,9 @@ def _dupfreeq(x: Expr, test: Expr = None) -> Boolean:
 
 # ─────────────────────────── counting ───────────────────────────
 
-@fn("Counts", **ADDED, notes="<|e -> count, ...|> in order of first appearance (SameQ)")
+@fn("Counts", **ADDED, notes="<|e -> count, ...|> in order of first appearance (SameQ)"
+                             ". Check: exact (exact input gives exact results), reference (differential cases in "
+                             "tests/library).")
 def _counts(x):
     keys, groups = classes(items_of(x, "Counts"))
     return KL.make_assoc([(k, len(g)) for k, g in zip(keys, groups)])

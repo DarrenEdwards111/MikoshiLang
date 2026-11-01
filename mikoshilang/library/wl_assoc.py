@@ -95,14 +95,16 @@ def _keys_values(x, which, f, fname):
 
 @fn("Keys", **ADDED,
     notes="keys of an association in order; Keys of a rule list gives each rule's key; lists of associations "
-          "thread; Keys[a, f] applies f to each key")
+          "thread; Keys[a, f] applies f to each key"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _keys(x, f=None):
     return _keys_values(x, "k", f, "Keys")
 
 
 @fn("Values", **ADDED,
     notes="values of an association in order (RuleDelayed values evaluated); rule lists and lists of "
-          "associations thread; Values[a, f] applies f to each value")
+          "associations thread; Values[a, f] applies f to each value"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _values(x, f=None):
     return _keys_values(x, "v", f, "Values")
 

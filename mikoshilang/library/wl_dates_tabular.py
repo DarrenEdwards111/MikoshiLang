@@ -980,7 +980,8 @@ _DATE_OPTS = {"CalendarType", "DateFormat", "DateGranularity", "TimeSystem", "Ti
           "elements are reduced ({2022, 2, 31} -> {2022, 3, 3}); canonical forms are DateObject[list, gran] for "
           "floating day-and-coarser dates and DateObject[list, gran, cal, tz] otherwise; d[\"Date\"], "
           "d[\"Granularity\"], d[\"TimeZone\"], d[\"CalendarType\"], d[\"DateList\"] and date elements such as "
-          "d[\"Year\"], d[\"DayName\"]")
+          "d[\"Year\"], d[\"DayName\"]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dateobject(*args: Expr) -> Expr:
     raw = args
     args, o = _opts(args, _DATE_OPTS, "DateObject")
@@ -1118,7 +1119,8 @@ def date_string(d, fmt=None):
     return format_date(_pad(d), fmt, d.tz)
 
 
-@fn("DateObjectQ", **ADDED, notes="True for a DateObject with a valid canonical specification, else False")
+@fn("DateObjectQ", **ADDED, notes="True for a DateObject with a valid canonical specification, else False"
+                                  ". Check: reference (differential cases in tests/library).")
 def _dateobjectq(x: Expr) -> Boolean:
     return parse_dobj(x) is not None
 
@@ -1126,7 +1128,8 @@ def _dateobjectq(x: Expr) -> Boolean:
 @fn("DateList", **ADDED,
     notes="DateList[] (now in $TimeZone), DateList[date] for DateObject, date list (out-of-range values reduced, "
           "fractional d/h/m/s allowed), absolute time (seconds since 1900 in $TimeZone), date string or "
-          "{\"string\", {e1, sep, e2, ...}}; always {y, m, d, h, m, s} with real seconds; DateList[TimeZone -> z]")
+          "{\"string\", {e1, sep, e2, ...}}; always {y, m, d, h, m, s} with real seconds; DateList[TimeZone -> z]"
+          ". Check: reference (differential cases in tests/library).")
 def _datelist(*args: Expr) -> Expr:
     args, o = _opts(args, {"TimeZone"}, "DateList")
     if len(args) > 1:
@@ -1153,7 +1156,8 @@ def _datelist(*args: Expr) -> Expr:
     notes="seconds since 1900-01-01 00:00 in $TimeZone: AbsoluteTime[] (machine real), AbsoluteTime[date] for "
           "DateObject (converted from its zone), date list (exact for exact input: AbsoluteTime[{2000, 1, 1}] = "
           "3155673600), date string or absolute time; TimeZone -> z gives the value in zone z; leap seconds are not "
-          "counted")
+          "counted"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _absolutetime(*args: Expr) -> Expr:
     args, o = _opts(args, {"TimeZone"}, "AbsoluteTime")
     if len(args) > 1:
@@ -1232,7 +1236,8 @@ def _wrap_datestring():
            "DateString[], DateString[date] (DateObject, date list, absolute time, date string), DateString[fmt] and "
            "DateString[date, fmt] with named formats (\"DateTimeShort\", \"ISODate\", \"ISODateTime\", "
            "\"ISOWeekDate\", ...) and element lists ({\"Day\", \"/\", \"Month\"}); default $DateStringFormat; W12 "
-           "extended the strings-batch version (date lists keep \"Thu 2 Jan 2020 00:00:00\")")
+           "extended the strings-batch version (date lists keep \"Thu 2 Jan 2020 00:00:00\")"
+           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 def _default_format():
@@ -1318,7 +1323,8 @@ def parse_tobj(e):
           "\"Hour\", \"Minute\", \"Second\"; real seconds -> \"Instant\"), TimeObject[n] (= {n}), TimeObject[date] "
           "(time part of a DateObject of granularity Hour or finer), TimeObject[t, gran] (Hour ... Nanosecond, "
           "Instant, 0..9); options DateGranularity and TimeZone (None by default); times are reduced modulo 24 h; "
-          "t[\"Time\"], t[\"Granularity\"], t[\"TimeZone\"], t[\"Hour\"], t[\"Minute\"], t[\"Second\"]")
+          "t[\"Time\"], t[\"Granularity\"], t[\"TimeZone\"], t[\"Hour\"], t[\"Minute\"], t[\"Second\"]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _timeobject(*args: Expr) -> Expr:
     raw = args
     args, o = _opts(args, {"DateGranularity", "TimeZone"}, "TimeObject")
@@ -1390,7 +1396,8 @@ def _time_hook(head, args, ev_):
 KL.COMPOUND_HEAD_HOOKS["TimeObject"] = _time_hook
 
 
-@fn("TimeObjectQ", **ADDED, notes="True for a TimeObject with a valid canonical specification, else False")
+@fn("TimeObjectQ", **ADDED, notes="True for a TimeObject with a valid canonical specification, else False"
+                                  ". Check: reference (differential cases in tests/library).")
 def _timeobjectq(x: Expr) -> Boolean:
     return parse_tobj(x) is not None
 
@@ -1566,7 +1573,8 @@ def _wall_key(d, g, end):
           "strings; the finest granularity of the endpoints is used by default, the end date's period is included "
           "(its final instant excluded); canonical form DateInterval[{{startlist, endlist}, ...}, gran] (floating) or "
           "DateInterval[..., gran, cal, tz]; properties \"DateBounds\", \"Granularity\", \"TimeZone\", "
-          "\"CalendarType\"")
+          "\"CalendarType\""
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dateinterval(*args: Expr) -> Expr:
     raw = Expr("DateInterval", *args)
     di = parse_interval(raw)
@@ -1671,7 +1679,8 @@ def _later(a, b):
 @fn("MinDate", **ADDED,
     notes="MinDate[{d1, d2, ...}] gives the earliest date in the form given (DateObject, date list, absolute time, "
           "string, DateInterval); MinDate[interval] the start of a DateInterval, MinDate[interval, gran] at "
-          "granularity gran")
+          "granularity gran"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mindate(x: Expr, g: Expr = None) -> Expr:
     di = parse_interval(x)
     if di is not None:
@@ -1687,7 +1696,8 @@ def _mindate(x: Expr, g: Expr = None) -> Expr:
 
 @fn("MaxDate", **ADDED,
     notes="MaxDate[{d1, d2, ...}] gives the latest date (latest end of its period) in the form given; "
-          "MaxDate[interval] the end date of a DateInterval, MaxDate[interval, gran] at granularity gran")
+          "MaxDate[interval] the end date of a DateInterval, MaxDate[interval, gran] at granularity gran"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _maxdate(x: Expr, g: Expr = None) -> Expr:
     di = parse_interval(x)
     if di is not None:
@@ -1704,7 +1714,8 @@ def _maxdate(x: Expr, g: Expr = None) -> Expr:
 @fn("DateBounds", **ADDED,
     notes="DateBounds[{d1, d2, ...}] = {earliest, latest} in the form given; DateBounds[interval] the first and last "
           "dates of a DateInterval; DateBounds[gdate] the first and final instants of a granular DateObject (the "
-          "final instant is the start of the next period); DateBounds[obj, gran] at granularity gran")
+          "final instant is the start of the next period); DateBounds[obj, gran] at granularity gran"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _datebounds(x: Expr, g: Expr = None) -> ListOf[Expr]:
     di = parse_interval(x)
     if di is not None:
@@ -1742,7 +1753,8 @@ def _outer2(f, a, b, fname):
 
 @fn("DateWithinQ", **ADDED,
     notes="DateWithinQ[d1, d2] is True if the period of DateObject (or DateInterval) d2 lies entirely within d1; "
-          "lists in either argument thread like Outer")
+          "lists in either argument thread like Outer"
+          ". Check: reference (differential cases in tests/library).")
 def _datewithinq(a: Expr, b: Expr) -> Boolean:
     def f(s1, s2, x, y):
         di = parse_interval(x)
@@ -1754,7 +1766,8 @@ def _datewithinq(a: Expr, b: Expr) -> Boolean:
 
 @fn("DateOverlapsQ", **ADDED,
     notes="DateOverlapsQ[d1, d2] is True if the periods of two DateObjects (or DateIntervals) intersect; instants "
-          "overlap a period they lie in; lists thread like Outer")
+          "overlap a period they lie in; lists thread like Outer"
+          ". Check: reference (differential cases in tests/library).")
 def _dateoverlapsq(a: Expr, b: Expr) -> Boolean:
     def f(s1, s2, x, y):
         p1 = parse_interval(x).utc_parts() if parse_interval(x) is not None else [s1]
@@ -1950,7 +1963,8 @@ def _walls_in_common_zone(a, b, fname):
           "Quantity[MixedMagnitude[...], MixedUnit[...]]; DateDifference[d2] from now; DayCountConvention "
           "(ActualActual, Thirty360, Thirty360US, ThirtyE360, ThirtyE360ISDA, ThirtyEPlus360, Actual365, Actual360, "
           "ActualActualISDA; Actual365L and ActualActualICMA raise); integer results are exact, others machine "
-          "reals (as Wolfram displays them)")
+          "reals (as Wolfram displays them)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _datedifference(*args: Expr) -> Expr:
     args, o = _opts(args, {"DayCountConvention", "Method"}, "DateDifference")
     if len(args) == 1:
@@ -2118,7 +2132,8 @@ def _date_tai(d):
     notes="TimeSystemConvert[date, tsys] and TimeSystemConvert[{d1, ...}, tsys] between \"UT\" (smeared UTC, the "
           "default), \"UTC\" (leap seconds shown as second 60), \"TAI\", \"TT\" (TAI + 32.184 s), \"GPS\", \"TDB\" "
           "(Fairhead-Bretagnon leading terms, ~10 us), \"TCG\" and \"TCB\" (IAU 2006 linear relations); leap seconds "
-          "from 1972 to 2017 are tabulated; \"UT1\" (needs IERS data) and dates before 1972 raise")
+          "from 1972 to 2017 are tabulated; \"UT1\" (needs IERS data) and dates before 1972 raise"
+          ". Check: reference (differential cases in tests/library).")
 def _timesystemconvert(x: Expr, tsys: Expr = None) -> Expr:
     if is_list(x) and parse_dobj(x) is None:
         return L(*(_timesystemconvert(v, tsys) for v in x.args))
@@ -2172,7 +2187,8 @@ def _jd_date(x, fname):
     notes="days since noon GMT on 24 Nov -4714 (proleptic Gregorian): JulianDate[], JulianDate[date] (DateObject, "
           "date list or string in $TimeZone, absolute time) and the variants \"Full\", \"Reduced\" (JD - 2400000), "
           "\"Modified\" (JD - 2400000.5), \"Truncated\" (JD - 2440000.5), \"Dublin\" (JD - 2415020); exact for exact "
-          "input; TimeSystem option (UT/UTC, TAI, TT, TDB, ...)")
+          "input; TimeSystem option (UT/UTC, TAI, TT, TDB, ...)"
+          ". Check: reference (differential cases in tests/library).")
 def _juliandate(*args: Expr) -> Expr:
     args, o = _opts(args, {"TimeSystem"}, "JulianDate")
     variant = "Full"
@@ -2198,7 +2214,8 @@ def _juliandate(*args: Expr) -> Expr:
     notes="FromJulianDate[jd] and FromJulianDate[\"type\", jd] give the DateObject (\"Instant\", in $TimeZone or the "
           "TimeZone option) of a Julian date (variants Full, Reduced, Modified, Truncated, Dublin); exact for exact "
           "input (FromJulianDate[2457754, TimeZone -> 0] = 2016-12-31 12:00:00); options CalendarType, DateFormat, "
-          "DateGranularity, TimeSystem, TimeZone")
+          "DateGranularity, TimeSystem, TimeZone"
+          ". Check: reference (differential cases in tests/library).")
 def _fromjuliandate(*args: Expr) -> Expr:
     args, o = _opts(args, _DATE_OPTS, "FromJulianDate")
     variant = "Full"
@@ -2495,7 +2512,8 @@ def _quantity_secs(q, fname):
           "end of dmax), RandomDate[gdate] (within a granular DateObject or DateInterval), RandomDate[Quantity[q, "
           "unit]] and RandomDate[{q1, q2}] (relative to now), RandomDate[range, n | {n1, n2, ...}]; options "
           "DateGranularity (default \"Instant\"), TimeZone, CalendarType, DateFormat; uses the session generator "
-          "(SeedRandom)")
+          "(SeedRandom)"
+          ". Check: reference (differential cases in tests/library).")
 def _randomdate(*args: Expr) -> Expr:
     args, o = _opts(args, _DATE_OPTS, "RandomDate")
     if len(args) > 2:
@@ -2597,7 +2615,8 @@ def _randomtime(*args: Expr) -> Expr:
 @fn("Dated", **ADDED,
     notes="Dated[obj, year], Dated[obj, date] and Dated[obj, All]: an inert wrapper associating obj (an entity, "
           "entity property or property name) with a date; the date must be an integer year, a DateObject or "
-          "DateInterval, Interval of dates or All (resolving entity data needs curated data and is not available)")
+          "DateInterval, Interval of dates or All (resolving entity data needs curated data and is not available)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dated(obj: Expr, date: Expr) -> Expr:
     if K.is_int(date) or is_sym(date, "All") or parse_dobj(date) is not None or parse_interval(date) is not None:
         raise Unevaluated()
@@ -2611,7 +2630,8 @@ def _dated(obj: Expr, date: Expr) -> Expr:
 @fn("Clock", **ADDED,
     notes="Clock[...] outside Dynamic evaluates to its starting value (documented 'Possible Issues'): Clock[] -> 0, "
           "Clock[vmax] -> 0, Clock[{vmin, vmax}] and Clock[{vmin, vmax, dv}] -> vmin, with the optional cycle time "
-          "t and count n validated; Clock[Infinity] -> 0")
+          "t and count n validated; Clock[Infinity] -> 0"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _clock(spec: Expr = None, t: Expr = None, n: Expr = None) -> Expr:
     if t is not None:
         tv = _num(t, "Clock", "cycle time")
@@ -2640,7 +2660,8 @@ def _clock(spec: Expr = None, t: Expr = None, n: Expr = None) -> Expr:
 
 @fn("DateScale", **ADDED,
     notes="DateScale[] and DateScale[DateFunction -> f, DateTicksFormat -> fmt]: the inert date scale for "
-          "ScalingFunctions; options are validated (unknown options raise)")
+          "ScalingFunctions; options are validated (unknown options raise)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _datescale(*args: Expr) -> Expr:
     for a in args:
         if not (is_rule(a) and isinstance(a.args[0], Symbol) and a.args[0].name in ("DateFunction",
@@ -2876,9 +2897,13 @@ _CATNOTE = ("{kind}[{{c1, ...}}] gives the scale {kind}[<|\"CategoryList\" -> ..
             "lists, associations, {kind}Scale or {kind} expressions; Normal gives the underlying expression(s); "
             "CategoricalValue reads properties")
 fn("Nominal", **ADDED, notes=_CATNOTE.format(kind="Nominal") + "; Sort orders Nominal categories canonically by "
-   "their expressions; Min/Max/Less stay unevaluated")(_make_categorical("Nominal"))
+   "their expressions; Min/Max/Less stay unevaluated"
+   ". Check: exact (exact input gives exact results), reference (differential cases "
+   "in tests/library).")(_make_categorical("Nominal"))
 fn("Ordinal", **ADDED, notes=_CATNOTE.format(kind="Ordinal") + "; Sort, Min, Max, Less, Greater, LessEqual and "
-   "GreaterEqual use the \"Score\" values")(_make_categorical("Ordinal"))
+   "GreaterEqual use the \"Score\" values"
+   ". Check: exact (exact input gives exact results), reference (differential cases "
+   "in tests/library).")(_make_categorical("Ordinal"))
 
 
 def _cat_hook(head, args, ev_):
@@ -2920,7 +2945,9 @@ def _catvalue(obj: Expr, prop: Expr = "Expression") -> Expr:
 fn("CategoricalValue", **ADDED,
    notes="CategoricalValue[obj] and CategoricalValue[obj, prop] for Nominal/Ordinal categories and scales and "
          "NominalScale/OrdinalScale (threads over lists): \"Expression\" (default), \"Category\", \"Index\", "
-         "\"Label\", \"Scale\", \"Score\"")(_catvalue)
+         "\"Label\", \"Scale\", \"Score\""
+         ". Check: exact (exact input gives exact results), reference (differential cases in "
+         "tests/library).")(_catvalue)
 
 
 class _Scale:
@@ -2999,7 +3026,8 @@ def _scale_validate(*a, head):
 @fn("NominalScale", **ADDED,
    notes="NominalScale[{c...}], NominalScale[<|c -> lab, ...|>], NominalScale[cats, labels]: inert scale for "
          "ScalingFunctions and Nominal, validated; scale[prop] and scale[prop, arg] give \"CategoryList\", "
-         "\"LabelAssociation\", \"LabelList\", \"Label\", \"Labels\", \"Properties\"")
+         "\"LabelAssociation\", \"LabelList\", \"Label\", \"Labels\", \"Properties\""
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nominal_scale(*a: Expr) -> Expr:
     return _scale_validate(*a, head="NominalScale")
 
@@ -3008,7 +3036,8 @@ def _nominal_scale(*a: Expr) -> Expr:
    notes="OrdinalScale[{c...}], OrdinalScale[cats, vals], OrdinalScale[<|c -> v|>], OrdinalScale[..., labels]: "
          "inert, validated; scale[prop] / scale[prop, arg] give \"CategoryAssociation\" (<|v -> c|>), "
          "\"CategoryList\", \"LabelAssociation\", \"LabelList\", \"ValueAssociation\", \"ValueList\", \"Category\", "
-         "\"Categories\", \"Label\", \"Labels\", \"Value\", \"Values\", \"Properties\"")
+         "\"Categories\", \"Label\", \"Labels\", \"Value\", \"Values\", \"Properties\""
+         ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ordinal_scale(*a: Expr) -> Expr:
     return _scale_validate(*a, head="OrdinalScale")
 
@@ -3272,7 +3301,8 @@ def _cast_array(v, elem, rank, method):
           "integer conversions), \"CCast\" (C semantics: wraps integers, truncates reals; numeric types only), "
           "\"BitCast\" (reinterprets the bits between same-size integer/real types; the source type is inferred "
           "as Integer64 / Real64, or give {val, srcType}); types Integer8-64, UnsignedInteger8-64, Real32, Real64, "
-          "ComplexReal32/64, Boolean, String, InertExpression and TypeSpecifier[\"PackedArray\"][elem, rank]")
+          "ComplexReal32/64, Boolean, String, InertExpression and TypeSpecifier[\"PackedArray\"][elem, rank]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cast(val: Expr, typ: Expr, method: Expr = "ConversionCast") -> Expr:
     if method not in ("ConversionCast", "CCast", "BitCast"):
         raise ValueError(f"Cast: {method!r} is not a casting method (ConversionCast, CCast or BitCast)")

@@ -343,7 +343,8 @@ def _flatten_args(args):
 
 @fn("Max", area=AREA, status="fixed",
     notes="returned floats for exact input (Max[1, 2] = 2.0) and only took 1-2 arguments; "
-          "now exact, variadic, flattens lists, Max[] = -Infinity")
+          "now exact, variadic, flattens lists, Max[] = -Infinity"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _max(*args):
     items = _flatten_args(args)
     if not items:
@@ -357,7 +358,8 @@ def _max(*args):
 
 
 @fn("Min", area=AREA, status="fixed",
-    notes="returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity")
+    notes="returned floats for exact input; now exact, variadic, flattens lists, Min[] = Infinity"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _min(*args):
     items = _flatten_args(args)
     if not items:
