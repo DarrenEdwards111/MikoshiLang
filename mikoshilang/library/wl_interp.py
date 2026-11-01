@@ -72,6 +72,13 @@ def _make(f, a, b):
     return Expr("InterpolatingFunction", L(L(float(a), float(b))), key)
 
 
+def _make_nd(f, bounds):
+    """Register a multi-dimensional InterpolatingFunction[{{x1min, x1max}, ...}, id]; f(t1, t2, ...) -> value."""
+    key = f"if{next(_ids)}"
+    _REG[key] = f
+    return Expr("InterpolatingFunction", L(*(L(float(a), float(b)) for a, b in bounds)), key)
+
+
 def _num_out(v):
     v = complex(v)
     return float(v.real) if v.imag == 0 else R(v)
@@ -81,6 +88,9 @@ def apply_ifun(head, args, order=0):
     """ifun[x] (or Derivative[order][ifun][x])."""
     if len(head.args) != 2 or not isinstance(head.args[1], str) or head.args[1] not in _REG:
         raise ValueError("InterpolatingFunction: this function's data is not available in this session")
+    dims = len(head.args[0].args) if is_list(head.args[0]) else 1
+    if dims > 1:
+        return _apply_nd(head, args, order, dims)
     if len(args) != 1:
         raise ValueError("InterpolatingFunction: one-dimensional functions take one argument")
     x = args[0]
@@ -94,6 +104,25 @@ def apply_ifun(head, args, order=0):
         raise ValueError("InterpolatingFunction: the argument must be real")
     f = _REG[head.args[1]]
     return _num_out(f(t.real, order))
+
+
+def _apply_nd(head, args, order, dims):
+    """ifun[x1, ..., xd] for a d-dimensional InterpolatingFunction (values only)."""
+    if order:
+        raise NotImplementedError("InterpolatingFunction: derivatives of multi-dimensional functions are not "
+                                  "supported")
+    if len(args) != dims:
+        raise ValueError(f"InterpolatingFunction: this function takes {dims} arguments")
+    ts = []
+    for x in args:
+        try:
+            t = complex(sp.N(sym(x, "InterpolatingFunction")))
+        except Exception:
+            return None
+        if t.imag != 0:
+            raise ValueError("InterpolatingFunction: the arguments must be real")
+        ts.append(t.real)
+    return _num_out(_REG[head.args[1]](*ts))
 
 
 def _points(data, fname):
@@ -211,6 +240,13 @@ def _to_sym(e, funcs, x, table):
 
 
 def _ndsolve(eqs, unknowns, rng, opts, fname):
+    from .wl_pde import ndsolve_bvp
+    extra = list(opts.get("ranges", ()))
+    r = ndsolve_bvp(eqs, unknowns, [rng] + extra, fname)
+    if r is not None:
+        return r
+    if extra:
+        raise ValueError(f"{fname}: unexpected arguments {extra}")
     try:
         import scipy.integrate as si
     except ImportError:
@@ -373,8 +409,8 @@ def _ndopts(rest, fname):
           "rtol 1e-10; the initial point may be inside the range; machine precision only; boundary-value "
           "problems, DAEs, PDEs and delay equations raise")
 def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Expr]:
-    _ndopts(rest, "NDSolve")
-    us, out, xv = _ndsolve(eqs, unknowns, rng, {}, "NDSolve")
+    pos = _ndopts(rest, "NDSolve")
+    us, out, xv = _ndsolve(eqs, unknowns, rng, {"ranges": pos}, "NDSolve")
     rules = []
     for u in us:
         f = _fname(u)
@@ -389,7 +425,7 @@ def _ndsolve_fn(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> ListOf[Exp
     notes="NDSolveValue[{odes, ics}, y, {x, xmin, xmax}] -> InterpolatingFunction (y[x] -> ifun[x], {y, z} -> "
           "list); same solver and limits as NDSolve")
 def _ndsolvevalue(eqs: Expr, unknowns: Expr, rng: Expr, *rest: Expr) -> Expr:
-    _ndopts(rest, "NDSolveValue")
-    us, out, xv = _ndsolve(eqs, unknowns, rng, {}, "NDSolveValue")
+    pos = _ndopts(rest, "NDSolveValue")
+    us, out, xv = _ndsolve(eqs, unknowns, rng, {"ranges": pos}, "NDSolveValue")
     vals = [out[_fname(u)] if isinstance(u, Symbol) else ev(Expr(out[_fname(u)], *u.args)) for u in us]
     return L(*vals) if is_list(unknowns) else vals[0]

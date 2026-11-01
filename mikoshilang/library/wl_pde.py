@@ -31,7 +31,7 @@ from ..expr import Expr, Symbol
 from .. import kernel as K
 from .. import kernel_lists as KL
 from .core import fn, record, Unevaluated, L, is_list, is_numeric_value, S, R
-from .wl_common import ev
+from .wl_common import ev, split_options
 
 AREA = "numerics: PDE modelling (W26)"
 
@@ -1386,3 +1386,1378 @@ def _m_potential(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
             raise ValueError(f"{fname}: \"MagneticPotential\" must be a vector of length {m}")
         return _dirichlet(L(*V.deps), val, pred, subs)
     return _dirichlet(V.u, _p(keys, "MagneticPotential", 0), pred, subs)
+
+
+# ───────────────────────────── solid mechanics ─────────────────────────────
+
+_MODULI = ("YoungModulus", "PoissonRatio", "LameParameter", "ShearModulus", "BulkModulus", "PWaveModulus")
+_SOLID_KEYS = _MODULI + ("MassDensity", "BodyLoad", "BodyLoadValue", "AnalysisType", "MaterialSymmetry",
+                         "SolidMechanicsMaterialModel", "SolidMechanicsModelForm", "RegionSymmetry", "Material",
+                         "CoordinateChart", "Thickness", "EngineeringStrain", "OutputStressMeasure",
+                         "Displacement", "Pressure", "SpringConstant", "DampingConstant", "BoundaryUnitNormal",
+                         "Force", "NormalForce", "NormalPressure", "InitialStress", "InitialStrain")
+
+
+def _lame(keys, fname):
+    """(lambda, mu) as SymPy expressions from any two isotropic moduli."""
+    given = [k for k in _MODULI if k in keys]
+    if len(given) != 2:
+        raise ValueError(f"{fname}: exactly two of the elastic moduli {', '.join(_MODULI)} are required "
+                         f"(got {len(given)})")
+    lam, mu = sp.symbols("lam_ mu_")
+    rel = {"YoungModulus": mu * (3 * lam + 2 * mu) / (lam + mu), "PoissonRatio": lam / (2 * (lam + mu)),
+           "LameParameter": lam, "ShearModulus": mu, "BulkModulus": lam + 2 * mu / 3, "PWaveModulus": lam + 2 * mu}
+    vals = {k: S(keys[k]) for k in given}
+    if set(given) == {"YoungModulus", "PoissonRatio"}:
+        E_, nu = vals["YoungModulus"], vals["PoissonRatio"]
+        return E_ * nu / ((1 + nu) * (1 - 2 * nu)), E_ / (2 * (1 + nu))
+    g1, g2 = sp.symbols("g1_ g2_")
+    sols = sp.solve([rel[given[0]] - g1, rel[given[1]] - g2], [lam, mu], dict=True)
+    if len(sols) != 1:
+        raise NotImplementedError(f"{fname}: the moduli pair {given[0]}, {given[1]} does not determine the Lame "
+                                  "parameters uniquely; give YoungModulus and PoissonRatio")
+    s = sols[0]
+    return (sp.simplify(s[lam].subs({g1: vals[given[0]], g2: vals[given[1]]})),
+            sp.simplify(s[mu].subs({g1: vals[given[0]], g2: vals[given[1]]})))
+
+
+def _solid_check(keys, V, fname):
+    for k, ok in (("AnalysisType", "Automatic"), ("MaterialSymmetry", "Isotropic"),
+                  ("SolidMechanicsMaterialModel", "LinearElastic"), ("SolidMechanicsModelForm", "Solid")):
+        if k in keys:
+            v = keys[k]
+            if not (v == ok or (isinstance(v, Symbol) and v.name == ok)):
+                raise NotImplementedError(f"{fname}: \"{k}\" -> {v} is not supported (only {ok})")
+    for k in ("InitialStress", "InitialStrain", "Force", "NormalForce", "NormalPressure"):
+        if k in keys:
+            raise NotImplementedError(f"{fname}: the parameter \"{k}\" is not supported")
+    if V.n != 3 or len(V.deps) != 3:
+        raise NotImplementedError(f"{fname}: only 3-D solids {{{{u, v, w}}, {{x, y, z}}}} are supported (plane "
+                                  "stress/strain model forms are not)")
+
+
+@fn("SolidMechanicsPDEComponent", area=AREA, status="added",
+    notes="SolidMechanicsPDEComponent[{{u, v, w}, {x, y, z}}, pars] for linear elastic isotropic 3-D solids: rows "
+          "-Div[sigma(u)]_i - f_i (+ rho D[u_i, {t, 2}] for time vars, - rho omega^2 u_i for frequency vars) written, "
+          "as Wolfram does, as Sum_j Inactive[Div][-C_ij . Inactive[Grad][u_j, X], X] with (C_ij)_kl = lambda "
+          "d_ik d_jl + mu (d_ij d_kl + d_il d_jk); any two of \"YoungModulus\", \"PoissonRatio\", \"LameParameter\", "
+          "\"ShearModulus\", \"BulkModulus\", \"PWaveModulus\" (pairs that do not fix the Lame parameters uniquely "
+          "raise NotImplementedError), \"MassDensity\", \"BodyLoad\" f, \"BodyLoadValue\" g (adds -rho g); 2-D plane "
+          "stress/strain forms, other material models/symmetries, \"Material\" entities and eigenmode analysis raise "
+          "NotImplementedError. Check: Activate compared with the Navier-Cauchy equations (lambda + mu) Grad[Div[u]] "
+          "+ mu Laplacian[u] in tests.")
+def _solid_component(vars_: Expr, pars: Assoc) -> ListOf[Expr]:
+    fname = "SolidMechanicsPDEComponent"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _SOLID_KEYS, allow_freq=True, allow_system=True)
+    _solid_check(keys, V, fname)
+    lam, mu = _lame(keys, fname)
+    n = 3
+    rho = keys.get("MassDensity")
+    f = _vector(_p(keys, "BodyLoad", _zero_vec(n)), n, fname, "\"BodyLoad\"")
+    g = keys.get("BodyLoadValue")
+    if (V.t is not None or V.w is not None or g is not None) and rho is None:
+        raise ValueError(f"{fname}: \"MassDensity\" is required for dynamic analyses and \"BodyLoadValue\"")
+    rows = []
+    for i in range(n):
+        parts = []
+        if V.t is not None:
+            parts.append(_times(rho, _time_d(V.deps[i], V.t, 2)))
+        for j in range(n):
+            C = [[R(-(lam * (1 if (i == k and j == l) else 0) +
+                      mu * ((1 if (i == j and k == l) else 0) + (1 if (i == l and j == k) else 0))))
+                  for l in range(n)] for k in range(n)]
+            parts.append(_div(Expr("Dot", L(*(L(*r) for r in C)), _grad(V.deps[j], V.XL)), V.XL))
+        if V.w is not None:
+            parts.append(_times(-1, rho, Expr("Power", V.w, 2), V.deps[i]))
+        parts.append(_neg(f.args[i]))
+        if g is not None:
+            gv = _vector(g, n, fname, "\"BodyLoadValue\"")
+            parts.append(_times(-1, rho, gv.args[i]))
+        rows.append(_plus(*parts))
+    return _finish(L(*rows), subs)
+
+
+def _displ(d, V, fname):
+    if not is_list(d) or len(d.args) != len(V.deps):
+        raise ValueError(f"{fname}: the displacement must be a list of {len(V.deps)} expressions")
+    return list(d.args)
+
+
+def _sym_matrix_arg(m, fname, what="tensor"):
+    if _head_is(m, "SymmetrizedArray"):
+        m = ev(Expr("Normal", m))
+    if not _is_matrix(m) or len(m.args) not in (2, 3):
+        if isinstance(m, Symbol):
+            raise Unevaluated()
+        raise ValueError(f"{fname}: the {what} must be a 2 x 2 or 3 x 3 symmetric matrix (or SymmetrizedArray)")
+    rows = [list(r.args) for r in m.args]
+    n = len(rows)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if not K.same(rows[i][j], rows[j][i]) and sp.simplify(S(rows[i][j]) - S(rows[j][i])) != 0:
+                raise ValueError(f"{fname}: the {what} must be symmetric")
+    if n == 2:
+        rows = [rows[0] + [0], rows[1] + [0], [0, 0, 0]]
+    return rows
+
+
+def _engineering(keys, fname):
+    e = keys.get("EngineeringStrain", True)
+    if e not in (True, False):
+        raise ValueError(f"{fname}: \"EngineeringStrain\" must be True or False")
+    return e
+
+
+def _symarray(rows):
+    return ev(Expr("SymmetrizedArray", L(*(L(*r) for r in rows))))
+
+
+@fn("SolidMechanicsStrain", area=AREA, status="added",
+    notes="SolidMechanicsStrain[vars, pars, displ] -> SymmetrizedArray of the infinitesimal strains of displacement "
+          "displ = {du, dv, dw} in 3-D: normal strains D[d_i, x_i] and engineering shear strains D[d_i, x_j] + "
+          "D[d_j, x_i] (\"EngineeringStrain\" -> False gives the tensor strains, half of those); 2-D plane forms "
+          "and InterpolatingFunction displacements on meshes raise NotImplementedError; a displacement of the wrong "
+          "length raises ValueError. Check: reference (Wolfram documentation example: torsion displacement {-a y "
+          "z, a x z, w[x, y]}) and the identity strain = {{1,2,2},{2,1,2},{2,2,1}} * tensor strain in tests.")
+def _solid_strain(vars_: Expr, pars: Assoc, displ: ListOf[Expr]) -> Expr:
+    fname = "SolidMechanicsStrain"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _SOLID_KEYS, allow_system=True)
+    _solid_check(keys, V, fname)
+    d = _displ(displ, V, fname)
+    X = V.X
+    eng = _engineering(keys, fname)
+    rows = []
+    for i in range(3):
+        row = []
+        for j in range(3):
+            if i == j:
+                row.append(ev(Expr("D", d[i], X[i])))
+            else:
+                s_ = ev(Expr("Plus", Expr("D", d[i], X[j]), Expr("D", d[j], X[i])))
+                row.append(s_ if eng else ev(Expr("Times", Expr("Rational", 1, 2), s_)))
+        rows.append(row)
+    return _apply_subs(_symarray(rows), subs)
+
+
+@fn("SolidMechanicsStress", area=AREA, status="added",
+    notes="SolidMechanicsStress[vars, pars, strain] -> SymmetrizedArray of the Cauchy stresses of a linear elastic "
+          "isotropic 3-D solid: sigma_ii = lambda tr(eps) + 2 mu eps_ii, tau_ij = mu gamma_ij for engineering shear "
+          "strains (2 mu eps_ij with \"EngineeringStrain\" -> False); strain is a 3 x 3 symmetric matrix or "
+          "SymmetrizedArray as returned by SolidMechanicsStrain; moduli as for SolidMechanicsPDEComponent; other "
+          "\"OutputStressMeasure\" values, initial strains/stresses and 2-D forms raise NotImplementedError. Check: "
+          "reference (Hooke's law; Wolfram documentation example tau = Y gamma/(2 (1 + nu))) in tests.")
+def _solid_stress(vars_: Expr, pars: Assoc, strain: Expr) -> Expr:
+    fname = "SolidMechanicsStress"
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _SOLID_KEYS, allow_system=True)
+    _solid_check(keys, V, fname)
+    osm = keys.get("OutputStressMeasure", "Cauchy")
+    if osm != "Cauchy":
+        raise NotImplementedError(f"{fname}: only the \"Cauchy\" output stress measure is supported")
+    lam, mu = _lame(keys, fname)
+    eps = [[S(v) for v in r] for r in _sym_matrix_arg(strain, fname, "strain")]
+    eng = _engineering(keys, fname)
+    tr = eps[0][0] + eps[1][1] + eps[2][2]
+    rows = [[R(sp.expand(lam * tr + 2 * mu * eps[i][i]) if i == j else
+               (mu * eps[i][j] if eng else 2 * mu * eps[i][j])) for j in range(3)] for i in range(3)]
+    return _apply_subs(_symarray(rows), subs)
+
+
+def _mises(rows, fname):
+    a = [[S(v) for v in r] for r in rows]
+    return R(sp.sqrt(sp.Rational(1, 2) * ((a[0][0] - a[1][1]) ** 2 + (a[1][1] - a[2][2]) ** 2 +
+                                          (a[2][2] - a[0][0]) ** 2 + 6 * (a[0][1] ** 2 + a[0][2] ** 2 +
+                                                                          a[1][2] ** 2))))
+
+
+@fn("VonMisesStress", area=AREA, status="added",
+    notes="VonMisesStress[vars, pars, stress] -> Sqrt[((sxx - syy)^2 + (syy - szz)^2 + (szz - sxx)^2 + 6 (txy^2 + "
+          "txz^2 + tyz^2))/2] for a symmetric 3 x 3 (or 2 x 2, padded with zeros) stress matrix or SymmetrizedArray; "
+          "numeric stresses give a number, symbolic ones a formula; non-symmetric or wrongly shaped input raises "
+          "ValueError. Check: reference (uniaxial stress s -> |s|, pure shear t -> Sqrt[3] |t|) in tests.")
+def _von_mises(vars_: Expr, pars: Assoc, stress: Expr) -> Expr:
+    fname = "VonMisesStress"
+    parse_vars(vars_, fname, allow_system=True)
+    parse_pars(pars, fname, known=_SOLID_KEYS)
+    return ev(_mises(_sym_matrix_arg(stress, fname, "stress"), fname))
+
+
+@fn("EquivalentStrain", area=AREA, status="added",
+    notes="EquivalentStrain[vars, pars, strain] -> Sqrt[((exx - eyy)^2 + (eyy - ezz)^2 + (ezz - exx)^2 + 6 (gxy^2 + "
+          "gxz^2 + gyz^2))/2] (the documented formula on the strain matrix entries) for a symmetric 3 x 3 (or 2 x 2, "
+          "zero padded) matrix or SymmetrizedArray; non-symmetric or wrongly shaped input raises ValueError. "
+          "Check: reference (Wolfram documentation formula) in tests.")
+def _equivalent_strain(vars_: Expr, pars: Assoc, strain: Expr) -> Expr:
+    fname = "EquivalentStrain"
+    parse_vars(vars_, fname, allow_system=True)
+    parse_pars(pars, fname, known=_SOLID_KEYS)
+    return ev(_mises(_sym_matrix_arg(strain, fname, "strain"), fname))
+
+
+@fn("SolidDisplacementCondition", area=AREA, status="added",
+    notes=_bc_doc("SolidDisplacementCondition", "DirichletCondition[{u == d1, v == d2, w == d3}, pred] with "
+                  "\"Displacement\" {d1, d2, d3} (default 0; None entries leave that component free)",
+                  "A displacement of the wrong length raises ValueError. "))
+def _solid_displacement(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    fname = "SolidDisplacementCondition"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _SOLID_KEYS, allow_system=True)
+    m = len(V.deps)
+    d = _p(keys, "Displacement", _zero_vec(m))
+    if not is_list(d) or len(d.args) != m:
+        raise ValueError(f"{fname}: \"Displacement\" must be a list of length {m}")
+    pairs = [(u, v) for u, v in zip(V.deps, d.args) if not (isinstance(v, Symbol) and v.name == "None")]
+    if not pairs:
+        raise ValueError(f"{fname}: every displacement component is None")
+    return _dirichlet(L(*(p[0] for p in pairs)), L(*(p[1] for p in pairs)), pred, subs)
+
+
+@fn("SolidFixedCondition", area=AREA, status="added",
+    notes=_bc_doc("SolidFixedCondition", "DirichletCondition[{u == 0, v == 0, ...}, pred] (all displacements "
+                  "fixed)"))
+def _solid_fixed(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> Expr:
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, "SolidFixedCondition", _SOLID_KEYS, allow_system=True)
+    return _dirichlet(L(*V.deps), _zero_vec(len(V.deps)), pred, subs)
+
+
+@fn("SolidBoundaryLoadValue", area=AREA, status="added",
+    notes=_bc_doc("SolidBoundaryLoadValue", "{NeumannValue[p_i - k u_i - c D[u_i, t], pred], ...} (zero components "
+                  "omitted as NeumannValue[0, pred]) for a \"Pressure\" (traction) vector p, \"SpringConstant\" k and "
+                  "\"DampingConstant\" c (time vars)", "\"Force\", \"NormalForce\" (need the boundary area) and "
+                  "\"NormalPressure\" raise NotImplementedError; \"DampingConstant\" without time vars raises "
+                  "ValueError. "))
+def _solid_load(pred: Expr, vars_: Expr, pars: Assoc, *rest: Expr) -> ListOf[Expr]:
+    fname = "SolidBoundaryLoadValue"
+    V, keys, subs = _bc_args(pred, vars_, pars, rest, fname, _SOLID_KEYS, allow_system=True)
+    for k in ("Force", "NormalForce", "NormalPressure"):
+        if k in keys:
+            raise NotImplementedError(f"{fname}: \"{k}\" is not supported; give the traction as \"Pressure\"")
+    m = len(V.deps)
+    p = _vector(_p(keys, "Pressure", _zero_vec(m)), m, fname, "\"Pressure\"")
+    k, c = _p(keys, "SpringConstant", 0), _p(keys, "DampingConstant", 0)
+    if not _is_zero(c) and V.t is None:
+        raise ValueError(f"{fname}: \"DampingConstant\" needs time-dependent variables")
+    out = []
+    for i in range(m):
+        val = _plus(p.args[i], _times(-1, k, V.deps[i]),
+                    (_times(-1, c, _time_d(V.deps[i], V.t)) if V.t is not None else 0))
+        out.append(Expr("NeumannValue", val, pred))
+    return _apply_subs(ev(L(*out)), subs)
+
+
+# ───────────────────────────── fluid flow ─────────────────────────────
+
+_FLUID_KEYS = ("CoordinateChart", "DynamicViscosity", "FluidLoad", "FluidDynamicsMaterialModel", "MassDensity",
+               "Material", "ModelForm", "RegionSymmetry", "ReynoldsNumber")
+
+
+def _fluid_setup(vars_, pars, fname, need_rho=True):
+    V, keys, subs, axi = _component_args(vars_, pars, fname, _FLUID_KEYS, allow_system=True)
+    if axi:
+        raise NotImplementedError(f"{fname}: axisymmetric flow is not supported")
+    mm = keys.get("FluidDynamicsMaterialModel", "Newtonian")
+    if mm != "Newtonian":
+        raise NotImplementedError(f"{fname}: only the \"Newtonian\" material model is supported")
+    if not V.system or V.n not in (2, 3) or len(V.deps) != V.n + 1:
+        raise ValueError(f"{fname}: the variables must be {{{{u, v, (w,) p}}, {{x, y, (z)}}}} (velocities and "
+                         "pressure)")
+    if "ReynoldsNumber" in keys:
+        if "DynamicViscosity" in keys or "MassDensity" in keys:
+            raise ValueError(f"{fname}: give either \"ReynoldsNumber\" or \"DynamicViscosity\" and \"MassDensity\"")
+        rho, mu = 1, _recip(keys["ReynoldsNumber"])
+    else:
+        if "DynamicViscosity" not in keys or (need_rho and "MassDensity" not in keys):
+            raise ValueError(f"{fname}: \"DynamicViscosity\"" + (" and \"MassDensity\"" if need_rho else "")
+                             + " (or \"ReynoldsNumber\") required")
+        rho, mu = keys.get("MassDensity", 1), keys["DynamicViscosity"]
+    names = {x.name for x in V.X} | {d.head for d in V.deps} | ({V.t.name} if V.t is not None else set())
+    if _free_names(rho) & names:
+        raise NotImplementedError(f"{fname}: compressible flow (a variable \"MassDensity\") is not supported")
+    return V, keys, subs, rho, mu
+
+
+def _free_names(e):
+    out = set()
+    if isinstance(e, Symbol):
+        out.add(e.name)
+    elif isinstance(e, Expr):
+        if isinstance(e.head, str):
+            out.add(e.head)
+        else:
+            out |= _free_names(e.head)
+        for a in e.args:
+            out |= _free_names(a)
+    return out
+
+
+def _viscous_C(n, i, j, mu):
+    return L(*(L(*(_neg(_times(mu, (1 if (i == j and k == l) else 0) + (1 if (i == l and j == k) else 0)))
+                   if ((i == j and k == l) or (i == l and j == k)) else 0 for l in range(n))) for k in range(n)))
+
+
+@fn("FluidFlowPDEComponent", area=AREA, status="added",
+    notes="FluidFlowPDEComponent[{{u, v, (w,) p}, X}, pars] for incompressible Newtonian flow (constant "
+          "\"MassDensity\" rho and \"DynamicViscosity\" mu, or \"ReynoldsNumber\" Re: rho = 1, mu = 1/Re): momentum "
+          "rows rho D[v_i, t] + Inactive[Div][rho v_i {u, v, ...}, X] (\"ModelForm\" \"Conservative\", the default) "
+          "or rho {u, v, ...} . Inactive[Grad][v_i, X] (\"NonConservative\") + e_i . Inactive[Grad][p, X] + "
+          "Sum_j Inactive[Div][-C_ij . Inactive[Grad][v_j, X], X] (viscous stress mu (Grad v + Grad v^T)) - f_i "
+          "(\"FluidLoad\" f), and the continuity row Sum_j e_j . Inactive[Grad][v_j, X]; compressible "
+          "(variable density), non-Newtonian, axisymmetric and \"Material\" models raise NotImplementedError; "
+          "missing material constants raise ValueError. Check: Activate compared with the written-out "
+          "Navier-Stokes equations in tests.")
+def _fluid_component(vars_: Expr, pars: Assoc) -> ListOf[Expr]:
+    fname = "FluidFlowPDEComponent"
+    V, keys, subs, rho, mu = _fluid_setup(vars_, pars, fname)
+    n = V.n
+    vel, p = V.deps[:n], V.deps[n]
+    f = _vector(_p(keys, "FluidLoad", _zero_vec(n)), n, fname, "\"FluidLoad\"")
+    cons = _model_form(keys, fname, default="Conservative")
+    rows = []
+    for i in range(n):
+        parts = []
+        if V.t is not None:
+            parts.append(_times(rho, _time_d(vel[i], V.t)))
+        if cons:
+            parts.append(_div(ev(Expr("Times", rho, vel[i], L(*vel))), V.XL))
+        else:
+            parts.append(Expr("Dot", ev(Expr("Times", rho, L(*vel))), _grad(vel[i], V.XL)))
+        parts.append(Expr("Dot", L(*((1 if k == i else 0) for k in range(n))), _grad(p, V.XL)))
+        for j in range(n):
+            parts.append(_div(Expr("Dot", ev(_viscous_C(n, i, j, mu)), _grad(vel[j], V.XL)), V.XL))
+        parts.append(_neg(f.args[i]))
+        rows.append(_plus(*parts))
+    rows.append(_plus(*(Expr("Dot", L(*((1 if k == j else 0) for k in range(n))), _grad(vel[j], V.XL))
+                        for j in range(n))))
+    return _finish(L(*rows), subs)
+
+
+def _velocity(vel, V, fname):
+    if not is_list(vel) or len(vel.args) != V.n:
+        raise ValueError(f"{fname}: the velocity must be a list of {V.n} expressions")
+    return list(vel.args)
+
+
+@fn("FluidViscosity", area=AREA, status="added",
+    notes="FluidViscosity[vars, pars, velocity] -> the dynamic viscosity mu of a Newtonian fluid (1/Re for "
+          "\"ReynoldsNumber\" Re); non-Newtonian models raise NotImplementedError; a velocity of the wrong length "
+          "raises ValueError. Check: reference (Wolfram documentation: mu, 1/Re) in tests.")
+def _fluid_viscosity(vars_: Expr, pars: Assoc, velocity: ListOf[Expr]) -> Expr:
+    fname = "FluidViscosity"
+    V, keys, subs, rho, mu = _fluid_setup(vars_, pars, fname, need_rho=False)
+    _velocity(velocity, V, fname)
+    return _apply_subs(ev(mu), subs)
+
+
+@fn("FluidViscousStress", area=AREA, status="added",
+    notes="FluidViscousStress[vars, pars, velocity] -> SymmetrizedArray mu (Grad[velocity] + Transpose[Grad[velocity]]) "
+          "(the viscous stress 2 mu strain rate of an incompressible Newtonian fluid); non-Newtonian and "
+          "compressible models raise NotImplementedError. Check: reference (Wolfram documentation: "
+          "{{2 mu U_x, mu (U_y + V_x)}, {mu (U_y + V_x), 2 mu V_y}}) in tests.")
+def _fluid_viscous_stress(vars_: Expr, pars: Assoc, velocity: ListOf[Expr]) -> Expr:
+    fname = "FluidViscousStress"
+    V, keys, subs, rho, mu = _fluid_setup(vars_, pars, fname, need_rho=False)
+    vel = _velocity(velocity, V, fname)
+    rows = [[ev(Expr("Times", mu, Expr("Plus", Expr("D", vel[i], V.X[j]), Expr("D", vel[j], V.X[i]))))
+             for j in range(V.n)] for i in range(V.n)]
+    return _apply_subs(_symarray(rows), subs)
+
+
+# ───────────────────────────── magnetic field quantities ─────────────────────────────
+
+def _potential_kind(V, pot, fname):
+    if V.system:
+        if len(V.deps) != 3 or V.n != 3:
+            raise NotImplementedError(f"{fname}: vector potentials must be 3-D {{{{Ax, Ay, Az}}, {{x, y, z}}}}")
+        if not is_list(pot) or len(pot.args) != 3:
+            raise ValueError(f"{fname}: a vector potential must be a list of 3 expressions")
+        return "vector"
+    if is_list(pot):
+        raise ValueError(f"{fname}: a scalar potential must be a scalar expression")
+    return "scalar"
+
+
+@fn("MagneticFieldIntensity", area=AREA, status="added",
+    notes="MagneticFieldIntensity[vars, pars, Vm] -> -Grad[Vm, X] for a magnetic scalar potential; "
+          "MagneticFieldIntensity[vars, pars, A] -> Curl[A, X]/mu0 - M for a 3-D vector potential (\"VacuumPermeability\" "
+          "mu0, default Pi/2500000; \"Magnetization\" M); a \"RelativePermeability\" with a vector potential raises "
+          "NotImplementedError. Check: reference (Wolfram documentation forms) in tests.")
+def _m_field_intensity(vars_: Expr, pars: Assoc, pot: Expr) -> ListOf[Expr]:
+    fname = "MagneticFieldIntensity"
+    V = parse_vars(vars_, fname, allow_system=True)
+    keys, subs = parse_pars(pars, fname, known=_M_BC_KEYS)
+    if _potential_kind(V, pot, fname) == "scalar":
+        return _apply_subs(ev(Expr("Times", -1, Expr("Grad", pot, V.XL))), subs)
+    if "RelativePermeability" in keys:
+        raise NotImplementedError(f"{fname}: \"RelativePermeability\" is not supported for vector potentials")
+    mu0 = _p(keys, "VacuumPermeability", MU0)
+    M = _vector(_p(keys, "Magnetization", _zero_vec(3)), 3, fname, "\"Magnetization\"")
+    return _apply_subs(ev(Expr("Plus", Expr("Times", Expr("Power", mu0, -1), Expr("Curl", pot, V.XL)),
+                               Expr("Times", -1, M))), subs)
+
+
+@fn("MagneticFluxDensity", area=AREA, status="added",
+    notes="MagneticFluxDensity[vars, pars, Vm] -> mur mu0 (-Grad[Vm, X] + M) for a magnetic scalar potential "
+          "(\"RelativePermeability\" mur scalar or matrix, \"VacuumPermeability\" mu0 default Pi/2500000, "
+          "\"Magnetization\" M); MagneticFluxDensity[vars, pars, A] -> Curl[A, X] - mu0 M for a 3-D vector "
+          "potential. Check: reference (Wolfram documentation forms) in tests.")
+def _m_flux_density(vars_: Expr, pars: Assoc, pot: Expr) -> ListOf[Expr]:
+    fname = "MagneticFluxDensity"
+    V = parse_vars(vars_, fname, allow_system=True)
+    keys, subs = parse_pars(pars, fname, known=_M_BC_KEYS)
+    mu0 = _p(keys, "VacuumPermeability", MU0)
+    kind = _potential_kind(V, pot, fname)
+    n = 3 if kind == "vector" else V.n
+    M = _vector(_p(keys, "Magnetization", _zero_vec(n)), n, fname, "\"Magnetization\"")
+    if kind == "vector":
+        return _apply_subs(ev(Expr("Plus", Expr("Curl", pot, V.XL), Expr("Times", -1, mu0, M))), subs)
+    mur = _p(keys, "RelativePermeability", 1)
+    H = Expr("Plus", Expr("Times", -1, Expr("Grad", pot, V.XL)), M)
+    if _is_matrix(mur, V.n):
+        return _apply_subs(ev(Expr("Times", mu0, Expr("Dot", mur, H))), subs)
+    return _apply_subs(ev(Expr("Times", mur, mu0, H)), subs)
+
+
+# ───────────────────────────── spectral collocation (NDEigensystem, NDSolve BVPs) ─────────────────────────────
+#
+# Operators are discretised by Chebyshev-Lobatto collocation on intervals and (tensor-product) rectangles.
+# Boundary rows follow Wolfram's finite-element conventions: no condition = natural flux n.(c Grad u + alpha u -
+# gamma) = 0, NeumannValue[g - q u, pred] on the right-hand side sets that flux to g - q u (on the left-hand side
+# the sign flips), DirichletCondition rows fix values, and periodic conditions identify values and fluxes.
+
+import numpy as np  # noqa: E402
+
+from ..expr import Expr as _Expr  # noqa: E402,F401
+
+
+def _cheb(N, a, b):
+    """Ascending Chebyshev-Lobatto nodes on [a, b] and the first-derivative matrix."""
+    j = np.arange(N + 1)
+    x = np.cos(np.pi * j / N)
+    c = np.ones(N + 1)
+    c[0] = c[-1] = 2.0
+    c = c * (-1.0) ** j
+    dX = x[:, None] - x[None, :]
+    D = np.outer(c, 1.0 / c) / (dX + np.eye(N + 1))
+    D = D - np.diag(D.sum(axis=1))
+    x, D = x[::-1].copy(), D[::-1, ::-1].copy()
+    return a + (x + 1.0) * (b - a) / 2.0, D * (2.0 / (b - a))
+
+
+def _clencurt(N, a, b):
+    """Clenshaw-Curtis quadrature weights for the ascending Chebyshev-Lobatto nodes on [a, b]."""
+    theta = np.pi * np.arange(N + 1) / N
+    w = np.zeros(N + 1)
+    ii = np.arange(1, N)
+    v = np.ones(N - 1)
+    if N % 2 == 0:
+        w[0] = w[N] = 1.0 / (N ** 2 - 1)
+        for k in range(1, N // 2):
+            v = v - 2 * np.cos(2 * k * theta[ii]) / (4 * k * k - 1)
+        v = v - np.cos(N * theta[ii]) / (N ** 2 - 1)
+    else:
+        w[0] = w[N] = 1.0 / N ** 2
+        for k in range(1, (N - 1) // 2 + 1):
+            v = v - 2 * np.cos(2 * k * theta[ii]) / (4 * k * k - 1)
+    w[ii] = 2 * v / N
+    return w[::-1] * (b - a) / 2.0
+
+
+def _bary_w(N):
+    w = (-1.0) ** np.arange(N + 1)
+    w[0] *= 0.5
+    w[-1] *= 0.5
+    return w
+
+
+def _bary(xs, w, vals, t):
+    d = t - xs
+    hit = np.nonzero(d == 0)[0]
+    if hit.size:
+        return vals[hit[0]]
+    q = w / d
+    return np.tensordot(q, vals, axes=(0, 0)) / q.sum()
+
+
+class _ChebFun:
+    """Chebyshev interpolant u(t) (and derivatives) through nodal values on [a, b]."""
+
+    def __init__(self, xs, D, vals):
+        self.xs, self.D, self.w = xs, D, _bary_w(len(xs) - 1)
+        self.vals = [np.asarray(vals)]
+
+    def _deriv(self, k):
+        while len(self.vals) <= k:
+            self.vals.append(self.D @ self.vals[-1])
+        return self.vals[k]
+
+    def __call__(self, t, k=0):
+        return complex(_bary(self.xs, self.w, self._deriv(k), t))
+
+
+class _ChebFun2:
+    """Tensor-product Chebyshev interpolant u(x, y) through nodal values on a rectangle."""
+
+    def __init__(self, xs, ys, V):
+        self.xs, self.ys, self.V = xs, ys, np.asarray(V)
+        self.wx, self.wy = _bary_w(len(xs) - 1), _bary_w(len(ys) - 1)
+
+    def __call__(self, x, y):
+        col = _bary(self.xs, self.wx, self.V, x)
+        return complex(_bary(self.ys, self.wy, col, y))
+
+
+def _scipy_linalg(fname):
+    try:
+        import scipy.linalg as sl
+    except ImportError:
+        raise NotImplementedError(f"{fname} requires SciPy (pip install scipy)")
+    return sl
+
+
+class _Region:
+    """Interval [a, b] or rectangle [a, b] x [c, d] with exact (Wolfram) and float bounds."""
+
+    def __init__(self, xs, lo, hi):
+        self.xs, self.lo, self.hi = xs, lo, hi             # Symbols, exact bounds (Wolfram exprs)
+        self.flo = [_real(v) for v in lo]
+        self.fhi = [_real(v) for v in hi]
+        self.dim = len(xs)
+
+
+def _real(v, fname="NDEigensystem"):
+    try:
+        z = complex(sp.N(S(v)))
+    except Exception:
+        raise ValueError(f"{fname}: the region bounds must be real numbers")
+    if z.imag != 0:
+        raise ValueError(f"{fname}: the region bounds must be real numbers")
+    return z.real
+
+
+def _region_of(specs, fname):
+    """{x, a, b} [, {y, c, d}], x in Interval[{a, b}], {x} in Line[{{a}, {b}}], {x, y} in Rectangle[...]."""
+    xs, lo, hi = [], [], []
+    if len(specs) == 1 and _head_is(specs[0], "Element"):
+        v, reg = specs[0].args
+        vs = list(v.args) if is_list(v) else [v]
+        if _head_is(reg, "Interval") and len(vs) == 1 and len(reg.args) == 1 and is_list(reg.args[0]):
+            lo, hi = [reg.args[0].args[0]], [reg.args[0].args[1]]
+        elif _head_is(reg, "Line") and len(vs) == 1 and len(reg.args) == 1 and len(reg.args[0].args) == 2:
+            lo, hi = [reg.args[0].args[0].args[0]], [reg.args[0].args[1].args[0]]
+        elif _head_is(reg, "Rectangle") and len(vs) == 2:
+            p, q = (reg.args if len(reg.args) == 2 else (L(0, 0), L(1, 1)))
+            lo, hi = list(p.args), list(q.args)
+        else:
+            raise NotImplementedError(f"{fname}: only intervals and rectangles are supported (not {reg})")
+        xs = vs
+    else:
+        for s_ in specs:
+            if not (is_list(s_) and len(s_.args) == 3):
+                raise ValueError(f"{fname}: region specifications must be {{x, xmin, xmax}}")
+            xs.append(s_.args[0])
+            lo.append(s_.args[1])
+            hi.append(s_.args[2])
+    if not xs or len(xs) > 2:
+        raise NotImplementedError(f"{fname}: only one- and two-dimensional regions are supported")
+    for x in xs:
+        if not isinstance(x, Symbol):
+            raise ValueError(f"{fname}: {x} is not a valid variable")
+    R_ = _Region(xs, lo, hi)
+    for a, b in zip(R_.flo, R_.fhi):
+        if not a < b:
+            raise ValueError(f"{fname}: the region must have xmin < xmax")
+    return R_
+
+
+def _uname(u, fname):
+    if isinstance(u, Symbol):
+        return u.name
+    if isinstance(u, Expr) and isinstance(u.head, str) and u.args:
+        return u.head
+    if is_list(u):
+        raise NotImplementedError(f"{fname}: coupled systems are not supported")
+    raise ValueError(f"{fname}: {u} is not an unknown function")
+
+
+def _signed_terms(e, s=1):
+    """[(sign, term)] of a sum, distributing numeric factors."""
+    if _head_is(e, "Plus"):
+        return [p for a in e.args for p in _signed_terms(a, s)]
+    if _head_is(e, "Times") and len(e.args) == 2 and _is_num(e.args[0]) and isinstance(e.args[1], Expr) and (
+            _head_is(e.args[1], "Plus") or _head_is(e.args[1], "NeumannValue") or _is_div(e.args[1])):
+        return _signed_terms(e.args[1], ev(Expr("Times", s, e.args[0])))
+    return [(s, e)]
+
+
+def _is_div(e):
+    return (isinstance(e, Expr) and isinstance(e.head, Expr) and e.head.head == "Inactive"
+            and e.head.args and isinstance(e.head.args[0], Symbol) and e.head.args[0].name == "Div")
+
+
+def _contains(e, name):
+    if isinstance(e, Expr):
+        if e.head == name or (isinstance(e.head, Expr) and _contains(e.head, name)):
+            return True
+        return any(_contains(a, name) for a in e.args)
+    return isinstance(e, Symbol) and e.name == name
+
+
+class _Op:
+    """A linear operator split into flux (Div) terms, other terms and NeumannValue terms."""
+
+    def __init__(self, e, fname):
+        if _head_is(e, "Equal"):
+            if len(e.args) != 2:
+                raise ValueError(f"{fname}: equations must have two sides")
+            terms = _signed_terms(e.args[0], 1) + _signed_terms(e.args[1], -1)
+        else:
+            terms = _signed_terms(e, 1)
+        self.nv, self.div, self.rest = [], [], []
+        for s_, t in terms:
+            if _head_is(t, "NeumannValue"):
+                if len(t.args) != 2:
+                    raise ValueError(f"{fname}: NeumannValue[value, predicate] expected")
+                self.nv.append((s_, t.args[0], t.args[1]))
+            elif _contains(t, "NeumannValue"):
+                raise NotImplementedError(f"{fname}: NeumannValue must appear as a separate term of the equation")
+            elif _is_div(t):
+                self.div.append((s_, t))
+            else:
+                self.rest.append((s_, t))
+
+
+def _lin_form(e, uname, svars, fname, what="operator"):
+    """e (SymPy) linear in u and its derivatives -> ({derivative orders: coefficient}, constant term)."""
+    uf = sp.Function(uname)(*svars)
+    reps, ys = {}, {}
+    ders = sorted((d for d in e.atoms(sp.Derivative) if d.expr == uf), key=lambda d: -d.derivative_count)
+    for d in ders:
+        cnt = tuple(sum(c for v, c in d.variable_count if v == s_) for s_ in svars)
+        y = ys.setdefault(cnt, sp.Symbol(f"__Y{'_'.join(map(str, cnt))}"))
+        reps[d] = y
+    e = e.xreplace(reps)
+    ys.setdefault(tuple(0 for _ in svars), sp.Symbol("__Y" + "_".join("0" for _ in svars)))
+    e = e.xreplace({uf: ys[tuple(0 for _ in svars)]})
+    if any(isinstance(f, sp.core.function.AppliedUndef) and f.func.__name__ == uname for f in e.atoms(sp.Function)) \
+            or any(isinstance(d, (sp.Derivative, sp.Subs)) and d.has(sp.Function(uname)) for d in
+                   e.atoms(sp.Derivative, sp.Subs)):
+        raise NotImplementedError(f"{fname}: the {what} must involve {uname} only at the variables "
+                                  f"{tuple(map(str, svars))}")
+    e = sp.expand(e)
+    coeffs = {}
+    syms = list(ys.values())
+    for cnt, y in ys.items():
+        c = e.coeff(y)
+        if c.has(*syms):
+            raise NotImplementedError(f"{fname}: the {what} must be linear in {uname}")
+        if c != 0:
+            coeffs[cnt] = c
+    const = sp.expand(e - sum(c * ys[k] for k, c in coeffs.items()))
+    if const.has(*syms):
+        raise NotImplementedError(f"{fname}: the {what} must be linear in {uname}")
+    return coeffs, const
+
+
+def _sympy_of(e, fname):
+    v = S(e)
+    if isinstance(v, (list, tuple)):
+        return [sp.sympify(a) for a in v]
+    return sp.sympify(v)
+
+
+class _Problem:
+    """Discretisable linear problem: interior form, flux form, boundary items."""
+
+    def __init__(self, fname, op_items, u, region, t=None, stationary_only=False):
+        self.fname, self.region, self.t = fname, region, t
+        self.uname = _uname(u, fname)
+        self.svars = [sp.Symbol(x.name) for x in region.xs]
+        if not op_items:
+            raise ValueError(f"{fname}: no equation given")
+        main, extra = None, []
+        for it in op_items:
+            if _head_is(it, "DirichletCondition") or _head_is(it, "PeriodicBoundaryCondition"):
+                extra.append(it)
+            elif main is None:
+                main = it
+            elif _head_is(it, "Equal") and not self._has_u_at_vars(it):
+                extra.append(it)
+            else:
+                raise NotImplementedError(f"{fname}: coupled systems and several equations are not supported")
+        if main is None:
+            raise ValueError(f"{fname}: no equation given")
+        op = _Op(main, fname)
+        self.nv = op.nv
+        tv = [sp.Symbol(t.name)] if t is not None else []
+        allv = tv + self.svars
+        full = Expr("Plus", 0, *(Expr("Times", s_, t_) for s_, t_ in op.rest),
+                    *(Expr("Times", s_, Expr(_inactive("Div"), G[0], G[1])) for s_, G in
+                      ((s_, self._div_parts(g)) for s_, g in op.div)))
+        self.coeffs, self.const = _lin_form(_sympy_of(ev(Expr("Activate", full)), fname),
+                                            self.uname, allv, fname)
+        restc, _ = _lin_form(_sympy_of(ev(Expr("Activate", Expr("Plus", 0, *(Expr("Times", s_, t_)
+                                                                                for s_, t_ in op.rest)))),
+                                       fname), self.uname, allv, fname)
+        n = len(self.svars)
+        # time structure
+        self.tcoef = {}
+        if t is not None:
+            for k, c in list(self.coeffs.items()):
+                if k[0]:
+                    if any(k[1:]):
+                        raise NotImplementedError(f"{fname}: mixed time-space derivatives are not supported")
+                    if k[0] > 2:
+                        raise NotImplementedError(f"{fname}: time derivatives above second order are not supported")
+                    self.tcoef[k[0]] = c
+                    del self.coeffs[k]
+            self.coeffs = {k[1:]: c for k, c in self.coeffs.items()}
+            restc = {k[1:]: c for k, c in restc.items() if not k[0]}
+            if not self.tcoef:
+                raise ValueError(f"{fname}: no time derivative of {self.uname} appears in the equation")
+            if any(c.has(allv[0]) for c in self.tcoef.values()) or any(
+                    c.has(allv[0]) for c in self.coeffs.values()) or self.const.has(allv[0]):
+                raise NotImplementedError(f"{fname}: the operator and boundary conditions need to be stationary "
+                                          "(time-independent coefficients)")
+        for k in self.coeffs:
+            if sum(k) > 2:
+                raise NotImplementedError(f"{fname}: only operators of order at most two in space are supported")
+        if not any(sum(k) == 2 for k in self.coeffs):
+            raise NotImplementedError(f"{fname}: a second-order spatial operator is required")
+        # flux F = C Grad u + (alpha u - gamma) from the Div terms and the non-Div second-order part
+        e_ = [tuple(1 if i == d else 0 for i in range(n)) for d in range(n)]
+        self.flux = [dict() for _ in range(n)]          # per component: {order tuple: coef}, plus const
+        self.flux_c = [sp.Integer(0)] * n
+        for d in range(n):
+            for d2 in range(n):
+                k2 = tuple(e_[d][i] + e_[d2][i] for i in range(n))
+                c = restc.get(k2, 0)
+                if c != 0:
+                    c = -c if d == d2 else -c / 2
+                    self.flux[d][e_[d2]] = self.flux[d].get(e_[d2], 0) + c
+        for s_, g in op.div:
+            G, X = self._div_parts(g)
+            Ga = ev(Expr("Activate", G))
+            comps = list(Ga.args) if is_list(Ga) else [Ga]
+            if len(comps) != n:
+                raise ValueError(f"{fname}: a flux vector of length {n} is required")
+            for d in range(n):
+                cs, c0 = _lin_form(_sympy_of(comps[d], fname), self.uname, allv, fname, "flux")
+                sgn = -S(s_)
+                for k, c in cs.items():
+                    kk = k[1:] if t is not None else k
+                    if t is not None and k[0]:
+                        raise NotImplementedError(f"{fname}: time derivatives inside fluxes are not supported")
+                    if sum(kk) > 1:
+                        raise NotImplementedError(f"{fname}: fluxes must be first order")
+                    self.flux[d][kk] = self.flux[d].get(kk, 0) + sgn * c
+                self.flux_c[d] = self.flux_c[d] + sgn * c0
+        self.extra = extra
+
+    def _has_u_at_vars(self, e):
+        names = {x.name for x in self.region.xs}
+
+        def walk(q):
+            if isinstance(q, Expr):
+                if q.head == self.uname and any(isinstance(a, Symbol) and a.name in names for a in q.args):
+                    return True
+                if isinstance(q.head, Expr) and _head_is(q.head, "Derivative") is False and walk(q.head):
+                    return True
+                if (isinstance(q.head, Expr) and isinstance(q.head.head, Expr) and q.head.head.head == "Derivative"
+                        and any(isinstance(a, Symbol) and a.name in names for a in q.args)):
+                    return True
+                if _head_is(q, "D") or _head_is(q, "Laplacian") or _head_is(q, "Grad") or _is_div(q):
+                    return True
+                return any(walk(a) for a in q.args)
+            return False
+        return walk(e)
+
+    def _div_parts(self, g):
+        if len(g.args) != 2:
+            raise ValueError(f"{self.fname}: Inactive[Div][flux, vars] expected")
+        return g.args[0], g.args[1]
+
+
+def _lam(expr, svars, fname="NDSolve"):
+    extra = sp.sympify(expr).free_symbols - set(svars)
+    if extra:
+        raise ValueError(f"{fname}: the coefficient {expr} must be numerical (free symbols "
+                         f"{', '.join(sorted(map(str, extra)))})")
+    bad = [f for f in sp.sympify(expr).atoms(sp.Function) if isinstance(f, sp.core.function.AppliedUndef)]
+    if bad:
+        raise NotImplementedError(f"{fname}: the coefficient {expr} cannot be evaluated numerically "
+                                  f"({bad[0].func})")
+    f = sp.lambdify(svars, expr, "numpy")
+
+    def call(*pts):
+        try:
+            with np.errstate(all="ignore"):
+                v = np.asarray(f(*pts), dtype=complex)
+        except (NameError, TypeError, ValueError) as exc:
+            raise NotImplementedError(f"{fname}: the coefficient {expr} cannot be evaluated numerically ({exc})")
+        return np.broadcast_to(v, np.broadcast(*pts).shape).astype(complex)
+    return call
+
+
+def _pred_true(pred, xs, pt, fname):
+    if pred is True or (isinstance(pred, Symbol) and pred.name == "True"):
+        return True
+    rules = L(*(Expr("Rule", x, v) for x, v in zip(xs, pt)))
+    r = ev(Expr("ReplaceAll", pred, rules))
+    if r is True or (isinstance(r, Symbol) and r.name == "True"):
+        return True
+    if r is False or (isinstance(r, Symbol) and r.name == "False"):
+        return False
+    raise ValueError(f"{fname}: the predicate {pred} does not evaluate to True or False on the boundary")
+
+
+class _Disc:
+    """Collocation matrices for a _Problem at resolution N (per dimension)."""
+
+    def __init__(self, P, N):
+        self.P = P
+        R_ = P.region
+        self.dim = R_.dim
+        self.grids = [_cheb(N, a, b) for a, b in zip(R_.flo, R_.fhi)]
+        self.N = N
+        if self.dim == 1:
+            xs, D = self.grids[0]
+            self.pts = [xs]
+            self.Dk = {(0,): np.eye(N + 1), (1,): D, (2,): D @ D}
+            self.size = N + 1
+        else:
+            (xs, Dx), (ys, Dy) = self.grids
+            I = np.eye(N + 1)
+            X, Y = np.meshgrid(xs, ys, indexing="ij")
+            self.pts = [X.ravel(), Y.ravel()]
+            Dx2, Dy2 = Dx @ Dx, Dy @ Dy
+            self.Dk = {(0, 0): np.kron(I, I), (1, 0): np.kron(Dx, I), (0, 1): np.kron(I, Dy),
+                       (2, 0): np.kron(Dx2, I), (0, 2): np.kron(I, Dy2), (1, 1): np.kron(Dx, Dy)}
+            self.size = (N + 1) ** 2
+        self.sv = P.svars
+
+    def field(self, expr):
+        return _lam(expr, self.sv, self.P.fname)(*self.pts)
+
+    def operator(self, coeffs):
+        A = np.zeros((self.size, self.size), dtype=complex)
+        for k, c in coeffs.items():
+            A += self.field(c)[:, None] * self.Dk[k]
+        return A
+
+    def boundary(self):
+        """[(index, outward normal, exact point)] for boundary nodes; corners get the summed normal."""
+        R_ = self.P.region
+        N = self.N
+        out = []
+        if self.dim == 1:
+            out.append((0, (-1.0,), [R_.lo[0]]))
+            out.append((N, (1.0,), [R_.hi[0]]))
+            return out
+        xs, ys = self.grids[0][0], self.grids[1][0]
+        for i in range(N + 1):
+            for j in range(N + 1):
+                if i not in (0, N) and j not in (0, N):
+                    continue
+                nx = -1.0 if i == 0 else (1.0 if i == N else 0.0)
+                ny = -1.0 if j == 0 else (1.0 if j == N else 0.0)
+                px = R_.lo[0] if i == 0 else (R_.hi[0] if i == N else float(xs[i]))
+                py = R_.lo[1] if j == 0 else (R_.hi[1] if j == N else float(ys[j]))
+                out.append((i * (N + 1) + j, (nx, ny), [px, py]))
+        return out
+
+    def flux_row(self, idx, normal):
+        P = self.P
+        row = np.zeros(self.size, dtype=complex)
+        c0 = 0j
+        pt = [p[idx] for p in self.pts]
+        for d, nd in enumerate(normal):
+            if nd == 0:
+                continue
+            for k, c in P.flux[d].items():
+                row += nd * complex(_lam(c, self.sv, P.fname)(*pt)) * self.Dk[k][idx]
+            c0 += nd * complex(_lam(P.flux_c[d], self.sv, P.fname)(*pt))
+        return row, c0
+
+
+def _point_value(expr_s, svars, pt_exact, fname="NDSolve"):
+    v = sp.N(sp.sympify(expr_s).subs({s_: S(p) for s_, p in zip(svars, pt_exact)}))
+    try:
+        return complex(v)
+    except TypeError:
+        raise ValueError(f"{fname}: the boundary value {expr_s} must be numerical on the boundary")
+
+
+def _assemble(P, Dz, eigen):
+    """Rows (matrix A, B and right-hand side) with the boundary conditions applied."""
+    fname = P.fname
+    A = Dz.operator(P.coeffs)
+    if eigen:
+        if P.t is None:
+            Bd = np.ones(Dz.size, dtype=complex)
+            P.tord = 0
+        else:
+            if len(P.tcoef) != 1:
+                raise NotImplementedError(f"{fname}: equations with both first and second time derivatives are "
+                                          "not supported")
+            (P.tord, c), = P.tcoef.items()
+            Bd = -Dz.field(c)
+        B = np.diag(Bd)
+        if P.const != 0:
+            raise ValueError(f"{fname}: the operator must be homogeneous (no source terms)")
+    else:
+        B = None
+    rhs = -Dz.field(P.const) if P.const != 0 else np.zeros(Dz.size, dtype=complex)
+    xs = P.region.xs
+    bnodes = Dz.boundary()
+    done = set()
+    uname = P.uname
+    # Dirichlet conditions
+    for c in P.extra:
+        if _head_is(c, "DirichletCondition"):
+            if len(c.args) != 2 or not _head_is(c.args[0], "Equal"):
+                raise ValueError(f"{fname}: DirichletCondition[u == value, predicate] expected")
+            lhs, val = c.args[0].args
+            if not (isinstance(lhs, Expr) and lhs.head == uname):
+                raise NotImplementedError(f"{fname}: Dirichlet conditions must have the form {uname}[...] == value")
+            vs = _sympy_of(val, fname)
+            if P.t is not None and vs.has(sp.Symbol(P.t.name)):
+                raise NotImplementedError(f"{fname}: time-dependent Dirichlet values are not supported")
+            for idx, nrm, pt in bnodes:
+                if idx in done or not _pred_true(c.args[1], xs, pt, fname):
+                    continue
+                v = _point_value(vs, P.svars, pt, fname)
+                if eigen and abs(v) > 0:
+                    raise ValueError(f"{fname}: eigensystems with inhomogeneous Dirichlet conditions cannot be "
+                                     "solved")
+                A[idx] = 0
+                A[idx, idx] = 1
+                rhs[idx] = v
+                if eigen:
+                    B[idx] = 0
+                done.add(idx)
+    # periodic conditions and two-point equations (1-D)
+    for c in P.extra:
+        if _head_is(c, "PeriodicBoundaryCondition") or _head_is(c, "Equal"):
+            if P.region.dim != 1:
+                raise NotImplementedError(f"{fname}: periodic and pointwise conditions are only supported in 1-D")
+            _point_condition(P, Dz, c, A, B, rhs, done, eigen)
+    # natural / Neumann rows
+    for idx, nrm, pt in bnodes:
+        if idx in done:
+            continue
+        row, c0 = Dz.flux_row(idx, nrm)
+        for s_, val, pred in P.nv:
+            if not _pred_true(pred, xs, pt, fname):
+                continue
+            q, g = _nv_parts(P, val)
+            sv = complex(sp.N(S(s_)))
+            row[idx] += sv * _point_value(q, P.svars, pt, fname)
+            c0 += sv * _point_value(g, P.svars, pt, fname)
+        if not np.any(np.abs(row) > 0):
+            raise ValueError(f"{fname}: the flux vanishes on the boundary at {pt}; give a DirichletCondition there")
+        if eigen and abs(c0) > 0:
+            raise ValueError(f"{fname}: eigensystems with inhomogeneous Neumann values cannot be solved")
+        A[idx] = row
+        rhs[idx] = -c0
+        if eigen:
+            B[idx] = 0
+    if not np.all(np.isfinite(A)):
+        raise ValueError(f"{fname}: the coefficients are singular on the region (at a collocation point)")
+    return A, B, rhs
+
+
+def _nv_parts(P, val):
+    """NeumannValue value g - q u -> (q-like coefficient of u, constant g) with value = q u + g."""
+    fname = P.fname
+    vs = _sympy_of(val, fname)
+    tv = [sp.Symbol(P.t.name)] if P.t is not None else []
+    cs, c0 = _lin_form(vs, P.uname, tv + P.svars, fname, "NeumannValue")
+    q = sp.Integer(0)
+    for k, c in cs.items():
+        if any(k):
+            raise NotImplementedError(f"{fname}: NeumannValue may only involve {P.uname} itself, not its "
+                                      "derivatives")
+        q = c
+    if P.t is not None and (q.has(tv[0]) or c0.has(tv[0])):
+        raise NotImplementedError(f"{fname}: time-dependent Neumann values are not supported")
+    return q, c0
+
+
+def _point_condition(P, Dz, c, A, B, rhs, done, eigen):
+    fname = P.fname
+    a, b = P.region.lo[0], P.region.hi[0]
+    fa, fb = P.region.flo[0], P.region.fhi[0]
+    N = Dz.N
+    idx_of = {}
+
+    def which(pt):
+        z = complex(sp.N(pt))
+        if abs(z.imag) > 0:
+            raise ValueError(f"{fname}: conditions must be at real points")
+        for i_, f_ in ((0, fa), (N, fb)):
+            if abs(z.real - f_) <= 1e-12 * max(1.0, abs(f_)):
+                return i_
+        raise NotImplementedError(f"{fname}: conditions are only supported at the ends of the interval")
+
+    def flux_full(i_):
+        row, c0 = Dz.flux_row(i_, (1.0,))
+        return row, c0
+    if _head_is(c, "PeriodicBoundaryCondition"):
+        if len(c.args) != 3:
+            raise ValueError(f"{fname}: PeriodicBoundaryCondition[k u[x], pred, f] expected")
+        expr, pred, f = c.args
+        uf = sp.Function(P.uname)(*P.svars)
+        k = sp.simplify(_sympy_of(expr, fname) / uf)
+        if k.has(P.uname) or k.free_symbols & set(P.svars) or (P.t is not None and k.has(sp.Symbol(P.t.name))):
+            raise NotImplementedError(f"{fname}: PeriodicBoundaryCondition needs a constant multiple of "
+                                      f"{P.uname}")
+        kk = complex(sp.N(k))
+        targets = [(i_, p) for i_, p in ((0, a), (N, b)) if _pred_true(pred, P.region.xs, [p], fname)]
+        if len(targets) != 1:
+            raise ValueError(f"{fname}: the PeriodicBoundaryCondition predicate must select one end point")
+        ti, tp = targets[0]
+        si = which(S(ev(Expr(f, tp))))
+        if si == ti:
+            raise ValueError(f"{fname}: the periodic map must send one end point to the other")
+        rows = [(ti, np.eye(Dz.size, dtype=complex)[ti] - kk * np.eye(Dz.size, dtype=complex)[si])]
+        ft, _ = flux_full(ti)
+        fs, _ = flux_full(si)
+        rows.append((si, ft - kk * fs))
+        for i_, r in rows:
+            if i_ in done:
+                raise ValueError(f"{fname}: conflicting conditions at an end point")
+            A[i_] = r
+            rhs[i_] = 0
+            if eigen:
+                B[i_] = 0
+            done.add(i_)
+        return
+    if len(c.args) != 2:
+        raise ValueError(f"{fname}: boundary equations must have two sides")
+    e = sp.expand(_sympy_of(c.args[0], fname) - _sympy_of(c.args[1], fname))
+    uf = sp.Function(P.uname)
+    terms = {}
+    reps = {}
+    for s_ in e.atoms(sp.Subs):
+        if isinstance(s_.expr, sp.Derivative) and s_.expr.expr.func == uf:
+            reps[s_] = (s_.expr.derivative_count, which(s_.point[0]))
+    inner = set()
+    for s_ in reps:
+        inner |= s_.expr.atoms(sp.core.function.AppliedUndef) | s_.expr.atoms(sp.Derivative)
+    for f_ in e.atoms(sp.core.function.AppliedUndef):
+        if f_.func == uf and f_ not in inner:
+            if len(f_.args) != 1 or f_.args[0].free_symbols:
+                raise NotImplementedError(f"{fname}: conditions must evaluate {P.uname} at end points")
+            reps[f_] = (0, which(f_.args[0]))
+    for f_ in e.atoms(sp.Derivative):
+        if f_.has(uf) and f_ not in inner:
+            raise NotImplementedError(f"{fname}: conditions must evaluate {P.uname} at end points")
+    syms = {atom: sp.Symbol(f"__B{i}") for i, atom in enumerate(reps)}
+    ee = sp.expand(e.xreplace(syms))
+    row = np.zeros(Dz.size, dtype=complex)
+    pts_used = set()
+    for atom, sy in syms.items():
+        cf = ee.coeff(sy)
+        if cf.free_symbols & set(syms.values()) or cf.has(uf):
+            raise NotImplementedError(f"{fname}: boundary conditions must be linear")
+        k, i_ = reps[atom]
+        pts_used.add(i_)
+        Dk = Dz.Dk.get((k,))
+        if Dk is None:
+            Dk = np.linalg.matrix_power(Dz.Dk[(1,)], k)
+        row += complex(sp.N(cf)) * Dk[i_]
+    c0 = ee.subs({sy: 0 for sy in syms.values()})
+    if c0.free_symbols:
+        raise ValueError(f"{fname}: the condition {c} has free symbols")
+    c0 = complex(sp.N(c0))
+    if not pts_used:
+        raise ValueError(f"{fname}: the condition {c} does not involve {P.uname}")
+    if len(pts_used) == 2:
+        # u[a] == k u[b]: periodic-type identification of values and fluxes
+        r0, rN = row[0], row[N]
+        if np.count_nonzero(np.abs(row) > 1e-14) != 2 or abs(c0) > 0:
+            raise NotImplementedError(f"{fname}: two-point conditions must have the form u[a] == k u[b]")
+        m = -rN / r0                       # u(a) == m u(b); fluxes then satisfy F(a) == m F(b)
+        fa_, _ = flux_full(0)
+        fb_, _ = flux_full(N)
+        for i_, r in ((N, row / r0), (0, fa_ - m * fb_)):
+            if i_ in done:
+                raise ValueError(f"{fname}: conflicting conditions at an end point")
+            A[i_] = r
+            rhs[i_] = 0
+            if eigen:
+                B[i_] = 0
+            done.add(i_)
+        return
+    (i_,) = pts_used
+    if i_ in done:
+        raise ValueError(f"{fname}: too many conditions at x = {fa if i_ == 0 else fb}")
+    if eigen and abs(c0) > 0:
+        raise ValueError(f"{fname}: eigensystems with inhomogeneous boundary conditions cannot be solved")
+    A[i_] = row
+    rhs[i_] = -c0
+    if eigen:
+        B[i_] = 0
+    done.add(i_)
+
+
+def _weights(P, Dz):
+    ws = [_clencurt(Dz.N, a, b) for a, b in zip(P.region.flo, P.region.fhi)]
+    return ws[0] if len(ws) == 1 else np.kron(ws[0], ws[1])
+
+
+def _sorted_eigs(lams):
+    order = sorted(range(len(lams)), key=lambda i: abs(lams[i]))
+    groups, out = [], []
+    for i in order:
+        if groups and abs(abs(lams[i]) - abs(lams[groups[-1][0]])) <= 1e-8 * (1 + abs(lams[i])):
+            groups[-1].append(i)
+        else:
+            groups.append([i])
+    for g in groups:
+        out.extend(sorted(g, key=lambda i: (round(lams[i].imag, 8), round(lams[i].real, 8))))
+    return out
+
+
+_EIG_SEQ = {1: (32, 48, 64, 96, 128, 192, 256), 2: (14, 18, 22, 26, 30)}
+
+
+def _eigen_solve(P, n, fname):
+    """(eigenvalues, nodal eigenvectors, discretisation) with a two-resolution self-check."""
+    sl = _scipy_linalg(fname)
+    prev, last = None, None
+    dim = P.region.dim
+    seq = [N for N in _EIG_SEQ[dim] if (N + 1) ** dim >= 4 * n + 8]
+    if not seq:
+        raise ValueError(f"{fname}: too many eigenvalues requested ({n})")
+    diff = np.inf
+    for N in seq:
+        Dz = _Disc(P, N)
+        A, B, _ = _assemble(P, Dz, True)
+        with np.errstate(all="ignore"):
+            w, V = sl.eig(A, B)
+        ok = np.isfinite(w) & (np.abs(w) < 1e12)
+        w, V = w[ok], V[:, ok]
+        if P.tord == 2:
+            r = np.sqrt(w.astype(complex))
+            w = np.concatenate([r, -r])
+            V = np.concatenate([V, V], axis=1)
+        idx = _sorted_eigs(list(w))[:n]
+        if len(idx) < n:
+            raise ValueError(f"{fname}: only {len(idx)} eigenvalues could be computed")
+        lam = w[idx]
+        cur = (lam, V[:, idx], Dz)
+        if prev is not None:
+            diff = float(np.max(np.abs(lam - prev[0]) / (1 + np.abs(lam))))
+            if diff <= 1e-9:
+                last = cur
+                break
+        prev = last = cur
+    if diff > 1e-6:
+        raise ArithmeticError(f"{fname}: self-check failed: the eigenvalues did not converge under grid "
+                              f"refinement (relative change {diff:.2e}); the problem may be singular or "
+                              "non-smooth")
+    return last
+
+
+def _normalise(P, Dz, v):
+    W = _weights(P, Dz)
+    nrm = np.sqrt(np.sum(W * np.abs(v) ** 2).real)
+    if nrm == 0 or not np.isfinite(nrm):
+        raise ArithmeticError(f"{P.fname}: self-check failed: a zero eigenvector was computed")
+    v = v / nrm
+    big = np.nonzero(np.abs(v) > 1e-3 * np.max(np.abs(v)))[0]
+    k = int(big[1] if big.size > 1 and big[0] == 0 else big[0])    # first interior-side significant value
+    v = v * (abs(v[k]) / v[k])
+    if np.max(np.abs(v.imag)) <= 1e-9 * np.max(np.abs(v)):
+        v = v.real
+    return v
+
+
+def _num(z):
+    z = complex(z)
+    if abs(z.imag) <= 1e-10 * (1 + abs(z)):
+        return float(z.real)
+    return R(z)
+
+
+def _ifun_of(P, Dz, vals):
+    from .wl_interp import _make, _make_nd
+    if P.region.dim == 1:
+        xs, D = Dz.grids[0]
+        return _make(_ChebFun(xs, D, vals), P.region.flo[0], P.region.fhi[0])
+    N = Dz.N
+    return _make_nd(_ChebFun2(Dz.grids[0][0], Dz.grids[1][0], np.asarray(vals).reshape(N + 1, N + 1)),
+                    list(zip(P.region.flo, P.region.fhi)))
+
+
+def _eig_setup(op, u, rest, fname):
+    pos, opts = split_options(rest, {"Method"}, fname)
+    m = opts.get("Method")
+    if m is not None and not (isinstance(m, Symbol) and m.name == "Automatic"):
+        raise NotImplementedError(f"{fname}: only Method -> Automatic (Chebyshev collocation) is supported")
+    if not pos:
+        raise ValueError(f"{fname}: the region and the number of eigenvalues are required")
+    n = pos[-1]
+    if isinstance(n, Symbol) or (isinstance(n, Expr) and not _is_num(n)):
+        raise Unevaluated()
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise ValueError(f"{fname}: the number of eigenvalues must be a positive integer")
+    specs = pos[:-1]
+    t = None
+    if specs and isinstance(specs[0], Symbol):
+        t = specs.pop(0)
+    if not specs:
+        raise ValueError(f"{fname}: a region {{x, xmin, xmax}} is required")
+    region = _region_of(specs, fname)
+    if isinstance(u, Expr) and u.args and not is_list(u):
+        want = ([t] if t is not None else []) + list(region.xs)
+        if len(u.args) != len(want) or any(not K.same(a, b) for a, b in zip(u.args, want)):
+            raise ValueError(f"{fname}: the unknown {u} must be a function of {L(*want)}")
+    items = list(op.args) if is_list(op) else [op]
+    P = _Problem(fname, items, u, region, t)
+    return P, n
+
+
+def _eig_funcs(P, u, lam, V, Dz):
+    fs = []
+    for i in range(len(lam)):
+        f = _ifun_of(P, Dz, _normalise(P, Dz, V[:, i]))
+        if isinstance(u, Expr) and u.args:
+            f = Expr(f, *P.region.xs)
+        fs.append(f)
+    return fs
+
+
+@fn("NDEigenvalues", area=AREA, status="added",
+    notes="NDEigenvalues[op, u, {x, a, b}, n] (also u[x], x in Interval[{a, b}], {x, a, b}, {y, c, d} and {x, y} in "
+          "Rectangle[...], and NDEigenvalues[eqns, u, t, region, n] for time-dependent equations, where D[u, t] -> "
+          "lambda u and D[u, {t, 2}] -> lambda^2 u) -> the n eigenvalues of smallest magnitude of a linear operator "
+          "of order at most two (constant or variable coefficients), sorted by increasing absolute value; op may "
+          "contain Inactive[Div] flux terms and NeumannValue terms, and be given with DirichletCondition, "
+          "PeriodicBoundaryCondition or periodic two-point equations u[a] == u[b]; no condition = natural "
+          "(Neumann 0) boundary; Chebyshev spectral collocation (SciPy generalized eigensolver) instead of finite "
+          "elements, so values agree with Wolfram's to within Wolfram's own discretisation error. Disks and "
+          "general regions, coupled systems, 3-D and Method settings raise NotImplementedError; inhomogeneous "
+          "conditions raise ValueError. Check: self-check — the eigenvalues are recomputed on a finer grid and an "
+          "ArithmeticError is raised unless they agree to 1e-6 (relative).")
+def _nd_eigenvalues(op: Expr, u: Expr, *rest: Expr) -> ListOf[Expr]:
+    fname = "NDEigenvalues"
+    P, n = _eig_setup(op, u, rest, fname)
+    lam, V, Dz = _eigen_solve(P, n, fname)
+    return L(*(_num(z) for z in lam))
+
+
+@fn("NDEigensystem", area=AREA, status="added",
+    notes="NDEigensystem[op, u, region, n] -> {{lambda1, ...}, {u1, ...}} with the eigenvalues as for NDEigenvalues "
+          "and the eigenfunctions as InterpolatingFunction objects (ifun[x] when u is given as u[x]; "
+          "two-dimensional InterpolatingFunction[{{a, b}, {c, d}}, ...] on rectangles) normalised to "
+          "Integrate[Abs[u]^2] == 1 over the region (Clenshaw-Curtis quadrature) with the phase fixed so that the "
+          "largest nodal value is positive (Wolfram leaves the sign arbitrary). Check: self-check — eigenvalues are "
+          "compared across two grid resolutions (ArithmeticError on disagreement); tests also verify op[u_i] == "
+          "lambda_i u_i at sample points and the analytic spectra of Laplacians.")
+def _nd_eigensystem(op: Expr, u: Expr, *rest: Expr) -> ListOf[Expr]:
+    fname = "NDEigensystem"
+    P, n = _eig_setup(op, u, rest, fname)
+    lam, V, Dz = _eigen_solve(P, n, fname)
+    return L(L(*(_num(z) for z in lam)), L(*_eig_funcs(P, u, lam, V, Dz)))
+
+
+# ── boundary-value problems for NDSolve / NDSolveValue ──
+
+_BVP_SEQ = {1: (16, 24, 32, 48, 64, 96, 128, 192, 256), 2: (12, 16, 20, 24, 28, 32)}
+
+
+def _bvp_solve(P, fname):
+    prev, diff = None, np.inf
+    out = None
+    for N in _BVP_SEQ[P.region.dim]:
+        Dz = _Disc(P, N)
+        A, _, rhs = _assemble(P, Dz, False)
+        try:
+            cond = np.linalg.cond(A)
+        except np.linalg.LinAlgError:
+            cond = np.inf
+        if not np.isfinite(cond) or cond > 1e15:
+            raise ValueError(f"{fname}: the boundary-value problem has no unique solution (singular system; "
+                             "add a Dirichlet condition)")
+        sol = np.linalg.solve(A, rhs)
+        if not np.all(np.isfinite(sol)):
+            raise ValueError(f"{fname}: the boundary-value problem could not be solved")
+        if prev is not None:
+            pD, psol = prev
+            if P.region.dim == 1:
+                f = _ChebFun(Dz.grids[0][0], Dz.grids[0][1], sol)
+                newv = np.array([f(t) for t in pD.grids[0][0]])
+            else:
+                f = _ChebFun2(Dz.grids[0][0], Dz.grids[1][0], sol.reshape(N + 1, N + 1))
+                newv = np.array([f(x, y) for x, y in zip(*pD.pts)])
+            diff = float(np.max(np.abs(newv - psol)) / (1 + np.max(np.abs(sol))))
+            out = (Dz, sol)
+            if diff <= 1e-11:
+                break
+        prev = out = (Dz, sol)
+    if diff > 1e-7:
+        raise ArithmeticError(f"{fname}: self-check failed: the boundary-value solution did not converge under "
+                              f"grid refinement (relative change {diff:.2e}); non-smooth data is not supported")
+    Dz, sol = out
+    if np.max(np.abs(sol.imag)) <= 1e-12 * (1 + np.max(np.abs(sol))):
+        sol = sol.real
+    return Dz, sol
+
+
+def _has_bc_heads(e):
+    return any(_contains(e, h) for h in ("DirichletCondition", "NeumannValue", "PeriodicBoundaryCondition"))
+
+
+def _two_point(items, uname, xname):
+    """True when plain conditions evaluate the unknown at two or more distinct points."""
+    pts = set()
+
+    def walk(q):
+        if isinstance(q, Expr):
+            if (q.head == uname or (isinstance(q.head, Expr) and isinstance(q.head.head, Expr)
+                                    and q.head.head.head == "Derivative" and q.head.args
+                                    and isinstance(q.head.args[0], Symbol) and q.head.args[0].name == uname)) \
+                    and len(q.args) == 1 and not _contains(q.args[0], xname):
+                pts.add(str(q.args[0]))
+            if isinstance(q.head, Expr):
+                walk(q.head)
+            for a in q.args:
+                walk(a)
+    for it in items:
+        walk(it)
+    return len(pts) >= 2
+
+
+def ndsolve_bvp(eqs, unknowns, ranges, fname):
+    """Hook used by wl_interp's NDSolve: (unknowns, {name: InterpolatingFunction}, var) for linear stationary
+    boundary-value problems on intervals and rectangles, or None when the problem is not one."""
+    items = list(eqs.args) if is_list(eqs) else [eqs]
+    us = list(unknowns.args) if is_list(unknowns) else [unknowns]
+    try:
+        uname = _uname(us[0], fname)
+    except (ValueError, NotImplementedError):
+        return None
+    if not ranges:
+        return None
+    xname = None
+    r0 = ranges[0]
+    if is_list(r0) and r0.args and isinstance(r0.args[0], Symbol):
+        xname = r0.args[0].name
+    elif _head_is(r0, "Element"):
+        v = r0.args[0]
+        xname = (v.args[0] if is_list(v) else v).name if isinstance(v.args[0] if is_list(v) else v, Symbol) else None
+    is_bvp = any(_has_bc_heads(e) for e in items) or len(ranges) > 1 or _head_is(r0, "Element") or (
+        xname is not None and _two_point(items, uname, xname))
+    if not is_bvp:
+        return None
+    if len(us) != 1:
+        raise NotImplementedError(f"{fname}: boundary-value problems for coupled systems are not supported")
+    region = _region_of(list(ranges), fname)
+    u = us[0]
+    if isinstance(u, Expr) and u.args:
+        if len(u.args) != region.dim or any(not K.same(a, b) for a, b in zip(u.args, region.xs)):
+            raise NotImplementedError(f"{fname}: time-dependent PDEs (method of lines) are not supported; the "
+                                      f"unknown must be a function of {L(*region.xs)}")
+    P = _Problem(fname, items, u, region)
+    Dz, sol = _bvp_solve(P, fname)
+    return us, {uname: _ifun_of(P, Dz, sol)}, region.xs[0].name
