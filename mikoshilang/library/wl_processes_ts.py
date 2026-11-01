@@ -125,6 +125,8 @@ def _merge(pairs, mf, fname):
             out.append((t, vs[0]))
         else:
             f = Symbol("Mean") if mf is None or _is_sym(mf, "Automatic") else mf
+            if isinstance(f, (int, float, str, bool)) or is_list(f):
+                raise TypeError(f"{fname}: MergingFunction must be a function, not {f!r}")
             out.append((t, call(f, L(*vs))))
     return out
 
@@ -192,7 +194,12 @@ def _canonical(e):
         return False
     if any(k2 <= k1 for k1, k2 in zip(ks, ks[1:])):
         return False
-    return all(_is_rule(o) and isinstance(o.args[0], Symbol) and o.args[0].name in KEPT for o in a[1:])
+    if not all(_is_rule(o) and isinstance(o.args[0], Symbol) and o.args[0].name in KEPT for o in a[1:]):
+        return False
+    for o in a[1:]:
+        if o.args[0].name == "ResamplingMethod":
+            _check_resampling(o.args[1], e.head)
+    return True
 
 
 def _build(head, args, fname):

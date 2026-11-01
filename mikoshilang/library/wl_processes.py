@@ -663,6 +663,10 @@ class InhomPoisson(Proc):
             raise ValueError(f"{fname}: InhomogeneousPoissonProcess expects [lambda[t], t]")
         self.var_ = sp.Symbol(a[1].name)
         self.lam = _p(a[0], fname, "intensity")
+        if self.var_ not in self.lam.free_symbols:
+            _cond(Expr("GreaterEqual", R(self.lam), 0))
+            if _num(self.lam) and not (self.lam.is_real and self.lam >= 0):
+                _bad(f"{fname}: the intensity must be non-negative")
         self.p = [self.lam]
 
     def numeric(self):
@@ -3042,7 +3046,7 @@ def _series_data(data, fname):
         paths = [[(sp.sympify(S(t)), sp.sympify(S(v))) for t, v in p] for p in T.td_paths(data)[0]]
     elif isinstance(data, Expr) and data.head in ("TimeSeries", "EventSeries"):
         ser = T.series_of(data, fname)
-        paths = [[(sp.sympify(S(t)), sp.sympify(S(v))) for t, v in ser[0]]]
+        paths = [[(sp.sympify(S(t)), sp.sympify(S(v))) for t, v in ser[1]]]
     elif isinstance(data, Symbol):
         raise Unevaluated()
     else:
