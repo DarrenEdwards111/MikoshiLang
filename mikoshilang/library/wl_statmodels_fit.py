@@ -784,6 +784,8 @@ def _fm_apply(head, args, ev_):
         return UNH
     try:
         return _fm_dispatch(a, args, ev_)
+    except Unevaluated:
+        return UNH
     except KeyError as e:
         raise ValueError(f"FittedModel: malformed model object (missing {e})")
 
@@ -1361,3 +1363,669 @@ def _clustering_measurements(x: ListOf[ListOf[Expr]] | Rule | Expr, b: Expr | St
     if is_list(prop):
         return L(*(one(q) for q in props))
     return one(prop)
+
+
+# ─────────────────────────── survival models ───────────────────────────
+
+def _is_inf(v):
+    return (isinstance(v, Symbol) and v.name == "Infinity") or \
+        (isinstance(v, Expr) and v.head == "DirectedInfinity" and v.args in ((), (1,))) or v == float("inf")
+
+
+def _event_data(x, fname):
+    """[(time, event?)] from {t1, ...} (with {t, Infinity} right-censored entries) or EventData[times, flags]
+    / EventData[Automatic, {times, flags, None}] (flag 0 = event, 1 = right-censored)"""
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if isinstance(x, Expr) and x.head == "EventData":
+        a = x.args
+        if len(a) == 2 and isinstance(a[0], Symbol) and a[0].name == "Automatic" and is_list(a[1]) and \
+                len(a[1].args) == 3 and SM.str_or_sym(a[1].args[2]) == "None":
+            a = a[1].args[:2]
+        if len(a) == 2 and is_list(a[0]) and is_list(a[1]):
+            t, _ = SM.vec(a[0], fname, "event times")
+            c = list(a[1].args)
+            if len(c) != len(t):
+                raise ValueError(f"{fname}: EventData needs one censoring flag per time")
+            if any(q == -1 for q in c):
+                raise NotImplementedError(f"{fname}: left censoring is not supported")
+            if not all(q in (0, 1) for q in c):
+                raise ValueError(f"{fname}: EventData censoring flags must be 0 (event) or 1 (right-censored)")
+            res = [(SM.fl(v), q == 0) for v, q in zip(t, c)]
+        elif len(a) == 1 and is_list(a[0]):
+            res = _event_data(a[0], fname)
+        else:
+            raise NotImplementedError(f"{fname}: this EventData form (truncation, interval censoring, ...) is not "
+                                      f"supported")
+    elif is_list(x) and x.args:
+        res = []
+        for v in x.args:
+            if is_list(v):
+                if len(v.args) == 2 and _is_inf(v.args[1]):
+                    res.append((SM.fl(SM._num(v.args[0], fname, "event time")), False))
+                else:
+                    raise NotImplementedError(f"{fname}: interval or left censoring is not supported")
+            else:
+                res.append((SM.fl(SM._num(v, fname, "event time")), True))
+    else:
+        raise TypeError(f"{fname}: the data must be a list of event times or EventData")
+    if not res:
+        raise ValueError(f"{fname}: no event times")
+    if any(t < 0 for t, _ in res):
+        raise ValueError(f"{fname}: event times must be non-negative")
+    return res
+
+
+def _tnum(t):
+    """a time as an integer when it is integral, else a machine number"""
+    return int(t) if float(t).is_integer() and abs(t) < 2 ** 53 else float(t)
+
+
+def _tlist(ts):
+    return L(*(_tnum(t) for t in ts))
+
+
+def _ed_expr(ev_list):
+    return Expr("EventData", _tlist([t for t, _ in ev_list]), L(*(0 if e else 1 for _, e in ev_list)))
+
+
+def _km_table(evs):
+    """rows (t, at risk, events, censored) at the distinct times"""
+    times = sorted({t for t, _ in evs})
+    rows = []
+    for t in times:
+        r = sum(1 for u, _ in evs if u >= t)
+        d = sum(1 for u, e in evs if u == t and e)
+        c = sum(1 for u, e in evs if u == t and not e)
+        rows.append((t, r, d, c))
+    return rows
+
+
+def _z(cl):
+    return float(mpmath.sqrt(2) * mpmath.erfinv(cl))
+
+
+_TRANSFORMS = ("Linear", "LogLog", "Log", "ArcSinSqrt", "Logit")
+
+
+def _ci(s, se, z, tr):
+    """confidence interval for a survival probability s with standard error se under the transform tr"""
+    if not (0 < s < 1) or not math.isfinite(se):
+        if s == 1 and se == 0:
+            return (1.0, 1.0)
+        return None
+    if tr == "Linear":
+        lo, hi = s - z * se, s + z * se
+    elif tr == "LogLog":
+        w = z * se / (s * abs(math.log(s)))
+        lo, hi = s ** math.exp(w), s ** math.exp(-w)
+    elif tr == "Log":
+        w = z * se / s
+        lo, hi = s * math.exp(-w), s * math.exp(w)
+    elif tr == "ArcSinSqrt":
+        a = math.asin(math.sqrt(s))
+        w = 0.5 * z * se / math.sqrt(s * (1 - s))
+        lo, hi = math.sin(max(0.0, a - w)) ** 2, math.sin(min(math.pi / 2, a + w)) ** 2
+    else:
+        w = z * se / (s * (1 - s))
+        lg = math.log(s / (1 - s))
+        lo, hi = 1 / (1 + math.exp(-(lg - w))), 1 / (1 + math.exp(-(lg + w)))
+    return (max(0.0, lo), min(1.0, hi))
+
+
+def _ci_opts(o, fname):
+    cl = SM.fl(SM._num(o.get("ConfidenceLevel", sp.Rational(95, 100)), fname, "ConfidenceLevel"))
+    if not 0 < cl < 1:
+        raise ValueError(f"{fname}: ConfidenceLevel must be between 0 and 1")
+    tr = SM.str_or_sym(o.get("ConfidenceTransform", "LogLog"))
+    if tr not in _TRANSFORMS:
+        if not isinstance(o.get("ConfidenceTransform", "LogLog"), (str, Symbol)):
+            raise NotImplementedError(f"{fname}: custom confidence transforms are not supported")
+        raise ValueError(f"{fname}: unknown ConfidenceTransform {tr!r}")
+    cr = o.get("ConfidenceRange")
+    if cr is not None and SM.str_or_sym(cr) != "All":
+        raise NotImplementedError(f"{fname}: ConfidenceRange (simultaneous bands) is not supported")
+    return cl, tr
+
+
+def _step(points, values, t, before):
+    """right-continuous step function: value at the last point <= t, or before"""
+    v = before
+    for p, q in zip(points, values):
+        if p <= t:
+            v = q
+        else:
+            break
+    return v
+
+
+def _fnum(v):
+    return Symbol("Indeterminate") if v is None or (isinstance(v, float) and not math.isfinite(v)) else float(v)
+
+
+_SM_PROPS = ("SF", "CDF", "CHF", "EstimationPoints", "StandardErrors", "PointwiseIntervals", "MedianSurvival",
+             "AtRisk", "EventCounts", "RightCensoringCounts", "ObservationCount", "EventData", "EventTable",
+             "Properties")
+
+
+def _sm_core(a):
+    evs = [(SM.fl(S(t)), q == 0) for t, q in zip(_get(a, "EventData").args[0].args, _get(a, "EventData").args[1].args)]
+    rows = _km_table(evs)
+    s, surv, gw, ses = 1.0, [], 0.0, []
+    for t, r, d, c in rows:
+        s *= 1 - d / r
+        surv.append(s)
+        gw = gw + d / (r * (r - d)) if r > d else float("inf")
+        ses.append(s * math.sqrt(gw) if math.isfinite(gw) else float("nan"))
+    return evs, rows, surv, ses
+
+
+def _sm_property(a, prop, rest):
+    name = "SurvivalModel"
+    _, o = opts(rest, ("ConfidenceLevel", "ConfidenceTransform", "ConfidenceRange"), name)
+    base_o = {k: _get(a, k) for k in ("ConfidenceLevel", "ConfidenceTransform")}
+    base_o.update(o)
+    evs, rows, surv, ses = _sm_core(a)
+    pts = [r[0] for r in rows]
+    if prop == "Properties":
+        return L(*_SM_PROPS)
+    if prop == "EstimationPoints":
+        return _tlist(pts)
+    if prop == "AtRisk":
+        return L(*(r[1] for r in rows))
+    if prop == "EventCounts":
+        return L(*(r[2] for r in rows))
+    if prop == "RightCensoringCounts":
+        return L(*(r[3] for r in rows))
+    if prop == "ObservationCount":
+        return len(evs)
+    if prop == "EventData":
+        return _get(a, "EventData")
+    if prop == "EventTable":
+        return L(*(L(_tnum(t), r, d, c, float(sv)) for (t, r, d, c), sv in zip(rows, surv)))
+    if prop == "StandardErrors":
+        return L(*(_fnum(v if sv > 0 else None) for v, sv in zip(ses, surv)))
+    if prop == "PointwiseIntervals":
+        cl, tr = _ci_opts(base_o, name)
+        z = _z(cl)
+        res = []
+        for sv, se in zip(surv, ses):
+            iv = _ci(sv, se, z, tr) if sv > 0 else None
+            res.append(L(*(_fnum(v) for v in iv)) if iv else L(Symbol("Indeterminate"), Symbol("Indeterminate")))
+        return L(*res)
+    if prop == "MedianSurvival":
+        for t, sv in zip(pts, surv):
+            if sv <= 0.5 + 1e-12:
+                return _tnum(t)
+        return Symbol("Indeterminate")
+    if prop in ("SF", "CDF", "CHF"):
+        def f(t):
+            sv = _step(pts, surv, t, 1.0)
+            if prop == "SF":
+                return float(sv)
+            if prop == "CDF":
+                return float(1 - sv)
+            return float(-math.log(sv)) if sv > 0 else Symbol("Infinity")
+        return ("fn", f)
+    if prop.endswith("Table") or prop.endswith("Bands") or prop.endswith("Plot") or prop in (
+            "EqualPrecisionIntervals", "HallWellnerIntervals", "MeanSurvival", "HF", "PDF", "SurvivalDistribution",
+            "FullEventTable", "EventMatrix", "TruncationMatrix", "LeftCensoringCounts"):
+        raise NotImplementedError(f'{name}: the property "{prop}" is not supported')
+    raise ValueError(f'{name}: unknown property "{prop}"')
+
+
+@fn("SurvivalModelFit", area=AREA, status="added",
+    notes="SurvivalModelFit[{t1, ...}] or [EventData[times, flags]] (flag 1 = right-censored; {t, Infinity} entries "
+          "are right-censored too) gives a SurvivalModel with the Kaplan-Meier estimate; options ConfidenceLevel "
+          "(95/100) and ConfidenceTransform (\"LogLog\" default, \"Linear\", \"Log\", \"ArcSinSqrt\", \"Logit\") "
+          "for \"PointwiseIntervals\" (Greenwood standard errors). Properties are listed under SurvivalModel. "
+          "Left, interval censoring and truncation, simultaneous bands (ConfidenceRange) and Method settings raise "
+          "NotImplementedError; negative times ValueError. Check: WL doc values (S(24) = 0.9, Greenwood errors "
+          "{0.216506, 0.25, 0.216506, Indeterminate}, log-log pointwise intervals) and lifelines "
+          "KaplanMeierFitter (survival and confidence interval).")
+def _survival_model_fit(x: ListOf[Real] | Expr, *rest: Option) -> Expr:
+    name = "SurvivalModelFit"
+    _, o = opts(rest, ("ConfidenceLevel", "ConfidenceTransform", "ConfidenceRange", "Method", "WorkingPrecision"),
+                name)
+    if "Method" in o and SM.str_or_sym(o["Method"]) not in ("Automatic", "KaplanMeier"):
+        raise NotImplementedError(f"{name}: Method settings other than Kaplan-Meier are not supported")
+    cl, tr = _ci_opts(o, name)
+    evs = _event_data(x, name)
+    a = _assoc(EventData=_ed_expr(evs), ConfidenceLevel=o.get("ConfidenceLevel", sp.Rational(95, 100)),
+               ConfidenceTransform=tr)
+    return Expr("SurvivalModel", a)
+
+
+@fn("SurvivalModel", area=AREA, status="added",
+    notes="SurvivalModel[<|...|>] is the Kaplan-Meier model from SurvivalModelFit: sm[t] = S(t) (right-continuous "
+          "step function, machine numbers); sm[\"SF\" | \"CDF\" | \"CHF\"][t] (CHF = -Log[S]), sm[\"prop\"] and "
+          "sm[{props}] give \"EstimationPoints\" (distinct observed times), \"StandardErrors\" (Greenwood; "
+          "Indeterminate where S = 0), \"PointwiseIntervals\" (optionally sm[\"PointwiseIntervals\", "
+          "ConfidenceLevel -> p]), \"MedianSurvival\" (first time with S <= 1/2), \"AtRisk\", \"EventCounts\", "
+          "\"RightCensoringCounts\", \"ObservationCount\", \"EventData\", \"EventTable\" (rows {t, at risk, events, "
+          "censored, S}), \"Properties\". Formatted tables, simultaneous bands, \"MeanSurvival\", \"HF\", \"PDF\" "
+          "and \"SurvivalDistribution\" raise NotImplementedError. Check: S(t) is the product of (1 - d/r) over the "
+          "event table (tested) and matches lifelines KaplanMeierFitter.")
+def _survival_model(a: Expr) -> Expr:
+    if not (isinstance(a, Expr) and a.head == "Association"):
+        raise TypeError("SurvivalModel: expected SurvivalModel[<|...|>] (use SurvivalModelFit)")
+    raise Unevaluated()
+
+
+
+
+def _sm_apply(head, args, ev_):
+    try:
+        return _sm_apply1(head, args, ev_)
+    except Unevaluated:
+        return UNH
+
+
+def _sm_apply1(head, args, ev_):
+    # sm["SF"][t]
+    if isinstance(head, Expr) and _model_assoc("SurvivalModel", head.head) is not None and len(head.args) == 1 and \
+            head.args[0] in ("SF", "CDF", "CHF"):
+        a = _model_assoc("SurvivalModel", head.head)
+        f = _sm_property(a, head.args[0], [])[1]
+        if len(args) != 1:
+            raise ValueError("SurvivalModel: expected one time argument")
+        return _time_map(f, args[0], "SurvivalModel")
+    a = _model_assoc("SurvivalModel", head)
+    if a is None:
+        return UNH
+    try:
+        if args and isinstance(args[0], str):
+            if args[0] in ("SF", "CDF", "CHF") and len(args) == 1:
+                return UNH
+            return _sm_property(a, args[0], args[1:])
+        if len(args) == 1 and is_list(args[0]) and args[0].args and all(isinstance(q, str) for q in args[0].args):
+            if any(q in ("SF", "CDF", "CHF") for q in args[0].args):
+                raise ValueError('SurvivalModel: "SF", "CDF" and "CHF" are functions; use sm["SF"][t]')
+            return L(*(_sm_property(a, q, []) for q in args[0].args))
+        if len(args) == 1:
+            return _time_map(_sm_property(a, "SF", [])[1], args[0], "SurvivalModel")
+    except KeyError as e:
+        raise ValueError(f"SurvivalModel: malformed model object (missing {e})")
+    raise ValueError("SurvivalModel: expected a time or a property")
+
+
+def _time_map(f, t, fname):
+    if is_list(t):
+        return L(*(_time_map(f, u, fname) for u in t.args))
+    if isinstance(t, Symbol) and not _is_inf(t):
+        raise Unevaluated()
+    if _is_inf(t):
+        return f(float("inf"))
+    v = S(t)
+    if not (isinstance(v, sp.Basic) and v.is_number and v.is_real):
+        if isinstance(v, sp.Basic) and v.free_symbols:
+            raise Unevaluated()
+        raise TypeError(f"{fname}: the time must be a real number")
+    return f(float(v))
+
+
+KL.COMPOUND_HEAD_HOOKS["SurvivalModel"] = _sm_apply
+KL.DEEP_HEAD_HOOKS["SurvivalModel"] = _sm_apply
+
+
+# ─────────────────────────── Cox proportional hazards ───────────────────────────
+
+def _cox_loglik(beta, X, t, d, ties):
+    """partial log-likelihood, score and information (Breslow or Efron ties)"""
+    n, p = X.shape
+    eta = X @ beta
+    w = np.exp(eta)
+    ll, U, I = 0.0, np.zeros(p), np.zeros((p, p))
+    for tt in sorted(set(t[d == 1])):
+        D = np.where((t == tt) & (d == 1))[0]
+        Rs = np.where(t >= tt)[0]
+        m = len(D)
+        s0, s1 = w[Rs].sum(), (w[Rs, None] * X[Rs]).sum(0)
+        s2 = (w[Rs, None, None] * X[Rs, :, None] * X[Rs, None, :]).sum(0)
+        ll += eta[D].sum()
+        U += X[D].sum(0)
+        if ties == "Efron" and m > 1:
+            e0, e1 = w[D].sum(), (w[D, None] * X[D]).sum(0)
+            e2 = (w[D, None, None] * X[D, :, None] * X[D, None, :]).sum(0)
+            for j in range(m):
+                f = j / m
+                a0, a1, a2 = s0 - f * e0, s1 - f * e1, s2 - f * e2
+                ll -= math.log(a0)
+                U -= a1 / a0
+                I += a2 / a0 - np.outer(a1, a1) / a0 ** 2
+        else:
+            ll -= m * math.log(s0)
+            U -= m * s1 / s0
+            I += m * (s2 / s0 - np.outer(s1, s1) / s0 ** 2)
+    return ll, U, I
+
+
+def _cox_fit(X, t, d, ties, fname):
+    p = X.shape[1]
+    beta = np.zeros(p)
+    ll, U, I = _cox_loglik(beta, X, t, d, ties)
+    for _ in range(100):
+        try:
+            step = np.linalg.solve(I, U)
+        except np.linalg.LinAlgError:
+            raise ValueError(f"{fname}: the information matrix is singular (collinear covariates?)")
+        h = 1.0
+        while True:
+            nb = beta + h * step
+            nll, nU, nI = _cox_loglik(nb, X, t, d, ties)
+            if nll >= ll - 1e-12 or h < 1e-8:
+                break
+            h /= 2
+        conv = abs(nll - ll) < 1e-13 * max(1.0, abs(ll)) and np.max(np.abs(nb - beta)) < 1e-10
+        beta, ll, U, I = nb, nll, nU, nI
+        if conv:
+            break
+    else:
+        raise ArithmeticError(f"{fname}: Newton-Raphson did not converge")
+    spread = np.abs(beta) * (X.max(axis=0) - X.min(axis=0))
+    if not np.all(np.isfinite(beta)) or np.any(spread > 30) or \
+            np.max(np.abs(U)) > 1e-6 * max(1.0, np.max(np.abs(X))) * len(t):
+        raise ArithmeticError(f"{fname}: the partial likelihood has no finite maximum (monotone likelihood)")
+    return beta, ll, I
+
+
+def _cox_baseline(X, t, d, beta):
+    """Breslow cumulative baseline hazard at the distinct event times, and its variance (no-covariate form)"""
+    w = np.exp(X @ beta) if X.shape[1] else np.ones(len(t))
+    ets = sorted(set(t[d == 1]))
+    H, V, h, v = [], [], 0.0, 0.0
+    for tt in ets:
+        m = np.sum((t == tt) & (d == 1))
+        s0 = w[t >= tt].sum()
+        h += m / s0
+        v += m / s0 ** 2
+        H.append(h)
+        V.append(v)
+    return ets, H, V
+
+
+@fn("CoxModelFit", area=AREA, status="added",
+    notes="CoxModelFit[edata] (no covariates) and CoxModelFit[{covariates, edata}, {f1, ...}, {x1, ...}] (a covariate "
+          "vector or matrix with one row per subject; edata a list of times or EventData[times, flags] / "
+          "EventData[Automatic, {times, flags, None}], flag 1 = right-censored) fit the proportional hazards model "
+          "h(t) = h0(t) Exp[b.f(x)] by Newton-Raphson on the partial likelihood with Method -> \"Breslow\" "
+          "(default) or \"Efron\" ties and give a CoxModel; the baseline is the Breslow estimate at x = 0. "
+          "\"Exact\" ties, NominalVariables, StrataVariables and simultaneous bands raise NotImplementedError; a "
+          "singular information matrix ValueError; a monotone likelihood (infinite estimate) ArithmeticError. "
+          "Check: WL doc values (b = -0.291674, se 0.888806; b = {-0.0535922, 2.11712}, LR 7.54027, Wald 7.83201, "
+          "Score 8.93641) and statsmodels PHReg (params, bse, llf) for both tie methods; the score vanishes at "
+          "the estimate (self-check).")
+def _cox_model_fit(x: ListOf[Expr] | Expr, funs: Expr | ListOf[Expr] = None, vars_: Expr | ListOf[Expr] = None,
+                   *rest: Option) -> Expr:
+    name = "CoxModelFit"
+    rest = list(rest)
+    for _ in range(2):
+        if vars_ is not None and SM._is_rule(vars_):
+            rest.insert(0, vars_)
+            vars_ = None
+        if funs is not None and SM._is_rule(funs) and vars_ is None:
+            rest.insert(0, funs)
+            funs = None
+    _, o = opts(rest, ("ConfidenceLevel", "ConfidenceRange", "ConfidenceTransform", "Method", "NominalVariables",
+                       "StrataVariables", "WorkingPrecision"), name)
+    for k in ("NominalVariables", "StrataVariables"):
+        if k in o and SM.str_or_sym(o[k]) not in ("None", "Automatic"):
+            raise NotImplementedError(f"{name}: the {k} option is not supported")
+    ties = SM.str_or_sym(o.get("Method", "Breslow"))
+    if ties == "Automatic":
+        ties = "Breslow"
+    if ties == "Exact":
+        raise NotImplementedError(f"{name}: the exact marginal likelihood is not supported")
+    if ties not in ("Breslow", "Efron"):
+        raise ValueError(f"{name}: unknown Method {ties!r}")
+    cl, tr = _ci_opts(o, name)
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if funs is None:
+        evs = _event_data(x, name)
+        rows, basis, vs = [[] for _ in evs], [], []
+    else:
+        if vars_ is None:
+            raise TypeError(f"{name}: the variables must be given")
+        if not (is_list(x) and len(x.args) == 2):
+            raise TypeError(f"{name}: expected {{covariates, event data}}")
+        cov, ed = x.args
+        evs = _event_data(ed, name)
+        vs = _syms(vars_, name)
+        if isinstance(cov, Symbol):
+            raise Unevaluated()
+        if not is_list(cov) or len(cov.args) != len(evs):
+            raise ValueError(f"{name}: one covariate value (or row) per subject is required")
+        cr = [list(c.args) if is_list(c) else [c] for c in cov.args]
+        if any(len(c) != len(vs) for c in cr):
+            raise ValueError(f"{name}: each covariate row needs {len(vs)} value(s)")
+        cr = [[SM._num(v, name, "covariate") for v in c] for c in cr]
+        basis = _funs(funs)
+        rows = []
+        for c in cr:
+            try:
+                rows.append([SM.fl(_subst(f, vs, c)) for f in basis])
+            except ValueError as e:
+                raise ValueError(f"{name}: {e}")
+    t = np.array([u for u, _ in evs])
+    d = np.array([1 if e else 0 for _, e in evs])
+    if d.sum() == 0:
+        raise ValueError(f"{name}: there are no events")
+    X = np.array(rows, dtype=float).reshape(len(evs), len(basis))
+    if basis:
+        beta, ll, I = _cox_fit(X, t, d, ties, name)
+        ll0 = _cox_loglik(np.zeros(len(basis)), X, t, d, ties)[0]
+    else:
+        beta, ll, I, ll0 = np.zeros(0), None, np.zeros((0, 0)), None
+    a = _assoc(EventData=_ed_expr(evs), Covariates=_L(X) if basis else L(), BasisFunctions=L(*basis),
+               Variables=L(*vs), BestFitParameters=_L(beta), Ties=ties,
+               ConfidenceLevel=o.get("ConfidenceLevel", sp.Rational(95, 100)), ConfidenceTransform=tr)
+    return Expr("CoxModel", a)
+
+
+_COX_PROPS = ("BestFitParameters", "BasisFunctions", "ParameterStandardErrors", "CovarianceMatrix",
+              "InformationMatrix", "ParameterConfidenceIntervals", "RelativeRisk", "RelativeRiskConfidenceIntervals",
+              "LogLikelihood", "AIC", "LikelihoodRatioStatistic", "WaldStatistic", "ScoreStatistic",
+              "MartingaleResiduals", "CoxSnellResiduals", "DevianceResiduals", "EventTimes", "ObservationTimes",
+              "ObservationCount", "EventData", "SF", "CDF", "CHF", "StandardErrors", "MedianSurvival",
+              "Properties")
+
+
+def _cox_state(a):
+    edx = _get(a, "EventData")
+    t = np.array([SM.fl(S(v)) for v in edx.args[0].args])
+    d = np.array([0 if q == 1 else 1 for q in edx.args[1].args])
+    beta = _np(_get(a, "BestFitParameters")) if _get(a, "BestFitParameters").args else np.zeros(0)
+    X = _np(_get(a, "Covariates")) if _get(a, "Covariates").args else np.zeros((len(t), 0))
+    return t, d, beta, X.reshape(len(t), len(beta))
+
+
+def _cox_x0(a, x0, fname):
+    basis = list(_get(a, "BasisFunctions").args)
+    vs = list(_get(a, "Variables").args)
+    if x0 is None or (is_list(x0) and not x0.args):
+        return np.zeros(len(basis))
+    vals = list(x0.args) if is_list(x0) else [x0]
+    if len(vals) != len(vs):
+        raise ValueError(f"{fname}: expected {len(vs)} covariate value(s)")
+    if any(isinstance(v, Symbol) for v in vals):
+        raise Unevaluated()
+    vals = [SM._num(v, fname, "covariate") for v in vals]
+    return np.array([SM.fl(_subst(f, vs, vals)) for f in basis])
+
+
+def _cox_fn(a, form, x0):
+    t, d, beta, X = _cox_state(a)
+    ets, H, _ = _cox_baseline(X, t, d, beta)
+    r = math.exp(float(_cox_x0(a, x0, "CoxModel") @ beta)) if len(beta) else 1.0
+
+    def f(u):
+        h = _step(ets, H, u, 0.0) * r
+        if form == "CHF":
+            return float(h)
+        if form == "CDF":
+            return float(1 - math.exp(-h))
+        return float(math.exp(-h))
+    return f
+
+
+def _cox_property(a, prop, rest):
+    name = "CoxModel"
+    _, o = opts(rest, ("ConfidenceLevel", "ConfidenceTransform", "ConfidenceRange"), name)
+    t, d, beta, X = _cox_state(a)
+    p = len(beta)
+    ties = _get(a, "Ties")
+    if prop == "Properties":
+        return L(*_COX_PROPS)
+    if prop == "BestFitParameters":
+        return _get(a, "BestFitParameters")
+    if prop == "BasisFunctions":
+        return _get(a, "BasisFunctions")
+    if prop == "EventData":
+        return _get(a, "EventData")
+    if prop == "EventTimes":
+        return _tlist(sorted(set(t[d == 1])))
+    if prop == "ObservationTimes":
+        return _tlist(sorted(set(t)))
+    if prop == "ObservationCount":
+        return len(t)
+    ets, H, V = _cox_baseline(X, t, d, beta)
+    if prop in ("MartingaleResiduals", "CoxSnellResiduals", "DevianceResiduals"):
+        cs = np.array([_step(ets, H, u, 0.0) for u in t]) * (np.exp(X @ beta) if p else 1.0)
+        if prop == "CoxSnellResiduals":
+            return _L(cs)
+        m = d - cs
+        if prop == "MartingaleResiduals":
+            return _L(m)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            dev = np.sign(m) * np.sqrt(-2 * (m + np.where(d > 0, d * np.log(np.where(d > 0, d - m, 1)), 0)))
+        return _L(dev)
+    if prop in ("StandardErrors", "MedianSurvival", "SF", "CDF", "CHF"):
+        return ("x0", prop)
+    if prop.endswith("Table") or prop.endswith("Bands") or prop.endswith("Plot") or prop in (
+            "EqualPrecisionIntervals", "HallWellnerIntervals", "PointwiseIntervals", "MeanSurvival", "BIC",
+            "RiskScores", "SchoenfeldResiduals", "ScoreResiduals", "BetaDifferences", "ScaledBetaDifferences",
+            "RSquared", "MaxRSquared", "BaselineList", "Strata", "StrataModels", "StrataSummary", "TestTableEntries",
+            "ParameterTableEntries", "SurvivalDistribution", "HF", "PDF", "FullEventTable"):
+        raise NotImplementedError(f'{name}: the property "{prop}" is not supported')
+    if prop not in _COX_PROPS:
+        raise ValueError(f'{name}: unknown property "{prop}"')
+    if p == 0:
+        raise ValueError(f'{name}: "{prop}" needs a model with covariates')
+    ll, U0, I0 = _cox_loglik(np.zeros(p), X, t, d, ties)
+    llb, _, I = _cox_loglik(beta, X, t, d, ties)
+    cov = np.linalg.inv(I)
+    se = np.sqrt(np.diag(cov))
+    base_o = {"ConfidenceLevel": _get(a, "ConfidenceLevel")}
+    base_o.update(o)
+    z = _z(SM.fl(SM._num(base_o["ConfidenceLevel"], name, "ConfidenceLevel")))
+    if prop == "ParameterStandardErrors":
+        return _L(se)
+    if prop == "CovarianceMatrix":
+        return _L(cov)
+    if prop == "InformationMatrix":
+        return _L(I)
+    if prop == "ParameterConfidenceIntervals":
+        return L(*(L(float(b - z * s), float(b + z * s)) for b, s in zip(beta, se)))
+    if prop == "RelativeRisk":
+        return _L(np.exp(beta))
+    if prop == "RelativeRiskConfidenceIntervals":
+        return L(*(L(float(math.exp(b - z * s)), float(math.exp(b + z * s))) for b, s in zip(beta, se)))
+    if prop == "LogLikelihood":
+        return float(llb)
+    if prop == "AIC":
+        return float(-2 * llb + 2 * p)
+    if prop == "LikelihoodRatioStatistic":
+        return float(2 * (llb - ll))
+    if prop == "WaldStatistic":
+        return float(beta @ I @ beta)
+    return float(U0 @ np.linalg.solve(I0, U0))   # ScoreStatistic
+
+
+@fn("CoxModel", area=AREA, status="added",
+    notes="CoxModel[<|...|>] is the model from CoxModelFit: cm[t] is the baseline survival Exp[-H0(t)] (Breslow "
+          "estimate); cm[\"SF\" | \"CDF\" | \"CHF\"][{x0...}][t] at covariate levels x0 ([] = baseline), "
+          "cm[\"StandardErrors\"][x0] (S(t) Sqrt[Sum[d/r^2]] at the event times, no-covariate form), "
+          "cm[\"MedianSurvival\"][x0]; cm[\"prop\"] / cm[{props}] give \"BestFitParameters\", "
+          "\"ParameterStandardErrors\", \"CovarianceMatrix\", \"InformationMatrix\", "
+          "\"ParameterConfidenceIntervals\", \"RelativeRisk\", \"RelativeRiskConfidenceIntervals\", "
+          "\"LogLikelihood\" (partial), \"AIC\", \"LikelihoodRatioStatistic\", \"WaldStatistic\", "
+          "\"ScoreStatistic\", \"MartingaleResiduals\", \"CoxSnellResiduals\", \"DevianceResiduals\", "
+          "\"EventTimes\", \"ObservationTimes\", \"ObservationCount\", \"EventData\", \"Properties\". Formatted "
+          "tables, bands, strata, BIC, R^2 and Schoenfeld/score residuals raise NotImplementedError. Check: WL doc "
+          "values (cm /@ {1, 2, 3, 4} = {0.778801, 0.558035, 0.338465, 0.124514}, martingale and Cox-Snell "
+          "residuals, StandardErrors {0.1947, 0.232515, 0.220292, 0.148565}, SF[{30, 0}][20] = 0.628764) and "
+          "statsmodels PHReg.")
+def _cox_model(a: Expr) -> Expr:
+    if not (isinstance(a, Expr) and a.head == "Association"):
+        raise TypeError("CoxModel: expected CoxModel[<|...|>] (use CoxModelFit)")
+    raise Unevaluated()
+
+
+def _cox_x0_prop(a, prop, x0):
+    if prop in ("SF", "CDF", "CHF"):
+        return ("fn", _cox_fn(a, prop, x0))
+    t, d, beta, X = _cox_state(a)
+    ets, H, V = _cox_baseline(X, t, d, beta)
+    r = math.exp(float(_cox_x0(a, x0, "CoxModel") @ beta)) if len(beta) else 1.0
+    if prop == "MedianSurvival":
+        for tt, h in zip(ets, H):
+            if math.exp(-h * r) <= 0.5 + 1e-12:
+                return _tnum(tt)
+        return Symbol("Indeterminate")
+    if len(beta):
+        raise NotImplementedError("CoxModel: StandardErrors for models with covariates are not supported")
+    return _L([math.exp(-h) * math.sqrt(v) for h, v in zip(H, V)])
+
+
+def _cox_apply(head, args, ev_):
+    try:
+        return _cox_apply1(head, args, ev_)
+    except Unevaluated:
+        return UNH
+
+
+def _cox_apply1(head, args, ev_):
+    # cm["SF"][x0] -> CoxModel`SF object; cm["SF"][x0][t]
+    if isinstance(head, Expr) and isinstance(head.head, Expr) and \
+            _model_assoc("CoxModel", head.head.head) is not None and len(head.head.args) == 1 and \
+            head.head.args[0] in ("SF", "CDF", "CHF"):
+        a = _model_assoc("CoxModel", head.head.head)
+        x0 = head.args[0] if head.args else None
+        f = _cox_fn(a, head.head.args[0], x0)
+        if len(args) != 1:
+            raise ValueError("CoxModel: expected one time argument")
+        return _time_map(f, args[0], "CoxModel")
+    if isinstance(head, Expr) and _model_assoc("CoxModel", head.head) is not None and len(head.args) == 1 and \
+            head.args[0] in ("SF", "CDF", "CHF", "StandardErrors", "MedianSurvival"):
+        a = _model_assoc("CoxModel", head.head)
+        if head.args[0] in ("SF", "CDF", "CHF"):
+            if len(args) > 1:
+                raise ValueError("CoxModel: expected the covariate levels as one list")
+            if args and isinstance(args[0], Symbol):
+                raise Unevaluated()
+            _cox_x0(a, args[0] if args else None, "CoxModel")
+            return UNH
+        return _cox_x0_prop(a, head.args[0], args[0] if args else None)
+    a = _model_assoc("CoxModel", head)
+    if a is None:
+        return UNH
+    try:
+        if args and isinstance(args[0], str):
+            if args[0] in ("SF", "CDF", "CHF", "StandardErrors", "MedianSurvival") and len(args) == 1:
+                return UNH
+            return _cox_property(a, args[0], args[1:])
+        if len(args) == 1 and is_list(args[0]) and args[0].args and all(isinstance(q, str) for q in args[0].args):
+            if any(q in ("SF", "CDF", "CHF", "StandardErrors", "MedianSurvival") for q in args[0].args):
+                raise ValueError('CoxModel: "SF", "CDF", "CHF", "StandardErrors" and "MedianSurvival" take covariate '
+                                 'levels; use cm["SF"][{x0}][t]')
+            return L(*(_cox_property(a, q, []) for q in args[0].args))
+        if len(args) == 1:
+            return _time_map(_cox_fn(a, "SF", None), args[0], "CoxModel")
+    except KeyError as e:
+        raise ValueError(f"CoxModel: malformed model object (missing {e})")
+    raise ValueError("CoxModel: expected a time or a property")
+
+
+KL.COMPOUND_HEAD_HOOKS["CoxModel"] = _cox_apply
+KL.DEEP_HEAD_HOOKS["CoxModel"] = _cox_apply

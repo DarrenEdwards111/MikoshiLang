@@ -86,6 +86,16 @@ CT5 = "{0.1, 2.2, 3.4, 5.6, 8.9}"                              # WL doc Clusteri
 AGG = 'Method -> "Agglomerate"'
 CDF = "ClusterDissimilarityFunction"
 
+# survival data (WL doc SurvivalModelFit / CoxModelFit examples)
+ED4 = "EventData[{1, 2, 3, 4}, {0, 0, 1, 0}]"
+D10 = "{30, 32, 26, {37, Infinity}, 29, {32, Infinity}, 24, {31, Infinity}, {31, Infinity}, 42}"
+XI = ("{{67, 1}, {11, 0}, {32, 0}, {50, 1}, {65, 1}, {44, 1}, {20, 1}, {26, 0}, {69, 1}, {50, 1}, {25, 1}, {18, 0}, "
+      "{63, 1}, {41, 0}, {30, 0}, {32, 1}, {46, 1}, {35, 0}, {33, 0}, {22, 0}}")
+E20 = ("EventData[Automatic, {{8, 22, 6, 4, 12, 11, 2, 34, 25, 15, 8, 6, 34, 6, 32, 1, 15, 9, 9, 6}, "
+       "{0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0}, None}]")
+COX2 = "CoxModelFit[{" + XI + ", " + E20 + "}, {w18u, w18v}, {w18u, w18v}]"
+COX1 = "CoxModelFit[{{2, 1, 3, 1}, " + ED4 + "}, w18x, w18x]"
+
 CASES = [
     # ── BiweightLocation (WL doc examples) ──
     (f"BiweightLocation[{BASIC}]", approx(6.10018)),
@@ -1003,6 +1013,93 @@ CASES = [
     (f'ClusteringMeasurements[{CMP}, "Purity"]', Raises(ValueError)),
     ('ClusteringMeasurements[{{1, 1}, {1, 1}}, "Dunn"]', Raises(ArithmeticError)),
     ('ClusteringMeasurements[5, "Dunn"]', Raises(TypeError)),
+    # ── SurvivalModelFit / SurvivalModel (WL doc values) ──
+    (f"SurvivalModelFit[{ED4}][3]", approx(0.5)),
+    (f'SurvivalModelFit[{ED4}]["EstimationPoints"]', "{1, 2, 3, 4}"),
+    ("SurvivalModelFit[{1, 2, 3, 4}] /@ {1, 2, 3, 4}", approx_list([0.75, 0.5, 0.25, 0.0])),
+    ('SurvivalModelFit[{1, 2, 3, 4}]["StandardErrors"]', "{0.21650635094610965, 0.25, 0.21650635094610965, Indeterminate}", 1e-6),
+    (f"SurvivalModelFit[{D10}][24]", approx(0.9)),
+    (f'SurvivalModelFit[{D10}]["SF"][35]', approx(0.45)),
+    (f'SurvivalModelFit[{D10}]["CDF"][{{20, 30}}]', approx_list([0.0, 0.4])),
+    # WL doc PointwiseIntervals (log-log transform, Greenwood); the last (S = 0) is Indeterminate
+    (f'Most[SurvivalModelFit[{D10}]["PointwiseIntervals"]]',
+     approx_list([0.473009, 0.985281, 0.408691, 0.945873, 0.328717, 0.891949, 0.252669, 0.827221, 0.252669, 0.827221,
+                  0.126688, 0.73446, 0.126688, 0.73446], 1e-5)),
+    (f'Last[SurvivalModelFit[{D10}]["PointwiseIntervals"]]', "{Indeterminate, Indeterminate}"),
+    (f'SurvivalModelFit[{D10}]["MedianSurvival"]', "32"),
+    (f'SurvivalModelFit[{D10}][{{"AtRisk", "EventCounts", "RightCensoringCounts"}}]',
+     "{{10, 9, 8, 7, 6, 4, 2, 1}, {1, 1, 1, 1, 0, 1, 0, 1}, {0, 0, 0, 0, 2, 1, 1, 0}}"),
+    (f'SurvivalModelFit[{D10}]["ObservationCount"]', "10"),
+    # lifelines KaplanMeierFitter (exponential Greenwood = log-log) gives the same intervals at 24: (0.473009, 0.985281);
+    # the linear transform is S -+ 1.96 se = 0.9 -+ 1.959964 * 0.0948683
+    (f'First[SurvivalModelFit[{D10}, ConfidenceTransform -> "Linear"]["PointwiseIntervals"]]',
+     approx_list([0.9 - 1.959964 * 0.0948683, 1.0], 1e-5)),
+    # Check: S(t) is the product of (1 - d/r) over the event table
+    (f'SurvivalModelFit[{D10}]["SF"][32] - Times @@ (1 - SurvivalModelFit[{D10}]["EventCounts"][[;; 6]]/'
+     f'SurvivalModelFit[{D10}]["AtRisk"][[;; 6]])', approx(0.0)),
+    (f"SurvivalModelFit[{ED4}][w18t]", f"SurvivalModelFit[{ED4}][w18t]"),
+    ("SurvivalModelFit[w18d]", "SurvivalModelFit[w18d]"),
+    ("SurvivalModelFit[{1, {2, 3}}]", Raises(NotImplementedError)),
+    ("SurvivalModelFit[EventData[{1, 2}, {0, -1}]]", Raises(NotImplementedError)),
+    ("SurvivalModelFit[{1, -2}]", Raises(ValueError)),
+    ("SurvivalModelFit[EventData[{1, 2}, {0, 2}]]", Raises(ValueError)),
+    ('SurvivalModelFit[{1, 2}, ConfidenceTransform -> "w18Foo"]', Raises(ValueError)),
+    ("SurvivalModelFit[5]", Raises(TypeError)),
+    ('SurvivalModelFit[{1, 2}]["EventTable"]', "{{1, 2, 1, 0, 0.5}, {2, 1, 1, 0, 0.}}"),
+    ('SurvivalModelFit[{1, 2}]["HallWellnerBands"]', Raises(NotImplementedError)),
+    ('SurvivalModelFit[{1, 2}]["w18Foo"]', Raises(ValueError)),
+    ("SurvivalModel[3]", Raises(TypeError)),
+    ('Head[SurvivalModelFit[{1, 2}]]', "SurvivalModel"),
+    ('SurvivalModelFit[{1, 2}]["CHF"][1.5]', approx(0.6931471805599453)),
+    ('SurvivalModelFit[{1, 2}]["CHF"]["a"]', Raises(TypeError)),
+    # ── CoxModelFit / CoxModel (WL doc values; statsmodels PHReg on the same data) ──
+    (f'CoxModelFit[{ED4}]["EventTimes"]', "{1, 2, 4}"),
+    (f"CoxModelFit[{ED4}][3]", approx(0.558035, 1e-5)),
+    ("CoxModelFit[{1, 2, 3, 4}] /@ {1, 2, 3, 4}", approx_list([0.778801, 0.558035, 0.338465, 0.124514], 1e-5)),
+    ('CoxModelFit[{1, 2, 3, 4}]["StandardErrors"][]', approx_list([0.1947, 0.232515, 0.220292, 0.148565], 1e-4)),
+    ('CoxModelFit[{1, 2, 3, 4}][{"MartingaleResiduals", "CoxSnellResiduals"}]',
+     approx_list([0.75, 0.416667, -0.0833333, -1.08333, 0.25, 0.583333, 1.08333, 2.08333], 1e-5)),
+    # WL doc ParameterTable / TestTable; statsmodels PHReg: -0.29167361, bse 0.88880596
+    (f'{COX1}["BestFitParameters"]', approx_list([-0.29167361])),
+    (f'{COX1}["ParameterStandardErrors"]', approx_list([0.88880596])),
+    (f'{COX1}[{{"RelativeRisk", "WaldStatistic", "LikelihoodRatioStatistic", "ScoreStatistic"}}]',
+     approx_list([0.747012, 0.107691, 0.117096, 0.110132], 1e-5)),
+    (f'{COX1}["LogLikelihood"]', approx(-2.426358511648194)),     # statsmodels PHReg llf
+    # WL doc: estimates {-0.0535922, 2.11712}, errors {0.0212829, 0.823307}; statsmodels llf -28.46786993
+    (f'{COX2}["BestFitParameters"]', approx_list([-0.0535922, 2.11711687])),
+    (f'{COX2}["ParameterStandardErrors"]', approx_list([0.02128287, 0.82330689])),
+    (f'{COX2}[{{"LikelihoodRatioStatistic", "WaldStatistic", "ScoreStatistic", "LogLikelihood"}}]',
+     approx_list([7.54027, 7.83201, 8.93641, -28.467869927708662], 1e-5)),
+    (f'{COX2}["RelativeRiskConfidenceIntervals"]', approx_list([0.909095, 0.988192, 1.65444, 41.7112], 1e-5)),
+    (f'{COX2}["ParameterConfidenceIntervals"]', approx_list([-0.09530585, -0.01187855, 0.50346501, 3.73076873])),
+    (f'{COX2}["AIC"]', approx(2 * 28.467869927708662 + 4)),
+    (f'{COX2}["SF"][{{30, 0}}][20]', approx(0.628764, 1e-5)),
+    (f'{COX2}["MedianSurvival"] /@ {{{{25, 0}}, {{25, 1}}}}', "{22, 6}"),
+    (f'{COX2}["MedianSurvival"][]', "6"),
+    # statsmodels PHReg(ties="efron"): [-0.05496437, 2.17936292], bse [0.02126995, 0.83386988]
+    (f'CoxModelFit[{{{XI}, {E20}}}, {{w18u, w18v}}, {{w18u, w18v}}, Method -> "Efron"]["BestFitParameters"]',
+     approx_list([-0.05496437, 2.17936292])),
+    (f'CoxModelFit[{{{XI}, {E20}}}, {{w18u, w18v}}, {{w18u, w18v}}, Method -> "Efron"]["ParameterStandardErrors"]',
+     approx_list([0.02126995, 0.83386988])),
+    # statsmodels PHReg basic example (xi = {2, 0, 0, 1, ...}): 1.11193428, bse 0.38346782
+    ('CoxModelFit[{{2, 0, 0, 1, 1, 1, 3, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0}, ' + E20 + '}, w18x, w18x]'
+     '[{"BestFitParameters", "ParameterStandardErrors"}]', approx_list([1.11193428, 0.38346782])),
+    # Check: CHF = -Log[SF], and SF at x0 = baseline SF^RelativeRisk^x0
+    (f'{COX2}["CHF"][{{30, 0}}][20] + Log[{COX2}["SF"][{{30, 0}}][20]]', approx(0.0)),
+    (f'{COX2}["SF"][{{0, 1}}][20] - {COX2}["SF"][][20]^{COX2}["RelativeRisk"][[2]]', approx(0.0)),
+    (f'{COX2}["SF"][{{w18a, 0}}]', f'{COX2}["SF"][{{w18a, 0}}]'),
+    ("CoxModelFit[w18d]", "CoxModelFit[w18d]"),
+    (f'CoxModelFit[{{{{2, 1, 3, 1}}, {ED4}}}, w18x, w18x, Method -> "Exact"]', Raises(NotImplementedError)),
+    (f'CoxModelFit[{{{{2, 1, 3, 1}}, {ED4}}}, w18x, w18x, StrataVariables -> {{w18x}}]', Raises(NotImplementedError)),
+    ("CoxModelFit[{{0, 0, 1, 1}, {1, 2, 3, 4}}, w18x, w18x]", Raises(ArithmeticError)),
+    ("CoxModelFit[{{1, 2}, {1, 2, 3}}, w18x, w18x]", Raises(ValueError)),
+    (f'CoxModelFit[{{{{2, 1, 3, 1}}, {ED4}}}, w18x, w18x, Method -> "w18Foo"]', Raises(ValueError)),
+    ("CoxModelFit[EventData[{1, 2}, {1, 1}]]", Raises(ValueError)),
+    ("CoxModelFit[{1, 2, 3}, 5, w18x]", Raises(TypeError)),
+    (f'{COX1}["ParameterTable"]', Raises(NotImplementedError)),
+    (f'{COX1}["w18Foo"]', Raises(ValueError)),
+    ("CoxModel[3]", Raises(TypeError)),
+    (f"Head[{COX1}]", "CoxModel"),
 ]
 
 
