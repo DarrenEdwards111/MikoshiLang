@@ -552,12 +552,13 @@ NBODY = [
      '(3/2)/(2 Norm[delta])]]; x01d = NBodySimulation[<|"PairwiseForce" -> x01force[1., 2.]|>, {<|"Mass" -> 1, '
      '"Position" -> {0, 0, 0}, "Velocity" -> {0, 0, 0}|>, <|"Mass" -> 1, "Position" -> {.1, .1, 1}, "Velocity" -> '
      '{0, 0, -1}|>}, 2]; Total[x01d[All, "Velocity", 2]]', [0.0, 0.0, -1.0], 1e-9),
-    ("x01d = " + _HARM + '; x01d[1, "Position", x01t]', Pred(lambda r: isinstance(r, Expr) and isinstance(r.head, Expr)
+    ("x01d = " + _HARM + '; x01d[1, "Position", x01tsym]', Pred(lambda r: isinstance(r, Expr) and isinstance(r.head, Expr)
                                                               and r.head.head == "NBodySimulationData",
                                                               "symbolic time stays unevaluated")),
     ("NBodySimulation[x01law, x01states, 4]", "NBodySimulation[x01law, x01states, 4]"),
     ("x01d = " + _HARM + '; x01d[1, "Position", 11]', Raises(ValueError)),
     ("x01d = " + _HARM + '; x01d["Equations"]', Raises(NotImplementedError)),
+    ("x01d = " + _HARM + '; x01d[1, "Position", TaskObject[<||>]]', Raises(TypeError)),
     ('NBodySimulation["Newtonian", {<|"Mass" -> 1, "Position" -> {0}, "Velocity" -> {0}|>, <|"Mass" -> 1, '
      '"Position" -> {1}, "Velocity" -> {0}|>}, 1]',
      Raises(NotImplementedError)),

@@ -591,10 +591,20 @@ def _sim_of(head, fname="NBodySimulationData"):
 
 
 def _time(t):
-    if isinstance(t, bool):
+    """Float time, None for a symbolic time (the property stays unevaluated); other values raise TypeError."""
+    if isinstance(t, bool) or isinstance(t, str):
+        raise TypeError(f"NBodySimulationData: the time must be a real number, not {_show(t)}")
+    if isinstance(t, (int, float)):
+        return float(t)
+    if isinstance(t, Symbol):
         return None
-    v = ev(Expr("N", t))
-    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+    try:
+        v = ev(Expr("N", t))
+    except (ValueError, TypeError) as e:
+        raise TypeError(f"NBodySimulationData: the time must be a real number, not {_show(t)}") from e
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v)
+    return None
 
 
 def _nbody_hook(head, args, ev_):
