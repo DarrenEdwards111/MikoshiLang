@@ -77,8 +77,10 @@ Independent tables are added on top, whether a head states a check or not:
 Each function gets one status: `pass`, `fail`, `not exercised` (it states a check but nothing could run) or
 `no check stated`. The script exits with status 1 on any failure.
 
-* The default mode runs the heads with a `Check:` line plus the tables, in about 15 seconds. The `Verification`
-  workflow runs it on every push and pull request.
+* The default mode runs the heads with a `Check:` line plus the tables. Since the `Check:` backfill that is 942
+  functions (851 pass, 0 fail, 91 not exercised), about 9 minutes serially or 5 minutes with `--jobs 2` on a
+  busy machine. `--jobs N` runs the reference cases in N worker processes, module by module, with the same
+  outcomes as a serial run. The `Verification` workflow runs it with `--jobs 4` on every push and pull request.
 * `--all` also runs every audited head's reference cases. On main that is 2669 functions in about 6.5 minutes (2325 pass, 0 fail, 344 with no check), so the workflow
   runs it weekly and on demand (`workflow_dispatch`).
 
@@ -87,8 +89,10 @@ Each function gets one status: `pass`, `fail`, `not exercised` (it states a chec
 Caveats:
 
 * `exact` is vacuous for a head whose cases are all inexact or expect errors.
-* Most heads predate the `Check:` convention, so they are reported as `no check stated` (with their reference
-  cases, in `--all` mode) until their notes gain the sentence.
+* Many heads predate the `Check:` convention, so they are reported as `no check stated` (with their reference
+  cases, in `--all` mode) until their notes gain the sentence. The first backfill added the sentence to 647
+  numeric and solving heads, each claiming only the methods (`exact`, `reference`, `self-check`) that pass in
+  the harness.
 
 ## Not in v1
 

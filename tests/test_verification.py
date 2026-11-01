@@ -150,3 +150,12 @@ def test_markdown_report():
     res = H.run(TESTS, "stated", ["Gamma"])
     md = H.markdown(res, 1.0, "stated")
     assert "| `Gamma` |" in md and "pass" in md
+
+
+def test_reference_runs_in_parallel_match_serial(monkeypatch):
+    mods = [mc for mc in H.load_modules(TESTS) if mc[0] in ("test_special", "test_lists_strings")]
+    monkeypatch.setattr(H, "load_modules", lambda tests_dir: mods)
+    heads = {"BesselJ", "Gamma", "StringTake"}
+    serial = H.run_reference(TESTS, heads, jobs=1)
+    parallel = H.run_reference(TESTS, heads, jobs=2)
+    assert set(serial) == heads and parallel == serial

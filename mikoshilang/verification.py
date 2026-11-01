@@ -221,36 +221,77 @@ def _harness(tests_dir):
     return importlib.import_module("_harness")
 
 
-def run_reference(tests_dir, heads: set) -> Dict[str, List[Tuple[bool, str]]]:
-    """Run every module that has cases for ``heads``, in order, and collect the outcomes of those heads' cases."""
-    from .kernel import _state, SessionState
+def run_reference(tests_dir, heads: set, jobs: int = 1) -> Dict[str, List[Tuple[bool, str]]]:
+    """Run every module that has cases for ``heads``, in order, and collect the outcomes of those heads' cases.
+
+    ``jobs > 1`` runs the modules in that many worker processes (fork, where available). Each module still runs
+    in its own fresh session state, so the outcomes are the same as a serial run."""
     harness = _harness(tests_dir)
+    mods = [(m, cases) for m, cases in load_modules(tests_dir) if any(harness.head_of(c) in heads for c in cases)]
+    if jobs > 1 and len(mods) > 1:
+        import multiprocessing as mp
+        ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else None
+        if ctx is not None:
+            # balance by case count, largest modules first; each worker returns one dict per module
+            groups: List[List[str]] = [[] for _ in range(jobs)]
+            sizes = [0] * jobs
+            for m, cases in sorted(mods, key=lambda mc: -len(mc[1])):
+                i = sizes.index(min(sizes))
+                groups[i].append(m)
+                sizes[i] += len(cases)
+            global _FORK_MODS
+            _FORK_MODS = dict(mods)
+            try:
+                with ctx.Pool(jobs) as pool:
+                    parts = pool.starmap(_reference_group, [(str(tests_dir), g, heads) for g in groups if g])
+            finally:
+                _FORK_MODS = None
+            per_module = {m: o for part in parts for m, o in part.items()}
+            out: Dict[str, List[Tuple[bool, str]]] = {}
+            for m, _cases in mods:                       # merge in file order, as a serial run would
+                for h, rs in per_module.get(m, {}).items():
+                    out.setdefault(h, []).extend(rs)
+            return out
+    out = {}
+    for m, cases in mods:
+        for h, rs in _reference_module(tests_dir, m, cases, heads, harness).items():
+            out.setdefault(h, []).extend(rs)
+    return out
+
+
+_FORK_MODS = None
+
+
+def _reference_group(tests_dir, modules, heads):
+    harness = _harness(tests_dir)
+    return {m: _reference_module(tests_dir, m, _FORK_MODS[m], heads, harness) for m in modules}
+
+
+def _reference_module(tests_dir, m, cases, heads, harness) -> Dict[str, List[Tuple[bool, str]]]:
+    from .kernel import _state, SessionState
     out: Dict[str, List[Tuple[bool, str]]] = {}
-    for m, cases in load_modules(tests_dir):
-        if not any(harness.head_of(c) in heads for c in cases):
-            continue
-        # Each module runs in fresh session definitions (its cases may set up state for later ones);
-        # modules whose test function isolates every case (a = 5, f[x_] := ...) get the same here.
-        per_case = _isolates_cases(tests_dir, m)
-        tok = _state.set(SessionState())
-        try:
-            for c in cases:
-                h = harness.head_of(c)
-                ctok = _state.set(SessionState()) if per_case else None
-                try:
-                    harness.check(c)
-                    ok, detail = True, ""
-                except BaseException as exc:      # noqa: BLE001 - pytest.raises failures derive from BaseException
-                    if isinstance(exc, KeyboardInterrupt):
-                        raise
-                    ok, detail = False, f"{c[0][:80]}: {type(exc).__name__}: {str(exc)[:150]}"
-                finally:
-                    if ctok is not None:
-                        _state.reset(ctok)
-                if h in heads:
-                    out.setdefault(h, []).append((ok, detail))
-        finally:
-            _state.reset(tok)
+    # Each module runs in fresh session definitions (its cases may set up state for later ones);
+    # modules whose test function isolates every case (a = 5, f[x_] := ...) get the same here.
+    per_case = _isolates_cases(tests_dir, m)
+    tok = _state.set(SessionState())
+    try:
+        for c in cases:
+            h = harness.head_of(c)
+            ctok = _state.set(SessionState()) if per_case else None
+            try:
+                harness.check(c)
+                ok, detail = True, ""
+            except BaseException as exc:      # noqa: BLE001 - pytest.raises failures derive from BaseException
+                if isinstance(exc, KeyboardInterrupt):
+                    raise
+                ok, detail = False, f"{c[0][:80]}: {type(exc).__name__}: {str(exc)[:150]}"
+            finally:
+                if ctok is not None:
+                    _state.reset(ctok)
+            if h in heads:
+                out.setdefault(h, []).append((ok, detail))
+    finally:
+        _state.reset(tok)
     return out
 
 
@@ -440,7 +481,7 @@ def _run_tables(results: Dict[str, Result], only: Optional[set]):
                 res(head).add("numpy", False, f"{head}[{src}]: {type(exc).__name__}: {str(exc)[:120]}")
 
 
-def run(tests_dir, mode: str = "stated", names: Optional[List[str]] = None) -> Dict[str, Result]:
+def run(tests_dir, mode: str = "stated", names: Optional[List[str]] = None, jobs: int = 1) -> Dict[str, Result]:
     """Run the checks. mode "stated": heads with a Check: line plus the tables; "all": every audited head."""
     import mikoshilang  # noqa: F401  (registers the library)
     from .library.core import STATUS
@@ -458,7 +499,7 @@ def run(tests_dir, mode: str = "stated", names: Optional[List[str]] = None) -> D
         selected[name] = (methods, text)
     # reference cases: every selected head in "all" mode, else those whose Check: names reference
     ref_heads = {n for n, (m, _t) in selected.items() if mode == "all" or "reference" in m}
-    outcomes = run_reference(tests_dir, ref_heads)
+    outcomes = run_reference(tests_dir, ref_heads, jobs)
     results: Dict[str, Result] = {}
     for name, (methods, text) in selected.items():
         r = results[name] = Result(name, methods, text)
@@ -507,10 +548,11 @@ def main(argv=None):
     ap.add_argument("--names", nargs="*", help="only these heads")
     ap.add_argument("--markdown", help="write the report to this file")
     ap.add_argument("--json", help="write per-function results to this file")
+    ap.add_argument("--jobs", type=int, default=1, help="worker processes for the reference runs (default 1)")
     a = ap.parse_args(argv)
     mode = "all" if a.all else "stated"
     t = time.perf_counter()
-    results = run(a.tests, mode, a.names)
+    results = run(a.tests, mode, a.names, a.jobs)
     dt = time.perf_counter() - t
     s = summary(results)
     print(f"verification ({mode}): {len(results)} functions in {dt:.1f} s: "
