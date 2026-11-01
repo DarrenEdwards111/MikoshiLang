@@ -126,7 +126,7 @@ def test_harness_runs_stated_checks_for_named_heads():
     assert all(r.status == "pass" for r in res.values()), {k: r.failures for k, r in res.items()}
 
 
-def test_harness_reports_failures():
+def test_harness_reports_failures(monkeypatch):
     r = H.Result("X", ["delegated"], "delegated (no.such.module_fn)")
     H._run_delegated(r, [], None)
     assert r.status == "fail" and "not importable" in r.failures[0]
@@ -135,6 +135,7 @@ def test_harness_reports_failures():
     assert r.status == "fail"
     harness = H._harness(TESTS)
     r = H.Result("Verify", ["self-check"], "self-check")
+    monkeypatch.setattr(H, "_ALL_CASES", {})                         # no nesting examples to fall back on
     H._run_selfcheck(r, [("Verify[GCD[4, 6]]", harness.Raises())], harness)
     assert r.status == "fail" and "no real example" in r.failures[0]       # error cases do not count
     r = H.Result("Verify", ["self-check"], "self-check")
@@ -159,3 +160,29 @@ def test_reference_runs_in_parallel_match_serial(monkeypatch):
     serial = H.run_reference(TESTS, heads, jobs=1)
     parallel = H.run_reference(TESTS, heads, jobs=2)
     assert set(serial) == heads and parallel == serial
+
+
+def test_selfcheck_finds_verification_steps_in_helpers_and_distribution_classes():
+    import mikoshilang  # noqa: F401
+    # WaveletFilterCoefficients verifies in a helper; TracyWidomDistribution in the class its table entry names
+    cases = H.load_cases(TESTS)
+    harness = H._harness(TESTS)
+    for head in ("WaveletFilterCoefficients", "TracyWidomDistribution"):
+        r = H.Result(head, ["self-check"], "self-check")
+        H._run_selfcheck(r, cases.get(head, []), harness)       # also runs one real example
+        assert r.status == "pass", (head, r.failures)
+    assert not any("raise ArithmeticError" in s for s in H._impl_sources("GCD"))
+
+
+def test_delegated_prose_is_not_a_module_path():
+    r = H.Result("X", ["delegated"], "delegated (the stored function f) in tests.")
+    H._run_delegated(r, [], None)
+    assert r.status == "pass"
+    r = H.Result("Y", ["delegated"], "delegated (no.such.module_fn)")
+    H._run_delegated(r, [], None)
+    assert r.status == "fail"
+
+
+def test_selfcheck_uses_an_example_that_nests_the_head():
+    res = H.run(TESTS, "stated", ["KirchhoffGraph"])
+    assert res["KirchhoffGraph"].status == "pass", res["KirchhoffGraph"].failures

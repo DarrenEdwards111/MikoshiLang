@@ -326,27 +326,83 @@ def _run_exact(r: Result, cases, harness):
         r.add("exact", True)          # vacuous for heads whose cases are all inexact or Raises; noted in the docs
 
 
-def _impl_sources(name):
+def _impl_sources(name, depth: int = 2):
+    """Source of a head's implementations and of the same-module functions and classes they use (``depth``
+    levels): verification steps often live in a helper, in the function a factory wraps or in a class it builds."""
     from .library.core import REGISTRY
     e = REGISTRY.get(name)
-    srcs = []
-    for f, *_ in (e.impls if e else []):
+    srcs, seen = [], set()
+
+    def visit(f, d):
         while getattr(f, "__wrapped__", None) is not None:
             f = f.__wrapped__
+        code = getattr(f, "__code__", None)
+        if code is None or code in seen:
+            return
+        seen.add(code)
         try:
             srcs.append(inspect.getsource(f))
         except (OSError, TypeError):
-            pass
+            return
+        if d <= 0:
+            return
+        lib = "mikoshilang.library"
+        refs = [f.__globals__.get(n) for n in code.co_names]
+        refs += [c.cell_contents for c in (f.__closure__ or ()) if _cell_ok(c)]
+        for g in refs:
+            if inspect.isfunction(g) and (g.__module__ or "").startswith(lib):
+                visit(g, d - 1)
+            elif inspect.isclass(g) and (g.__module__ or "").startswith(lib) and g not in seen:
+                seen.add(g)                      # a distribution or object class the factory instantiates
+                try:
+                    srcs.append(inspect.getsource(g))
+                except (OSError, TypeError):
+                    pass
+
+    for f, *_ in (e.impls if e else []):
+        visit(f, depth)
+    if depth > 0:
+        # distributions are classes or builders looked up by name in the statistics tables
+        try:
+            from .library import wl_stats
+        except Exception:                    # optional dependency missing
+            wl_stats = None
+        for table in ("TABLE", "BUILDERS"):
+            g = getattr(wl_stats, table, {}).get(name) if wl_stats is not None else None
+            if inspect.isfunction(g):
+                visit(g, depth - 1)
+            elif inspect.isclass(g) and g not in seen:
+                seen.add(g)
+                try:
+                    srcs.append(inspect.getsource(g))
+                except (OSError, TypeError):
+                    pass
     return srcs
+
+
+def _cell_ok(cell):
+    try:
+        cell.cell_contents
+        return True
+    except ValueError:
+        return False
+
+
+_ALL_CASES: Dict[str, list] = {}          # every head's cases, for examples that nest the head (set by run)
 
 
 def _run_selfcheck(r: Result, cases, harness):
     """The implementation has a verification step, and one real (non-error) example runs through it."""
-    srcs = _impl_sources(r.name)
-    if not any("ArithmeticError" in s or "verif" in s.lower() for s in srcs):
+    # the implementation itself, or a helper, factory-wrapped function or class it uses, raising ArithmeticError
+    if not (any("ArithmeticError" in s or "verif" in s.lower() for s in _impl_sources(r.name, depth=0))
+            or any("raise ArithmeticError" in s for s in _impl_sources(r.name))):
         r.add("self-check", False, "no verification step (ArithmeticError) found in the implementation")
         return
     examples = [c for c in cases if len(c) > 1 and type(c[1]).__name__ != "Raises"]
+    if not examples:                    # the head may only appear inside another call (VertexList[f[g]])
+        call = re.compile(r"(?<![A-Za-z0-9`$])" + re.escape(r.name) + r"\[")
+        examples = [c for cs in _ALL_CASES.values() for c in cs
+                    if len(c) > 1 and type(c[1]).__name__ != "Raises" and call.search(c[0])]
     if not examples:
         r.add("self-check", False, "no real example to run the verification step on")
         return
@@ -387,7 +443,11 @@ def _run_numeric(r: Result, cases, harness):
         except Exception:
             continue
         n += 1
-        ok = abs(complex(sp.N(a - b, 30))) <= 1e-20 * max(1.0, abs(complex(sp.N(a, 30))))
+        # a function that works in machine precision (its result has 53-bit floats even for 30-digit input)
+        # is compared at machine accuracy; otherwise to 20 digits
+        floats = b.atoms(sp.Float)
+        tol = 1e-12 if floats and min(f._prec for f in floats) <= 53 else 1e-20
+        ok = abs(complex(sp.N(a - b, 30))) <= tol * max(1.0, abs(complex(sp.N(a, 30))))
         r.add("numeric cross-check", ok, f"{c[0][:60]}: {sp.N(a, 15)} vs {sp.N(b, 15)}")
         if n >= 5:
             break
@@ -401,6 +461,9 @@ def _run_delegated(r: Result, cases, harness):
         r.add("delegated", True)
         return
     path = m.group(1)
+    if "." not in path:                 # prose ("delegated (the stored function f)"), not a module path
+        r.add("delegated", True)
+        return
     parts = path.split(".")
     for i in range(len(parts), 0, -1):
         try:
@@ -486,6 +549,8 @@ def run(tests_dir, mode: str = "stated", names: Optional[List[str]] = None, jobs
     import mikoshilang  # noqa: F401  (registers the library)
     from .library.core import STATUS
     cases = load_cases(tests_dir)
+    _ALL_CASES.clear()
+    _ALL_CASES.update(cases)
     harness = _harness(tests_dir)
     selected = {}
     for name, (area, status, notes) in sorted(STATUS.items()):
