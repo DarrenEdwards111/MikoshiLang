@@ -36,7 +36,7 @@ if _PKG_DIR not in _W.PACKAGE_PATH:
 
 CONTEXTS = [
     ("$Context", text("Global`")),
-    ("$ContextPath", '{"System`", "Global`"}'),
+    ("$ContextPath", '{"System`", "Mikoshi`", "Global`"}'),
     ("Block[{$Context = \"w1ctx`\"}, $Context]", text("w1ctx`")),
     ("$Context = 5", Raises()),
     ("$Context = \"no context\"", Raises()),
@@ -49,10 +49,13 @@ CONTEXTS = [
     ("Block[{$ContextAliases = <|\"w1b`\" -> \"w1longb`\"|>}, ToExpression[\"w1b`w1zz\"]; Context[\"w1b`w1zz\"]]",
      text("w1longb`")),
     ("$ContextAliases = 3", Raises()),
-    ("$Packages", '{"System`", "Global`"}'),
+    ("$Packages", '{"System`", "Mikoshi`", "Global`"}'),
     ("Block[" + CLEAN + ", BeginPackage[\"W1pk`\"]; EndPackage[]; MemberQ[$Packages, \"W1pk`\"]]", True),
     ("$Packages = {3}", Raises()),
     ("Context[Sin]", text("System`")),
+    ("Context[TypeSignature]", text("Mikoshi`")),
+    ("Mikoshi`TypeMatchQ[3, Integer]", True),
+    ("Block[" + CLEAN + ", ToExpression[\"Context[Verify]\"]]", text("Mikoshi`")),
     ("w1cx = 1; Context[w1cx]", text("Global`")),
     ("Context[]", text("Global`")),
     ("Context[\"Plus\"]", text("System`")),
@@ -513,7 +516,7 @@ STACK_TRACE = [
      form("{w1fac[2], 2*w1fac[2 - 1], {{2 - 1, 1}, w1fac[1], 1}, 2*1, 2}")),
     (FAC + "Trace[w1fac[1], TraceOff -> w1nomatch] === Trace[w1fac[1]]", True),
     ("Trace[1 + 2 3, TraceOff -> _Times]", form("{{2*3, 6}, 1 + 6, 7}")),
-    ("Trace[1 + 1, TraceOriginal -> True]", Raises(NotImplementedError)),
+    ("Trace[1 + 1, TraceOriginal -> True]", form("{1 + 1, {Plus}, {1}, {1}, 1 + 1, 2}")),   # X01: implemented
     ("Trace[1 + 1, TraceOriginal -> False]", form("{1 + 1, 2}")),
     ("Trace[1 + 1, Bogus -> 1]", Raises()),
     (FAC + "Trace[w1fac[1], w1fac]", form("{w1fac[1], {w1fac[0]}}")),

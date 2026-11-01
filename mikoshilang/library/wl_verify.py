@@ -9,7 +9,8 @@ produced it:
 * ``Checked[value, <|"Method" -> ..., ...|>]``: the check passed, but it rests on symbolic simplification or on
   numerical evidence at sample points, which is strong evidence and not a proof;
 * ``Unchecked[value, reason]``: no checker applies (or the check was inconclusive);
-* a failed check raises ``ArithmeticError("Verify: ... failed verification ...")`` (CONVENTIONS §3).
+* ``Failed[value, <|"Head" -> h, "Reason" -> ...|>]``: the check failed. This is Verify's documented result, so
+  it is returned, not raised (CONVENTIONS §3). Errors raised by the computation itself still propagate.
 """
 from __future__ import annotations
 
@@ -42,8 +43,20 @@ def _unchecked(value, reason):
     return Expr("Unchecked", value, reason)
 
 
+class VerificationFailure(ArithmeticError):
+    """Raised by a checker when the result is wrong; Verify turns it into Failed[value, info]."""
+
+    def __init__(self, head, detail):
+        super().__init__(f"Verify: {head} result failed verification ({detail})")
+        self.head, self.detail = head, detail
+
+
 def _fail(head, detail):
-    raise ArithmeticError(f"Verify: {head} result failed verification ({detail})")
+    raise VerificationFailure(head, detail)
+
+
+def _failed(value, exc: VerificationFailure):
+    return Expr("Failed", value, _assoc(Head=Symbol(exc.head), Reason=exc.detail))
 
 
 class _Inconclusive(Exception):
@@ -570,7 +583,8 @@ CHECKERS = {
           "LinearSolve by multiplying back, Det by a second algorithm and Eigenvalues through the characteristic "
           "polynomial. It gives Certified[value, info] when an exact certificate was checked, Checked[value, "
           "info] when the evidence is symbolic simplification or numerical sampling, and Unchecked[value, "
-          "reason] when no checker applies; a failed check raises ArithmeticError. MikoshiLang extension. "
+          "reason] when no checker applies; a failed check gives Failed[value, <|\"Head\" -> h, \"Reason\" -> "
+          "text|>] (errors raised by the computation itself propagate). MikoshiLang extension. "
           "Check: self-check; seeded wrong results are caught in tests.")
 def _verify(expr: Held) -> Expr:
     from .wl_common import ev
@@ -588,6 +602,8 @@ def _verify(expr: Held) -> Expr:
         return checker(args, value)
     except _Inconclusive as exc:
         return _unchecked(value, f"{head}: {exc}")
+    except VerificationFailure as exc:
+        return _failed(value, exc)
 
 
 def _hold_verify():

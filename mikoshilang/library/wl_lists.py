@@ -84,7 +84,7 @@ def _array(f: Fn, dims: Expr, origin: Expr = None, head: Expr = None) -> Expr:
 
 
 @fn("ConstantArray", **ADDED, notes="ConstantArray[c, n] and ConstantArray[c, {n1, n2, ...}]")
-def _constarray(c: Expr, dims: Expr) -> Expr:
+def _constarray(c: Expr, dims: NonNegInteger | ListOf[NonNegInteger]) -> ListOf[Expr]:
     ds = _seq_spec_list(dims, "ConstantArray")
     if math.prod(ds) > K.MAX_TABLE:
         raise ValueError("ConstantArray: too many elements")
@@ -95,7 +95,7 @@ def _constarray(c: Expr, dims: Expr) -> Expr:
 
 
 @fn("Subdivide", **ADDED, notes="Subdivide[n], Subdivide[xmax, n], Subdivide[xmin, xmax, n]: n + 1 equally spaced values")
-def _subdivide(a: Expr, b: Expr = None, c: Expr = None) -> ListOf[Expr]:
+def _subdivide(a: Numeric, b: Numeric = None, c: PosInteger = None) -> ListOf[Expr]:
     if b is None:
         lo, hi, n = 0, 1, a
     elif c is None:
@@ -108,7 +108,7 @@ def _subdivide(a: Expr, b: Expr = None, c: Expr = None) -> ListOf[Expr]:
 
 
 @fn("PowerRange", **ADDED, notes="PowerRange[b] = {1, 10, 100, ...} up to b; PowerRange[a, b] and PowerRange[a, b, r]")
-def _powerrange(a: Expr, b: Expr = None, r: Expr = None) -> ListOf[Expr]:
+def _powerrange(a: Numeric, b: Numeric = None, r: Numeric = None) -> ListOf[Expr]:
     if b is None:
         lo, hi, ratio = 1, a, 10
     else:
@@ -130,7 +130,7 @@ def _powerrange(a: Expr, b: Expr = None, r: Expr = None) -> ListOf[Expr]:
 
 
 @fn("Subsequences", **ADDED, notes="contiguous subsequences by length then position; Subsequences[list, n | {n} | {m, n}]")
-def _subsequences(x: Expr, spec: Expr = None) -> ListOf[Expr]:
+def _subsequences(x: ListOf[Expr], spec: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Subsequences")
     n = len(items)
     lo, hi = 0, n
@@ -509,7 +509,7 @@ def _takewhile(x: Expr, crit: Fn) -> Expr:
 
 
 @fn("LengthWhile", **ADDED, notes="number of leading elements for which crit is True")
-def _lengthwhile(x: Expr, crit: Fn) -> Expr:
+def _lengthwhile(x: ListOf[Expr], crit: Fn) -> Integer:
     n = 0
     for e in items_of(x, "LengthWhile"):
         if not true(crit, e):
@@ -524,7 +524,7 @@ def _takedrop(x: Expr, spec: Expr) -> ListOf[Expr]:
 
 
 @fn("TakeList", **ADDED, notes="TakeList[list, {n1, n2, ...}] gives successive pieces; ni may be UpTo[k] or All")
-def _takelist(x: Expr, specs: ListOf[Expr]) -> ListOf[Expr]:
+def _takelist(x: ListOf[Expr], specs: ListOf[Expr]) -> ListOf[Expr]:
     items = items_of(x, "TakeList")
     if not is_list(specs):
         raise ValueError("TakeList: the second argument must be a list of counts")
@@ -541,7 +541,7 @@ def _takelist(x: Expr, specs: ListOf[Expr]) -> ListOf[Expr]:
 
 
 @fn("DeleteAdjacentDuplicates", **ADDED, notes="removes elements equal (SameQ, or the given test) to their predecessor")
-def _deladj(x: Expr, test: Fn = None) -> Expr:
+def _deladj(x: ListOf[Expr], test: Fn = None) -> ListOf[Expr]:
     items = items_of(x, "DeleteAdjacentDuplicates")
     t = tester(test)
     out = []
@@ -675,12 +675,12 @@ def _position_extreme(x, n, fname, largest):
 
 @fn("PositionLargest", **ADDED, notes="positions of the largest element(s); PositionLargest[list, n] positions of the "
                                       "n largest in decreasing order")
-def _poslargest(x: Expr, n: Expr = None) -> Expr:
+def _poslargest(x: Expr, n: Expr = None) -> ListOf[Expr]:
     return _position_extreme(x, n, "PositionLargest", True)
 
 
 @fn("PositionSmallest", **ADDED, notes="positions of the smallest element(s); PositionSmallest[list, n]")
-def _possmallest(x: Expr, n: Expr = None) -> Expr:
+def _possmallest(x: Expr, n: Expr = None) -> ListOf[Expr]:
     return _position_extreme(x, n, "PositionSmallest", False)
 
 
@@ -833,7 +833,7 @@ def _level(x: Expr, spec: Expr, *rest: Expr) -> Expr:
 
 @fn("Depth", **ADDED, notes="1 for atoms, else 1 + the maximum depth of the elements (heads ignored; an association "
                             "is one level)")
-def _depth(x: Expr, *rest: Expr) -> Expr:
+def _depth(x: Expr, *rest: Expr) -> Integer:
     return KL.depth(x)
 
 
@@ -870,7 +870,7 @@ def _array_depth(x):
 
 
 @fn("ArrayDepth", **ADDED, notes="depth to which expr is a full array of lists (0 for non-lists)")
-def _arraydepth(x: Expr) -> Expr:
+def _arraydepth(x: Expr) -> Integer:
     return _array_depth(x)
 
 
@@ -922,7 +922,7 @@ def _matrixq(x: Expr, test: Fn = None) -> Boolean:
 # ─────────────────────────── rearranging ───────────────────────────
 
 @fn("Split", **ADDED, notes="runs of identical (SameQ) adjacent elements; Split[list, test] tests adjacent pairs")
-def _split(x: Expr, test: Fn = None) -> ListOf[Expr]:
+def _split(x: ListOf[Expr], test: Fn = None) -> ListOf[Expr]:
     items = items_of(x, "Split")
     t = tester(test)
     out = []
@@ -935,7 +935,7 @@ def _split(x: Expr, test: Fn = None) -> ListOf[Expr]:
 
 
 @fn("SplitBy", **ADDED, notes="runs with identical f values; SplitBy[list, {f1, f2, ...}] splits recursively")
-def _splitby(x: Expr, f: Expr) -> Expr:
+def _splitby(x: ListOf[Expr], f: Expr) -> ListOf[Expr]:
     items = items_of(x, "SplitBy")
     fs = list(f.args) if is_list(f) else [f]
 
@@ -957,7 +957,7 @@ def _splitby(x: Expr, f: Expr) -> Expr:
 
 @fn("Gather", area=AREA, status="promoted",
     notes="classes of identical (SameQ) elements in order of first appearance; Gather[list, test]")
-def _gather(x: Expr, test: Expr = None) -> ListOf[Expr]:
+def _gather(x: ListOf[Expr], test: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Gather")
     _keys, groups = classes(items, test=test) if test is not None else classes(items)
     return L(*(L(*g) for g in groups))
@@ -965,7 +965,7 @@ def _gather(x: Expr, test: Expr = None) -> ListOf[Expr]:
 
 @fn("GatherBy", **ADDED, notes="classes with identical f values, in order of first appearance; GatherBy[list, {f1, "
                                "f2}] nests")
-def _gatherby(x: Expr, f: Expr) -> Expr:
+def _gatherby(x: ListOf[Expr], f: Expr) -> ListOf[Expr]:
     items = items_of(x, "GatherBy")
     fs = list(f.args) if is_list(f) else [f]
 
@@ -1161,19 +1161,19 @@ def _sortby_order(items, fs, p, fname):
 
 
 @fn("ReverseSort", **ADDED, notes="Reverse[Sort[list]] (reverse canonical order); ReverseSort[list, p]")
-def _reversesort(x: Expr, p: Expr = None) -> Expr:
+def _reversesort(x: ListOf[Expr] | Assoc, p: Expr = None) -> Expr:
     s = ev(Expr("Sort", x, *(() if p is None else (p,))))
     return ev(Expr("Reverse", s))
 
 
 @fn("ReverseSortBy", **ADDED, notes="Reverse[SortBy[list, f]]: decreasing f values, ties in reverse canonical order")
-def _reversesortby(x: Expr, f: Expr) -> Expr:
+def _reversesortby(x: ListOf[Expr] | Assoc, f: Expr) -> Expr:
     return ev(Expr("Reverse", ev(Expr("SortBy", x, f))))
 
 
 @fn("Ordering", **ADDED, notes="positions that put the list in canonical order (stable); Ordering[list, n] the first n "
                                "(negative n: the last n), Ordering[list, n, p] with ordering p")
-def _ordering(x: Expr, n: Expr = None, p: Expr = None) -> ListOf[Expr]:
+def _ordering(x: ListOf[Expr] | Assoc, n: Expr = None, p: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "Ordering")
     idx = list(range(len(items)))
     if p is None:
@@ -1190,7 +1190,7 @@ def _ordering(x: Expr, n: Expr = None, p: Expr = None) -> ListOf[Expr]:
 
 @fn("OrderingBy", **ADDED, notes="positions that sort the list by f (ties by canonical order of the elements); "
                                  "OrderingBy[list, f, n]")
-def _orderingby(x: Expr, f: Expr, n: Expr = None) -> ListOf[Expr]:
+def _orderingby(x: ListOf[Expr] | Assoc, f: Expr, n: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "OrderingBy")
     order = _sortby_order(items, [f], None, "OrderingBy")
     if n is not None:
@@ -1201,7 +1201,7 @@ def _orderingby(x: Expr, f: Expr, n: Expr = None) -> ListOf[Expr]:
 
 @fn("NumericalSort", **ADDED, notes="sorts numeric elements by numerical value (ties by canonical order); "
                                     "non-numeric elements raise")
-def _numericalsort(x: Expr) -> Expr:
+def _numericalsort(x: ListOf[Expr]) -> ListOf[Expr]:
     items = items_of(x, "NumericalSort")
     keyed = sorted(((_num_key(e, "NumericalSort"), i, e) for i, e in enumerate(items)), key=lambda t: (t[0], t[1]))
     out = []
@@ -1217,14 +1217,14 @@ def _numericalsort(x: Expr) -> Expr:
 
 
 @fn("DeleteDuplicatesBy", **ADDED, notes="keeps the first element for each distinct (SameQ) value of f")
-def _deldupby(x: Expr, f: Fn) -> Expr:
+def _deldupby(x: ListOf[Expr] | Assoc, f: Fn) -> Expr:
     items = items_of(x, "DeleteDuplicatesBy")
     _k, groups = classes(items, keyf=lambda e: apply(f, e))
     return _rebuild(x, [g[0] for g in groups]) if not is_assoc(x) else L(*(g[0] for g in groups))
 
 
 @fn("Catenate", **ADDED, notes="joins a list of lists (and/or associations, whose values are used) into one list")
-def _catenate(x: Expr) -> ListOf[Expr]:
+def _catenate(x: ListOf[Expr]) -> ListOf[Expr]:
     parts = items_of(x, "Catenate")
     out = []
     for p in parts:
@@ -1247,7 +1247,7 @@ def _opt_test(rest, fname):
 
 
 def _contains(fname, check):
-    def impl(a: Expr, b: Expr, *rest: Expr) -> Expr:
+    def impl(a: Expr, b: Expr, *rest: Expr) -> Boolean:
         t = tester(_opt_test(rest, fname))
         xs, ys = items_of(a, fname), items_of(b, fname)
         return check(xs, ys, lambda u, v: t(u, v))
@@ -1272,7 +1272,7 @@ fn("IntersectingQ", **ADDED, notes="the lists have at least one element in commo
 
 
 @fn("DuplicateFreeQ", **ADDED, notes="no two elements are SameQ (or equivalent under the given test)")
-def _dupfreeq(x: Expr, test: Expr = None) -> Boolean:
+def _dupfreeq(x: ListOf[Expr], test: Expr = None) -> Boolean:
     items = items_of(x, "DuplicateFreeQ")
     return len(dedup(items, test)) == len(items)
 
@@ -1286,18 +1286,18 @@ def _counts(x):
 
 
 @fn("CountsBy", **ADDED, notes="<|f[e] -> count, ...|> in order of first appearance")
-def _countsby(x: Expr, f: Fn) -> Expr:
+def _countsby(x: ListOf[Expr], f: Fn) -> Assoc:
     keys, groups = classes(items_of(x, "CountsBy"), keyf=lambda e: apply(f, e))
     return KL.make_assoc([(k, len(g)) for k, g in zip(keys, groups)])
 
 
 @fn("CountDistinct", **ADDED, notes="number of distinct (SameQ) elements; CountDistinct[list, test]")
-def _countdistinct(x: Expr, test: Expr = None) -> Integer:
+def _countdistinct(x: ListOf[Expr], test: Expr = None) -> Integer:
     return len(dedup(items_of(x, "CountDistinct"), test))
 
 
 @fn("CountDistinctBy", **ADDED, notes="number of distinct values of f")
-def _countdistinctby(x: Expr, f: Fn) -> Integer:
+def _countdistinctby(x: ListOf[Expr], f: Fn) -> Integer:
     keys, _ = classes(items_of(x, "CountDistinctBy"), keyf=lambda e: apply(f, e))
     return len(keys)
 
@@ -1365,7 +1365,7 @@ def _bin_index(v, edges):
 
 @fn("BinCounts", **ADDED, notes="counts in bins [b_k, b_k+1): BinCounts[data, dx] (bins at multiples of dx), "
                                 "BinCounts[data, {min, max, dx}] and BinCounts[data, {{b1, b2, ...}}]")
-def _bincounts(data: Expr, spec: Expr = None) -> ListOf[Expr]:
+def _bincounts(data: ListOf[Expr], spec: Expr = None) -> ListOf[Expr]:
     if spec is None:
         raise NotImplementedError("BinCounts[data] with automatic bins is not supported; give a bin width")
     items = items_of(data, "BinCounts")
@@ -1380,7 +1380,7 @@ def _bincounts(data: Expr, spec: Expr = None) -> ListOf[Expr]:
 
 @fn("BinLists", **ADDED, notes="the elements falling in each bin [b_k, b_k+1), with the same bin specifications "
                                "as BinCounts")
-def _binlists(data: Expr, spec: Expr = None) -> ListOf[Expr]:
+def _binlists(data: ListOf[Expr], spec: Expr = None) -> ListOf[Expr]:
     if spec is None:
         raise NotImplementedError("BinLists[data] with automatic bins is not supported; give a bin width")
     items = items_of(data, "BinLists")
@@ -1394,7 +1394,7 @@ def _binlists(data: Expr, spec: Expr = None) -> ListOf[Expr]:
 
 
 @fn("Ratios", **ADDED, notes="successive ratios a[i+1]/a[i]; Ratios[list, n] for n-th ratios")
-def _ratios(x: Expr, n: Integer = 1) -> ListOf[Expr]:
+def _ratios(x: ListOf[Expr], n: NonNegInteger = 1) -> ListOf[Expr]:
     items = items_of(x, "Ratios")
     k = int_value(n, "Ratios", "order", 0)
     for _ in range(k):
@@ -1404,7 +1404,7 @@ def _ratios(x: Expr, n: Integer = 1) -> ListOf[Expr]:
 
 @fn("MinMax", **ADDED, notes="{Min[list], Max[list]}; MinMax[list, d] = {min - d, max + d}; "
                              "MinMax[list, {dmin, dmax}]; Scaled[s] pads by s times the range")
-def _minmax(x: Expr, d: Expr = None) -> ListOf[Expr]:
+def _minmax(x: ListOf[Expr], d: Expr = None) -> ListOf[Expr]:
     items = items_of(x, "MinMax")
     lo, hi = ev(Expr("Min", L(*items))), ev(Expr("Max", L(*items)))
     if d is None:
@@ -1452,7 +1452,7 @@ def _through(x: Expr, h: Expr = None) -> Expr:
 @fn("Operate", **ADDED, notes="Operate[p, f[x, y]] = p[f][x, y]; Operate[p, expr, 0] = p[expr]; Operate[p, expr, n] "
                               "applies p to the head n levels down (f[a][b] at level 2 gives p[f][a][b]); an atomic "
                               "head that deep leaves expr unchanged")
-def _operate(p: Fn, x: Expr, n: Integer = 1) -> Expr:
+def _operate(p: Fn, x: Expr, n: NonNegInteger = 1) -> Expr:
     k = int_value(n, "Operate", "level", 0)
 
     def go(e, k):
@@ -1554,7 +1554,7 @@ fn("NoneTrue", **ADDED, notes="test[e] is True for no element; optional level")(
 
 
 @fn("BlockMap", **ADDED, notes="BlockMap[f, list, n] = Map[f, Partition[list, n]]; BlockMap[f, list, n, d]")
-def _blockmap(f: Expr, x: Expr, n: Expr, d: Expr = None) -> Expr:
+def _blockmap(f: Expr, x: ListOf[Expr], n: PosInteger, d: PosInteger = None) -> ListOf[Expr]:
     parts = ev(Expr("Partition", x, n, *(() if d is None else (d,))))
     return ev(Expr("Map", f, parts))
 
@@ -1576,7 +1576,7 @@ def _orderedq(x: Expr, p: Fn = None) -> Boolean:
 
 
 @fn("Order", **ADDED, notes="1 if e1 comes before e2 in canonical order, -1 if after, 0 if identical")
-def _order(a: Expr, b: Expr) -> Expr:
+def _order(a: Expr, b: Expr) -> Integer:
     if same(a, b):
         return 0
     ka, kb = canonical(a, "Order"), canonical(b, "Order")
@@ -1585,7 +1585,7 @@ def _order(a: Expr, b: Expr) -> Expr:
 
 @fn("Between", **ADDED, notes="min <= x <= max for {min, max}, or within any interval of {{min1, max1}, ...}; "
                               "Between[{min, max}] is an operator form")
-def _between(x: Expr, spec: ListOf[Expr]) -> Boolean:
+def _between(x: Real, spec: ListOf[Expr]) -> Boolean:
     if not is_list(spec):
         raise ValueError("Between: the range must be {min, max}")
     ranges = list(spec.args) if spec.args and all(is_list(r) for r in spec.args) else [spec]
@@ -1808,7 +1808,7 @@ def _lex_key(e):
 @fn("LexicographicSort", **ADDED,
     notes="sorts expressions by comparing their elements in canonical order, a proper prefix first; "
           "LexicographicSort[list, p] uses ordering function p on elements")
-def _lexsort(x: Expr, p: Fn = None) -> Expr:
+def _lexsort(x: Expr, p: Fn = None) -> ListOf[Expr]:
     items = items_of(x, "LexicographicSort")
     if p is None:
         return _rebuild(x, sorted(items, key=_lex_key))
@@ -1843,7 +1843,7 @@ def _leafcount(e, heads=True):
 @fn("LeafCount", **ADDED,
     notes="number of atomic subexpressions including heads (Rational and Complex count as 3); Heads -> False "
           "skips heads")
-def _leafcountf(e: Expr, *opts: Option) -> Expr:
+def _leafcountf(e: Expr, *opts: Option) -> Integer:
     _, o = split_options(opts, {"Heads"}, "LeafCount")
     heads = o.get("Heads", True)
     return _leafcount(e, heads is not False)

@@ -387,7 +387,16 @@ def signatures_of(name: str) -> List[Signature]:
         return list(d)
     from .library.core import REGISTRY
     e = REGISTRY.get(name)
-    return entry_signature(e) if e is not None else []
+    if e is not None:
+        return entry_signature(e)
+    from .kernel_types import kernel_signatures
+    k = kernel_signatures(name)
+    if k is not None:
+        return list(k)
+    from . import kernel
+    if name in kernel._HELD:
+        return [Signature([], ("Held",), EXPR_T)]
+    return []
 
 
 # ─────────────────────────── checking ───────────────────────────
@@ -438,30 +447,16 @@ def _short(v) -> str:
 
 
 def check_args(head: str, sig: Signature, args) -> None:
-    """Report arguments that are concrete values of the wrong kind."""
+    """Report concrete arguments that are not of the declared type (sign constraints included: -1 is not a
+    PosInteger)."""
     if _mode.get() is None:
         return
     for i, a in enumerate(args):
         t = sig.param_type(i)
         if t is None or t == EXPR_T or t[0] == "Held":
             continue
-        if match(a, _kind(t)) is False:
+        if match(a, t) is False:
             _mismatch(head, i + 1, a, t)
-
-
-_SIGN_FREE = {"PosInteger": ("Integer",), "NonNegInteger": ("Integer",)}
-
-
-def _kind(t: tuple) -> tuple:
-    """The type with sign constraints dropped: a negative integer for PosInteger is a bad *value* (the function
-    raises ValueError, CONVENTIONS §2), not a wrong kind, so argument checks leave it to the function."""
-    if t[0] in _SIGN_FREE:
-        return _SIGN_FREE[t[0]]
-    if t[0] in CONTAINERS:
-        return (t[0], _kind(t[1]))
-    if t[0] == "Or":
-        return _union(*(_kind(u) for u in t[1]))
-    return t
 
 
 def check_result(head: str, sig: Signature, value) -> None:
@@ -478,6 +473,22 @@ def check_library_call(head: str, f, args, held: bool):
     sig = function_signature(f, held)
     check_args(head, sig, args)
     return sig
+
+
+def check_kernel_call(head: str, args) -> Optional[Signature]:
+    """Hook for kernel built-ins (step 8 of the evaluator): checks the arguments against the hand-written
+    signature (mikoshilang.kernel_types) and returns it for the result check."""
+    if _mode.get() is None:
+        return None
+    from .kernel_types import kernel_signatures
+    sigs = kernel_signatures(head)
+    if not sigs:
+        return None
+    fitting = [s for s in sigs if s.accepts_count(len(args))]
+    if not fitting:
+        return None                      # the built-in reports a wrong argument count itself
+    check_args(head, fitting[0], args)
+    return fitting[0]
 
 
 def select_declared(head: str, args) -> Optional[List[Signature]]:

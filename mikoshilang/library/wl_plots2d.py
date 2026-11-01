@@ -1261,11 +1261,16 @@ _LIST_DEFAULTS = {"PlotRange": AUTO, "PlotStyle": AUTO, "Joined": AUTO, "Filling
                   "ScalingFunctions": NONE, "ClippingStyle": NONE, "PlotTheme": AUTO, "Mesh": NONE,
                   "ColorFunction": AUTO, "PlotHighlighting": AUTO, "Method": AUTO, "PerformanceGoal": AUTO,
                   "IntervalMarkers": AUTO, "PlotLabels": NONE, "PlotLayout": AUTO, "PlotFit": NONE,
-                  "LabelingFunction": AUTO}
+                  "PlotFitElements": AUTO, "LabelingFunction": AUTO}
+
+# X02: fn(fname, datasets, PlotFit, PlotFitElements, styles, plot range) -> extra content; set by wl_statmodels2_models
+PLOT_FIT_HOOK = None
+_PLOT_FIT_PLOTS = ("ListPlot", "ListLinePlot", "ListFitPlot")
 
 
 def _check_list_unsupported(o, fname):
-    for n in ("ClippingStyle", "Mesh", "PlotLabels", "PlotFit"):
+    fit_ok = PLOT_FIT_HOOK is not None and fname in _PLOT_FIT_PLOTS
+    for n in ("ClippingStyle", "Mesh", "PlotLabels") + (() if fit_ok else ("PlotFit", "PlotFitElements")):
         if not is_sym(o.get(n, NONE), "None", "Automatic"):
             raise NotImplementedError(f"{fname}: the option {n} -> {K_input(o[n])} is not supported")
     for n in ("ColorFunction", "PlotHighlighting", "Method", "IntervalMarkers", "LabelingFunction"):
@@ -1403,6 +1408,8 @@ def list_plot(fname, data, opts, joined_default=False, step=None, logx=False, lo
             flat = [p for r in cv for p in r]
             prims = [Expr("Point", pts(flat))] if flat else []
         content.append(L(st, wrap_prims(prims, ds)) if ds.wrappers else L(st, *prims))
+    if PLOT_FIT_HOOK is not None and fname in _PLOT_FIT_PLOTS and not is_sym(o.get("PlotFit", NONE), "None"):
+        content += PLOT_FIT_HOOK(fname, dss, o["PlotFit"], o.get("PlotFitElements", AUTO), styles, prange)
     defaults_g = [("AspectRatio", Symbol("Automatic") if polar else GOLDEN),
                   ("Axes", L(not frame, not frame) if not frame else L(False, False)),
                   ("PlotRange", range_expr(prange)), ("PlotRangeClipping", True),
@@ -5261,11 +5268,5 @@ def _surfacedensityplot3d(f: Held, reg: Held, *opts: Held | Option) -> Expr:
 # ───────────────────────────── not provided ─────────────────────────────
 
 SKIPPED = {
-    "ChromaticityPlot": "needs the CIE 1931/1964 colour-matching tables and Wolfram's undocumented rendering of "
-                        "colour spaces (gamut, spectral locus labelling); not reproducible offline",
-    "ChromaticityPlot3D": "as ChromaticityPlot: CIE colour-matching data and undocumented 3-D colour-space rendering",
     "BioSequencePlot": "needs BioSequence objects (not implemented) and an undocumented sequence-track layout",
-    "SingularValuePlot": "needs a control-systems frequency response (TransferFunctionModel evaluates inertly; "
-                         "no state-space/transfer-function numerics to take singular values of)",
-    "ImageWaveformPlot": "needs the Image type from batch W21 (not merged into this branch)",
 }

@@ -149,6 +149,14 @@ INERT = {}          # inert System symbols added here: name -> notes
 _SYS_CACHE = [None, -1]
 
 
+# MikoshiLang's own (non-Wolfram) symbols live in the Mikoshi` context. Their internal names are bare, like
+# System` symbols, so the library registry and the evaluator need no change; Mikoshi` is on the default
+# $ContextPath and its names are also found when a package replaces the path.
+MIKOSHI_CONTEXT = "Mikoshi`"
+MIKOSHI_NAMES = frozenset({"TypeSignature", "TypeMatchQ", "TypeCheck", "Verify", "Certified", "Checked",
+                           "Unchecked", "Failed"})
+
+
 def system_names():
     """Every name MikoshiLang implements as a System` symbol."""
     from .. import library
@@ -159,7 +167,7 @@ def system_names():
         names |= set(getattr(K, "STRUCTURAL_HEADS", ())) | set(SYSTEM_CONSTANTS) | set(E.SYSTEM_VARIABLES)
         names |= {h for h, (_a, s, _n) in library.STATUS.items() if s != "quarantined"}
         names |= set(INERT) | set(K.KNOWN_ATTRIBUTES) | {"Null", "True", "False", "$Assumptions", "General"}
-        _SYS_CACHE[0], _SYS_CACHE[1] = frozenset(names), n
+        _SYS_CACHE[0], _SYS_CACHE[1] = frozenset(names - MIKOSHI_NAMES), n
     return _SYS_CACHE[0]
 
 
@@ -172,7 +180,7 @@ _ASSIGNABLE = set()
 
 
 def _protected_system(name):
-    return is_system(name) and name not in _ASSIGNABLE and not name.startswith("$")
+    return (is_system(name) or name in MIKOSHI_NAMES) and name not in _ASSIGNABLE and not name.startswith("$")
 
 
 _orig_is_protected = K.is_protected
@@ -224,7 +232,7 @@ def cur_context():
 def context_path():
     v = _own("$ContextPath", None)
     if v is None:
-        return ["System`", "Global`"]
+        return ["System`", MIKOSHI_CONTEXT, "Global`"]
     if not K.is_list(v):
         v = ev(v)
     if not K.is_list(v) or not all(isinstance(c, str) for c in v.args):
@@ -248,7 +256,7 @@ def aliases():
 def packages():
     v = _own("$Packages", None)
     if v is None:
-        return ["System`", "Global`"]
+        return ["System`", MIKOSHI_CONTEXT, "Global`"]
     return [c for c in v.args if isinstance(c, str)]
 
 
@@ -275,6 +283,8 @@ def full_name(name):
     """Full name of an internal symbol name (bare names are in System` or Global`)."""
     if "`" in name:
         return name
+    if name in MIKOSHI_NAMES:
+        return MIKOSHI_CONTEXT + name
     return ("System`" if is_system(name) else "Global`") + name
 
 
@@ -286,7 +296,7 @@ def _short(full):
 def _internal(full):
     """Internal name for a full symbol name: System` and Global` symbols are bare."""
     c, s = _short(full)
-    if c in ("Global`", "System`"):
+    if c in ("Global`", "System`") or (c == MIKOSHI_CONTEXT and s in MIKOSHI_NAMES):
         return s
     return full
 
@@ -296,7 +306,9 @@ def _exists_in(ctx, short):
     if ctx == "System`":
         return is_system(short)
     if ctx == "Global`":
-        return short in d["globals"] or short in _defined_bare()
+        return short not in MIKOSHI_NAMES and (short in d["globals"] or short in _defined_bare())
+    if ctx == MIKOSHI_CONTEXT and short in MIKOSHI_NAMES:
+        return True
     return (ctx + short) in d["symbols"]
 
 
@@ -336,7 +348,9 @@ def resolve_name(name, create=True):
     else:
         for c in context_path() + [cur_context()]:
             if _exists_in(c, name):
-                return name if c in ("System`", "Global`") else c + name
+                return _internal(c + name)
+        if name in MIKOSHI_NAMES:               # Mikoshi` names stay visible when a package replaces the path
+            return name
         ctx = cur_context()
         full = ctx + name
         if create:
@@ -353,7 +367,7 @@ def _register(full):
     d = _ctxdata()
     c, s = _short(full)
     d["removed"].discard(_internal(full))
-    if c == "System`":
+    if c == "System`" or (c == MIKOSHI_CONTEXT and s in MIKOSHI_NAMES):
         return
     if c == "Global`":
         d["globals"].add(s)
@@ -405,7 +419,7 @@ def post_parse(expr):
     d = _ctxdata()
     if _default_contexts() and not any("`" in n for n in names):
         sysn = system_names()
-        new = {n for n in names if n not in sysn}
+        new = {n for n in names if n not in sysn and n not in MIKOSHI_NAMES}
         d["globals"] |= new
         if d["removed"]:
             d["removed"] -= new
@@ -426,7 +440,8 @@ def _install_parse_hook():
 def all_symbols():
     """Full names of every symbol that exists (System` names included)."""
     d = _ctxdata()
-    out = {"System`" + n for n in system_names()}
+    # internal heads registered with a context (Compile`...) are already full names
+    out = {n if "`" in n else "System`" + n for n in system_names()} | {MIKOSHI_CONTEXT + n for n in MIKOSHI_NAMES}
     out |= {"Global`" + n for n in (d["globals"] | _defined_bare()) if not is_system(n)}
     out |= {n for n in d["symbols"]}
     for k in list(st().own) + list(st().down) + list(st().attrs):
@@ -579,7 +594,8 @@ def _ctx_of_name(name):
 
 
 @held("Context", attrs={"HoldFirst"}, notes="Context[] gives $Context; Context[symbol] and Context[\"name\"] the "
-      "context of a symbol (System` for built-ins, Global` for unqualified user symbols); a name that does not "
+      "context of a symbol (System` for built-ins, Mikoshi` for MikoshiLang's own symbols such as TypeSignature "
+      "and Verify, Global` for unqualified user symbols); a name that does not "
       "exist raises")
 def _h_context(a, ev_, expr):
     _need(a, 0, "Context", 1)
@@ -755,15 +771,26 @@ _CONTINUES = {"PLUS", "MINUS", "TIMES", "DIVIDE", "POWER", "SET", "SETDELAYED", 
               "RIGHTCOMPOSITION", "SPAN"}
 
 
+class StopSource(Exception):
+    """Raised by an expression to end the reading of the current file (X01: PackageInitialize[ctx, None],
+    which evaluates the rest of its file itself); value is the result Get returns."""
+    def __init__(self, value=None):
+        super().__init__("StopSource")
+        self.value = NULL if value is None else value
+
+
 def run_source(text):
     """Parse and evaluate text one top-level expression at a time (as Get does); the last result."""
     from ..parser import parse
     result = NULL
-    for chunk in split_statements(text):
-        e = parse(chunk)
-        if e is None:
-            continue
-        result = E.evaluate(e)
+    try:
+        for chunk in split_statements(text):
+            e = parse(chunk)
+            if e is None:
+                continue
+            result = E.evaluate(e)
+    except StopSource as stop:
+        return stop.value
     return result
 
 
@@ -902,9 +929,9 @@ def _getter(name, default):
 
 
 _getter("$Context", "Global`")
-_getter("$ContextPath", lambda: L("System`", "Global`"))
+_getter("$ContextPath", lambda: L("System`", MIKOSHI_CONTEXT, "Global`"))
 _getter("$ContextAliases", lambda: Expr("Association"))
-_getter("$Packages", lambda: L("System`", "Global`"))
+_getter("$Packages", lambda: L("System`", MIKOSHI_CONTEXT, "Global`"))
 _getter("$Line", 1)
 _getter("$HistoryLength", lambda: Symbol("Infinity"))
 _getter("$RecursionLimit", E._MAX_DEPTH)
@@ -979,7 +1006,8 @@ for _n, _note in [
         ("$Context", "current context (default \"Global`\"); set by Begin, BeginPackage, End, EndPackage; "
                      "assignable (validated); Block localises it"),
         ("$ContextPath", "contexts searched (before $Context) when a name is parsed; default {\"System`\", "
-                         "\"Global`\"}; modified by BeginPackage, EndPackage, Needs, DeclarePackage"),
+                         "\"Mikoshi`\", \"Global`\"} (Mikoshi` holds MikoshiLang's own symbols such as TypeSignature "
+                         "and Verify, which stay visible inside packages); modified by BeginPackage, EndPackage, Needs, DeclarePackage"),
         ("$ContextAliases", "association \"alias`\" -> \"context`\" used when parsing qualified names; "
                             "$ContextAliases[\"a`\"] = \"ctx`\" and =. update it; Needs[ctx -> alias] adds one"),
         ("$Packages", "contexts of loaded packages (BeginPackage adds; Needs consults it)"),
@@ -3042,13 +3070,17 @@ def _trace_parse(rest, fname):
         if isinstance(form, Symbol) and (st().down.get(form.name) or
                                          any(K._def_key(l) == form.name for l, _ in st().exact.values())):
             form = Expr("Alternatives", form, Expr(form.name, Expr("BlankNullSequence")))
-    if "TraceOriginal" in opts and opts["TraceOriginal"] is not False:
-        raise NotImplementedError(f"{fname}: TraceOriginal -> True is not supported")
+    if "TraceOriginal" in opts:
+        to = opts["TraceOriginal"]
+        if not (to is True or to is False or is_sym(to, "Automatic")):
+            raise ValueError(f"{fname}: TraceOriginal must be True, False or Automatic")
     return form, opts
 
 
 def _traced_chain(e, form, opts):
-    chain, r = E.trace_evaluation(e)
+    to = opts.get("TraceOriginal", False)
+    chain, r = E.trace_evaluation(e, original=(True if to is True else ("Automatic" if is_sym(to, "Automatic")
+                                                                        else False)))
     if "TraceOff" in opts:
         chain = _trace_off(chain, opts["TraceOff"])
     if "TraceOn" in opts:
@@ -3175,6 +3207,8 @@ def _hval(name):
 
 # Optional hook (text, parse) -> expr used by main_loop to parse each input (W29: $Echo, $SyntaxHandler).
 INPUT_HOOK = None
+# Calls f(n, history) at the end of main-loop line n (X01: MessageList[n] and the $MessageList reset).
+LINE_END_HOOKS = []
 
 
 def main_loop(source, whole=True):
@@ -3210,6 +3244,8 @@ def main_loop(source, whole=True):
             h[n]["out"] = value
         finally:
             E._STACK.reset(tok)
+            for hook in LINE_END_HOOKS:
+                hook(n, h)
             if _line() == n:
                 st().own["$Line"] = n + 1
         hl = st().own.get("$HistoryLength")
@@ -3601,24 +3637,12 @@ SKIPPED = {
     "IncludeDefinitions": "Wolfram Cloud deployment option",
     "PartProtection": "Wolfram Cloud (CloudExpression) option",
     "Anonymous": "Wolfram Cloud (permissions) setting",
-    "InertEvaluate": "compiled-code (FunctionCompile) construct",
-    "InertExpression": "compiled-code (FunctionCompile) construct",
-    "DownValuesFunction": "compiled-code (FunctionCompile) construct",
-    "RuntimeAttributes": "Compile option (compiler not part of this batch)",
-    "RuntimeOptions": "Compile option (compiler not part of this batch)",
     "InitializationObject": "persistence framework (PersistenceLocation) not available",
     "InitializationObjects": "persistence framework (PersistenceLocation) not available",
     "InitializationValue": "persistence framework (PersistenceLocation) not available",
     "Initialize": "persistence framework (PersistenceLocation) not available",
     "$Initialization": "persistence/kernel start-up file settings",
     "$PreInitialization": "persistence/kernel start-up file settings",
-    "Symmetrize": "needs SymmetrizedArray and Symmetric/Antisymmetric symmetry objects (other batches)",
-    "AbsoluteOptions": "needs the graphics option catalogue (Graphics batch)",
-    "PackageExported": "Structured Package Format (PackageScope/PackageExport files)",
-    "PackageImport": "Structured Package Format (PackageScope/PackageExport files)",
-    "PackageScoped": "Structured Package Format (PackageScope/PackageExport files)",
-    "PackageInitialize": "Structured Package Format (PackageScope/PackageExport files)",
-    "TraceOriginal": "MikoshiLang's trace records only forms that change, so the original forms cannot be tested",
 }
 
 

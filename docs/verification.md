@@ -13,9 +13,10 @@ produced it. There are three outcomes, labelled distinctly so a check is never o
 | `Certified[value, info]` | An exact certificate was checked with exact arithmetic. |
 | `Checked[value, info]` | The check passed, but it rests on symbolic simplification or on numerical sampling. This is strong evidence, not a proof. `info["Evidence"]` says which. |
 | `Unchecked[value, reason]` | No checker applies, or the check was inconclusive (too few points where the expression is defined, symbolic parameters in a definite integral, ...). |
+| `Failed[value, info]` | The check failed: the value is wrong. `info` is `<|"Head" -> h, "Reason" -> text|>`. |
 
-A failed check raises `ArithmeticError("Verify: Head result failed verification (...)")`, which `Check[...]`
-catches. Errors raised by the computation itself propagate unchanged.
+A failed check is Verify's *result*, so it is returned, not raised (CONVENTIONS §3). Errors raised by the
+computation itself (bad arguments, a function's own self-check) propagate unchanged.
 
 | Head | Method | Best level |
 |---|---|---|
@@ -43,6 +44,14 @@ Verify[Integrate[Sin[x]^2, x]]       (* Checked[x/2 - Cos[x] Sin[x]/2, <|"Method
 Verify[Sort[{3, 1, 2}]]              (* Unchecked[{1, 2, 3}, "no checker for Sort"] *)
 ```
 
+## Context
+
+`TypeSignature`, `TypeMatchQ`, `TypeCheck`, `Verify`, `Certified`, `Checked`, `Unchecked` and `Failed` are
+MikoshiLang extensions, not Wolfram symbols, so they live in the `Mikoshi`` context:
+`Context[Verify]` is `"Mikoshi`"`, and `Mikoshi`Verify[...]` is the full name. `Mikoshi`` is on the default
+`$ContextPath` (`{"System`", "Mikoshi`", "Global`"}`), so the short names work everywhere, including inside
+`BeginPackage`. They are protected, like `System`` symbols.
+
 ## Executable Check: lines
 
 `python scripts/verify_library.py` reads each head's `Check:` sentence and runs the methods it names:
@@ -51,7 +60,7 @@ Verify[Sort[{3, 1, 2}]]              (* Unchecked[{1, 2, 3}, "no checker for Sor
 |---|---|
 | `reference` | the head's differential cases in `tests/library` (each module's cases run in order, because some set up state for later ones) |
 | `exact` | every case with exact input gives a result without floats |
-| `self-check` | the implementation contains its verification step (`ArithmeticError`) |
+| `self-check` | the implementation contains its verification step (`ArithmeticError`), and one real (non-error) example of the head runs cleanly through it |
 | `numeric cross-check` | the exact result evaluated to 30 digits matches the head evaluated on 30-digit input |
 | `delegated` | the named routine (`delegated (hashlib.scrypt)`) is importable |
 
@@ -80,8 +89,8 @@ Caveats:
 * `exact` is vacuous for a head whose cases are all inexact or expect errors.
 * Test modules whose cases only run inside pytest fixtures (a temporary working directory, local servers,
   per-test isolation: `test_wolfram_w27`, `w29`, `w30`) are left out of the harness; their heads are `not
-  exercised` there, and their cases still run in the test suite.
-* `self-check` only confirms the verification code exists. Its execution is covered by the head's cases.
+  exercised` there (so is a `self-check` head whose only real examples are in those modules), and their cases
+  still run in the test suite.
 * Most heads predate the `Check:` convention, so they are reported as `no check stated` (with their reference
   cases, in `--all` mode) until their notes gain the sentence.
 
