@@ -2893,7 +2893,7 @@ def _edge_costs(gr, fname):
           "demands (< 0) in VertexList order; a final \"CostValue\" (default) or \"FlowValue\" property; other "
           "properties raise NotImplementedError. Costs from EdgeCost (default 1), capacities from EdgeCapacity "
           "(default Infinity); undirected edges carry flow either way; successive shortest paths, exact for exact "
-          "data; an unbounded maximum flow or infeasible demands raise ValueError. Check: self-check (tests: unit "
+          "data; an unbounded maximum flow or infeasible demands raise ValueError. Check: reference (tests: unit "
           "costs give the shortest-path distance times d; LP duality on a small network).")
 def _mcflow(g: Expr, *args: Expr) -> Expr:
     fname = "FindMinimumCostFlow"
@@ -3177,7 +3177,7 @@ def _canonical_labelling(gr, fname):
           "(colour refinement plus individualisation, branches pruned by discovered automorphisms; limit 2*10^5 "
           "leaves), edges sorted; isomorphic graphs give identical results, direction-aware, self-loops allowed, "
           "multigraphs and mixed graphs raise NotImplementedError; options are dropped. Vertex numbering differs from "
-          "Wolfram's canonical form. Check: self-check (tests: relabelled copies give the same result, "
+          "Wolfram's canonical form. Check: reference (tests: relabelled copies give the same result, "
           "non-isomorphic graphs with equal degree sequences differ, IsomorphicGraphQ[g, CanonicalGraph[g]]).")
 def _canon(g: Expr) -> Expr:
     gr = _sym_graph(g, "CanonicalGraph")
@@ -4028,7 +4028,7 @@ def _k_edge_subgraphs(gr, k):
           "documentation states both, so when the two differ NotImplementedError is raised. Components are listed "
           "largest first (ties by VertexList position), vertices in VertexList order; Wolfram's own ordering is not "
           "documented and may differ. Pattern selectors raise NotImplementedError; k < 1 raises ValueError. "
-          "Check: self-check (both definitions must agree) and reference (Wolfram documentation example "
+          "Both definitions must agree at run time. Check: reference (Wolfram documentation example "
           "{1 -> 2, 1 -> 5, 2 -> 3, 3 -> 4, 4 -> 5, 6 -> 3, 4 -> 6} with k = 1; networkx k_edge_subgraphs in tests).")
 def _kecc(g: Expr, k: PosInteger, *rest: ListOf[Expr]) -> ListOf[ListOf[Expr]]:
     fname = "KEdgeConnectedComponents"

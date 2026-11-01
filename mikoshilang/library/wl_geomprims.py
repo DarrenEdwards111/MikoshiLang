@@ -2291,7 +2291,8 @@ def _vertices_of(x, f):
           "(circumcircle in 2-D); Circumsphere[poly] for a Polygon/Triangle/Rectangle or polyhedron uses its "
           "vertices, which must lie on a common sphere. Wrong point counts or degenerate (affinely dependent) points "
           "raise ValueError, as do vertices that are not cospherical; symbolic points stay unevaluated. "
-          "Check: self-check (every vertex lies on the sphere; ValueError otherwise) and reference values.")
+          "Check: exact (every vertex is checked to lie on the sphere; points that are not cospherical raise "
+          "ValueError) and reference values.")
 def _circumsphere(points: MatrixOf[Real] | Expr) -> Expr:
     f = "Circumsphere"
     P = _vertices_of(points, f)
@@ -2316,7 +2317,9 @@ def _facet_measure(F):
           "Insphere[poly] for a convex Polygon/Triangle/Rectangle in 2-D or a convex polyhedron tangential to all "
           "edges/faces gives the sphere tangent to them; a polygon or polyhedron without an insphere raises "
           "ValueError, a non-convex one NotImplementedError; degenerate simplices raise ValueError; symbolic points "
-          "stay unevaluated. Check: self-check (the centre is at distance r from every facet; ArithmeticError).")
+          "stay unevaluated. Check: exact (closed-form incentre for simplices; for polygons and polyhedra the centre's "
+          "distance r to every facet is checked, and ValueError is raised when there is no such sphere) and "
+          "reference values in tests.")
 def _insphere(points: MatrixOf[Real] | Expr) -> Expr:
     f = "Insphere"
     if isinstance(points, Expr) and isinstance(points.head, str) and points.head in _POLYHEDRON_HEADS + _POLYGON_HEADS \
@@ -2405,7 +2408,7 @@ def _facet_planes(poly, f):
           "CircleThrough[pts, q, r] gives Circle[q, r] after checking the points lie on it. Fewer than three points "
           "without a centre do not determine a circle (ValueError); collinear points ValueError; non-2-D points "
           "ValueError; symbolic points stay unevaluated (GeometricScene constraint in Wolfram). "
-          "Check: self-check (every point lies on the returned circle).")
+          "Check: reference (tests: every point lies on the returned circle).")
 def _circle_through(points: MatrixOf[Real], *rest: ListOf[Real] | Real) -> Expr:
     f = "CircleThrough"
     _nargs((points,) + rest, 1, 3, f)
@@ -2437,7 +2440,7 @@ def _circle_through(points: MatrixOf[Real], *rest: ListOf[Real] | Real) -> Expr:
           "concyclic, not in arc order, or fewer than three raise ValueError; the centre/radius forms "
           "CircularArcThrough[pts, q(, r)] raise NotImplementedError; symbolic points stay unevaluated. "
           "Deviation: Wolfram may choose a different but equivalent angle branch. "
-          "Check: self-check (all points lie on the circle within the angle range).")
+          "Check: reference (tests: all points lie on the circle within the angle range).")
 def _circular_arc_through(points: MatrixOf[Real], *rest: ListOf[Real] | Real) -> Expr:
     f = "CircularArcThrough"
     if rest:

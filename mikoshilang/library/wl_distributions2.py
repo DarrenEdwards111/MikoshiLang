@@ -5115,7 +5115,8 @@ _builder("ProbabilityDistribution", _prob_dist,
          "ProbabilityDistribution[pdf, {x, xmin, xmax}] (continuous) and [pdf, {x, xmin, xmax, 1}] (discrete), with "
          "Method -> \"Normalize\": PDF, CDF, moments, Expectation, RandomVariate; a numeric density whose total mass "
          "is not 1 raises ValueError (self-check); {\"CDF\" | \"SF\" | \"HF\", f} and multivariate forms raise "
-         "NotImplementedError. Check: self-check (normalisation verified exactly).")
+         "NotImplementedError. Check: reference (the density's normalisation is checked exactly on input; Wolfram "
+         "documentation examples in tests).")
 _builder("FailureDistribution", _reliability,
          "FailureDistribution[bexpr, {{x1, dist1}, ...}] (fault tree: the top event occurs when bexpr is True): "
          "survival by exact enumeration of the Boolean structure function over independent components, PDF, CDF, "
@@ -6480,8 +6481,8 @@ for _h in ("CircularUnitaryMatrixDistribution", "CircularRealMatrixDistribution"
     _multi(_h, CircularEnsemble,
            f"{_h}[n]: Haar-measure matrix ensemble (CUE: unitary; CRE: orthogonal; COE: U^T U; CQE: unitary "
            "symplectic, x^T J x = J; CSE: self-dual J U^T J^T U, 2n x 2n); RandomVariate only (PDF raises "
-           "NotImplementedError: no density in matrix entries). Check: self-check of the defining group property "
-           "(unitarity, symmetry, symplecticity) in tests.")
+           "NotImplementedError: no density in matrix entries). Check: reference (the defining group "
+           "property: unitarity, symmetry, symplecticity, is tested).")
 _multi("MatrixPropertyDistribution", MatrixProperty,
        "MatrixPropertyDistribution[expr, x ~ mdist] (and lists of matrix variables): RandomVariate evaluates expr on "
        "a sampled matrix; other properties raise NotImplementedError. Check: reference identities (e.g. Tr of a GOE "
