@@ -523,6 +523,13 @@ NX_CASES = [
     ("GraphValuePlot[" + G6 + ", {1, 2, 3, 4, 5, 6, 7}, EdgeValueRange -> 3]", Raises(ValueError)),
 ]
 
+# Rendering paths need matplotlib: without it they raise the documented "requires matplotlib" NotImplementedError.
+_MPL_CASES = {"Head[Rasterize[GraphPlot[" + G6 + "]]]", "FullGraphics[Graphics[Disk[], Axes -> True]]",
+              "FullGraphics[Graphics[Circle[], Frame -> True]]", "FullGraphics[Graphics[Circle[], GridLines -> Automatic]]",
+              "FullGraphics[Graphics[Disk[], PlotLabel -> \"t\"]]", "FullGraphics[Graphics[Disk[]]]"}
+if not HAVE_MPL:
+    CASES = [(c[0], Raises(NotImplementedError)) + tuple(c[2:]) if c[0] in _MPL_CASES else c for c in CASES]
+
 ALL_CASES = CASES + NX_CASES
 
 
