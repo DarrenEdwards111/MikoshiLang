@@ -1,6 +1,8 @@
 """Linear algebra.  Exact matrices are handled exactly with SymPy; matrices
 containing machine numbers use NumPy/SciPy where noted.  Output conventions
 follow the Wolfram Language."""
+
+from __future__ import annotations
 import sympy as sp
 
 from ..expr import Expr, Symbol
@@ -56,7 +58,7 @@ def _npmat(m):
 @fn("IdentityMatrix", area=AREA, status="fixed",
     notes="IdentityMatrix[n] and IdentityMatrix[{m, n}]; non-integer sizes raise (legacy truncated)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _identity(n):
+def _identity(n: Expr) -> Expr:
     if is_list(n):
         r, c = [pos_int(v, "IdentityMatrix", "size") for v in list_arg(n, "IdentityMatrix")]
         return mat_out(sp.eye(r, c))
@@ -66,7 +68,7 @@ def _identity(n):
 @fn("ZeroMatrix", area=AREA, status="fixed", notes="m x n zero matrix (MikoshiLang); ZeroMatrix[n] is n x n; " 
     "non-integer sizes raise"
     ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _zeros(m, n=None):
+def _zeros(m: PosInteger, n: Expr = None) -> Expr:
     r = pos_int(m, "ZeroMatrix", "size")
     c = r if n is None else pos_int(n, "ZeroMatrix", "size")
     return mat_out(sp.zeros(r, c))
@@ -75,7 +77,7 @@ def _zeros(m, n=None):
 @fn("DiagonalMatrix", area=AREA, status="fixed", notes="DiagonalMatrix[list] and DiagonalMatrix[list, k] (k-th diagonal)"
                                                        ". Check: exact (exact input gives exact results), reference "
                                                        "(differential cases in tests/library).")
-def _diag(v, k=0):
+def _diag(v: ListOf[Expr], k: Integer = 0) -> Expr:
     items = list_arg(v, "DiagonalMatrix", min_len=1)
     off = int_arg(k, "DiagonalMatrix", "offset")
     n = len(items) + abs(off)
@@ -89,7 +91,7 @@ def _diag(v, k=0):
 def _pred(fname, test):
     @fn(fname, area=AREA, status="fixed",
         notes="False for non-matrices (legacy raised); exact test on the entries")
-    def impl(x):
+    def impl(x: Expr) -> Boolean:
         if not _is_matrix(x):
             return False
         m = matrix_arg(x, fname)
@@ -110,7 +112,7 @@ _pred("LowerTriangularMatrixQ", lambda m: all(m[i, j] == 0 for i in range(m.rows
     notes="legacy returned Det[x I - m]; Wolfram CharacteristicPolynomial[m, x] = Det[m - x I] "
           "(differs by (-1)^n)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _charpoly(m, x):
+def _charpoly(m: MatrixOf[Expr], x: Var) -> Expr:
     M, _ = _mat(m, "CharacteristicPolynomial", square=True)
     xv = variable(x, "CharacteristicPolynomial")
     return R(sp.expand((M - xv * sp.eye(M.rows)).det()))
@@ -134,7 +136,7 @@ def _eig_sorted(vals):
     notes="eigenvalues with multiplicity in Wolfram order (decreasing absolute value; legacy returned SymPy's "
           "dict order)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _eigenvalues(m):
+def _eigenvalues(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M, inexact = _mat(m, "Eigenvalues", square=True)
     if inexact:
         np = _np()
@@ -159,7 +161,7 @@ def _scale_last(v):
     notes="ordered like Eigenvalues, exact vectors scaled so the last non-zero entry is 1, zero vectors pad "
           "defective matrices (Wolfram); machine matrices give unit vectors"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _eigenvectors(m):
+def _eigenvectors(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M, inexact = _mat(m, "Eigenvectors", square=True)
     n = M.rows
     if inexact:
@@ -185,7 +187,7 @@ def _eigenvectors(m):
     notes="legacy returned the lower factor; Wolfram returns the upper triangular u with "
           "ConjugateTranspose[u].u = m; non-Hermitian or non-positive-definite matrices raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _cholesky(m):
+def _cholesky(m: MatrixOf[Expr]) -> Expr:
     M, inexact = _mat(m, "CholeskyDecomposition", square=True)
     if M != M.H:
         raise ValueError("CholeskyDecomposition: matrix must be Hermitian")
@@ -200,7 +202,7 @@ def _cholesky(m):
           "lu holds L (unit lower, below the diagonal) and U, m[[p]] == L.U, c = 0 for exact matrices and the "
           "infinity-norm condition number for machine matrices"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _lu(m):
+def _lu(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M, inexact = _mat(m, "LUDecomposition", square=True)
     Lm, U, perm = M.LUdecomposition()
     p = list(range(1, M.rows + 1))
@@ -222,7 +224,7 @@ def _lu(m):
     notes="legacy returned {Q, R} with m = Q.R; Wolfram returns {q, r} with m = ConjugateTranspose[q].r "
           "(q has orthonormal rows)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _qr(m):
+def _qr(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M, inexact = _mat(m, "QRDecomposition")
     Q, Rm = M.QRdecomposition()
     return L(_out(Q.H.applyfunc(sp.simplify), inexact), _out(Rm.applyfunc(sp.simplify), inexact))
@@ -250,9 +252,16 @@ def _svd(m, fname):
 
 SVDN = ("Wolfram {u, s, v} with m = u.s.ConjugateTranspose[v] and singular values in decreasing order "
         "(legacy did not order them); machine matrices give the full SVD")
-fn("SingularValueDecomposition", area=AREA, status="fixed", notes=SVDN)(lambda m: _svd(m, "SingularValueDecomposition"))
-fn("SVD", area=AREA, status="fixed", notes="MikoshiLang alias of SingularValueDecomposition; " + SVDN)(
-    lambda m: _svd(m, "SVD"))
+
+
+@fn("SingularValueDecomposition", area=AREA, status="fixed", notes=SVDN)
+def _svd_full(m: MatrixOf[Expr]) -> ListOf[Expr]:
+    return _svd(m, "SingularValueDecomposition")
+
+
+@fn("SVD", area=AREA, status="fixed", notes="MikoshiLang alias of SingularValueDecomposition; " + SVDN)
+def _svd_alias(m: MatrixOf[Expr]) -> ListOf[Expr]:
+    return _svd(m, "SVD")
 
 
 def _spectral(M):
@@ -268,7 +277,7 @@ def _spectral(M):
           "Wolfram (legacy flattened the matrix, giving the Frobenius norm), Norm[m, 1], Norm[m, Infinity], "
           "Norm[m, \"Frobenius\"]"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _norm(x, p=2):
+def _norm(x: Expr, p: Expr = 2) -> Expr:
     if _is_matrix(x):
         M, inexact = _mat(x, "Norm")
         if p == 2:
@@ -299,7 +308,7 @@ def _norm(x, p=2):
 @fn("FrobeniusNorm", area=AREA, status="fixed", notes="exact Frobenius norm (legacy returned floats)"
                                                       ". Check: exact (exact input gives exact results), reference "
                                                       "(differential cases in tests/library).")
-def _frob(m):
+def _frob(m: Expr) -> Expr:
     M, _ = _mat(m, "FrobeniusNorm")
     return numeric_out(sp.sqrt(sp.Add(*(sp.Abs(v) ** 2 for v in M))), m)
 
@@ -307,7 +316,7 @@ def _frob(m):
 @fn("SpectralNorm", area=AREA, status="fixed", notes="largest singular value, exact for exact matrices "
     "(legacy always returned a float via NumPy)"
     ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _specnorm(m):
+def _specnorm(m: Expr) -> Expr:
     M, _ = _mat(m, "SpectralNorm")
     return numeric_out(_spectral(M), m)
 
@@ -316,7 +325,7 @@ def _specnorm(m):
     notes="2-norm condition number sigma_max/sigma_min (MikoshiLang); exact for exact matrices, Infinity for "
           "singular matrices (legacy returned a huge float or an Error expression without NumPy)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _cond(m):
+def _cond(m: MatrixOf[Expr]) -> Expr:
     M, inexact = _mat(m, "ConditionNumber", square=True)
     if inexact:
         np = _np()
@@ -331,7 +340,7 @@ def _cond(m):
     notes="v / Norm[v]; the zero vector is returned unchanged as in Wolfram (legacy divided by zero); "
           "Normalize[z] for a number gives z/Abs[z]"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _normalize(v):
+def _normalize(v: Expr) -> Expr:
     if not is_list(v):
         z = sym(v, "Normalize")
         return numeric_out(0 if z == 0 else z / sp.Abs(z), v)
@@ -345,7 +354,7 @@ def _normalize(v):
 @fn("VectorAngle", area=AREA, status="fixed",
     notes="ArcCos[u.Conjugate[v]/(|u| |v|)]; zero vectors and different lengths raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _vangle(u, v):
+def _vangle(u: Expr, v: Expr) -> Expr:
     a, b = _vec(u, "VectorAngle"), _vec(v, "VectorAngle")
     if len(a) != len(b):
         raise ValueError("VectorAngle: vectors must have the same length")
@@ -363,7 +372,7 @@ def _cross3(a, b):
 
 def _cross(fname, notes):
     @fn(fname, area=AREA, status="fixed", notes=notes)
-    def impl(u, v=None):
+    def impl(u: Expr, v: Expr = None) -> ListOf[Expr]:
         if v is None:
             a = _vec(u, fname, 2)
             return L(numeric_out(-a[1], u), numeric_out(a[0], u))
@@ -380,7 +389,7 @@ _cross("Cross3D", "alias of Cross; legacy converted to floats and returned an Er
 @fn("ScalarTripleProduct", area=AREA, status="fixed", notes="a.(b x c), exact (legacy converted to floats)"
                                                             ". Check: exact (exact input gives exact results), "
                                                             "reference (differential cases in tests/library).")
-def _triple(a, b, c):
+def _triple(a: Expr, b: Expr, c: Expr) -> Expr:
     x, y, z = _vec(a, "ScalarTripleProduct", 3), _vec(b, "ScalarTripleProduct", 3), _vec(c, "ScalarTripleProduct", 3)
     return numeric_out(sp.expand(sp.Add(*(p * q for p, q in zip(x, _cross3(y, z))))), a, b, c)
 
@@ -394,7 +403,7 @@ def _as_matrix_or_vector(x, fname):
 @fn("KroneckerProduct", area=AREA, status="fixed",
     notes="variadic Kronecker product of matrices and/or vectors (vectors give vectors, as Wolfram)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _kron(*ms):
+def _kron(*ms: Expr) -> ListOf[Expr]:
     if not ms:
         raise ValueError("KroneckerProduct needs at least one argument")
     mats = [_as_matrix_or_vector(m, "KroneckerProduct") for m in ms]
@@ -410,7 +419,7 @@ def _kron(*ms):
     notes="solves m.x == b for a vector or matrix b; underdetermined systems give one particular solution "
           "(free parameters 0, as Wolfram); inconsistent systems raise"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _linsolve(m, b):
+def _linsolve(m: MatrixOf[Expr], b: Expr) -> Expr:
     M, inexact = _mat(m, "LinearSolve")
     if _is_matrix(b):
         B = matrix_arg(b, "LinearSolve")
@@ -437,7 +446,7 @@ def _linsolve(m, b):
 @fn("MatrixPower", area=AREA, status="fixed",
     notes="integer powers (negative powers of singular matrices raise); symbolic n via diagonalisation"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _mpow(m, n):
+def _mpow(m: MatrixOf[Expr], n: Expr) -> Expr:
     M, inexact = _mat(m, "MatrixPower", square=True)
     k = sym(n, "MatrixPower")
     if k.is_Integer and k < 0 and M.det() == 0:
@@ -449,7 +458,7 @@ def _mpow(m, n):
 
 def _mfunc(fname, f, scipy_name, notes):
     @fn(fname, area=AREA, status="fixed", notes=notes)
-    def impl(m):
+    def impl(m: MatrixOf[Expr]) -> Expr:
         M, inexact = _mat(m, fname, square=True)
         if inexact:
             try:
@@ -497,15 +506,17 @@ def _rank(m, fname):
 
 fn("MatrixRank", area=AREA, status="verified", notes="exact rank; machine matrices use an SVD tolerance")(
     lambda m: _rank(m, "MatrixRank"))
-fn("Rank", area=AREA, status="verified", notes="MikoshiLang alias of MatrixRank"
-                                               ". Check: exact (exact input gives exact results), reference "
-                                               "(differential cases in tests/library).")(lambda m: _rank(m, "Rank"))
+@fn("Rank", area=AREA, status="verified", notes="MikoshiLang alias of MatrixRank"
+                                                ". Check: exact (exact input gives exact results), reference "
+                                                "(differential cases in tests/library).")
+def _rank_alias(m: MatrixOf[Expr]) -> Integer:
+    return _rank(m, "Rank")
 
 
 @fn("MatrixNullity", area=AREA, status="verified", notes="columns - rank (MikoshiLang)"
                                                          ". Check: exact (exact input gives exact results), "
                                                          "reference (differential cases in tests/library).")
-def _nullity(m):
+def _nullity(m: MatrixOf[Expr]) -> Integer:
     M, _ = _mat(m, "MatrixNullity")
     return M.cols - _rank(m, "MatrixNullity")
 
@@ -527,7 +538,7 @@ def _rref(m):
 @fn("RowSpace", area=AREA, status="verified", notes="basis of the row space (non-zero rows of the RREF; MikoshiLang)"
                                                     ". Check: exact (exact input gives exact results), reference "
                                                     "(differential cases in tests/library).")
-def _rowspace(m):
+def _rowspace(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M, _ = _mat(m, "RowSpace")
     return L(*(L(*(R(x) for x in v)) for v in M.rowspace()))
 
@@ -535,7 +546,7 @@ def _rowspace(m):
 @fn("ColumnSpace", area=AREA, status="verified", notes="basis of the column space (pivot columns; MikoshiLang)"
                                                        ". Check: exact (exact input gives exact results), reference "
                                                        "(differential cases in tests/library).")
-def _colspace(m):
+def _colspace(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M, _ = _mat(m, "ColumnSpace")
     return L(*(L(*(R(x) for x in v)) for v in M.columnspace()))
 
@@ -543,7 +554,7 @@ def _colspace(m):
 @fn("PseudoInverse", area=AREA, status="verified", notes="Moore-Penrose pseudo-inverse (exact; NumPy for machine matrices)"
                                                          ". Check: exact (exact input gives exact results), "
                                                          "reference (differential cases in tests/library).")
-def _pinv(m):
+def _pinv(m: MatrixOf[Expr]) -> Expr:
     M, inexact = _mat(m, "PseudoInverse")
     if inexact:
         np = _np()
@@ -554,7 +565,7 @@ def _pinv(m):
 @fn("JordanForm", area=AREA, status="verified",
     notes="{s, j} with m = s.j.Inverse[s] (Wolfram JordanDecomposition convention)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _jordan(m):
+def _jordan(m: MatrixOf[Expr]) -> ListOf[Expr]:
     M, inexact = _mat(m, "JordanForm", square=True)
     if inexact:
         raise NotImplementedError("JordanForm is numerically unstable for machine-precision matrices; use exact input")
@@ -576,7 +587,7 @@ def _scipy_decomp(m, fname):
 @fn("HessenbergDecomposition", area=AREA, status="fixed",
     notes="Wolfram {p, h} with m = p.h.ConjugateTranspose[p] (legacy returned {H -> h, Q -> q} rules); numeric"
           ". Check: reference (differential cases in tests/library).")
-def _hess(m):
+def _hess(m: MatrixOf[Expr]) -> ListOf[Expr]:
     sl, a = _scipy_decomp(m, "HessenbergDecomposition")
     h, q = sl.hessenberg(a, calc_q=True)
     return L(R(q), R(h))
@@ -586,7 +597,7 @@ def _hess(m):
     notes="Wolfram {q, t} with m = q.t.ConjugateTranspose[q] (legacy returned {T -> t, Z -> z} rules); numeric, "
           "real Schur form for real matrices"
           ". Check: reference (differential cases in tests/library).")
-def _schur(m):
+def _schur(m: MatrixOf[Expr]) -> ListOf[Expr]:
     sl, a = _scipy_decomp(m, "SchurDecomposition")
     t, z = sl.schur(a)
     return L(R(z), R(t))
@@ -627,7 +638,7 @@ def _trace(e, *form):
 @fn("Tr", area=AREA, status="promoted", notes="trace of a matrix (sum of the diagonal); Tr[list] sums a vector"
                                               ". Check: exact (exact input gives exact results), reference "
                                               "(differential cases in tests/library).")
-def _tr(m):
+def _tr(m: Expr) -> Expr:
     if _is_matrix(m):
         M = matrix_arg(m, "Tr")
         return numeric_out(sp.Add(*(M[i, i] for i in range(min(M.rows, M.cols)))), m)
@@ -637,7 +648,7 @@ def _tr(m):
 @fn("TransposeList", area=AREA, status="fixed",
     notes="transpose of a rectangular list of lists (MikoshiLang); ragged input now raises (legacy zip-truncated)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _tlist(x):
+def _tlist(x: ListOf[Expr]) -> ListOf[Expr]:
     rows = list_arg(x, "TransposeList", min_len=1)
     if not all(is_list(r) for r in rows) or len({len(r.args) for r in rows}) != 1:
         raise ValueError("TransposeList: argument must be a rectangular list of lists")

@@ -715,7 +715,7 @@ def _companion_coeffs(args, fname):
           "with dir = Right (default), Bottom (transpose), Top (-c(n-1), ..., -c0 along the first row) or Left "
           "(its transpose); TargetStructure -> \"Dense\" | \"Sparse\" accepted (dense result)"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _companionmatrix(*args: Expr) -> Expr:
+def _companionmatrix(*args: Expr) -> ListOf[Expr]:
     pos, opts = split_options(args, {"TargetStructure"}, "CompanionMatrix")
     if not pos:
         raise ValueError("CompanionMatrix needs a coefficient list or a polynomial and variable")
@@ -759,7 +759,7 @@ def _sequency(row):
           "entries +-1/Sqrt[n], rows in sequency order (Method -> \"Sequency\", default), Sylvester order "
           "(\"BitComplement\") or Paley/dyadic order (\"GrayCode\"); WorkingPrecision -> p gives numeric entries"
           + _STRUCT_NOTE)
-def _hadamardmatrix(n: Expr, *rest: Expr) -> Expr:
+def _hadamardmatrix(n: PosInteger, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, _TS | {"Method"}, "HadamardMatrix")
     if pos:
         raise ValueError("HadamardMatrix takes one size argument")
@@ -790,7 +790,7 @@ def _hadamardmatrix(n: Expr, *rest: Expr) -> Expr:
 @fn("JordanMatrix", **ADDED,
     notes="JordanMatrix[l, n] n x n Jordan block (l on the diagonal, 1 on the superdiagonal); JordanMatrix[l, n, "
           "Right] puts the ones below the diagonal (the transpose); l must be a scalar" + _STRUCT_NOTE)
-def _jordanmatrix(lam: Expr, n: Expr, *rest: Expr) -> ListOf[Expr]:
+def _jordanmatrix(lam: Expr, n: PosInteger, *rest: Expr) -> ListOf[Expr]:
     pos, opts = split_options(rest, {"TargetStructure"}, "JordanMatrix")
     if is_list(lam):
         raise ValueError("JordanMatrix: the diagonal value must be a scalar")
@@ -1487,7 +1487,7 @@ def _smithdecomposition(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
 @fn("SmithReduce", **ADDED,
     notes="the Smith normal form r of an integer or rational matrix (SmithDecomposition[m][[2]], unique)"
           + _DENSE_NOTE)
-def _smithreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
+def _smithreduce(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     return _mout(_smith(m, rest, "SmithReduce")[1])
 
 
@@ -1793,7 +1793,7 @@ def _frobeniusreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
           "then imaginary part); machine matrices must be diagonalizable and give the diagonal matrix of "
           "Eigenvalues[m] (decreasing absolute value); Wolfram's block order can differ for exact matrices"
           + _DENSE_NOTE)
-def _jordanreduce(m: MatrixOf[Expr], *rest: Expr) -> Expr:
+def _jordanreduce(m: MatrixOf[Expr], *rest: Expr) -> ListOf[Expr]:
     M, args, _ = _decomp(m, rest, "JordanReduce")
     if args:
         raise ValueError("JordanReduce called with too many arguments")
@@ -2158,7 +2158,7 @@ record("Standardized", AREA, "added",
           "data (exact numbers are evaluated numerically); the sign of each component is normalised so that the "
           "largest eigenvector component is positive, which can differ from Wolfram's sign choice; symbolic and "
           "arbitrary-precision data raise")
-def _principalcomponents(m: Expr, *rest: Expr) -> Expr:
+def _principalcomponents(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     fname = "PrincipalComponents"
     args, opts = split_options(rest, {"Method"}, fname)
     if args:
@@ -2249,7 +2249,7 @@ def _kind_float(e):
           "and \"Pauli\" give the same value, \"Det\" gives Sqrt[Det[m]] (sign not conformed, as Wolfram); a "
           "non-antisymmetric matrix raises"
           ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
-def _pfaffiandet(m: Expr, *rest: Expr) -> Expr:
+def _pfaffiandet(m: MatrixOf[Expr], *rest: Expr) -> Expr:
     fname = "PfaffianDet"
     args, opts = split_options(rest, {"Method"}, fname)
     if args:
