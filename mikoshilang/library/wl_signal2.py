@@ -2243,12 +2243,10 @@ def _psd(data: Expr, w: Expr, *rest: Expr) -> Expr:
         if len(args) != 1:
             raise ValueError(f"{fname}: PowerSpectralDensity[data, ω, sspec] takes one smoothing specification")
         sspec = args[0]
-        if is_list(sspec) and len(sspec.args) == 2 and K.is_int(sspec.args[0]):
+        if is_list(sspec) and len(sspec.args) == 2 and K.is_int(sspec.args[0]) and not is_list(sspec.args[1]):
             c, wfun = sspec.args[0], sspec.args[1]
         elif K.is_int(sspec):
             c = sspec
-        elif is_list(sspec) and sspec.args and not K.is_int(sspec.args[0]) or not is_list(sspec):
-            wfun = sspec
         else:
             wfun = sspec
         c = _int_arg(c, fname, "the cutoff") if not isinstance(c, int) else c
@@ -2263,6 +2261,8 @@ def _psd(data: Expr, w: Expr, *rest: Expr) -> Expr:
             if len(wfun.args) != c + 1:
                 raise ValueError(f"{fname}: a window list must have c + 1 = {c + 1} values w_0, …, w_c")
             wts = [sp.sympify(S(t)) for t in wfun.args]
+            if not all(isinstance(t, sp.Basic) and t.is_number for t in wts):
+                raise ValueError(f"{fname}: a window list must contain numbers")
         else:
             from .wl_signal import _WINDOWS
             wts = []

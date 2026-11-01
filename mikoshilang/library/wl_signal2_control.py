@@ -857,8 +857,7 @@ def _ctw(s1, s2, rest, fname):
             else:
                 raise ValueError(f"{fname}: unknown method option {k!r}")
     mask = _window_mask(n1, n2, args[1] if len(args) > 1 else None, fname)
-    Xc, Yc = X - X.mean(axis=0), Y - Y.mean(axis=0)
-    if np.allclose(Xc, 0) or np.allclose(Yc, 0):
+    if np.allclose(X - X.mean(axis=0), 0) or np.allclose(Y - Y.mean(axis=0), 0):
         raise ValueError(f"{fname}: canonical time warping needs non-constant sequences")
     d1, d2 = X.shape[1], Y.shape[1]
     b = min(d1, d2) if keep is None else keep
@@ -884,6 +883,7 @@ def _ctw(s1, s2, rest, fname):
     for _ in range(iters + 1):
         ix = np.array([p[0] for p in path])
         iy = np.array([p[1] for p in path])
+        Xc, Yc = X - X[ix].mean(axis=0), Y - Y[iy].mean(axis=0)
         Xp, Yp = Xc[ix], Yc[iy]
         Cxx, Cyy, Cxy = Xp.T @ Xp, Yp.T @ Yp, Xp.T @ Yp
         lx = lam[0] if lam else 1e-8 * max(np.trace(Cxx) / d1, 1e-300)
@@ -923,11 +923,11 @@ def _ctw_distance(s1: Expr, s2: Expr, *rest: Expr) -> Real:
 fn("CanonicalWarpingDistance", area=AREA, status="added",
    notes="CanonicalWarpingDistance[s1, s2, init, win]: canonical time warping (Zhou & De la Torre 2009): from the "
          "initial correspondence (default: the uniform alignment of length Max[n1, n2]) alternate regularized "
-         "CCA on the aligned, mean-centred sequences (α^T C11 α = I, β^T C22 β = I, ridge λ_i = 10^-8 tr(C_ii)/d_i "
+         "CCA on the aligned sequences, centred by their means along the current alignment (α^T C11 α = I, β^T C22 β = I, ridge λ_i = 10^-8 tr(C_ii)/d_i "
          "unless Method -> {\"Lambdas\" -> {λ1, λ2}}, \"DimensionsToKeep\" default Min[d1, d2]) and squared-"
          "Euclidean dynamic time warping of the projections (steps (1,0), (0,1), (1,1); window r / {\"SlantedBand\", "
          "r} / {\"Band\", r}), until the path repeats or MaxIterations (default 20); the result is the smallest "
-         "Σ_k ||α^T (s1[[n_k]] - μ1) - β^T (s2[[m_k]] - μ2)||² met. Deviation: Wolfram's defaults are undocumented, "
+         "Σ_k ||α^T (s1[[n_k]] - μ1) - β^T (s2[[m_k]] - μ2)||² met (μ_i = means along the alignment). Deviation: Wolfram's defaults are undocumented, "
          "so numbers differ from Wolfram's; constant sequences raise ValueError; \"Parallelogram\" windows, "
          "other DistanceFunctions, \"EnergyThreshold\"/\"MatchingIntervals\" and quantities raise "
          "NotImplementedError. Check: reference (sequences related by an affine map and a time warp have distance "
