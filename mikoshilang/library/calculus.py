@@ -745,4 +745,6 @@ def _laplace_ode(eqs, y, t):
     return L(L(rule(Expr(y.name, Symbol(tv.name)), out)))
 
 
-record("Table", AREA, "kernel", "Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed")
+record("Table", AREA, "kernel", "Table is a held kernel form; the legacy Table[a, b] rule was unreachable and removed"
+                                ". Check: exact (exact input gives exact results), reference (differential cases in "
+                                "tests/library).")

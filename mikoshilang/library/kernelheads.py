@@ -57,3 +57,15 @@ BATCH1_FIXED = {
 }
 for _h, _n in BATCH1_FIXED.items():
     record(_h, "kernel", "fixed", "kernel builtin extended in batch 1: " + _n)
+
+# Check: sentences (CONVENTIONS §4) for heads registered in a loop or by a factory, whose notes are
+# built in code. Each names only methods that pass in scripts/verify_library.py.
+from .core import add_check as _add_check  # noqa: E402
+
+_add_check("exact (exact input gives exact results), reference (differential cases in tests/library).",
+          "Append", "Apply", "Cases", "Count", "DeleteCases", "Distance2D", "Drop", "First", "Flatten", "IntegerQ",
+          "Join", "Last", "Length", "ListQ", "Map", "MapAll", "MapIndexed", "MemberQ", "Most", "Part", "Position",
+          "Prepend", "PrimeQ", "Range", "ReplaceAll", "Rest", "Reverse", "Select", "Sort", "StringLength", "StringQ",
+          "Take", "Thread", "ToString", "Total", "Transpose")
+_add_check("reference (differential cases in tests/library).",
+          "AtomQ", "EvenQ", "FreeQ", "Less", "N", "Unequal")

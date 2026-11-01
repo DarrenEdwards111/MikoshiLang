@@ -595,7 +595,8 @@ def _ctx_of_name(name):
 @held("Context", attrs={"HoldFirst"}, notes="Context[] gives $Context; Context[symbol] and Context[\"name\"] the "
       "context of a symbol (System` for built-ins, Mikoshi` for MikoshiLang's own symbols such as TypeSignature "
       "and Verify, Global` for unqualified user symbols); a name that does not "
-      "exist raises")
+      "exist raises"
+      ". Check: reference (differential cases in tests/library).")
 def _h_context(a, ev_, expr):
     _need(a, 0, "Context", 1)
     if not a:
@@ -1139,7 +1140,8 @@ def _check_unlocked(name, fname):
 
 @held("Attributes", attrs={"HoldAll", "Listable"},
       notes="Attributes[f], Attributes[\"f\"], Attributes[{f, g}] (built-in Protected included, Temporary for "
-            "live Module symbols, Stub, user attributes); Attributes[f] = {...} replaces them")
+            "live Module symbols, Stub, user attributes); Attributes[f] = {...} replaces them"
+            ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _h_attributes(a, ev_, expr):
     _need(a, 1, "Attributes")
     x = a[0]
@@ -1225,7 +1227,8 @@ def _protect(a, ev_, on):
 
 
 @held("Protect", attrs={"HoldAll"}, notes="Protect[s1, s2, ...] (symbols, names or string patterns) sets the "
-      "Protected attribute (assignments then raise); returns the names whose protection changed")
+      "Protected attribute (assignments then raise); returns the names whose protection changed"
+      ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _h_protect(a, ev_, expr):
     return _protect(a, ev_, True)
 
@@ -1349,7 +1352,8 @@ def _upset(lhs, rhs, ev_, fname):
 
 @held("UpSet", attrs={"HoldFirst", "SequenceHold"},
       notes="lhs ^= rhs: rhs is evaluated and the rule is attached (as an upvalue) to every symbol that is an "
-            "argument of lhs or the head of an argument (h[x_] in f[h[x_]] attaches to h); returns rhs")
+            "argument of lhs or the head of an argument (h[x_] in f[h[x_]] attaches to h); returns rhs"
+            ". Check: reference (differential cases in tests/library).")
 def _h_upset(a, ev_, expr):
     _need(a, 2, "UpSet")
     rhs = ev_(a[1])
@@ -1358,7 +1362,8 @@ def _h_upset(a, ev_, expr):
 
 
 @held("UpSetDelayed", attrs={"HoldAll", "SequenceHold"},
-      notes="lhs ^:= rhs: like UpSet with rhs kept unevaluated until the rule is used; returns Null")
+      notes="lhs ^:= rhs: like UpSet with rhs kept unevaluated until the rule is used; returns Null"
+            ". Check: reference (differential cases in tests/library).")
 def _h_upsetdelayed(a, ev_, expr):
     _need(a, 2, "UpSetDelayed")
     _upset(a[0], a[1], ev_, "UpSetDelayed")
@@ -1402,13 +1407,15 @@ def _tagset(a, ev_, delayed, fname):
 
 @held("TagSet", attrs={"HoldAll", "SequenceHold"},
       notes="f /: lhs = rhs: attaches the rule to f, which must be the head of lhs (a DownValue or SubValue) or "
-            "an argument of lhs or an argument's head (an UpValue); otherwise TagSet::tagnf is raised")
+            "an argument of lhs or an argument's head (an UpValue); otherwise TagSet::tagnf is raised"
+            ". Check: reference (differential cases in tests/library).")
 def _h_tagset(a, ev_, expr):
     return _tagset(a, ev_, False, "TagSet")
 
 
 @held("TagSetDelayed", attrs={"HoldAll", "SequenceHold"},
-      notes="f /: lhs := rhs (delayed TagSet); returns Null")
+      notes="f /: lhs := rhs (delayed TagSet); returns Null"
+            ". Check: reference (differential cases in tests/library).")
 def _h_tagsetdelayed(a, ev_, expr):
     return _tagset(a, ev_, True, "TagSetDelayed")
 
@@ -1488,14 +1495,16 @@ def _values_fn(name, getter, note):
 
 
 _values_fn("OwnValues", _own_values, "OwnValues[x]: {HoldPattern[x] :> value} for a symbol with a value, else {}; "
-           "OwnValues[x] = {...} sets it")
+           "OwnValues[x] = {...} sets it"
+           ". Check: reference (differential cases in tests/library).")
 _values_fn("DownValues", lambda n: _downs(n, False),
            "DownValues[f]: the rules HoldPattern[f[...]] :> rhs in the order they are tried (pattern-free "
            "definitions first, then by specificity); DownValues[f] = {...} replaces them")
 _values_fn("SubValues", lambda n: _downs(n, True),
            "SubValues[f]: rules for f[...][...] (HoldPattern[lhs] :> rhs); SubValues[f] = {...} replaces them")
 _values_fn("UpValues", _ups, "UpValues[f]: rules attached to f by UpSet/TagSet (HoldPattern[lhs] :> rhs); "
-           "UpValues[f] = {...} replaces them")
+           "UpValues[f] = {...} replaces them"
+           ". Check: reference (differential cases in tests/library).")
 _values_fn("DefaultValues", _default_values,
            "DefaultValues[f]: {HoldPattern[Default[f, ...]] :> value, ...} set by Default[f, ...] = value")
 
@@ -1946,7 +1955,8 @@ def _has_value(e):
 @held("ValueQ", attrs={"HoldAll"},
       notes="ValueQ[expr] is True when expr has a value: a symbol with an OwnValue, or an expression changed by "
             "evaluation (Method -> \"Legacy\" default compares the result; \"SymbolDefinitionsPresent\" and "
-            "\"TrialEvaluation\" also accepted)")
+            "\"TrialEvaluation\" also accepted)"
+            ". Check: reference (differential cases in tests/library).")
 def _h_valueq(a, ev_, expr):
     _need(a, 1, "ValueQ", 2)
     method = "Legacy"
@@ -2002,7 +2012,8 @@ _UNIQUE_N = {}
 @held("Unique", attrs={"HoldAll"},
       notes="Unique[] gives $nnn, Unique[x] gives x$nnn (using $ModuleNumber, then incrementing it), "
             "Unique[\"xxx\"] gives xxxn with n counting up from 1 per prefix, Unique[{x, y}] gives a list; "
-            "Unique[x, {attrs}] sets attributes")
+            "Unique[x, {attrs}] sets attributes"
+            ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _h_unique(a, ev_, expr):
     _need(a, 0, "Unique", 2)
     s = st()
@@ -2248,7 +2259,8 @@ def _info_assoc(n, long_form=True):
       notes="Information[symbol] (also ?f, ??f) gives InformationData[<|ObjectType, Usage, Documentation, "
             "OwnValues, UpValues, DownValues, SubValues, DefaultValues, NValues, FormatValues, Options, Attributes, "
             "FullName|>]; Information[s, \"prop\"] gives one property; Information[\"patt*\"] a list; LongForm -> "
-            "False keeps only the summary. Usage messages (f::usage) are not available")
+            "False keeps only the summary. Usage messages (f::usage) are not available"
+            ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _h_information(a, ev_, expr):
     _need(a, 1, "Information", 3)
     long_form = True
@@ -2346,7 +2358,8 @@ _added("Unevaluated", "Unevaluated[expr] passes expr unevaluated as an argument 
 
 @held("Inactive", attrs={"HoldFirst"},
       notes="Inactive[f][args] is an inert form of f[args] (the arguments are evaluated, f is not applied); "
-            "Inactive[atom] gives atom for atoms other than symbols")
+            "Inactive[atom] gives atom for atoms other than symbols"
+            ". Check: reference (differential cases in tests/library).")
 def _h_inactive(a, ev_, expr):
     _need(a, 1, "Inactive")
     x = a[0]
@@ -2395,7 +2408,8 @@ def _inactivate(t, pred, heads):
 @held("Inactivate", attrs={"HoldFirst"},
       notes="Inactivate[expr] replaces every head f (except List, Rule, Blank and other structural heads) by "
             "Inactive[f] before evaluation; Inactivate[expr, patt] only heads matching patt (a symbol, "
-            "Alternatives, Except[...]); Heads -> False leaves compound heads alone")
+            "Alternatives, Except[...]); Heads -> False leaves compound heads alone"
+            ". Check: reference (differential cases in tests/library).")
 def _h_inactivate(a, ev_, expr):
     _need(a, 1, "Inactivate", -1)
     rest = [ev_(x) for x in a[1:]]
@@ -3468,7 +3482,8 @@ def _split_args(call, spec, assoc, fname):
 @held("CheckArguments", attrs={"HoldFirst"},
       notes="CheckArguments[f[args], n] is True when args is n positional arguments followed by options known "
             "to f (Options[f]), else False; {min, max} counts; <|\"ExtraOptions\" -> ..., \"OptionsMode\" -> "
-            "...|>")
+            "...|>"
+            ". Check: reference (differential cases in tests/library).")
 def _h_checkarguments(a, ev_, expr):
     _need(a, 2, "CheckArguments", 3)
     call = a[0]
@@ -3501,7 +3516,8 @@ def _h_argumentsoptions(a, ev_, expr):
 @held("SyntaxInformation", attrs={"HoldAll"},
       notes="SyntaxInformation[f] gives the syntax properties set by SyntaxInformation[f] = {\"ArgumentsPattern\" "
             "-> {...}, ...} ({} if none); used only for advisories, not evaluation. Built-in syntax data is not "
-            "catalogued and raises")
+            "catalogued and raises"
+            ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _h_syntaxinformation(a, ev_, expr):
     _need(a, 1, "SyntaxInformation")
     n = _sym_arg(a, ev_, "SyntaxInformation")
