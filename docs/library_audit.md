@@ -4871,7 +4871,7 @@ Cases = number of differential test cases in which the head occurs.
 | `TDistribution` | verified | 3 | inert Student t distribution (MikoshiLang name; StudentTDistribution is the Wolfram name) |
 | `TTest` | fixed | 4 | Wolfram TTest[data] and TTest[data, mu0] return the two-sided one-sample p-value; TTest[{x, y}] the Welch two-sample p-value; legacy returned rounded rule lists and TTest[x, y] used the pooled-variance test (now raises with a pointer to TTest[{x, y}]) |
 | `TrimmedMean` | fixed | 3 | mean after dropping Floor[f n] values from each end (0 <= f < 1/2), exact for exact data (legacy converted to floats and rounded to 10 digits) |
-| `UniformDistribution` | verified | 65 | inert distribution UniformDistribution[{min, max}] (Wolfram); the legacy form [min, max] is accepted |
+| `UniformDistribution` | verified | 65 | inert distribution UniformDistribution[{min, max}] (Wolfram; UniformDistribution[] = [{0, 1}]); the legacy form [min, max] is accepted |
 | `Variance` | fixed | 105 | Variance[FirstPassageTimeDistribution[...]] (phase-type formulas); Variance[proc[t]] for random processes (closed form, also where the slice distribution is not named); matrix data: the statistic of each column (Wolfram); Variance[dist] for the batch 5 distributions (Indeterminate when the moment does not exist); unbiased sample variance (n - 1), exact for exact data (legacy converted to floats and rounded to 10 digits); Variance[dist] |
 | `WilcoxonTest` | fixed | 3 | paired signed-rank test {W -> statistic, p_value -> p} (SciPy), unrounded |
 | `ZScore` | fixed | 3 | (x - mu)/sigma, exact; sigma <= 0 raises (legacy rounded floats) |
@@ -5346,7 +5346,7 @@ Cases = number of differential test cases in which the head occurs.
 | `SymmetrizedArrayRules` | added | 3 | independent nonzero rules of a SymmetrizedArray followed by {_, _, ...} -> 0; for an ordinary array, the rules of the array symmetrized with sym (Symmetrize: the phase-weighted group average); without sym the array's own nonzero rules |
 | `SymmetrizedDependentComponents` | added | 3 | sorted list of the components related to comp by the symmetry sym (its orbit, including comp) |
 | `SymmetrizedIndependentComponents` | added | 4 | independent components (lexicographically smallest orbit members, vanishing orbits excluded) of an array with dimensions dims and symmetry sym, in lexicographic order |
-| `SymmetrizedReplacePart` | added | 3 | SymmetrizedReplacePart[sa, {pos -> val, ...}] replaces independent values (dependent positions are mapped to their independent component); SymmetrizedReplacePart[array, rules, sym] symmetrizes first |
+| `SymmetrizedReplacePart` | added | 3 | SymmetrizedReplacePart[sa, {pos -> val, ...}] replaces independent values (dependent positions are mapped to their independent component); SymmetrizedReplacePart[array, rules, sym] replaces both independent and dependent components (Wolfram docs); components of array that lack the symmetry sym and are not overwritten by an explicit rule raise instead of being silently averaged. Check: reference; tests compare hand-derived symmetric/antisymmetric results and the raised non-symmetric cases. |
 | `UniqueElements` | added | 3 | for each list, the elements (without repeats, in order) that are not in any other list; UniqueElements[lists, test] uses test for equivalence |
 | `UnitVector` | added | 4 | UnitVector[n, k]: length-n vector with 1 at position k; UnitVector[k] = UnitVector[2, k] |
 | `Verbatim` | added | 4 | Verbatim[expr] matches expr literally (blanks inside are not patterns) |
