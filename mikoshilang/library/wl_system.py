@@ -437,39 +437,55 @@ _sysvar("$Username", _username, "the login name of the user running the kernel (
 _sysvar("$CommandLine", _command_line, "the command line that started this Python process, as a list of strings "
         "(sys.orig_argv)")
 _sysvar("$ScriptCommandLine", lambda: L(), "{}: MikoshiLang is not running from a wolframscript-style script "
-        "launcher, so (as documented for that case) the list is empty")
+        "launcher, so (as documented for that case) the list is empty",
+        check='exact (the documented {} outside a script launcher; a child Python process reports no script arguments either) in tests')
 _sysvar("$ScriptInputString", lambda: NONE, "None: no script launcher supplied standard input (documented value "
-        "outside wolframscript)")
+        "outside wolframscript)",
+        check='exact (the documented None outside a script launcher) in tests')
 _sysvar("$SystemShell", _system_shell, "the system shell: \"/bin/sh\" on Unix and macOS, %COMSPEC% (cmd.exe) "
         "on Windows; Run uses it")
 _sysvar("$CharacterEncodings", _character_encodings, "the character encoding names known to this installation "
-        "(those with a Python codec), sorted case-insensitively")
+        "(those with a Python codec), sorted case-insensitively",
+        check='reference (every entry has a Python codec: codecs.lookup) in tests')
 _sysvar("$FontFamilies", lambda: L(), "{}: there is no notebook front end, and Wolfram documents $FontFamilies as "
-        "typically {} without one")
+        "typically {} without one",
+        check='exact (the documented {} without a front end) in tests')
 _sysvar("$BatchOutput", lambda: False, "False: MikoshiLang has no batch-output mode (InputForm output without "
-        "labels); it cannot be reset during a session")
+        "labels); it cannot be reset during a session",
+        check='exact (False; Protected) in tests')
 _sysvar("$BatchInput", lambda: not _isatty(sys.stdin), "True when standard input is not an interactive terminal "
-        "(input from a file or pipe), False in an interactive terminal", protected=False)
+        "(input from a file or pipe), False in an interactive terminal", protected=False,
+        check='reference (not sys.stdin.isatty()) in tests')
 _sysvar("$IgnoreEOF", lambda: False, "False: the REPL ends at end-of-file; set it to True to make an interactive "
-        "REPL ignore end-of-file (it is always False for non-terminal input, as documented)", protected=False)
+        "REPL ignore end-of-file (it is always False for non-terminal input, as documented)", protected=False,
+        check='exact (default False; Block assignment) in tests')
 _sysvar("$Language", lambda: "English", "\"English\", the language of system messages (only English message "
-        "texts exist)", protected=False)
+        "texts exist)", protected=False,
+        check='exact (default "English"; Block assignment) in tests')
 _sysvar("$Input", lambda: (_INPUT_NAMES[-1] if _INPUT_NAMES else ""), "the name of the stream input is read from: "
-        "the file name given to Get (<<) while it reads, and \"\" otherwise", protected=False)
+        "the file name given to Get (<<) while it reads, and \"\" otherwise", protected=False,
+        check='exact (inside Get it is the file name, "" afterwards) in tests')
 _sysvar("$Output", lambda: L(Expr("OutputStream", "stdout", 1)), "the channels Print writes to: "
         "{OutputStream[\"stdout\", 1]}; assign {} to silence Print, or a list of stdout/stderr streams",
-        protected=False)
+        protected=False,
+        check='exact (Print output reaches the assigned channel; {} silences it) in tests')
 _sysvar("$Urgent", lambda: L(Expr("OutputStream", "stdout", 1)), "the channels for urgent output (the prompts "
-        "of Input and InputString): {OutputStream[\"stdout\", 1]}", protected=False)
-_sysvar("$Echo", lambda: L(), "the channels every main-loop input line is echoed to: {} (stdout/stderr streams "
-        "may be assigned)", protected=False)
+        "of Input and InputString): {OutputStream[\"stdout\", 1]}", protected=False,
+        check='exact (Input/InputString prompts are written to it) in tests')
+_sysvar("$Echo", lambda: L(), "the streams every main-loop input (Session.evaluate_input, the REPL) is echoed "
+        "to: {} by default; OutputStream[\"stdout\", 1], OutputStream[\"stderr\", 2] or W27 output streams (files) "
+        "may be assigned", protected=False,
+        check='exact (Session.evaluate_input echoes the input line to a W27 file stream) in tests')
 _sysvar("$Display", lambda: L(), "{}: the files and pipes for a user-defined $DisplayFunction (initial setting {} "
-        "as documented)", protected=False)
+        "as documented)", protected=False,
+        check='exact (the documented initial {}) in tests')
 _sysvar("$ProgressReporting", lambda: False, "False: no progress panels are shown in this text interface; True "
         "or Automatic may be assigned (functions with a ProgressReporting option then warn that progress "
-        "reporting is unavailable)", protected=False)
+        "reporting is unavailable)", protected=False,
+        check='exact (default False; results of functions are unchanged when set) in tests')
 _sysvar("$EvaluationEnvironment", lambda: _EVAL_ENV.get(), "\"Session\" in the main session, \"Subkernel\" in a "
-        "parallel subkernel")
+        "parallel subkernel",
+        check='exact ("Session" on the master, "Subkernel" in ParallelEvaluate) in tests')
 
 
 _INPUT_NAMES = []
@@ -510,28 +526,31 @@ def _own(name):
     return K.state().own.get(name)
 
 
-def _echo_channels():
+def _echo(text):
+    """Write an input line to the $Echo streams (stdout/stderr or W27 output streams)."""
     v = _own("$Echo")
     if v is None:
-        return []
-    from .wl_errors import _streams
-    return _streams("$Echo", L())
+        return
+    for s in (v.args if is_list(v) else (v,)):
+        if isinstance(s, Expr) and s.head == "OutputStream" and s.args and s.args[0] in ("stdout", "stderr"):
+            f = sys.stdout if s.args[0] == "stdout" else sys.stderr
+            f.write(text + "\n")
+            f.flush()
+        else:
+            ev(Expr("WriteString", s, text + "\n"))
 
 
 def _input_hook(text, parse):
     """Parse one main-loop input: echo it to $Echo, and on a syntax error apply $SyntaxHandler[text, pos]."""
     from ..parser import ParseError
-    chans = _echo_channels()
-    if chans:
-        from .wl_errors import _write
-        _write(chans, text)
+    _echo(text)
     try:
         return parse(text)
     except ParseError as err:
         h = _own("$SyntaxHandler")
         if h is None:
             raise
-        pos = _error_offset(text, parse)
+        pos = _error_offset(text, parse) + 1          # 1-based position of the offending character
         new = ev(Expr(K.as_head(h), text, pos))
         if isinstance(new, str):
             return parse(new)
@@ -542,25 +561,20 @@ def _input_hook(text, parse):
 
 
 def _error_offset(text, parse):
-    """Character offset of a syntax error: the length of the longest prefix that is still valid as the start
-    of an input (a prefix that parses, or that only fails for being incomplete)."""
-    from .wl_files import _expr_complete
+    """Character offset of a syntax error: the length of the longest prefix of text that is still a valid start
+    of an input (it parses, or only fails for ending too early)."""
     from ..parser import ParseError
     best = 0
     for i in range(1, len(text) + 1):
         pre = text[:i]
         try:
-            c = _expr_complete(pre)
-        except ParseError:
-            break
-        if c is False or c is None:
-            best = i
-            continue
-        try:
             parse(pre)
-            best = i
-        except ParseError:
-            break
+        except ParseError as e:
+            msg = str(e)
+            if not ("end of input" in msg or "got EOF" in msg or "Unsupported character" in msg and
+                    ('"' in pre or "(*" in pre)):
+                break
+        best = i
     return best
 
 
@@ -574,7 +588,8 @@ def _install_input_hook():
 _install_input_hook()
 _sysvar("$SyntaxHandler", lambda: Symbol("$SyntaxHandler"),
         "unset by default; when assigned a function f, a main-loop input (Session.evaluate_input / the REPL) "
-        "with a syntax error is replaced by f[\"text\", pos] where pos is the character offset of the error: "
+        "with a syntax error is replaced by f[\"text\", pos] where pos is the (1-based) position of the character "
+        "where the error was detected: "
         "a string result is parsed instead, $Failed abandons the input", protected=False,
         check="exact (handler called with the text and offset, replacement parsed) in tests")
 E.SYSTEM_VARIABLES.pop("$SyntaxHandler", None)     # no value unless assigned (evaluates to itself)
@@ -2362,6 +2377,9 @@ def _worker_pre_hook(prev):
 
 def _worker_assign_hook(name):
     def hook(lhs, rhs, ev_):
+        if isinstance(lhs, Expr) and isinstance(lhs.head, str) and not (_attrs_of(lhs.head) & {"HoldAll",
+                                                                                               "HoldAllComplete"}):
+            lhs = Expr(lhs.head, *(ev_(a) for a in lhs.args))     # f[i] = v defines f[<value of i>]
         _WORKER.call(("assign", lhs, rhs))
     return hook
 
@@ -2521,7 +2539,7 @@ def _handle(k, msg):
         _service(k, msg)
     elif kind == "result":
         job = _RUNNING.get(k.id)
-        if job is not None and job.id == msg[1]:
+        if job is not None and job.id == msg[1] and job.ran_on is k:
             del _RUNNING[k.id]
             job.outcome = msg[2]
             job.state = "finished"
@@ -2533,13 +2551,14 @@ def _handle(k, msg):
 
 
 def _kernel_died(k):
-    if not k.alive and k.id not in _KERNELS and k.id not in _RUNNING:
-        return
     k.alive = False
+    if _KERNELS.get(k.id) is not k:
+        return                        # a kernel already closed or replaced (AbortKernels, CloseKernels)
     _KERNELS.pop(k.id, None)
     _release_kernel_locks(k.id)
-    job = _RUNNING.pop(k.id, None)
-    if job is not None:
+    job = _RUNNING.get(k.id)
+    if job is not None and job.ran_on is k:
+        del _RUNNING[k.id]
         if job.kernel is None and job.requeues < 1 and _sysopt("ParallelOptions", "RecoveryMode") == "ReQueue":
             job.requeues += 1
             job.state = "queued"
@@ -3007,11 +3026,14 @@ _sysvar("$DefaultParallelKernels", _default_parallel_kernels, "the kernels launc
         check="exact (LaunchKernels[] launches the configured number) in tests")
 _sysvar("$ConfiguredKernels", lambda: ev(Symbol("$DefaultParallelKernels")), "the kernel configurations "
         "available: by default the value of $DefaultParallelKernels; assignments are kept for the session only",
-        protected=False)
+        protected=False,
+        check='exact (follows $DefaultParallelKernels) in tests')
 _sysvar("$DefaultLocalKernel", lambda: "Local", "\"Local\", the kernel used by LocalEvaluate and LocalSubmit (only "
-        "local kernels are supported); assignments are kept for the session only", protected=False)
+        "local kernels are supported); assignments are kept for the session only", protected=False,
+        check='exact (default "Local"; Block assignment) in tests')
 _sysvar("$DefaultRemoteKernel", lambda: "localhost", "\"localhost\", the default remote kernel specification; "
-        "assignments are kept for the session only (remote evaluation is not supported)", protected=False)
+        "assignments are kept for the session only (remote evaluation is not supported)", protected=False,
+        check='exact (default "localhost"; Block assignment) in tests')
 _sysvar("$DistributedContexts", lambda: ev(Symbol("$Context")), "the contexts whose definitions parallel commands "
         "distribute automatically: by default the value of $Context (\"Global`\"); All, None, a context or a list "
         "of contexts may be assigned", protected=False,
@@ -3658,6 +3680,11 @@ def _eo_props_hook(head, args, ev_):
 
 
 KL.COMPOUND_HEAD_HOOKS["EvaluationObject"] = _eo_props_hook
+record("EvaluationObject", AREA, "added",
+       "EvaluationObject[id, expr] (HoldAllComplete, inert) represents an evaluation queued by ParallelSubmit; "
+       "WaitAll and WaitNext give its result; eo[\"Process\"] (HoldForm of expr), eo[\"State\"] (\"ready for "
+       "processing\", \"queued\", \"running\", \"received\", \"finished\"), eo[\"Result\"] (HoldComplete[value], "
+       "Missing[\"NotAvailable\"] before), eo[All] and eo[\"Properties\"]. Check: exact in tests.")
 
 # ── definitions ──
 

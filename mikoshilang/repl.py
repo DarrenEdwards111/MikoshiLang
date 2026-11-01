@@ -66,7 +66,13 @@ def main():
     while True:
         try:
             line = input(f"In[{counter}]:= ")
-        except (EOFError, KeyboardInterrupt):
+        except EOFError:
+            if session.state.own.get("$IgnoreEOF") is True and sys.stdin.isatty():
+                print("\n(end-of-file ignored: $IgnoreEOF is True; use Exit[] or \"quit\")")
+                continue
+            print("\nGoodbye!")
+            break
+        except KeyboardInterrupt:
             print("\nGoodbye!")
             break
 
@@ -94,6 +100,8 @@ def main():
                     result = session.output_form(result)
                     shown = result if isinstance(result, str) else display_text(result)
                     print(f"Out[{n}]= {shown}")
+        except SystemExit:
+            raise                           # Exit[] / Quit[]: $Epilog has already run
         except ParseError as ex:
             print(f"  Parse error: {ex}")
         except Exception as ex:
