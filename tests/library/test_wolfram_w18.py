@@ -428,6 +428,188 @@ CASES = [
     (f"DistributionFitTest[{TA}]", Raises(NotImplementedError)),
     (f'DistributionFitTest[{TA}, NormalDistribution[], "PearsonChiSquare"]', Raises(NotImplementedError)),
     (f'DistributionFitTest[{TA}, NormalDistribution[], "Bogus"]', Raises(ValueError)),
+    # ── Around family (first-order propagation; hand derivatives) ──
+    ("Around[1, 1/10] + Around[2, 1/5]", "Around[3, Sqrt[5]/10]"),
+    ("Around[1, 0.1] + Around[2, 0.2]", Pred(lambda g: g.head == "Around" and abs(float(g.args[1]) - 0.223606797749979) < 1e-12, "Around[3., 0.2236]")),
+    ("3 Around[2, 1/10]", "Around[6, 3/10]"),
+    ("Around[1, 1/10] Around[2, 1/5]", "Around[2, Sqrt[2]/5]"),   # Check: d(xy) = Sqrt[(y dx)^2 + (x dy)^2]
+    ("Around[2., 0.1]^2", Pred(lambda g: abs(float(g.args[1]) - 0.4) < 1e-12, "Around[4., 0.4]")),
+    ("Exp[Around[0, 1/10]]", "Around[1, 1/10]"),
+    ("Around[Interval[{1, 3}]]", "Around[2, 1]"),
+    ("Around[5, Scaled[1/10]]", "Around[5, 1/2]"),
+    ("Around[{1, 2, 3, 4}]", "Around[5/2, Sqrt[5/3]]"),   # Mean, StandardDeviation
+    ("Around[1, {1/10, 1/5}] + 1", "Around[2, {1/10, 1/5}]"),
+    ('Around[2, 1/10]["Interval"]', "Interval[{19/10, 21/10}]"),
+    ('Around[2, 1/10]["Value"]', "2"),
+    ('Around[2, 1/10]["Uncertainty"]', "1/10"),
+    ("Around[w18x, 1]", "Around[w18x, 1]"),
+    ("Around[1, -1]", Raises(ValueError)),
+    ('Around["a", 1]', Raises(TypeError)),
+    ("Around[1 + I, 1]", Raises(NotImplementedError)),
+    ("Around[1, I]", Raises(ValueError)),
+    ('Around[2, 1/10]["Bogus"]', Raises(ValueError)),
+    ("AroundReplace[w18x w18y, {w18x -> Around[2, 1/10], w18y -> Around[3, 1/5]}]", "Around[6, 1/2]"),
+    ("AroundReplace[w18x^2 + w18y, {w18x -> Around[2., 0.1], w18y -> Around[1., 0.2]}]",
+     Pred(lambda g: abs(float(g.args[0]) - 5) < 1e-12 and abs(float(g.args[1]) - 0.2 * 5 ** 0.5) < 1e-12, "Around[5., Sqrt[0.4^2 + 0.2^2]]")),
+    # Check: identical to Around arithmetic when each variable occurs once
+    ("AroundReplace[w18x + w18y, {w18x -> Around[1, 1/10], w18y -> Around[2, 1/5]}] == Around[1, 1/10] + Around[2, 1/5]", "True"),
+    ("AroundReplace[w18x + w18z, w18x -> Around[1, 1/10]]", "AroundReplace[w18x + w18z, w18x -> Around[1, 1/10]]"),
+    ("AroundReplace[w18x, {w18x -> Around[1, {1/10, 1/5}]}]", Raises(NotImplementedError)),
+    ("AroundReplace[w18x, 5]", Raises(TypeError)),
+    ("MeanAround[{1.2, 2.3, 1.9, 2.8, 2.1}]",
+     Pred(lambda g: abs(float(g.args[0]) - 2.06) < 1e-12 and abs(float(g.args[1]) - 0.26191601707417583) < 1e-12, "numpy mean/sem")),
+    ("MeanAround[{Around[1, 1/10], Around[2, 1/10]}]", "Around[3/2, Sqrt[2]/20]"),   # weighted mean
+    ("MeanAround[{1, 2, 3}]", "Around[2, 1/Sqrt[3]]"),
+    ("MeanAround[w18x]", "MeanAround[w18x]"),
+    ("MeanAround[{Around[1, 0], Around[2, 1]}]", Raises(ArithmeticError)),
+    ("MeanAround[{1}]", Raises(ValueError)),
+    ("MeanAround[{{1, 2}, {3, 4}}]", Raises(NotImplementedError)),
+    ("MeanAround[5]", Raises(TypeError)),
+    ('VectorAround[{1, 2}, {1/10, 1/5}]["Covariance"]', "{{1/100, 0}, {0, 1/25}}"),   # Check: DiagonalMatrix[d^2]
+    ('VectorAround[{1, 2}, {{1, 0}, {0, 4}}]["Uncertainty"]', "{1, 2}"),
+    ('VectorAround[{1, 2}, {1/10, 1/5}]["Value"]', "{1, 2}"),
+    ("VectorAround[w18v, {1, 2}]", "VectorAround[w18v, {1, 2}]"),
+    ("VectorAround[{1, 2}, {1/10}]", Raises(ValueError)),
+    ("VectorAround[{1, 2}, {{1, 2}, {3, 4}}]", Raises(ValueError)),
+    ("VectorAround[{{1, 2}, {3, 4}}]", Raises(NotImplementedError)),
+    ('VectorAround[{"a"}, {1}]', Raises(TypeError)),
+    ("CenteredInterval[1, 1/10] CenteredInterval[2, 1/5]", "CenteredInterval[2, 21/50]"),
+    ("CenteredInterval[1, 1/2] + 3", "CenteredInterval[4, 1/2]"),
+    ("CenteredInterval[Interval[{1, 3}]]", "CenteredInterval[2, 1]"),
+    ('CenteredInterval[1, 1/10]["Bounds"]', "{9/10, 11/10}"),
+    # Check: the product enclosure contains every product of endpoints (9/10 * 9/5 and 11/10 * 11/5)
+    ('(CenteredInterval[1, 1/10] CenteredInterval[2, 1/5])["Bounds"][[1]] <= 81/50 && 121/50 <= '
+     '(CenteredInterval[1, 1/10] CenteredInterval[2, 1/5])["Bounds"][[2]]', "True"),
+    ("CenteredInterval[1, 1/10]^2", "CenteredInterval[1, 21/100]"),
+    ("CenteredInterval[w18c, 1]", "CenteredInterval[w18c, 1]"),
+    ("CenteredInterval[1, -1]", Raises(ValueError)),
+    ("CenteredInterval[1.5, 0.1]", Raises(NotImplementedError)),
+    ('CenteredInterval["a", 1]', Raises(TypeError)),
+    # ── Likelihood / LogLikelihood ──
+    ("Likelihood[NormalDistribution[0, 1], {0.5, -1., 2.}]", approx(0.004599463560297635)),  # prod norm.pdf
+    ("Likelihood[PoissonDistribution[2], {1, 3, 0}]", "8/(3 E^6)"),
+    ("N[Likelihood[PoissonDistribution[2], {1, 3, 0}]]", approx(0.006610005804443622)),  # prod poisson.pmf
+    ("Likelihood[w18d, {1, 2}]", "Likelihood[w18d, {1, 2}]"),
+    ("Likelihood[NormalDistribution[0, 1], 3]", Raises(TypeError)),
+    ("Likelihood[NormalDistribution[0, 1], {{1, 2}}]", Raises(NotImplementedError)),
+    ("Likelihood[5, {1, 2}]", Raises(ValueError)),
+    ("LogLikelihood[NormalDistribution[1, 2], {0.5, -1., 2.}]", approx(-5.492507141293855)),  # sum norm.logpdf
+    ("LogLikelihood[ExponentialDistribution[2], {1, 3}]", "2 Log[2] - 8"),
+    ("LogLikelihood[ExponentialDistribution[2], {1, 3}] - Log[Likelihood[ExponentialDistribution[2], {1, 3}]]", "0"),  # Check
+    ("LogLikelihood[ExponentialDistribution[2], {-1, 3}]", "-Infinity"),
+    ("LogLikelihood[w18d, {1, 2}]", "LogLikelihood[w18d, {1, 2}]"),
+    ("LogLikelihood[NormalDistribution[0, 1], 3]", Raises(TypeError)),
+    ("LogLikelihood[NormalDistribution[0, 1], {{1, 2}}]", Raises(NotImplementedError)),
+    # ── FactorialMoment (WL doc) ──
+    ("FactorialMoment[{1, 2, 3, 4}, 1]", "5/2"),
+    ("FactorialMoment[{1., 2., 3., 4.}, 2]", approx(5.0)),
+    ("FactorialMoment[BinomialDistribution[w18n, w18p], 2]", "(w18n - 1) w18n w18p^2"),
+    ("FactorialMoment[PoissonDistribution[w18m], 3]", "w18m^3"),   # Check: Poisson factorial moments m^r
+    ("FactorialMoment[{Pi, E, 2}, 2] - (2 - E + E^2 - Pi + Pi^2)/3", "0"),
+    ("FactorialMoment[3]", "FactorialMoment[3]"),
+    ("FactorialMoment[{1, 2}, -1]", Raises(ValueError)),
+    ("FactorialMoment[{1, 2}, {1, 2}]", Raises(NotImplementedError)),
+    ("FactorialMoment[5, 2]", Raises(TypeError)),
+    # ── PowerSymmetricPolynomial / AugmentedSymmetricPolynomial (WL doc: on {a, b, c}) ──
+    ("PowerSymmetricPolynomial[2, {1, 2, 3}]", "14"),
+    ("PowerSymmetricPolynomial[2, {w18a, w18b, w18c}]", "w18a^2 + w18b^2 + w18c^2"),
+    ("PowerSymmetricPolynomial[1, {3, 5, 9}] == Total[{3, 5, 9}]", "True"),   # Check
+    ("PowerSymmetricPolynomial[{1, 2}, {1, 2}]", "{3, 5}"),
+    ("PowerSymmetricPolynomial[2]", "PowerSymmetricPolynomial[2]"),
+    ("PowerSymmetricPolynomial[2, 5]", Raises(TypeError)),
+    ("AugmentedSymmetricPolynomial[{2, 1}, {w18a, w18b, w18c}]",
+     "w18a^2 w18b + w18a w18b^2 + w18a^2 w18c + w18b^2 w18c + w18a w18c^2 + w18b w18c^2"),
+    ("AugmentedSymmetricPolynomial[{1, 2}, {1, 2, 3}]", "48"),   # brute force: sum over i != j of x_i x_j^2
+    ("AugmentedSymmetricPolynomial[{1, 1, 1}, {1, 2, 3, 4}]", "300"),   # 3! e3 = 6 * 50
+    ("AugmentedSymmetricPolynomial[{3}, {1, 2}] == PowerSymmetricPolynomial[3, {1, 2}]", "True"),
+    ("AugmentedSymmetricPolynomial[{2, 1}]", "AugmentedSymmetricPolynomial[{2, 1}]"),
+    ("AugmentedSymmetricPolynomial[{0, 1}, {1, 2}]", Raises(ValueError)),
+    ("AugmentedSymmetricPolynomial[2, {1, 2}]", Raises(TypeError)),
+    # ── DistributionParameterAssumptions / DistributionParameterQ (WL doc) ──
+    ("DistributionParameterAssumptions[NormalDistribution[w18m, w18s]]", "Element[w18m, Reals] && w18s > 0"),
+    ("DistributionParameterAssumptions[GammaDistribution[w18a, 2]]", "w18a > 0"),
+    ("DistributionParameterAssumptions[GammaDistribution[1, 2]]", "True"),
+    ("DistributionParameterAssumptions[GeometricDistribution[w18p]]", "0 < w18p <= 1"),
+    ("DistributionParameterAssumptions[BinormalDistribution[w18r]]", "-1 < w18r < 1"),
+    ("DistributionParameterAssumptions[MultinomialDistribution[w18n, {w18p1, w18p2}]]",
+     "Element[w18n, Integers] && w18n > 0 && w18p1 >= 0 && w18p2 >= 0 && w18p1 + w18p2 == 1"),
+    ("DistributionParameterAssumptions[w18d]", "DistributionParameterAssumptions[w18d]"),
+    ("DistributionParameterAssumptions[ZipfDistribution[w18r]]", Raises(NotImplementedError)),
+    ("DistributionParameterAssumptions[5]", Raises(TypeError)),
+    ("DistributionParameterQ[NormalDistribution[w18m, w18s]]", "True"),
+    ("DistributionParameterQ[NormalDistribution[0, 1]]", "True"),
+    ("DistributionParameterQ[5]", "False"),
+    ("DistributionParameterQ[w18d]", "False"),
+    # ── RarerProbability ──
+    ("RarerProbability[NormalDistribution[0, 1], 1.96]", approx(0.04999579029644087)),   # 2 norm.cdf(-1.96)
+    ("RarerProbability[StudentTDistribution[5], 2.]", approx(0.10193947882985835)),   # 2 t.cdf(-2, 5)
+    ("RarerProbability[LaplaceDistribution[0, 1], 1.5]", approx(0.22313016014842982)),
+    ("RarerProbability[BinomialDistribution[4, 1/2], {0, 1, 2}]", "{1/8, 5/8, 1}"),   # Check: direct pmf sums
+    ("RarerProbability[NormalDistribution[w18m, 1], 1]", "RarerProbability[NormalDistribution[w18m, 1], 1]"),
+    ("RarerProbability[GammaDistribution[2, 1], 1]", Raises(NotImplementedError)),
+    ('RarerProbability[NormalDistribution[0, 1], "a"]', Raises(TypeError)),
+    # ── Conditioned (memorylessness) ──
+    ("Probability[Conditioned[w18x > 3, w18x > 1], Distributed[w18x, ExponentialDistribution[2]]]", "E^-4"),
+    ("Expectation[Conditioned[w18x, w18x > 1], Distributed[w18x, ExponentialDistribution[2]]]", "3/2"),
+    ("Probability[Conditioned[w18x > 3, w18x > 1], Distributed[w18x, ExponentialDistribution[2]]] == "
+     "Probability[w18x > 2, Distributed[w18x, ExponentialDistribution[2]]]", "True"),   # Check: memoryless
+    ("Conditioned[w18a, w18b]", "Conditioned[w18a, w18b]"),
+    ("Conditioned[w18a]", Raises(ValueError)),
+    ("Probability[Conditioned[w18x > 3, w18x > 5], Distributed[w18x, UniformDistribution[{0, 1}]]]", Raises(ArithmeticError)),
+    ("Expectation[Conditioned[w18x, w18x > 1], Distributed[w18x, PoissonDistribution[2]]]", Raises(NotImplementedError)),
+    # ── BirnbaumImportance ──
+    ("BirnbaumImportance[ReliabilityDistribution[w18x && w18y, {{w18x, ExponentialDistribution[1]}, "
+     "{w18y, ExponentialDistribution[2]}}], w18t]", "{E^(-2 w18t), E^-w18t}"),   # Check: series -> survival of the other
+    ("BirnbaumImportance[ReliabilityDistribution[w18x || w18y, {{w18x, ExponentialDistribution[1]}, "
+     "{w18y, ExponentialDistribution[2]}}], w18t]", "{1 - E^(-2 w18t), 1 - E^-w18t}"),
+    ("BirnbaumImportance[FailureDistribution[w18x && w18y, {{w18x, ExponentialDistribution[1]}, "
+     "{w18y, ExponentialDistribution[2]}}], 1]", "{1 - E^-2, 1 - E^-1}"),
+    ("BirnbaumImportance[w18r, 1]", "BirnbaumImportance[w18r, 1]"),
+    ("BirnbaumImportance[NormalDistribution[0, 1], 1]", Raises(TypeError)),
+    ("BirnbaumImportance[ReliabilityDistribution[w18x, {{w18x, ExponentialDistribution[1]}}], -1]", Raises(ValueError)),
+    # ── MeanShift (WL doc) ──
+    ("MeanShift[{0, 10, 1, 11}, 1]", "{1/2, 21/2, 1/2, 21/2}"),
+    ("MeanShift[{{0, 1}, {2, 3}, {10, 11}, {12, 13}}, 3]", "{{1, 2}, {1, 2}, {11, 12}, {11, 12}}"),
+    ("MeanShift[{0, 10, 1, 11}, 1, {1}]", "{1/2, 10, 1, 11}"),
+    ("MeanShift[{0, 1, 2}, 1, MaxIterations -> 2]", "{1, 1, 1}"),   # hand: {1/2, 1, 3/2} then {1, 1, 1}
+    ("MeanShift[w18l, 1]", "MeanShift[w18l, 1]"),
+    ("MeanShift[{1, 2}, -1]", Raises(ValueError)),
+    ("MeanShift[{1, 2}, 1, Weights -> {1, 2}]", Raises(NotImplementedError)),
+    ("MeanShift[5, 1]", Raises(TypeError)),
+    # ── MissingFallback (WL doc) ──
+    ("MissingFallback[1, 2]", "1"),
+    ("MissingFallback[Missing[], 2]", "2"),
+    ('MissingFallback[Missing["reason"], Missing[], 2]', "2"),
+    ('MissingFallback[Missing["Unknown"], Missing["NotAvailable"]]', 'Missing["NotAvailable"]'),
+    ("MissingFallback[]", "MissingFallback[]"),
+    # ── TransformMissing ──
+    ('TransformMissing[{1, Missing[], 3, 6}, "Mean"]', "{1, 10/3, 3, 6}"),
+    ('TransformMissing[{1, Missing[], 3, 6}, "Median"]', "{1, 3, 3, 6}"),
+    ('TransformMissing[{{1, Missing[]}, {Missing[], 4}, {5, 6}}, {"Previous", {"Constant", 0}}]', "{{1, 0}, {1, 4}, {5, 6}}"),
+    ('TransformMissing[{Missing[], 2, Missing[]}, "Next"]', "{2, 2, 2}"),
+    ('TransformMissing[w18t, "Mean"]', 'TransformMissing[w18t, "Mean"]'),
+    ('TransformMissing[{Missing[], Missing[]}, "Mean"]', Raises(ValueError)),
+    ('TransformMissing[{1, Missing[]}, "Bogus"]', Raises(ValueError)),
+    ('TransformMissing[Tabular[{{1}}], "Mean"]', Raises(NotImplementedError)),
+    ('TransformMissing[5, "Mean"]', Raises(TypeError)),
+    # ── MomentConvert (WL doc) / MomentEvaluate (WL doc) ──
+    ('MomentConvert[Cumulant[2], "Moment"]', "-Moment[1]^2 + Moment[2]"),
+    ('MomentConvert[CentralMoment[3], "Moment"]', "2 Moment[1]^3 - 3 Moment[1] Moment[2] + Moment[3]"),
+    ('MomentConvert[Moment[2], "CentralMoment"]', "CentralMoment[2] + Moment[1]^2"),
+    ('MomentConvert[Moment[3], "FactorialMoment"]', "FactorialMoment[1] + 3 FactorialMoment[2] + FactorialMoment[3]"),
+    ('MomentConvert[MomentConvert[Moment[3], "Cumulant"], "Moment"]', "Moment[3]"),   # Check: round trip
+    ('MomentConvert[Cumulant[{2, 2}], "Moment"]', Raises(NotImplementedError)),
+    ('MomentConvert[Cumulant[2], "UnbiasedSampleEstimator"]', Raises(NotImplementedError)),
+    ('MomentConvert[Cumulant[2], "Bogus"]', Raises(ValueError)),
+    ('MomentConvert[w18e, "Moment"]', "w18e"),
+    ("MomentEvaluate[Moment[1], NormalDistribution[w18m, w18s]]", "w18m"),
+    ("MomentEvaluate[Moment[2], NormalDistribution[w18m, w18s]]", "w18m^2 + w18s^2"),
+    ("MomentEvaluate[PowerSymmetricPolynomial[2], {w18a, w18b, w18c}]", "w18a^2 + w18b^2 + w18c^2"),
+    ("MomentEvaluate[Cumulant[2] + Moment[1]^2, BinomialDistribution[w18n, w18p]] - "
+     "Moment[BinomialDistribution[w18n, w18p], 2]", "0"),   # Check: Cumulant[2] + Moment[1]^2 = Moment[2]
+    ("MomentEvaluate[Moment[2], w18d]", "MomentEvaluate[Moment[2], w18d]"),
+    ("MomentEvaluate[Moment[2], 5]", Raises(TypeError)),
+    ("MomentEvaluate[PowerSymmetricPolynomial[2], NormalDistribution[0, 1]]", Raises(ValueError)),
 ]
 
 

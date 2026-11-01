@@ -2204,3 +2204,1133 @@ def _dft(x: ListOf[Real], d: Expr = None, *rest: String | ListOf[String] | Optio
         else:
             res.append(ev(Expr(_DFT[test], x, d if d is not None else Symbol("Automatic"), *extra, *optr)))
     return L(*res) if several else res[0]
+
+
+# ─────────────────────────── uncertainty: Around, VectorAround, CenteredInterval ───────────────────────────
+
+from .. import kernel as _K                        # noqa: E402
+from .. import kernel_lists as _KL                 # noqa: E402
+from . import wl_numbertheory2 as _NT              # noqa: E402
+
+_UNH = _K.UNHANDLED
+_ELEMENTARY = {"Exp": sp.exp, "Log": sp.log, "Sin": sp.sin, "Cos": sp.cos, "Tan": sp.tan, "ArcTan": sp.atan,
+               "ArcSin": sp.asin, "ArcCos": sp.acos, "Sinh": sp.sinh, "Cosh": sp.cosh, "Tanh": sp.tanh,
+               "Sqrt": sp.sqrt, "Abs": sp.Abs}
+
+
+def _sp(x, fname, what):
+    v = _num(x, fname, what)
+    return v
+
+
+def _around_parts(a):
+    """(value, (dminus, dplus)) of a normalized Around[x, d] / Around[x, {dm, dp}]"""
+    x, d = a.args
+    if is_list(d):
+        return S(x), (S(d.args[0]), S(d.args[1]))
+    return S(x), (S(d), S(d))
+
+
+def _mk_around(x, dm, dp, inexact_=False):
+    def o(v):
+        return fl(v) if inexact_ else R(v)
+    if sp.simplify(dm - dp) == 0:
+        return Expr("Around", o(x), o(dp))
+    return Expr("Around", o(x), L(o(dm), o(dp)))
+
+
+@fn("Around", area=AREA, status="added",
+    notes="Around[x, d] is x with uncertainty d >= 0; Around[x, {dm, dp}] asymmetric; Around[x, Scaled[r]] = "
+          "Around[x, r Abs[x]]; Around[Interval[{a, b}]] = Around[(a + b)/2, (b - a)/2]; Around[{x1, x2, ...}] = "
+          "Around[Mean, StandardDeviation] of the samples. Arithmetic (Plus, Times, Power) and the elementary "
+          "functions propagate uncertainty to first order assuming independent arguments (Sqrt[Sum[(df/dxi di)^2]], "
+          "asymmetric parts propagated separately); a[\"Value\"], a[\"Uncertainty\"] and a[\"Interval\"] give the parts. "
+          "Comparisons stay unevaluated; negative uncertainties raise ValueError; non-numeric values TypeError; "
+          "symbolic arguments stay unevaluated; Around of complex numbers raises NotImplementedError. Check: "
+          "first-order propagation formulas checked against hand derivatives in tests.")
+def _around(x: Real | ListOf[Real] | Expr, d: Real | ListOf[Real] | Expr = None) -> Expr:
+    name = "Around"
+    if d is None:
+        if isinstance(x, Expr) and x.head == "Interval" and len(x.args) == 1 and is_list(x.args[0]) and \
+                len(x.args[0].args) == 2:
+            a, b = (_sp(t, name, "endpoint") for t in x.args[0].args)
+            if b < a:
+                raise ValueError(f"{name}: the interval endpoints are out of order")
+            return _mk_around((a + b) / 2, (b - a) / 2, (b - a) / 2, has_float(x))
+        if is_list(x):
+            v, items = vec(x, name, min_len=2)
+            m = mean(v)
+            s = sp.sqrt(svar(v))
+            return _mk_around(m, s, s, inexact(items))
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{name}: expected Around[x, d], Around[{{x1, ...}}] or Around[Interval[{{a, b}}]]")
+    xv = _num(x, name, "value", real=False)
+    if xv.is_real is False:
+        raise NotImplementedError(f"{name}: complex values are not supported")
+    if isinstance(d, Expr) and d.head == "Scaled" and len(d.args) == 1:
+        r = _sp(d.args[0], name, "relative uncertainty")
+        if r < 0:
+            raise ValueError(f"{name}: the uncertainty must be non-negative")
+        u = r * abs(xv)
+        return _mk_around(xv, u, u, has_float(x) or has_float(d))
+    if is_list(d):
+        if len(d.args) != 2:
+            raise ValueError(f"{name}: an asymmetric uncertainty is {{dminus, dplus}}")
+        dm, dp = (_sp(t, name, "uncertainty") for t in d.args)
+        if dm < 0 or dp < 0:
+            raise ValueError(f"{name}: the uncertainty must be non-negative")
+        if dm == dp:
+            return Expr("Around", x, d.args[0])
+        raise Unevaluated()
+    dv = _sp(d, name, "uncertainty")
+    if dv < 0:
+        raise ValueError(f"{name}: the uncertainty must be non-negative")
+    raise Unevaluated()
+
+
+def _is_around(a):
+    return isinstance(a, Expr) and a.head == "Around" and len(a.args) == 2 and \
+        all(isinstance(S(t), sp.Basic) and S(t).is_number for t in
+            ([a.args[0]] + (list(a.args[1].args) if is_list(a.args[1]) else [a.args[1]])))
+
+
+def _propagate(f, vals, deltas, inexact_):
+    """first-order propagation of the sympy expression f in symbols z_i with values vals and (dm, dp) deltas"""
+    zs = sp.symbols(f"w18z0:{len(vals)}")
+    expr = f(*zs)
+    sub = dict(zip(zs, vals))
+    val = expr.subs(sub)
+    lo2, hi2 = sp.Integer(0), sp.Integer(0)
+    for z, (dm, dp) in zip(zs, deltas):
+        g = sp.diff(expr, z).subs(sub)
+        if g.has(sp.zoo, sp.nan, sp.oo, -sp.oo):
+            raise ArithmeticError("Around: the derivative is undefined at the value (uncertainty not propagable)")
+        # a positive derivative maps the upper deviation to the upper side
+        if (g >= 0) == True:  # noqa: E712
+            hi2 += (g * dp) ** 2
+            lo2 += (g * dm) ** 2
+        else:
+            hi2 += (g * dm) ** 2
+            lo2 += (g * dp) ** 2
+    if inexact_:
+        val, lo, hi = sp.N(val, 17), sp.N(sp.sqrt(lo2), 17), sp.N(sp.sqrt(hi2), 17)
+    else:
+        val, lo, hi = sp.simplify(val), sp.simplify(sp.sqrt(lo2)), sp.simplify(sp.sqrt(hi2))
+    return _mk_around(val, lo, hi, inexact_)
+
+
+def _around_arith(expr, ev_):
+    h = expr.head
+    args = list(expr.args)
+    if not any(_is_around(a) for a in args):
+        return _UNH
+    vals, deltas, slots, inexact_ = [], [], [], False
+    for a in args:
+        if _is_around(a):
+            v, d = _around_parts(a)
+            vals.append(v)
+            deltas.append(d)
+            slots.append(None)
+            inexact_ = inexact_ or has_float(a)
+        else:
+            n = _NT.number_of(a)
+            if n is None:
+                return _UNH
+            slots.append(sp.sympify(n))
+            inexact_ = inexact_ or isinstance(n, float)
+
+    def build(*zs):
+        it = iter(zs)
+        xs = [next(it) if s is None else s for s in slots]
+        if h == "Plus":
+            return sp.Add(*xs)
+        if h == "Times":
+            return sp.Mul(*xs)
+        if h == "Power":
+            return xs[0] ** xs[1]
+        return _ELEMENTARY[h](*xs)
+    if h in ("Plus", "Times", "Power") or (h in _ELEMENTARY and len(args) == 1):
+        return _propagate(build, vals, deltas, inexact_)
+    return _UNH
+
+
+_NT.SPECIAL_HEADS.add("Around")
+_NT.ARITH_HANDLERS.append(_around_arith)
+_NT._ARITH_HEADS.update(_ELEMENTARY)
+
+
+def _around_prop(head, args, ev_):
+    if not _is_around(head) or len(args) != 1 or not isinstance(args[0], str):
+        return _UNH
+    p = args[0]
+    v, (dm, dp) = _around_parts(head)
+    if p == "Value":
+        return head.args[0]
+    if p == "Uncertainty":
+        return head.args[1]
+    if p == "Interval":
+        return ev_(Expr("Interval", L(Expr("Plus", head.args[0], Expr("Times", -1, R(dm) if not has_float(head)
+                                                                         else fl(dm))),
+                                      Expr("Plus", head.args[0], R(dp) if not has_float(head) else fl(dp)))))
+    raise ValueError(f'Around: unknown property "{p}" (use "Value", "Uncertainty" or "Interval")')
+
+
+_KL.COMPOUND_HEAD_HOOKS["Around"] = _around_prop
+
+
+@fn("AroundReplace", area=AREA, status="added",
+    notes="AroundReplace[expr, {x1 -> Around[v1, d1], ...}] evaluates expr at the values and propagates the "
+          "(symmetric) uncertainties to first order treating the xi as independent: Around[f(v), Sqrt[Sum[(df/dxi "
+          "di)^2]]]; rules whose right side is a plain number substitute it exactly; a single rule need not be in a "
+          "list. Asymmetric uncertainties and the Assumptions option raise NotImplementedError; a non-rule "
+          "TypeError. Check: identical to Around arithmetic for expressions with each variable once (tested).")
+def _around_replace(e: Expr, rules: Expr) -> Expr:
+    name = "AroundReplace"
+    rl = list(rules.args) if is_list(rules) else [rules]
+    if not all(_is_rule(r) for r in rl):
+        raise TypeError(f"{name}: the second argument must be a rule or a list of rules")
+    from ..evaluate import evaluate
+    syms, vals, ds, inexact_ = [], [], [], False
+    plain = []
+    for r in rl:
+        lhs, rhs = r.args
+        rhs = evaluate(rhs)
+        if _is_around(rhs):
+            if is_list(rhs.args[1]):
+                raise NotImplementedError(f"{name}: asymmetric uncertainties are not supported")
+            syms.append(lhs)
+            v, (d, _) = _around_parts(rhs)
+            vals.append(v)
+            ds.append(d)
+            inexact_ = inexact_ or has_float(rhs)
+        else:
+            plain.append(r)
+    e2 = evaluate(Expr("ReplaceAll", e, L(*plain))) if plain else e
+    if not syms:
+        return evaluate(e2)
+    zs = sp.symbols(f"w18z0:{len(syms)}")
+    sub_rules = L(*(rule(s, Symbol(str(z))) for s, z in zip(syms, zs)))
+    fe = S(evaluate(Expr("ReplaceAll", e2, sub_rules)))
+    if not isinstance(fe, sp.Basic):
+        raise TypeError(f"{name}: the expression is not numeric")
+    fe = fe.subs({sp.Symbol(str(z)): z for z in zs})
+    if fe.free_symbols - set(zs):
+        raise Unevaluated()
+    return _propagate(lambda *z: fe.subs(dict(zip(zs, z))), vals, [(d, d) for d in ds], inexact_ or
+                      has_float(e2))
+
+
+@fn("MeanAround", area=AREA, status="added",
+    notes="MeanAround[{x1, x2, ...}] = Around[Mean, StandardDeviation/Sqrt[n]] (the mean with its standard error); "
+          "for a list of Around values the inverse-variance weighted mean Around[Sum[w_i x_i]/Sum[w_i], "
+          "1/Sqrt[Sum[w_i]]], w_i = 1/d_i^2 (zero uncertainties raise ArithmeticError). Matrices (VectorAround "
+          "output), asymmetric uncertainties and Weights raise NotImplementedError; fewer than 2 plain values "
+          "ValueError. Check: reference values from numpy mean/std(ddof=1)/sqrt(n) and the weighted-mean formula.")
+def _mean_around(x: ListOf[Real] | ListOf[Expr]) -> Expr:
+    name = "MeanAround"
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if not is_list(x):
+        raise TypeError(f"{name}: the argument must be a list")
+    if is_matrix(x):
+        raise NotImplementedError(f"{name}: matrices (VectorAround results) are not supported")
+    if x.args and all(_is_around(a) for a in x.args):
+        num, den, inexact_ = sp.Integer(0), sp.Integer(0), False
+        for a in x.args:
+            if is_list(a.args[1]):
+                raise NotImplementedError(f"{name}: asymmetric uncertainties are not supported")
+            v, (d, _) = _around_parts(a)
+            if d == 0:
+                raise ArithmeticError(f"{name}: an uncertainty is zero (infinite weight)")
+            num += v / d ** 2
+            den += 1 / d ** 2
+            inexact_ = inexact_ or has_float(a)
+        m, u = num / den, 1 / sp.sqrt(den)
+        if not inexact_:
+            m, u = sp.simplify(m), sp.simplify(u)
+        return _mk_around(m, u, u, inexact_)
+    v, items = vec(x, name, min_len=2)
+    m = mean(v)
+    u = sp.sqrt(svar(v) / len(v))
+    return _mk_around(m, u, u, inexact(items))
+
+
+@fn("VectorAround", area=AREA, status="added",
+    notes="VectorAround[{x1, ..., xn}, {d1, ..., dn}] and VectorAround[{x1, ...}, cov] (symmetric positive "
+          "semidefinite covariance matrix) represent a vector with correlated uncertainties; the arguments are "
+          "validated and the object stays as entered; v[\"Value\"], v[\"Uncertainty\"] (Sqrt of the covariance "
+          "diagonal) and v[\"Covariance\"] give its parts. Arithmetic on VectorAround and the single-argument "
+          "sample form raise NotImplementedError; mismatched lengths or an invalid covariance ValueError. Check: "
+          "the covariance of the d form is DiagonalMatrix[d^2] (tested).")
+def _vector_around(x: ListOf[Real], d: ListOf[Real] | MatrixOf[Real] = None) -> Expr:
+    name = "VectorAround"
+    if d is None:
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise NotImplementedError(f"{name}: the sample form VectorAround[{{v1, v2, ...}}] is not supported")
+    if isinstance(x, Symbol) or isinstance(d, Symbol):
+        raise Unevaluated()
+    v, _ = vec(x, name, "value")
+    if is_matrix(d):
+        m = mat(d, name, "covariance")
+        if len(m) != len(v) or len(m[0]) != len(v):
+            raise ValueError(f"{name}: the covariance matrix must be {len(v)} x {len(v)}")
+        M = sp.Matrix(m)
+        if not all(sp.simplify(M[i, j] - M[j, i]) == 0 for i in range(len(v)) for j in range(len(v))):
+            raise ValueError(f"{name}: the covariance matrix must be symmetric")
+        if any(fl(e) < -1e-12 for e in M.evalf().eigenvals()):
+            raise ValueError(f"{name}: the covariance matrix must be positive semidefinite")
+    else:
+        dd, _ = vec(d, name, "uncertainties")
+        if len(dd) != len(v):
+            raise ValueError(f"{name}: the values and uncertainties must have the same length")
+        if any(t < 0 for t in dd):
+            raise ValueError(f"{name}: uncertainties must be non-negative")
+    raise Unevaluated()
+
+
+def _vector_around_prop(head, args, ev_):
+    if len(head.args) != 2 or len(args) != 1 or not isinstance(args[0], str) or not is_list(head.args[0]):
+        return _UNH
+    p = args[0]
+    x, d = head.args
+    if p == "Value":
+        return x
+    if is_matrix(d):
+        cov = d
+        unc = ev_(Expr("Sqrt", Expr("Diagonal", d)))
+    else:
+        cov = ev_(Expr("DiagonalMatrix", Expr("Power", d, 2)))
+        unc = d
+    if p == "Covariance":
+        return cov
+    if p == "Uncertainty":
+        return unc
+    raise ValueError(f'VectorAround: unknown property "{p}" (use "Value", "Uncertainty" or "Covariance")')
+
+
+_KL.COMPOUND_HEAD_HOOKS["VectorAround"] = _vector_around_prop
+
+
+def _is_ci(a):
+    if not (isinstance(a, Expr) and a.head == "CenteredInterval" and len(a.args) == 2):
+        return False
+    for t in a.args:
+        if has_float(t):
+            return False
+        v = S(t)
+        if not (isinstance(v, sp.Basic) and v.is_number and v.is_real):
+            return False
+    return True
+
+
+@fn("CenteredInterval", area=AREA, status="added",
+    notes="CenteredInterval[c, r] is the set of numbers within r >= 0 of c (exact real c and r); "
+          "CenteredInterval[Interval[{a, b}]] = CenteredInterval[(a + b)/2, (b - a)/2]. Exact interval arithmetic: "
+          "sums add centres and radii, products give CenteredInterval[c1 c2, |c1| r2 + |c2| r1 + r1 r2] (a "
+          "guaranteed enclosure), integer powers repeat the product; ci[\"Center\"], ci[\"Radius\"] and "
+          "ci[\"Bounds\"] give the parts. Machine-number (binary ball) inputs, complex centres and other functions "
+          "raise NotImplementedError; r < 0 ValueError. Check: every product enclosure contains the exact product "
+          "of the endpoints (tested).")
+def _centered_interval(c: Real | Expr, r: Real = None) -> Expr:
+    name = "CenteredInterval"
+    if r is None:
+        if isinstance(c, Expr) and c.head == "Interval" and len(c.args) == 1 and is_list(c.args[0]) and \
+                len(c.args[0].args) == 2:
+            if has_float(c):
+                raise NotImplementedError(f"{name}: machine-number intervals are not supported")
+            a, b = (_sp(t, name, "endpoint") for t in c.args[0].args)
+            if b < a:
+                raise ValueError(f"{name}: the interval endpoints are out of order")
+            return Expr("CenteredInterval", R((a + b) / 2), R((b - a) / 2))
+        if isinstance(c, Symbol):
+            raise Unevaluated()
+        raise TypeError(f"{name}: expected CenteredInterval[c, r] or CenteredInterval[Interval[{{a, b}}]]")
+    if isinstance(c, Symbol) or isinstance(r, Symbol):
+        raise Unevaluated()
+    if has_float(c) or has_float(r):
+        raise NotImplementedError(f"{name}: machine-number (binary ball) intervals are not supported; use exact "
+                                  "numbers")
+    cv = _num(c, name, "centre", real=False)
+    if cv.is_real is False:
+        raise NotImplementedError(f"{name}: complex centres are not supported")
+    rv = _sp(r, name, "radius")
+    if rv < 0:
+        raise ValueError(f"{name}: the radius must be non-negative")
+    raise Unevaluated()
+
+
+def _ci_parts(a):
+    return S(a.args[0]), S(a.args[1])
+
+
+def _ci_arith(expr, ev_):
+    h = expr.head
+    if h not in ("Plus", "Times", "Power") or not any(_is_ci(a) for a in expr.args):
+        return _UNH
+    parts = []
+    for a in expr.args:
+        if _is_ci(a):
+            parts.append(_ci_parts(a))
+        else:
+            n = _NT.number_of(a)
+            if n is None or isinstance(n, (float, complex)) or (isinstance(n, sp.Basic) and n.is_real is False):
+                return _UNH
+            parts.append((sp.sympify(n), sp.Integer(0)))
+    if h == "Plus":
+        c = sp.Add(*(p[0] for p in parts))
+        r = sp.Add(*(p[1] for p in parts))
+    elif h == "Times":
+        c, r = parts[0]
+        for c2, r2 in parts[1:]:
+            c, r = c * c2, abs(c) * r2 + abs(c2) * r + r * r2
+    else:
+        (c0, r0), (e, er) = parts
+        if er != 0 or not e.is_integer or e < 1:
+            raise NotImplementedError("CenteredInterval: only positive integer powers are supported")
+        c, r = c0, r0
+        for _ in range(int(e) - 1):
+            c, r = c * c0, abs(c) * r0 + abs(c0) * r + r * r0
+    return Expr("CenteredInterval", R(sp.simplify(c)), R(sp.simplify(r)))
+
+
+_NT.SPECIAL_HEADS.add("CenteredInterval")
+_NT.ARITH_HANDLERS.append(_ci_arith)
+
+
+def _ci_prop(head, args, ev_):
+    if not _is_ci(head) or len(args) != 1 or not isinstance(args[0], str):
+        return _UNH
+    c, r = _ci_parts(head)
+    p = args[0]
+    if p == "Center":
+        return head.args[0]
+    if p == "Radius":
+        return head.args[1]
+    if p == "Bounds":
+        return L(R(c - r), R(c + r))
+    raise ValueError(f'CenteredInterval: unknown property "{p}" (use "Center", "Radius" or "Bounds")')
+
+
+_KL.COMPOUND_HEAD_HOOKS["CenteredInterval"] = _ci_prop
+
+
+# ─────────────────────────── likelihoods, moments and distribution utilities ───────────────────────────
+
+def _dist_data(d, x, fname):
+    dd = W.dist_of(d, fname)
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if not is_list(x):
+        raise TypeError(f"{fname}: the observations must be a list")
+    if any(is_list(a) for a in x.args):
+        raise NotImplementedError(f"{fname}: multivariate observations are not supported")
+    return dd
+
+
+def _pdf_terms(d, x, fname):
+    dd = _dist_data(d, x, fname)
+    out_ = []
+    for a in x.args:
+        out_.append(S(W.pdf_value(dd, S(a))))
+    return dd, out_
+
+
+@fn("Likelihood", area=AREA, status="added",
+    notes="Likelihood[dist, {x1, x2, ...}] = Product[PDF[dist, xi]] for univariate distributions (exact for exact "
+          "input; symbolic parameters and observations give the symbolic product). Random processes and "
+          "multivariate observations raise NotImplementedError; a non-list TypeError; a non-distribution "
+          "ValueError. Check: reference values from scipy.stats (norm.pdf / poisson.pmf products) and the closed "
+          "form.")
+def _likelihood(d: Expr, x: ListOf[Real] | ListOf[Expr]) -> Real | Expr:
+    _, terms = _pdf_terms(d, x, "Likelihood")
+    v = sp.Mul(*terms)
+    return out(sp.simplify(v) if not has_float(x) and not has_float(d) else v, [d, x])
+
+
+@fn("LogLikelihood", area=AREA, status="added",
+    notes="LogLikelihood[dist, {x1, x2, ...}] = Sum[Log[PDF[dist, xi]]] for univariate distributions (exact for "
+          "exact input, logarithms of the positive density factors split; an observation outside the support gives -Infinity). Random "
+          "processes and multivariate observations raise NotImplementedError; a non-list TypeError. Check: "
+          "reference values from scipy.stats logpdf sums and Log[Likelihood] (tested).")
+def _loglikelihood(d: Expr, x: ListOf[Real] | ListOf[Expr]) -> Real | Expr:
+    _, terms = _pdf_terms(d, x, "LogLikelihood")
+    if any(t == 0 for t in terms):
+        return R(-sp.oo)
+    inexact_ = has_float(x) or has_float(d)
+    v = sp.Add(*(sp.log(t) for t in terms))
+    if not inexact_:
+        # the densities are positive here, so splitting the logarithms is valid
+        v = sp.simplify(sp.expand_log(v, force=True))
+    return out(v, [d, x])
+
+
+def _falling(x, r):
+    return sp.Mul(*(x - k for k in range(r)))
+
+
+@fn("FactorialMoment", area=AREA, status="added",
+    notes="FactorialMoment[data, r] = Mean[FactorialPower[x, r]] (column-wise for matrices) and "
+          "FactorialMoment[dist, r] = Sum[StirlingS1[r, k] Moment[dist, k], {k, r}] for univariate distributions "
+          "(symbolic parameters allowed); FactorialMoment[r] stays as the formal moment. Multivariate orders "
+          "{r1, ...}, WeightedData and multivariate distributions raise NotImplementedError; r not a non-negative "
+          "integer ValueError. Check: reference values from the Wolfram documentation (FactorialMoment[{1, 2, 3, "
+          "4}, 1] = 5/2, FactorialMoment[{1., 2., 3., 4.}, 2] = 5., FactorialMoment[BinomialDistribution[n, p], 2] "
+          "= n (n - 1) p^2).")
+def _factorial_moment(x: ListOf[Real] | MatrixOf[Real] | Expr | Integer, r: Integer = None) -> Real | Expr:
+    name = "FactorialMoment"
+    if r is None:
+        if isinstance(x, int) and not isinstance(x, bool) and x >= 0:
+            raise Unevaluated()
+        if isinstance(x, Symbol):
+            raise Unevaluated()
+        raise ValueError(f"{name}: the formal moment order must be a non-negative integer")
+    if is_list(r):
+        raise NotImplementedError(f"{name}: multivariate orders are not supported")
+    if isinstance(r, Symbol):
+        raise Unevaluated()
+    if not (isinstance(r, int) and not isinstance(r, bool)) or r < 0:
+        raise ValueError(f"{name}: the order must be a non-negative integer")
+    if isinstance(x, Expr) and x.head == "WeightedData":
+        raise NotImplementedError(f"{name}: WeightedData is not supported")
+    if W.is_dist(x):
+        dd = W.dist_of(x, name)
+        k = sp.Symbol("w18k")
+        v = sp.Add(*(sp.functions.combinatorial.numbers.stirling(r, j, kind=1, signed=True) *
+                     W.raw_moment(dd, j) for j in range(0, r + 1)))
+        return out(sp.factor(sp.simplify(v)) if not has_float(x) else v, [x])
+    if is_matrix(x):
+        return per_column(x, name, lambda c: _factorial_moment(c, r))
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if not is_list(x) or not x.args:
+        raise TypeError(f"{name}: the first argument must be a non-empty list or a distribution")
+    v = [S(a) for a in x.args]
+    m = sp.Add(*(_falling(t, r) for t in v)) / len(v)
+    return out(m if inexact(x.args) else (sp.factor(m) if any(getattr(t, "free_symbols", None) for t in v)
+                                           else sp.simplify(m)), list(x.args))
+
+
+@fn("PowerSymmetricPolynomial", area=AREA, status="added",
+    notes="PowerSymmetricPolynomial[r, data] = Sum[x^r] over the data (column-wise for matrices; r any number); "
+          "PowerSymmetricPolynomial[r] stays as the formal power sum and PowerSymmetricPolynomial[{r1, ...}, data] "
+          "is the list of the PowerSymmetricPolynomial[ri, data]. A non-list data TypeError. Check: the identity "
+          "PowerSymmetricPolynomial[1, data] = Total[data] (tested) and direct sums.")
+def _power_sym(r: Integer | ListOf[Integer] | Real, x: ListOf[Real] | MatrixOf[Real] = None) -> Real | Expr:
+    name = "PowerSymmetricPolynomial"
+    if x is None:
+        raise Unevaluated()
+    if is_list(r):
+        return L(*(_power_sym(q, x) for q in r.args))
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if is_matrix(x):
+        return per_column(x, name, lambda c: _power_sym(r, c))
+    if not is_list(x):
+        raise TypeError(f"{name}: the data must be a list")
+    rr = S(r)
+    v = sp.Add(*(S(a) ** rr for a in x.args))
+    return out(v, list(x.args) + [r])
+
+
+def _set_partitions(items):
+    if not items:
+        yield []
+        return
+    first, rest = items[0], items[1:]
+    for p in _set_partitions(rest):
+        yield [[first]] + p
+        for i in range(len(p)):
+            yield p[:i] + [[first] + p[i]] + p[i + 1:]
+
+
+@fn("AugmentedSymmetricPolynomial", area=AREA, status="added",
+    notes="AugmentedSymmetricPolynomial[{r1, ..., rk}, data] = Sum[x_i1^r1 ... x_ik^rk] over distinct indices "
+          "i1, ..., ik, computed from power sums by Moebius inversion over the set partitions of {1, ..., k} "
+          "(column-wise for matrices); AugmentedSymmetricPolynomial[{r1, ...}] stays as the formal object. Orders "
+          "must be positive integers (ValueError); a non-list TypeError. Check: equals the brute-force sum over "
+          "distinct index tuples (tested) and AugmentedSymmetricPolynomial[{r}, data] = "
+          "PowerSymmetricPolynomial[r, data].")
+def _aug_sym(rs: ListOf[Integer], x: ListOf[Real] | MatrixOf[Real] = None) -> Real | Expr:
+    name = "AugmentedSymmetricPolynomial"
+    if isinstance(rs, Symbol):
+        raise Unevaluated()
+    if not is_list(rs) or not rs.args:
+        raise TypeError(f"{name}: the orders must be a list {{r1, r2, ...}}")
+    if not all(isinstance(q, int) and not isinstance(q, bool) and q > 0 for q in rs.args):
+        if any(isinstance(q, Symbol) for q in rs.args):
+            raise Unevaluated()
+        raise ValueError(f"{name}: the orders must be positive integers")
+    if x is None:
+        raise Unevaluated()
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if is_matrix(x):
+        return per_column(x, name, lambda c: _aug_sym(rs, c))
+    if not is_list(x):
+        raise TypeError(f"{name}: the data must be a list")
+    v = [S(a) for a in x.args]
+    r = list(rs.args)
+    tot = sp.Integer(0)
+    for part in _set_partitions(list(range(len(r)))):
+        mu = sp.Integer(1)
+        prod = sp.Integer(1)
+        for blk in part:
+            mu *= (-1) ** (len(blk) - 1) * sp.factorial(len(blk) - 1)
+            e = sum(r[i] for i in blk)
+            prod *= sp.Add(*(t ** e for t in v))
+        tot += mu * prod
+    res = sp.expand(tot)
+    return out(res, list(x.args))
+
+
+_ASSUME = {
+    "NormalDistribution": (2, "Element[#1, Reals] && #2 > 0"),
+    "LogNormalDistribution": (2, "Element[#1, Reals] && #2 > 0"),
+    "CauchyDistribution": (2, "Element[#1, Reals] && #2 > 0"),
+    "LaplaceDistribution": (2, "Element[#1, Reals] && #2 > 0"),
+    "LogisticDistribution": (2, "Element[#1, Reals] && #2 > 0"),
+    "GammaDistribution": (2, "#1 > 0 && #2 > 0"),
+    "BetaDistribution": (2, "#1 > 0 && #2 > 0"),
+    "WeibullDistribution": (2, "#1 > 0 && #2 > 0"),
+    "ParetoDistribution": (2, "#1 > 0 && #2 > 0"),
+    "FRatioDistribution": (2, "#1 > 0 && #2 > 0"),
+    "ExponentialDistribution": (1, "#1 > 0"),
+    "PoissonDistribution": (1, "#1 > 0"),
+    "ChiSquareDistribution": (1, "#1 > 0"),
+    "StudentTDistribution": (1, "#1 > 0"),
+    "GeometricDistribution": (1, "0 < #1 <= 1"),
+    "BernoulliDistribution": (1, "0 <= #1 <= 1"),
+    "BinormalDistribution": (1, "-1 < #1 < 1"),
+}
+
+
+@fn("DistributionParameterAssumptions", area=AREA, status="added",
+    notes="DistributionParameterAssumptions[dist] gives the parameter conditions (Element[mu, Reals] && sigma > 0 "
+          "for NormalDistribution[mu, sigma], 0 < p <= 1 for GeometricDistribution[p], n in Integers && n > 0 && "
+          "pi >= 0 && Sum[pi] == 1 for MultinomialDistribution, ...), with conditions on numeric parameters "
+          "evaluated (True when all hold, False when one fails). Covered: Normal, LogNormal, Cauchy, Laplace, "
+          "Logistic, Gamma, Beta, Weibull, Pareto, FRatio (two parameters), Exponential, Poisson, ChiSquare, "
+          "StudentT[nu], Geometric, Bernoulli, Binormal[rho] and Multinomial; other distributions raise "
+          "NotImplementedError; non-distributions TypeError. Check: reference values from the Wolfram documentation "
+          "(Normal, Gamma, Geometric, Pareto, Binormal, Multinomial examples).")
+def _dpa(d: Expr) -> Expr:
+    name = "DistributionParameterAssumptions"
+    if isinstance(d, Symbol):
+        raise Unevaluated()
+    if not (isinstance(d, Expr) and isinstance(d.head, str) and d.head.endswith("Distribution")):
+        raise TypeError(f"{name}: {d!r} is not a distribution")
+    from ..parser import parse
+    if d.head == "MultinomialDistribution" and len(d.args) == 2 and is_list(d.args[1]):
+        n, ps = d.args
+        parts = [Expr("Element", n, Symbol("Integers")), Expr("Greater", n, 0)]
+        parts += [Expr("GreaterEqual", p, 0) for p in ps.args]
+        parts.append(Expr("Equal", Expr("Plus", *ps.args), 1))
+        return ev(Expr("And", *parts))
+    spec = _ASSUME.get(d.head)
+    if spec is None or len(d.args) != spec[0]:
+        raise NotImplementedError(f"{name}: {d.head} with {len(d.args)} parameter(s) is not supported")
+    tmpl = parse(spec[1])
+    sub = L(*(rule(Expr("Slot", i + 1), a) for i, a in enumerate(d.args)))
+    return ev(ev(Expr("ReplaceAll", tmpl, sub)))
+
+
+@fn("DistributionParameterQ", area=AREA, status="added",
+    notes="DistributionParameterQ[dist] is True when the numeric parameters of dist satisfy its parameter "
+          "assumptions (symbolic parameters are assumed valid) and False otherwise; non-distribution arguments "
+          "give False; distributions the library does not implement raise NotImplementedError. Check: agrees with "
+          "DistributionParameterAssumptions on numeric parameters (tested).")
+def _dpq(d: Expr) -> Boolean:
+    if not (isinstance(d, Expr) and isinstance(d.head, str) and d.head.endswith("Distribution")):
+        return False
+    try:
+        W.dist_of(d, "DistributionParameterQ")
+    except ValueError:
+        return False
+    except Unevaluated:
+        return True
+    return True
+
+
+_SYMMETRIC = {"NormalDistribution": 0, "StudentTDistribution": None, "CauchyDistribution": 0,
+              "LaplaceDistribution": 0, "LogisticDistribution": 0}
+
+
+@fn("RarerProbability", area=AREA, status="added",
+    notes="RarerProbability[dist, x] = Probability[PDF[dist, y] <= PDF[dist, x], y ~ dist] (and the list form "
+          "RarerProbability[dist, {x1, ...}]): for the symmetric unimodal Normal, StudentT, Cauchy, Laplace and "
+          "Logistic distributions 2 CDF[dist, c - |x - c|] (the two-tailed p-value); for discrete distributions "
+          "with finite support (Bernoulli, Binomial, DiscreteUniform) the exact sum of the probabilities not "
+          "exceeding PDF[dist, x]. Other distributions and multivariate ones raise NotImplementedError; symbolic "
+          "parameters or points stay unevaluated. Check: reference values from scipy.stats (2 norm.cdf(-|z|)) and "
+          "direct summation of binom.pmf.")
+def _rarer(d: Expr, x: Real | ListOf[Real]) -> Real | ListOf[Real]:
+    name = "RarerProbability"
+    if is_list(x):
+        return L(*(_rarer(d, a) for a in x.args))
+    dd = W.dist_of(d, name)
+    xv = _num(x, name, "point")
+    if not dd.numeric():
+        raise Unevaluated()
+    h = d.head
+    if h in _SYMMETRIC:
+        c = dd.a[0] if (h != "StudentTDistribution" or len(dd.a) == 3) else sp.Integer(0)
+        if h == "StudentTDistribution" and len(dd.a) == 3:
+            c = dd.a[0]
+        F = W.cdf_value(dd, c - abs(xv - c))
+        return out(sp.simplify(2 * F), [d, x])
+    if h in ("BernoulliDistribution", "BinomialDistribution", "DiscreteUniformDistribution"):
+        lo, hi = dd.bounds()
+        px = W.pdf_value(dd, xv)
+        tot = sp.Integer(0)
+        for k in range(int(lo), int(hi) + 1):
+            pk = W.pdf_value(dd, sp.Integer(k))
+            if (sp.N(pk - px, 30) <= sp.Float(1e-25)) if (has_float(d) or has_float(x)) else (pk <= px):
+                tot += pk
+        return out(sp.simplify(tot), [d, x])
+    raise NotImplementedError(f"{name}: {h} is not supported")
+
+
+# ─────────────────────────── conditioning, reliability importance, data utilities ───────────────────────────
+
+@fn("Conditioned", area=AREA, status="added",
+    notes="Conditioned[expr, cond] (expr \\[Conditioned] cond) is inert; Probability[Conditioned[a, c], x ~ dist] = "
+          "Probability[a && c]/Probability[c] and Expectation[Conditioned[f, c], x ~ dist] = Expectation[f "
+          "Boole[c]]/Probability[c] (univariate; the expectation integrates f PDF over the event, continuous "
+          "distributions with numeric parameters only, discrete ones raise NotImplementedError); a "
+          "zero-probability condition raises ArithmeticError; a wrong number of arguments ValueError. Check: "
+          "conditional probabilities of exponential memorylessness (tested) and Bayes' rule.")
+def _conditioned(*args: Expr) -> Expr:
+    if len(args) != 2:
+        raise ValueError(f"Conditioned: expected Conditioned[expr, cond], not {len(args)} argument(s)")
+    raise Unevaluated()
+
+
+def _is_conditioned_first(args):
+    return len(args) == 2 and isinstance(args[0], Expr) and args[0].head == "Conditioned" and \
+        len(args[0].args) == 2
+
+
+def _cond_prob(*args: Expr) -> Expr:
+    (a, c), spec = args[0].args, args[1]
+    pc = ev(Expr("Probability", c, spec))
+    if _NT.number_of(pc) is not None and sp.sympify(_NT.number_of(pc)) == 0:
+        raise ArithmeticError("Probability: the condition has probability zero")
+    if isinstance(pc, Expr) and pc.head == "Probability":
+        raise Unevaluated()
+    pac = ev(Expr("Probability", Expr("And", a, c), spec))
+    if isinstance(pac, Expr) and pac.head == "Probability":
+        raise Unevaluated()
+    return ev(Expr("Simplify", Expr("Times", pac, Expr("Power", pc, -1))))
+
+
+def _cond_expect(*args: Expr) -> Expr:
+    (f, c), spec = args[0].args, args[1]
+    pairs = W._distributed(spec, "Expectation")
+    if len(pairs) != 1:
+        raise NotImplementedError("Expectation: conditioned expectations need one random variable")
+    (v, d), = pairs
+    dd = W.dist_of(d, "Expectation")
+    if not dd.numeric():
+        raise Unevaluated()
+    if dd.discrete:
+        raise NotImplementedError("Expectation: conditioned expectations of discrete distributions are not supported")
+    st = W._event_set(W._pred(c, "Expectation"), v, "Expectation")
+    pc = sp.simplify(W._prob_set(dd, st))
+    if pc == 0:
+        raise ArithmeticError("Expectation: the condition has probability zero")
+    fv = W.sym(f, "Expectation")
+    x = sp.Dummy("x", real=True)
+    dens = W.pdf_value(dd, x)
+
+    def integ(s_):
+        if isinstance(s_, sp.Union):
+            return sp.Add(*(integ(t) for t in s_.args))
+        if isinstance(s_, sp.Interval):
+            return sp.integrate(fv.subs(v, x) * dens, (x, s_.start, s_.end))
+        if s_ is sp.S.EmptySet or isinstance(s_, sp.FiniteSet):
+            return sp.Integer(0)
+        raise NotImplementedError(f"Expectation: unsupported conditioning event {s_}")
+    num = integ(st)
+    if num.has(sp.Integral):
+        raise Unevaluated()
+    return out(sp.simplify(num / pc), [f, d])
+
+
+def _formal_order(args):
+    return len(args) == 1 and ((isinstance(args[0], int) and not isinstance(args[0], bool) and args[0] >= 0) or
+                               (is_list(args[0]) and all(isinstance(q, int) and q >= 0 for q in args[0].args)) or
+                               isinstance(args[0], Symbol))
+
+
+def _formal_moment(*args: Expr) -> Expr:
+    raise Unevaluated()
+
+
+for _mn in ("Moment", "CentralMoment", "Cumulant"):
+    W.extend(_mn, _formal_moment, _formal_order,
+             f"{_mn}[r] (and {_mn}[{{r1, ...}}]) stays as the formal moment for MomentConvert / MomentEvaluate (W18)",
+             status="added")
+
+
+W.extend("Probability", _cond_prob, _is_conditioned_first,
+         "Probability[Conditioned[a, c], x \\[Distributed] dist] = Probability[a && c]/Probability[c] (W18)",
+         status="added")
+W.extend("Expectation", _cond_expect, _is_conditioned_first,
+         "Expectation[Conditioned[f, c], x \\[Distributed] dist] = Expectation[f Boole[c]]/Probability[c] (W18)",
+         status="added")
+
+
+@fn("BirnbaumImportance", area=AREA, status="added",
+    notes="BirnbaumImportance[rdist, t] for ReliabilityDistribution and FailureDistribution: the list (in component "
+          "order) of R(t | component i works) - R(t | component i failed), by exact enumeration of the Boolean "
+          "structure function with independent component survival functions; t may be symbolic. Other "
+          "distributions raise TypeError; discrete components (rejected by the distribution) NotImplementedError. "
+          "Check: for a series system x && y the importance of x is the survival of y (tested), parallel x || y "
+          "gives 1 - F_y.")
+def _birnbaum(d: Expr, t: Real | Expr) -> ListOf[Expr]:
+    name = "BirnbaumImportance"
+    if isinstance(d, Symbol):
+        raise Unevaluated()
+    if not (isinstance(d, Expr) and d.head in ("ReliabilityDistribution", "FailureDistribution")):
+        raise TypeError(f"{name}: expected a ReliabilityDistribution or FailureDistribution")
+    dd = W.dist_of(d, name)
+    tv = S(t)
+    if isinstance(tv, sp.Basic) and tv.is_number and tv < 0:
+        raise ValueError(f"{name}: the time must be non-negative")
+    from . import wl_distributions2 as W2
+    Sv = [sp.simplify(1 - W2._cdf_of(c, tv)) for c in dd.ds]
+    n = len(dd.ds)
+
+    def works(state):
+        if dd.failure:
+            return not dd.f({nm: not w for nm, w in zip(dd.names, state)})
+        return dd.f(dict(zip(dd.names, state)))
+
+    res = []
+    for i in range(n):
+        tot = sp.Integer(0)
+        for bits in itertools.product((True, False), repeat=n - 1):
+            st1 = list(bits[:i]) + [True] + list(bits[i:])
+            st0 = list(bits[:i]) + [False] + list(bits[i:])
+            w = sp.Mul(*(Sv[j] if st1[j] else 1 - Sv[j] for j in range(n) if j != i))
+            tot += w * (int(works(st1)) - int(works(st0)))
+        res.append(out(sp.simplify(tot), [d, t]))
+    return L(*res)
+
+
+@fn("MeanShift", area=AREA, status="added",
+    notes="MeanShift[list, d] replaces each element by the mean of the elements within distance d of it "
+          "(|xi - xj| <= d, Euclidean distance for vectors; one iteration, MaxIterations -> k repeats); "
+          "MeanShift[list, d, {p1, ...}] shifts only those positions; options MaxIterations, Tolerance, "
+          "DistanceFunction (EuclideanDistance, ManhattanDistance, ChessboardDistance). Images, Weights and "
+          "symbolic elements raise NotImplementedError / stay unevaluated; d < 0 ValueError. Check: reference "
+          "values from the Wolfram documentation (MeanShift[{0, 10, 1, 11}, 1] = {1/2, 21/2, 1/2, 21/2}).")
+def _mean_shift(x: ListOf[Real] | MatrixOf[Real], d: Real, *rest: ListOf[Integer] | Option) -> ListOf[Real] | Expr:
+    name = "MeanShift"
+    args, o = opts(rest, ("MaxIterations", "Tolerance", "DistanceFunction", "Weights"), name)
+    if isinstance(x, Expr) and x.head == "Image":
+        raise NotImplementedError(f"{name}: images are not supported")
+    if "Weights" in o and str_or_sym(o["Weights"]) != "Automatic":
+        raise NotImplementedError(f"{name}: Weights are not supported")
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if not is_list(x) or not x.args:
+        raise TypeError(f"{name}: the first argument must be a non-empty list")
+    dv = _num(d, name, "distance")
+    if dv < 0:
+        raise ValueError(f"{name}: the distance must be non-negative")
+    vecs = is_matrix(x)
+    rows = mat(x, name) if vecs else [[v] for v in vec(x, name)[0]]
+    df = str_or_sym(o.get("DistanceFunction", Symbol("EuclideanDistance")))
+    if df not in ("EuclideanDistance", "ManhattanDistance", "ChessboardDistance", "Automatic"):
+        raise NotImplementedError(f"{name}: DistanceFunction -> {o['DistanceFunction']} is not supported")
+    its = o.get("MaxIterations", 1)
+    if not isinstance(its, int) or its < 1:
+        raise ValueError(f"{name}: MaxIterations must be a positive integer")
+    tol = _num(o.get("Tolerance", 0), name, "tolerance")
+    parts = None
+    if args:
+        if len(args) > 1 or not is_list(args[0]):
+            raise ValueError(f"{name}: the third argument must be a list of positions")
+        n = len(rows)
+        parts = set()
+        for p in args[0].args:
+            if not isinstance(p, int) or not (1 <= abs(p) <= n):
+                raise ValueError(f"{name}: invalid position {p!r}")
+            parts.add(p - 1 if p > 0 else n + p)
+
+    def dist(a, b):
+        diffs = [abs(p - q) for p, q in zip(a, b)]
+        if df == "ManhattanDistance":
+            return sp.Add(*diffs)
+        if df == "ChessboardDistance":
+            return sp.Max(*diffs)
+        return sp.sqrt(sp.Add(*(t ** 2 for t in diffs)))
+    cur = rows
+    for _ in range(its):
+        new = []
+        for i, a in enumerate(cur):
+            if parts is not None and i not in parts:
+                new.append(a)
+                continue
+            nb = [b for b in cur if (dist(a, b) - dv) <= 0]
+            new.append([sp.Add(*(b[k] for b in nb)) / len(nb) for k in range(len(a))])
+        delta = max((dist(p, q) for p, q in zip(new, cur)), key=lambda z: fl(z))
+        cur = new
+        if fl(delta) <= fl(tol):
+            break
+    items = list(x.args)
+    if vecs:
+        return L(*(L(*(out(v, items) for v in r)) for r in cur))
+    return L(*(out(r[0], items) for r in cur))
+
+
+def _missingq(x):
+    return isinstance(x, Expr) and x.head == "Missing"
+
+
+@fn("MissingFallback", area=AREA, status="added",
+    notes="MissingFallback[arg1, arg2, ...] gives the first argument that is not Missing[...] (the last argument "
+          "when all are Missing); MissingFallback[] stays unevaluated. Check: reference values from the Wolfram "
+          "documentation (MissingFallback[Missing[], 2] = 2, MissingFallback[Missing[\"Unknown\"], "
+          "Missing[\"NotAvailable\"]] = Missing[\"NotAvailable\"]).")
+def _missing_fallback(*args: Expr) -> Expr:
+    if not args:
+        raise Unevaluated()
+    for a in args:
+        if not _missingq(a):
+            return a
+    return args[-1]
+
+
+@fn("TransformMissing", area=AREA, status="added",
+    notes="TransformMissing[data, spec] replaces Missing[...] elements of a vector, or column-wise in a matrix, by "
+          "spec \"Mean\", \"Median\", \"Mode\" (first most frequent), {\"Constant\", c}, \"Previous\" or \"Next\" "
+          "(the nearest known value before / after, falling back to the other direction); TransformMissing[data, "
+          "{spec1, spec2, ...}] gives one spec per column. Tabular, Dataset, TimeSeries and associations raise "
+          "NotImplementedError; a column with no known values ValueError; unknown specs ValueError. Check: the "
+          "known values are unchanged and the result has no Missing elements (self-check in code).")
+def _transform_missing(x: ListOf[Expr] | MatrixOf[Expr], spec: String | ListOf[Expr] = None) -> ListOf[Expr]:
+    name = "TransformMissing"
+    if isinstance(x, Symbol):
+        raise Unevaluated()
+    if isinstance(x, Expr) and x.head in ("Tabular", "Dataset", "TimeSeries", "EventSeries", "Association"):
+        raise NotImplementedError(f"{name}: {x.head} input is not supported (use a list or matrix)")
+    if not is_list(x) or not x.args:
+        raise TypeError(f"{name}: the data must be a non-empty list or matrix")
+    if spec is None:
+        raise NotImplementedError(f"{name}: the automatic specification is not supported; give \"Mean\", "
+                                  "\"Median\", {\"Constant\", c}, ...")
+
+    def fill(col, sp_):
+        known = [(i, v) for i, v in enumerate(col) if not _missingq(v)]
+        if not known:
+            raise ValueError(f"{name}: a column has no known values")
+        kv = [v for _, v in known]
+        sname = str_or_sym(sp_)
+        if is_list(sp_) and len(sp_.args) == 2 and sp_.args[0] == "Constant":
+            rep = [sp_.args[1]] * len(col)
+        elif sname in ("Mean", "Median"):
+            nums = [S(v) for v in kv]
+            if not all(isinstance(t, sp.Basic) and t.is_number for t in nums):
+                raise TypeError(f"{name}: \"{sname}\" needs numeric known values")
+            val = mean(nums) if sname == "Mean" else median(nums)
+            rep = [out(val, kv)] * len(col)
+        elif sname == "Mode":
+            cnt = {}
+            for v in kv:
+                cnt[repr(v)] = cnt.get(repr(v), 0) + 1
+            best = max(cnt.values())
+            m = next(v for v in kv if cnt[repr(v)] == best)
+            rep = [m] * len(col)
+        elif sname in ("Previous", "Next"):
+            rep = []
+            for i in range(len(col)):
+                if not _missingq(col[i]):
+                    rep.append(col[i])
+                    continue
+                prev = [v for j, v in known if j < i]
+                nxt = [v for j, v in known if j > i]
+                if sname == "Previous":
+                    rep.append(prev[-1] if prev else nxt[0])
+                else:
+                    rep.append(nxt[0] if nxt else prev[-1])
+        else:
+            raise ValueError(f"{name}: unknown specification {sp_!r}")
+        res = [rep[i] if _missingq(v) else v for i, v in enumerate(col)]
+        assert not any(_missingq(v) for v in res) and all(res[i] is col[i] for i, _ in known)
+        return res
+    if all(is_list(r) for r in x.args):
+        ncol = len(x.args[0].args)
+        if any(len(r.args) != ncol for r in x.args):
+            raise ValueError(f"{name}: the matrix must be rectangular")
+        cols = [[r.args[j] for r in x.args] for j in range(ncol)]
+        if is_list(spec) and not (len(spec.args) == 2 and spec.args[0] == "Constant"):
+            if len(spec.args) != ncol:
+                raise ValueError(f"{name}: give one specification per column")
+            specs = list(spec.args)
+        else:
+            specs = [spec] * ncol
+        filled = [fill(c, s_) for c, s_ in zip(cols, specs)]
+        return L(*(L(*(filled[j][i] for j in range(ncol))) for i in range(len(x.args))))
+    if any(is_list(r) for r in x.args):
+        raise TypeError(f"{name}: ragged data is not supported")
+    return L(*fill(list(x.args), spec))
+
+
+# formal moments: conversions through raw moments
+
+def _formal(e):
+    """sympy expression with formal moments replaced by symbols M_r (raw), C_r (central), K_r (cumulant), F_r"""
+    syms = {}
+
+    def walk(x):
+        if isinstance(x, Expr) and x.head in ("Moment", "CentralMoment", "Cumulant", "FactorialMoment") and \
+                len(x.args) == 1:
+            r = x.args[0]
+            if is_list(r):
+                raise NotImplementedError("MomentConvert: multivariate formal moments are not supported")
+            if not (isinstance(r, int) and r >= 0):
+                raise ValueError(f"MomentConvert: invalid moment order {r!r}")
+            s = sp.Symbol(f"w18{x.head}_{r}")
+            syms[s] = (x.head, r)
+            return Symbol(str(s))
+        if isinstance(x, Expr) and x.head in ("PowerSymmetricPolynomial", "AugmentedSymmetricPolynomial"):
+            raise NotImplementedError("MomentConvert: formal sample moments are not supported")
+        if isinstance(x, Expr):
+            return Expr(x.head, *(walk(a) for a in x.args))
+        return x
+    w = walk(e)
+    return S(w), syms
+
+
+def _raw_of(kind, r, cache):
+    """the formal moment (kind, r) as a polynomial in raw moments m[k] (sympy symbols)"""
+    m = lambda k: sp.Integer(1) if k == 0 else sp.Symbol(f"w18Moment_{k}")  # noqa: E731
+    if kind == "Moment":
+        return m(r)
+    if kind == "CentralMoment":
+        return sp.expand(sp.Add(*(sp.binomial(r, k) * m(k) * (-m(1)) ** (r - k) for k in range(r + 1))))
+    if kind == "FactorialMoment":
+        return sp.expand(sp.Add(*(sp.functions.combinatorial.numbers.stirling(r, k, kind=1, signed=True) * m(k)
+                                  for k in range(r + 1))))
+    if kind == "Cumulant":
+        if r == 0:
+            return sp.Integer(0)
+        if r in cache:
+            return cache[r]
+        v = m(r) - sp.Add(*(sp.binomial(r - 1, j - 1) * _raw_of("Cumulant", j, cache) * m(r - j)
+                            for j in range(1, r)))
+        cache[r] = sp.expand(v)
+        return cache[r]
+    raise AssertionError(kind)
+
+
+def _raw_in(target, r, cache):
+    """raw moment m[r] in terms of the target family"""
+    T = lambda k: sp.Symbol(f"w18{target}_{k}")  # noqa: E731
+    if r == 0:
+        return sp.Integer(1)
+    if target == "Moment":
+        return T(r)
+    if target == "CentralMoment":
+        m1 = sp.Symbol("w18Moment_1")
+        return sp.expand(sp.Add(*(sp.binomial(r, k) * (T(k) if k >= 2 else (1 if k == 0 else 0)) * m1 ** (r - k)
+                                  for k in range(r + 1))))
+    if target == "FactorialMoment":
+        return sp.expand(sp.Add(*(sp.functions.combinatorial.numbers.stirling(r, k) * T(k) for k in range(1, r + 1))))
+    if target == "Cumulant":
+        if r in cache:
+            return cache[r]
+        v = sp.Add(*(sp.binomial(r - 1, j - 1) * T(j) * _raw_in("Cumulant", r - j, cache) for j in range(1, r + 1)))
+        cache[r] = sp.expand(v)
+        return cache[r]
+    raise AssertionError(target)
+
+
+@fn("MomentConvert", area=AREA, status="added",
+    notes="MomentConvert[mexpr, form] for polynomials in the univariate formal moments Moment[r], CentralMoment[r], "
+          "Cumulant[r] and FactorialMoment[r], with form \"Moment\", \"CentralMoment\" (raw moments written with "
+          "central moments and Moment[1]), \"Cumulant\" or \"FactorialMoment\" (exact polynomial identities through "
+          "raw moments, e.g. Cumulant[2] -> Moment[2] - Moment[1]^2). Multivariate formal moments, formal sample "
+          "moments (PowerSymmetricPolynomial, AugmentedSymmetricPolynomial) and the sample-estimator forms raise "
+          "NotImplementedError; unknown forms ValueError. Check: reference values from the Wolfram documentation "
+          "(Cumulant[2] -> -Moment[1]^2 + Moment[2]) and round trips (tested).")
+def _moment_convert(e: Expr, form: String) -> Expr:
+    name = "MomentConvert"
+    forms = ("Moment", "CentralMoment", "Cumulant", "FactorialMoment")
+    if form in ("UnbiasedSampleEstimator", "SampleEstimator", "PowerSymmetricPolynomial",
+                "AugmentedSymmetricPolynomial"):
+        raise NotImplementedError(f'{name}: the "{form}" form is not supported')
+    if form not in forms:
+        raise ValueError(f"{name}: unknown form {form!r} (use one of {', '.join(forms)})")
+    fe, syms = _formal(e)
+    if not isinstance(fe, sp.Basic):
+        raise TypeError(f"{name}: the moment expression must be algebraic")
+    if not syms:
+        return e
+    cache = {}
+    raw = fe.subs({s: _raw_of(k, r, cache) for s, (k, r) in syms.items()})
+    raw = sp.expand(raw)
+    if form != "Moment":
+        cache2 = {}
+        ms = sorted({s for s in raw.free_symbols if str(s).startswith("w18Moment_")}, key=lambda s: -int(str(s)[10:]))
+        sub = {}
+        for s in ms:
+            k = int(str(s)[10:])
+            if form == "CentralMoment" and k == 1:
+                continue
+            sub[s] = _raw_in(form, k, cache2)
+        raw = sp.expand(raw.subs(sub, simultaneous=True))
+    from ..parser import parse
+    txt = str(raw)
+    back = {}
+    for s in raw.free_symbols:
+        nm = str(s)
+        if nm.startswith("w18"):
+            k, r = nm[3:].rsplit("_", 1)
+            back[nm] = Expr(k, int(r))
+    res = R(raw)
+    return ev(ev(Expr("ReplaceAll", res, L(*(rule(Symbol(k), v) for k, v in back.items())))))
+
+
+@fn("MomentEvaluate", area=AREA, status="added",
+    notes="MomentEvaluate[mexpr, dist] replaces the formal moments Moment[r], CentralMoment[r], Cumulant[r] and "
+          "FactorialMoment[r] by their values for the distribution (Moment[dist, r], ...); MomentEvaluate[mexpr, "
+          "list] evaluates formal moments and the formal sample moments PowerSymmetricPolynomial[r] and "
+          "AugmentedSymmetricPolynomial[{r1, ...}] on the data; MomentEvaluate[mexpr, dist, list] uses dist for "
+          "the moments and list for the sample moments. Multivariate orders follow the underlying functions. "
+          "Check: reference values from the Wolfram documentation (Moment[2] on NormalDistribution[mu, sigma] = "
+          "mu^2 + sigma^2, PowerSymmetricPolynomial[2] on {a, b, c} = a^2 + b^2 + c^2).")
+def _moment_evaluate(e: Expr, src: Expr | ListOf[Expr], data: ListOf[Expr] = None) -> Expr:
+    name = "MomentEvaluate"
+    if isinstance(src, Symbol) or isinstance(data, Symbol):
+        raise Unevaluated()
+    if data is None:
+        if W.is_dist(src):
+            dist, lst = src, None
+        elif is_list(src):
+            dist, lst = None, src
+        else:
+            raise TypeError(f"{name}: the second argument must be a distribution or a data list")
+    else:
+        if not W.is_dist(src) or not is_list(data):
+            raise TypeError(f"{name}: expected MomentEvaluate[mexpr, dist, list]")
+        dist, lst = src, data
+
+    def walk(x):
+        if isinstance(x, Expr) and x.head in ("Moment", "CentralMoment", "Cumulant", "FactorialMoment") and \
+                len(x.args) == 1:
+            s_ = dist if dist is not None else lst
+            return Expr(x.head, s_, x.args[0])
+        if isinstance(x, Expr) and x.head in ("PowerSymmetricPolynomial", "AugmentedSymmetricPolynomial") and \
+                len(x.args) == 1:
+            if lst is None:
+                raise ValueError(f"{name}: formal sample moments need a data list")
+            return Expr(x.head, x.args[0], lst)
+        if isinstance(x, Expr):
+            return Expr(x.head, *(walk(a) for a in x.args))
+        return x
+    return ev(Expr("Simplify", walk(e)))
