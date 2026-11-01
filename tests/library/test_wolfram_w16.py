@@ -491,7 +491,7 @@ def test_w16(case):
 def test_w16_skipped_symbols():
     from mikoshilang.library import STATUS
     from mikoshilang.library.wl_plots2d import SKIPPED
-    assert set(SKIPPED) == {"ChromaticityPlot", "ChromaticityPlot3D", "BioSequencePlot", "SingularValuePlot",
+    assert set(SKIPPED) == {"ChromaticityPlot", "ChromaticityPlot3D", "BioSequencePlot",
                             "ListSurfacePlot3D", "ImageWaveformPlot"}
     assert not any(n in STATUS for n in SKIPPED)
 
