@@ -16,7 +16,7 @@ def p(src):
     return Session().evaluate(src)
 
 
-# Seeded wrong results: each checker must raise ArithmeticError("Verify: ...") ----------------------------
+# Seeded wrong results: each checker must reject them (VerificationFailure; Verify returns Failed[...]) -------
 
 @pytest.mark.parametrize("head, args, wrong", [
     ("Integrate", ["Sin[x]^2", "x"], "x/2 + Sin[x] Cos[x]/2"),            # sign error
@@ -40,8 +40,22 @@ def p(src):
 ])
 def test_seeded_wrong_results_are_caught(head, args, wrong):
     a = [p(s) for s in args]
-    with pytest.raises(ArithmeticError, match=rf"^Verify: {head} result failed verification"):
+    with pytest.raises(V.VerificationFailure, match=rf"^Verify: {head} result failed verification"):
         V.CHECKERS[head](a, p(wrong))
+
+
+def test_verify_returns_failed_for_a_wrong_result():
+    from mikoshilang.library import core
+    impls = core.REGISTRY["GCD"].impls
+    saved = impls[0]
+    impls[0] = (lambda *a: 3,) + tuple(saved[1:])               # a seeded bug in GCD
+    try:
+        out = p("Verify[GCD[12, 18]]")
+    finally:
+        impls[0] = saved
+    assert out.head == "Failed" and out.args[0] == 3
+    assert "Head -> GCD" in str(out).replace('"', "") and "Reason" in str(out)
+    assert p("Verify[GCD[12, 18]]").head == "Certified"
 
 
 def test_right_results_pass_the_same_checkers():

@@ -13,9 +13,10 @@ produced it. There are three outcomes, labelled distinctly so a check is never o
 | `Certified[value, info]` | An exact certificate was checked with exact arithmetic. |
 | `Checked[value, info]` | The check passed, but it rests on symbolic simplification or on numerical sampling. This is strong evidence, not a proof. `info["Evidence"]` says which. |
 | `Unchecked[value, reason]` | No checker applies, or the check was inconclusive (too few points where the expression is defined, symbolic parameters in a definite integral, ...). |
+| `Failed[value, info]` | The check failed: the value is wrong. `info` is `<|"Head" -> h, "Reason" -> text|>`. |
 
-A failed check raises `ArithmeticError("Verify: Head result failed verification (...)")`, which `Check[...]`
-catches. Errors raised by the computation itself propagate unchanged.
+A failed check is Verify's *result*, so it is returned, not raised (CONVENTIONS §3). Errors raised by the
+computation itself (bad arguments, a function's own self-check) propagate unchanged.
 
 | Head | Method | Best level |
 |---|---|---|
