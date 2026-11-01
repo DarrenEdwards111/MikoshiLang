@@ -783,12 +783,9 @@ def chan_vese(f, phi, mu, nu, l1, l2, iters, c1fix=None, c2fix=None, dt=0.5, eps
     return phi
 
 
-def _signed_init(mask):
+def _marker_check(mask):
     if mask.all() or not mask.any():
         raise ValueError("ChanVeseBinarize: the marker must contain both foreground and background pixels")
-    din = np.sqrt(WP._edt_sq(mask))
-    dout = np.sqrt(WP._edt_sq(~mask))
-    return np.where(mask, din, -dout)
 
 
 @fn("ChanVeseBinarize", area=AREA, status="added",
@@ -799,9 +796,10 @@ def _signed_init(mask):
           "2012; time step 0.5, regularised delta with epsilon 1, stopping when the mean change is below 5 10^-4). "
           "Defaults (Wolfram's are not documented): {mu, nu, lambda1, lambda2} = {0.2, 0, 1, 1}; marker Automatic "
           "starts from Getreuer's checkerboard sin(pi x/5) sin(pi y/5) and returns the phase with the larger mean "
-          "intensity as foreground (1). A marker image or matrix (nonzero = inside) or a list of positions (disks of "
-          "radius 3 pixels) gives the initial contour and the foreground is the evolved inside region; a colour fixes "
-          "c1, {{fg, bg}} fixes c1 and c2 (the foreground is the region fitting fg). MaxIterations -> 100 (as "
+          "intensity as foreground (1). A marker image or matrix (nonzero = marked) or a list of positions (disks of "
+          "radius 3 pixels) selects the foreground: the evolution starts from the same checkerboard (with the "
+          "regularised delta a flat marker-shaped start barely moves away from the marker contour) and the phase "
+          "containing at least half of the marked pixels is returned as foreground; a colour fixes c1, {{fg, bg}} fixes c1 and c2 (the foreground is the region fitting fg). MaxIterations -> 100 (as "
           "documented). Image3D raises NotImplementedError, negative weights ValueError. Check: reference (tests: "
           "two-level images with noise are recovered exactly; a fixed colour pair selects the matching region).")
 def _chanvesebinarize(x: Expr, *rest: Expr | ListOf[Real] | Option) -> Expr:
@@ -826,6 +824,7 @@ def _chanvesebinarize(x: Expr, *rest: Expr | ListOf[Real] | Option) -> Expr:
     yy, xx = np.mgrid[0:h, 0:w]
     phi = np.sin(math.pi * xx / 5) * np.sin(math.pi * yy / 5)
     auto = True
+    marker = None
     if pos and not _is_sym(pos[0], "Automatic"):
         mk = pos[0]
         col = None
@@ -846,10 +845,13 @@ def _chanvesebinarize(x: Expr, *rest: Expr | ListOf[Real] | Option) -> Expr:
             m = marker_mask(mk, h, w, fname)
             if K.is_list(mk) and all(is_point(pp) for pp in mk.args) or is_point(mk):
                 m = WP.dilate(m.astype(float), WP._disk_offsets(3.0, "EuclideanDistance"), 0.0) > 0
-            phi = _signed_init(m)
+            _marker_check(m)
+            marker = m
             auto = False
     phi = chan_vese(f, phi, mu, nu, l1, l2, iters, c1fix, c2fix)
     fgm = phi > 0
+    if marker is not None and fgm[marker].mean() < 0.5:
+        fgm = ~fgm
     if auto and fgm.any() and (~fgm).any():
         if gray(WI.Img(f))[fgm].mean() < gray(WI.Img(f))[~fgm].mean():
             fgm = ~fgm

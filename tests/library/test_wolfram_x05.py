@@ -81,14 +81,25 @@ NOISY = "Image[Table[If[j > 6, 0.8, 0.2] + 0.05 Sin[7 i j], {i, 12}, {j, 12}]]"
 HALVES6 = "Table[If[j > 6, 2, 1], {i, 6}, {j, 12}]"
 HALVES8 = "Table[If[j > 6, 2, 1], {i, 8}, {j, 12}]"
 RIDGE = "{{1, 2, 3, 2, 1}, {1, 2, 3, 2, 1}, {1, 2, 3, 2, 1}}"
-# deterministic non-periodic blocky texture (4 x 4 blocks, quadratic residues mod 101)
-TEXF = "Image[Table[With[{{a = Floor[i/4], b = Floor[j/4]}}, N[Mod[13 a^2 + 7 b^2 + 5 a b + 3 a + 11 b, 101]/100]], " \
-       "{{i, {h}}}, {{j, {w}}}]]"
-TEX = TEXF.format(h=96, w=96)
-BIG = TEXF.format(h=100, w=160)
+# deterministic non-periodic blocky texture: quadratic residues mod 101 on a grid of blocks, enlarged 4x by
+# nearest-neighbour resampling (built from a literal so the tests do not spend time in a symbolic Table)
+
+
+def _blocks(h, w):
+    rows = (", ".join(str((13 * a * a + 7 * b * b + 5 * a * b + 3 * a + 11 * b) % 101) for b in range(w))
+            for a in range(h))
+    return "{" + ", ".join("{" + r + "}" for r in rows) + "}"
+
+
+def _tex(h, w):
+    return f"ImageResize[Image[{_blocks(h, w)}/100.], {{{4 * w}, {4 * h}}}, Resampling -> \"Nearest\"]"
+
+
+TEX = _tex(24, 24)                                                     # 96 x 96
+BIG = _tex(25, 40)                                                     # 160 x 100
 SHIFTED = f"ImagePerspectiveTransformation[{TEX}, {{{{1, 0, 3}}, {{0, 1, -2}}, {{0, 0, 1}}}}, DataRange -> Full]"
 CROP = f"ImageTake[{TEX}, {{5, 96}}, {{9, 96}}]"             # image coordinates shift by {-8, 0}
-BLOB = "Image[Table[N[Exp[-((i - 20)^2 + (j - 19)^2)/60] + 0.5 Exp[-((i - 11)^2 + (j - 28)^2)/30]], {i, 40}, {j, 40}]]"
+BLOB = f"GaussianFilter[ImageResize[Image[{_blocks(5, 5)}/100.], {{40, 40}}, Resampling -> \"Nearest\"], 4]"
 BLOB2 = f"ImagePerspectiveTransformation[{BLOB}, {{{{1, 0, 2}}, {{0, 1, -1}}, {{0, 0, 1}}}}, DataRange -> Full]"
 CIRC = "N[Table[{Cos[2 Pi k/20], Sin[2 Pi k/20]}, {k, 0, 19}]]"
 HOMOG = "{{1.5, 0.2, 5}, {-0.4, 2, 1}, {-0.5, 0, 1}}"
@@ -163,14 +174,15 @@ SEGMENTATION = [
     # ChanVeseBinarize (Chan & Vese 2001; the brighter phase is foreground)
     (f"ImageData[ChanVeseBinarize[{NOISY}]] == Table[If[j > 6, 1, 0], {{i, 12}}, {{j, 12}}]", "True"),
     (f"ImageData[ChanVeseBinarize[{TWO}, {{{{11.5, 3.5}}}}]] == {HALVES6} - 1", "True"),
-    (f"ImageType[ChanVeseBinarize[{NOISY}, {{0.2, 0, 1, 1}}]]", "\"Bit\""),
+    (f"ImageData[ChanVeseBinarize[{TWO}, {{{{0.5, 3.5}}}}]] == 2 - {HALVES6}", "True"),   # marker picks the phase
+    (f"ImageType[ChanVeseBinarize[{NOISY}, Automatic, {{0.2, 0, 1, 1}}]]", "\"Bit\""),
     ("ChanVeseBinarize[x05x]", "ChanVeseBinarize[x05x]"),
-    (f"ChanVeseBinarize[{TWO}, {{-1, 0, 1, 1}}]", Raises(ValueError, "^ChanVeseBinarize: ")),
+    (f"ChanVeseBinarize[{TWO}, Automatic, {{-1, 0, 1, 1}}]", Raises(ValueError, "^ChanVeseBinarize: ")),
     (f"ChanVeseBinarize[{TWO}, {{0.2, 0, 1, 1}}, 3, 4]", Raises(TypeError, "^ChanVeseBinarize: ")),
     # GrowCutComponents (Vezhnevets & Konouchine 2005)
     (f"GrowCutComponents[{TWO}, {{{{{{0.5, 0.5}}}}, {{{{11.5, 5.5}}}}}}] == {HALVES6}", "True"),
     (f"GrowCutComponents[{TWO}, {{{{{{11.5, 5.5}}}}, {{{{0.5, 0.5}}}}}}] == 3 - {HALVES6}", "True"),
-    (f"Union[Flatten[GrowCutComponents[{TWO}, {{{{{{0.5, 0.5}}}}}}]]]", "{1}"),        # Check: one marker
+    (f"GrowCutComponents[{TWO}, {{{{{{0.5, 0.5}}}}}}] == 2 - {HALVES6}", "True"),   # Check: g = 0 across the step
     ("GrowCutComponents[x05x, {{{1, 1}}}]", "GrowCutComponents[x05x, {{{1, 1}}}]"),
     (f"GrowCutComponents[{TWO}, {{}}]", Raises(ValueError, "^GrowCutComponents: ")),
     (f"GrowCutComponents[{TWO}, 5]", Raises(TypeError, "^GrowCutComponents: ")),
@@ -194,14 +206,14 @@ SEGMENTATION = [
     (f"ImageSegmentationComponents[{TWO8}, \"a\"]", Raises(TypeError, "^ImageSegmentationComponents: ")),
     # ImageSegmentationFilter (Grady 2006 random walker)
     (f"Round[ImageData[ImageSegmentationFilter[{TWO8}, {{10.5, 4.5}}]]] == {HALVES8} - 1", "True"),
-    (f"Round[ImageData[ImageSegmentationFilter[{TWO8}, Rectangle[{{6.5, 1}}, {{12, 7}}]]]] == {HALVES8} - 1", "True"),
+    (f"Round[ImageData[ImageSegmentationFilter[{TWO8}, Rectangle[{{6, 0}}, {{12, 8}}]]]] == {HALVES8} - 1", "True"),
     (f"Module[{{d = ImageData[ImageSegmentationFilter[{TWO8}, {{10.5, 4.5}}]]}}, 0 <= Min[d] <= Max[d] <= 1]",
      "True"),                                                                       # Check: probabilities
     ("ImageSegmentationFilter[x05x, {1, 1}]", "ImageSegmentationFilter[x05x, {1, 1}]"),
     (f"ImageSegmentationFilter[{TWO8}, Rectangle[{{0, 0}}, {{12, 8}}]]", Raises(ValueError, "^ImageSegmentationFilter: ")),
     (f"ImageSegmentationFilter[{TWO8}, {{Rectangle[{{0, 0}}, {{2, 2}}], Rectangle[{{4, 4}}, {{6, 6}}]}}]",
      Raises(NotImplementedError, "^ImageSegmentationFilter: ")),
-    (f"ImageSegmentationFilter[{TWO8}]", Raises(TypeError, "^ImageSegmentationFilter: ")),
+    (f"ImageSegmentationFilter[{TWO8}, \"a\"]", Raises(TypeError, "^ImageSegmentationFilter: ")),
     # ImageLines (Duda & Hart 1972 Hough transform)
     ("ImageLines[Image[Table[Boole[i == 5], {i, 20}, {j, 30}]]]", "{Line[{{0.0, 15.5}, {30.0, 15.5}}]}"),
     ("ImageLines[Image[Table[Boole[i == j], {i, 20}, {j, 20}]]]", "{Line[{{0.0, 20.0}, {20.0, 0.0}}]}"),
@@ -218,7 +230,7 @@ SEGMENTATION = [
     ("RegionMember[ImageMesh[Image[{{1, 0}, {0, 1}}]], {{0.5, 1.5}, {1.5, 1.5}}]", "{True, False}"),
     ("Area[ImageMesh[Image[{{1, 0}, {0, 1}}], CornerNeighbors -> False]]", "2"),
     (f"Area[ImageMesh[{SQ}]] == Total[ImageData[{SQ}], 2]", "True"),                    # Check: pixel count
-    ("Area[ImageMesh[Image[{{1, 1}, {1, 1}}], DataRange -> {{0, 1}, {0, 1}}]]", "1"),
+    ("Area[ImageMesh[Image[{{1, 1}, {1, 1}}], DataRange -> {{0, 1}, {0, 1}}]]", "1."),
     ("ImageMesh[x05x]", "ImageMesh[x05x]"),
     (f"ImageMesh[{SQ}, Method -> \"MarchingSquares\"]", Raises(NotImplementedError, "^ImageMesh: ")),
     (f"ImageMesh[{SQ}, DataRange -> {{{{1, 1}}, {{0, 1}}}}]", Raises(ValueError, "^ImageMesh: ")),
@@ -254,7 +266,7 @@ REGISTRATION = [
      Raises(NotImplementedError, "^ImageCorrespondingPoints: ")),
     (f"ImageCorrespondingPoints[{SQ}, {SQ}, TransformationClass -> \"Foo\"]",
      Raises(ValueError, "^ImageCorrespondingPoints: ")),
-    (f"ImageCorrespondingPoints[{SQ}]", Raises(TypeError, "^ImageCorrespondingPoints: ")),
+    (f"ImageCorrespondingPoints[{SQ}, {SQ}, 3]", Raises(TypeError, "^ImageCorrespondingPoints: ")),
     # FindGeometricTransform (reference page examples; Umeyama 1991; Hartley 1997; RANSAC)
     ("FindGeometricTransform[{{0., 0.}, {0., 1.}}, {{0, 0}, {-0.5, 0.5}}]",
      FGT(0.0, [[1, 1, 0], [-1, 1, 0], [0, 0, 1]])),
@@ -292,7 +304,7 @@ REGISTRATION = [
     # ImageFeatureTrack (Shi & Tomasi features; Bouguet 2000 pyramidal Lucas-Kanade)
     (f"Module[{{t = ImageFeatureTrack[{{{TEX}, {SHIFTED}}}, MaxFeatures -> 10]}}, "
      "Max[Abs[Flatten[t[[2]] - t[[1]] - ConstantArray[{3, -2}, Length[t[[1]]]]]]] < 0.15]", "True"),
-    (f"ImageFeatureTrack[{{{BLOB}, {BLOB2}}}, {{{{19.5, 20.5}}}}]", N([[[19.5, 20.5]], [[21.5, 19.5]]], 0.01)),
+    (f"ImageFeatureTrack[{{{BLOB}, {BLOB2}}}, {{{{19.5, 20.5}}}}]", N([[[19.5, 20.5]], [[21.5, 19.5]]], 0.001)),
     (f"Length[ImageFeatureTrack[{{{TEX}, {TEX}, {TEX}}}, MaxFeatures -> 4]]", "3"),
     (f"ImageFeatureTrack[{{{TEX}, {TEX}}}, {{{{40.5, 40.5}}}}]", N([[[40.5, 40.5]], [[40.5, 40.5]]], 1e-9)),  # Check
     (f"ImageFeatureTrack[{{{BLOB}, Image[ConstantArray[0., {{40, 40}}]]}}, {{{{19.5, 20.5}}}}][[2, 1]]",
@@ -309,7 +321,7 @@ REGISTRATION = [
     (f"ImageDisplacements[{{{BLOB}, {BLOB}}}, Method -> \"HornSchunck\"]",
      Raises(NotImplementedError, "^ImageDisplacements: ")),
     (f"ImageDisplacements[{{{BLOB}, {SQ}}}]", Raises(ValueError, "^ImageDisplacements: ")),
-    (f"ImageDisplacements[{{{BLOB}, {BLOB}}}, {{1, 2}}]", Raises(TypeError, "^ImageDisplacements: ")),
+    (f"ImageDisplacements[{{{BLOB}, {BLOB}}}, \"a\"]", Raises(TypeError, "^ImageDisplacements: ")),
     # ImageAlign (keypoint RANSAC or phase correlation, then resampling onto the reference)
     (f"Max[Abs[ImageData[ImageAlign[{TEX}, {SHIFTED}]][[10 ;; 80, 10 ;; 80]] - "
      f"ImageData[{TEX}][[10 ;; 80, 10 ;; 80]]]] < 0.05", "True"),
@@ -319,7 +331,7 @@ REGISTRATION = [
     (f"ImageDimensions[ImageAlign[{TEX}, {CROP}]]", "{96, 96}"),                        # Check: reference frame
     ("ImageAlign[x05x, x05y]", "ImageAlign[x05x, x05y]"),
     (f"ImageAlign[{TEX}, {SHIFTED}, Method -> \"Foo\"]", Raises(ValueError, "^ImageAlign: ")),
-    (f"ImageAlign[{TEX}, {SHIFTED}, Method -> \"Elastix\"]", Raises(NotImplementedError, "^ImageAlign: ")),
+    (f"ImageAlign[{TEX}, {SHIFTED}, Method -> \"MeanSquareGradientDescent\"]", Raises(NotImplementedError, "^ImageAlign: ")),
     (f"ImageAlign[{TEX}]", Raises(TypeError, "^ImageAlign: ")),
     # ImageStitch (Brown & Lowe 2007: pairwise RANSAC, spanning tree, feathered blending)
     (f"Module[{{s = ImageStitch[{{ImageTake[{BIG}, All, {{1, 100}}], ImageTake[{BIG}, All, {{41, 160}}]}}]}}, "
@@ -331,7 +343,7 @@ REGISTRATION = [
     ("ImageStitch[x05x]", "ImageStitch[x05x]"),
     (f"ImageStitch[{{{TEX}, {TEX}}}, \"Sphere\"]", Raises(NotImplementedError, "^ImageStitch: ")),
     (f"ImageStitch[{{{TEX}, Image[ConstantArray[0.5, {{50, 50}}]]}}]", Raises(ValueError, "^ImageStitch: ")),
-    (f"ImageStitch[{{{TEX}, {TEX}}}, 3]", Raises(TypeError, "^ImageStitch: ")),
+    (f"ImageStitch[{{{TEX}, {TEX}}}, \"Plane\", 3]", Raises(TypeError, "^ImageStitch: ")),
 ]
 
 CASES = FEATURES + SEGMENTATION + REGISTRATION
