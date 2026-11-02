@@ -129,6 +129,33 @@ Prefer `self-check` wherever a cheap independent check exists (solving, decompos
 transforms). It is the hook the verification pillar will build provenance on (`Checked` / `Unchecked`).
 Numerical results state their precision rule (machine vs. bignum via `core.numeric_out`).
 
+**Notes built in code.** When a head is registered in a loop or by a factory, so its notes are not one literal
+you can edit, state the check with `core.add_check` at module level, after the registrations and in the module
+that sets the head's final notes:
+
+```python
+from .core import add_check as _add_check
+
+_add_check("reference (differential cases in tests/library).", "JacobiSN", "JacobiCN", "JacobiDN")
+```
+
+It appends `Check: <sentence>` to the notes in `STATUS` and on the registry entry. It raises `ValueError` if a
+head is not registered or already states a check, so it can't silently claim a method twice. As with literal
+notes, name only methods that `scripts/verify_library.py` passes for that head.
+
+**Which head a test case counts towards.** `scripts/verify_library.py` groups the `CASES` in `tests/library`
+with `_harness.head_of`:
+
+- `F[...]` counts towards its outermost head `F`.
+- A bare symbol or `$`-variable (`"Pi"`, `"$MachinePrecision"`) counts towards that symbol. Use it as a value
+  check (a `str` or numeric expected value) or a type check (`Pred(lambda v: isinstance(v, float), "a machine
+  real")`).
+- A wrapper case counts towards the outer head (`ToString`, `N`, ...) unless it is written as
+  `Via("G", "ToString[G[...]]")`. A `Via` case counts towards the inner head `G` only when the expected value
+  depends on `G`'s own output: the harness re-runs it with `G` replaced by an inert `ViaProbe` head, and the
+  case fails if the expectation still holds (`Via("Sin", "Length[{Sin[1], 2}]")` with expected `2` fails).
+- Setup lines with no head (`x = 3`) count towards nothing.
+
 ## 5. Required tests (`tests/library/test_wolfram_<id>.py`)
 
 Already enforced by `tests/library/test_coverage.py`: at least **3 differential cases per head**, and a `Raises`
