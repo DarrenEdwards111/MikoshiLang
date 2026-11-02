@@ -202,18 +202,84 @@ def _check_solve(args, value, head="Solve"):
         raise _Inconclusive("no equations")
     eqs = _equations(args[0])
     sols = _solutions(value)
+    count = _root_count(args, eqs)              # None: the number of roots is not known
     if not sols:
-        raise _Inconclusive("no solutions to substitute (completeness is not checked)")
+        if count is None:
+            raise _Inconclusive("no solutions to substitute (completeness is not checked)")
+        if count[0] != 0:
+            _fail(head, f"no solutions returned, but the polynomial has {count[0]} distinct {count[1]} root(s)")
+        return _certified(value, "Root counting", Solutions=0,
+                          Completeness=f"complete: the polynomial has no {count[1]} roots ({count[2]})")
     kinds = []
     for sol in sols:
         for d in eqs:
             kinds.append(_zero(d.subs(sol, simultaneous=True), head, f"residual for {sol}"))
     inexact = any(isinstance(a, sp.Float) for sol in sols for v in sol.values() for a in sp.preorder_traversal(v))
     method = "Substitution of every solution"
+    completeness = "not checked"
+    if count is not None:
+        x = count[3]
+        distinct = _distinct([sol.get(x) for sol in sols], inexact)
+        if distinct != count[0]:
+            _fail(head, f"{distinct} distinct solution(s) returned, but the polynomial has {count[0]} distinct "
+                        f"{count[1]} root(s)")
+        completeness = f"complete: {count[0]} distinct {count[1]} root(s) ({count[2]})"
+        method += "; root counting"
     if inexact:
         return _checked(value, method, Evidence="numerical residuals", Solutions=len(sols),
-                        Completeness="not checked")
-    return _level(kinds, value, method, Solutions=len(sols), Completeness="not checked")
+                        Completeness=completeness)
+    return _level(kinds, value, method, Solutions=len(sols), Completeness=completeness)
+
+
+def _root_count(args, eqs):
+    """(distinct roots, "complex"|"real", how, x) for one univariate polynomial equation with rational coefficients
+    (Solve[p == q, x] or Solve[p == q, x, Reals]); None when the count is not known."""
+    if len(eqs) != 1 or len(args) < 2:
+        return None
+    v = args[1]
+    if is_list(v) and len(v.args) == 1:
+        v = v.args[0]
+    if not isinstance(v, Symbol):
+        return None
+    domain = "complex"
+    if len(args) >= 3:
+        d = args[2]
+        if isinstance(d, Symbol) and d.name == "Reals":
+            domain = "real"
+        elif not (isinstance(d, Symbol) and d.name == "Complexes"):
+            return None
+        if len(args) > 3:
+            return None                          # options: leave to the substitution check
+    x = sp.Symbol(v.name)
+    num, den = sp.fraction(sp.together(eqs[0]))
+    if den.has(x):
+        return None
+    try:
+        p = sp.Poly(num, x)
+    except sp.PolynomialError:
+        return None
+    if p.free_symbols - {x} or p.domain not in (sp.ZZ, sp.QQ) or p.degree() < 1:
+        return None
+    sqf = sp.Poly(sp.sqf_part(p.as_expr()), x)
+    if domain == "complex":
+        return sqf.degree(), "complex", "degree of the square-free part", x
+    return sqf.count_roots(), "real", "Sturm count of the square-free part", x
+
+
+def _distinct(values, inexact):
+    out = []
+    for v in values:
+        if v is None:
+            raise _Inconclusive("a solution does not give the variable")
+        v = sp.sympify(v)
+        for w in out:
+            d = v - w
+            if (inexact and abs(complex(sp.N(d))) < 1e-8 * max(1.0, abs(complex(sp.N(w))))) or \
+                    (not inexact and (sp.expand(d) == 0 or sp.simplify(d) == 0)):
+                break
+        else:
+            out.append(v)
+    return len(out)
 
 
 def _check_dsolve(args, value):
@@ -575,8 +641,8 @@ CHECKERS = {
 
 @fn("Verify", area=AREA, status="added", hold=True,
     notes="Verify[expr] evaluates expr and checks the result independently: Integrate by differentiation (or "
-          "mpmath quadrature for definite integrals), Solve/NSolve by substituting every solution (completeness "
-          "is not checked), DSolve by substitution, D by numerical differentiation, Limit and Series numerically, "
+          "mpmath quadrature for definite integrals), Solve/NSolve by substituting every solution (and "
+          "completeness by root counting for one univariate polynomial with rational coefficients), DSolve by substitution, D by numerical differentiation, Limit and Series numerically, "
           "FactorInteger and PrimeQ with primality proofs (deterministic Miller-Rabin below 3.3*10^24, Pratt "
           "certificates above) or compositeness witnesses, GCD by a Bezout identity, Factor by expansion, "
           "Simplify/FullSimplify/Expand/Together/Apart/TrigExpand by equivalence with the input, Inverse and "

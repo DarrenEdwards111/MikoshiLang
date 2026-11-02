@@ -1,7 +1,8 @@
 name: Verification
-# Executable Check: lines (mikoshilang/verification.py). The stated checks and the identity/mpmath/NumPy tables
-# take well under a minute, so they run on every push and pull request; the full run (every audited head's
-# reference cases) is the size of the test suite and runs weekly or on demand.
+# Executable Check: lines (mikoshilang/verification.py). The stated checks (about 940 heads since the Check:
+# backfill) and the identity/mpmath/NumPy tables run on every push and pull request, with the reference runs
+# spread over 4 worker processes; the full run (every audited head's reference cases) is the size of the test
+# suite and runs weekly or on demand.
 on:
   push:
   pull_request:
@@ -19,7 +20,7 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install '.[all,test]'
-      - run: python scripts/verify_library.py --markdown verification_report.md
+      - run: python scripts/verify_library.py --jobs 4 --markdown verification_report.md
         env:
           MPLBACKEND: Agg
       - uses: actions/upload-artifact@v4
@@ -37,7 +38,7 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install '.[all,test]'
-      - run: python scripts/verify_library.py --all --markdown verification_report.md --json verification_report.json
+      - run: python scripts/verify_library.py --all --jobs 4 --markdown verification_report.md --json verification_report.json
         env:
           MPLBACKEND: Agg
       - uses: actions/upload-artifact@v4

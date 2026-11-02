@@ -214,7 +214,8 @@ SPECIAL_HEADS.update({"Overflow", "Underflow"})
 
 @fn("Overflow", **ADDED, notes="Overflow[] represents a number too large to represent; Overflow[] + x = Overflow[], "
     "c Overflow[] = Sign[c] Overflow[] for real c != 0, 1/Overflow[] = Underflow[]; NumberQ-like tests treat it as "
-    "a real number. MikoshiLang's arbitrary-precision numbers never overflow, so it only arises when entered")
+    "a real number. MikoshiLang's arbitrary-precision numbers never overflow, so it only arises when entered"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _overflow(*a: Expr) -> Expr:
     if a:
         raise ValueError("Overflow takes no arguments")
@@ -365,7 +366,8 @@ def _is_real_number_atom(x):
 
 @fn("RealValuedNumberQ", **ADDED, notes="True for integers, rationals, approximate reals and Overflow[]/"
     "Underflow[]; False for complex numbers (even with zero imaginary part), exact numeric expressions such as "
-    "Sqrt[2] and symbols")
+    "Sqrt[2] and symbols"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rvnq(x: Expr) -> Boolean:
     return _is_real_number_atom(x)
 
@@ -393,7 +395,8 @@ def _numeric_real(v):
 
 @fn("RealValuedNumericQ", **ADDED, notes="True when expr is numeric (NumericQ) and real-valued: exact quantities "
     "such as Sin[Sqrt[2]], E or Exp[I] - I Sin[1] (decided exactly when possible, otherwise numerically at 40 and "
-    "120 digits); False for complex numbers with a zero inexact imaginary part, Infinity and non-numeric input")
+    "120 digits); False for complex numbers with a zero inexact imaginary part, Infinity and non-numeric input"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _rvnumq(x: Expr) -> Boolean:
     if _is_real_number_atom(x):
         return True
@@ -423,7 +426,8 @@ def _rvnumq(x: Expr) -> Boolean:
 
 @fn("RealSign", **ADDED, listable=True, notes="sign of a real number: -1, 0 or 1 (an exact integer, also for "
     "approximate input); RealSign[Infinity] = 1, RealSign[-Infinity] = -1; complex and symbolic arguments stay "
-    "unevaluated")
+    "unevaluated"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _realsign(x: Expr) -> Expr:
     if isinstance(x, Symbol) and x.name == "Infinity":
         return 1
@@ -452,7 +456,8 @@ _MACHINE_ZERO_EXPONENT = math.log10(2.2250738585072014e-308)
 
 @fn("RealExponent", **ADDED, listable=True, notes="RealExponent[x] = Log10[Abs[x]], RealExponent[x, b] = "
     "Log[b, Abs[x]], as machine reals; RealExponent[0] = -Infinity; RealExponent[0.] = -307.653 (minus the "
-    "accuracy of a machine zero); symbolic arguments stay unevaluated")
+    "accuracy of a machine zero); symbolic arguments stay unevaluated"
+    ". Check: reference (differential cases in tests/library).")
 def _realexp(x: Expr, b: Expr = 10) -> Expr:
     if not is_numeric_value(x) or (not is_numeric_value(b)):
         raise Unevaluated()
@@ -476,7 +481,8 @@ def mathlog(a):
 
 
 @fn("MixedFractionParts", **ADDED, listable=True, notes="{IntegerPart[x], FractionalPart[x]} (both parts carry "
-    "the sign of x; complex numbers are split componentwise); symbolic arguments stay unevaluated")
+    "the sign of x; complex numbers are split componentwise); symbolic arguments stay unevaluated"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mixedfrac(x: Expr) -> ListOf[Expr]:
     if not is_numeric_value(x):
         raise Unevaluated()
@@ -488,7 +494,8 @@ def _mixedfrac(x: Expr) -> ListOf[Expr]:
 
 
 @fn("NumeratorDenominator", **ADDED, notes="{Numerator[expr], Denominator[expr]}; lists give the pair of lists. "
-    "The Modulus and Trig options are not supported (raise)")
+    "The Modulus and Trig options are not supported (raise)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _numden(x: Expr, *opts: Option) -> ListOf[Expr]:
     if opts:
         raise NotImplementedError("NumeratorDenominator: the Modulus and Trig options are not supported")
@@ -514,7 +521,8 @@ def _sp_or_float(v):
 
 @fn("NumberDecompose", **ADDED, notes="NumberDecompose[x, {u1, ..., un}]: coefficients ci with x == Sum[ci ui]; "
     "c1..c(n-1) are integers taken greedily with IntegerPart (so the signs follow x) and cn = remainder/un may be "
-    "fractional; exact inputs give exact results")
+    "fractional; exact inputs give exact results"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _numdecomp(x: Expr, units: ListOf[Expr]) -> ListOf[Expr]:
     us = _num_list(units, "NumberDecompose", "the units")
     if not us:
@@ -546,7 +554,8 @@ def _numdecomp(x: Expr, units: ListOf[Expr]) -> ListOf[Expr]:
 
 
 @fn("NumberCompose", **ADDED, notes="NumberCompose[{c1, ..., ck}, {u1, ..., un}] = Sum[ci u(n-k+i)]: the "
-    "coefficients are aligned with the last k units (k <= n)")
+    "coefficients are aligned with the last k units (k <= n)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _numcompose(cs: Expr, units: Expr) -> Expr:
     if not is_list(cs) or not is_list(units):
         raise ValueError("NumberCompose: both arguments must be lists")
@@ -1021,7 +1030,8 @@ def _poly_var(poly, fname, var=None):
 
 @fn("Cyclotomic", **ADDED, notes="Cyclotomic[n, x] is the n-th cyclotomic polynomial (product of x - zeta over "
     "the primitive n-th roots of unity); Cyclotomic[0, x] = 1; any x, including numbers and matrices of "
-    "symbols, is substituted")
+    "symbols, is substituted"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cyclotomic(n: Integer, x: Expr) -> Expr:
     if not _intq(n):
         raise Unevaluated()
@@ -1103,7 +1113,8 @@ def gf_primitive(cs_high, p):
 
 
 @fn("PrimitivePolynomialQ", **ADDED, notes="PrimitivePolynomialQ[poly, p]: True if the univariate poly, reduced "
-    "modulo the prime p and made monic, is primitive over GF(p) (irreducible with x of order p^n - 1)")
+    "modulo the prime p and made monic, is primitive over GF(p) (irreducible with x of order p^n - 1)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _primpolyq(poly: Expr, p: Expr) -> Boolean:
     if not _intq(p) or not sp.isprime(int(p)):
         raise ValueError("PrimitivePolynomialQ: the modulus must be a prime")
@@ -1148,7 +1159,8 @@ def _free_of(f, i):
     "1/(g_imin+1 + ...)) and ContinuedFractionK[f, g, {i, imin, imax}] = f_imin/(g_imin + f_imin+1/(g_imin+1 + "
     "...)); finite numeric limits are evaluated exactly; infinite fractions with constant terms give the closed "
     "form 2 f/(g + Sqrt[g^2 + 4 f]) (for numeric terms the attracting fixed point, unevaluated when the fraction "
-    "oscillates); other infinite or symbolic-length fractions stay unevaluated")
+    "oscillates); other infinite or symbolic-length fractions stay unevaluated"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cfk(*args: Held) -> Expr:
     pos, opts = split_options(args, ("Assumptions", "GenerateConditions", "Method", "VerifyConvergence"),
                               "ContinuedFractionK")
@@ -1431,7 +1443,8 @@ def _holder_squarefree(n):
 @fn("FiniteGroupCount", **ADDED, listable=True, notes="number of non-isomorphic groups of order n: tabulated "
     "for n <= 2047 (SmallGroups library, OEIS A000001); beyond the table exact formulas for cyclic numbers "
     "(gcd(n, EulerPhi[n]) = 1 gives 1), square-free n (Hoelder), p, p^2, p^3, p^4 and p^5 (p >= 5); other orders "
-    "raise")
+    "raise"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fgc(n: Expr) -> Expr:
     if not _intq(n):
         if is_numeric_value(n):
@@ -1460,7 +1473,8 @@ def _fgc(n: Expr) -> Expr:
 
 
 @fn("FiniteAbelianGroupCount", **ADDED, listable=True, notes="number of abelian groups of order n: the product "
-    "of PartitionsP[e] over the prime-power exponents e of n")
+    "of PartitionsP[e] over the prime-power exponents e of n"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fagc(n: Expr) -> Expr:
     if not _intq(n):
         if is_numeric_value(n):
@@ -1510,7 +1524,8 @@ def _groupings(leaves, k, head, limit):
     "List nodes with the given leaves in order (compositions of the leaves lexicographically descending); "
     "Groupings[list, h -> k] uses head h; Groupings[{list1, list2, ...}, spec] gives the groupings of every "
     "list, grouping structure outermost; a third argument wraps each result (e.g. HoldForm). Several heads or "
-    "arities, arity 1 and Orderless/Flat specifications are not supported (raise)")
+    "arities, arity 1 and Orderless/Flat specifications are not supported (raise)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _groupings_fn(lst: Expr, spec: Expr, wrapper: Fn = None) -> ListOf[Expr]:
     if _intq(lst):
         if int(lst) < 0:
@@ -1666,7 +1681,8 @@ def _kj(k, j, fname):
 @fn("DirichletCharacter", **ADDED, notes="DirichletCharacter[k, j, n]: the j-th Dirichlet character modulo k "
     "(j = 1 is the principal character); for a prime modulus chi_j(g^a) = Exp[2 Pi I (j - 1) a/(k - 1)] with g "
     "the least primitive root (the Wolfram ordering); moduli 1, 2, 4 and primes are supported, other moduli "
-    "raise; zero when n is not coprime to k; listable in n")
+    "raise; zero when n is not coprime to k; listable in n"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dirichletchar(k: Expr, j: Expr, n: Expr) -> Expr:
     k, j = _kj(k, j, "DirichletCharacter")
     if is_list(n):
@@ -1821,7 +1837,8 @@ def _is_delta1(f, n):
 @fn("DirichletConvolve", **ADDED, notes="DirichletConvolve[f, g, n, m] = Sum[f(d) g(m/d), {d | m}]: explicit for "
     "a positive integer m; for symbolic m, sums of powers of n give DivisorSigma closed forms (n^a * n^b -> "
     "m^Min[a,b] DivisorSigma[|a - b|, m]), KroneckerDelta[n - 1] is the identity, and other inputs stay "
-    "unevaluated")
+    "unevaluated"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dirconv(f: Expr, g: Expr, n: Expr, m: Expr) -> Expr:
     if not isinstance(n, Symbol):
         raise ValueError("DirichletConvolve: the variable must be a symbol")
@@ -1959,7 +1976,8 @@ def _dt(f, n, s):
     "closed form for linear combinations of powers of n, a^n (PolyLog), Cos/Sin/Exp of multiples of n, Mod[n, "
     "k] (Hurwitz zeta), MoebiusMu, EulerPhi, LiouvilleLambda, DivisorSigma, DirichletCharacter (DirichletL), "
     "KroneckerDelta[n - 1] and DivisorSum[n, f] (Zeta[s] times the transform of f); other functions stay "
-    "unevaluated")
+    "unevaluated"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dirtransform(f: Expr, n: Expr, s: Expr, *opts: Option) -> Expr:
     if not isinstance(n, Symbol):
         raise ValueError("DirichletTransform: the variable must be a symbol")
@@ -2048,7 +2066,8 @@ def _pslq_complex(zs, maxcoeff, dps):
 
 @fn("LatticeReduce", **ADDED, notes="LatticeReduce[{v1, v2, ...}] gives an LLL-reduced basis (delta = 3/4) of "
     "the lattice spanned by the integer (or rational) vectors vi; linearly dependent inputs drop to the rank; "
-    "approximate vectors raise")
+    "approximate vectors raise"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _latticereduce(m: Expr) -> ListOf[Expr]:
     if not is_list(m) or not m.args or not all(is_list(r) for r in m.args):
         raise ValueError("LatticeReduce: the argument must be a list of vectors")

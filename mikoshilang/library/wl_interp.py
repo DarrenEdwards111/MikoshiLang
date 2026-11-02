@@ -169,7 +169,8 @@ def _no_periodic(opts: dict, fname: str) -> None:
     notes="Interpolation[{f1, f2, ...}] (x = 1, 2, ...) and Interpolation[{{x1, f1}, ...}] -> InterpolatingFunction: "
           "piecewise polynomials of InterpolationOrder (default 3) through the nearest order+1 points "
           "(Wolfram's default method; exact through the data); Interpolation[data, x] evaluates at x; "
-          "one-dimensional data only (derivative data and grids raise)")
+          "one-dimensional data only (derivative data and grids raise)"
+          ". Check: reference (differential cases in tests/library).")
 def _interpolation(data: Expr, *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"InterpolationOrder", "Method", "PeriodicInterpolation"}, "Interpolation")
     if opts.get("Method") is not None:
@@ -184,7 +185,8 @@ def _interpolation(data: Expr, *rest: Expr) -> Expr:
 
 @fn("ListInterpolation", area=AREA, status="added",
     notes="ListInterpolation[{f1, ..., fn}] on x = 1..n and ListInterpolation[list, {{xmin, xmax}}] on an "
-          "equally spaced grid -> InterpolatingFunction (same piecewise polynomials as Interpolation); 1-D only")
+          "equally spaced grid -> InterpolatingFunction (same piecewise polynomials as Interpolation); 1-D only"
+          ". Check: reference (differential cases in tests/library).")
 def _listinterp(data: ListOf[Expr], *rest: Expr) -> Expr:
     pos, opts = split_options(rest, {"InterpolationOrder", "Method", "PeriodicInterpolation"}, "ListInterpolation")
     reject_options(opts, ("Method",), "ListInterpolation")

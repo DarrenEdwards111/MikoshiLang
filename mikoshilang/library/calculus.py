@@ -68,7 +68,8 @@ def _integrate(f, *specs):
 
 @fn("DefiniteIntegral", area=AREA, status="fixed",
     notes="definite integral DefiniteIntegral[f, {x, a, b}] (MikoshiLang); legacy silently computed an "
-          "indefinite integral for a bare variable, now that raises")
+          "indefinite integral for a bare variable, now that raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _defint(f: Expr, spec: Expr) -> Expr:
     if not (is_list(spec) and len(spec.args) == 3):
         raise ValueError("DefiniteIntegral: second argument must be {x, a, b}")
@@ -166,7 +167,8 @@ def _taylor(f, x, a, n, fname):
 
 @fn("TaylorSeries", area=AREA, status="fixed",
     notes="TaylorSeries[f, {x, a, n}] keeps terms up to (x - a)^n (legacy stopped at (x - a)^(n - 1)); "
-          "default n = 5")
+          "default n = 5"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _taylorseries(f: Expr, spec: ListOf[Expr]) -> Expr:
     x, a, n = _series_spec(spec, "TaylorSeries")
     return _taylor(f, x, a, n, "TaylorSeries")
@@ -174,7 +176,8 @@ def _taylorseries(f: Expr, spec: ListOf[Expr]) -> Expr:
 
 @fn("MaClaurinSeries", area=AREA, status="fixed",
     notes="MaClaurinSeries[f, {x, n}] about 0 up to x^n (legacy used the point slot and an exclusive order); "
-          "the 3-element form {x, 0, n} is accepted, a non-zero centre raises")
+          "the 3-element form {x, 0, n} is accepted, a non-zero centre raises"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _maclaurin(f: Expr, spec: ListOf[Expr]) -> Expr:
     items = list_arg(spec, "MaClaurinSeries", min_len=1)
     x = variable(items[0], "MaClaurinSeries")
@@ -192,7 +195,8 @@ def _maclaurin(f: Expr, spec: ListOf[Expr]) -> Expr:
 
 
 @fn("TaylorPolynomial", area=AREA, status="verified",
-    notes="TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang)")
+    notes="TaylorPolynomial[f, x, a, n]: Taylor polynomial of degree n (MikoshiLang)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _taylorpoly(f: Expr, x: Var, a: Expr, n: NonNegInteger) -> Expr:
     return _taylor(f, variable(x, "TaylorPolynomial"), sym(a, "TaylorPolynomial"),
                    nonneg_int(n, "TaylorPolynomial", "order"), "TaylorPolynomial")
@@ -200,7 +204,8 @@ def _taylorpoly(f: Expr, x: Var, a: Expr, n: NonNegInteger) -> Expr:
 
 @fn("LaurentSeries", area=AREA, status="fixed",
     notes="LaurentSeries[f, x, a, n]: Laurent expansion up to (x - a)^n without the O-term "
-          "(legacy kept an O-term and was exclusive in n)")
+          "(legacy kept an O-term and was exclusive in n)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _laurent(f: Expr, x: Var, a: Expr, n: Integer) -> Expr:
     v = sym(f, "LaurentSeries")
     xv = variable(x, "LaurentSeries")
@@ -210,7 +215,8 @@ def _laurent(f: Expr, x: Var, a: Expr, n: Integer) -> Expr:
 
 
 @fn("NthDerivative", area=AREA, status="fixed",
-    notes="NthDerivative[f, x, n] = D[f, {x, n}]; n must be a non-negative integer (legacy truncated reals)")
+    notes="NthDerivative[f, x, n] = D[f, {x, n}]; n must be a non-negative integer (legacy truncated reals)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nthd(f: Expr, x: Var, n: NonNegInteger) -> Expr:
     return R(sp.diff(sym(f, "NthDerivative"), variable(x, "NthDerivative"), nonneg_int(n, "NthDerivative", "order")))
 
@@ -219,7 +225,9 @@ def _residue(f, x, a, fname="Residue"):
     return R(sp.residue(sym(f, fname), variable(x, fname), sym(a, fname)))
 
 
-@fn("Residue", area=AREA, status="verified", notes="Residue[f, {x, a}] (Wolfram) and Residue[f, x, a]")
+@fn("Residue", area=AREA, status="verified", notes="Residue[f, {x, a}] (Wolfram) and Residue[f, x, a]"
+                                                   ". Check: exact (exact input gives exact results), reference "
+                                                   "(differential cases in tests/library).")
 def _res(f: Expr, spec: Expr, a: Expr = None) -> Expr:
     if a is None:
         items = list_arg(spec, "Residue", min_len=2)
@@ -245,7 +253,9 @@ def _same_len(F, V, fname):
         raise ValueError(f"{fname}: the field and the variable list must have the same length")
 
 
-@fn("Gradient", area=AREA, status="verified", notes="list of partial derivatives (MikoshiLang; Wolfram Grad)")
+@fn("Gradient", area=AREA, status="verified", notes="list of partial derivatives (MikoshiLang; Wolfram Grad)"
+                                                    ". Check: exact (exact input gives exact results), reference "
+                                                    "(differential cases in tests/library).")
 def _gradient(f: Expr, vs: ListOf[Var]) -> ListOf[Expr]:
     v = sym(f, "Gradient")
     return L(*(R(sp.diff(v, x)) for x in _vars_list(vs, "Gradient")))
@@ -272,7 +282,8 @@ def _div(F, vs, fname):
 
 
 @fn("Divergence", area=AREA, status="fixed",
-    notes="sum of dF_i/dx_i (MikoshiLang; Wolfram Div); mismatched lengths now raise (legacy zip-truncated)")
+    notes="sum of dF_i/dx_i (MikoshiLang; Wolfram Div); mismatched lengths now raise (legacy zip-truncated)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _divergence(F: ListOf[Expr], vs: ListOf[Var]) -> Expr:
     return _div(F, vs, "Divergence")
 
@@ -304,12 +315,16 @@ def _curl(F, vs):
              R(sp.diff(c[1], xs[0]) - sp.diff(c[0], xs[1])))
 
 
-@fn("HessianMatrix", area=AREA, status="verified", notes="matrix of second partial derivatives")
+@fn("HessianMatrix", area=AREA, status="verified", notes="matrix of second partial derivatives"
+                                                         ". Check: exact (exact input gives exact results), "
+                                                         "reference (differential cases in tests/library).")
 def _hessian(f: Expr, vs: ListOf[Var]) -> Expr:
     return mat_out(sp.hessian(sym(f, "HessianMatrix"), _vars_list(vs, "HessianMatrix")))
 
 
-@fn("JacobianMatrix", area=AREA, status="verified", notes="matrix dF_i/dx_j")
+@fn("JacobianMatrix", area=AREA, status="verified", notes="matrix dF_i/dx_j"
+                                                          ". Check: exact (exact input gives exact results), "
+                                                          "reference (differential cases in tests/library).")
 def _jacobian(F: ListOf[Expr], vs: ListOf[Var]) -> Expr:
     comps = [sym(c, "JacobianMatrix") for c in list_arg(F, "JacobianMatrix", "function list", min_len=1)]
     return mat_out(sp.Matrix(comps).jacobian(_vars_list(vs, "JacobianMatrix")))
@@ -317,7 +332,8 @@ def _jacobian(F: ListOf[Expr], vs: ListOf[Var]) -> Expr:
 
 @fn("DirectionalDerivative", area=AREA, status="fixed",
     notes="grad f . u/|u| with an exact unit vector; legacy converted the direction to floats and did not "
-          "normalise it (so it returned grad f . u)")
+          "normalise it (so it returned grad f . u)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _dirder(f: Expr, vs: ListOf[Var], u: Expr) -> Expr:
     v = sym(f, "DirectionalDerivative")
     xs = _vars_list(vs, "DirectionalDerivative")
@@ -337,7 +353,8 @@ def _solutions(eqs, xs, fname):
 
 @fn("CriticalPoints", area=AREA, status="fixed",
     notes="solutions of grad f = 0 as rule lists (real and complex, as Solve); legacy silently dropped "
-          "solutions SymPy returned as tuples (most multivariate cases)")
+          "solutions SymPy returned as tuples (most multivariate cases)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _critical(f: Expr, vs: Expr) -> Expr:
     xs = [variable(vs, "CriticalPoints")] if isinstance(vs, Symbol) else _vars_list(vs, "CriticalPoints")
     v = sym(f, "CriticalPoints")
@@ -346,7 +363,8 @@ def _critical(f: Expr, vs: Expr) -> Expr:
 
 @fn("PhasePlane", area=AREA, status="fixed",
     notes="equilibrium points of x' = F(x) as rule lists (MikoshiLang; no plot); legacy silently dropped "
-          "tuple-form solutions")
+          "tuple-form solutions"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _phaseplane(F: ListOf[Expr], vs: ListOf[Var]) -> Expr:
     comps = [sym(c, "PhasePlane") for c in list_arg(F, "PhasePlane", "system")]
     xs = _vars_list(vs, "PhasePlane")
@@ -365,7 +383,8 @@ def _real_roots(expr, x, fname):
 
 @fn("InflectionPoints", area=AREA, status="fixed",
     notes="real points where f'' changes sign; legacy returned every root of f'' (so x^4 reported 0, which is "
-          "not an inflection point) and complex roots")
+          "not an inflection point) and complex roots"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _inflection(f: Expr, x: Var) -> ListOf[Expr]:
     xv = variable(x, "InflectionPoints")
     v = sym(f, "InflectionPoints")
@@ -449,7 +468,8 @@ def _maximize(f, vs):
 @fn("FindMinimum", area=AREA, status="fixed",
     notes="Wolfram FindMinimum[f, {x, x0}] / [f, {{x, x0}, {y, y0}}] -> {fmin, {x -> xmin, ...}} (local, "
           "numeric, BFGS via SciPy); the legacy form [f, {x, y}, {x0, y0}] is accepted and returns the same "
-          "format; non-convergence raises")
+          "format; non-convergence raises"
+          ". Check: reference (differential cases in tests/library).")
 def _findmin(f: Expr, spec: Expr, x0: Expr = None) -> ListOf[Expr]:
     if x0 is not None:
         xs = _vars_list(spec, "FindMinimum")
@@ -483,7 +503,8 @@ def _findmin(f: Expr, spec: Expr, x0: Expr = None) -> ListOf[Expr]:
 
 @fn("LinearProgramming", area=AREA, status="fixed",
     notes="legacy solved A.x <= b with floats; Wolfram LinearProgramming[c, m, b] minimises c.x subject to "
-          "m.x >= b and x >= 0; now exact (SymPy simplex); infeasible/unbounded problems raise")
+          "m.x >= b and x >= 0; now exact (SymPy simplex); infeasible/unbounded problems raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _linprog(c: ListOf[Expr], m: MatrixOf[Expr], b: ListOf[Expr]) -> ListOf[Expr]:
     from sympy.solvers.simplex import linprog, InfeasibleLPError, UnboundedLPError
     cc = [number(v, "LinearProgramming") for v in list_arg(c, "LinearProgramming")]
@@ -542,7 +563,8 @@ def _rsolve(eq, fexpr, n):
 
 @fn("GeneratingFunction", area=AREA, status="fixed",
     notes="GeneratingFunction[{a0, a1, ...}, x] = a0 + a1 x + ... (MikoshiLang finite form); exact (legacy "
-          "converted coefficients to floats); Wolfram's GeneratingFunction[expr, n, x] is not supported")
+          "converted coefficients to floats); Wolfram's GeneratingFunction[expr, n, x] is not supported"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _genfunc(seq: Expr, x: Var, *rest: Expr) -> Expr:
     if rest:
         raise NotImplementedError("GeneratingFunction[expr, n, x] (infinite sequences) is not supported")
@@ -551,13 +573,16 @@ def _genfunc(seq: Expr, x: Var, *rest: Expr) -> Expr:
     return numeric_out(sp.Add(*(c * xv ** i for i, c in enumerate(cs))), seq)
 
 
-@fn("Wronskian", area=AREA, status="verified", notes="Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram)")
+@fn("Wronskian", area=AREA, status="verified", notes="Wronskian[{f1, ..., fn}, x] (determinant, as Wolfram)"
+                                                     ". Check: exact (exact input gives exact results), reference "
+                                                     "(differential cases in tests/library).")
 def _wronskian(fs: ListOf[Expr], x: Var) -> Expr:
     funcs = [sym(f, "Wronskian") for f in list_arg(fs, "Wronskian", min_len=1)]
     return R(sp.simplify(sp.wronskian(funcs, variable(x, "Wronskian"))))
 
 
-@fn("ExactODEQ", area=AREA, status="verified", notes="True when M dx + N dy = 0 is exact (dM/dy == dN/dx)")
+@fn("ExactODEQ", area=AREA, status="verified", notes="True when M dx + N dy = 0 is exact (dM/dy == dN/dx)"
+                                                     ". Check: reference (differential cases in tests/library).")
 def _exactq(M: Expr, N: Expr, x: Var, y: Var) -> Boolean:
     m, n = sym(M, "ExactODEQ"), sym(N, "ExactODEQ")
     return bool(sp.simplify(sp.diff(m, variable(y, "ExactODEQ")) - sp.diff(n, variable(x, "ExactODEQ"))) == 0)
@@ -565,7 +590,8 @@ def _exactq(M: Expr, N: Expr, x: Var, y: Var) -> Boolean:
 
 @fn("IntegratingFactor", area=AREA, status="fixed",
     notes="mu(x) or mu(y) making M dx + N dy exact; the test is now applied to the simplified ratio and "
-          "failure raises (legacy returned an Error expression)")
+          "failure raises (legacy returned an Error expression)"
+          ". Check: reference (differential cases in tests/library).")
 def _intfactor(M: Expr, N: Expr, x: Var, y: Var) -> Expr:
     m, n = sym(M, "IntegratingFactor"), sym(N, "IntegratingFactor")
     xv, yv = variable(x, "IntegratingFactor"), variable(y, "IntegratingFactor")
@@ -584,7 +610,8 @@ def _intfactor(M: Expr, N: Expr, x: Var, y: Var) -> Expr:
 
 
 @fn("LyapunovDerivative", area=AREA, status="fixed",
-    notes="dV/dt = grad V . F along x' = F(x) (MikoshiLang); mismatched lengths now raise (legacy zip-truncated)")
+    notes="dV/dt = grad V . F along x' = F(x) (MikoshiLang); mismatched lengths now raise (legacy zip-truncated)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lyap(F: ListOf[Expr], vs: ListOf[Var], V: Expr) -> Expr:
     comps = [sym(c, "LyapunovDerivative") for c in list_arg(F, "LyapunovDerivative", "system")]
     xs = _vars_list(vs, "LyapunovDerivative")
@@ -609,7 +636,8 @@ def _ode_parts(eq, y, x, fname):
 
 
 @fn("ODEClassify", area=AREA, status="verified",
-    notes="list of SymPy ODE hint names for eq, y, x (MikoshiLang)")
+    notes="list of SymPy ODE hint names for eq, y, x (MikoshiLang)"
+          ". Check: reference (differential cases in tests/library).")
 def _odeclassify(eq: Expr, y: Expr, x: Var) -> ListOf[Expr]:
     e, fx, _ = _ode_parts(eq, y, x, "ODEClassify")
     return L(*sp.classify_ode(e, fx))
@@ -617,7 +645,8 @@ def _odeclassify(eq: Expr, y: Expr, x: Var) -> ListOf[Expr]:
 
 @fn("SeparableODE", area=AREA, status="fixed",
     notes="general solution {{y[x] -> ...}} of a separable first-order ODE (DSolve format); non-separable "
-          "equations raise; legacy returned a SymPy equation")
+          "equations raise; legacy returned a SymPy equation"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _separable(eq: Expr, y: Expr, x: Var) -> Expr:
     e, fx, _ = _ode_parts(eq, y, x, "SeparableODE")
     if "separable" not in sp.classify_ode(e, fx):
@@ -643,7 +672,9 @@ def _separable(eq: Expr, y: Expr, x: Var) -> Expr:
           "DSolve, valid for t > 0. Initial values that are not given appear as y[0], y'[0], ... (Laplace "
           "form) rather than C[k]. Every solution is substituted back into the ODE and the initial conditions "
           "before it is returned. Non-linear or variable-coefficient equations raise (use DSolve). Legacy "
-          "transformed the raw equation and solved for an unrelated symbol, so it never returned a solution")
+          "transformed the raw equation and solved for an unrelated symbol, so it never returned a solution"
+          ". Check: exact, self-check (the result is verified before it is returned), reference (differential cases "
+          "in tests/library).")
 def _laplace_ode(eqs: Expr, y: Expr, t: Var) -> ListOf[Expr]:
     from ..kernel import substitute
     fname = "LaplaceODESolve"

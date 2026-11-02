@@ -27,7 +27,8 @@ def _binom_int(n, k):
 
 @fn("Binomial", area=AREA, status="fixed", listable=True,
     notes="legacy truncated arguments with int() (Binomial[5/2, 1] = 2) and failed on symbols; now exact/symbolic "
-          "with Wolfram's conventions for negative integers (Binomial[-1, -1] = 1)")
+          "with Wolfram's conventions for negative integers (Binomial[-1, -1] = 1)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _binomial(n, k):
     if _intq(n) and _intq(k):
         return _binom_int(int(n), int(k))
@@ -46,7 +47,8 @@ def _binomial(n, k):
 
 @fn("Factorial", area=AREA, status="fixed", listable=True,
     notes="non-integers use Gamma[n + 1] (Factorial[1/2] = Sqrt[Pi]/2); negative integers give ComplexInfinity; "
-          "symbols stay unevaluated; legacy truncated with int()")
+          "symbols stay unevaluated; legacy truncated with int()"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _factorial(n):
     if _intq(n):
         k = int(n)
@@ -72,12 +74,16 @@ def _fact2(n, fname):
 
 
 @fn("DoubleFactorial", area=AREA, status="fixed", listable=True,
-    notes="negative odd integers supported ((-5)!! = 1/3); legacy truncated reals")
+    notes="negative odd integers supported ((-5)!! = 1/3); legacy truncated reals"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _doublefact(n):
     return _fact2(n, "DoubleFactorial")
 
 
-@fn("Factorial2", area=AREA, status="promoted", listable=True, notes="Wolfram name for the double factorial")
+@fn("Factorial2", area=AREA, status="promoted", listable=True, notes="Wolfram name for the double factorial"
+                                                                     ". Check: exact (exact input gives exact "
+                                                                     "results), reference (differential cases in "
+                                                                     "tests/library).")
 def _factorial2(n):
     return _fact2(n, "Factorial2")
 
@@ -98,12 +104,16 @@ def _subfact(n, fname):
 
 
 @fn("Derangements", area=AREA, status="verified", listable=True,
-    notes="number of derangements !n (MikoshiLang; same as Subfactorial)")
+    notes="number of derangements !n (MikoshiLang; same as Subfactorial)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _derangements(n):
     return _subfact(n, "Derangements")
 
 
-@fn("Subfactorial", area=AREA, status="promoted", listable=True, notes="!n")
+@fn("Subfactorial", area=AREA, status="promoted", listable=True, notes="!n"
+                                                                       ". Check: exact (exact input gives exact "
+                                                                       "results), reference (differential cases in "
+                                                                       "tests/library).")
 def _subfactorial(n):
     return _subfact(n, "Subfactorial")
 
@@ -114,17 +124,26 @@ def _partitions_p(n, fname):
     return 0 if k < 0 else int(partition(k))
 
 
-@fn("PartitionCount", area=AREA, status="verified", listable=True, notes="MikoshiLang alias of PartitionsP")
+@fn("PartitionCount", area=AREA, status="verified", listable=True, notes="MikoshiLang alias of PartitionsP"
+                                                                         ". Check: exact (exact input gives exact "
+                                                                         "results), reference (differential cases in "
+                                                                         "tests/library).")
 def _partcount(n):
     return _partitions_p(n, "PartitionCount")
 
 
-@fn("PartitionsP", area=AREA, status="promoted", listable=True, notes="number of unrestricted partitions")
+@fn("PartitionsP", area=AREA, status="promoted", listable=True, notes="number of unrestricted partitions"
+                                                                      ". Check: exact (exact input gives exact "
+                                                                      "results), reference (differential cases in "
+                                                                      "tests/library).")
 def _partitionsp(n):
     return _partitions_p(n, "PartitionsP")
 
 
-@fn("PartitionsQ", area=AREA, status="promoted", listable=True, notes="number of partitions into distinct parts")
+@fn("PartitionsQ", area=AREA, status="promoted", listable=True, notes="number of partitions into distinct parts"
+                                                                      ". Check: exact (exact input gives exact "
+                                                                      "results), reference (differential cases in "
+                                                                      "tests/library).")
 def _partitionsq(n):
     k = int_arg(n, "PartitionsQ")
     if k < 0:
@@ -176,7 +195,8 @@ def _kspec(spec, fname):
 @fn("IntegerPartitions", area=AREA, status="fixed",
     notes="legacy returned the number of partitions; Wolfram IntegerPartitions lists them in reverse "
           "lexicographic order; supports [n], [n, k], [n, {k}], [n, {kmin, kmax}], [n, kspec, {s1, ...} or All] and "
-          "[n, kspec, sspec, m] (first m partitions, batch 6)")
+          "[n, kspec, sspec, m] (first m partitions, batch 6)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _intpartitions(n, kspec=None, elems=None, count=None):
     k = int_arg(n, "IntegerPartitions")
     if k < 0:
@@ -195,7 +215,8 @@ def _intpartitions(n, kspec=None, elems=None, count=None):
 
 @fn("PartitionsList", area=AREA, status="fixed",
     notes="legacy reused one mutable dict (every entry was the last partition); now the partitions of n "
-          "in Wolfram IntegerPartitions order")
+          "in Wolfram IntegerPartitions order"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _partitionslist(n):
     k = nonneg_int(n, "PartitionsList")
     return L(*(L(*p) for p in _partitions(k)))
@@ -203,7 +224,8 @@ def _partitionslist(n):
 
 @fn("Compositions", area=AREA, status="fixed",
     notes="legacy returned k-subsets of {1..n-1}; now Compositions[n, k] lists all ordered k-tuples of "
-          "non-negative integers summing to n (Combinatorica convention), lexicographic")
+          "non-negative integers summing to n (Combinatorica convention), lexicographic"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _compositions(n, k):
     nn, kk = nonneg_int(n, "Compositions"), nonneg_int(k, "Compositions", "number of parts")
     if kk == 0:
@@ -222,7 +244,8 @@ def _compositions(n, k):
 
 @fn("Multinomial", area=AREA, status="fixed",
     notes="legacy Multinomial[n, {k...}] was not Wolfram's form; now Multinomial[n1, n2, ...] = "
-          "(n1 + n2 + ...)!/(n1! n2! ...), exact for any exact arguments")
+          "(n1 + n2 + ...)!/(n1! n2! ...), exact for any exact arguments"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _multinomial(*args):
     if any(is_list(a) for a in args):
         raise ValueError("Multinomial takes the counts as separate arguments: Multinomial[n1, n2, ...]")
@@ -255,7 +278,8 @@ def _perm_list(items, lo, hi):
 
 @fn("Permutations", area=AREA, status="fixed",
     notes="legacy Permutations[n, k] returned the count n!/(n-k)!; Wolfram lists permutations of a list "
-          "(duplicates removed); Permutations[list, n] and [list, {n}] supported; integer arguments raise")
+          "(duplicates removed); Permutations[list, n] and [list, {n}] supported; integer arguments raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _permutations(lst, spec=None):
     if not is_list(lst):
         if _intq(lst):
@@ -314,7 +338,8 @@ def _unrank_subset(items, sizes, r):
 @fn("Subsets", area=AREA, status="fixed",
     notes="Subsets[list], [list, n], [list, {n}], [list, {min, max}], [list, {min, max, step}] in Wolfram order "
           "(by size, then position); batch 6 adds Subsets[list, nspec, s] (first s), [list, nspec, {s}] (the s-th, "
-          "computed by unranking) and [list, nspec, {m, n(, step)}], and any head (Subsets[f[a, b]])")
+          "computed by unranking) and [list, nspec, {m, n(, step)}], and any head (Subsets[f[a, b]])"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _subsets_fn(lst, spec=None, take=None):
     head = "List"
     if is_list(lst):
@@ -357,7 +382,10 @@ def _subsets_fn(lst, spec=None, take=None):
     return L(*(mk(_unrank_subset(items, sizes, i)) for i in idx))
 
 
-@fn("PowerSet", area=AREA, status="verified", listable=False, notes="MikoshiLang alias of Subsets[list]")
+@fn("PowerSet", area=AREA, status="verified", listable=False, notes="MikoshiLang alias of Subsets[list]"
+                                                                    ". Check: exact (exact input gives exact "
+                                                                    "results), reference (differential cases in "
+                                                                    "tests/library).")
 def _powerset(lst):
     items = list_arg(lst, "PowerSet")
     if len(items) > 20:
@@ -366,7 +394,8 @@ def _powerset(lst):
 
 
 @fn("CartesianProduct", area=AREA, status="verified",
-    notes="pairs {a, b} for a in the first list and b in the second (= Tuples[{l1, l2}]); now variadic")
+    notes="pairs {a, b} for a in the first list and b in the second (= Tuples[{l1, l2}]); now variadic"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _cartesian(*lists):
     if not lists:
         raise ValueError("CartesianProduct needs at least one list")
@@ -383,7 +412,8 @@ def _reshape(flat, dims):
 
 @fn("Tuples", area=AREA, status="promoted",
     notes="Tuples[list, n] and Tuples[{l1, l2, ...}]; batch 6 adds Tuples[list, {n1, n2, ...}] (all n1 x n2 x ... "
-          "arrays) and any head (Tuples[f[a, b], 2] = {f[a, a], f[a, b], f[b, a], f[b, b]})")
+          "arrays) and any head (Tuples[f[a, b], 2] = {f[a, a], f[a, b], f[b, a], f[b, b]})"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _tuples(lst, n=None):
     head = "List"
     if n is None:
@@ -416,7 +446,8 @@ def _tuples(lst, n=None):
 
 @fn("HookLengthFormula", area=AREA, status="fixed",
     notes="legacy subtracted the row index from each hook (wrong counts / ZeroDivisionError); now the number of "
-          "standard Young tableaux of the shape")
+          "standard Young tableaux of the shape"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _hook(shape):
     parts = [pos_int(p, "HookLengthFormula", "part") for p in list_arg(shape, "HookLengthFormula")]
     if any(parts[i] < parts[i + 1] for i in range(len(parts) - 1)):
@@ -432,7 +463,8 @@ def _hook(shape):
 
 
 @fn("ArithmeticSequence", area=AREA, status="fixed",
-    notes="first n terms a, a + d, ...; exact for exact input (legacy converted to floats and rounded to 10 digits)")
+    notes="first n terms a, a + d, ...; exact for exact input (legacy converted to floats and rounded to 10 digits)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _arith(a, d, n):
     k = nonneg_int(n, "ArithmeticSequence", "length")
     sa, sd = sym(a, "ArithmeticSequence"), sym(d, "ArithmeticSequence")
@@ -440,14 +472,17 @@ def _arith(a, d, n):
 
 
 @fn("GeometricSequence", area=AREA, status="fixed",
-    notes="first n terms a, a r, ...; exact for exact input (legacy converted to floats and rounded)")
+    notes="first n terms a, a r, ...; exact for exact input (legacy converted to floats and rounded)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _geom(a, r, n):
     k = nonneg_int(n, "GeometricSequence", "length")
     sa, sr = sym(a, "GeometricSequence"), sym(r, "GeometricSequence")
     return L(*(numeric_out(sp.expand(sa * sr ** i), a, r) for i in range(k)))
 
 
-@fn("FibonacciSequence", area=AREA, status="verified", notes="first n Fibonacci numbers F0, F1, ... (MikoshiLang)")
+@fn("FibonacciSequence", area=AREA, status="verified", notes="first n Fibonacci numbers F0, F1, ... (MikoshiLang)"
+                                                             ". Check: exact (exact input gives exact results), "
+                                                             "reference (differential cases in tests/library).")
 def _fibseq(n):
     k = nonneg_int(n, "FibonacciSequence", "length")
     a, b, out = 0, 1, []

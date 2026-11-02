@@ -21,14 +21,16 @@ def _intq(x):
 
 
 @fn("IsPrime", area=AREA, status="verified", listable=True,
-    notes="MikoshiLang alias of PrimeQ (same kernel implementation)")
+    notes="MikoshiLang alias of PrimeQ (same kernel implementation)"
+          ". Check: reference (differential cases in tests/library).")
 def _isprime(n: Numeric) -> Boolean:
     return Expr("PrimeQ", n)
 
 
 @fn("NextPrime", area=AREA, status="fixed", listable=True,
     notes="legacy truncated reals and ignored negative primes; now NextPrime[x] is the smallest prime > x "
-          "(primes include -2, -3, ... as in Wolfram) and NextPrime[x, k] the k-th")
+          "(primes include -2, -3, ... as in Wolfram) and NextPrime[x, k] the k-th"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _nextprime(x: Real, k: Integer = 1) -> Integer:
     v = number(x, "NextPrime")
     kk = int_arg(k, "NextPrime", "count")
@@ -56,7 +58,8 @@ def _prev_before(v):
 
 
 @fn("PrimePi", area=AREA, status="fixed", listable=True,
-    notes="PrimePi[x] for real x counts primes <= x (legacy truncated with int(), wrong for negative floats)")
+    notes="PrimePi[x] for real x counts primes <= x (legacy truncated with int(), wrong for negative floats)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _primepi(x: Real) -> Integer:
     v = number(x, "PrimePi")
     if v in (sp.oo, -sp.oo):
@@ -93,7 +96,10 @@ def _factorint(n):
     return _factor(n, "FactorInteger")
 
 
-@fn("PrimeFactorization", area=AREA, status="fixed", listable=True, notes="MikoshiLang alias of FactorInteger")
+@fn("PrimeFactorization", area=AREA, status="fixed", listable=True, notes="MikoshiLang alias of FactorInteger"
+                                                                          ". Check: exact (exact input gives exact "
+                                                                          "results), reference (differential cases "
+                                                                          "in tests/library).")
 def _primefactorization(n: Integer) -> ListOf[Expr]:
     return _factor(n, "PrimeFactorization")
 
@@ -116,7 +122,8 @@ def _divisorcount(n: Integer) -> Integer:
 
 
 @fn("DivisorSigma", area=AREA, status="fixed", listable=True,
-    notes="DivisorSigma[k, n] = sum of d^k over divisors of n; exact for any exact k (legacy truncated k)")
+    notes="DivisorSigma[k, n] = sum of d^k over divisors of n; exact for any exact k (legacy truncated k)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _divisorsigma(k: Numeric, n: Integer) -> Numeric:
     m = _nonzero(n, "DivisorSigma")
     kk = number(k, "DivisorSigma", "power", real=False)
@@ -124,19 +131,23 @@ def _divisorsigma(k: Numeric, n: Integer) -> Numeric:
 
 
 @fn("EulerPhi", area=AREA, status="fixed", listable=True,
-    notes="EulerPhi[0] = 0 and EulerPhi[-n] = EulerPhi[n] (legacy raised / gave wrong values)")
+    notes="EulerPhi[0] = 0 and EulerPhi[-n] = EulerPhi[n] (legacy raised / gave wrong values)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _eulerphi(n: Integer) -> Integer:
     k = int_arg(n, "EulerPhi")
     return R(0 if k == 0 else sp.totient(abs(k)))
 
 
-@fn("MoebiusMu", area=AREA, status="fixed", listable=True, notes="MoebiusMu[-n] = MoebiusMu[n]; 0 raises")
+@fn("MoebiusMu", area=AREA, status="fixed", listable=True, notes="MoebiusMu[-n] = MoebiusMu[n]; 0 raises"
+                                                                 ". Check: exact (exact input gives exact results), "
+                                                                 "reference (differential cases in tests/library).")
 def _mobius(n: Integer) -> Integer:
     return R(sp.mobius(_nonzero(n, "MoebiusMu")))
 
 
 @fn("PowerMod", area=AREA, status="fixed", listable=True,
-    notes="negative exponents use the modular inverse and raise when it does not exist; rational exponents raise")
+    notes="negative exponents use the modular inverse and raise when it does not exist; rational exponents raise"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _powermod(a: Numeric, b: Numeric, m: Integer):
     aa, bb, mm = int_arg(a, "PowerMod"), int_arg(b, "PowerMod", "exponent"), int_arg(m, "PowerMod", "modulus")
     if mm == 0:
@@ -153,7 +164,8 @@ def _powermod(a: Numeric, b: Numeric, m: Integer):
 
 
 @fn("ModularInverse", area=AREA, status="fixed", listable=True,
-    notes="raises a clear error when no inverse exists (legacy leaked a Python ValueError)")
+    notes="raises a clear error when no inverse exists (legacy leaked a Python ValueError)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _modinv(a: Integer, m: Integer) -> Integer:
     aa, mm = int_arg(a, "ModularInverse"), int_arg(m, "ModularInverse", "modulus")
     if mm <= 0:
@@ -165,7 +177,8 @@ def _modinv(a: Integer, m: Integer) -> Integer:
 
 @fn("ChineseRemainder", area=AREA, status="fixed",
     notes="smallest non-negative solution; non-coprime moduli handled; no solution leaves the call "
-          "unevaluated (legacy returned an Error expression)")
+          "unevaluated (legacy returned an Error expression)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _crt(rs: ListOf[Integer], ms: ListOf[Integer]) -> Integer:
     from sympy.ntheory.modular import solve_congruence
     r = [int_arg(v, "ChineseRemainder") for v in list_arg(rs, "ChineseRemainder")]
@@ -196,7 +209,8 @@ def _rationals(args, fname):
 
 
 @fn("GCD", area=AREA, status="fixed", listable=True,
-    notes="now variadic, exact for rationals, GCD[] = 0; legacy truncated reals (GCD[2.5, 5] = 1)")
+    notes="now variadic, exact for rationals, GCD[] = 0; legacy truncated reals (GCD[2.5, 5] = 1)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _gcd(*args: Numeric) -> Numeric:
     vals = _rationals(args, "GCD")
     if not vals:
@@ -208,7 +222,8 @@ def _gcd(*args: Numeric) -> Numeric:
 
 
 @fn("LCM", area=AREA, status="fixed", listable=True,
-    notes="now variadic, exact for rationals, LCM[] = 1; legacy truncated reals")
+    notes="now variadic, exact for rationals, LCM[] = 1; legacy truncated reals"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lcm(*args: Numeric) -> Numeric:
     vals = _rationals(args, "LCM")
     if not vals:
@@ -220,7 +235,8 @@ def _lcm(*args: Numeric) -> Numeric:
 
 
 @fn("ExtendedGCD", area=AREA, status="fixed",
-    notes="returned {x, y, g}; Wolfram order is {g, {x, y}} with g = a x + b y")
+    notes="returned {x, y, g}; Wolfram order is {g, {x, y}} with g = a x + b y"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _egcd(a: Numeric, b: Numeric) -> ListOf[Expr]:
     aa, bb = int_arg(a, "ExtendedGCD"), int_arg(b, "ExtendedGCD")
     # iterative extended Euclid (same minimal Bezout pair as SymPy igcdex)
@@ -258,8 +274,13 @@ def _fibonacci(n: Numeric, x: Numeric = None) -> Numeric:
 
 
 fn("Fibonacci", area=AREA, status="fixed", listable=True,
-   notes="symbolic n raised TypeError (now unevaluated); negative n, real n and Fibonacci[n, x] added")(_fibonacci)
-fn("FibonacciNumber", area=AREA, status="fixed", listable=True, notes="MikoshiLang alias of Fibonacci")(_fibonacci)
+   notes="symbolic n raised TypeError (now unevaluated); negative n, real n and Fibonacci[n, x] added"
+         ". Check: exact (exact input gives exact results), reference (differential cases in "
+         "tests/library).")(_fibonacci)
+fn("FibonacciNumber", area=AREA, status="fixed", listable=True, notes="MikoshiLang alias of Fibonacci"
+                                                                      ". Check: exact (exact input gives exact "
+                                                                      "results), reference (differential cases in "
+                                                                      "tests/library).")(_fibonacci)
 
 
 def _lucas(n: Numeric) -> Numeric:
@@ -288,7 +309,10 @@ def _bernoulli(n: Integer, x: Numeric = None) -> Numeric:
 B1 = "Bernoulli[1] returned +1/2 (SymPy >= 1.12 convention); Wolfram BernoulliB[1] = -1/2"
 fn("Bernoulli", area=AREA, status="fixed", listable=True, notes=B1)(_bernoulli)
 fn("BernoulliNumber", area=AREA, status="fixed", listable=True, notes=B1)(_bernoulli)
-fn("BernoulliB", area=AREA, status="promoted", listable=True, notes="BernoulliB[n] and BernoulliB[n, x]")(_bernoulli)
+fn("BernoulliB", area=AREA, status="promoted", listable=True, notes="BernoulliB[n] and BernoulliB[n, x]"
+                                                                    ". Check: exact (exact input gives exact "
+                                                                    "results), reference (differential cases in "
+                                                                    "tests/library).")(_bernoulli)
 
 
 def _euler(n: Integer, x: Numeric = None) -> Numeric:
@@ -298,8 +322,13 @@ def _euler(n: Integer, x: Numeric = None) -> Numeric:
     return R(sp.euler(k))
 
 
-fn("EulerNumber", area=AREA, status="verified", listable=True, notes="Euler numbers E_n (E_1 = 0, E_4 = 5)")(_euler)
-fn("EulerE", area=AREA, status="promoted", listable=True, notes="EulerE[n] and EulerE[n, x]")(_euler)
+fn("EulerNumber", area=AREA, status="verified", listable=True, notes="Euler numbers E_n (E_1 = 0, E_4 = 5)"
+                                                                     ". Check: exact (exact input gives exact "
+                                                                     "results), reference (differential cases in "
+                                                                     "tests/library).")(_euler)
+fn("EulerE", area=AREA, status="promoted", listable=True, notes="EulerE[n] and EulerE[n, x]"
+                                                                ". Check: exact (exact input gives exact results), "
+                                                                "reference (differential cases in tests/library).")(_euler)
 
 @fn("Catalan", area=AREA, status="fixed",
     notes="Wolfram constant Catalan = 0.915965594177219... (SymPy Catalan; N[Catalan, n] to any precision, "
@@ -327,7 +356,9 @@ def _bell(n: Integer, x: Numeric = None) -> Numeric:
 
 fn("Bell", area=AREA, status="fixed", listable=True, notes="alias of BellB; " + NO_TRUNC)(_bell)
 fn("BellNumber", area=AREA, status="fixed", listable=True, notes="alias of BellB; " + NO_TRUNC)(_bell)
-fn("BellB", area=AREA, status="promoted", listable=True, notes="BellB[n] and Bell polynomials BellB[n, x]")(_bell)
+fn("BellB", area=AREA, status="promoted", listable=True, notes="BellB[n] and Bell polynomials BellB[n, x]"
+                                                               ". Check: exact (exact input gives exact results), "
+                                                               "reference (differential cases in tests/library).")(_bell)
 
 
 def _stirling(n, k, kind):
@@ -338,7 +369,8 @@ def _stirling(n, k, kind):
 
 
 @fn("StirlingS1", area=AREA, status="fixed", listable=True,
-    notes="returned unsigned Stirling numbers (StirlingS1[3, 2] = 3); Wolfram uses signed numbers (-3)")
+    notes="returned unsigned Stirling numbers (StirlingS1[3, 2] = 3); Wolfram uses signed numbers (-3)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _s1(n: Integer, k: Integer) -> Integer:
     return _stirling(n, k, 1)
 
@@ -349,7 +381,8 @@ def _s2(n: Integer, k: Integer) -> Integer:
 
 
 @fn("Stirling", area=AREA, status="fixed",
-    notes="Stirling[n, k] = StirlingS2[n, k]; Stirling[n, k, 1] now gives the signed numbers like StirlingS1")
+    notes="Stirling[n, k] = StirlingS2[n, k]; Stirling[n, k, 1] now gives the signed numbers like StirlingS1"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _stirling_any(n: Integer, k: Integer, kind: Integer = 2) -> Integer:
     t = int_arg(kind, "Stirling", "kind")
     if t not in (1, 2):
@@ -390,7 +423,8 @@ def _base(b, fname):
 
 @fn("DigitCount", area=AREA, status="fixed", listable=True,
     notes="legacy returned the number of digits; Wolfram DigitCount[n] is the list of counts of digits "
-          "1, 2, ..., 9, 0; DigitCount[n, b] and DigitCount[n, b, d] also supported")
+          "1, 2, ..., 9, 0; DigitCount[n, b] and DigitCount[n, b, d] also supported"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _digitcount(n: Integer, b: Integer = 10, d: Integer = None):
     k = int_arg(n, "DigitCount")
     base = _base(b, "DigitCount")
@@ -467,7 +501,8 @@ def _fromdigits_real(digs, e, base):
 
 @fn("BaseConvert", area=AREA, status="fixed",
     notes="BaseConvert[n, from, to] reads the decimal digits of n as base-'from' digits; legacy accepted "
-          "invalid digits (BaseConvert[19, 2, 10] = 3); now raises. Returns an integer for to = 10, else a digit list")
+          "invalid digits (BaseConvert[19, 2, 10] = 3); now raises. Returns an integer for to = 10, else a digit list"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _baseconvert(n, b1: Integer, b2: Integer):
     k = nonneg_int(n, "BaseConvert")
     fb, tb = _base(b1, "BaseConvert"), _base(b2, "BaseConvert")
@@ -508,7 +543,8 @@ def _radical(n: Integer) -> Integer:
 
 @fn("JordanTotient", area=AREA, status="fixed", listable=True,
     notes="legacy called a SymPy function that does not exist (AttributeError); now J_k(n) = n^k prod(1 - p^-k), "
-          "JordanTotient[n] = EulerPhi[n]")
+          "JordanTotient[n] = EulerPhi[n]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _jordan(n: Integer, k: Integer = 1) -> Integer:
     m = pos_int(n, "JordanTotient")
     kk = pos_int(k, "JordanTotient", "order")
@@ -560,13 +596,15 @@ def _kron(a, n):
 
 @fn("KroneckerSymbol", area=AREA, status="fixed", listable=True,
     notes="legacy called a SymPy function that does not exist (AttributeError); now the full Kronecker symbol "
-          "(n = 0, even and negative n)")
+          "(n = 0, even and negative n)"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _kronecker(a: Integer, n: Integer) -> Integer:
     return _kron(int_arg(a, "KroneckerSymbol"), int_arg(n, "KroneckerSymbol"))
 
 
 @fn("QuadraticResidues", area=AREA, status="verified", listable=True,
-    notes="sorted residues x^2 mod n including 0 (MikoshiLang function); n must be positive")
+    notes="sorted residues x^2 mod n including 0 (MikoshiLang function); n must be positive"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _qr(n: Integer) -> ListOf[Integer]:
     m = pos_int(n, "QuadraticResidues", "modulus")
     return L(*sorted({(i * i) % m for i in range(m)}))
@@ -574,7 +612,8 @@ def _qr(n: Integer) -> ListOf[Integer]:
 
 @fn("PrimitiveRoot", area=AREA, status="fixed", listable=True,
     notes="smallest primitive root; legacy returned None (displayed as nothing) when none exists, now unevaluated "
-          "like Wolfram")
+          "like Wolfram"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _primroot(n: Integer):
     m = pos_int(n, "PrimitiveRoot", "modulus")
     if m == 1:
@@ -587,7 +626,8 @@ def _primroot(n: Integer):
 
 @fn("PrimitiveRootQ", area=AREA, status="fixed", listable=True,
     notes="PrimitiveRootQ[a, n]: True when a generates the units mod n; False when gcd(a, n) != 1 "
-          "(legacy raised a SymPy ValueError)")
+          "(legacy raised a SymPy ValueError)"
+          ". Check: reference (differential cases in tests/library).")
 def _primrootq(a: Integer, n: Integer) -> Boolean:
     aa, m = int_arg(a, "PrimitiveRootQ"), pos_int(n, "PrimitiveRootQ", "modulus")
     if math.gcd(aa, m) != 1:
@@ -606,7 +646,8 @@ def _order(k, n):
 
 @fn("PrimePowerQ", area=AREA, status="fixed", listable=True,
     notes="True for p^k with k >= 1; False for 0, 1 and non-integers; negative integers raise (Gaussian/negative "
-          "conventions not supported); legacy truncated reals")
+          "conventions not supported); legacy truncated reals"
+          ". Check: reference (differential cases in tests/library).")
 def _primepowerq(n) -> Boolean:
     if not _intq(n):
         if is_numeric_value(n):
@@ -619,7 +660,8 @@ def _primepowerq(n) -> Boolean:
 
 
 @fn("ContinuedFractionConvergents", area=AREA, status="fixed",
-    notes="convergents p/q of [a0; a1, ...] as {p, q} pairs (MikoshiLang); legacy raised for integer convergents")
+    notes="convergents p/q of [a0; a1, ...] as {p, q} pairs (MikoshiLang); legacy raised for integer convergents"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _convergents(cf: ListOf[Expr]) -> ListOf[Expr]:
     terms = [int_arg(t, "ContinuedFractionConvergents", "term") for t in list_arg(cf, "ContinuedFractionConvergents", min_len=1)]
     out = []
@@ -631,7 +673,8 @@ def _convergents(cf: ListOf[Expr]) -> ListOf[Expr]:
 
 @fn("DiophantineSolve", area=AREA, status="fixed",
     notes="legacy called sympy.diophantine.diophantine (AttributeError for every input); now the general "
-          "integer solution via SymPy diophantine, parameters t0, t1, ... in sorted order")
+          "integer solution via SymPy diophantine, parameters t0, t1, ... in sorted order"
+          ". Check: reference (differential cases in tests/library).")
 def _diophantine(eq, vars_: Var | ListOf[Var]):
     from sympy.solvers.diophantine.diophantine import diophantine
     e = sym(eq, "DiophantineSolve")
@@ -648,7 +691,8 @@ def _diophantine(eq, vars_: Var | ListOf[Var]):
 
 @fn("RationalReconstruct", area=AREA, status="fixed",
     notes="legacy used nsimplify, so RationalReconstruct[1.4142135623730951] returned Sqrt[2] (not a rational); "
-          "now the exact rational with the same decimal digits, simplest within machine precision")
+          "now the exact rational with the same decimal digits, simplest within machine precision"
+          ". Check: reference (differential cases in tests/library).")
 def _ratrec(x: Real):
     v = number(x, "RationalReconstruct")
     if v.is_Rational:
@@ -659,7 +703,8 @@ def _ratrec(x: Real):
 
 
 @fn("Ackermann", area=AREA, status="fixed",
-    notes="exact closed forms for m <= 3; larger m raise instead of recursing until RecursionError")
+    notes="exact closed forms for m <= 3; larger m raise instead of recursing until RecursionError"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ackermann(m: NonNegInteger, n: NonNegInteger) -> Integer:
     mm, nn = nonneg_int(m, "Ackermann"), nonneg_int(n, "Ackermann")
     if mm == 0:
@@ -689,13 +734,15 @@ def _collatz_seq(n, fname):
 
 
 @fn("CollatzSequence", area=AREA, status="fixed", listable=True,
-    notes="legacy looped forever for n <= 0; now n must be a positive integer")
+    notes="legacy looped forever for n <= 0; now n must be a positive integer"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _collatz(n: PosInteger) -> ListOf[Integer]:
     return L(*_collatz_seq(n, "CollatzSequence"))
 
 
 @fn("CollatzLength", area=AREA, status="fixed", listable=True,
-    notes="number of terms of CollatzSequence[n] (including n and 1); legacy looped forever for n <= 0")
+    notes="number of terms of CollatzSequence[n] (including n and 1); legacy looped forever for n <= 0"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _collatzlen(n: PosInteger) -> Integer:
     return len(_collatz_seq(n, "CollatzLength"))
 
@@ -707,7 +754,8 @@ B2 = "number theory (batch 2)"
 
 @fn("LucasL", area=AREA, status="fixed", listable=True,
     notes="LucasL[n, x] Lucas polynomials L_0 = 2, L_1 = x, L_n = x L_(n-1) + L_(n-2) (LucasL[3, x] = x^3 + 3 x); "
-          "the 2-argument form was missing")
+          "the 2-argument form was missing"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _lucas_poly(n: Numeric, x: Numeric) -> Numeric:
     k = nonneg_int(n, "LucasL", "index")
     xv = sym(x, "LucasL")
@@ -721,7 +769,8 @@ def _lucas_poly(n: Numeric, x: Numeric) -> Numeric:
 
 @fn("HarmonicNumber", area=AREA, status="fixed", listable=True,
     notes="HarmonicNumber[n] for rational n in closed form (HarmonicNumber[1/2] = 2 - 2 Log[2], legacy left it "
-          "unevaluated); HarmonicNumber[n, r]")
+          "unevaluated); HarmonicNumber[n, r]"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _harmonic_b2(n: Numeric, r: Numeric = 1) -> Numeric:
     if not is_numeric_value(n):
         raise Unevaluated()
@@ -836,7 +885,8 @@ def _primroot2(n: Integer, k: Integer):
 
 
 @fn("MangoldtLambda", area=B2, status="added", listable=True,
-    notes="von Mangoldt function: Log[p] if n is a power of the prime p, else 0; MangoldtLambda[1] = 0")
+    notes="von Mangoldt function: Log[p] if n is a power of the prime p, else 0; MangoldtLambda[1] = 0"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _mangoldt(n: Integer) -> Numeric:
     k = int_arg(n, "MangoldtLambda")
     if k < 1:
@@ -848,7 +898,8 @@ def _mangoldt(n: Integer) -> Numeric:
 
 
 @fn("LiouvilleLambda", area=B2, status="added", listable=True,
-    notes="Liouville function (-1)^Omega(n), Omega counting prime factors with multiplicity; LiouvilleLambda[1] = 1")
+    notes="Liouville function (-1)^Omega(n), Omega counting prime factors with multiplicity; LiouvilleLambda[1] = 1"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _liouville(n: Integer) -> Integer:
     k = int_arg(n, "LiouvilleLambda")
     if k == 0:
@@ -858,7 +909,8 @@ def _liouville(n: Integer) -> Integer:
 
 @fn("DivisorSum", area=B2, status="added",
     notes="DivisorSum[n, form] = Sum of form[d] over the positive divisors d of n; DivisorSum[n, form, cond] keeps "
-          "the divisors for which cond[d] is True")
+          "the divisors for which cond[d] is True"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _divisorsum(n: Integer, form: Fn, cond: Fn = None):
     from ..evaluate import evaluate
     from .wl_common import apply

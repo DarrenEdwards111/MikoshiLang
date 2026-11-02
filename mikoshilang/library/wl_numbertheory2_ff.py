@@ -409,7 +409,8 @@ def field_of(ff):
 @fn("FiniteField", **ADDED, notes="FiniteField[p, d], FiniteField[q] (q = p^d), FiniteField[p, f] (f an "
     "irreducible pure function), FiniteField[p, d|f, \"Polynomial\"|\"Exponential\"]: the finite field GF(p^d); "
     "ff[k] / ff[{c0, c1, ...}] give elements; Information[ff, prop] gives Characteristic, ExtensionDegree, "
-    "FieldSize, FieldIrreducible, ElementRepresentation. The default irreducible is the Conway polynomial")
+    "FieldSize, FieldIrreducible, ElementRepresentation. The default irreducible is the Conway polynomial"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _finitefield(*a: Expr) -> Expr:
     if not a or len(a) > 3:
         raise ValueError("FiniteField takes 1 to 3 arguments")
@@ -1011,13 +1012,15 @@ def _norm_trace(a, k, fname, op):
 
 @fn("FiniteFieldElementNorm", **ADDED, notes="FiniteFieldElementNorm[a] is the absolute norm (an integer 0..p-1, "
     "the product of the conjugates of a); [a, k] the norm relative to the p^k-element subfield (an element of "
-    "FiniteField[p, k], identified through the standard embedding); [a, emb] relative to an embedding")
+    "FiniteField[p, k], identified through the standard embedding); [a, emb] relative to an embedding"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ffnorm(a: Expr, k: Expr = None) -> Expr:
     return _norm_trace(a, k, "FiniteFieldElementNorm", _norm_cs)
 
 
 @fn("FiniteFieldElementTrace", **ADDED, notes="FiniteFieldElementTrace[a] is the absolute trace (an integer 0..p-1, "
-    "the sum of the conjugates); [a, k] relative to the p^k-element subfield; [a, emb] relative to an embedding")
+    "the sum of the conjugates); [a, k] relative to the p^k-element subfield; [a, emb] relative to an embedding"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fftrace(a: Expr, k: Expr = None) -> Expr:
     return _norm_trace(a, k, "FiniteFieldElementTrace", _trace_cs)
 
@@ -1035,7 +1038,8 @@ def _mult_order(F, cs):
 
 
 @fn("FiniteFieldElementPrimitiveQ", **ADDED, notes="True if the FiniteFieldElement a generates the multiplicative "
-    "group of its field (order q - 1); False for anything else")
+    "group of its field (order q - 1); False for anything else"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ffprimq(a: Expr) -> Boolean:
     if not is_ffe(a):
         return False
@@ -1046,14 +1050,16 @@ def _ffprimq(a: Expr) -> Boolean:
 
 
 @fn("FiniteFieldIndex", **ADDED, listable=True, notes="FiniteFieldIndex[u] = u[\"Index\"] (Listable): sum c_i p^i "
-    "for the polynomial representation; k + 1 for t^k in the exponential representation; 0 for zero")
+    "for the polynomial representation; k + 1 for t^k in the exponential representation; 0 for zero"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _ffindex(u: Expr) -> Expr:
     F, cs = _need_ffe(u, "FiniteFieldIndex")
     return F.index(cs)
 
 
 @fn("FromFiniteFieldIndex", **ADDED, notes="FromFiniteFieldIndex[ind, ff] = ff[ind]; listable in ind (vectors and "
-    "matrices of indices)")
+    "matrices of indices)"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fromffindex(ind: Expr, ff: Expr) -> Expr:
     F = field_of(ff)
     if F is None:
@@ -1082,7 +1088,8 @@ def _map_coeffs(expr, conv, fname, depth=0):
 
 @fn("ToFiniteField", **ADDED, notes="ToFiniteField[k, ff]: integers and rationals (mod p) become prime-field "
     "elements ff[{k}]; ToFiniteField[expr, ff] maps the rational coefficients inside List, Plus, Times and integer "
-    "Power; ToFiniteField[expr, ff, t] also replaces t by the field generator ff[{0, 1}]")
+    "Power; ToFiniteField[expr, ff, t] also replaces t by the field generator ff[{0, 1}]"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _toff(expr: Expr, ff: Expr, t: Expr = None) -> Expr:
     F = field_of(ff)
     if F is None:
@@ -1100,7 +1107,8 @@ def _toff(expr: Expr, ff: Expr, t: Expr = None) -> Expr:
 
 @fn("FromFiniteField", **ADDED, notes="FromFiniteField[a, ff] turns prime-subfield elements into integers 0..p-1 "
     "(inside List, Plus, Times, integer Power); elements outside the prime field stay; FromFiniteField[expr, ff, t] "
-    "writes every element as c0 + c1 t + ... in the generator t")
+    "writes every element as c0 + c1 t + ... in the generator t"
+    ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _fromff(expr: Expr, ff: Expr, t: Expr = None) -> Expr:
     F = field_of(ff)
     if F is None:
@@ -1292,7 +1300,8 @@ def emb_of(x):
     "(as FiniteFieldEmbedding[e1 -> e2], e1 the generator of ff1; for two default (Conway) fields the standard "
     "compatible embedding, otherwise the root of the minimal polynomial with the smallest index); "
     "FiniteFieldEmbedding[e1 -> e2] needs e1 to generate ff1 and e2 to share its minimal polynomial; emb[a] maps "
-    "elements, emb[\"Projection\"] is a GF(p)-linear left inverse")
+    "elements, emb[\"Projection\"] is a GF(p)-linear left inverse"
+    ". Check: reference (differential cases in tests/library).")
 def _ffemb(*a: Expr) -> Expr:
     if len(a) == 2:
         F1, F2 = field_of(a[0]), field_of(a[1])

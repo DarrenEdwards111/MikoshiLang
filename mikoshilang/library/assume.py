@@ -248,7 +248,8 @@ def effective(explicit, opt, fname):
     notes="Refine[expr, assum] / Refine[expr] (uses $Assumptions) / Refine[expr, Assumptions -> a]: SymPy refine "
           "with assumption-carrying symbols and Q-propositions (Refine[Sqrt[x^2], x > 0] -> x, "
           "Refine[Abs[x], x < 0] -> -x, Refine[Sin[n Pi], Element[n, Integers]] -> 0, Refine[x > 0, x > 1] -> "
-          "True); relations that do not follow stay as they are. Legacy raised")
+          "True); relations that do not follow stay as they are. Legacy raised"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _refine(e, *rest):
     rest, opt = split_option(rest, "Refine")
     if len(rest) > 1:
@@ -259,7 +260,8 @@ def _refine(e, *rest):
 
 @fn("Assuming", area=AREA, status="promoted",
     notes="Assuming[assum, expr] evaluates expr with $Assumptions = $Assumptions && assum (held arguments), "
-          "restoring $Assumptions afterwards, as in Wolfram")
+          "restoring $Assumptions afterwards, as in Wolfram"
+          ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _assuming(a, e):
     from ..kernel import state
     from ..evaluate import evaluate
