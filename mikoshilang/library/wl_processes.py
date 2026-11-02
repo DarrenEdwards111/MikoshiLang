@@ -2570,6 +2570,8 @@ def _statdist(proc: Expr) -> Expr:
         raise NotImplementedError(f"{fname}: the stationary distribution of {pr.name} has no closed form")
     if isinstance(pr, (Ito, Transformed, Renewal)):
         raise NotImplementedError(f"{fname}: not supported for {pr.name}")
+    if hasattr(pr, "stationary_distribution"):        # X02: hidden Markov processes, queueing networks
+        return pr.stationary_distribution(fname)
     raise ValueError(f"{fname}: {pr.name} has no stationary distribution")
 
 
@@ -2875,6 +2877,9 @@ def _queue_prop(q, prop, fname):
     return R(m[prop])
 
 
+QPROPS_HOOK = None      # X02: fn(q, prop, extra) for QueueingNetworkProcess / {net, i}; None when not handled
+
+
 @fn("QueueProperties", area=AREA, status="added",
     notes="QueueProperties[qproc, prop] for QueueingProcess: \"ArrivalRate\", \"ServiceRate\", \"ArrivalDistribution\", "
           "\"ServiceDistribution\", \"ServiceChannels\", \"SystemCapacity\", \"InitialState\", \"StationarySystem\" and "
@@ -2887,6 +2892,10 @@ def _queue_prop(q, prop, fname):
           "M/M/1 and M/M/c values) in tests.")
 def _qprops(q: Expr, prop: String = None, extra: String = None) -> Expr:
     fname = "QueueProperties"
+    if QPROPS_HOOK is not None:
+        r = QPROPS_HOOK(q, prop, extra)
+        if r is not None:
+            return r
     if not (isinstance(q, Expr) and q.head == "QueueingProcess"):
         if isinstance(q, Expr) and q.head == "QueueingNetworkProcess":
             raise NotImplementedError(f"{fname}: queueing networks are not supported")
@@ -3137,6 +3146,9 @@ def _arma_predict(pr, xs, ks, exact):
     return [sp.Float(m + float(sum(g[n - 1 + k - i] * w[i] for i in range(n)))) for k in ks]
 
 
+TSM_FORECAST_HOOK = None    # X02: fn(TimeSeriesModel, spec, opts)
+
+
 @fn("TimeSeriesForecast", area=AREA, status="added",
     notes="TimeSeriesForecast[tproc, data, spec] for ARProcess, MAProcess, ARMAProcess, ARIMAProcess, SARMAProcess, "
           "SARIMAProcess, ARCHProcess and GARCHProcess with numeric parameters: the conditional expectation "
@@ -3146,15 +3158,18 @@ def _arma_predict(pr, xs, ks, exact):
           "stationary part and integrate; (G)ARCH forecasts are 0. spec: k (default 1, gives the value), {kmax}, "
           "{kmin, kmax} or {{k1, ...}} (give TemporalData with the forecasts at times m + k). Data: a list of "
           "values (times 0, 1, ...), {t, x} pairs with unit spacing, a TimeSeries or TemporalData (first path). "
-          "Mean squared errors (MetaInformation), TimeSeriesModel input and the Method option raise "
-          "NotImplementedError. Check: exact; reference (the AR recursion, hand-computed MA(1) predictor) in tests.")
+          "TimeSeriesForecast[tsmodel, spec] forecasts with a TimeSeriesModel's fitted process (X02). Mean squared "
+          "errors (MetaInformation) and the Method option raise NotImplementedError. Check: exact; reference (the "
+          "AR recursion, hand-computed MA(1) predictor) in tests.")
 def _tsforecast(proc: Expr, data: Expr, spec: Expr = None, *opts: Expr) -> Expr:
     fname = "TimeSeriesForecast"
     from .wl_processes_ts import make_td
     if opts:
         raise NotImplementedError(f"{fname}: options are not supported")
     if isinstance(proc, Expr) and proc.head == "TimeSeriesModel":
-        raise NotImplementedError(f"{fname}: TimeSeriesModel input is not supported")
+        if TSM_FORECAST_HOOK is None or spec is not None:
+            raise NotImplementedError(f"{fname}: use TimeSeriesForecast[tsmodel, spec]")
+        return TSM_FORECAST_HOOK(proc, data, ())
     pr = proc_of(proc, fname)
     if not isinstance(pr, (ARMA, GARCH)):
         raise TypeError(f"{fname}: {pr.name} is not a time series process")
@@ -3374,6 +3389,9 @@ def _ar_ols(xs, p, with_c, exact):
     return c, phi, rss / (n - p)
 
 
+ESTIMATE_HOOKS = {}     # X02: head -> fn(data, proc, estimator, fname, template_ok) -> (sols, proc)
+
+
 def _estimate(data, proc, opts, fname, template_ok):
     est = _est_opts(opts, fname)
     if not (isinstance(proc, Expr) and isinstance(proc.head, str) and proc.head in CLASSES):
@@ -3381,6 +3399,8 @@ def _estimate(data, proc, opts, fname, template_ok):
             raise Unevaluated()
         raise TypeError(f"{fname}: {proc} is not a random process")
     h = proc.head
+    if h in ESTIMATE_HOOKS:
+        return ESTIMATE_HOOKS[h](data, proc, est, fname, template_ok)
     paths = _series_data(data, fname)
     exact = not any(_inexact(t, x) for p in paths for t, x in p)
     args = list(proc.args)

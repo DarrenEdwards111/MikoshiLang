@@ -584,7 +584,7 @@ SPATIAL = [
     ("RipleyK[ThomasPointProcess[10, 20, .1, 2], 0.2]", math.pi * 0.04 + 0.1 * (1 - math.exp(-1))),
     ("RipleyK[MaternPointProcess[1, 2, 3, 2], 1]", Raises(NotImplementedError)),
     ("RipleyK[PoissonPointProcess[1, 2], -1]", Raises(ValueError)),
-    ("RipleyK[{{0, 0}, {1, 1}}, 1]", Raises(NotImplementedError)),
+    ("RipleyK[{{0, 0}, {1, 1}}, 1]", Raises(ValueError)),        # point data (X08): collinear, no region
     ("RipleyK[5, 1]", Raises(TypeError)),
     ("BesagL[PoissonPointProcess[m, 2], r]", "r"),
     ("BesagL[PoissonPointProcess[m, 3], {1, 2}]", "{1, 2}"),

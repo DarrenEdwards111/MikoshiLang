@@ -256,6 +256,7 @@ BUILTIN_MESSAGES = {
 }
 for _c in ("Confirm", "ConfirmBy", "ConfirmMatch", "ConfirmQuiet", "ConfirmAssert"):
     BUILTIN_MESSAGES[(_c, "confirmnotag")] = "`1` has no tag or surrounding Enclose."
+BUILTIN_MESSAGES[("Enclose", "nocatch")] = "No Enclose with tag `1` caught the confirmation failure; returning it."
 
 DEFAULT_GROUPS = [("Compiler", []), ("Graphics", []), ("Obsolete", []), ("Packing", []),
                   ("Spelling", [("General", "spell"), ("General", "spell1")]), ("Symbolics", [])]
@@ -1068,6 +1069,13 @@ class ConfirmThrow(K.ThrowSignal):
     def __init__(self, failure, tag):
         super().__init__(failure, tag)
         self.failure = failure
+
+
+def uncaught_confirm(t: ConfirmThrow) -> Expr:
+    """Top level: a tagged confirmation failure that no Enclose caught returns its Failure (message
+    Enclose::nocatch) instead of an Uncaught Throw error, as untagged ones do (confirmnotag)."""
+    issue("Enclose", "nocatch", t.tag)
+    return t.failure
 
 
 def _lexical_tag(e):

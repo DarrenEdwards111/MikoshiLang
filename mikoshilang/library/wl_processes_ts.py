@@ -28,6 +28,7 @@ TS_OPTS = {"ResamplingMethod", "TemporalRegularity", "MergingFunction", "Interpo
            "MissingDataMethod", "TimeObservationWindow", "ComponentKeys", "MetaInformation", "CalendarType",
            "DateFunction", "DateGranularity", "HolidayCalendar", "TimeSystem", "TimeZone", "ValueDimensions"}
 KEPT = ("ResamplingMethod", "TemporalRegularity")
+TOW_CHECK = None    # X02: fn(window, times, fname) -> Interval[{a, b}] (set by wl_statmodels2_ts)
 
 
 def _ev(e):
@@ -80,7 +81,8 @@ def _split_opts(args, fname):
             raise ValueError(f"{fname}: unknown option {n}")
         opts[n] = args.pop().args[1]
     for n in opts:
-        if n not in KEPT + ("MergingFunction", "InterpolationOrder"):
+        if n not in KEPT + ("MergingFunction", "InterpolationOrder") + \
+                (("TimeObservationWindow",) if TOW_CHECK is not None else ()):
             raise NotImplementedError(f"{fname}: the option {n} is not supported")
     return args, opts
 
@@ -194,7 +196,9 @@ def _canonical(e):
         return False
     if any(k2 <= k1 for k1, k2 in zip(ks, ks[1:])):
         return False
-    if not all(_is_rule(o) and isinstance(o.args[0], Symbol) and o.args[0].name in KEPT for o in a[1:]):
+    if not all(_is_rule(o) and isinstance(o.args[0], Symbol) and (o.args[0].name in KEPT or (
+            o.args[0].name == "TimeObservationWindow" and TOW_CHECK is not None and
+            isinstance(o.args[1], Expr) and o.args[1].head == "Interval")) for o in a[1:]):
         return False
     for o in a[1:]:
         if o.args[0].name == "ResamplingMethod":
@@ -204,6 +208,11 @@ def _canonical(e):
 
 def _build(head, args, fname):
     args, opts = _split_opts(args, fname)
+    tow = opts.pop("TimeObservationWindow", None)
+    if tow is not None:
+        out = _build(head, args, fname)
+        win = TOW_CHECK(tow, [p.args[0] for p in out.args[0].args], fname)
+        return Expr(head, *out.args, rule(Symbol("TimeObservationWindow"), win))
     if "ResamplingMethod" in opts:
         _check_resampling(opts["ResamplingMethod"], fname)
     if "InterpolationOrder" in opts:
@@ -383,6 +392,9 @@ def series_property(head, pairs, opts, prop, rest, fname):
         "ResamplingMethod": lambda: opts.get("ResamplingMethod", AUTO),
         "MinimumTimeIncrement": lambda: _min_increment(pairs),
     }
+    if TOW_CHECK is not None:
+        table["TimeObservationWindow"] = lambda: opts.get("TimeObservationWindow",
+                                                          Expr("Interval", L(times[0], times[-1])))
     if prop == "Properties":
         return L(*sorted(table))
     if prop not in table:

@@ -491,8 +491,9 @@ def test_w16(case):
 def test_w16_skipped_symbols():
     from mikoshilang.library import STATUS
     from mikoshilang.library.wl_plots2d import SKIPPED
-    assert set(SKIPPED) == {"ChromaticityPlot", "ChromaticityPlot3D", "BioSequencePlot", "SingularValuePlot",
-                            "ListSurfacePlot3D", "ImageWaveformPlot"}
+    # ChromaticityPlot, ChromaticityPlot3D and ImageWaveformPlot were implemented by batch X04 (wl_imageproc2_create);
+    # SingularValuePlot by batch X03; ListSurfacePlot3D by batch X06; BioSequencePlot by batch X07 (wl_graphplots)
+    assert set(SKIPPED) == set()
     assert not any(n in STATUS for n in SKIPPED)
 
 

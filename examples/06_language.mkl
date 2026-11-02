@@ -1,0 +1,15 @@
+(* MikoshiLang source file: patterns, scoping and functional programming.
+   Run: python examples/run_mkl.py examples/06_language.mkl *)
+
+collatz[1] = 0;
+collatz[n_?EvenQ] := 1 + collatz[n/2];
+collatz[n_] := 1 + collatz[3 n + 1];
+Print["collatz /@ {6, 27}: ", collatz /@ {6, 27}];
+
+Print["Module scoping: ", Module[{t = 2}, t^3]];
+Print["Pure functions: ", Select[Range[20], PrimeQ[#] && # > 5 &]];
+Print["Span: ", Range[10][[3 ;; 6]]];
+Print["Optional pattern: ", (h[x_ + y_.] := {x, y}; h[a])];
+Print["Fold: ", Fold[#1 * 10 + #2 &, 0, {1, 2, 3}]];
+Print["Table: ", Table[i^2, {i, 5}]];
+Print["Verify: ", Head[Verify[FactorInteger[1001]]]];

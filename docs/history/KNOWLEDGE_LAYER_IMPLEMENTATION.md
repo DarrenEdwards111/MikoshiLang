@@ -1,3 +1,7 @@
+> **Historical document (February 2026, pre-3.8).** It describes an earlier version of MikoshiLang and is not a
+> current capability specification. Function and test counts here are out of date: see the
+> [README](../../README.md) and the [coverage roadmap](../wolfram_coverage_roadmap.md) for current figures.
+
 # MikoshiLang Full Knowledge Layer — Implementation Summary
 
 **Version:** 3.3.0 (unreleased)  

@@ -77,6 +77,16 @@ NATIVE = set(_INT_RANGES) | {"Real32", "Real64", "ComplexReal64", "Boolean", "St
 _COMPOUND = {"PackedArray": 2, "ListVector": 1, "NumericArray": 2}
 
 
+# X01 extension points (wl_core_extras_compile): rewrites of the compiled view of a body, extra declaration kinds
+# and extra type kinds. PREPARE_HOOKS: f(expr, walk) -> replacement or None. DECL_HOOKS[head]: f(decl, aliases,
+# fname) registering the declaration. TYPE_CONFORMERS[kind]: f(v, t, b, fname) -> (ok, value) for a parsed type
+# tuple (kind, ...). TYPE_EXPRS[kind]: f(t) -> Wolfram form of the type.
+PREPARE_HOOKS = []
+DECL_HOOKS = {}
+TYPE_CONFORMERS = {}
+TYPE_EXPRS = {}
+
+
 class TVar:
     def __init__(self, name):
         self.name = name
@@ -193,6 +203,8 @@ def type_expr(t):
         return Expr("SequenceType", Symbol(t[1]))
     if k == "Eval":
         return Expr("TypeEvaluate", t[1])
+    if k in TYPE_EXPRS:
+        return TYPE_EXPRS[k](t)
     raise ValueError(t)
 
 
@@ -276,6 +288,8 @@ def conform(v, t, b, fname):
         return True, v
     if isinstance(t, tuple) and t[0] == "Eval":
         return conform(v, _eval_literal(t[1], b, fname), b, fname)
+    if isinstance(t, tuple) and t[0] in TYPE_CONFORMERS:
+        return TYPE_CONFORMERS[t[0]](v, t, b, fname)
     if isinstance(t, str):
         if t in _INT_RANGES:
             if K.is_int(v) and not isinstance(v, bool):
@@ -605,9 +619,12 @@ def _typed_function(tf, fname, aliases):
     else:
         raise TypeError(f"{fname}: a declaration needs Typed[type]@Function[...], not {_show(tf)}")
     if not (isinstance(f, Expr) and f.head == "Function" and len(f.args) == 2):
-        if isinstance(f, Expr) and f.head in ("KernelFunction", "DownValuesFunction", "LibraryFunction"):
+        if isinstance(f, Expr) and f.head in ("KernelFunction", "DownValuesFunction") and len(f.args) == 1:
+            pass                                    # X01: evaluated by the kernel (see _run_overload)
+        elif isinstance(f, Expr) and f.head == "LibraryFunction":
             raise NotImplementedError(f"{fname}: {f.head} declarations are not supported")
-        raise TypeError(f"{fname}: the declared value must be Function[params, body]")
+        else:
+            raise TypeError(f"{fname}: the declared value must be Function[params, body]")
     tvars, cond = (), None
     if isinstance(ty, Expr) and ty.head == "ForAllType":
         if len(ty.args) not in (2, 3):
@@ -672,7 +689,8 @@ def _decl_list(d, fname):
         for x in d.args:
             out.extend(_decl_list(x, fname))
         return out
-    if isinstance(d, Expr) and d.head in ("FunctionDeclaration", "TypeDeclaration", "OperationDeclaration"):
+    if isinstance(d, Expr) and (d.head in ("FunctionDeclaration", "TypeDeclaration", "OperationDeclaration")
+                                or d.head in DECL_HOOKS):
         return [d]
     if isinstance(d, Expr) and d.head == "CompilerEnvironmentObject":
         return list(_env_decls(d, fname))
@@ -687,11 +705,15 @@ def build_env(decls, fname):
             kind = d.args[0] if d.args else None
             if kind in ("Macro", "Alias") and len(d.args) >= 3 and isinstance(d.args[1], str):
                 aliases[d.args[1]] = parse_type(d.args[2], fname, (), aliases)
+            elif ("TypeDeclaration", kind) in DECL_HOOKS:
+                DECL_HOOKS[("TypeDeclaration", kind)](d, aliases, fname)
             else:
                 raise NotImplementedError(f"{fname}: TypeDeclaration[{_show(kind)}, ...] (product and abstract "
                                           f"types) is not supported in compilation; \"Macro\" and \"Alias\" are")
         elif d.head == "OperationDeclaration":
             raise NotImplementedError(f"{fname}: OperationDeclaration needs product types, which are not supported")
+        elif d.head in DECL_HOOKS:
+            DECL_HOOKS[d.head](d, aliases, fname)
     funcs = {}
     for d in decls:
         if d.head == "FunctionDeclaration":
@@ -710,6 +732,10 @@ def _prepare(body, env_types, decls, fname):
     def walk(x):
         if not isinstance(x, Expr):
             return x
+        for hook in PREPARE_HOOKS:
+            r = hook(x, walk)
+            if r is not None:
+                return r
         if x.head == "IfCompiled" and len(x.args) == 2:
             return walk(x.args[0])
         if x.head in ("TypeHint", "Typed") and len(x.args) == 2:
@@ -778,6 +804,13 @@ def _run_overload(name, overloads, args, funcs, aliases, fname):
                 coerced.append(a)
         if not ok or not _check_cond(ov.cond, b, fname):
             continue
+        if ov.func.head in ("KernelFunction", "DownValuesFunction"):
+            res = machine(_kernel_call(name, ov.func, coerced))
+            good, res2 = conform(res, _subst_type(ov.ret, b, fname), b, fname)
+            if not good:
+                raise TypeError(f"{fname}: {name} returned {_show(res)}, which does not have its declared type "
+                                f"{_show(type_expr(_subst_type(ov.ret, b, fname)))}")
+            return res2
         params = ov.func.args[0]
         names = [K._untyped(p) for p in (params.args if is_list(params) else (params,))]
         env_types = {}
@@ -798,6 +831,24 @@ def _run_overload(name, overloads, args, funcs, aliases, fname):
                             f"{_show(type_expr(ret))}")
         return res2
     raise TypeError(f"{fname}: no declaration of {name} accepts the arguments {[_show(a) for a in args]}")
+
+
+def _kernel_call(name, kf, args):
+    """X01: a declaration Typed[type]@KernelFunction[f] evaluates f[args] with the evaluator;
+    Typed[type]@DownValuesFunction[sym] applies the definitions of sym (the declared name is unbound meanwhile, so
+    its own downvalues are used)."""
+    f = kf.args[0]
+    if kf.head == "DownValuesFunction":
+        if not isinstance(f, Symbol):
+            raise TypeError("DownValuesFunction: the argument must be a symbol")
+        st = K.state()
+        saved = st.own.pop(f.name, _MISSING)
+        try:
+            return ev(Expr(f.name, *args))
+        finally:
+            if saved is not _MISSING:
+                st.own[f.name] = saved
+    return ev(Expr(f.name if isinstance(f, Symbol) else f, *args))
 
 
 def _decl_values(funcs, aliases):
@@ -951,8 +1002,10 @@ def _compile_one(f, decls, opts, fname):
           "machine numbers. Integer overflow of an inferred integer result type follows CompilerRuntimeErrorAction "
           "(Automatic/\"Evaluate\": the exact result, as Wolfram's rerun gives; None: Failure[\"RuntimeError\", "
           "...]; f: f[failure]). Options CompilerEnvironment, CompilerOptions, ProgressReporting, TargetSystem and "
-          "UseEmbeddedLibrary are accepted (no machine code is generated). Product/abstract types, "
-          "OperationDeclaration, KernelFunction and DownValuesFunction raise NotImplementedError; untyped "
+          "UseEmbeddedLibrary are accepted (no machine code is generated). Product types, KernelFunction, "
+          "DownValuesFunction, KernelEvaluate, InertExpression, CompiledExpressionDeclaration and raw pointers "
+          "are handled by the X01 extensions (wl_core_extras_compile); abstract types and "
+          "OperationDeclaration raise NotImplementedError; untyped "
           "parameters ValueError. Deviation: the \"PackedArray\"::[...] input syntax is not parsed; write "
           "TypeSpecifier[\"PackedArray\"][...]. Check: reference (Wolfram documentation examples) and agreement "
           "with the uncompiled Function in tests.")
@@ -1363,14 +1416,14 @@ fn("FunctionDeclaration", area=AREA, status="added",
    notes="FunctionDeclaration[name, Typed[{t1, ...} -> t]@Function[{x1, ...}, body], \"Inline\" -> ...] is a "
          "validated, inert declaration used by FunctionCompile and CompilerEnvironmentAppendTo; several "
          "declarations of one name with different types are overloads, ForAllType makes them polymorphic and "
-         "SequenceType variadic. Malformed declarations raise TypeError/ValueError; KernelFunction and "
-         "DownValuesFunction bodies NotImplementedError. Check: reference (Wolfram documentation AddTwo, "
+         "SequenceType variadic; Typed[type]@KernelFunction[f] and Typed[type]@DownValuesFunction[sym] declare "
+         "functions evaluated by the kernel (X01). Malformed declarations raise TypeError/ValueError. Check: reference (Wolfram documentation AddTwo, "
          "VarArgsAdd and ForAllType examples) in tests.")(_inert_decl("FunctionDeclaration"))
 fn("TypeDeclaration", area=AREA, status="added",
    notes="Partial. TypeDeclaration[kind, name, ...] is a validated, inert declaration (kinds \"Product\", "
          "\"Abstract\", \"Alias\", \"Macro\"); FunctionCompile uses \"Macro\" and \"Alias\" declarations as type "
-         "names and raises NotImplementedError for product and abstract types (CreateTypeInstance is not "
-         "available). Malformed declarations raise ValueError/TypeError. Check: reference (Wolfram documentation "
+         "names and \"Product\" types with CreateTypeInstance (X01), and raises NotImplementedError for abstract "
+         "types. Malformed declarations raise ValueError/TypeError. Check: reference (Wolfram documentation "
          "fooInteger example) in tests.")(_inert_decl("TypeDeclaration"))
 fn("OperationDeclaration", area=AREA, status="added",
    notes="Partial. OperationDeclaration[\"type\", \"op\", Typed[...]@Function[...]] is a validated, inert "

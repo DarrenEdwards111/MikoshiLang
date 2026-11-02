@@ -1141,6 +1141,6 @@ def test_skipped_symbols_are_not_registered():
     """Symbols left out of W29 (BRIEF step 9) have a reason and no implementation."""
     from mikoshilang.library import wl_system as W
     from mikoshilang.library.core import REGISTRY, STATUS
-    assert len(W._SKIPS) == 12
+    assert len(W._SKIPS) == 9          # X01 implemented KernelEvaluate, KernelFunction, Parallelization
     for name, why in W._SKIPS.items():
         assert why and name not in STATUS and name not in REGISTRY, name

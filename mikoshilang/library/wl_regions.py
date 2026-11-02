@@ -2937,6 +2937,28 @@ def _flat_from(h, a, f):
     raise NotImplementedError(f"{f}: {h} regions are not supported")
 
 
+def _shells_with_voids(h, a, n, f):
+    """(outer faces, [void faces, ...]) of Polyhedron[pts, {outer -> {void, ...}, ...}] (indexed form with a Rule);
+    None otherwise.  The voids are subtracted (X06: CanonicalizePolyhedron's canonical form)."""
+    if h != "Polyhedron" or len(a) != 2:
+        return None
+    items = [a[1]] if isinstance(a[1], Expr) and a[1].head == "Rule" else \
+        (list(a[1].args) if K.is_list(a[1]) else [])
+    if not any(isinstance(e, Expr) and e.head == "Rule" for e in items):
+        return None
+    outer, voids = [], []
+    for e in items:
+        if isinstance(e, Expr) and e.head == "Rule":
+            outer += G._index_faces(e.args[0], n, f)
+            vs = e.args[1]
+            groups = vs.args if K.is_list(vs) and vs.args and K.is_list(vs.args[0]) and vs.args[0].args and \
+                K.is_list(vs.args[0].args[0]) else [vs]
+            voids += [G._index_faces(g, n, f) for g in groups]
+        else:
+            outer += G._index_faces(e, n, f)
+    return outer, voids
+
+
 def _prim(x, f):
     h = x.head
     G._check_args(h, list(x.args), allow_index=False)
@@ -3113,6 +3135,9 @@ def _prim(x, f):
                 return r
         V, F = G.polyhedron_data(x, f)
         _cc(V)
+        sv = _shells_with_voids(h, a, len(V), f)
+        if sv is not None:
+            return PolyhedronR(V, sv[0], expr=x, f=f, voids=[(V, fv) for fv in sv[1]])
         return PolyhedronR(V, F, expr=x, f=f)
     if h in ("InfiniteLine", "HalfLine", "InfinitePlane", "AffineSpace", "HalfPlane", "AffineHalfSpace",
              "HalfSpace", "Hyperplane", "FullRegion", "EmptyRegion"):

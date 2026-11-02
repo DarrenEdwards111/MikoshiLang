@@ -1,25 +1,28 @@
-# Manual Rebuild Instructions
+# Manual rebuild instructions
 
-The manual has been updated with current function counts and domains.
+The PDF is built from `mikoshilang-manual.tex`. The 3.8.0 PDF was built with
+[Tectonic](https://tectonic-typesetting.github.io/) (XeTeX), which fetches the LaTeX packages it needs:
 
-## To regenerate the PDF:
+```bash
+cd manual
+tectonic -X compile mikoshilang-manual.tex
+```
+
+`pdflatex` also works if a TeX Live installation is available (run it twice for the table of contents):
 
 ```bash
 cd manual
 pdflatex mikoshilang-manual.tex
-pdflatex mikoshilang-manual.tex  # Run twice for TOC
+pdflatex mikoshilang-manual.tex
 ```
 
-## Or using Docker:
+## 3.8.0 update
 
-```bash
-docker run --rm -v $(pwd):/work texlive/texlive pdflatex mikoshilang-manual.tex
-```
+- Version 3.7.0 → 3.8.0.
+- Replaced the retracted "6,324 functions" figure with the coverage roadmap figure (4,402 of 6,716 documented
+  Wolfram symbols), and added a "Status of this manual" note: where the manual conflicts with the README or
+  `docs/`, those take precedence.
+- Removed the dead `mikoshi.co.uk` console and REST API links; the hosted services are offline.
+- Added the verification, Python interop and types pillars to the key features.
 
-## Changes in this update:
-
-- Version: 2.0.0 → 3.1.1
-- Function count: 1,794 → 6,327
-- Domains: 25+ → 40+
-- Added comprehensive list of all 32 extended modules
-- Updated domain coverage section with new fields
+Most sections below the introduction still describe pre-3.8 releases and need a full rewrite.

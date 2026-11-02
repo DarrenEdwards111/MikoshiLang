@@ -19,7 +19,7 @@ import sympy as sp
 
 from ..expr import Expr, Symbol
 from .. import kernel as K
-from .core import fn, Unevaluated, L, R, error
+from .core import fn, Unevaluated, L, R
 from .wl_graphics_color import K_input
 from .wl_graphics_core import split_trailing_options, opt_name
 from . import wl_geomprims as G
@@ -1432,19 +1432,5 @@ for _nm, _txt in [
 
 # ───────────────────────────── skipped (algorithms not documented) ─────────────────────────────
 
-for _nm, _why in [
-    ("ConcaveHullMesh", "the concave (alpha-shape) hull depends on Wolfram's undocumented automatic alpha choice"),
-    ("FindMeshDefects", "Wolfram's catalogue of defect types and tolerances is not documented"),
-    ("GradientFittedMesh", "the gradient-fitting reconstruction algorithm is not documented"),
-    ("MeshCellQuality", "the quality measure used by the Wolfram Language is not documented"),
-    ("ReconstructionMesh", "the surface reconstruction method and its parameters are not documented"),
-    ("Remesh", "the remeshing algorithm and its target cell sizes are not documented"),
-    ("RepairMesh", "the repair heuristics (which defects are fixed and how) are not documented"),
-    ("SimplifyMesh", "the mesh decimation algorithm and its error criteria are not documented"),
-    ("SmoothMesh", "the smoothing operator and its default parameters are not documented"),
-    ("SubdivisionRegion", "subdivision-surface regions need Wolfram's subdivision scheme and limit evaluation"),
-    ("RegionFit", "the fitting methods and their output parametrizations are not documented"),
-    ("TriangulateMesh", "Wolfram's quality triangulation (Steiner points, MaxCellMeasure refinement) is not "
-                        "documented, so the cells could not match"),
-]:
-    error(_nm, AREA, f"{_nm} is not implemented: {_why}")
+# The 12 mesh-processing heads reserved here as errors in W22 (ConcaveHullMesh, FindMeshDefects, ...)
+# are implemented in wl_geometry3 / wl_geometry3_curves (Wolfram batch X06).
