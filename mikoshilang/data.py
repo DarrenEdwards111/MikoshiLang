@@ -3,6 +3,8 @@
 from __future__ import annotations
 from typing import Any, Callable, Optional
 import statistics as _stats
+import math as _math
+from numbers import Rational as _Rational
 from .expr import Expr, Symbol
 
 
@@ -23,11 +25,26 @@ def Table(expr_fn: Callable, spec) -> Expr:
             raise ValueError("Table spec must be (min, max) or (min, max, step)")
     else:
         start, end, step = 1, spec, 1
+    if step == 0:
+        raise ValueError("Table step cannot be zero")
+    # Exact rationals are finite; Decimal/SymPy expose native finiteness checks.
+    finite = True if isinstance(step, _Rational) else getattr(step, "is_finite", None)
+    if callable(finite):
+        finite = finite()
+    if finite is None:
+        finite = _math.isfinite(step)
+    if not finite:
+        raise ValueError("Table step must be finite")
     results = []
     i = start
-    while i <= end:
+    while (i <= end if step >= 0 else i >= end):
         results.append(expr_fn(i))
-        i += step
+        if i == end:
+            break
+        next_i = i + step
+        if next_i == i:
+            raise ValueError("Table step must advance the iterator")
+        i = next_i
     return Expr("List", *results)
 
 
@@ -60,16 +77,16 @@ def Reverse(lst: Expr) -> Expr:
 
 
 def Take(lst: Expr, n: int) -> Expr:
-    """Take first n elements."""
+    """Take n elements from the front, or the last -n when n is negative."""
     if isinstance(lst, Expr) and lst.head == "List":
-        return Expr("List", *lst.args[:n])
+        return Expr("List", *(lst.args[:n] if n >= 0 else lst.args[n:]))
     raise TypeError("Take expects a List expression")
 
 
 def Drop(lst: Expr, n: int) -> Expr:
-    """Drop first n elements."""
+    """Drop n elements from the front, or the last -n when n is negative."""
     if isinstance(lst, Expr) and lst.head == "List":
-        return Expr("List", *lst.args[n:])
+        return Expr("List", *(lst.args[n:] if n >= 0 else lst.args[:n]))
     raise TypeError("Drop expects a List expression")
 
 
@@ -93,7 +110,7 @@ def Range(*args) -> Expr:
     elif len(args) == 2:
         return Expr("List", *builtins_range(args[0], args[1] + 1))
     elif len(args) == 3:
-        return Expr("List", *builtins_range(args[0], args[1] + 1, args[2]))
+        return Expr("List", *builtins_range(args[0], args[1] + (1 if args[2] > 0 else -1), args[2]))
     raise ValueError("Range takes 1-3 arguments")
 
 

@@ -28,24 +28,24 @@ def _to_numpy(m: Expr) -> np.ndarray:
                 rows.append([float(x) if isinstance(x, (int, float)) else x for x in row.args])
             else:
                 rows.append([float(row) if isinstance(row, (int, float)) else row])
-        return np.array(rows, dtype=float)
+        dtype = complex if any(np.iscomplexobj(x) for row in rows for x in row) else float
+        return np.array(rows, dtype=dtype)
     raise TypeError("Expected a Matrix expression")
+
+
+def _numeric_scalar(x) -> int | float | complex:
+    """Use Python scalars without discarding components or rounding near integers."""
+    if x.imag != 0:
+        return complex(x)
+    value = float(x.real)
+    return int(value) if value.is_integer() else value
 
 
 def _from_numpy(arr: np.ndarray) -> Expr:
     """Convert numpy array back to Matrix Expr."""
     if arr.ndim == 1:
-        return Expr("List", *(int(x) if x == int(x) else float(x) for x in arr))
-    rows = []
-    for row in arr:
-        vals = []
-        for x in row:
-            if abs(x - round(x)) < 1e-10:
-                vals.append(int(round(x)))
-            else:
-                vals.append(float(x))
-        rows.append(Expr("List", *vals))
-    return Expr("Matrix", *rows)
+        return Expr("List", *(_numeric_scalar(x) for x in arr))
+    return Expr("Matrix", *(Expr("List", *(_numeric_scalar(x) for x in row)) for row in arr))
 
 
 def Dot(a: Expr, b: Expr) -> Expr:
@@ -54,12 +54,20 @@ def Dot(a: Expr, b: Expr) -> Expr:
     return _from_numpy(na @ nb)
 
 
-def Det(m: Expr) -> float:
-    """Matrix determinant."""
+def Det(m: Expr) -> int | float | complex:
+    """Matrix determinant; integer input is exact, other input is numerical."""
+    if not isinstance(m, Expr) or m.head != "Matrix":
+        raise TypeError("Expected a Matrix expression")
+    rows = [row.args if isinstance(row, Expr) and row.head == "List" else (row,)
+            for row in m.args]
+    if rows and all(len(row) == len(rows) for row in rows) and all(
+        isinstance(x, (int, np.integer)) for row in rows for x in row
+    ):
+        # Preserve exact integer results without rounding numerical determinants.
+        from sympy import Matrix as SympyMatrix
+        return int(SympyMatrix(rows).det())
     result = np.linalg.det(_to_numpy(m))
-    if abs(result - round(result)) < 1e-10:
-        return int(round(result))
-    return float(result)
+    return result.item()
 
 
 def Inverse(m: Expr) -> Expr:
@@ -70,12 +78,7 @@ def Inverse(m: Expr) -> Expr:
 def Eigenvalues(m: Expr) -> Expr:
     """Eigenvalues of a matrix."""
     vals = np.linalg.eigvals(_to_numpy(m))
-    result = []
-    for v in sorted(vals.real):
-        if abs(v - round(v)) < 1e-10:
-            result.append(int(round(v)))
-        else:
-            result.append(float(v))
+    result = [_numeric_scalar(v) for v in sorted(vals, key=lambda x: (x.real, x.imag))]
     return Expr("List", *result)
 
 
@@ -84,8 +87,8 @@ def Eigenvectors(m: Expr) -> Expr:
     vals, vecs = np.linalg.eig(_to_numpy(m))
     rows = []
     for i in range(vecs.shape[1]):
-        col = vecs[:, i].real
-        rows.append(Expr("List", *(float(x) for x in col)))
+        col = vecs[:, i]
+        rows.append(Expr("List", *(complex(x) if x.imag != 0 else float(x.real) for x in col)))
     return Expr("List", *rows)
 
 
