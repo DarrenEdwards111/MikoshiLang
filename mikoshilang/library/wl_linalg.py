@@ -48,18 +48,23 @@ def _matrix(x, fname, square=False):
 record("Dot", AREA, "fixed",
        "kernel builtin replaced in batch 3: any number of arguments and tensors of any rank (contracts the last "
        "index of each factor with the first of the next); symbolic factors leave Dot unevaluated (legacy raised); "
-       "Dot[x] = x; incompatible shapes raise; infix a.b parses as Dot")
+       "Dot[x] = x; incompatible shapes raise; infix a.b parses as Dot"
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
-record("DotProduct", AREA, "fixed", "MikoshiLang alias of Dot for two vectors (now the batch-3 Dot)")
+record("DotProduct", AREA, "fixed", "MikoshiLang alias of Dot for two vectors (now the batch-3 Dot)"
+                                    ". Check: exact (exact input gives exact results), reference (differential cases "
+                                    "in tests/library).")
 
 record("Det", AREA, "fixed",
        "kernel builtin replaced in batch 3: non-square input raises a clear error (legacy raised SymPy's "
        "NonSquareMatrixError), a symbol leaves Det unevaluated (legacy raised TypeError), machine matrices use "
-       "LAPACK, arbitrary-precision matrices keep their precision, symbolic determinants are expanded")
+       "LAPACK, arbitrary-precision matrices keep their precision, symbolic determinants are expanded"
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 record("Inverse", AREA, "fixed",
        "kernel builtin replaced in batch 3: a symbol leaves Inverse unevaluated (legacy raised), non-square and "
-       "singular matrices raise clear errors, machine matrices use LAPACK, symbolic entries are cancelled")
+       "singular matrices raise clear errors, machine matrices use LAPACK, symbolic entries are cancelled"
+       ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 
 
 # ─────────────────────────── transposes, parts of matrices ───────────────────────────

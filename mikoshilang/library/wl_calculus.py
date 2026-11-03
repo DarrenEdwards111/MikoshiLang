@@ -182,7 +182,8 @@ def D_expr(f, specs, nonconst=None, opts_expr=None):
                  "higher derivatives), threads over lists and equations (implicit differentiation "
                  "D[x^2 + y[x]^2 == 1, x]), NonConstants -> {y}, derivatives with respect to f[x]; chain rule "
                  "results are Wolfram Derivative forms (D[f[g[x]], x] -> f'[g[x]] g'[x]; previously "
-                 "D[f[g[x]], g[x]] g'[x]); symbolic orders stay unevaluated; D[f] with no variable returns f")
+                 "D[f[g[x]], g[x]] g'[x]); symbolic orders stay unevaluated; D[f] with no variable returns f"
+                 ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _b_D(a, ev, expr):
     if not a:
         raise ValueError("D needs an expression")
@@ -737,7 +738,8 @@ def _limit_impl(f, r, opts, fname):
                  "Direction -> \"FromAbove\" / \"FromBelow\" / -1 / 1 / \"TwoSided\", Assumptions, limits at "
                  "+-Infinity, lists of functions, and multivariate limits Limit[f, {x, y} -> {a, b}] (continuity "
                  "after cancellation, Indeterminate when two paths disagree, otherwise a clear error); "
-                 "oscillating limits raise (use MaxLimit/MinLimit); legacy rejected every option")
+                 "oscillating limits raise (use MaxLimit/MinLimit); legacy rejected every option"
+                 ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _b_limit(a, ev, expr):
     f, r, opts = _limit_args(a, "Limit")
     return _limit_impl(f, r, opts, "Limit")
@@ -1003,7 +1005,8 @@ def _series_undefined(f, x, x0, n, fname):
                  "of 1/x (O[1/x]^(n+1)), the O term always present (Series[1/x, {x, 0, 2}] -> 1/x + O[x]^3; "
                  "previously dropped), expansions about x0 grouped in powers of (x - x0) (O[x - x0]^k); several "
                  "variables Series[f, {x, x0, nx}, {y, y0, ny}] expand in x with coefficients that are series in y; "
-                 "threads over lists; functions SymPy cannot expand raise")
+                 "threads over lists; functions SymPy cannot expand raise"
+                 ". Check: reference (differential cases in tests/library).")
 def _b_series(a, ev, expr):
     if len(a) < 2:
         raise ValueError("Series expects Series[f, {x, x0, n}]")
@@ -1087,7 +1090,8 @@ _orig_normal = K._BUILTINS.get("Normal")
 
 @kernel_override("Normal", AREA,
                  "batch 4 adds: Normal[series] drops every O term structurally (also the inner ones of multivariate "
-                 "series) and evaluates the remaining polynomial; associations and other heads as before (batch 1)")
+                 "series) and evaluates the remaining polynomial; associations and other heads as before (batch 1)"
+                 ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _b_normal(a, ev, expr):
     if a and _has_o(a[0]) and (len(a) == 1 or (len(a) == 2 and K.contains(a[1], lambda y: isinstance(y, Symbol)
                                                                          and y.name in ("Series", "SeriesData")))):
@@ -1580,7 +1584,8 @@ def KL_equations(e):
                  "batch 4: every solution returned by DSolve (ODEs and ODE systems in one variable, initial "
                  "conditions, y[x] or y forms) is now substituted back into the equations and checked (symbolically, "
                  "else numerically at sample points); PDEs raise. Free constants may be numbered differently from "
-                 "Wolfram (the solution family is the same)")
+                 "Wolfram (the solution family is the same)"
+                 ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _b_dsolve(a, ev, expr):
     return _dsolve_checked(a, ev, expr, "DSolve")
 

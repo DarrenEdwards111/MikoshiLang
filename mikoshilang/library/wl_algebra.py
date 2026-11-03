@@ -1330,7 +1330,8 @@ def _solve_args(a, fname):
                  "(underdetermined systems solved for the later variables, as Wolfram), linear and finite quadratic "
                  "Diophantine equations over the Integers; every solution is substituted back; inequalities raise "
                  "(use Reduce); transcendental equations SymPy cannot solve completely raise instead of returning "
-                 "a partial list")
+                 "a partial list"
+                 ". Check: exact (exact input gives exact results), reference (differential cases in tests/library).")
 def _b_solve(a, ev, expr):
     eqs, vs, dom, opts = _solve_args(a, "Solve")
     xs, sols = _solve_core(eqs, vs, dom, "Solve", opts)
