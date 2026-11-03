@@ -29,6 +29,12 @@ It replaces 3.7.1 (27 February 2026), whose "6,324 functions" claim has been ret
   with `Direction`.
 
 ### Python interop
+- Corrected the direct Python helpers exported from `mikoshilang`: complex eigenvalues and eigenvectors
+  retain their imaginary components, small nonzero determinants are not rounded to zero, negative
+  `Take`/`Drop` counts operate on the end of the list, and descending `Range`/`Table` iterators respect
+  their direction and endpoint. Wrong-direction `Table` iterators return an empty list and a zero step
+  raises a clear error rather than looping forever. Regression tests cover these calls separately from
+  the already-correct `Session.evaluate` interface.
 - Phase 1 (#34): `Session.eval` returns Python data (`Fraction`, lists, dicts, optional NumPy arrays),
   `Session.ns` gives Pythonic calls, `@session.function` turns typed Python functions into heads, and
   `PythonFunction`/`PythonImport` are gated by an `allow_python` allow-list. There is no `eval`/`exec`.
