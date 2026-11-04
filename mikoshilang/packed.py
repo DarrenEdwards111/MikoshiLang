@@ -48,6 +48,8 @@ class PackedArray(Expr):
         dt = _DTYPES.get(arr.dtype.kind)
         if dt is None:
             raise TypeError(f"PackedArray: dtype {arr.dtype} is not a machine number type")
+        if arr.dtype.kind == "u" and int(arr.max()) >= 2 ** 63:
+            raise ValueError("PackedArray: integer values must fit in int64")
         if arr.dtype != dt:
             arr = arr.astype(dt)
         elif arr.flags.writeable:

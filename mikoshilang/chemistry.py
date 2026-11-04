@@ -181,17 +181,43 @@ def ElectronConfiguration(key) -> str:
 
 def _parse_formula(formula: str) -> Dict[str, int]:
     """Parse a molecular formula like H2O, C6H12O6 into {element: count}."""
-    result: Dict[str, int] = {}
-    # Handle parentheses
-    formula = _expand_parens(formula)
-    # Parse element-count pairs
-    pattern = re.compile(r'([A-Z][a-z]?)(\d*)')
-    for m in pattern.finditer(formula):
-        elem = m.group(1)
-        count = int(m.group(2)) if m.group(2) else 1
-        if elem:
-            result[elem] = result.get(elem, 0) + count
-    return result
+    # Only neutral formulas with element symbols and parenthesized groups.
+    # Consume every character; charges, hydrates and leading coefficients are
+    # unsupported rather than silently interpreted as a different compound.
+    if not isinstance(formula, str) or not formula:
+        raise ValueError("Expected a nonempty molecular formula")
+    stack = [{}]
+    pos = 0
+    while pos < len(formula):
+        char = formula[pos]
+        if char == '(':
+            stack.append({})
+            pos += 1
+            continue
+        if char == ')':
+            if len(stack) == 1 or not stack[-1]:
+                raise ValueError("Invalid parenthesized formula")
+            atoms = stack.pop()
+            pos += 1
+        else:
+            match = re.match(r'[A-Z][a-z]?', formula[pos:])
+            if match is None:
+                raise ValueError(f"Unsupported formula at position {pos}: {formula}")
+            elem = match.group()
+            _lookup(elem)
+            atoms = {elem: 1}
+            pos += len(elem)
+        match = re.match(r'[0-9]+', formula[pos:])
+        count = int(match.group()) if match else 1
+        if count <= 0:
+            raise ValueError("Atom and group counts must be positive")
+        if match:
+            pos += len(match.group())
+        for elem, amount in atoms.items():
+            stack[-1][elem] = stack[-1].get(elem, 0) + amount * count
+    if len(stack) != 1:
+        raise ValueError("Unclosed parenthesis in formula")
+    return stack[0]
 
 
 def _expand_parens(formula: str) -> str:
@@ -208,7 +234,11 @@ def _expand_parens(formula: str) -> str:
 
 
 def MolecularMass(formula: str) -> float:
-    """Calculate molecular mass from formula string."""
+    """Mass rounded to 0.001 for neutral formulas and parenthesized groups.
+
+    Charges, isotope notation, hydrates and leading coefficients are unsupported
+    and raise ValueError, as do malformed formulas and unknown elements.
+    """
     atoms = _parse_formula(formula)
     total = 0.0
     for elem, count in atoms.items():
@@ -219,7 +249,11 @@ def MolecularMass(formula: str) -> float:
 # ── Equation balancing ──
 
 def BalanceEquation(equation: str) -> str:
-    """Balance a chemical equation string like 'H2 + O2 -> H2O'."""
+    """Balance neutral formulas with unique strictly positive coefficients.
+
+    Accept ->, → or = separators. Impossible or underdetermined equations and
+    preexisting coefficients raise ValueError rather than guessing a balance.
+    """
     # Parse equation
     if '->' in equation:
         lhs, rhs = equation.split('->')
@@ -238,39 +272,28 @@ def BalanceEquation(equation: str) -> str:
     all_formulas = [_parse_formula(c) for c in all_compounds]
     elements = sorted(set(e for f in all_formulas for e in f))
 
-    n = len(all_compounds)
-
-    # Build matrix: each row is an element, each column is a compound
-    # LHS compounds positive, RHS negative
-    import numpy as np
-    matrix = np.zeros((len(elements), n))
-    for j, formula in enumerate(all_formulas):
-        sign = 1 if j < len(lhs_compounds) else -1
-        for i, elem in enumerate(elements):
-            matrix[i, j] = sign * formula.get(elem, 0)
-
-    # Find null space (coefficients)
-    from numpy.linalg import svd
-    U, S, Vt = svd(matrix)
-    # Last row of Vt corresponds to smallest singular value
-    null_vec = Vt[-1, :]
-
-    # Make all coefficients positive
-    if null_vec[0] < 0:
-        null_vec = -null_vec
-
-    # Convert to smallest integers
-    null_vec = np.abs(null_vec)
-    null_vec = null_vec / null_vec.min()
-
-    # Round to nearest integer and verify
-    coeffs = np.round(null_vec).astype(int)
-
-    # Scale to smallest integers
+    # Exact rational nullspace: rounding an SVD vector can violate atom
+    # conservation. Multiple independent balances are deliberately unsupported.
+    import sympy as sp
+    matrix = sp.Matrix([
+        [(1 if j < len(lhs_compounds) else -1) * formula.get(elem, 0)
+         for j, formula in enumerate(all_formulas)]
+        for elem in elements
+    ])
+    basis = matrix.nullspace()
+    if len(basis) != 1:
+        raise ValueError("Equation has no unique balance")
+    vector = basis[0]
+    if vector[0] < 0:
+        vector = -vector
+    if any(value <= 0 for value in vector):
+        raise ValueError("Equation requires nonpositive coefficients")
+    scale = sp.ilcm(1, *[value.q for value in vector])
+    coeffs = [int(value * scale) for value in vector]
     from math import gcd
     from functools import reduce
-    g = reduce(gcd, coeffs)
-    coeffs = coeffs // g
+    divisor = reduce(gcd, coeffs)
+    coeffs = [value // divisor for value in coeffs]
 
     # Format result
     lhs_parts = []

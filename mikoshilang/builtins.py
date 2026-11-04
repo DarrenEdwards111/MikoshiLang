@@ -59,17 +59,11 @@ def FactorInteger(n: int) -> Expr:
 
 def GCD(*args: int) -> int:
     """Greatest common divisor."""
-    result = args[0]
-    for a in args[1:]:
-        result = math.gcd(result, a)
-    return result
+    return math.gcd(*args)
 
 def LCM(*args: int) -> int:
     """Least common multiple."""
-    result = args[0]
-    for a in args[1:]:
-        result = result * a // math.gcd(result, a)
-    return result
+    return math.lcm(*args)
 
 def Mod(a: int, b: int) -> int:
     """Modular arithmetic."""
@@ -88,42 +82,54 @@ def Binomial(n: int, k: int) -> int:
 
 def Fibonacci(n: int) -> int:
     """nth Fibonacci number."""
-    return int(sp.fibonacci(n))
+    # Validate the index before SymPy's analytic extension can be truncated.
+    import operator
+    return int(sp.fibonacci(operator.index(n)))
 
 
 # ── Logic ──
 
-def And(*args: bool) -> bool:
-    return all(args)
+def And(*args: bool):
+    return all(args) if all(isinstance(a, bool) for a in args) else Expr("And", *args)
 
-def Or(*args: bool) -> bool:
-    return any(args)
+def Or(*args: bool):
+    return any(args) if all(isinstance(a, bool) for a in args) else Expr("Or", *args)
 
-def Not(x: bool) -> bool:
-    return not x
+def Not(x: bool):
+    return not x if isinstance(x, bool) else Expr("Not", x)
 
-def Xor(a: bool, b: bool) -> bool:
-    return a ^ b
+def Xor(a: bool, b: bool):
+    return a ^ b if isinstance(a, bool) and isinstance(b, bool) else Expr("Xor", a, b)
 
-def Implies(a: bool, b: bool) -> bool:
-    return (not a) or b
+def Implies(a: bool, b: bool):
+    return (not a) or b if isinstance(a, bool) and isinstance(b, bool) else Expr("Implies", a, b)
 
 
 # ── Comparison ──
 
-def Equal(a, b) -> bool:
+def Equal(a, b):
+    if isinstance(a, (Expr, Symbol)) or isinstance(b, (Expr, Symbol)):
+        return True if a == b else Expr("Equal", a, b)
     return a == b
 
-def Less(a, b) -> bool:
+def Less(a, b):
+    if isinstance(a, (Expr, Symbol)) or isinstance(b, (Expr, Symbol)):
+        return Expr("Less", a, b)
     return a < b
 
-def Greater(a, b) -> bool:
+def Greater(a, b):
+    if isinstance(a, (Expr, Symbol)) or isinstance(b, (Expr, Symbol)):
+        return Expr("Greater", a, b)
     return a > b
 
-def LessEqual(a, b) -> bool:
+def LessEqual(a, b):
+    if isinstance(a, (Expr, Symbol)) or isinstance(b, (Expr, Symbol)):
+        return Expr("LessEqual", a, b)
     return a <= b
 
-def GreaterEqual(a, b) -> bool:
+def GreaterEqual(a, b):
+    if isinstance(a, (Expr, Symbol)) or isinstance(b, (Expr, Symbol)):
+        return Expr("GreaterEqual", a, b)
     return a >= b
 
 
