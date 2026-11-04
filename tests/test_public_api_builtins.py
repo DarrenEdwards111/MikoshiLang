@@ -173,8 +173,12 @@ def test_combinatorics_known_values_domains_and_session_parity():
     for call in [lambda: Factorial(-1), lambda: Binomial(-1, 2), lambda: Binomial(3, -1)]:
         with pytest.raises(ValueError):
             call()
-    for call in [lambda: Factorial(2.5), lambda: Binomial(3.5, 1),
-                 lambda: Binomial(3, 1.5), lambda: Factorial(Symbol("n"))]:
+    # Python 3.9 rejects fractional factorial inputs with ValueError;
+    # newer Python versions use TypeError. Both enforce the integer domain.
+    with pytest.raises((TypeError, ValueError)):
+        Factorial(2.5)
+    for call in [lambda: Binomial(3.5, 1), lambda: Binomial(3, 1.5),
+                 lambda: Factorial(Symbol("n"))]:
         with pytest.raises(TypeError):
             call()
     assert Factorial(10) == Session().evaluate("Factorial[10]")
