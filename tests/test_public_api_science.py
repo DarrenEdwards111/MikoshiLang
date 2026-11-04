@@ -172,15 +172,18 @@ def test_unitconvert_known_values(value, source, target, expected):
     assert result.value == pytest.approx(expected, rel=1e-12, abs=1e-9 if expected == 0 else 0)
 
 
-def test_fouriertransform_gaussian_and_inverse():
+@pytest.mark.parametrize("real_variables", [False, True])
+def test_fouriertransform_gaussian_and_inverse(real_variables):
     import sympy as sp
     from mikoshilang.math_ops import to_sympy
-    t, w = sp.symbols("t w")
+    t, w = sp.symbols("t w", real=True) if real_variables else sp.symbols("t w")
     gaussian = sp.exp(-sp.pi * t**2)
-    transformed = api.FourierTransform(gaussian, Symbol("t"), "w")
-    assert sp.simplify(to_sympy(transformed) - sp.exp(-sp.pi * w**2)) == 0
-    inverse = api.InverseFourierTransform(sp.exp(-sp.pi * w**2), "w", Symbol("t"))
-    assert sp.simplify(to_sympy(inverse) - gaussian) == 0
+    transformed = api.FourierTransform(gaussian, t if real_variables else Symbol("t"), w if real_variables else "w")
+    forward = to_sympy(transformed).subs(sp.Symbol("w"), w)
+    assert sp.simplify(forward - sp.exp(-sp.pi * w**2)) == 0
+    inverse = api.InverseFourierTransform(sp.exp(-sp.pi * w**2), w if real_variables else "w", t if real_variables else Symbol("t"))
+    restored = to_sympy(inverse).subs(sp.Symbol("t"), t)
+    assert sp.simplify(restored - gaussian) == 0
     assert api.FourierTransform(0, "t", "w") == 0
     assert api.InverseFourierTransform(0, "w", "t") == 0
     with pytest.raises(TypeError):

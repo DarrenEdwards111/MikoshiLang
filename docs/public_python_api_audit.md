@@ -47,7 +47,8 @@ and tiny unit conversion. The baseline import path was asserted before execution
 ## Confirmed repairs
 
 - Preserve assumption-bearing SymPy variable identity in `diff`, `integrate`,
-  `solve`, `limit` and `series` instead of silently using a different symbol.
+  `solve`, `limit`, `series`, `FourierTransform` and `InverseFourierTransform`
+  instead of silently using a different symbol.
 - Validate requested numerical precision before the `MachinePrecision` special
   case and reject nonfinite precision consistently.
 - Correct GCD/LCM signs, zero/empty identities and integer validation; reject
@@ -78,10 +79,10 @@ python scripts/check_public_api_wheel.py --work-dir <scratch-directory>
 
 Final targeted validation on Windows / Python 3.14:
 
-- **435 new audit cases** (including 5 inventory guards), plus the **118 existing
-  direct-Python regressions**: **553 passed**, with warnings treated as errors.
+- **436 new audit cases** (including 5 inventory guards), plus the **118 existing
+  direct-Python regressions**: **554 passed**, with warnings treated as errors.
 - Separate minimal environment with no SciPy, Hypothesis or matplotlib:
-  **483 passed, 70 explicitly skipped**, also with warnings treated as errors.
+  **484 passed, 70 explicitly skipped**, also with warnings treated as errors.
   Optional skips do not imply those features were tested in that environment.
 - Built both sdist and wheel successfully. Source archive inspection confirmed
   that the audit manifest, wheel-check script and report ship alongside the tests.

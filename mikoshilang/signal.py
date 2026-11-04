@@ -19,8 +19,8 @@ def FourierTransform(expr, t_var, w_var) -> Any:
     import sympy as sp
     from .math_ops import to_sympy, from_sympy
     sexpr = to_sympy(expr)
-    st = to_sympy(t_var) if isinstance(t_var, Symbol) else sp.Symbol(str(t_var))
-    sw = to_sympy(w_var) if isinstance(w_var, Symbol) else sp.Symbol(str(w_var))
+    st = to_sympy(t_var) if isinstance(t_var, (Symbol, sp.Symbol)) else sp.Symbol(str(t_var))
+    sw = to_sympy(w_var) if isinstance(w_var, (Symbol, sp.Symbol)) else sp.Symbol(str(w_var))
     result = sp.fourier_transform(sexpr, st, sw)
     return from_sympy(result)
 
@@ -30,8 +30,8 @@ def InverseFourierTransform(expr, w_var, t_var) -> Any:
     import sympy as sp
     from .math_ops import to_sympy, from_sympy
     sexpr = to_sympy(expr)
-    sw = to_sympy(w_var) if isinstance(w_var, Symbol) else sp.Symbol(str(w_var))
-    st = to_sympy(t_var) if isinstance(t_var, Symbol) else sp.Symbol(str(t_var))
+    sw = to_sympy(w_var) if isinstance(w_var, (Symbol, sp.Symbol)) else sp.Symbol(str(w_var))
+    st = to_sympy(t_var) if isinstance(t_var, (Symbol, sp.Symbol)) else sp.Symbol(str(t_var))
     result = sp.inverse_fourier_transform(sexpr, sw, st)
     return from_sympy(result)
 

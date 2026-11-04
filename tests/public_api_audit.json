@@ -1605,9 +1605,11 @@
         "test_fouriertransform_gaussian_and_inverse"
       ],
       "limitations": [
-        "SymPy Fourier convention; bounded Gaussian/zero cases do not establish convergence for arbitrary symbolic input."
+        "SymPy Fourier convention; bounded Gaussian/zero cases do not establish convergence for arbitrary symbolic input. Returned Mikoshi symbols do not encode SymPy assumptions."
       ],
-      "findings": [],
+      "findings": [
+        "Fixed loss of assumption-bearing SymPy variable identity; a real-variable Gaussian incorrectly became a constant-times-transform expression. Observed failing forward regression before repair."
+      ],
       "test_file": "test_public_api_science.py"
     },
     {
@@ -1620,9 +1622,11 @@
         "test_fouriertransform_gaussian_and_inverse"
       ],
       "limitations": [
-        "SymPy inverse convention; arbitrary symbolic transforms may remain unevaluated."
+        "SymPy inverse convention; arbitrary symbolic transforms may remain unevaluated. Returned Mikoshi symbols do not encode SymPy assumptions."
       ],
-      "findings": [],
+      "findings": [
+        "Fixed loss of assumption-bearing SymPy variable identity. Inverse Gaussian regression failed after the forward fix and passed after preserving the inverse variables."
+      ],
       "test_file": "test_public_api_science.py"
     },
     {
