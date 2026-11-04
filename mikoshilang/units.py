@@ -6,6 +6,7 @@ Supports unit arithmetic, conversion, and physical constants.
 from __future__ import annotations
 from typing import Any, Dict, Optional, Tuple
 import re
+from math import isfinite
 from .expr import Expr, Symbol
 
 
@@ -118,6 +119,16 @@ _def("Hz", 1.0, {"s": -1})
 def _get_unit(name: str) -> Unit:
     if name in _UNITS:
         return _UNITS[name]
+    if name == "dimensionless":
+        return Unit(1.0, {})
+    # Canonical SI dimensions emitted by quantity arithmetic, not a general
+    # unit-expression parser.
+    if isinstance(name, str) and re.fullmatch(r'(?:m|kg|s|A|K|mol|cd)(?:\^-?[0-9]+)?(?:\*(?:m|kg|s|A|K|mol|cd)(?:\^-?[0-9]+)?)*', name):
+        dims = {}
+        for part in name.split('*'):
+            base, _, exponent = part.partition('^')
+            dims[base] = dims.get(base, 0) + (int(exponent) if exponent else 1)
+        return Unit(1.0, dims)
     raise ValueError(f"Unknown unit: {name}")
 
 
@@ -149,11 +160,17 @@ def _find_unit_name(factor: float, dims: Dict[str, int]) -> Optional[str]:
 # ── Quantity class ──
 
 class Quantity:
-    """A physical quantity: value with a unit."""
+    """A finite real float with a named unit or canonical SI dimensions.
+
+    Offset temperatures (C/F) support conversion, not arithmetic. Convert to
+    K explicitly before arithmetic; temperature differences are not modeled.
+    """
     __slots__ = ("value", "unit_name", "_unit")
 
     def __init__(self, value: float, unit_name: str):
         self.value = float(value)
+        if not isfinite(self.value):
+            raise ValueError("Quantity value must be finite")
         self.unit_name = unit_name
         self._unit = _get_unit(unit_name)
 
@@ -176,7 +193,12 @@ class Quantity:
             return abs(self._to_si() - other._to_si()) < 1e-10 and self._si_dims() == other._si_dims()
         return False
 
+    def _check_arithmetic(self, other):
+        if self._unit.offset or (isinstance(other, Quantity) and other._unit.offset):
+            raise ValueError("Arithmetic with offset temperatures is unsupported; convert to K first")
+
     def __add__(self, other):
+        self._check_arithmetic(other)
         if isinstance(other, Quantity):
             if self._si_dims() != other._si_dims():
                 raise ValueError(f"Cannot add {self.unit_name} and {other.unit_name}: incompatible dimensions")
@@ -185,6 +207,7 @@ class Quantity:
         return NotImplemented
 
     def __sub__(self, other):
+        self._check_arithmetic(other)
         if isinstance(other, Quantity):
             if self._si_dims() != other._si_dims():
                 raise ValueError(f"Cannot subtract {self.unit_name} from {other.unit_name}: incompatible dimensions")
@@ -193,6 +216,7 @@ class Quantity:
         return NotImplemented
 
     def __mul__(self, other):
+        self._check_arithmetic(other)
         if isinstance(other, Quantity):
             new_val_si = self._to_si() * other._to_si()
             new_dims = dict(self._si_dims())
@@ -206,11 +230,13 @@ class Quantity:
         return NotImplemented
 
     def __rmul__(self, other):
+        self._check_arithmetic(other)
         if isinstance(other, (int, float)):
             return Quantity(self.value * other, self.unit_name)
         return NotImplemented
 
     def __truediv__(self, other):
+        self._check_arithmetic(other)
         if isinstance(other, Quantity):
             new_val_si = self._to_si() / other._to_si()
             new_dims = dict(self._si_dims())
@@ -226,6 +252,8 @@ class Quantity:
 
 def UnitConvert(qty: Quantity, target_unit: str) -> Quantity:
     """Convert a Quantity to a different unit."""
+    if not isinstance(qty, Quantity):
+        raise TypeError("Expected a Quantity")
     target = _get_unit(target_unit)
     if qty._si_dims() != target.dims:
         raise ValueError(f"Cannot convert {qty.unit_name} to {target_unit}: incompatible dimensions")
@@ -234,7 +262,7 @@ def UnitConvert(qty: Quantity, target_unit: str) -> Quantity:
         new_val = (si_val - target.offset) / target.factor
     else:
         new_val = si_val / target.factor
-    return Quantity(round(new_val, 10), target_unit)
+    return Quantity(new_val, target_unit)
 
 
 # ── Physical constants ──

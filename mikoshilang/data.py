@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Callable, Optional
 import statistics as _stats
 import math as _math
+import operator as _operator
 from numbers import Rational as _Rational
 from .expr import Expr, Symbol
 
@@ -91,12 +92,14 @@ def Drop(lst: Expr, n: int) -> Expr:
 
 
 def Part(lst: Expr, *indices: int) -> Any:
-    """Access element(s) by index (1-based like Wolfram)."""
+    """Access 1-based elements; negative indices count from the end, 0 gives the head."""
     if isinstance(lst, Expr) and lst.head == "List":
         result = lst
         for idx in indices:
+            idx = _operator.index(idx)
             if isinstance(result, Expr) and result.head == "List":
-                result = result.args[idx - 1] if idx > 0 else result.args[idx]
+                result = (Symbol("List") if idx == 0 else
+                          result.args[idx - 1] if idx > 0 else result.args[idx])
             else:
                 raise IndexError(f"Cannot index into {result}")
         return result

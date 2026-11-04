@@ -519,13 +519,13 @@ def factor(expr) -> Any:
 
 def diff(expr, var, n: int = 1) -> Any:
     """Differentiate expr with respect to var, n times."""
-    sv = to_sympy(var) if isinstance(var, Symbol) else sp.Symbol(str(var))
+    sv = to_sympy(var) if isinstance(var, (Symbol, sp.Symbol)) else sp.Symbol(str(var))
     return from_sympy(sp.diff(to_sympy(expr), sv, n))
 
 
 def integrate(expr, var, *limits) -> Any:
     """Integrate expr with respect to var. Optional limits for definite integrals."""
-    sv = to_sympy(var) if isinstance(var, Symbol) else sp.Symbol(str(var))
+    sv = to_sympy(var) if isinstance(var, (Symbol, sp.Symbol)) else sp.Symbol(str(var))
     if limits:
         return from_sympy(sp.integrate(to_sympy(expr), (sv, *[to_sympy(l) for l in limits])))
     return from_sympy(sp.integrate(to_sympy(expr), sv))
@@ -533,14 +533,14 @@ def integrate(expr, var, *limits) -> Any:
 
 def solve(expr, var) -> Any:
     """Solve expr == 0 for var."""
-    sv = to_sympy(var) if isinstance(var, Symbol) else sp.Symbol(str(var))
+    sv = to_sympy(var) if isinstance(var, (Symbol, sp.Symbol)) else sp.Symbol(str(var))
     solutions = sp.solve(to_sympy(expr), sv)
     return Expr("List", *(from_sympy(s) for s in solutions))
 
 
 def limit(expr, var, point) -> Any:
     """Compute limit of expr as var -> point."""
-    sv = to_sympy(var) if isinstance(var, Symbol) else sp.Symbol(str(var))
+    sv = to_sympy(var) if isinstance(var, (Symbol, sp.Symbol)) else sp.Symbol(str(var))
     return from_sympy(sp.limit(to_sympy(expr), sv, to_sympy(point)))
 
 
@@ -550,7 +550,7 @@ def series(expr, var, point=0, order=6) -> Any:
     Unlike ``sympy.series`` (whose ``n`` is exclusive) the x^order term is included.
     Use the ``Series`` language function to keep the O[x]^(n+1) term.
     """
-    sv = to_sympy(var) if isinstance(var, Symbol) else sp.Symbol(str(var))
+    sv = to_sympy(var) if isinstance(var, (Symbol, sp.Symbol)) else sp.Symbol(str(var))
     # Wolfram semantics: include terms up to and including order n, plus O[x]^(n+1)
     s = sp.series(to_sympy(expr), sv, to_sympy(point), order + 1)
     return from_sympy(s.removeO())

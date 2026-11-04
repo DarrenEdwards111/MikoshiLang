@@ -1,0 +1,1944 @@
+{
+  "scope": "Bounded audit of names in mikoshilang.__all__; not the entire registered language library",
+  "base_commit": "8fc1b2c29227d66fa1c2e66c64a8f811849687f2",
+  "generated_at": "2026-11-04T00:14:34.898815+00:00",
+  "exports": [
+    {
+      "name": "Expr",
+      "kind": "class",
+      "module": "mikoshilang.expr",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_expr_structure_hash_and_operator_conversion"
+      ],
+      "limitations": [
+        "Structural equality/hash and selected arithmetic overloads; arbitrary invalid constructor arguments and every operator combination are not exhaustively checked."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "Symbol",
+      "kind": "class",
+      "module": "mikoshilang.expr",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_symbol_value_identity_and_arithmetic_trees"
+      ],
+      "limitations": [
+        "Preserves documented structural comparisons; identifier validation and every overloaded operator are not exhaustively checked."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "symbols",
+      "kind": "function",
+      "module": "mikoshilang.expr",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_symbols_single_multiple_and_whitespace"
+      ],
+      "limitations": [
+        "Single/multiple names and whitespace splitting checked; no new contract imposed for zero names."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "Blank",
+      "kind": "class",
+      "module": "mikoshilang.pattern",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_blank_named_typed_and_repeated_binding"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "BlankSequence",
+      "kind": "class",
+      "module": "mikoshilang.pattern",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_blank_sequence_requires_one_and_splices_captured_arguments"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "BlankNullSequence",
+      "kind": "class",
+      "module": "mikoshilang.pattern",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_blank_null_sequence_empty_and_backtracking",
+        "test_property_sequence_capture_preserves_values"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "Pattern",
+      "kind": "class",
+      "module": "mikoshilang.pattern",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_pattern_nested_head_and_arity_constraints"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "Rule",
+      "kind": "class",
+      "module": "mikoshilang.rules",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_rule_template_substitution_and_no_match"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "RuleDelayed",
+      "kind": "class",
+      "module": "mikoshilang.rules",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_rule_delayed_calls_only_after_matching_with_fresh_bindings"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "replace",
+      "kind": "function",
+      "module": "mikoshilang.rules",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_replace_top_level_first_match_and_empty_rules"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "replace_all",
+      "kind": "function",
+      "module": "mikoshilang.rules",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_replace_all_recursive_and_repeated_rewrites",
+        "test_replace_all_cyclic_and_growing_rules_terminate_in_subprocess"
+      ],
+      "limitations": [
+        "Existing repeated-rewrite semantics and depth cap retained, not changed to Wolfram single-pass semantics. Cyclic/growing rewrites bounded in 20-second subprocess."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "evaluate",
+      "kind": "function",
+      "module": "mikoshilang.evaluate",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_evaluate_direct_values_symbolic_and_exact_arithmetic",
+        "test_property_parse_evaluate_bounded_arithmetic"
+      ],
+      "limitations": [
+        "Direct exported tree evaluator tested; source strings remain literal values. Full kernel/library scope intentionally excluded."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "simplify",
+      "kind": "function",
+      "module": "mikoshilang.math_ops",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_simplify_exact_trig_complex_and_branch_safety",
+        "test_constants_exact_independent_identities",
+        "test_session_parity_only_for_equal_contracts",
+        "test_math_rejects_unparsed_source_strings"
+      ],
+      "limitations": [
+        "Bounded identities, complex values, branch safety and 401-digit exact integers; not exhaustive simplification or domain equivalence coverage.",
+        "Simplification can cancel removable singularities; no claim that original expression domains are preserved."
+      ],
+      "findings": [
+        "No confirmed bug in checked cases."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "expand",
+      "kind": "function",
+      "module": "mikoshilang.math_ops",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_expand_and_factor_independent_polynomial_values",
+        "test_property_expand_factor_preserve_independent_values",
+        "test_math_rejects_unparsed_source_strings"
+      ],
+      "limitations": [
+        "Polynomial degrees bounded to three; 30 deterministic Hypothesis examples with small integer coefficients and evaluation points.",
+        "Properties skip individually when optional Hypothesis is unavailable."
+      ],
+      "findings": [
+        "No confirmed bug in checked cases; independent arithmetic oracle, not a shared-SymPy comparison."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "factor",
+      "kind": "function",
+      "module": "mikoshilang.math_ops",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_expand_and_factor_independent_polynomial_values",
+        "test_property_expand_factor_preserve_independent_values",
+        "test_math_rejects_unparsed_source_strings"
+      ],
+      "limitations": [
+        "Value preservation checked for bounded polynomials over integer, rational and complex evaluation points; no optimal-factorization claim.",
+        "Properties skip individually when optional Hypothesis is unavailable."
+      ],
+      "findings": [
+        "No confirmed bug in checked cases."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "diff",
+      "kind": "function",
+      "module": "mikoshilang.math_ops",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_calculus_preserves_sympy_variable_assumptions",
+        "test_diff_orders_mixed_variables_and_complex",
+        "test_property_polynomial_calculus_known_coefficients",
+        "test_session_parity_only_for_equal_contracts"
+      ],
+      "limitations": [
+        "Input SymPy symbols retain their identity during calculation; returned Mikoshi Symbol does not encode SymPy assumptions.",
+        "Bounded orders zero through five and polynomial degree up to seven; no exhaustive derivative coverage."
+      ],
+      "findings": [
+        "Fixed silent wrong result from stringifying assumption-bearing SymPy variable: diff(x**2, real_x) returned 0 instead of 2*x. Regression observed red before fix, then green."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "integrate",
+      "kind": "function",
+      "module": "mikoshilang.math_ops",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_calculus_preserves_sympy_variable_assumptions",
+        "test_integrate_exact_orientation_improper_and_complex",
+        "test_property_polynomial_calculus_known_coefficients",
+        "test_session_parity_only_for_equal_contracts",
+        "test_bounded_symbolic_work_in_killable_subprocess"
+      ],
+      "limitations": [
+        "Polynomial and one elementary improper integral tested, not arbitrary convergence/domain analysis.",
+        "Potentially more expensive symbolic workload bounded in a subprocess with timeout=20 seconds."
+      ],
+      "findings": [
+        "Fixed assumption-bearing variable identity loss: integrate(real_x, real_x, 0, 2) returned 2*x rather than 2. Regression observed red before fix, then green."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "solve",
+      "kind": "function",
+      "module": "mikoshilang.math_ops",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_calculus_preserves_sympy_variable_assumptions",
+        "test_solve_linear_repeated_complex_and_no_roots",
+        "test_session_parity_only_for_equal_contracts",
+        "test_bounded_symbolic_work_in_killable_subprocess"
+      ],
+      "limitations": [
+        "Python helper returns List of roots, whereas Session Solve returns rules; intentionally not asserted equal.",
+        "Single-variable equations only; finite roots and repeated roots checked, not solution-family completeness.",
+        "Potentially more expensive bounded quartic runs in subprocess with timeout=20 seconds."
+      ],
+      "findings": [
+        "Fixed assumption-bearing variable identity loss: solve(real_x-3, real_x) returned empty List instead of {3}. Regression observed red before fix, then green."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "limit",
+      "kind": "function",
+      "module": "mikoshilang.math_ops",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_calculus_preserves_sympy_variable_assumptions",
+        "test_limit_known_values_and_documented_right_hand_default"
+      ],
+      "limitations": [
+        "Direct helper inherits backend right-hand default at finite points; limit(1/x,x,0)==Infinity is not a two-sided-limit guarantee.",
+        "No direction parameter, multivariable limits or general branch-cut coverage claimed."
+      ],
+      "findings": [
+        "Fixed assumption-bearing variable identity loss: limit(real_x, real_x, 0) returned symbolic x rather than 0. Regression observed red before fix, then green."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "series",
+      "kind": "function",
+      "module": "mikoshilang.math_ops",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_calculus_preserves_sympy_variable_assumptions",
+        "test_series_inclusive_order_nonzero_center_and_laurent",
+        "test_session_parity_only_for_equal_contracts",
+        "test_bounded_symbolic_work_in_killable_subprocess"
+      ],
+      "limitations": [
+        "Python series includes requested order and removes O terms, unlike Session Series; parity checked only with Normal[Series[...]].",
+        "Checked zero/nonzero centers and one Laurent pole; not a full generalized-series implementation audit."
+      ],
+      "findings": [
+        "Fixed assumption-bearing variable identity loss: truncating real_x**3 through order two returned x**3 instead of 0. Regression observed red before fix, then green.",
+        "Initial Laurent structural-equality assertion was corrected to independent value checks because canonicalization removes redundant Times[1,...]; not a production bug."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "N",
+      "kind": "function",
+      "module": "mikoshilang.numerical",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_nonfinite_precision_rejected_consistently",
+        "test_numeric_exact_complex_tiny_and_symbolic",
+        "test_numeric_arbitrary_precision_independent_decimal_reference",
+        "test_numeric_invalid_precision",
+        "test_numeric_precision_boundaries_complex_and_nonfinite_values",
+        "test_constants_direct_symbolic_and_numeric",
+        "test_constants_exact_independent_identities",
+        "test_session_parity_only_for_equal_contracts",
+        "test_math_rejects_unparsed_source_strings"
+      ],
+      "limitations": [
+        "Exact complex and Decimal sqrt(2)/rational references checked through 60 requested digits; high precision retains SymPy result types.",
+        "Machine inputs do not gain precision. Very low precision controls binary accuracy rather than decimal rounding.",
+        "Indeterminate maps to a complex NaN at default precision; test accepts NaN without requiring a real float."
+      ],
+      "findings": [
+        "Fixed nonfinite precision validation: +/-Infinity raised OverflowError and NaN leaked int-conversion error. All now use the existing positive-integer ValueError contract; three regressions observed red before fix, then green."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "numerical",
+      "kind": "function",
+      "module": "mikoshilang.numerical",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_machine_precision_symbol_validates_requested_precision",
+        "test_numeric_exact_complex_tiny_and_symbolic",
+        "test_numeric_arbitrary_precision_independent_decimal_reference",
+        "test_numeric_invalid_precision",
+        "test_numeric_precision_boundaries_complex_and_nonfinite_values",
+        "test_math_rejects_unparsed_source_strings"
+      ],
+      "limitations": [
+        "Tiny 1e-100 result uses abs=0 tolerance; no arbitrary underflow/overflow guarantee.",
+        "Nested Mikoshi Lists tested; arbitrary Python container coercion not promised.",
+        "Bounded known values only; special-function library completeness outside this audit."
+      ],
+      "findings": [
+        "Fixed MachinePrecision expression bypassing requested-precision validation: zero, negative, boolean and fractional precision silently succeeded, while string precision raised TypeError. Five regressions observed red before moving validation ahead of special handling, then green.",
+        "Shared precision implementation also rejects nonfinite precision consistently."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "Pi",
+      "kind": "constant",
+      "module": "mikoshilang.expr",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_constants_direct_symbolic_and_numeric",
+        "test_constants_exact_independent_identities",
+        "test_numeric_arbitrary_precision_independent_decimal_reference",
+        "test_numeric_precision_boundaries_complex_and_nonfinite_values",
+        "test_session_parity_only_for_equal_contracts"
+      ],
+      "limitations": [
+        "Symbol identity, machine value and known high-precision decimal prefix tested; not arbitrary-precision proof."
+      ],
+      "findings": [
+        "No confirmed constant bug in checked cases."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "E",
+      "kind": "constant",
+      "module": "mikoshilang.expr",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_constants_direct_symbolic_and_numeric",
+        "test_constants_exact_independent_identities"
+      ],
+      "limitations": [
+        "Symbol identity, math.e machine value and exact Log[E] identity tested."
+      ],
+      "findings": [
+        "No confirmed constant bug in checked cases."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "I",
+      "kind": "constant",
+      "module": "mikoshilang.expr",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_constants_direct_symbolic_and_numeric",
+        "test_simplify_exact_trig_complex_and_branch_safety",
+        "test_constants_exact_independent_identities",
+        "test_numeric_precision_boundaries_complex_and_nonfinite_values",
+        "test_diff_orders_mixed_variables_and_complex",
+        "test_integrate_exact_orientation_improper_and_complex"
+      ],
+      "limitations": [
+        "Exact square, Euler identity, machine value and one high-precision complex rational tested; no exhaustive complex branch semantics."
+      ],
+      "findings": [
+        "No confirmed constant bug in checked cases."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "Infinity",
+      "kind": "constant",
+      "module": "mikoshilang.expr",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_constants_direct_symbolic_and_numeric",
+        "test_numeric_precision_boundaries_complex_and_nonfinite_values",
+        "test_integrate_exact_orientation_improper_and_complex",
+        "test_limit_known_values_and_documented_right_hand_default"
+      ],
+      "limitations": [
+        "Positive/negative numerical infinity, high-precision infinity and elementary improper integral/limit checked; indeterminate infinity arithmetic not exhaustively covered."
+      ],
+      "findings": [
+        "No confirmed constant bug in checked cases."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "GoldenRatio",
+      "kind": "constant",
+      "module": "mikoshilang.expr",
+      "group": "math",
+      "status": "checked",
+      "tests": [
+        "test_constants_direct_symbolic_and_numeric",
+        "test_constants_exact_independent_identities"
+      ],
+      "limitations": [
+        "Symbol identity, independent (1+sqrt(5))/2 machine value and exact quadratic identity tested."
+      ],
+      "findings": [
+        "No confirmed constant bug in checked cases."
+      ],
+      "test_file": "test_public_api_math.py"
+    },
+    {
+      "name": "List",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_list_constructor_preserves_values_without_evaluation",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Structural constructor; no automatic evaluation or conversion of nested Python lists."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Table",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_table_rational_symbolic_body_and_python_spec",
+        "test_table_termination_guards_in_bounded_child",
+        "test_range_table_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Python callable with scalar count or two/three-item numeric spec, not symbolic Wolfram iterator syntax. Resource-unbounded output is outside this audit."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Map",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_list_operations_reject_non_list_expressions",
+        "test_map_select_sort_reverse_empty_and_callable_contracts",
+        "test_statistics_empty_singleton_and_rational_contract",
+        "test_list_and_statistics_bounded_properties"
+      ],
+      "limitations": [
+        "Python callable; operates on List Expr only, not raw Python lists."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Select",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_list_operations_reject_non_list_expressions",
+        "test_map_select_sort_reverse_empty_and_callable_contracts",
+        "test_list_and_statistics_bounded_properties"
+      ],
+      "limitations": [
+        "Python callable predicate and Python truthiness; no symbolic predicate evaluation."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Sort",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_list_operations_reject_non_list_expressions",
+        "test_map_select_sort_reverse_empty_and_callable_contracts",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Python ordering and key callable; mutually incomparable mixed values raise TypeError rather than Wolfram canonical ordering."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Reverse",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_list_operations_reject_non_list_expressions",
+        "test_map_select_sort_reverse_empty_and_callable_contracts",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Take",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_list_operations_reject_non_list_expressions",
+        "test_take_drop_boundaries",
+        "test_take_drop_reject_noninteger_counts",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Python scalar integer count, slicing clamps oversize counts; no multidimensional/spec-list overloads."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Drop",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_list_operations_reject_non_list_expressions",
+        "test_take_drop_boundaries",
+        "test_take_drop_reject_noninteger_counts",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Python scalar integer count, slicing clamps oversize counts; no multidimensional/spec-list overloads."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Part",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_part_zero_returns_head_including_empty_and_nested_lists",
+        "test_part_nested_negative_missing_and_invalid_indices",
+        "test_list_operations_reject_non_list_expressions",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Only List Expr traversal and scalar integer indices; no arbitrary expression or list-of-indices overload."
+      ],
+      "findings": [
+        "Confirmed red before fix: index zero selected first item (or raised on empty List), inconsistent with documented Wolfram-like indexing and Session head result. Now returns Symbol('List'), including nested/empty Lists. Added operator.index validation after a second red test caught float-zero acceptance introduced by zero handling."
+      ],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Range",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_range_python_integer_contract_and_arity",
+        "test_range_table_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Python integer range contract; rational/float steps unsupported. Bounded ranges only in audit."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Total",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_statistics_empty_singleton_and_rational_contract",
+        "test_list_operations_reject_non_list_expressions",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Uses Python sum; symbolic results remain arithmetic expressions rather than automatically simplified Session results."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Mean",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_statistics_empty_singleton_and_rational_contract",
+        "test_list_operations_reject_non_list_expressions",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Python statistics.mean adapter, no symbolic or matrix-column statistics; empty input raises StatisticsError. Fractions stay exact."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Median",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_statistics_empty_singleton_and_rational_contract",
+        "test_list_operations_reject_non_list_expressions",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Python statistics.median ordering contract, not symbolic canonical ordering; empty input raises StatisticsError. Fractions stay exact."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "StandardDeviation",
+      "kind": "function",
+      "module": "mikoshilang.data",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_statistics_empty_singleton_and_rational_contract",
+        "test_list_operations_reject_non_list_expressions",
+        "test_list_and_statistics_bounded_properties",
+        "test_session_parity_for_shared_numeric_list_contract"
+      ],
+      "limitations": [
+        "Python statistics.stdev sample convention (n-1); fewer than two values raise StatisticsError; rational input produces numerical square root, not symbolic radical."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Matrix",
+      "kind": "function",
+      "module": "mikoshilang.linalg",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_matrix_constructor_row_forms_and_empty",
+        "test_symbolic_matrix_entries_are_not_a_numeric_backend",
+        "test_matrix_bounded_properties"
+      ],
+      "limitations": [
+        "Structural row constructor; accepts empty/ragged/symbolic rows without validating numerical suitability. Consumers perform numeric/shape validation."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Dot",
+      "kind": "function",
+      "module": "mikoshilang.linalg",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_dot_rectangular_shape_errors_and_rational_numeric_inputs",
+        "test_matrix_operations_reject_non_matrix",
+        "test_matrix_operations_reject_ragged_rows",
+        "test_symbolic_matrix_entries_are_not_a_numeric_backend",
+        "test_matrix_bounded_properties"
+      ],
+      "limitations": [
+        "Two Matrix expressions, not Wolfram vector/general tensor overloads. NumPy floating/complex backend, including coercion of rationals; no arbitrary-precision or symbolic multiplication contract."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Det",
+      "kind": "function",
+      "module": "mikoshilang.linalg",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_det_exact_huge_integer_singular_and_tiny_complex",
+        "test_matrix_operations_reject_non_matrix",
+        "test_matrix_operations_reject_ragged_rows",
+        "test_square_operations_reject_empty_and_rectangular",
+        "test_symbolic_matrix_entries_are_not_a_numeric_backend",
+        "test_matrix_bounded_properties"
+      ],
+      "limitations": [
+        "Integer matrices use exact determinant; other accepted numerics use NumPy floating/complex computation. Symbolic entries unsupported; empty/rectangular matrices rejected."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Inverse",
+      "kind": "function",
+      "module": "mikoshilang.linalg",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_inverse_singular_and_complex_residuals",
+        "test_matrix_operations_reject_non_matrix",
+        "test_matrix_operations_reject_ragged_rows",
+        "test_square_operations_reject_empty_and_rectangular",
+        "test_symbolic_matrix_entries_are_not_a_numeric_backend",
+        "test_matrix_bounded_properties"
+      ],
+      "limitations": [
+        "Numerical square Matrix inverse; singular/empty/rectangular matrices raise LinAlgError. No exact rational or symbolic inverse contract."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Eigenvalues",
+      "kind": "function",
+      "module": "mikoshilang.linalg",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_eigenvalues_and_eigenvectors_complex_residuals_without_order_assumption",
+        "test_matrix_operations_reject_non_matrix",
+        "test_matrix_operations_reject_ragged_rows",
+        "test_square_operations_reject_empty_and_rectangular",
+        "test_symbolic_matrix_entries_are_not_a_numeric_backend",
+        "test_matrix_bounded_properties"
+      ],
+      "limitations": [
+        "Numerical square Matrix spectrum; sorted real/imaginary values. Eigenvectors order is not assumed aligned. No symbolic eigenvalue contract."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Eigenvectors",
+      "kind": "function",
+      "module": "mikoshilang.linalg",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_eigenvalues_and_eigenvectors_complex_residuals_without_order_assumption",
+        "test_matrix_operations_reject_non_matrix",
+        "test_matrix_operations_reject_ragged_rows",
+        "test_square_operations_reject_empty_and_rectangular",
+        "test_symbolic_matrix_entries_are_not_a_numeric_backend",
+        "test_matrix_bounded_properties"
+      ],
+      "limitations": [
+        "Numerical normalized vectors; phases/order are backend-dependent; defective matrices need not yield an independent basis. Tests assert residuals, not arbitrary phases."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Transpose",
+      "kind": "function",
+      "module": "mikoshilang.linalg",
+      "group": "data_linalg",
+      "status": "checked",
+      "tests": [
+        "test_transpose_is_not_conjugate_transpose_and_preserves_tiny_values",
+        "test_matrix_operations_reject_non_matrix",
+        "test_matrix_operations_reject_ragged_rows",
+        "test_symbolic_matrix_entries_are_not_a_numeric_backend",
+        "test_matrix_bounded_properties"
+      ],
+      "limitations": [
+        "Numerical Matrix backend coerces values to float/complex; symbolic/huge exact arithmetic not supported. Unshaped Matrix() has no guaranteed matrix-shape preservation."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_data_linalg.py"
+    },
+    {
+      "name": "Sin",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_elementary_symbolic_constructors",
+        "test_elementary_complex_values_against_cmath",
+        "test_bounded_trigonometric_and_log_identities"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Cos",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_elementary_symbolic_constructors",
+        "test_elementary_complex_values_against_cmath",
+        "test_bounded_trigonometric_and_log_identities"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Tan",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_elementary_symbolic_constructors",
+        "test_elementary_complex_values_against_cmath",
+        "test_bounded_trigonometric_and_log_identities"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "ArcSin",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_elementary_symbolic_constructors",
+        "test_elementary_complex_values_against_cmath",
+        "test_principal_complex_branches_and_log_bases"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "ArcCos",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_elementary_symbolic_constructors",
+        "test_elementary_complex_values_against_cmath",
+        "test_principal_complex_branches_and_log_bases"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "ArcTan",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_elementary_symbolic_constructors",
+        "test_elementary_complex_values_against_cmath"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Exp",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_elementary_symbolic_constructors",
+        "test_elementary_complex_values_against_cmath",
+        "test_principal_complex_branches_and_log_bases",
+        "test_bounded_trigonometric_and_log_identities"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Log",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_elementary_symbolic_constructors",
+        "test_elementary_complex_values_against_cmath",
+        "test_log_base_order_symbolic_and_known_values",
+        "test_principal_complex_branches_and_log_bases",
+        "test_bounded_trigonometric_and_log_identities"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Log2",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_log_base_order_symbolic_and_known_values",
+        "test_principal_complex_branches_and_log_bases"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Log10",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_elementary_known_values_and_session_parity",
+        "test_log_base_order_symbolic_and_known_values",
+        "test_principal_complex_branches_and_log_bases"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Prime",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_number_theory_known_values_and_session_parity",
+        "test_integer_number_theory_rejects_nonintegers",
+        "test_prime_rejects_nonpositive_indices",
+        "test_bounded_combinatorics_properties"
+      ],
+      "limitations": [
+        "Prime property indices are bounded to 1..25; no unbounded prime searches."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "PrimeQ",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_number_theory_known_values_and_session_parity",
+        "test_integer_number_theory_rejects_nonintegers",
+        "test_bounded_combinatorics_properties"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "FactorInteger",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_number_theory_known_values_and_session_parity",
+        "test_integer_number_theory_rejects_nonintegers",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "GCD",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_number_theory_known_values_and_session_parity",
+        "test_gcd_normalizes_unary_sign_and_validates_integer",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [],
+      "findings": [
+        "Sequential RED/GREEN: unary negative returned a negative GCD; empty calls indexed missing argument; unary floats bypassed integer validation. Delegate to math.gcd."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "LCM",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_number_theory_known_values_and_session_parity",
+        "test_lcm_zero_sign_and_integer_domain",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [],
+      "findings": [
+        "Sequential RED/GREEN: LCM(0,0) divided by zero; signed inputs could yield negative LCM; empty/unary validation also incorrect. Delegate to math.lcm."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Mod",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_bounded_integer_properties",
+        "test_mod_signed_zero_and_symbolic_inputs"
+      ],
+      "limitations": [
+        "Retains existing Python remainder behavior: native Mikoshi Symbol rejected; SymPy integer symbols supported. No speculative symbolic extension."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Factorial",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_combinatorics_known_values_domains_and_session_parity",
+        "test_bounded_combinatorics_properties"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Binomial",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_combinatorics_known_values_domains_and_session_parity",
+        "test_bounded_combinatorics_properties"
+      ],
+      "limitations": [],
+      "findings": [],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Fibonacci",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_combinatorics_known_values_domains_and_session_parity",
+        "test_bounded_combinatorics_properties",
+        "test_fibonacci_rejects_noninteger_indices"
+      ],
+      "limitations": [],
+      "findings": [
+        "Sequential RED/GREEN: Fibonacci(2.5) and Fibonacci(Rational(5,2)) evaluated an analytic extension then silently truncated to int. Validate index with operator.index before evaluation."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "And",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_boolean_truth_tables_and_identities",
+        "test_logic_preserves_unknown_symbolic_operands",
+        "test_boolean_composite_and_mixed_symbolic_operands",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Direct symbolic calls construct expressions; simplification is tested through Session rather than assumed eager."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown symbolic operands were coerced through Python truthiness (or Xor raised TypeError), losing symbolic meaning. Non-Boolean operands now remain expression trees."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Or",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_boolean_truth_tables_and_identities",
+        "test_logic_preserves_unknown_symbolic_operands",
+        "test_boolean_composite_and_mixed_symbolic_operands",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Direct symbolic calls construct expressions; simplification is tested through Session rather than assumed eager."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown symbolic operands were coerced through Python truthiness (or Xor raised TypeError), losing symbolic meaning. Non-Boolean operands now remain expression trees."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Not",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_boolean_truth_tables_and_identities",
+        "test_logic_preserves_unknown_symbolic_operands",
+        "test_boolean_composite_and_mixed_symbolic_operands",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Direct symbolic calls construct expressions; simplification is tested through Session rather than assumed eager."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown symbolic operands were coerced through Python truthiness (or Xor raised TypeError), losing symbolic meaning. Non-Boolean operands now remain expression trees."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Xor",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_boolean_truth_tables_and_identities",
+        "test_logic_preserves_unknown_symbolic_operands",
+        "test_boolean_composite_and_mixed_symbolic_operands",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Direct symbolic calls construct expressions; simplification is tested through Session rather than assumed eager."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown symbolic operands were coerced through Python truthiness (or Xor raised TypeError), losing symbolic meaning. Non-Boolean operands now remain expression trees."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Implies",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_boolean_truth_tables_and_identities",
+        "test_logic_preserves_unknown_symbolic_operands",
+        "test_boolean_composite_and_mixed_symbolic_operands",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Direct symbolic calls construct expressions; simplification is tested through Session rather than assumed eager."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown symbolic operands were coerced through Python truthiness (or Xor raised TypeError), losing symbolic meaning. Non-Boolean operands now remain expression trees."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Equal",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_comparisons_preserve_symbolic_relations",
+        "test_comparison_known_values_and_session_parity",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Unresolved symbolic relations remain expression trees; numeric comparisons keep Python behavior, including TypeError on complex ordering."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown Mikoshi symbolic comparisons returned structural False for Equal or raised TypeError for order relations. Preserve unresolved comparison expressions; retain structural reflexive Equal."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Less",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_comparisons_preserve_symbolic_relations",
+        "test_comparison_known_values_and_session_parity",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Unresolved symbolic relations remain expression trees; numeric comparisons keep Python behavior, including TypeError on complex ordering."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown Mikoshi symbolic comparisons returned structural False for Equal or raised TypeError for order relations. Preserve unresolved comparison expressions; retain structural reflexive Equal."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "Greater",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_comparisons_preserve_symbolic_relations",
+        "test_comparison_known_values_and_session_parity",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Unresolved symbolic relations remain expression trees; numeric comparisons keep Python behavior, including TypeError on complex ordering."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown Mikoshi symbolic comparisons returned structural False for Equal or raised TypeError for order relations. Preserve unresolved comparison expressions; retain structural reflexive Equal."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "LessEqual",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_comparisons_preserve_symbolic_relations",
+        "test_comparison_known_values_and_session_parity",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Unresolved symbolic relations remain expression trees; numeric comparisons keep Python behavior, including TypeError on complex ordering."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown Mikoshi symbolic comparisons returned structural False for Equal or raised TypeError for order relations. Preserve unresolved comparison expressions; retain structural reflexive Equal."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "GreaterEqual",
+      "kind": "function",
+      "module": "mikoshilang.builtins",
+      "group": "builtins",
+      "status": "checked",
+      "tests": [
+        "test_comparisons_preserve_symbolic_relations",
+        "test_comparison_known_values_and_session_parity",
+        "test_bounded_integer_properties"
+      ],
+      "limitations": [
+        "Unresolved symbolic relations remain expression trees; numeric comparisons keep Python behavior, including TypeError on complex ordering."
+      ],
+      "findings": [
+        "Sequential RED/GREEN: unknown Mikoshi symbolic comparisons returned structural False for Equal or raised TypeError for order relations. Preserve unresolved comparison expressions; retain structural reflexive Equal."
+      ],
+      "test_file": "test_public_api_builtins.py"
+    },
+    {
+      "name": "parse",
+      "kind": "function",
+      "module": "mikoshilang.parser",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_parse_precedence_patterns_strings_and_empty_input",
+        "test_parse_error_malformed_syntax"
+      ],
+      "limitations": [
+        "Representative grammar/precedence and malformed-input checks; not a complete Wolfram-language grammar audit."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "parse_file",
+      "kind": "function",
+      "module": "mikoshilang.parser",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_parse_file_values_empty_malformed_and_missing"
+      ],
+      "limitations": [
+        "Current multi-statement CompoundExpression structure retained despite one-per-statement docstring; no speculative return-shape change. UTF-8/non-ASCII file decoding not checked."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "parse_and_eval",
+      "kind": "function",
+      "module": "mikoshilang.parser",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_parse_and_eval_direct_arithmetic_and_errors",
+        "test_property_parse_evaluate_bounded_arithmetic"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "ParseError",
+      "kind": "class",
+      "module": "mikoshilang.parser",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_parse_error_preserves_exception_message",
+        "test_parse_error_malformed_syntax"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "to_latex",
+      "kind": "function",
+      "module": "mikoshilang.latex",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_to_latex_values_precedence_fractions_and_generic_head"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "Quantity",
+      "kind": "class",
+      "module": "mikoshilang.units",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_quantity_generated_dimensions_and_dimensionless",
+        "test_quantity_offset_arithmetic_clear_error",
+        "test_quantity_known_arithmetic_and_errors",
+        "test_quantity_rejects_nonfinite_values",
+        "test_bounded_units_and_molecularmass_properties"
+      ],
+      "limitations": [
+        "Finite real binary floats; no exact or complex quantities. Offset-temperature arithmetic deliberately errors; convert to K first. Unit grammar is named units plus canonical SI products, not a general parser. Equality retains existing absolute tolerance."
+      ],
+      "findings": [
+        "Fixed generated area/dimensionless unit failures; rejected ambiguous offset arithmetic and nonfinite quantities."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "UnitConvert",
+      "kind": "function",
+      "module": "mikoshilang.units",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_unitconvert_preserves_tiny_values",
+        "test_unitconvert_known_values",
+        "test_unitconvert_rejects_nonquantity",
+        "test_quantity_known_arithmetic_and_errors",
+        "test_bounded_units_and_molecularmass_properties"
+      ],
+      "limitations": [
+        "Finite floating-point conversion; no temperature-difference type or physical absolute-zero validation."
+      ],
+      "findings": [
+        "Removed decimal rounding that zeroed tiny conversions; invalid non-Quantity input now TypeError."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "Element",
+      "kind": "function",
+      "module": "mikoshilang.chemistry",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_element_known_data_and_lookup_aliases",
+        "test_element_exports_invalid_keys"
+      ],
+      "limitations": [
+        "Embedded 118-element table; audit checks selected known records, not independent verification of every scientific datum."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "AtomicMass",
+      "kind": "function",
+      "module": "mikoshilang.chemistry",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_atomicmass_and_electronconfiguration_known_values",
+        "test_element_exports_invalid_keys"
+      ],
+      "limitations": [
+        "Embedded rounded atomic masses, not isotope-specific mass data."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "ElectronConfiguration",
+      "kind": "function",
+      "module": "mikoshilang.chemistry",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_atomicmass_and_electronconfiguration_known_values",
+        "test_element_exports_invalid_keys"
+      ],
+      "limitations": [
+        "Embedded configurations; selected known entries checked, not independent validation of every configuration."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "MolecularMass",
+      "kind": "function",
+      "module": "mikoshilang.chemistry",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_molecularmass_rejects_invalid_formula",
+        "test_molecularmass_known_formulas",
+        "test_bounded_units_and_molecularmass_properties"
+      ],
+      "limitations": [
+        "Neutral formulas and parenthesized groups only; no hydrates, charges, isotope notation or leading coefficients; results round to 0.001."
+      ],
+      "findings": [
+        "Replaced partial regex acceptance with full-consumption validated group counting without expanding repeated strings."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "BalanceEquation",
+      "kind": "function",
+      "module": "mikoshilang.chemistry",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_balanceequation_exact_positive_coefficients",
+        "test_balanceequation_rejects_invalid_or_ambiguous",
+        "test_balanceequation_arrow_aliases"
+      ],
+      "limitations": [
+        "Unique strictly positive neutral-formula balances only; ambiguous, impossible, zero-coefficient or pre-coefficient input equations error. No ionic charge conservation."
+      ],
+      "findings": [
+        "Replaced rounded absolute SVD vectors, which returned unbalanced equations, with exact rational nullspace and positive uniqueness checks."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "FourierTransform",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_fouriertransform_gaussian_and_inverse"
+      ],
+      "limitations": [
+        "SymPy Fourier convention; bounded Gaussian/zero cases do not establish convergence for arbitrary symbolic input. Returned Mikoshi symbols do not encode SymPy assumptions."
+      ],
+      "findings": [
+        "Fixed loss of assumption-bearing SymPy variable identity; a real-variable Gaussian incorrectly became a constant-times-transform expression. Observed failing forward regression before repair."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "InverseFourierTransform",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_fouriertransform_gaussian_and_inverse"
+      ],
+      "limitations": [
+        "SymPy inverse convention; arbitrary symbolic transforms may remain unevaluated. Returned Mikoshi symbols do not encode SymPy assumptions."
+      ],
+      "findings": [
+        "Fixed loss of assumption-bearing SymPy variable identity. Inverse Gaussian regression failed after the forward fix and passed after preserving the inverse variables."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "DFT",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_dft_idft_numpy_convention_and_complex_roundtrip",
+        "test_bounded_complex_transform_and_convolution_properties",
+        "test_dft_preserves_numpy_complex_scalars",
+        "test_signal_rejects_nonfinite_and_empty"
+      ],
+      "limitations": [
+        "Direct NumPy FFT convention, not Wolfram Session convention. Finite one-dimensional Expr List inputs; bounded samples only."
+      ],
+      "findings": [
+        "Fixed silent NumPy complex64 imaginary loss in shared signal conversion."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "IDFT",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_dft_idft_numpy_convention_and_complex_roundtrip",
+        "test_bounded_complex_transform_and_convolution_properties",
+        "test_signal_rejects_nonfinite_and_empty"
+      ],
+      "limitations": [
+        "Direct NumPy inverse FFT convention; binary floating-point error is expected."
+      ],
+      "findings": [
+        "Shared converter now rejects empty/nonfinite data and preserves NumPy complex scalar input."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "LowPassFilter",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_filters_preserve_complex_linearity",
+        "test_filter_parameter_domains",
+        "test_filters_constant_response_and_boundaries",
+        "test_signal_rejects_nonfinite_and_empty"
+      ],
+      "limitations": [
+        "Optional SciPy Butterworth/filtfilt direct-form implementation. Positive integer order and finite positive sample rate required; short inputs and invalid cutoffs error. High-order numerical stability and broad frequency-response accuracy not established."
+      ],
+      "findings": [
+        "Removed silent imaginary-part dropping; added rate/order and signal-domain validation."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "HighPassFilter",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_filters_preserve_complex_linearity",
+        "test_filter_parameter_domains",
+        "test_filters_constant_response_and_boundaries",
+        "test_signal_rejects_nonfinite_and_empty"
+      ],
+      "limitations": [
+        "Optional SciPy Butterworth/filtfilt direct-form implementation. Positive integer order and finite positive sample rate required; short inputs and invalid cutoffs error. High-order numerical stability and broad frequency-response accuracy not established."
+      ],
+      "findings": [
+        "Removed silent imaginary-part dropping; added rate/order and signal-domain validation."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "BandPassFilter",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_filters_preserve_complex_linearity",
+        "test_filter_parameter_domains",
+        "test_filters_constant_response_and_boundaries",
+        "test_signal_rejects_nonfinite_and_empty"
+      ],
+      "limitations": [
+        "Optional SciPy Butterworth/filtfilt direct-form implementation. Positive integer order and finite positive sample rate required; short inputs and invalid cutoffs error. High-order numerical stability and broad frequency-response accuracy not established."
+      ],
+      "findings": [
+        "Removed silent imaginary-part dropping; added rate/order and signal-domain validation."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "Convolve",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_convolve_preserves_complex",
+        "test_convolve_known_identity_and_empty",
+        "test_bounded_complex_transform_and_convolution_properties",
+        "test_dft_preserves_numpy_complex_scalars",
+        "test_signal_rejects_nonfinite_and_empty"
+      ],
+      "limitations": [
+        "Full discrete one-dimensional convolution of finite nonempty Expr Lists; no alternate modes."
+      ],
+      "findings": [
+        "Removed silent imaginary-part dropping, including NumPy complex scalars."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "HammingWindow",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_windows_reject_invalid_lengths",
+        "test_windows_known_values_and_boundaries"
+      ],
+      "limitations": [
+        "NumPy symmetric window; nonnegative integer length (including empty and singleton). Bounded known-value checks only."
+      ],
+      "findings": [
+        "Reject negative, fractional and boolean lengths instead of silently returning misleading windows."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "HanningWindow",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_windows_reject_invalid_lengths",
+        "test_windows_known_values_and_boundaries"
+      ],
+      "limitations": [
+        "NumPy symmetric window; nonnegative integer length (including empty and singleton). Bounded known-value checks only."
+      ],
+      "findings": [
+        "Reject negative, fractional and boolean lengths instead of silently returning misleading windows."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "BlackmanWindow",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_windows_reject_invalid_lengths",
+        "test_windows_known_values_and_boundaries"
+      ],
+      "limitations": [
+        "NumPy symmetric window; nonnegative integer length (including empty and singleton). Bounded known-value checks only."
+      ],
+      "findings": [
+        "Reject negative, fractional and boolean lengths instead of silently returning misleading windows."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "Spectrogram",
+      "kind": "function",
+      "module": "mikoshilang.signal",
+      "group": "science",
+      "status": "checked",
+      "tests": [
+        "test_spectrogram_raw_power_and_complex_input",
+        "test_spectrogram_invalid_rate",
+        "test_spectrogram_figure_real_and_complex",
+        "test_signal_rejects_nonfinite_and_empty"
+      ],
+      "limitations": [
+        "Requires SciPy; matplotlib figure path tested when installed, raw fallback forced separately. Uses SciPy defaults; broad PSD accuracy and short-record estimator quality not established."
+      ],
+      "findings": [
+        "Preserved complex signals with two-sided PSD; added missing raw power matrix; sorted complex plot frequencies; validates rates and signal data."
+      ],
+      "test_file": "test_public_api_science.py"
+    },
+    {
+      "name": "Session",
+      "kind": "class",
+      "module": "mikoshilang.runtime",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_session_definitions_and_local_functions_are_isolated",
+        "test_session_modes_and_python_permission_validation"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "clear_definitions",
+      "kind": "function",
+      "module": "mikoshilang.runtime",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_clear_definitions_default_state_isolated_in_subprocess"
+      ],
+      "limitations": [
+        "Default-state mutation runs in a subprocess to avoid clearing unrelated suite state; local Session independence verified."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "function",
+      "kind": "function",
+      "module": "mikoshilang.interop",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_function_global_typed_listable_and_unregister_cleanup"
+      ],
+      "limitations": [
+        "Global decorator checked with exact inputs, type/value failures, listability and finally-unregister; no edits to evaluator/kernel/library."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "unregister",
+      "kind": "function",
+      "module": "mikoshilang.interop",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_function_global_typed_listable_and_unregister_cleanup"
+      ],
+      "limitations": [
+        "Representative direct public value and edge assertions; not exhaustive over all expression trees."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "from_python",
+      "kind": "function",
+      "module": "mikoshilang.interop",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_from_python_to_python_documented_roundtrips",
+        "test_from_python_unsupported_nonfinite_and_numpy_scalars",
+        "test_property_integer_fraction_nested_conversion_roundtrip",
+        "test_property_machine_complex_conversion_roundtrip"
+      ],
+      "limitations": [
+        "Bounded properties (60 nested values, 60 complex pairs), not exhaustive foreign-type/array coverage; Hypothesis tests individually skip when dependency absent."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "to_python",
+      "kind": "function",
+      "module": "mikoshilang.interop",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_from_python_to_python_documented_roundtrips",
+        "test_to_python_symbolic_modes_and_numpy_copy",
+        "test_property_integer_fraction_nested_conversion_roundtrip",
+        "test_property_machine_complex_conversion_roundtrip"
+      ],
+      "limitations": [
+        "Bounded documented-data roundtrips and symbolic/numpy modes; not exhaustive foreign-type coverage."
+      ],
+      "findings": [],
+      "test_file": "test_public_api_core.py"
+    },
+    {
+      "name": "PackedArray",
+      "kind": "class",
+      "module": "mikoshilang.packed",
+      "group": "core",
+      "status": "checked",
+      "tests": [
+        "test_packed_array_rejects_unsigned_integer_overflow",
+        "test_packed_array_dtype_complex_values_readonly_and_equality",
+        "test_packed_array_multidimensional_and_invalid_inputs",
+        "test_property_machine_complex_conversion_roundtrip"
+      ],
+      "limitations": [
+        "Machine integer/float/complex values, dtype conversion, read-only storage and copies checked; broader fast-operation correctness owned by other batches."
+      ],
+      "findings": [
+        "Confirmed red-first: direct PackedArray(uint64([2**63])) silently wrapped to a negative int64. Added pre-cast int64 range rejection; boundary 2**63-1 remains accepted. Regression green."
+      ],
+      "test_file": "test_public_api_core.py"
+    }
+  ]
+}

@@ -1,3 +1,6 @@
 include README.md
 include LICENSE
 recursive-include manual *.tex *.pdf *.md
+include tests/public_api_audit.json
+include scripts/check_public_api_wheel.py
+include docs/public_python_api_audit.md

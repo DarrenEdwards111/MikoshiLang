@@ -29,6 +29,13 @@ It replaces 3.7.1 (27 February 2026), whose "6,324 functions" claim has been ret
   with `Direction`.
 
 ### Python interop
+- Added a bounded robustness audit of all 108 public exports, with per-name evidence and limitations,
+  direct value/domain tests, generated properties, inventory guards, and source/installed-wheel checks
+  on Ubuntu and Windows. See `docs/public_python_api_audit.md`; this is not a new audit of every language head.
+- Repaired additional direct-API defects found by the audit: assumption-bearing calculus variables,
+  precision validation, GCD/LCM/Fibonacci domains, symbolic logic/comparisons, `Part[..., 0]`, packed
+  unsigned overflow, tiny/derived units, exact chemical balancing and malformed formulas, and complex
+  signal processing. Unsupported offset-temperature arithmetic now raises rather than guessing.
 - Corrected the direct Python helpers exported from `mikoshilang`: complex eigenvalues and eigenvectors
   retain their imaginary components, small nonzero determinants are not rounded to zero, negative
   `Take`/`Drop` counts operate on the end of the list, and descending `Range`/`Table` iterators respect
