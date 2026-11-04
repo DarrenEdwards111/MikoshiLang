@@ -1,28 +1,41 @@
-# Manual rebuild instructions
+# Rebuilding the reference manual
 
-The PDF is built from `mikoshilang-manual.tex`. The 3.8.0 PDF was built with
-[Tectonic](https://tectonic-typesetting.github.io/) (XeTeX), which fetches the LaTeX packages it needs:
+The 56-page source-edition 3.8.0 manual includes a beginner tutorial, checked
+examples, a public Python API reference, and a registered-name catalogue.
+The source snapshot documented by this edition is
+`6d067221be924fe789203ed0fc0a3a8b4a656521`; PyPI versions may differ.
+
+From the repository root, with core dependencies installed:
 
 ```bash
+python scripts/check_manual_examples.py
+PYTHONPATH=. python scripts/beginner_tutorial.py
 cd manual
 tectonic -X compile mikoshilang-manual.tex
 ```
 
-`pdflatex` also works if a TeX Live installation is available (run it twice for the table of contents):
+The second command uses POSIX shell syntax. On Windows PowerShell set
+`$env:PYTHONPATH = '.'` then run `python scripts/beginner_tutorial.py`.
+
+Tectonic downloads required TeX packages on its first run. The output is
+`manual/mikoshilang-manual.pdf`.
+
+## Source files
+
+- `mikoshilang-manual.tex`: main document and installation/reference overview.
+- `beginner-tutorial.tex`: authored beginner chapter.
+- `current-examples.tex`: generated checked-example chapter.
+- `generated-reference.tex`: API reference and registered-name catalogue snapshot.
+
+To regenerate the checked-example chapter after intentional example changes:
 
 ```bash
-cd manual
-pdflatex mikoshilang-manual.tex
-pdflatex mikoshilang-manual.tex
+python scripts/check_manual_examples.py --write
 ```
 
-## 3.8.0 update
-
-- Version 3.7.0 → 3.8.0.
-- Replaced the retracted "6,324 functions" figure with the coverage roadmap figure (4,402 of 6,716 documented
-  Wolfram symbols), and added a "Status of this manual" note: where the manual conflicts with the README or
-  `docs/`, those take precedence.
-- Removed the dead `mikoshi.co.uk` console and REST API links; the hosted services are offline.
-- Added the verification, Python interop and types pillars to the key features.
-
-Most sections below the introduction still describe pre-3.8 releases and need a full rewrite.
+The checker runs ten standalone programs with timeouts, verifies their assertions
+and exact expected output, and checks the generated chapter for drift. The beginner
+script checks the tutorial calculations. These are bounded documentation checks,
+not certification of the entire library. Keep the catalogue aligned with its stated
+source snapshot when updating library versions; do not change inventory counts
+without regenerating and auditing the associated reference.

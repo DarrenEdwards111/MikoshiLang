@@ -1,1165 +1,140 @@
 \documentclass[11pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
-\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[margin=23mm]{geometry}
 \usepackage{amsmath,amssymb}
-\usepackage{listings}
-\usepackage{upquote}
-\usepackage{xcolor}
-\usepackage{hyperref}
-\usepackage{graphicx}
-\usepackage{fancyhdr}
-\usepackage{titlesec}
-
-% Colors
-\definecolor{codegreen}{rgb}{0,0.6,0}
-\definecolor{codegray}{rgb}{0.5,0.5,0.5}
-\definecolor{codepurple}{rgb}{0.58,0,0.82}
-\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
-
-% Code listing style
-\lstdefinestyle{mikoshi}{
-    backgroundcolor=\color{backcolour},   
-    commentstyle=\color{codegreen},
-    keywordstyle=\color{magenta},
-    numberstyle=\tiny\color{codegray},
-    stringstyle=\color{codepurple},
-    basicstyle=\ttfamily\footnotesize,
-    breakatwhitespace=false,         
-    breaklines=true,                 
-    captionpos=b,                    
-    keepspaces=true,                 
-    numbers=left,                    
-    numbersep=5pt,                  
-    showspaces=false,                
-    showstringspaces=false,
-    showtabs=false,                  
-    tabsize=2,
-    upquote=true
-}
+\usepackage{listings,upquote,xcolor,multicol,booktabs}
+\usepackage{hyperref,fancyhdr}
+\definecolor{ink}{HTML}{182D43}
+\definecolor{accent}{HTML}{146A82}
+\definecolor{codebg}{HTML}{F2F5F7}
+\hypersetup{colorlinks=true,linkcolor=ink,urlcolor=accent,pdftitle={MikoshiLang 3.8 Reference Manual},pdfauthor={Mikoshi Ltd}}
+\lstdefinestyle{mikoshi}{backgroundcolor=\color{codebg},basicstyle=\ttfamily\footnotesize,breaklines=true,breakatwhitespace=false,columns=fullflexible,keepspaces=true,showstringspaces=false,upquote=true,frame=single,rulecolor=\color{codebg},aboveskip=7pt,belowskip=7pt}
 \lstset{style=mikoshi}
-
-% Headers
-\pagestyle{fancy}
-\fancyhf{}
-\rhead{MikoshiLang Reference Manual}
-\lhead{Mikoshi Ltd}
-\rfoot{Page \thepage}
-
-% Title formatting
-\titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
-\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
-
-\hypersetup{
-    colorlinks=true,
-    linkcolor=blue,
-    filecolor=magenta,      
-    urlcolor=cyan,
-}
-
-\title{\Huge\textbf{MikoshiLang}\\\Large Reference Manual \& User Guide}
+\setlength{\parindent}{0pt}\setlength{\parskip}{5pt}\setlength{\headheight}{15pt}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small MikoshiLang 3.8}
+\fancyhead[R]{\small Reference Manual}
+\fancyfoot[R]{\small\thepage}
+\title{\Huge\textbf{MikoshiLang}\\[8pt]\Large Current Reference Manual\\[6pt]\large Language, Python API and Function Catalogue}
 \author{Mikoshi Ltd}
-\date{Version 3.8.0 --- \today}
-
+\date{Source edition 3.8.0\\Updated 4 November 2026}
 \begin{document}
-
-\maketitle
-\thispagestyle{empty}
-
-\vspace{2cm}
-
+\sloppy
+\maketitle\thispagestyle{empty}
 \begin{abstract}
-MikoshiLang is an open-source, Wolfram-style symbolic computation language for Python, built on SymPy and NumPy. It implements \textbf{4,402 of the 6,716} documented Wolfram Language symbols with reviewed, value-tested semantics (92.9\% of the 4,739 judged feasible without curated data, notebooks or cloud services; see \texttt{docs/wolfram\_coverage\_roadmap.md}). Its rule is: a correct result, a clear error, or left unevaluated, never silently wrong. Version 3.8 adds three pillars: \texttt{Verify[]}, which re-checks results with an independent method and labels them Certified, Checked, Unchecked or Failed; two-way Python interop; and opt-in types read from Python annotations. MikoshiLang is alpha software, not a Mathematica replacement or a proof assistant.
+MikoshiLang is a Wolfram-style symbolic language running inside Python, built on SymPy and NumPy. This edition documents current features and repaired helpers, with verified runnable examples, all 108 public Python exports, and a catalogue of 4,201 registered library names. Names, constants, aliases and algorithms are different things. MikoshiLang is alpha software: tests support checked behaviours, not correctness for every input, full Wolfram compatibility or equivalence to Mathematica.
 \end{abstract}
-
 \vfill
+\textbf{Source snapshot:} \texttt{6d067221be924fe789203ed0fc0a3a8b4a656521}.\\
+\textbf{Repository:} \url{https://github.com/DarrenEdwards111/MikoshiLang}\\
+Installation instructions below reproduce this source snapshot; PyPI versions may differ.
+\newpage\tableofcontents\newpage
 
-\begin{center}
-\textbf{GitHub:} \url{https://github.com/DarrenEdwards111/MikoshiLang}\\
-\textbf{PyPI:} \texttt{pip install mikoshilang}
-\end{center}
+\section{What this edition updates}
+This guide replaces the mixed-version manual. Historical domain-pack lists, natural-language examples, hosted-console instructions and retracted function totals are not current capability specifications. Earlier editions remain in Git history. The recent audit repaired existing helpers; adding hundreds of tests did not itself add hundreds of algorithms.
+\begin{center}\begin{tabular}{lr}\toprule
+\textbf{Inventory} & \textbf{Count}\\\midrule
+Public Python exports & 108\\
+Functions / classes / constants & 91 / 12 / 5\\
+Registered library names & 4,201\\
+Audit-status records & 4,884\\
+New public-API audit cases in PR 89 & 436\\
+Earlier direct-Python regression cases in PR 88 & 118\\\bottomrule
+\end{tabular}\end{center}
+The registry is not the entire Wolfram-symbol universe: kernel forms, constants, options and system variables can be counted separately. Registration is not certification of every overload or input. The final catalogue is generated from the live registry, not an old advertised total.
 
-\newpage
-
-\section*{Status of this manual (3.8)}
-
-Releases up to 3.7.1 advertised ``6,324 functions''. An audit found that figure was not supported: many entries were generated stubs and some gave wrong answers. Those modules are quarantined in 3.8 and are not registered by the evaluator. \textbf{Where any later section of this manual conflicts with the README, the README and the files in \texttt{docs/} take precedence.} In particular, the natural-language mode, the hosted web console and REST API, and the domain packs described below as ``chemistry'', ``physics'', ``biology'', ``machine learning'' and engineering functions belong to the pre-3.8 releases; the hosted services are offline and many of those functions are quarantined. Current, authoritative references:
+\subsection{Companion documentation}
 \begin{itemize}
-    \item README: \url{https://github.com/DarrenEdwards111/MikoshiLang#readme}
-    \item Coverage roadmap: \texttt{docs/wolfram\_coverage\_roadmap.md}
-    \item Verification: \texttt{docs/verification.md}; types: \texttt{docs/types.md}; Python interop: \texttt{docs/python\_interop.md}
-    \item Runnable examples: \texttt{examples/}
+\item \texttt{README.md}: current usage and limitations.
+\item \texttt{docs/library\_audit.md}: per-head semantics and repair notes.
+\item \texttt{docs/wolfram\_coverage\_roadmap.md}: broader symbol coverage.
+\item \texttt{docs/python\_interop.md}, \texttt{docs/verification.md}, \texttt{docs/types.md}.
+\item \texttt{docs/public\_python\_api\_audit.md} and \texttt{tests/public\_api\_audit.json}: bounded per-export evidence.
 \end{itemize}
 
-\newpage
-
-\tableofcontents
-
-\newpage
-
-\section{Introduction}
-
-MikoshiLang is a symbolic computation language designed for Python, providing Wolfram-style syntax with deterministic evaluation. Built on SymPy, it extends Python's mathematical capabilities with pattern matching, rule-based transformations, and natural language processing.
-
-\subsection{Key Features}
-
-\begin{itemize}
-    \item \textbf{4,402 documented Wolfram symbols} implemented with reviewed, value-tested semantics (see the coverage roadmap)
-    \item \textbf{Verification} — \texttt{Verify[expr]} returns Certified, Checked, Unchecked or Failed, using a method independent of the one that produced the result
-    \item \textbf{Python interop} — results as Python data, typed Python functions as language heads, Python access off unless allow-listed
-    \item \textbf{Opt-in types} — signatures from Python annotations; \texttt{Session(check\_types=True)}
-    \item \textbf{Pattern matching \& rules} — symbolic manipulation with custom transformations
-    \item \textbf{Jupyter kernel} — interactive notebooks with rich output
-    \item \textbf{Visualization} — 2D/3D plotting with matplotlib \& plotly
-    \item \textbf{Chemistry} — equation balancing, molecular mass, 118 elements
-    \item \textbf{Physics} — mechanics, thermodynamics, E\&M, quantum, relativity
-    \item \textbf{Machine learning} — regression, neural nets, loss functions, optimizers
-    \item \textbf{Biology} — genetics, DNA analysis, population dynamics
-    \item \textbf{Cryptography} — hashing, modular arithmetic, number theory
-    \item \textbf{Unit conversion} — 50+ physical units with dimensional analysis
-\end{itemize}
-
-\subsection{Installation}
-
-\subsubsection{Linux / macOS}
-
+\section{Installation and interfaces}
+For this exact source edition, use a virtual environment and a source checkout. A published PyPI package may be older.
 \begin{lstlisting}[language=bash]
-# Create virtual environment (recommended)
-python3 -m venv ~/mikoshi-env
-source ~/mikoshi-env/bin/activate
-
-# Install MikoshiLang
-pip install mikoshilang
-
-# With Jupyter support
-pip install mikoshilang[jupyter]
-
-# With all features (Jupyter + visualization + signal processing)
-pip install mikoshilang[all]
+git clone https://github.com/DarrenEdwards111/MikoshiLang.git
+cd MikoshiLang
+git checkout 6d067221be924fe789203ed0fc0a3a8b4a656521
+python -m venv .venv
+# Activate .venv using the command for your shell
+python -m pip install .
+# Optional scientific, plotting and notebook dependencies:
+python -m pip install ".[all]"
+# Development and property tests:
+python -m pip install ".[all,test]" build
 \end{lstlisting}
+Core dependencies include SymPy, NumPy and requests. Scientific and plotting operations need the relevant extras. Recent public-API CI exercises Python 3.9, 3.12 and 3.13 on Ubuntu and Windows; macOS was not in that audit matrix.
 
-\textbf{Note:} On Ubuntu 24.04+ the virtual environment is required due to PEP 668 (externally-managed-environment).
-
-\subsubsection{Windows (Anaconda — Recommended)}
-
-\begin{lstlisting}[language=bash]
-# Create new conda environment
-conda create -n mikoshilang python=3.9
-conda activate mikoshilang
-
-# Install MikoshiLang with Jupyter support
-pip install mikoshilang[jupyter]
-
-# All features
-pip install mikoshilang[all]
-\end{lstlisting}
-
-\textbf{Supported on all platforms:} Windows, macOS, Linux, WSL. The Jupyter kernel is fully compatible with Anaconda (fixed in v3.6.9 with \texttt{nest\_asyncio} integration).
-
-\subsubsection{Windows (WSL — Alternative)}
-
-\begin{lstlisting}[language=bash]
-# Install WSL (if not already installed)
-# In PowerShell: wsl --install
-
-# Open WSL terminal (Ubuntu)
-# Then follow Linux installation steps:
-python3 -m venv ~/mikoshi-env
-source ~/mikoshi-env/bin/activate
-pip install mikoshilang[jupyter]
-
-# Start Jupyter
-jupyter notebook
-
-# Access from Windows browser at http://localhost:8888
-\end{lstlisting}
-
-\subsubsection{macOS (Apple Silicon / Intel)}
-
-\begin{lstlisting}[language=bash]
-# Create virtual environment
-python3 -m venv ~/mikoshi-env
-source ~/mikoshi-env/bin/activate
-
-# Install MikoshiLang
-pip install mikoshilang[jupyter]
-
-# For M1/M2/M3 Macs: all dependencies are ARM64-compatible
-\end{lstlisting}
-
-\subsubsection{Optional Dependencies}
-
-\begin{lstlisting}[language=bash]
-# Jupyter notebook support
-pip install mikoshilang[jupyter]
-
-# Visualization (matplotlib + plotly)
-pip install mikoshilang[visualization]
-
-# Signal processing (scipy)
-pip install mikoshilang[signal]
-
-# Everything
-pip install mikoshilang[all]
-\end{lstlisting}
-
-\subsection{Quick Start}
-
+\subsection{Session versus direct Python}
 \begin{lstlisting}[language=Python]
-from mikoshilang import parse_and_eval
-
-# Basic arithmetic
-parse_and_eval("2 + 2")
-# => 4
-
-# Symbolic calculus
-parse_and_eval("D[x^3 + 2*x, x]")
-# => 3*x^2 + 2
-
-# Equation solving
-parse_and_eval("Solve[x^2 - 4 == 0, x]")
-# => {-2, 2}
-
-# Plotting
-parse_and_eval("Plot[sin(x), {x, 0, 6.28}]")
-# => <base64 PNG image>
+from mikoshilang import Session
+s = Session()
+s.evaluate("f[x_] := x^2; f[3]")  # raw result: 9
+s.eval("1/3")                    # Fraction(1, 3)
 \end{lstlisting}
+\texttt{Session.evaluate} returns raw values/expressions; \texttt{Session.eval} converts data to Python types. Definitions are session-local. The legacy \texttt{evaluate}/\texttt{parse\_and\_eval} interface uses a shared default session.
 
-\section{Knowledge Layer (v3.5.0)}
+Imported helpers are a separate interface. Their signatures, result shapes and dispatch paths can differ from similarly named language heads. Direct \texttt{Table(fn, spec)} takes a Python callable, not a language string and iterator symbol. Tests of one interface do not automatically test the other.
 
-MikoshiLang v3.5.0 introduces a complete knowledge layer with deterministic fact retrieval from multiple sources. Unlike LLMs that answer from memory, MikoshiLang queries structured databases and returns provenance-tracked results.
+\input{beginner-tutorial.tex}
 
-\subsection{Architecture}
+\section{Language and computation}
+Function calls use square brackets and lists use braces. Expressions have heads and arguments; symbols represent variables and function names. Exact integers/rationals differ from machine decimals. Unknown user heads generally remain symbolic; malformed syntax raises an error.
 
-The knowledge layer implements 8 core components:
+The core includes immediate/delayed definitions, named and typed blank patterns, sequence patterns, conditional rules, replacements, pure functions, list transformations, memoisation and specificity-ordered definitions. \texttt{Module}, \texttt{Block} and \texttt{With} implement documented scoping, including capture-avoiding substitution.
 
-\begin{enumerate}
-    \item \textbf{Entity Graph} — Wikidata (QIDs, 50 canonical properties)
-    \item \textbf{Text Layer} — Wikipedia (summaries, citations)
-    \item \textbf{5 Core Tools} — Search, facts, relationships, text, time-travel
-    \item \textbf{LLM Interpreter} — Natural language → structured queries
-    \item \textbf{Persistent Cache} — SQLite with TTL (7d Wikidata, 24h Wikipedia)
-    \item \textbf{Canonical Properties} — Stable schema (BirthDate, Occupation, etc.)
-    \item \textbf{Domain Packs} — PubChem, Crossref, OpenAlex, GeoNames, World Bank, AlphaFold, JHTDB
-    \item \textbf{License Compliance} — Full attribution (CC0, CC BY-SA, Public Domain)
-\end{enumerate}
+Capabilities include simplification, expansion, factorisation, differentiation, integration, limits, series and supported equation solving. \texttt{Solve} returns rule lists, not the bare roots in some old examples. \texttt{DSolve} handles supported ODEs and initial conditions, not arbitrary PDEs. \texttt{Series} includes the requested order and retains a remainder; \texttt{Normal} removes it. Convergence and solver completeness still need problem-specific checking.
 
-\subsection{Core Knowledge Functions}
+\texttt{N[expr,p]} can retain arbitrary precision, but requesting more digits cannot recover information lost in machine inputs. Lists, associations, strings, number theory, statistics, matrices, graphs and numerical methods have per-head limits. Consult the catalogue and companion audit rather than assuming every name supports every form.
 
-\subsubsection{EntitySearch}
+\section{Verification, Python integration and types}
+\subsection{Independent result checks}
+\texttt{Verify[expr]} distinguishes:
+\begin{description}
+\item[Certified] An exact certificate was checked with exact arithmetic.
+\item[Checked] Symbolic or numerical evidence passed; not a general proof.
+\item[Unchecked] No checker applied or the check was inconclusive.
+\item[Failed] The result failed its applicable check.
+\end{description}
+Computation errors can still propagate. Inspect the evidence: expanding a factorisation does not establish irreducibility, and checking returned solutions does not always establish completeness. Methods include primality/product certificates, Bezout identities, substitution, differentiation, numerical comparisons and matrix residuals. This is not a trusted proof-assistant bridge.
 
-Search Wikidata entities:
+\subsection{Python integration}
+\texttt{Session.eval} converts rational data to \texttt{Fraction} and containers to lists/dictionaries. Request \texttt{symbolic="sympy"} or \texttt{arrays="numpy"} where appropriate. \texttt{Session.ns} provides Pythonic access to language heads; keyword arguments become options.
 
-\begin{lstlisting}
-EntitySearch["Douglas Adams"]
-# => [{"id": "Q42", "label": "Douglas Adams", 
-#      "description": "British science fiction writer...", 
-#      "license": "CC0"}]
+\texttt{@session.function} exposes a typed host function locally. Global \texttt{@mikoshilang.function} registration affects all sessions; \texttt{unregister} performs cleanup. \texttt{from\_python}/\texttt{to\_python} provide explicit conversion. Unsupported objects raise rather than becoming arbitrary foreign atoms.
 
-EntitySearch["Moon", "Film", 10]  # Type hint, limit 10
-\end{lstlisting}
+Python imports/calls are off by default. An explicit \texttt{allow\_python} allow-list is not an operating-system sandbox. Network knowledge calls need explicit opt-in; a session flag does not sandbox direct Python calls. Untrusted evaluation needs an external process with time and memory limits. Old hosted-service and natural-language promises are not assumed available.
 
-\subsubsection{EntityValue}
+\texttt{PackedArray} stores supported machine numbers in NumPy-backed form. Eligible operations use NumPy paths. Unsigned values overflowing int64 are rejected rather than wrapping negative. Packed arrays are not arbitrary-precision storage.
 
-Get entity properties:
+\subsection{Opt-in type checking}
+\texttt{Session(check\_types=True)} raises on concrete mismatches at checked boundaries; report mode collects mismatches. Symbolic arguments are permitted because their future values are unknown. Types cover integers with sign constraints, rationals, reals, complex numbers, variables, lists, matrices and associations. \texttt{TypeSignature}, \texttt{TypeMatchQ} and \texttt{TypeCheck} are MikoshiLang extensions. See the types guide for supported forms.
 
-\begin{lstlisting}
-EntityValue["Q42", "BirthDate"]
-# => {"value": "1952-03-11", "license": "CC0", 
-#     "source": "https://www.wikidata.org/wiki/Q42"}
+\section{Corrected helpers and scientific boundaries}
+Negative direct \texttt{Take}/\texttt{Drop} counts operate on the tail. \texttt{Part[...,0]} returns the list head. Descending ranges/tables respect direction and endpoint; wrong-direction tables are empty without running their body. Zero, nonfinite and nonadvancing table steps error instead of hanging.
 
-# Time-travel queries
-EntityValue["Q42", "Occupation", as_of="2015-01-01"]
-\end{lstlisting}
+Complex eigenvalues/eigenvectors retain imaginary parts. Tiny determinants and matrix entries are not snapped to zero. Integer determinants use exact arithmetic before float conversion could overflow; other direct matrix operations remain numerical. GCD/LCM integer/sign/zero contracts and noninteger Fibonacci validation were repaired. Symbolic logic/comparisons preserve unknown expressions rather than Python truthiness. Calculus and symbolic Fourier helpers retain assumption-bearing SymPy variable identity while calculating; returned Mikoshi symbols do not encode those assumptions.
 
-\textbf{Canonical Properties (50):} BirthDate, DeathDate, Occupation, Country, Population, ChemicalFormula, AtomicNumber, ISBN, DOI, and more.
+\texttt{Quantity}/\texttt{UnitConvert} preserve tiny values and canonical derived SI dimensions but remain floating point. Offset-temperature conversion is supported; ambiguous offset arithmetic is rejected, and temperature differences are not modelled. Element data is not a general isotope database. Neutral molecular formulas and parenthesised groups are supported; malformed formulas and unsupported charge/isotope/hydrate notation error. Chemical balancing uses exact rational arithmetic for unique strictly positive balances, not rounded guesses.
 
-\subsubsection{EntityRelationships}
+Direct DFT/IDFT use NumPy's negative forward exponent and $1/n$ inverse normalisation; direct symbolic Fourier transforms use SymPy's convention. Do not blindly compare these with the session's Wolfram-style Fourier convention. Complex signal components are preserved. Numerical signal helpers require finite nonempty one-dimensional lists; cutoffs are finite, ordered and strictly below Nyquist. Tests do not guarantee high-order filter stability. SciPy is optional; spectrogram plotting needs matplotlib, otherwise the documented raw frequency/time/power form is returned.
 
-SPARQL-powered graph traversal:
+\section{Test evidence and honest limits}
+At the PR 89 audit snapshot, 436 new audit cases plus 118 earlier regressions gave 554 passing focused cases locally, both from source and installed wheels. A minimal environment gave 484 passed and 70 optional skips. Full-suite comparison on Windows/Python 3.14 gave 30,229 passed, 78 pre-existing failures and 9 skips, with zero new failing identities and no tests removed. These are dated results, not guarantees for future revisions.
 
-\begin{lstlisting}
-EntityRelationships["Q42", "Occupation", depth=1, limit=10]
-# => {"related": [{"id": "Q36180", "label": "writer"}, ...], 
-#     "license": "CC0"}
-\end{lstlisting}
+Pre-merge CI passed the executed source/wheel and minimal jobs on Ubuntu and Windows with Python 3.9, 3.12 and 3.13; optional full-verification jobs were skipped. No licensed Wolfram kernel was used as an oracle. Shared-backend comparisons supplement independent known values, identities and residuals. This public-surface audit is not an exhaustive audit of every registered head or class method.
 
-\subsubsection{WikipediaText}
+\clearpage\input{current-examples.tex}
+\clearpage\input{generated-reference.tex}
+\clearpage
+\section{Rebuilding and contributing}
+Follow \texttt{manual/REBUILD.md}. Regenerate the live function reference and execute the example checker before compiling the PDF. Do not edit generated files by hand. Keep source and PDF together so the document can be reproduced.
 
-Get Wikipedia summaries with attribution:
+Contributions should test the actual public entry point and state unsupported inputs. For a bug, demonstrate a failing regression before the narrow repair. A name count is not a correctness score, and a passing example does not justify removing an honest limitation.
 
-\begin{lstlisting}
-WikipediaText["Douglas Adams", sentences=3]
-# => {"text": "Douglas Noel Adams was...", 
-#     "license": "CC BY-SA 3.0", 
-#     "attribution": "Source: Wikipedia contributors"}
-\end{lstlisting}
-
-\subsection{Domain Packs}
-
-MikoshiLang includes 7 domain-specific knowledge sources:
-
-\subsubsection{PubChem (Chemistry)}
-
-\begin{lstlisting}
-PackSearch["pubchem", "caffeine"]
-# => [{"id": "CID2519", "source": "PubChem", 
-#      "license": "Public Domain"}]
-
-PackValue["pubchem", "2519", "MolecularFormula"]
-# => {"value": "C8H10N4O2"}
-\end{lstlisting}
-
-\textbf{Coverage:} 100M+ compounds \\
-\textbf{Properties:} MolecularFormula, MolecularWeight, IUPACName, CanonicalSMILES
-
-\subsubsection{Crossref (Scholarly Papers)}
-
-\begin{lstlisting}
-PackSearch["crossref", "machine learning", limit=5]
-# => [{"id": "10.1145/...", "label": "Paper Title", 
-#      "license": "Metadata: CC0"}]
-
-PackValue["crossref", "10.1145/3422622", "Authors"]
-# => {"value": ["Author 1", "Author 2"]}
-\end{lstlisting}
-
-\textbf{Coverage:} 70M+ papers \\
-\textbf{Properties:} Title, Authors, PublicationDate, Abstract, CitationCount
-
-\subsubsection{OpenAlex (Scholarly Graph)}
-
-\begin{lstlisting}
-PackSearch["openalex", "deep learning"]
-# => [{"id": "W2741809807", "license": "CC0"}]
-
-PackValue["openalex", "W2741809807", "CitationCount"]
-# => {"value": 1523}
-\end{lstlisting}
-
-\textbf{Coverage:} 200M+ works \\
-\textbf{Properties:} Title, Authors, CitationCount, Concepts, OpenAccessURL
-
-\subsubsection{GeoNames (Geographic Data)}
-
-\begin{lstlisting}
-PackSearch["geonames", "London"]
-# => [{"id": "2643743", "license": "CC BY 4.0"}]
-
-PackValue["geonames", "2643743", "Population"]
-# => {"value": 8961989}
-\end{lstlisting}
-
-\textbf{Coverage:} 11M+ places \\
-\textbf{Properties:} Country, Population, Latitude, Longitude, Elevation, Timezone
-
-\subsubsection{World Bank (Economic Indicators)}
-
-\begin{lstlisting}
-PackSearch["worldbank", "GDP"]
-# => [{"id": "NY.GDP.MKTP.CD", "license": "CC BY 4.0"}]
-
-PackValue["worldbank", "NY.GDP.MKTP.CD", "Value", country="US"]
-# => {"value": 25462700000000, "date": "2022"}
-\end{lstlisting}
-
-\textbf{Coverage:} 1,400+ indicators \\
-\textbf{Properties:} Value, Date, Country, Unit
-
-\subsubsection{AlphaFold (Protein Structures)}
-
-\begin{lstlisting}
-PackSearch["alphafold", "hemoglobin"]
-# => [{"id": "P69905", "label": "Hemoglobin subunit alpha", 
-#      "license": "CC BY 4.0"}]
-
-PackValue["alphafold", "P69905", "Confidence"]
-# => {"value": 93.2}
-
-PackValue["alphafold", "P69905", "Structure"]
-# => {"value": "https://alphafold.ebi.ac.uk/files/AF-P69905-F1..."}
-\end{lstlisting}
-
-\textbf{Coverage:} 200M+ protein structures \\
-\textbf{Properties:} Structure, Confidence, Sequence, Organism, Gene, Function
-
-\subsubsection{JHTDB (Turbulence Simulations)}
-
-\begin{lstlisting}
-PackSearch["jhtdb", "channel"]
-# => [{"id": "channel5200", "label": "Channel Flow (Re=5200)", 
-#      "license": "Free for research/education"}]
-
-PackValue["jhtdb", "channel5200", "ReynoldsNumber"]
-# => {"value": 5200}
-
-PackValue["jhtdb", "isotropic1024coarse", "Resolution"]
-# => {"value": "1024^3"}
-\end{lstlisting}
-
-\textbf{Coverage:} 6 DNS datasets \\
-\textbf{Properties:} Name, Resolution, ReynoldsNumber, TimeRange, Fields \\
-\textbf{Datasets:} Isotropic turbulence, channel flow (Re=1000, Re=5200), mixing layer, MHD turbulence, transitional boundary layer
-
-\subsection{Caching \& Provenance}
-
-All knowledge queries are cached in \texttt{\textasciitilde/.mikoshilang/knowledge\_cache/knowledge.db} (SQLite) with:
-
-\begin{itemize}
-    \item \textbf{TTL:} 7 days (Wikidata), 24 hours (Wikipedia)
-    \item \textbf{Provenance:} Source URL, retrieved timestamp, license
-    \item \textbf{Performance:} 200x speedup on cached queries
-\end{itemize}
-
-\begin{lstlisting}
-CacheStats[]
-# => {"total_entries": 1523, "size_mb": 8.4}
-
-CacheClear[30]  # Clear entries older than 30 days
-\end{lstlisting}
-
-\subsection{License Compliance}
-
-Every result includes license metadata:
-
-\begin{itemize}
-    \item \textbf{Wikidata:} CC0 (public domain)
-    \item \textbf{Wikipedia:} CC BY-SA 3.0 (attribution required)
-    \item \textbf{PubChem:} Public Domain
-    \item \textbf{Crossref:} Metadata CC0
-    \item \textbf{OpenAlex:} CC0
-    \item \textbf{GeoNames:} CC BY 4.0
-    \item \textbf{World Bank:} CC BY 4.0
-\end{itemize}
-
-\section{Syntax}
-
-MikoshiLang uses Wolfram-inspired syntax with square brackets for function calls and curly braces for lists.
-
-\subsection{Basic Expressions}
-
-\begin{lstlisting}
-# Arithmetic
-2 + 3 * 4       # => 14
-2^10            # => 1024
-Sqrt[16]        # => 4
-
-# Variables
-x + 2*y - z     # => x + 2*y - z
-
-# Lists
-{1, 2, 3, 4}    # => [1, 2, 3, 4]
-Range[1, 10]    # => [1, 2, 3, ..., 10]
-\end{lstlisting}
-
-\subsection{Function Calls}
-
-\begin{lstlisting}
-# Single argument
-Sin[Pi/2]       # => 1
-Exp[1]          # => E
-
-# Multiple arguments
-GCD[48, 18]     # => 6
-Mod[17, 5]      # => 2
-
-# Nested calls
-Sqrt[Abs[-16]]  # => 4
-\end{lstlisting}
-
-\subsection{Pattern Matching}
-
-\begin{lstlisting}
-# Define a rule
-rule = x^2 + 2*x + 1 -> (x + 1)^2
-
-# Apply rule
-ReplaceAll[x^2 + 2*x + 1, rule]
-# => (x + 1)^2
-\end{lstlisting}
-
-\section{Core Functions}
-
-\subsection{Calculus}
-
-\subsubsection{Differentiation}
-
-\begin{lstlisting}
-D[x^3, x]                    # First derivative
-D[x^3 + 2*x^2, x, 2]         # Second derivative
-\end{lstlisting}
-
-\textbf{Available:} \texttt{D}, \texttt{Derivative}, \texttt{PartialD}, \texttt{Gradient}, \texttt{Divergence}, \texttt{Curl}, \texttt{Laplacian}
-
-\subsubsection{Integration}
-
-\begin{lstlisting}
-Integrate[x^2, x]            # Indefinite integral
-Integrate[x^2, {x, 0, 1}]    # Definite integral (0 to 1)
-\end{lstlisting}
-
-\textbf{Available:} \texttt{Integrate}, \texttt{NIntegrate}, \texttt{LineIntegral}, \texttt{DoubleIntegral}, \texttt{TripleIntegral}
-
-\subsubsection{Limits}
-
-\begin{lstlisting}
-Limit[sin(x)/x, x, 0]        # => 1
-Limit[1/x, x, Infinity]      # => 0
-\end{lstlisting}
-
-\textbf{Available:} \texttt{Limit}, \texttt{Series}, \texttt{TaylorSeries}, \texttt{LaurentSeries}
-
-\subsection{Algebra}
-
-\subsubsection{Solving Equations}
-
-\begin{lstlisting}
-Solve[x^2 - 4 == 0, x]       # => {-2, 2}
-Solve[x^2 + x + 1 == 0, x]   # Complex solutions
-NSolve[cos(x) == x, x]       # Numerical solver
-\end{lstlisting}
-
-\textbf{Available:} \texttt{Solve}, \texttt{NSolve}, \texttt{DSolve}, \texttt{RSolve}, \texttt{Roots}, \texttt{FindRoot}
-
-\subsubsection{Simplification}
-
-\begin{lstlisting}
-Simplify[(x^2 - 1)/(x - 1)]  # => x + 1
-Expand[(x + 1)^3]            # => x^3 + 3*x^2 + 3*x + 1
-Factor[x^2 - 4]              # => (x - 2)*(x + 2)
-\end{lstlisting}
-
-\textbf{Available:} \texttt{Simplify}, \texttt{FullSimplify}, \texttt{Expand}, \texttt{Factor}, \texttt{Apart}, \texttt{Together}, \texttt{Cancel}, \texttt{Collect}
-
-\subsection{Linear Algebra}
-
-\begin{lstlisting}
-# Determinant
-Det[{{1, 2}, {3, 4}}]        # => -2
-
-# Eigenvalues
-Eigenvalues[{{1, 2}, {2, 1}}]  # => [-1, 3]
-
-# Matrix multiplication
-Dot[{{1, 2}, {3, 4}}, {{5}, {6}}]  # => {{17}, {39}}
-\end{lstlisting}
-
-\textbf{Available:} \texttt{Det}, \texttt{Inverse}, \texttt{Transpose}, \texttt{Eigenvalues}, \texttt{Eigenvectors}, \texttt{Dot}, \texttt{Cross}, \texttt{MatrixPower}, \texttt{MatrixRank}, \texttt{Trace}, \texttt{Norm}
-
-\subsection{Number Theory}
-
-\begin{lstlisting}
-Prime[100]                   # 100th prime number
-PrimeQ[17]                   # True (17 is prime)
-FactorInteger[60]            # => {{2, 2}, {3, 1}, {5, 1}}
-GCD[48, 18]                  # => 6
-LCM[12, 18]                  # => 36
-\end{lstlisting}
-
-\textbf{Available:} \texttt{Prime}, \texttt{PrimeQ}, \texttt{NextPrime}, \texttt{PrimePi}, \texttt{FactorInteger}, \texttt{Divisors}, \texttt{GCD}, \texttt{LCM}, \texttt{EulerPhi}, \texttt{MoebiusMu}, \texttt{Fibonacci}, \texttt{Lucas}
-
-\subsection{Statistics}
-
-\begin{lstlisting}
-Mean[{1, 2, 3, 4, 5}]        # => 3
-Median[{1, 2, 3, 4, 5}]      # => 3
-StandardDeviation[{1, 2, 3}] # => sqrt(2/3)
-Variance[{1, 2, 3, 4}]       # => 5/4
-\end{lstlisting}
-
-\textbf{Available:} \texttt{Mean}, \texttt{Median}, \texttt{Mode}, \texttt{Variance}, \texttt{StandardDeviation}, \texttt{Quantile}, \texttt{Quartiles}, \texttt{Correlation}, \texttt{Covariance}, \texttt{Skewness}, \texttt{Kurtosis}
-
-\section{Visualization}
-
-MikoshiLang supports 2D and 3D plotting with matplotlib (static) or plotly (interactive).
-
-\subsection{2D Plotting}
-
-\begin{lstlisting}
-# Simple plot
-Plot[sin(x), {x, 0, 6.28}]
-
-# Multiple functions
-Plot[{sin(x), cos(x)}, {x, 0, 6.28}]
-
-# Parametric plot
-ParametricPlot[{cos(t), sin(t)}, {t, 0, 6.28}]
-
-# Polar plot
-PolarPlot[1 + cos(theta), {theta, 0, 6.28}]
-\end{lstlisting}
-
-\subsection{3D Plotting}
-
-\begin{lstlisting}
-# 3D surface
-Plot3D[sin(x)*cos(y), {x, -3, 3}, {y, -3, 3}]
-
-# Contour plot
-ContourPlot[x^2 + y^2, {x, -2, 2}, {y, -2, 2}]
-
-# Vector field
-VectorFieldPlot[{-y, x}, {x, -2, 2}, {y, -2, 2}]
-\end{lstlisting}
-
-\subsection{Interactive Plots}
-
-\begin{lstlisting}
-# Use plotly for interactive 3D
-Plot3D[x^2 + y^2, {x, -2, 2}, {y, -2, 2}, interactive=True]
-\end{lstlisting}
-
-\section{Chemistry}
-
-\subsection{Equation Balancing}
-
-\begin{lstlisting}
-BalanceEquation["H2 + O2 -> H2O"]
-# => 2H2 + O2 -> 2H2O
-
-BalanceEquation["C6H12O6 -> CO2 + H2O"]
-# => C6H12O6 -> 6CO2 + 6H2O
-\end{lstlisting}
-
-\subsection{Molecular Mass}
-
-\begin{lstlisting}
-MolecularMass["H2O"]         # => 18.015 g/mol
-MolecularMass["C6H12O6"]     # => 180.156 g/mol (glucose)
-MolecularMass["NaCl"]        # => 58.443 g/mol
-\end{lstlisting}
-
-\subsection{Element Data}
-
-\begin{lstlisting}
-Element["Fe"]
-# => {
-#   name: Iron,
-#   number: 26,
-#   mass: 55.845,
-#   electronConfiguration: [Ar] 3d6 4s2,
-#   category: transition metal
-# }
-\end{lstlisting}
-
-\section{Unit Conversion}
-
-MikoshiLang supports 50+ physical units across length, mass, time, temperature, energy, power, pressure, and more.
-
-\begin{lstlisting}
-Convert[100, "miles", "km"]      # => 160.934 km
-Convert[32, "fahrenheit", "celsius"]  # => 0 C
-Convert[1, "atm", "pascal"]      # => 101325 Pa
-Convert[1, "kWh", "joules"]      # => 3.6e6 J
-\end{lstlisting}
-
-\textbf{Available units:} meters, km, miles, feet, inches, kg, pounds, ounces, seconds, hours, days, celsius, fahrenheit, kelvin, joules, calories, kWh, watts, horsepower, atm, bar, pascal, liters, gallons
-
-\section{Natural Language Mode}
-
-MikoshiLang includes an AI-powered natural language interface. Type plain English, get verified results.
-
-\subsection{How It Works}
-
-\begin{enumerate}
-    \item User types natural language query
-    \item AI translates to MikoshiLang code
-    \item Code is executed by the deterministic engine
-    \item Result is verified and returned
-\end{enumerate}
-
-\subsection{Examples}
-
-\begin{lstlisting}
-# Natural language input
-"What is the derivative of x cubed?"
-# AI translates to: D[x^3, x]
-# Engine returns: 3*x^2
-
-"Solve x squared equals 4"
-# AI translates to: Solve[x^2 == 4, x]
-# Engine returns: {-2, 2}
-
-"What is the molecular mass of water?"
-# AI translates to: MolecularMass["H2O"]
-# Engine returns: 18.015 g/mol
-\end{lstlisting}
-
-\subsection{Web Console}
-
-The hosted web console described in earlier editions is no longer online. Use the \texttt{mikoshilang} REPL, the Jupyter kernel, or the Python API instead.
-
-\section{API Usage}
-
-\subsection{Python Library}
-
-\begin{lstlisting}[language=Python]
-from mikoshilang import parse_and_eval, evaluate
-from mikoshilang.parser import parse
-
-# Parse and evaluate
-result = parse_and_eval("D[x^2, x]")
-print(result)  # => 2*x
-
-# Parse only (returns AST)
-ast = parse("x^2 + 2*x + 1")
-print(ast)  # => BinOp(...)
-
-# Evaluate parsed AST
-result = evaluate(ast)
-print(result)  # => x^2 + 2*x + 1
-\end{lstlisting}
-
-\subsection{REST API}
-
-The hosted REST API described in earlier editions is no longer online and is not part of the Python package. To serve MikoshiLang over HTTP, wrap \texttt{Session.eval} in your own web service, and run untrusted input in an external process sandbox with time and memory limits.
-
-\subsection{Jupyter Kernel}
-
-MikoshiLang provides a custom Jupyter kernel for interactive Wolfram-style notebooks with LaTeX rendering and inline plots.
-
-\subsubsection{Installation}
-
-\begin{lstlisting}[language=bash]
-# Install with Jupyter support
-pip install mikoshilang[jupyter]
-
-# Install the kernel
-python -m mikoshilang.jupyter.install
-
-# Start Jupyter
-jupyter notebook
-\end{lstlisting}
-
-\subsubsection{Platform Support}
-
-\begin{itemize}
-    \item \textbf{Linux:} Fully supported
-    \item \textbf{macOS:} Fully supported (Intel \& Apple Silicon)
-    \item \textbf{Windows (Anaconda):} Fully supported (fixed in v3.6.9)
-    \item \textbf{Windows (WSL):} Fully supported
-\end{itemize}
-
-\textbf{Anaconda Compatibility:} As of v3.6.9, the MikoshiLang kernel is fully compatible with Anaconda on all platforms. The kernel applies \texttt{nest\_asyncio.apply()} before launch to fix Windows ProactorEventLoop conflicts.
-
-\subsubsection{Usage}
-
-\begin{enumerate}
-    \item Create a new notebook in Jupyter
-    \item Select \textbf{MikoshiLang} from the kernel dropdown
-    \item Use Wolfram-style syntax directly:
-\end{enumerate}
-
-\begin{lstlisting}
-In[1]:= x^2 + 2*x + 1
-Out[1]= x^2 + 2*x + 1  (rendered as LaTeX)
-
-In[2]:= Solve[x^2 - 4 == 0, x]
-Out[2]= [-2, 2]
-
-In[3]:= Plot2D[Sin[x], {x, -Pi, Pi}]
-Out[3]= <inline plot>
-\end{lstlisting}
-
-\subsubsection{Troubleshooting}
-
-If the kernel doesn't appear in Jupyter:
-
-\begin{lstlisting}[language=bash]
-# Verify kernel is installed
-jupyter kernelspec list
-
-# Reinstall kernel
-python -m mikoshilang.jupyter.install --user
-
-# Check Python environment matches Jupyter
-which python
-which jupyter
-\end{lstlisting}
-
-\section{Function Reference}
-
-MikoshiLang implements \textbf{4,402 of the 6,716} documented Wolfram Language symbols (see \texttt{docs/wolfram\_coverage\_roadmap.md} for the authoritative, generated list). The categorized listing below dates from earlier releases; entries from quarantined modules are not available in 3.8.
-
-\subsection{Version History}
-
-\begin{itemize}
-    \item \textbf{v3.8.0} (Current) — Correctness repair (generated modules quarantined); 4,402 documented Wolfram symbols with reviewed semantics; \texttt{Verify[]} and executable \texttt{Check:} notes; Python interop; opt-in types. See \texttt{CHANGELOG.md}
-    \item \textbf{v3.3.0} — Full knowledge layer: 5 domain packs (Crossref, OpenAlex, GeoNames, World Bank, PubChem), SPARQL graph queries, persistent cache, 50 canonical properties
-    \item \textbf{v3.2.0} — MVP knowledge layer: EntitySearch, EntityValue, WikipediaSummary, Wikidata/Wikipedia integration
-    \item \textbf{v3.1.1} — claimed 6,324 computational functions (claim retracted in 3.8)
-    \item \textbf{v3.1.0} — Added 600 functions: hydrology, mining, manufacturing, renewable energy
-    \item \textbf{v3.0.4} — Fixed all placeholders, 100\% working functions
-    \item \textbf{v3.0.0} — Added 600 functions: info theory, acoustics, GIS, chemical engineering
-    \item \textbf{v2.5.0} — Added 600 functions: materials, optics, aerospace, nuclear physics
-    \item \textbf{v2.4.0} — Added 600 functions: climate, medical, robotics, environmental
-    \item \textbf{v2.3.0} — Added 900 functions: engineering, biology, finance, fluids
-    \item \textbf{v2.2.0} — Added 900 functions: CS algorithms, astronomy, statistics, NLP
-    \item \textbf{v2.0.0} — Added 452 functions: vector calculus, ML, physics, biology
-    \item \textbf{v1.0.0} — Initial release: 1,342 core functions
-\end{itemize}
-
-\subsection{Extended Function Sets (v2.0+)}
-
-MikoshiLang v2.0+ includes 32 extended modules covering specialized scientific domains:
-
-\begin{itemize}
-    \item \textbf{Extended 6-9} (552) — Vector calculus, ML/time series, physics, biology/numerical methods
-    \item \textbf{Extended 10-12} (600) — Special functions, audio/signal processing, graph theory/quantum computing
-    \item \textbf{Extended 13-16} (900) — Computer science algorithms, astronomy/astrophysics, advanced statistics, NLP
-    \item \textbf{Extended 17-20} (900) — Mechanical/electrical/civil engineering, biology/genetics, finance/economics, fluid dynamics
-    \item \textbf{Extended 21-24} (600) — Climate science, medical sciences, robotics, environmental science
-    \item \textbf{Extended 25-28} (600) — Materials science, optics/photonics, aerospace engineering, nuclear/particle physics
-    \item \textbf{Extended 29-32} (600) — Information theory/cryptography, acoustics/audio, geospatial/GIS, chemical engineering
-    \item \textbf{Extended 33} (100) — Agriculture, food science, sports science, textile/petroleum engineering
-    \item \textbf{Extended 34} (150) — Hydrology, groundwater, watershed analysis, oceanography, coastal engineering
-    \item \textbf{Extended 35} (150) — Rock mechanics, mine design, drilling/blasting, mineral processing, flotation
-    \item \textbf{Extended 36} (153) — Production planning, quality control, lean manufacturing, maintenance, ergonomics, facility layout
-    \item \textbf{Extended 37} (150) — Solar/wind energy, energy storage, power systems, grid integration
-\end{itemize}
-
-\subsection{Domain Coverage}
-
-\textbf{Mathematics:} Calculus, linear algebra, number theory, statistics, differential equations, discrete math, abstract algebra, topology, geometry, tensor analysis
-
-\textbf{Physics:} Classical mechanics, thermodynamics, electromagnetism, quantum mechanics, relativity, astronomy, astrophysics, nuclear physics, particle physics, optics, acoustics, fluid dynamics
-
-\textbf{Engineering:} Mechanical, electrical, civil, chemical, aerospace, materials, mining, manufacturing, petroleum, textile, robotics
-
-\textbf{Computer Science:} Algorithms, data structures, ML, NLP, cryptography, information theory, signal processing, image processing
-
-\textbf{Natural Sciences:} Chemistry, biology, genetics, environmental science, climate science, oceanography, geology, hydrology
-
-\textbf{Applied Sciences:} Medicine, pharmacology, agriculture, food science, sports science, renewable energy
-
-\textbf{Industrial:} Production, quality control, lean manufacturing, facility layout, maintenance, ergonomics
-
-\subsection{Calculus (67 functions)}
-
-\texttt{D, Derivative, PartialD, Grad, Gradient, Div, Divergence, Curl, Laplacian, Integrate, NIntegrate, Limit, Series, TaylorSeries, LaurentSeries, FourierSeries, FourierTransform, InverseFourierTransform, LaplaceTransform, InverseLaplaceTransform, ZTransform, InverseZTransform, DSolve, NDSolve, Residue, LineIntegral, SurfaceIntegral, VolumeIntegral, DoubleIntegral, TripleIntegral, ...}
-
-\subsection{Algebra (89 functions)}
-
-\texttt{Solve, NSolve, DSolve, RSolve, Roots, FindRoot, Simplify, FullSimplify, Expand, Factor, Apart, Together, Cancel, Collect, Coefficient, CoefficientList, PolynomialQ, Degree, Exponent, ReplaceAll, ReplaceRepeated, Rule, Pattern, Blank, BlankSequence, ...}
-
-\subsection{Linear Algebra (76 functions)}
-
-\texttt{Det, Determinant, Inverse, Transpose, Eigenvalues, Eigenvectors, CharacteristicPolynomial, MinimalPolynomial, Dot, Cross, Norm, Normalize, MatrixPower, MatrixExp, MatrixLog, MatrixRank, Trace, DiagonalMatrix, IdentityMatrix, ZeroMatrix, RandomMatrix, HilbertMatrix, VandermondeMatrix, JordanForm, SchurDecomposition, QRDecomposition, LUDecomposition, CholeskyDecomposition, SVD, PseudoInverse, ...}
-
-\subsection{Number Theory (94 functions)}
-
-\texttt{Prime, PrimeQ, IsPrime, NextPrime, PreviousPrime, PrimePi, PrimeFactors, FactorInteger, Divisors, DivisorSigma, EulerPhi, MoebiusMu, LiouvilleLambda, Fibonacci, Lucas, Binomial, Multinomial, Factorial, DoubleFactorial, Subfactorial, GCD, LCM, ExtendedGCD, ChineseRemainder, Mod, PowerMod, JacobiSymbol, LegendreSymbol, KroneckerSymbol, ...}
-
-\subsection{Statistics (112 functions)}
-
-\texttt{Mean, Median, Mode, Variance, StandardDeviation, Quantile, Quartiles, InterquartileRange, Range, Correlation, Covariance, Skewness, Kurtosis, GeometricMean, HarmonicMean, TrimmedMean, CentralMoment, Moment, RandomVariate, PDF, CDF, InverseCDF, NormalDistribution, UniformDistribution, ExponentialDistribution, PoissonDistribution, BinomialDistribution, ChiSquareDistribution, StudentTDistribution, FDistribution, ...}
-
-\subsection{Trigonometry (48 functions)}
-
-\texttt{Sin, Cos, Tan, Cot, Sec, Csc, ArcSin, ArcCos, ArcTan, ArcCot, ArcSec, ArcCsc, Sinh, Cosh, Tanh, Coth, Sech, Csch, ArcSinh, ArcCosh, ArcTanh, ArcCoth, ArcSech, ArcCsch, Haversine, InverseHaversine, TrigExpand, TrigReduce, TrigSimplify, TrigToExp, ExpToTrig, ...}
-
-\subsection{Special Functions (97 functions)}
-
-\texttt{Gamma, LogGamma, PolyGamma, DiGamma, TriGamma, Beta, Zeta, HurwitzZeta, Erf, Erfc, Erfi, BesselJ, BesselY, BesselI, BesselK, AiryAi, AiryBi, HermiteH, LaguerreL, LegendreP, ChebyshevT, ChebyshevU, JacobiP, GegenbauerC, SphericalHarmonicY, EllipticK, EllipticE, EllipticF, EllipticPi, ...}
-
-\subsection{Discrete Math (68 functions)}
-
-\texttt{Permutations, Combinations, Multinomial, Subsets, Tuples, IntegerPartitions, SetPartitions, StirlingS1, StirlingS2, BellNumber, CatalanNumber, BernoulliB, EulerE, HarmonicNumber, GeneralizedHarmonicNumber, PartitionsP, PartitionsQ, ...}
-
-\subsection{Logic \& Sets (34 functions)}
-
-\texttt{And, Or, Not, Xor, Nand, Nor, Implies, Equivalent, ForAll, Exists, Union, Intersection, Complement, SymmetricDifference, Subset, Element, Cardinality, PowerSet, CartesianProduct, ...}
-
-\subsection{String Operations (52 functions)}
-
-\texttt{StringLength, StringReverse, StringJoin, StringSplit, StringReplace, StringTake, StringDrop, ToUpperCase, ToLowerCase, StringContainsQ, StringStartsQ, StringEndsQ, StringCount, StringPosition, Characters, FromCharacterCode, ToCharacterCode, ...}
-
-\subsection{List Manipulation (89 functions)}
-
-\texttt{Length, First, Last, Rest, Most, Part, Take, Drop, Append, Prepend, Insert, Delete, Sort, Reverse, Flatten, Partition, Riffle, Join, Union, Intersection, Complement, Select, Map, Apply, Fold, FoldList, Nest, NestList, Table, Range, ...}
-
-\subsection{Graph Theory (64 functions)}
-
-\texttt{Graph, DirectedGraph, WeightedGraph, AdjacencyMatrix, IncidenceMatrix, EdgeList, VertexList, VertexCount, EdgeCount, VertexDegree, InDegree, OutDegree, PathGraph, CycleGraph, CompleteGraph, StarGraph, WheelGraph, GridGraph, TreeGraph, ShortestPath, GraphDistance, GraphDiameter, GraphRadius, ConnectedComponents, StronglyConnectedComponents, WeaklyConnectedComponents, ArticulationPoints, Bridges, ChromaticNumber, ChromaticPolynomial, MaximumFlow, MinimumCut, SpanningTree, MinimumSpanningTree, EulerianPath, HamiltonianPath, ...}
-
-\subsection{Chemistry (118 elements + functions)}
-
-\texttt{Element, MolecularMass, BalanceEquation, AtomicNumber, AtomicMass, ElectronConfiguration, Electronegativity, MeltingPoint, BoilingPoint, Density, H, He, Li, Be, B, C, N, O, F, Ne, Na, Mg, Al, Si, P, S, Cl, Ar, K, Ca, Fe, Cu, Zn, Ag, Au, U, ...}
-
-\subsection{Units (50+ units)}
-
-\texttt{Convert, Meter, Kilometer, Mile, Foot, Inch, Kilogram, Pound, Ounce, Second, Hour, Day, Celsius, Fahrenheit, Kelvin, Joule, Calorie, KilowattHour, Watt, Horsepower, Atmosphere, Bar, Pascal, Liter, Gallon, ...}
-
-\subsection{Visualization (9 functions)}
-
-\texttt{Plot, Plot3D, ParametricPlot, PolarPlot, ContourPlot, VectorFieldPlot, Heatmap, AnimatePlot, Interactive3D}
-
-\subsection{Numerical Methods (43 functions)}
-
-\texttt{NIntegrate, NSolve, FindRoot, FindMinimum, FindMaximum, NMinimize, NMaximize, NDSolve, InterpolatingFunction, Interpolation, LinearInterpolation, CubicSplineInterpolation, BSplineInterpolation, Fit, LinearFit, PolynomialFit, NonlinearModelFit, ...}
-
-\subsection{Optimization (37 functions)}
-
-\texttt{Minimize, Maximize, NMinimize, NMaximize, LinearProgramming, ConvexOptimization, ConstrainedMin, ConstrainedMax, GradientDescent, NewtonMethod, GoldenSectionSearch, ...}
-
-\subsection{Control Theory (28 functions)}
-
-\texttt{TransferFunction, StateSpaceModel, Poles, Zeros, SystemGain, BodePlot, NyquistPlot, RootLocus, StabilityMargin, Controllability, Observability, LQR, PIDController, ...}
-
-\subsection{Signal Processing (46 functions)}
-
-\texttt{FFT, InverseFFT, DFT, IDFT, DCT, IDCT, Spectrogram, Periodogram, Correlate, Convolve, ButterworthFilter, ChebyshevFilter, BesselFilter, EllipticFilter, ...}
-
-\subsection{Time \& Date (24 functions)}
-
-\texttt{Now, Today, DateString, DateList, DayName, MonthName, DayOfWeek, DayOfYear, LeapYearQ, DateDifference, DatePlus, TimeZone, UnixTime, ...}
-
-\subsection{Random \& Probability (38 functions)}
-
-\texttt{Random, RandomInteger, RandomReal, RandomChoice, RandomSample, SeedRandom, RandomVariate, RandomPrime, RandomGraph, RandomMatrix, ...}
-
-\subsection{Financial Math (21 functions)}
-
-\texttt{PresentValue, FutureValue, NPV, IRR, Annuity, TimeValue, CompoundInterest, ContinuouslyCompounded, BondPrice, YieldToMaturity, ...}
-
-\section{New Domain Examples (v2.0)}
-
-\subsection{Vector Calculus}
-
-\begin{lstlisting}
-# Gradient of a scalar field
-Grad[x^2 + y^2 + z^2, {x, y, z}]
-# => [2*x, 2*y, 2*z]
-
-# Divergence of a vector field
-Div[{x, y, z}, {x, y, z}]
-# => 3
-
-# Curl of a vector field
-Curl[{-y, x, 0}, {x, y, z}]
-# => [0, 0, 2]
-
-# Laplacian
-Laplacian[x^2 + y^2, {x, y}]
-# => 4
-\end{lstlisting}
-
-\subsection{Machine Learning}
-
-\begin{lstlisting}
-# Linear regression
-X = Matrix([[1, 2], [2, 3], [3, 4]])
-y = Matrix([3, 5, 7])
-LinearRegression[X, y]
-
-# Activation functions
-Sigmoid[x]        # => 1/(1 + exp(-x))
-ReLU[x]           # => Max(0, x)
-Softmax[{x, y, z}]
-
-# Loss functions
-MeanSquaredError[ytrue, ypred]
-CrossEntropy[p, q]
-
-# Metrics
-Accuracy[ytrue, ypred]
-F1Score[precision, recall]
-\end{lstlisting}
-
-\subsection{Physics}
-
-\begin{lstlisting}
-# Classical mechanics
-KineticEnergy[m, v]           # => m*v^2/2
-PotentialEnergy[m, g, h]      # => m*g*h
-EscapeVelocity[M, r]          # => sqrt(2*G*M/r)
-
-# Thermodynamics
-IdealGasLaw[P, V, n, T]       # => P*V - n*R*T
-CarnotEfficiency[Th, Tc]      # => 1 - Tc/Th
-
-# Electromagnetism
-CoulombForce[q1, q2, r]       # => k_e*q1*q2/r^2
-OhmLaw[V, R]                  # => V/R
-
-# Quantum mechanics
-PlankEnergy[freq]             # => h*freq
-DeBroglieWavelength[p]        # => h/p
-HeisenbergUncertainty[dx, dp] # => dx*dp >= hbar/2
-
-# Relativity
-LorentzFactor[v]              # => 1/sqrt(1 - v^2/c^2)
-MassEnergyEquivalence[m]      # => m*c^2
-\end{lstlisting}
-
-\subsection{Biology \& Genetics}
-
-\begin{lstlisting}
-# DNA analysis
-Complement["A"]               # => "T"
-ReverseComplement["ATCG"]     # => "CGAT"
-Transcribe["ATCG"]            # => "AUCG"
-GCContent["ATCGGC"]           # => 0.5
-
-# Molecular mass
-MolecularMass["H2O"]          # => 18.015 g/mol
-
-# Population dynamics
-LogisticGrowth[N, r, K]       # => r*N*(1 - N/K)
-SIRModel[S, I, R, beta, gamma]
-
-# Sequence alignment
-HammingDistanceDNA[seq1, seq2]
-LevenshteinDNA[seq1, seq2]
-\end{lstlisting}
-
-\subsection{Cryptography}
-
-\begin{lstlisting}
-# Hashing
-SHA256["hello"]
-SHA512["world"]
-MD5["message"]
-
-# Modular arithmetic
-ModularExponentiation[base, exp, mod]
-ModularInverse[a, m]
-ExtendedEuclidean[a, b]
-
-# Number theory
-DiscreteLog[base, result, modulus]
-PrimitiveRoot[p]
-QuadraticResidue[a, p]
-LegendreSymbol[a, p]
-\end{lstlisting}
-
-\subsection{Numerical Methods}
-
-\begin{lstlisting}
-# Root finding
-NewtonRaphson[f, x0, tol]
-BisectionMethod[f, a, b, tol]
-SecantMethod[f, x0, x1, tol]
-
-# Integration
-TrapezoidalRule[f, a, b, n]
-SimpsonsRule[f, a, b, n]
-GaussianQuadrature[f, a, b, n]
-
-# ODEs
-EulerMethod[f, y0, t0, h, n]
-RungeKutta4[f, y0, t0, h]
-AdamsBashforth[f, y, h]
-
-# Interpolation
-LagrangeInterpolation[{x1, x2, x3}, {y1, y2, y3}]
-CubicSpline[points]
-\end{lstlisting}
-
-\section{Advanced Topics}
-
-\subsection{Custom Rules}
-
-Define your own transformation rules:
-
-\begin{lstlisting}[language=Python]
-from mikoshilang import parse_and_eval
-
-# Define a custom simplification rule
-rule = "sin(x)^2 + cos(x)^2 -> 1"
-
-# Apply it
-expr = "sin(x)^2 + cos(x)^2 + 2*x"
-result = parse_and_eval(f"ReplaceAll[{expr}, {rule}]")
-# => 1 + 2*x
-\end{lstlisting}
-
-\subsection{Pattern Matching}
-
-\begin{lstlisting}
-# Match any power
-Pattern[_, x^_]
-
-# Match specific forms
-Pattern[a_ + b_, ...]
-\end{lstlisting}
-
-\subsection{Performance Tips}
-
-\begin{itemize}
-    \item Use \texttt{NSolve} for numerical roots instead of symbolic \texttt{Solve}
-    \item Cache repeated computations
-    \item Use \texttt{N[expr]} to convert symbolic to numeric
-    \item Simplify expressions before integration/differentiation
-    \item For large matrices, use sparse representations
-\end{itemize}
-
-\section{Troubleshooting}
-
-\subsection{Common Errors}
-
-\textbf{SyntaxError: Invalid expression}
-
-Ensure square brackets for function calls and proper operator syntax.
-
-\textbf{NameError: Function not found}
-
-Check spelling and capitalization. MikoshiLang functions are case-sensitive (\texttt{Sin} not \texttt{sin}).
-
-\textbf{ValueError: Cannot parse expression}
-
-Verify parentheses/brackets are balanced.
-
-\subsection{Getting Help}
-
-\begin{itemize}
-    \item GitHub Issues: \url{https://github.com/DarrenEdwards111/MikoshiLang/issues}
-    \item Documentation: \url{https://github.com/DarrenEdwards111/MikoshiLang/blob/main/README.md}
-\end{itemize}
-
-\section{Contributing}
-
-MikoshiLang is open-source (Apache 2.0). Contributions welcome:
-
-\begin{enumerate}
-    \item Fork the repository
-    \item Create a feature branch
-    \item Add or fix functions in \texttt{mikoshilang/library/}, following \texttt{docs/CONVENTIONS.md}, with an executable \texttt{Check:} note
-    \item Write tests in \texttt{tests/}
-    \item Submit a pull request
-\end{enumerate}
-
-\section{License}
-
-MikoshiLang is licensed under the Apache License 2.0.
-
-\begin{verbatim}
-Copyright 2025 Mikoshi Ltd
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-\end{verbatim}
-
-\section{Acknowledgments}
-
-MikoshiLang is built on:
-\begin{itemize}
-    \item \textbf{SymPy} — symbolic mathematics
-    \item \textbf{matplotlib} — 2D plotting
-    \item \textbf{plotly} — interactive visualization
-    \item \textbf{numpy} — numerical arrays
-\end{itemize}
-
-Inspired by Wolfram Language and designed for the Python ecosystem.
-
-\vfill
-
-\begin{center}
-\Large\textbf{Built by Mikoshi Ltd}\\
-\normalsize
-\url{https://github.com/DarrenEdwards111/MikoshiLang}
-\end{center}
-
+MikoshiLang is distributed under Apache License 2.0; consult \texttt{LICENSE}. It relies on the Python scientific ecosystem, especially SymPy and NumPy. Wolfram Language and Mathematica are separate products; no affiliation, endorsement or full compatibility is claimed.
 \end{document}

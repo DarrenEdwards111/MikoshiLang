@@ -1,0 +1,104 @@
+\section{Beginner tutorial: your first calculation}
+This tutorial starts with Python and introduces MikoshiLang a step at a time. You do not need Wolfram Language experience. Use the source installation above to match this manual; the examples need only the core dependencies.
+
+\subsection{Prepare your environment}
+Install Python and Git first. Open a terminal in the cloned MikoshiLang folder. A virtual environment keeps this project's packages separate from other Python projects. Create it once, then activate it each time you open a new terminal.
+
+\textbf{Windows PowerShell:}
+\begin{lstlisting}
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install .
+\end{lstlisting}
+If PowerShell blocks activation, you do not need to change its policy. Use the environment's Python directly:
+\begin{lstlisting}
+.\.venv\Scripts\python.exe -m pip install .
+.\.venv\Scripts\python.exe hello_mikoshi.py
+\end{lstlisting}
+The second command runs the file you will create below.
+
+\textbf{Linux or macOS terminal:}
+\begin{lstlisting}
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+\end{lstlisting}
+On some Linux systems, the distribution's Python venv package must be installed first. These are setup instructions, not a claim that this edition's CI tested macOS.
+
+\subsection{Create and run a Python file}
+Create a plain-text file named \texttt{hello\_mikoshi.py} in your project folder. Make sure your editor does not add a hidden \texttt{.txt} extension. Put this in it:
+\begin{lstlisting}[language=Python]
+from mikoshilang import Session
+
+s = Session()
+print(s.eval("2 + 3 * 4"))
+print(s.eval("1/3 + 1/6"))
+print(s.eval("{2, 4, 6}"))
+\end{lstlisting}
+With the environment activated, run:
+\begin{lstlisting}
+python hello_mikoshi.py
+\end{lstlisting}
+Expected output:
+\begin{lstlisting}
+14
+1/2
+[2, 4, 6]
+\end{lstlisting}
+Python runs the outer program. The strings passed to \texttt{s.eval} contain MikoshiLang code. A \texttt{Session} holds your definitions; \texttt{eval} returns convenient Python values. The fraction is exact, rather than a rounded decimal.
+
+\subsection{Learn the three essential syntax rules}
+\begin{itemize}
+\item Language function calls use square brackets: \texttt{square[5]}.
+\item Language lists use braces: \texttt{\{2, 4, 6\}}. Python output uses square brackets.
+\item Powers inside the language use \texttt{x\^{}2}; ordinary Python uses \texttt{x**2}.
+\end{itemize}
+Add the following to the same file:
+\begin{lstlisting}[language=Python]
+s.eval("square[x_] := x^2")
+print(s.eval("square[5]"))
+print(s.eval("Table[square[k], {k, 1, 4}]"))
+\end{lstlisting}
+Expected additional output:
+\begin{lstlisting}
+25
+[1, 4, 9, 16]
+\end{lstlisting}
+The pattern \texttt{x\_} names an argument. The delayed definition \texttt{:=} evaluates the right side when the function is called. \texttt{Table} repeats a calculation; here \texttt{k} runs from 1 through 4, inclusive. Keep using the same session to retain the definition.
+
+\subsection{Worked application: a simple cost model}
+Suppose a small job has a fixed cost of 12 currency units plus 3 per item. Define the cost once and calculate several order sizes:
+\begin{lstlisting}[language=Python]
+s.eval("cost[n_] := 12 + 3*n")
+costs = s.eval("Table[cost[n], {n, 0, 5}]")
+print(costs)
+print(s.eval("cost[5]"))
+assert costs == [12, 15, 18, 21, 24, 27]
+\end{lstlisting}
+Expected additional output:
+\begin{lstlisting}
+[12, 15, 18, 21, 24, 27]
+27
+\end{lstlisting}
+The first value is the fixed cost at zero items. For five items, a hand check gives $12+3\times5=27$. The assertion is an executable check: Python raises an error if the returned list differs. Try changing the fixed cost or the per-item cost, and update your expected values too.
+
+\subsection{Use the direct Python helpers deliberately}
+The imported Python helpers are a different interface, not interchangeable spellings of session calls:
+\begin{lstlisting}[language=Python]
+from mikoshilang import List, Take, Range
+
+xs = List(10, 20, 30, 40)
+assert Take(xs, -2).args == (30, 40)
+assert Range(3, 1, -1).args == (3, 2, 1)
+\end{lstlisting}
+Here \texttt{List} builds a MikoshiLang expression and \texttt{.args} exposes its arguments as a Python tuple. Negative \texttt{Take} selects from the end. By contrast, \texttt{s.eval("\{10, 20\}")} returns a normal Python list. Start with \texttt{Session.eval} and consult the public API reference before mixing interfaces.
+
+\subsection{Troubleshooting and next steps}
+\begin{description}
+\item[No module named mikoshilang:] Install using the same Python interpreter that runs your file. Check your environment activation, or use the explicit environment interpreter path above.
+\item[An expression stays symbolic:] Check the function's spelling, capitalisation and supported arguments. A new session will not know definitions made in an earlier one.
+\item[Unexpected list or result type:] Check whether you used \texttt{eval}, \texttt{evaluate} or a direct Python helper; they have different return contracts.
+\item[An unsupported operation:] Read the relevant API entry and limitations. A registered name alone does not promise every possible input form.
+\end{description}
+Next, work through the verified examples for equation solving, calculus, matrices and units. Use independent expected answers where possible. The assertions in this tutorial were executed against the documented source snapshot; they establish these examples, not correctness for all inputs.
+\clearpage
